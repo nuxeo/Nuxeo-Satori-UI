@@ -57,7 +57,7 @@ import { requireStepCredentials } from '../helpers.mjs';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'brand-assets-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
-const { ASSETS, MARKER, PRODUCTS, SHOTS, WORKSPACE, shotName } = await import(
+const { ASSETS, MARKER, PRODUCTS, SHOTS, VIDEOS, WORKSPACE, shotName } = await import(
   join(KIT, 'demo', 'data.mjs')
 );
 
@@ -82,6 +82,8 @@ const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 const ENDING = ASSETS.find((asset) => asset.id === 'ast-503');
 const ENDED = ASSETS.find((asset) => asset.id === 'ast-505');
 const CLEARED = ASSETS.find((asset) => asset.id === 'ast-501');
+/** What the library lists: the pictures and the videos, each an asset of the kit. */
+const LISTED = [...ASSETS, ...VIDEOS];
 /** The product it opens: the one with a missing colourway shot. */
 const PRODUCT = PRODUCTS.find((product) => product.style === 'AO-3101');
 
@@ -222,7 +224,7 @@ export default async function run(page, h) {
   const basic = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 
   const types = [];
-  for (const type of ['AcmeAsset', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch']) {
+  for (const type of ['AcmeAsset', 'AcmeVideo', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch']) {
     const answer = await page.request
       .get(`${h.baseUrl}/nuxeo/api/v1/config/types/${type}`)
       .catch(unread);
@@ -241,10 +243,10 @@ export default async function run(page, h) {
       .catch(unread);
   const seeded = new Map();
   const absent = [];
-  for (const asset of ASSETS) {
+  for (const asset of LISTED) {
     const doc = await read(`${ROOT}/assets/${asset.id}`);
-    if (doc?.type === 'AcmeAsset' && doc.properties?.['dc:source'] === MARKER)
-      seeded.set(asset.id, doc);
+    const kind = VIDEOS.includes(asset) ? 'AcmeVideo' : 'AcmeAsset';
+    if (doc?.type === kind && doc.properties?.['dc:source'] === MARKER) seeded.set(asset.id, doc);
     else absent.push(asset.id);
   }
   const product = await read(`${ROOT}/products/${PRODUCT.style.toLowerCase()}`);
@@ -290,6 +292,7 @@ export default async function run(page, h) {
   // kit's own folders, is someone else's.
   const places = {
     AcmeAsset: ASSETS.map((asset) => `${ROOT}/assets/${asset.id}`),
+    AcmeVideo: VIDEOS.map((video) => `${ROOT}/assets/${video.id}`),
     AcmeShot: SHOTS.map((shot) => `${ROOT}/shots/${shotName(shot)}`),
     AcmeProduct: PRODUCTS.map((each) => `${ROOT}/products/${each.style.toLowerCase()}`),
   };
@@ -323,6 +326,7 @@ export default async function run(page, h) {
     'layouts/AcmeAsset/view.layout.json',
     'layouts/AcmeProduct/view.layout.json',
     'layouts/AcmeShot/view.layout.json',
+    'layouts/AcmeVideo/view.layout.json',
     ...readdirSync(join(CONFIG, 'queues')).map((name) => `queues/${name}`),
   ];
   const differing = [];
@@ -461,7 +465,7 @@ export default async function run(page, h) {
       },
     )
     .catch(deferred);
-  const titles = ASSETS.map((asset) => asset.title);
+  const titles = LISTED.map((asset) => asset.title);
   const readRows = () =>
     page
       .evaluate(() =>
@@ -476,8 +480,8 @@ export default async function run(page, h) {
   const libraryRows = await readRows();
   h.check(
     'the library lists every seeded asset, the rights that end soonest first',
-    JSON.stringify(libraryRows) === JSON.stringify(byRightsEnd(ASSETS)),
-    `drawn ${JSON.stringify(libraryRows)}, expected ${JSON.stringify(byRightsEnd(ASSETS))}`,
+    JSON.stringify(libraryRows) === JSON.stringify(byRightsEnd(LISTED)),
+    `drawn ${JSON.stringify(libraryRows)}, expected ${JSON.stringify(byRightsEnd(LISTED))}`,
   );
   const readFacet = (aggregate) =>
     page
@@ -501,16 +505,16 @@ export default async function run(page, h) {
     'the Rights facet counts the assets by rights end, from the date_range aggregate',
     sameJson(
       Object.fromEntries(Object.entries(rightsFacet ?? {}).filter(([, count]) => count > 0)),
-      countBy(ASSETS, bucketOf),
+      countBy(LISTED, bucketOf),
     ),
-    `drawn ${JSON.stringify(rightsFacet)}, expected ${JSON.stringify(countBy(ASSETS, bucketOf))}`,
+    `drawn ${JSON.stringify(rightsFacet)}, expected ${JSON.stringify(countBy(LISTED, bucketOf))}`,
   );
   const shotFacet = await readFacet('acme_shot_agg');
   h.check(
     'the Shot facet counts the assets by shot, from the terms aggregate',
     sameJson(
       shotFacet,
-      countBy(ASSETS, (asset) => asset.shot),
+      countBy(LISTED, (asset) => asset.shot),
     ),
     `drawn ${JSON.stringify(shotFacet)}`,
   );
@@ -530,7 +534,7 @@ export default async function run(page, h) {
     .click()
     .catch(deferred);
   const sent = await narrowed;
-  const endingAssets = ASSETS.filter((asset) => bucketOf(asset) === 'Ending');
+  const endingAssets = LISTED.filter((asset) => bucketOf(asset) === 'Ending');
   await page
     .waitForFunction(
       (count) => document.querySelectorAll('.queue-page tbody tr').length === count,

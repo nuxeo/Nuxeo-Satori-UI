@@ -248,6 +248,7 @@ const mockDetailService = {
   fetchPdfRendition: vi.fn((): Observable<Blob> =>
     of(new Blob(['x'], { type: 'application/pdf' })),
   ),
+  fetchRendition: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'video/mp4' }))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
   getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
@@ -1523,6 +1524,163 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         expect(viewBody().querySelector('lib-record-page')).toBeNull();
         expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
         expect(originalFetches()).toBe(1);
+      });
+    });
+
+    /**
+     * A video's record page plays it with its own player, which fetches the file it plays, by its
+     * rendition's name, so the page fetches none of the video's files for the packaged viewer: not
+     * its transcoded videos, not its original, not its storyboard, until that viewer shows. The
+     * type is a kit's own, extending Video, as the brand assets kit's `AcmeVideo` does. Seen red
+     * with the video's files loaded on load, as before.
+     */
+    describe("a video's own files", () => {
+      const film = (): NuxeoDocument =>
+        Object.assign(
+          doc({
+            uid: 'doc-1',
+            type: 'AcmeVideo',
+            facets: ['Video', 'HasStoryboard', 'Versionable'],
+            properties: {
+              'dc:title': 'Into the Hills, campaign film',
+              'file:content': {
+                name: 'film.webm',
+                'mime-type': 'video/webm',
+                length: 4762,
+                digest: 'o1',
+              },
+              'vid:info': { duration: 12, width: 160, height: 90, format: 'matroska,webm' },
+              'vid:transcodedVideos': [
+                {
+                  name: 'MP4 480p',
+                  content: { 'mime-type': 'video/mp4', digest: 'm1', data: '/nuxeo/nxfile/mp4' },
+                  info: { width: 854, height: 480 },
+                },
+              ],
+              'vid:storyboard': [
+                { timecode: 0, comment: '', content: { digest: 's0', data: '/nuxeo/nxfile/sb0' } },
+              ],
+            },
+          }),
+          {
+            schemas: [
+              { name: 'dublincore', prefix: 'dc' },
+              { name: 'file', prefix: 'file' },
+              { name: 'video', prefix: 'vid' },
+              { name: 'picture', prefix: 'picture' },
+            ],
+          },
+        );
+      const FILM_VIEW = {
+        version: 2,
+        cards: [{ id: 'details', label: 'Details', fields: ['dc:title'] }],
+      };
+
+      async function answerFilm(entries: readonly string[], view?: unknown): Promise<void> {
+        const http = TestBed.inject(HttpTestingController);
+        http
+          .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+          .forEach((request) =>
+            request.flush({
+              format: FORMAT,
+              layer: 'layouts',
+              layouts: entries.map((entry) => {
+                const [type, mode] = entry.split('/');
+                return { type, mode, component: 'org.acme.config' };
+              }),
+              diagnostics: [],
+            }),
+          );
+        if (view !== undefined) {
+          http
+            .expectOne((request) =>
+              request.url.endsWith('/agentic-ui-config/layouts/AcmeVideo/view.layout.json'),
+            )
+            .flush({
+              format: FORMAT,
+              layer: 'layout',
+              type: 'AcmeVideo',
+              mode: 'view',
+              content: view,
+            });
+        }
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+      }
+
+      /** Any request for a transcoded video by its address, which neither the page nor the viewer sends. */
+      const byAddress = () =>
+        TestBed.inject(HttpTestingController).match((request) =>
+          request.url.includes('/nuxeo/nxfile/mp4'),
+        );
+      /** How often the transcoded video was asked for by its name: by the page's player, the viewer. */
+      const byName = () => mockDetailService.fetchRendition.mock.calls.length;
+      const originalFetches = () =>
+        mockDetailService.fetchBlob.mock.calls.filter((call) => (call as unknown[])[0] === 'doc-1')
+          .length;
+
+      beforeEach(() => {
+        mockDetailService.fetchBlob.mockClear();
+        mockDetailService.fetchRendition.mockClear();
+        mockDetailService.fetchBlobByXpath.mockClear();
+      });
+
+      it('fetches none for the viewer while the record page plays it, and does for Annotations', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, film());
+        await answerFilm(['AcmeVideo/view'], FILM_VIEW);
+
+        expect(viewBody().querySelector('lib-record-page lib-record-video')).toBeTruthy();
+        expect(originalFetches()).toBe(0);
+        // The record page's player asks for the file it plays by its name, and nothing else does.
+        expect(byName()).toBe(1);
+        expect(mockDetailService.fetchRendition).toHaveBeenCalledWith('doc-1', 'MP4 480p');
+        expect(fixture.componentInstance.videoSources()).toEqual([]);
+
+        const annotations = fixture.componentInstance
+          .detailTabs()
+          .findIndex((tab) => tab.id === 'app.tabs.annotations');
+        fixture.componentInstance.onTabChange(annotations);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        // The Annotations tab's viewer shows it: its files load now, by the rendition's name too.
+        expect(byName()).toBe(2);
+        expect(fixture.componentInstance.videoSources()).toHaveLength(1);
+        expect(byAddress()).toHaveLength(0);
+      });
+
+      it('keeps them held when the record reloads under the record page', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, film());
+        await answerFilm(['AcmeVideo/view'], FILM_VIEW);
+        // The metadata refetch the page makes while Nuxeo may still be reading the video.
+        (
+          fixture.componentInstance as unknown as {
+            syncDocumentMetadataFromRefetch(doc: NuxeoDocument): void;
+          }
+        ).syncDocumentMetadataFromRefetch({ ...film(), lastModified: '2026-08-24T11:00:00.000Z' });
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(byName()).toBe(1);
+        expect(fixture.componentInstance.videoSources()).toEqual([]);
+        expect(originalFetches()).toBe(0);
+        expect(byAddress()).toHaveLength(0);
+      });
+
+      it('loads them for the packaged viewer when the type has no record page', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, film());
+        expect(byName()).toBe(0);
+        await answerFilm(['AcmeVideo/metadata']);
+
+        expect(viewBody().querySelector('lib-record-page')).toBeNull();
+        expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+        // The viewer's own request, by the rendition's name: no record page drew a player.
+        expect(byName()).toBe(1);
+        expect(fixture.componentInstance.videoSources()).toHaveLength(1);
+        expect(byAddress()).toHaveLength(0);
       });
     });
 

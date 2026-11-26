@@ -766,7 +766,9 @@ async function theDemoListing() {
     "the repository's kit demos listed, with their people, seeds and environment",
     problems.length === 0 &&
       of('payers-claims-demo').length === 4 &&
-      of('brand-assets-demo').length === 3 &&
+      // The demo, step 2's rights, step 4's review and the videos.
+      of('brand-assets-demo').length === 4 &&
+      of('brand-assets-demo').some((each) => each.file.endsWith('/brand-assets-video.mjs')) &&
       demo?.runAs.users.includes('dana.lee') &&
       demo?.signsInAs.length === 1 &&
       demo?.environment.includes('PAYERS_DEMO_PASSWORD') &&

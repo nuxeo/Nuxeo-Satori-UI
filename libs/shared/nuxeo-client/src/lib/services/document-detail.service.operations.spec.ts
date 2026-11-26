@@ -171,6 +171,28 @@ describe('DocumentDetailService', () => {
       expect(await (await pending).text()).toBe('%PDF');
     });
 
+    it('reads a rendition by its name, the name one encoded path segment', async () => {
+      const pending = firstValueFrom(service.fetchRendition('doc-1', 'MP4 480p'));
+      httpMock
+        .expectOne('/nuxeo/api/v1/id/doc-1/@rendition/MP4%20480p')
+        .flush(new Blob(['mp4'], { type: 'video/mp4' }));
+      expect(await (await pending).text()).toBe('mp4');
+
+      // A name cannot reach another path: a slash is part of the segment, not a separator.
+      const odd = firstValueFrom(service.fetchRendition('doc-1', '../@blob/file:content'));
+      httpMock
+        .expectOne('/nuxeo/api/v1/id/doc-1/@rendition/..%2F%40blob%2Ffile%3Acontent')
+        .flush(new Blob(['x']), { status: 404, statusText: 'Not Found' });
+      await expect(odd).rejects.toMatchObject({ status: 404 });
+
+      // A URL resolves these as no segment or a step up, to the document itself: never asked.
+      for (const name of ['', '.', '..'])
+        await expect(firstValueFrom(service.fetchRendition('doc-1', name))).rejects.toThrow(
+          "is not a rendition's name",
+        );
+      httpMock.expectNone(() => true);
+    });
+
     it('propagates a rendition failure rather than an empty blob', async () => {
       const pending = firstValueFrom(service.fetchThumbnail('doc-1'));
       httpMock

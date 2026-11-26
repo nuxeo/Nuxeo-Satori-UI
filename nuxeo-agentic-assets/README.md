@@ -416,6 +416,7 @@ runtime: documents are proxies that answer only what the code reads.
 | `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                             |
 | `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                |
 | `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                             |
+| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided                                                                                                                                                                        |
 | `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations |
 | `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                  |
 | `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                             |
@@ -429,7 +430,8 @@ Every guard was seen failing: each of 28 breakages, one at a time (a use not lis
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
 print view given another channel, a version read by its own fields, a container's renditions
 served, a nested collection not looked for, a proxy's live fields written, and the others), turned
-the tests red, and the build unbroken was green. **What the tests cannot reach:** the privileged
+the tests red, and the build unbroken was green. `KitVideoPolicyTest`, added with the kit's videos
+and with no change to the add-on's code, went red with the kit's `MP4 480p` given the Print channel. **What the tests cannot reach:** the privileged
 lookup of a version's live document and the container query run against fakes here; the query's
 text is held exactly, but neither has run on a repository.
 
@@ -458,7 +460,7 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 
 **Not run for 0.2.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read only, on
 25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and `brand-assets-demo-0.2.0`
-started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.2, which depends on it, in one
+started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.3, which depends on it, in one
 restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
 process, so a one-off script installs them when the container next starts, as the kits' READMEs do.
 **Not before the share links' security review:** the upgrade opens `/nuxeo/agentic-share/` to
@@ -482,11 +484,11 @@ docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.2.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.3.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.2.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.3.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
@@ -496,12 +498,12 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
 **3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
 
 - `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed, at
-  0.2.0 and 0.2.2;
+  0.2.0 and 0.2.3;
 - the server log's `Component Loading Status` has nothing pending or missing, and names
   `org.nuxeo.agentic.assets.rights`, `org.nuxeo.agentic.assets.rights.download`,
   `org.nuxeo.agentic.assets.rights.enrichers`, `org.nuxeo.agentic.assets.share.directories`,
-  `org.nuxeo.agentic.assets.share`, `org.nuxeo.agentic.assets.share.operations` and
-  `nuxeo.config.brand-assets-demo.rights`;
+  `org.nuxeo.agentic.assets.share`, `org.nuxeo.agentic.assets.share.operations`,
+  `nuxeo.config.brand-assets-demo.rights` and `nuxeo.config.brand-assets-demo.video-rights`;
 - the server log has no `Asset rights:` error and no `Share links:` error;
 - the generated `nxserver/nuxeo.war/WEB-INF/web.xml` maps the servlet `Agentic Share Links` on
   `/agentic-share/*`, and no `NuxeoAuthenticationFilter` on that path;

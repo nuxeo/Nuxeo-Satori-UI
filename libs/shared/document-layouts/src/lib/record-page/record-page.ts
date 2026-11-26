@@ -78,6 +78,7 @@ import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
 import { RecordPictureViewsComponent } from './record-picture-views';
 import { RecordShareLinksComponent } from './record-share-links';
+import { RECORD_VIDEO_ID, RecordVideoComponent } from './record-video';
 import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
 import {
@@ -234,9 +235,10 @@ function fieldShowing(
  * a checklist: the items the file requires, each done or not by the record's own property, with who
  * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
  * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
- * rounds (`lib-record-picture-review`); then, when the file has `shareLinks`, the picture's share
- * links (`lib-record-share-links`), drawn only for a user the server lets manage them; then the
- * cards.
+ * rounds (`lib-record-picture-review`), and, when the file has `shareLinks`, the picture's share
+ * links (`lib-record-share-links`), drawn only for a user the server lets manage them; or, for a
+ * video, its player, its facts and its storyboard (`lib-record-video`, through
+ * `nxs.components.recordVideo`); then the cards.
  *
  * Its fields and checklists are read-only; the comments card, the review and the share links are
  * where a user writes, and the server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
@@ -258,6 +260,7 @@ function fieldShowing(
     RecordPictureViewsComponent,
     RecordShareLinksComponent,
     RecordTimelineComponent,
+    RecordVideoComponent,
     RouterLink,
     TranslatePipe,
   ],
@@ -283,6 +286,12 @@ export class RecordPageComponent {
 
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+  protected readonly videoId = RECORD_VIDEO_ID;
+  /** What a video's player is given, through `nxs.components.recordVideo`. */
+  protected readonly videoInputs = computed(() => ({
+    document: this.document(),
+    stateHeadingLevel: 3,
+  }));
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly linkedRecords = inject(LinkedRecordLookup);

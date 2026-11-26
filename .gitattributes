@@ -11,5 +11,6 @@
 *.ttf binary
 *.eot binary
 *.mp4 binary
+*.webm binary
 *.zip binary
 *.tgz binary

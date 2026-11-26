@@ -1,0 +1,71 @@
+:host {
+  display: block;
+}
+
+.record-video__figure {
+  margin: 0;
+}
+
+/* The player fits its frame whole, and the frame keeps its height while the file loads. */
+.record-video__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  max-height: 560px;
+  padding: 24px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container);
+  overflow: hidden;
+}
+
+.record-video__player {
+  display: block;
+  max-width: 100%;
+  max-height: 512px;
+}
+
+/* A file the server refused: its reason in the frame, where the player would be. */
+.record-video__refusal {
+  max-width: 480px;
+}
+
+.record-video__caption {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-video__storyboard {
+  margin-top: 12px;
+}
+
+.record-video__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 16px 0 0;
+}
+
+.record-video__fact {
+  dt {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 2px 0 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.record-video__note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}

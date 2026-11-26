@@ -23,8 +23,9 @@
  *   only while the whole count and a page fit in it. `numberOfPages` is not held to it.
  * - **Order:** the provider's own, `dc:expired` ascending, records with no end last, as the search
  *   index puts a missing value; or `sortBy` and `sortOrder` on one of the asset's single values.
- * - **Facets:** the three aggregates, `acme_rights_agg` (`date_range`, Ended, Ending and Cleared),
- *   `acme_shot_agg` and `acme_product_agg` (`terms`, the 10 largest). A bucket chosen is sent as a
+ * - **Facets:** the four aggregates, `acme_rights_agg` (`date_range`, Ended, Ending and Cleared),
+ *   `acme_shot_agg`, `acme_product_agg` and `acme_type_agg` (`terms`, the 10 largest), every record
+ *   in the last one's `AcmeAsset` bucket, since the stand-in holds no video. A bucket chosen is sent as a
  *   parameter named after its aggregate, a JSON array of keys. A record is kept when it is in any
  *   chosen bucket of each aggregate chosen in; each aggregate's buckets are counted with the other
  *   aggregates' choices and not its own, and a chosen bucket that holds nothing is listed in
@@ -102,6 +103,8 @@ export const AGGREGATES = {
   acme_rights_agg: { type: 'date_range', field: 'dc:expired' },
   acme_shot_agg: { type: 'terms', field: 'acmeasset:shot' },
   acme_product_agg: { type: 'terms', field: 'acmeasset:product' },
+  // The kit's Type facet, from 0.2.2: every synthetic record is a picture, AcmeAsset.
+  acme_type_agg: { type: 'terms', field: 'ecm:primaryType' },
 };
 
 /** The fields a header may sort by: each a single value of the asset. */
@@ -210,6 +213,7 @@ export function createLibrary({
     acme_rights_agg: (n) => (rights[n] === 3 ? null : RIGHTS_BUCKETS[rights[n]]),
     acme_shot_agg: (n) => SHOTS[shot[n]],
     acme_product_agg: (n) => styleOf(n),
+    acme_type_agg: () => 'AcmeAsset',
   };
 
   const sortValue = {

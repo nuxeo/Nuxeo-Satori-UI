@@ -24,6 +24,29 @@
       "parent": "Document",
       "facets": [],
       "schemas": ["common", "dublincore", "acmeshot"]
+    },
+    "AcmeVideo": {
+      "parent": "Video",
+      "facets": [
+        "Versionable",
+        "NXTag",
+        "Publishable",
+        "Video",
+        "HasStoryboard",
+        "Commentable",
+        "HasVideoPreview"
+      ],
+      "schemas": [
+        "common",
+        "dublincore",
+        "uid",
+        "files",
+        "facetedTag",
+        "file",
+        "video",
+        "picture",
+        "acmeasset"
+      ]
     }
   },
   "facets": [
@@ -158,6 +181,134 @@
     },
     {
       "name": "Commentable"
+    },
+    {
+      "name": "Video",
+      "schemas": [
+        {
+          "name": "file",
+          "@prefix": "",
+          "fields": {
+            "content": "blob"
+          }
+        },
+        {
+          "name": "video",
+          "@prefix": "vid",
+          "fields": {
+            "storyboard": {
+              "fields": {
+                "comment": "string",
+                "content": "blob",
+                "timecode": "double"
+              },
+              "type": "complex[]"
+            },
+            "transcodedVideos": {
+              "fields": {
+                "name": "string",
+                "content": "blob",
+                "info": {
+                  "fields": {
+                    "duration": "double",
+                    "frameRate": "double",
+                    "streams": {
+                      "fields": {
+                        "codec": "string",
+                        "bitRate": "double",
+                        "streamInfo": "string",
+                        "type": "string"
+                      },
+                      "type": "complex[]"
+                    },
+                    "width": "long",
+                    "format": "string",
+                    "height": "long"
+                  },
+                  "type": "complex"
+                }
+              },
+              "type": "complex[]"
+            },
+            "info": {
+              "fields": {
+                "duration": "double",
+                "frameRate": "double",
+                "streams": {
+                  "fields": {
+                    "codec": "string",
+                    "bitRate": "double",
+                    "streamInfo": "string",
+                    "type": "string"
+                  },
+                  "type": "complex[]"
+                },
+                "width": "long",
+                "format": "string",
+                "height": "long"
+              },
+              "type": "complex"
+            }
+          }
+        },
+        {
+          "name": "picture",
+          "@prefix": "",
+          "fields": {
+            "dateline": "string",
+            "origin": "string",
+            "caption": "string",
+            "language": "string",
+            "source": "string",
+            "cropCoords": "string",
+            "slugline": "string",
+            "genre": "string",
+            "typage": "string",
+            "credit": "string",
+            "headline": "string",
+            "subheadline": "string",
+            "byline": "string",
+            "views": {
+              "fields": {
+                "filename": "string",
+                "width": "long",
+                "description": "string",
+                "tag": "string",
+                "title": "string",
+                "content": "blob",
+                "height": "long",
+                "info": {
+                  "fields": {
+                    "colorSpace": "string",
+                    "depth": "long",
+                    "width": "long",
+                    "format": "string",
+                    "height": "long"
+                  },
+                  "type": "complex"
+                }
+              },
+              "type": "complex[]"
+            },
+            "info": {
+              "fields": {
+                "colorSpace": "string",
+                "depth": "long",
+                "width": "long",
+                "format": "string",
+                "height": "long"
+              },
+              "type": "complex"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "HasStoryboard"
+    },
+    {
+      "name": "HasVideoPreview"
     }
   ],
   "schemas": [
@@ -1272,6 +1423,268 @@
               }
             }
           ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "video",
+      "prefix": "vid",
+      "@prefix": "vid",
+      "fields": {
+        "storyboard": {
+          "type": "complex[]",
+          "fields": {
+            "comment": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "content": "blob",
+            "timecode": {
+              "type": "double",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "double",
+                  "parameters": {}
+                }
+              ]
+            }
+          }
+        },
+        "transcodedVideos": {
+          "type": "complex[]",
+          "fields": {
+            "name": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "content": "blob",
+            "info": {
+              "fields": {
+                "duration": {
+                  "type": "double",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "double",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "frameRate": {
+                  "type": "double",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "double",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "streams": {
+                  "type": "complex[]",
+                  "fields": {
+                    "codec": {
+                      "type": "string",
+                      "constraints": [
+                        {
+                          "entity-type": "validation_constraint",
+                          "name": "string",
+                          "parameters": {}
+                        }
+                      ]
+                    },
+                    "bitRate": {
+                      "type": "double",
+                      "constraints": [
+                        {
+                          "entity-type": "validation_constraint",
+                          "name": "double",
+                          "parameters": {}
+                        }
+                      ]
+                    },
+                    "streamInfo": {
+                      "type": "string",
+                      "constraints": [
+                        {
+                          "entity-type": "validation_constraint",
+                          "name": "string",
+                          "parameters": {}
+                        }
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "constraints": [
+                        {
+                          "entity-type": "validation_constraint",
+                          "name": "string",
+                          "parameters": {}
+                        }
+                      ]
+                    }
+                  }
+                },
+                "width": {
+                  "type": "long",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "long",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "height": {
+                  "type": "long",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "long",
+                      "parameters": {}
+                    }
+                  ]
+                }
+              },
+              "type": "complex"
+            }
+          }
+        },
+        "info": {
+          "fields": {
+            "duration": {
+              "type": "double",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "double",
+                  "parameters": {}
+                }
+              ]
+            },
+            "frameRate": {
+              "type": "double",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "double",
+                  "parameters": {}
+                }
+              ]
+            },
+            "streams": {
+              "type": "complex[]",
+              "fields": {
+                "codec": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "bitRate": {
+                  "type": "double",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "double",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "streamInfo": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "type": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                }
+              }
+            },
+            "width": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            },
+            "format": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "height": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            }
+          },
+          "type": "complex"
         }
       }
     }
