@@ -24,6 +24,9 @@ getDocumentPermissions(uid: string): Observable<NuxeoDocument>
 fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
   // GET @blob/file:content?clientReason=view (default) or download; fallback blobholder:0
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
+fetchRendition(uid: string, name: string): Observable<Blob>
+  // GET @rendition/{name}, the name one encoded path segment; '', '.' and '..' error unasked.
+  // A video's transcoded files are asked so, by the name a rights policy lists them by
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
 fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>

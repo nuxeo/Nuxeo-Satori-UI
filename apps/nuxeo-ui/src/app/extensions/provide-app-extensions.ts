@@ -231,8 +231,9 @@ function provideAppContributions(): EnvironmentProviders {
 
         // The strip of frames under a video that seeks it. The document viewer renders it through
         // this ID wherever it shows a video — the document page's View tab, and the asset screens
-        // that use the same viewer — so re-registering it replaces the strip in all of them.
-        // Inputs only, so the viewer passes `seekHandler` rather than binding `seek`.
+        // that use the same viewer — and so does a video's record page, so re-registering it
+        // replaces the strip in all of them. Inputs only, so each passes `seekHandler` rather than
+        // binding `seek`.
         [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
 
         // A video on its record page: its player, its facts and its storyboard (layout-v2.md,

@@ -71,7 +71,7 @@
       @if (storyboardOutlet.unresolved()) {
         <nxs-storyboard
           [items]="storyboard()"
-          [label]="'document-layouts.video.storyboard' | translate"
+          [label]="storyboardInputs().label"
           [activeTimecode]="activeTimecode()"
           (seek)="seekTo($event)"
         />

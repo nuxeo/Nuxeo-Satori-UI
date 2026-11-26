@@ -1119,7 +1119,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
 | `nxs.components.taskForm`              | A task's own form inside that panel, from its step's `tasks/<workflow>.<step>.layout.json`; given `task`, `disabled` and `onForm`, to hand its form back |
 | `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
-| `nxs.components.storyboard`            | The strip of frames under a video that seeks it, wherever the document viewer shows a video — the document page's View tab and the asset screens         |
+| `nxs.components.storyboard`            | The strip of frames under a video that seeks it: the document viewer's, on the View tab and the asset screens, and a video's record page                 |
 | `nxs.components.recordVideo`           | A video's player, facts and storyboard on its record page, for the `video` schema; given `document` and `stateHeadingLevel`                              |
 | `nxs.components.assetGrid`             | The cards of the asset search screen's grid view at `/documents`: thumbnail, name, type pill and the selection checkbox                                  |
 | `nxs.components.assetFacetsDrawer`     | The faceted filter panel inside the assets drawer: full-text box, a collapsible group per facet with its counts, and reset / save-as / search            |

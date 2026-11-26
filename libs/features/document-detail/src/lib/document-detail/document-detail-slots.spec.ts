@@ -1609,11 +1609,13 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         fixture.detectChanges();
       }
 
-      /** The viewer's own requests for the video's files: the transcoded one, by its address. */
-      const viewerTranscodedFetches = () =>
+      /** Any request for a transcoded video by its address, which neither the page nor the viewer sends. */
+      const byAddress = () =>
         TestBed.inject(HttpTestingController).match((request) =>
           request.url.includes('/nuxeo/nxfile/mp4'),
         );
+      /** How often the transcoded video was asked for by its name: by the page's player, the viewer. */
+      const byName = () => mockDetailService.fetchRendition.mock.calls.length;
       const originalFetches = () =>
         mockDetailService.fetchBlob.mock.calls.filter((call) => (call as unknown[])[0] === 'doc-1')
           .length;
@@ -1630,10 +1632,9 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         await answerFilm(['AcmeVideo/view'], FILM_VIEW);
 
         expect(viewBody().querySelector('lib-record-page lib-record-video')).toBeTruthy();
-        expect(viewerTranscodedFetches()).toHaveLength(0);
         expect(originalFetches()).toBe(0);
         // The record page's player asks for the file it plays by its name, and nothing else does.
-        expect(mockDetailService.fetchRendition).toHaveBeenCalledTimes(1);
+        expect(byName()).toBe(1);
         expect(mockDetailService.fetchRendition).toHaveBeenCalledWith('doc-1', 'MP4 480p');
         expect(fixture.componentInstance.videoSources()).toEqual([]);
 
@@ -1644,9 +1645,10 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();
-        const asked = viewerTranscodedFetches();
-        expect(asked).toHaveLength(1);
-        asked[0].flush(new Blob(['mp4'], { type: 'video/mp4' }));
+        // The Annotations tab's viewer shows it: its files load now, by the rendition's name too.
+        expect(byName()).toBe(2);
+        expect(fixture.componentInstance.videoSources()).toHaveLength(1);
+        expect(byAddress()).toHaveLength(0);
       });
 
       it('keeps them held when the record reloads under the record page', async () => {
@@ -1661,25 +1663,24 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         ).syncDocumentMetadataFromRefetch({ ...film(), lastModified: '2026-08-24T11:00:00.000Z' });
         fixture.detectChanges();
         await fixture.whenStable();
-        expect(viewerTranscodedFetches()).toHaveLength(0);
+        expect(byName()).toBe(1);
+        expect(fixture.componentInstance.videoSources()).toEqual([]);
         expect(originalFetches()).toBe(0);
+        expect(byAddress()).toHaveLength(0);
       });
 
       it('loads them for the packaged viewer when the type has no record page', async () => {
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         await render({}, film());
-        expect(viewerTranscodedFetches()).toHaveLength(0);
+        expect(byName()).toBe(0);
         await answerFilm(['AcmeVideo/metadata']);
 
         expect(viewBody().querySelector('lib-record-page')).toBeNull();
         expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
-        const asked = viewerTranscodedFetches();
-        expect(asked).toHaveLength(1);
-        asked[0].flush(new Blob(['mp4'], { type: 'video/mp4' }));
-        fixture.detectChanges();
-        await fixture.whenStable();
+        // The viewer's own request, by the rendition's name: no record page drew a player.
+        expect(byName()).toBe(1);
         expect(fixture.componentInstance.videoSources()).toHaveLength(1);
-        expect(mockDetailService.fetchRendition).not.toHaveBeenCalled();
+        expect(byAddress()).toHaveLength(0);
       });
     });
 

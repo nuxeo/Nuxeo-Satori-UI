@@ -670,6 +670,15 @@ a 1600 × 1067 PNG upload had five views, `Thumbnail`, `Small`, `Medium`, `FullH
 
 **Response:** Raw PDF blob. Used as fallback preview for non-image, non-PDF document types (e.g., Word docs).
 
+**A rendition by its name,** `fetchRendition(uid, name)`, asks the same adapter,
+`/nuxeo/api/v1/id/{uid}/@rendition/{name}`, the name one encoded path segment, such as
+`MP4%20480p`; an empty name, `.` or `..` errors without a request. A video's transcoded files are
+asked so, by a video's record page (`record-video.ts`) and the document page's viewer: Nuxeo LTS
+2025's `VideoRenditionDefinitionProvider` offers each transcoded video whose conversion is a
+rendition, `MP4 480p` and `WebM 480p` by default, by its conversion's name, and the platform names
+it to the download permission by that name, where `nuxeo-agentic-assets` decides it as a policy
+lists it ([layout-v2.md](business-apps/layout-v2.md), section 11).
+
 ---
 
 ## 10a. Document Detail — Why the Server's Rights Refused a Use

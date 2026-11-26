@@ -1,5 +1,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
+import { NXS_STORYBOARD_ID, NxsStoryboardComponent } from '@nuxeo/satori-platform/components';
+import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
 import {
   DocumentDetailService,
   type AssetRightsExplanation,
@@ -637,6 +639,25 @@ describe('RecordVideoComponent', () => {
       expect(player(root)?.currentTime).toBe(8);
       expect(frames[2].getAttribute('aria-current')).toBe('true');
       expect(frames[0].getAttribute('aria-current')).toBeNull();
+    });
+
+    it('gives the storyboard registered by its ID, as the app registers it, its name and its seek', async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
+      });
+      const root = await render(video());
+      await answer('v1 rendition MP4 480p');
+      await answerFrames();
+      // Drawn by the outlet, not the page's own fallback: one strip.
+      expect(root.querySelectorAll('nxs-storyboard')).toHaveLength(1);
+      expect(root.querySelector('lib-extension-outlet nxs-storyboard')).not.toBeNull();
+      expect(root.querySelector('nxs-storyboard ul')?.getAttribute('aria-label')).toBe(
+        'Storyboard of the video',
+      );
+      frameButtons(root)[1].click();
+      await settle();
+      expect(player(root)?.currentTime).toBe(4);
+      expect(frameButtons(root)[1].getAttribute('aria-current')).toBe('true');
     });
 
     it('marks the frame the player has reached as it plays', async () => {

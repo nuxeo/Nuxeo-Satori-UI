@@ -132,7 +132,10 @@ function standIn({
       out.properties['vid:transcodedVideos'] = transcodes
         ? [{ name: 'MP4 480p' }, { name: 'WebM 480p' }]
         : [];
-      out.properties['vid:storyboard'] = transcodes ? Array.from({ length: 9 }, () => ({})) : [];
+      // Nuxeo makes nine frames, for a video of 10 seconds or more.
+      const seconds = VIDEOS.find((video) => video.video.file === doc.blob.name)?.video.seconds;
+      out.properties['vid:storyboard'] =
+        transcodes && seconds >= 10 ? Array.from({ length: 9 }, () => ({})) : [];
     }
     if (doc.blob)
       out.properties['file:content'] = {
@@ -646,7 +649,7 @@ for (const [fault, name, said] of [
     'a server that transcodes: it says what the server made of each video',
     VIDEOS.every((video) =>
       run.output.includes(
-        `video    ${video.id}: its facts read; transcoded: MP4 480p, WebM 480p; storyboard: 9 frame(s)`,
+        `video    ${video.id}: its facts read; transcoded: MP4 480p, WebM 480p; storyboard: ${video.video.seconds >= 10 ? 9 : 0} frame(s)`,
       ),
     ),
     run.output,

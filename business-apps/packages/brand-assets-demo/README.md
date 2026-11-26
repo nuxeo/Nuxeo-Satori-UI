@@ -473,10 +473,11 @@ to check the branch it is on, and says which:
 
 1. the cleared video's page: its player plays it from a blob URL, the transcoded web cut where the
    server made one, else the original, and the browser reads it as a video of its length; its
-   facts, or the page's word that the server read none; its storyboard, whose last frame moves the
-   player, or the page's word that the server made none;
-2. the video with no Print channel: its web cut plays where the server transcoded it; where it did
-   not, its original is refused with 403, and the page says the server's reason;
+   facts, or the page's word that the server read none; and, at 4 seconds, the page's word that
+   the server made no storyboard;
+2. the video with no Print channel: where the server transcoded it, its web cut plays, with its
+   storyboard, whose last frame moves the player; where it did not, its original is refused with
+   403, and the page says the server's reason, with no player;
 3. the REST API called directly: that original refused through `@blob` and `/nxfile/`, the cleared
    video's served; where the server transcoded them, each video's transcoded file refused at its
    place in `vid:transcodedVideos` and served by its name through `@rendition`;

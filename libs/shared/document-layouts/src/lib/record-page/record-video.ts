@@ -11,8 +11,8 @@ import {
   viewChild,
   type ElementRef,
 } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { TranslatePipe } from '@ngx-translate/core';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_STORYBOARD_ID,
   NxsBannerComponent,
@@ -310,6 +310,11 @@ export class RecordVideoComponent {
   readonly stateHeadingLevel = input<NxsHeadingLevel>(4);
 
   protected readonly storyboardId = NXS_STORYBOARD_ID;
+  /** The strip's name, in the reader's language: an override of the strip is given it too. */
+  protected readonly storyboardLabel = toSignal(
+    inject(TranslateService).stream('document-layouts.video.storyboard'),
+    { initialValue: '' },
+  );
 
   private readonly documents = inject(DocumentDetailService);
   private readonly locale = inject(LOCALE_ID);
@@ -389,6 +394,7 @@ export class RecordVideoComponent {
   /** What `nxs.components.storyboard` is given: `seekHandler`, since the outlet binds no output. */
   readonly storyboardInputs = computed(() => ({
     items: this.storyboard(),
+    label: String(this.storyboardLabel()),
     activeTimecode: this.activeTimecode(),
     seekHandler: this.seekHandler,
   }));

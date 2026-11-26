@@ -108,6 +108,9 @@ const mockDetailService = {
   fetchPdfRendition: vi.fn((): Observable<Blob> =>
     of(new Blob(['pdf'], { type: 'application/pdf' })),
   ),
+  // A rendition by its name, which the viewer asks a transcoded video by first: none here, so the
+  // address Nuxeo gives is asked, unless a test answers by name.
+  fetchRendition: vi.fn((): Observable<Blob> => throwError(() => ({ status: 404 }))),
   exportXml: vi.fn((): Observable<Blob> => of(new Blob(['<xml/>']))),
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip']))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
@@ -547,6 +550,58 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
       );
 
       expect(component.storyboard().map((i) => i.label)).toEqual(['kept']);
+    });
+  });
+
+  /**
+   * The packaged viewer asks a transcoded video by its rendition's name first, as the record
+   * page's player does: rights that list it by name decide it there, where nuxeo-agentic-assets
+   * names the same file at its place in `vid:transcodedVideos` by that place only. Seen red with
+   * the viewer asking the address alone.
+   */
+  describe('transcoded videos', () => {
+    const transcoded = (): NuxeoDocument =>
+      doc({
+        type: 'Video',
+        properties: {
+          'vid:transcodedVideos': [
+            {
+              name: 'MP4 480p',
+              content: { 'mime-type': 'video/mp4', data: '/nuxeo/nxfile/default/doc-1/v480.mp4' },
+            },
+          ],
+          'vid:info': { duration: 12, width: 640, height: 480, format: 'mp4' },
+        },
+      });
+
+    async function buildVideo(initial: NuxeoDocument): Promise<void> {
+      await build(initial);
+      http
+        .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+        .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it('asks for one by its rendition name, and plays it, asking its address for nothing', async () => {
+      mockDetailService.fetchRendition.mockReturnValueOnce(
+        of(new Blob(['mp4'], { type: 'video/mp4' })),
+      );
+      await buildVideo(transcoded());
+
+      expect(mockDetailService.fetchRendition).toHaveBeenCalledWith('doc-1', 'MP4 480p');
+      http.expectNone((request) => request.url.includes('v480.mp4'));
+      expect(component.videoSources()).toEqual([
+        { url: expect.stringMatching(/^blob:/), mimeType: 'video/mp4', label: 'MP4 480p' },
+      ]);
+    });
+
+    it('asks its address when the rendition adapter does not serve the name', async () => {
+      await buildVideo(transcoded());
+
+      expect(mockDetailService.fetchRendition).toHaveBeenCalledWith('doc-1', 'MP4 480p');
+      http.expectOne('/nuxeo/nxfile/default/doc-1/v480.mp4').flush(new Blob(['mp4']));
+      expect(component.videoSources()).toHaveLength(1);
     });
   });
 

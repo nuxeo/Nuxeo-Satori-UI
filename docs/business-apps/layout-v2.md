@@ -993,7 +993,9 @@ becomes. In version 2's terms:
   - **a file the server's rights refuse** shows the server's reason in the player's place, asked of
     the `assetRights` enricher after the 403, as a picture's view does, in a video's words: _The
     server refused this video: …_. Nothing is hidden or tried instead: the server decided. A 403 the
-    rights do not explain shows the error state, as any 403 does;
+    rights do not explain shows the error state, as any 403 does, and so does a file the server
+    does not serve, a 404 or a 500, Retry offered for a server error: no other file is tried then
+    either, though one may play;
   - **the facts:** the duration, the frame size and the format, from `vid:info`, as Nuxeo read
     them with ffprobe. A server without it reads none, and the page says so;
   - **the storyboard,** `vid:storyboard`, through `nxs.components.storyboard`, and only with the
@@ -1004,7 +1006,11 @@ becomes. In version 2's terms:
   - **the document page fetches none of the video's files for its own viewer** while the record
     page may hold the View tab, as it holds back a picture's original: a record with a `vid:`
     property waits until its type's layout is read, and its files load for the Annotations tab or
-    the packaged viewer of a type with no record page.
+    the packaged viewer of a type with no record page. That viewer asks for a transcoded video by
+    its rendition's name too, then by the address Nuxeo gives when the name is not served;
+  - **each file is downloaded whole, each time it is shown:** the page's tabs draw the active one
+    only, so going back to the View tab fetches the video again, and the Annotations tab's viewer
+    fetches its own copy.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;

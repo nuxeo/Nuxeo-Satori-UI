@@ -7,11 +7,15 @@
  *
  *   1. The cleared video's page: its player plays a file of it from a blob URL, the transcoded
  *      web cut where the server made one, else the original; the browser reads it as a video; the
- *      facts Nuxeo read of it, or the page's word that it read none; its storyboard where the
- *      server made one, a frame of which seeks the player, else the page's word that it made none.
- *   2. The video with no Print channel: where the server transcoded it, its web cut plays; where
- *      it did not, its original, the master, is refused, and the page says the server's reason,
- *      asked after the 403. Either way nothing is hidden or tried instead.
+ *      facts Nuxeo read of it, or the page's word that it read none; and, at 4 seconds, too short
+ *      for one, the page's word that the server made no storyboard.
+ *   2. The video with no Print channel: where the server transcoded it, its web cut plays, and its
+ *      storyboard, a frame of which seeks the player; where it did not, its original, the master,
+ *      is refused, and the page says the server's reason, asked after the 403, with no player and
+ *      nothing tried instead.
+ *
+ * A server that has transcoded one video and not yet the other is refused (exit 2): the run checks
+ * one branch, and waits for Nuxeo to finish.
  *   3. The REST API called directly, outside the app: the no-Print video's original refused,
  *      through `@blob` and `/nxfile/`; a transcoded video refused at its place in
  *      `vid:transcodedVideos` to everyone, the cleared video included, and served by its name
@@ -224,6 +228,11 @@ export default async function run(page, h) {
 
   const made = new Map(VIDEOS.map((video) => [video.id, madeOf(seeded.get(video.id))]));
   const transcodes = VIDEOS.every((video) => made.get(video.id).transcoded.length > 0);
+  h.requirePrecondition(
+    'the server has transcoded both videos or neither, so that the run checks one branch',
+    transcodes || VIDEOS.every((video) => made.get(video.id).transcoded.length === 0),
+    `transcoded so far: ${VIDEOS.map((video) => `${video.id} ${made.get(video.id).transcoded.join(', ') || 'nothing'}`).join('; ')}. Nuxeo is still converting: wait, then run this again`,
+  );
   h.note(
     transcodes
       ? `the server transcoded the videos: ${VIDEOS.map((video) => `${video.id} ${made.get(video.id).transcoded.join(', ')}`).join('; ')}`
@@ -295,8 +304,16 @@ export default async function run(page, h) {
     return out;
   };
 
+  /** Press a frame of the storyboard on the page, and read where the player then is. */
+  const seekWithLastFrame = async () => {
+    await page.locator('lib-record-video .nxs-storyboard__frame').last().click().catch(deferred);
+    return page
+      .evaluate(() => document.querySelector('lib-record-video video')?.currentTime ?? null)
+      .catch(unread);
+  };
+
   // ── 1. The cleared video's page ────────────────────────────────────────────────────────────
-  await h.step(`1. ${CLEARED.title}: its page plays it, with its facts and its storyboard`);
+  await h.step(`1. ${CLEARED.title}: its page plays it, with its facts, and no storyboard`);
   await h.login();
   const cleared = await open(CLEARED);
   const clearedMade = made.get(CLEARED.id);
@@ -341,27 +358,14 @@ export default async function run(page, h) {
       : cleared?.notes.includes('facts') && cleared.facts.length === 0,
     JSON.stringify(cleared?.facts),
   );
+  // Its 4 seconds are under the 10 from which Nuxeo makes a storyboard, ffmpeg or not.
   h.check(
-    clearedMade.frames > 0
-      ? `its storyboard of ${clearedMade.frames} frame(s), each a button that seeks it`
-      : 'the page says the server has made no storyboard for it',
-    clearedMade.frames > 0
-      ? cleared?.frames.length === clearedMade.frames &&
-          cleared.frames.every((name) => /^Seek to /.test(name ?? ''))
-      : cleared?.notes.includes('storyboard') && cleared.frames.length === 0,
-    JSON.stringify(cleared?.frames),
+    'the page says the server has made no storyboard for it, as the server holds none',
+    clearedMade.frames === 0 &&
+      cleared?.notes.includes('storyboard') &&
+      cleared.frames.length === 0,
+    JSON.stringify({ server: clearedMade.frames, page: cleared?.frames }),
   );
-  if (clearedMade.frames > 1) {
-    await page.locator('lib-record-video .nxs-storyboard__frame').last().click().catch(deferred);
-    const position = await page
-      .evaluate(() => document.querySelector('lib-record-video video')?.currentTime ?? null)
-      .catch(unread);
-    h.check(
-      'pressing the last frame moves the player to its moment',
-      Number(position) > 0,
-      String(position),
-    );
-  }
   h.check('the cleared video is not refused', cleared?.refusal === null, cleared?.refusal);
   await h.screenshot('video-cleared');
 
@@ -369,15 +373,39 @@ export default async function run(page, h) {
   const noPrintUid = seeded.get(NO_PRINT.id).uid;
   const refusedInApp = `HTTP 403 /nuxeo/api/v1/id/${noPrintUid}/@blob/file:content`;
   if (transcodes) {
-    await h.step(`2. ${NO_PRINT.title}, with no Print channel: its web cut plays`);
+    await h.step(
+      `2. ${NO_PRINT.title}, with no Print channel: its web cut plays, with its storyboard`,
+    );
     const web = await open(NO_PRINT);
+    const noPrintMade = made.get(NO_PRINT.id);
     h.check(
-      'its transcoded web cut plays, covered by E-commerce, though its original is not',
-      web?.src?.startsWith('blob:') === true &&
-        made.get(NO_PRINT.id).transcoded.includes(web.rendition) &&
+      'its transcoded web cut plays, covered by E-commerce, though its original is not, and the browser reads it',
+      web?.name?.startsWith(`${NO_PRINT.title}, `) === true &&
+        web.src?.startsWith('blob:') === true &&
+        noPrintMade.transcoded.includes(web.rendition) &&
+        web.readyState >= 1 &&
+        web.error === null &&
         web.refusal === null,
       JSON.stringify(web),
     );
+    h.check(
+      noPrintMade.frames > 0
+        ? `its storyboard of ${noPrintMade.frames} frame(s), each a button that seeks it`
+        : 'the page says the server has made no storyboard for it',
+      noPrintMade.frames > 0
+        ? web?.frames.length === noPrintMade.frames &&
+            web.frames.every((name) => /^Seek to /.test(name ?? ''))
+        : web?.notes.includes('storyboard') && web.frames.length === 0,
+      JSON.stringify({ server: noPrintMade.frames, page: web?.frames }),
+    );
+    if (noPrintMade.frames > 1) {
+      const position = await seekWithLastFrame();
+      h.check(
+        'pressing the last frame moves the player to its moment',
+        Number(position) > 0,
+        String(position),
+      );
+    }
   } else {
     await h.step(
       `2. ${NO_PRINT.title}, with no Print channel: its original refused, with the server's reason`,
@@ -420,8 +448,12 @@ export default async function run(page, h) {
       refused?.text,
     );
     h.check(
-      'no player, and no storyboard, where the file was refused',
-      refused?.src === null && refused.frames.length === 0,
+      'no player where the file was refused, and nothing tried instead',
+      refused?.src === null &&
+        refused.rendition === 'original' &&
+        refused.name === null &&
+        refused.nuxeoAddresses.length === 0,
+      JSON.stringify(refused),
     );
   }
   await h.screenshot('video-no-print');
