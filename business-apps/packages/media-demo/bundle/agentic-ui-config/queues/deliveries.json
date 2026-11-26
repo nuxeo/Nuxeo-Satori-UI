@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "media.queue.deliveries",
+  "pageProvider": "media_deliveries",
+  "columns": [
+    { "field": "mdlv:deliveredAt", "widget": "date" },
+    "dc:title",
+    "mdlv:distributor",
+    "mdlv:territory",
+    { "field": "mdlv:deliveredBy", "widget": "user" }
+  ],
+  "sort": [
+    {
+      "field": "mdlv:deliveredAt",
+      "order": "desc"
+    }
+  ],
+  "pageSize": 50
+}

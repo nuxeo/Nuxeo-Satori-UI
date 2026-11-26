@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "media.queue.films",
+  "pageProvider": "media_films",
+  "columns": ["dc:title", "film:year", "film:director", "film:genre"],
+  "sort": [
+    {
+      "field": "dc:title",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50
+}

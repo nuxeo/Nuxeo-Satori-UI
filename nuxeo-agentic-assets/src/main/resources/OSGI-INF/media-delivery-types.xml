@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.delivery.types" version="1.0">
+
+  <documentation>
+    A delivery package, MediaDelivery: a distributor's delivery of a localised version to a
+    territory. A person files one, naming the version, the distributor and the territory, wherever
+    they may add a document; the delivery listener decides its files by the version's rights policy,
+    refuses it whole when any is outside its release window or its territory, and otherwise writes
+    what was delivered, when and by whom. A delivery holds no file: it records the files the version
+    held, by their digests. No Versionable facet: a delivery is never checked in or restored.
+  </documentation>
+
+  <require>org.nuxeo.ecm.core.CoreExtensions</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="media_delivery" prefix="mdlv" src="schemas/media_delivery.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <doctype name="MediaDelivery" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="media_delivery" />
+    </doctype>
+  </extension>
+
+</component>

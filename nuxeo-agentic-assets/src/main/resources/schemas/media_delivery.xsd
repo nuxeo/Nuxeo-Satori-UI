@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!-- A delivery package: a distributor's delivery of a localised version to a territory. The person
+     who files one writes the version, the distributor and the territory; DeliveryListener decides
+     it, and writes the rest, the files delivered and when, or refuses it whole, and then nothing is
+     made. It refuses any later write to these properties. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/assets/media-delivery"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/assets/media-delivery">
+
+  <!-- Filed: the id of the localised version delivered, a live document of a type whose rights
+       policy has a <delivery>. -->
+  <xs:element name="version" type="xs:string" />
+  <!-- Filed: who it is delivered to, as written, trimmed. -->
+  <xs:element name="distributor" type="xs:string" />
+  <!-- Filed: where, as the version's territories and its windows write it. -->
+  <xs:element name="territory" type="xs:string" />
+
+  <!-- The server's: when it was delivered, and by whom. -->
+  <xs:element name="deliveredAt" type="xs:date" />
+  <xs:element name="deliveredBy" type="xs:string" />
+
+  <!-- The server's: each file of the package, as the version held it when it was delivered. -->
+  <xs:element name="files" type="nxs:deliveredFiles" />
+  <xs:complexType name="deliveredFiles">
+    <xs:sequence>
+      <xs:element name="file" type="nxs:deliveredFile" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="deliveredFile">
+    <xs:sequence>
+      <!-- original, view or blob, as the policy names it, and the view's title or the blob's xpath. -->
+      <xs:element name="use" type="xs:string" />
+      <xs:element name="name" type="xs:string" />
+      <!-- The channel whose window in the territory cleared it. -->
+      <xs:element name="channel" type="xs:string" />
+      <xs:element name="filename" type="xs:string" />
+      <xs:element name="mimeType" type="xs:string" />
+      <xs:element name="length" type="xs:long" />
+      <!-- The file's digest, as the blob store gives it. -->
+      <xs:element name="digest" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

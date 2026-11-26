@@ -74,7 +74,8 @@ class BundleTest {
         assertEquals(List.of("OSGI-INF/asset-rights-service.xml", "OSGI-INF/asset-rights-download-permission.xml",
                 "OSGI-INF/asset-rights-enricher-contrib.xml", "OSGI-INF/share-links-directories.xml",
                 "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml",
-                "OSGI-INF/asset-rights-video-operations-contrib.xml"), components);
+                "OSGI-INF/asset-rights-video-operations-contrib.xml", "OSGI-INF/media-delivery-types.xml",
+                "OSGI-INF/media-delivery-listener.xml"), components);
         for (String component : components) {
             byte[] xml = resource(component);
             assertDoesNotThrow(() -> parse(xml),
@@ -93,8 +94,9 @@ class BundleTest {
             collect(xml.getElementsByTagName("object"), "class", classes);
             collect(xml.getElementsByTagName("register"), "class", classes);
             collect(xml.getElementsByTagName("operation"), "class", classes);
+            collect(xml.getElementsByTagName("listener"), "class", classes);
         }
-        assertEquals(15, classes.size(), classes::toString);
+        assertEquals(16, classes.size(), classes::toString);
         for (String name : classes) {
             assertDoesNotThrow(() -> Class.forName(name), name);
         }
@@ -121,6 +123,37 @@ class BundleTest {
         NodeList points = xml.getElementsByTagName("extension-point");
         assertEquals(1, points.getLength());
         assertEquals(AssetRightsComponent.XP_POLICIES, ((Element) points.item(0)).getAttribute("name"));
+    }
+
+    /**
+     * The delivery listener is synchronous, before the commit, on every event that could make,
+     * change, copy, move or remove a delivery; and a delivery is not versionable, so never checked
+     * in or restored.
+     */
+    @Test
+    void theDeliveryListenerHearsEveryWayADeliveryCouldBeMadeOrChanged() throws Exception {
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/media-delivery-listener.xml"));
+        NodeList listeners = xml.getElementsByTagName("listener");
+        assertEquals(1, listeners.getLength());
+        Element listener = (Element) listeners.item(0);
+        assertEquals("false", listener.getAttribute("async"));
+        assertEquals("false", listener.getAttribute("postCommit"));
+        assertEquals("org.nuxeo.agentic.assets.delivery.DeliveryListener", listener.getAttribute("class"));
+        List<String> events = new ArrayList<>();
+        NodeList named = listener.getElementsByTagName("event");
+        for (int i = 0; i < named.getLength(); i++) {
+            events.add(named.item(i).getTextContent());
+        }
+        assertEquals(List.of("aboutToCreate", "aboutToImport", "beforeDocumentModification", "aboutToRemove",
+                "aboutToMove", "aboutToCopy", "aboutToCheckIn", "beforeRestoringDocument", "documentTrashed"), events);
+
+        org.w3c.dom.Document types = parse(resource("OSGI-INF/media-delivery-types.xml"));
+        Element doctype = (Element) types.getElementsByTagName("doctype").item(0);
+        assertEquals("MediaDelivery", doctype.getAttribute("name"));
+        assertEquals(0, doctype.getElementsByTagName("facet").getLength());
+        // The filed three, the server's three, and each delivered file's fields.
+        assertEquals(List.of("version", "distributor", "territory", "deliveredAt", "deliveredBy", "files", "file", "use",
+                "name", "channel", "filename", "mimeType", "length", "digest"), fields("schemas/media_delivery.xsd"));
     }
 
     /** package.xml's version is the module's property, and the manifest's Bundle-Version repeats it. */
