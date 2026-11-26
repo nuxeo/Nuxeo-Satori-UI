@@ -83,6 +83,12 @@
             <property name="size">10</property>
           </properties>
         </aggregate>
+        <aggregate id="pclaim_policy_agg" type="terms" parameter="pclaim:policy">
+          <field schema="propertyclaim_search" name="pclaim_policy_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
       </aggregates>
       <sort column="pclaim:reportedOn" ascending="true" />
       <pageSize>50</pageSize>

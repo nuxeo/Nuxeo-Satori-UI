@@ -35,9 +35,10 @@ Every name in it is fictional. The log of each step, its result, its time and ea
   when the status is Denied", as `app.rules.fieldIn`, and a check that the loss date is not after
   the report date, as `core.notBefore` on the report date. The claim number, the connector's key,
   is read-only there.
-- **Two queues:** open claims, oldest report first, with facets on status, cause of loss and
-  adjuster; and open claims reserved over $50,000, largest reserve first. Both show each claim's
-  policyholder, read from its policy.
+- **Two queues:** open claims, oldest report first, with facets on status, cause of loss,
+  adjuster and policy, the last showing each policy by its title (#751); and, for claims managers,
+  open claims reserved over $50,000, largest reserve first. Both show each claim's policyholder,
+  read from its policy.
 - **A home, a menu and labels.** Open claims by status and by cause for everyone; the reserves over
   $50,000 for claims managers; the claims reported and not yet investigated for adjusters.
 - **An `app.json` that names its own groups,** `property-claims-adjusters` and
@@ -60,8 +61,8 @@ Every name in it is fictional. The log of each step, its result, its time and ea
 | `bundle/agentic-ui-config/layouts/PropertyClaim/view.layout.json`  | The claim page: two banners; the claim, the loss, the policy, the core system, attachments, denial, history | `app-layout`, then `write_package_file`                      |
 | `bundle/agentic-ui-config/layouts/PropertyClaim/edit.layout.json`  | The claim's Edit form: the denial reason's rule, the loss date's check, the number read-only                | `app-form`, then `write_package_file`                        |
 | `bundle/agentic-ui-config/layouts/PropertyPolicy/view.layout.json` | The policy page: two banners, three cards, its claims and its history                                       | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/queues/open-property-claims.json`        | Open claims, oldest report first, with Status, Cause of loss and Adjuster facets                            | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/queues/high-reserve.json`                | Open claims reserved over $50,000, largest first                                                            | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/queues/open-property-claims.json`        | Open claims, oldest report first, with Status, Cause of loss, Adjuster and Policy facets                    | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/queues/high-reserve.json`                | Open claims reserved over $50,000, largest first, for claims managers                                       | `app-queue`, then `write_package_file`                       |
 | `bundle/agentic-ui-config/home.json`, `navigation.json`            | The home's four figures, and the menu: the home and the two queues                                          | `write_package_file`                                         |
 | `bundle/agentic-ui-config/labels/en.json`                          | Every label key the files name, in English, and each schema's Properties heading                            | The generators, then `write_package_file`                    |
 | `bundle/OSGI-INF/pc-claims-demo-config.xml`                        | The component: the three layouts, and the app with the five files the registry serves                       | The generators                                               |
@@ -118,11 +119,11 @@ do.
   `dmg:` from the moves kit, and a plain `Policy` would be the first name a real insurer's Studio
   project took.
 
-| Page provider            | Given         | Returns                                                                                                                                    | Reads            |
-| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
-| `pc_open_claims`         | Nothing       | Claims `Reported`, `Investigating` or `Approved`, oldest report first, with `pclaim_status_agg`, `pclaim_cause_agg`, `pclaim_adjuster_agg` | The search index |
-| `pc_high_reserve_claims` | Nothing       | The same open claims with a reserve over 50,000, largest reserve first                                                                     | The repository   |
-| `pc_policy_claims`       | A policy's id | Its claims, latest loss first                                                                                                              | The repository   |
+| Page provider            | Given         | Returns                                                                                                                                                         | Reads            |
+| ------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `pc_open_claims`         | Nothing       | Claims `Reported`, `Investigating` or `Approved`, oldest report first, with `pclaim_status_agg`, `pclaim_cause_agg`, `pclaim_adjuster_agg`, `pclaim_policy_agg` | The search index |
+| `pc_high_reserve_claims` | Nothing       | The same open claims with a reserve over 50,000, largest reserve first                                                                                          | The repository   |
+| `pc_policy_claims`       | A policy's id | Its claims, latest loss first                                                                                                                                   | The repository   |
 
 - **The threshold is written in the page provider,** `pclaim:reserve > 50000`, and in the queue's
   and the home's labels, "$50,000": changing it is a change to the model and to two labels. A queue
@@ -161,16 +162,23 @@ system"), over the connectors add-on's `Connector.Read`
   three files to each other: the card's fields are the contribution's, `registered.json` lists
   exactly them, and the key is a property the model gives the type.
 - **The stand-in core system has no record for this kit's claims.** `core-system.mjs` answers the
-  Payers seed's claim numbers only, so on a server today the card would say "Nothing found in the
-  other system" for every one of the eight. Not changed here: another change is editing the
+  Payers seed's claim numbers only, so on a server with the add-on, the contribution, its settings
+  and the stand-in all in place, the card would say "Nothing found in the other system" for every
+  one of the eight. With the kit alone, `Connector.Read` does not exist, and the card shows its
+  error state. Not changed here: another change is editing the
   add-on, and the kit only configures it. Its follow-up is eight records of the same shape for
   `PC-24001` to `PC-24008` (feedback item 4, below).
 - **The connector's key is the claim number,** which the Edit form shows read-only, so the form
-  cannot point the card at another claim's record. **That is a convenience, not a control:** the
-  REST API still writes it, and whoever may write a claim's number chooses which core-system record
-  its readers see. The connectors README's security review says to key a connector on a property a
-  workflow or an import writes; a real kit would. The reader's `Read` on the claim is checked on
-  the server first, and the card is never a security control.
+  cannot point the card at another claim's record. **That is a convenience, not a control,** and
+  the exposure is wider than the form: the REST API still writes the number, and **anyone who may
+  create a `PropertyClaim` anywhere, their own personal workspace included, may give it any number
+  and read that claim's core-system record through the card.** The kit does not limit where its
+  types may be created (no folder lists them, which hides them from the Create menu only), so the
+  server's check of the reader's `Read` on the claim, which comes first, protects nothing here: the
+  reader made the claim. The connectors README's security review says to key a connector on a
+  property a workflow or an import writes and to limit where its types may be created; a real kit
+  must do both. **Accepted for this demo,** whose core-system data is fictional, and left for the
+  connectors' security review; the card is never a security control.
 
 ## Photos and documents
 
@@ -188,8 +196,8 @@ The claim's attachments are `files:files`, which `app-model --attachments` gave 
 
 ## How it was built: the log
 
-Run on 26 November 2026, from 20:03 to 21:XX IST, in a worktree of `staging/enterprise-grade-app`
-at `cc9afbb66`, on Node 24.22.1 (Node 25.2.0 for `npm ci`), as the skill's agent. The agent spoke to
+Run on 26 November 2026, from 20:03 to @@END@@ IST, in a worktree of `staging/enterprise-grade-app`
+at `cc9afbb66`, on Node 24.22.1 (Node 25.2.0 for `npm ci`, a departure: step 0), as the skill's agent. The agent spoke to
 the Builder MCP server over stdio, as Claude Code does once the server is registered, through a
 small client of its own outside the repository, as the contracts and moves kits' runs did:
 registering the server with `claude mcp add-json` changes the person's own Claude configuration,
@@ -198,25 +206,25 @@ which was not asked for. **Nothing was written to any Nuxeo, and nothing was rea
 
 ### Step 0. Before you start (20:03, 2 minutes)
 
-| What                               | Result                                                                                                                         |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `npm ci`                           | Passed in 69 seconds, on Node 25.2.0 with `NODE_OPTIONS=--no-experimental-webstorage`. `package-lock.json`'s SHA-256 unchanged |
-| Node for the rest                  | 24.22.1, the major `.nvmrc` pins, for the MCP server, the generators, the pipeline and the seed                                |
-| `NUXEO_USER`, `NUXEO_PASS`         | **Not in this run's environment.** The agent did not supply an account of its own (step 1)                                     |
-| A server whose model may be shared | The local Docker Nuxeo, running (`/nuxeo/runningstatus` answered 200, unauthenticated), never read                             |
-| The platform version               | `0.2.0`, from `libs/platform/package.json`                                                                                     |
+| What                               | Result                                                                                                                                                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm ci`                           | Passed in 69 seconds, on Node 25.2.0 with `NODE_OPTIONS=--no-experimental-webstorage`. `package-lock.json`'s SHA-256 unchanged. **A departure:** the shell's default Node, not the 24 the skill asks for; allowed by the request, with that option. Everything after ran on 24 |
+| Node for the rest                  | 24.22.1, the major `.nvmrc` pins, for the MCP server, the generators, the pipeline and the seed                                                                                                                                                                                |
+| `NUXEO_USER`, `NUXEO_PASS`         | **Not in this run's environment.** The agent did not supply an account of its own (step 1)                                                                                                                                                                                     |
+| A server whose model may be shared | The local Docker Nuxeo, running (`/nuxeo/runningstatus` answered 200, unauthenticated), never read                                                                                                                                                                             |
+| The platform version               | `0.2.0`, from `libs/platform/package.json`                                                                                                                                                                                                                                     |
 
 Reading the plan, the skill, the moves and contracts kits' READMEs, the connectors README,
 layout-v2.md's sections 2 to 7 and 12, and app-definition-v2.md's queues took about 8 minutes;
 writing the client, 1 more.
 
-### Step 1. Read the server (20:13, 2 minutes)
+### Step 1. Read the server (20:12, 1 minute)
 
-| Asked                                                                                                                                                                  | Answer                                                                                                                                                                       |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_content_model`, `describe_document_type` `PropertyClaim`, `describe_page_provider` `pc_claims_open`, `list_page_providers`, `list_vocabularies`, `list_workflows` | Each refused at once: "NUXEO_USER and NUXEO_PASS must both be set in the server's environment … There is deliberately no default"                                            |
-| `get_content_model` and `describe_schema` `files`, given the moves kit's folder                                                                                        | Answered from its `content-model.json`, `source: "package"`: `files:files`, `complex[]` of `{ file: blob }`                                                                  |
-| The seven kits' own models, read from their folders                                                                                                                    | Their types and prefixes: `Claim` and `claim`, `DamageClaim` and `dmg`, `Contract` and `contract`, and the rest. No `PropertyClaim`, `PropertyPolicy`, `pclaim` or `ppolicy` |
+| Asked                                                                                                                                                                                                                       | Answer                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_content_model`, `describe_document_type` `PropertyClaim`, `describe_page_provider` `pc_claims_open` (a name planned then; the kit's is `pc_open_claims`), `list_page_providers`, `list_vocabularies`, `list_workflows` | Each refused at once: "NUXEO_USER and NUXEO_PASS must both be set in the server's environment … There is deliberately no default"                                            |
+| `get_content_model` and `describe_schema` `files`, given the moves kit's folder                                                                                                                                             | Answered from its `content-model.json`, `source: "package"`: `files:files`, `complex[]` of `{ file: blob }`                                                                  |
+| The seven kits' own models, read from their folders                                                                                                                                                                         | Their types and prefixes: `Claim` and `claim`, `DamageClaim` and `dmg`, `Contract` and `contract`, and the rest. No `PropertyClaim`, `PropertyPolicy`, `pclaim` or `ppolicy` |
 
 **A departure:** the skill's step 1 reads the server, and this run could not. The server reads
 need an account, and the run's environment had none; the agent did not sign in with one of its own
@@ -228,20 +236,22 @@ could shadow, and the NXQL tried read-only, which the pipeline's token check rep
 **The skill says to stop here:** the types do not exist, and creating them is Studio's. The
 request asked for a demo kit with a stand-in model, so the kit carries one, written by `app-model`.
 
-### Step 2. Write the files, through the write tools only (20:13, 6 minutes)
+### Step 2. Write the files, through the write tools only (20:13, 6 minutes, then 1 at 20:36 and 1 at 21:00)
 
-Four writes, each answering `written: true`, and two refused on purpose, as negative controls of
+Three writes from 20:13 to 20:19, each answering `written: true`, two more later, after the release
+candidate and after the review, and two refused on purpose, as negative controls of
 the write tools, which show that a refusal leaves the package as it was; they are not evidence
 that the kit is right, which the rest of this log is.
 
-| Call                                                                                                                                                                                                                                                                                                                                                                                                                        | Answer                                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apply_package_changes`, 9 changes: `app-package` (no `type`, `appId: pc-claims`, `address: property-claims`, two groups); `app-model` for `PropertyPolicy`, and `PropertyClaim` with `attachments`; `app-model` for the three page providers, the open claims' with `aggregates: "pclaim:status,pclaim:cause,pclaim:adjuster"`; `app-layout` for the two types; `app-form` for the claim's Edit form with seven `required` | `written: true`, 17 files, in 6.3 seconds. One card per type, every property in the model's order. "Left out" named `files:files` for the claim, "a file-list widget shows them on the record page, written by hand" |
-| `apply_package_changes`: `labels/en.json` first, then the three layouts, whole                                                                                                                                                                                                                                                                                                                                              | `written: true`, 4 files, in 0.5 seconds: 3 layouts held to the content model, 5 files passed                                                                                                                        |
-| `write_package_file`: the claim page with the core system's card naming `ppolicy:number`, a property, as a connector field                                                                                                                                                                                                                                                                                                  | **Refused, on purpose:** step 2, `cards[3].external.fields[1].name: a field of another system is named as its connector names it` [structure]. The file's SHA-256 unchanged                                          |
-| `apply_package_changes`: `app-queue` twice, then `labels/en.json`, the two queues with their widgets and facets, `home.json` and `navigation.json`, whole, then `app-registry`                                                                                                                                                                                                                                              | `written: true`, 5 files, in 3.5 seconds: 9 files passed. `app-registry`: "Now names: home.json, navigation.json"                                                                                                    |
-| `write_package_file`: the open claims queue with a fourth facet, `pclaim_policy_agg`                                                                                                                                                                                                                                                                                                                                        | **Refused, on purpose:** step 2, `facets[3].aggregate`: the page provider "has no aggregate "pclaim_policy_agg": it defines pclaim_status_agg, pclaim_cause_agg, pclaim_adjuster_agg"                                |
-| After the release candidate (below): `apply_package_changes`, `app-queue` `open-property-claims`, then `labels/en.json`, that queue, `home.json` and `navigation.json`, whole, then `app-registry`                                                                                                                                                                                                                          | `written: true`, 5 files, in 1.3 seconds. `app-queue`: "now names queues/open-property-claims.json, and no longer names queues/open-claims.json"                                                                     |
+| Call                                                                                                                                                                                                                                                                                                                                                                                                                        | Answer                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apply_package_changes`, 9 changes: `app-package` (no `type`, `appId: pc-claims`, `address: property-claims`, two groups); `app-model` for `PropertyPolicy`, and `PropertyClaim` with `attachments`; `app-model` for the three page providers, the open claims' with `aggregates: "pclaim:status,pclaim:cause,pclaim:adjuster"`; `app-layout` for the two types; `app-form` for the claim's Edit form with seven `required` | `written: true`, 17 files, in 6.3 seconds. One card per type, every property in the model's order. "Left out" named `files:files` for the claim, "a file-list widget shows them on the record page, written by hand"                                                             |
+| `apply_package_changes`: `labels/en.json` first, then the three layouts, whole                                                                                                                                                                                                                                                                                                                                              | `written: true`, 4 files, in 0.5 seconds: 3 layouts held to the content model, 5 files passed                                                                                                                                                                                    |
+| `write_package_file`: the claim page with the core system's card naming `ppolicy:number`, a property, as a connector field                                                                                                                                                                                                                                                                                                  | **Refused, on purpose:** step 2, `cards[3].external.fields[1].name: a field of another system is named as its connector names it` [structure]. The file's SHA-256 unchanged                                                                                                      |
+| `apply_package_changes`: `app-queue` twice, then `labels/en.json`, the two queues with their widgets and facets, `home.json` and `navigation.json`, whole, then `app-registry`                                                                                                                                                                                                                                              | `written: true`, 5 files, in 3.5 seconds: 9 files passed. `app-registry`: "Now names: home.json, navigation.json"                                                                                                                                                                |
+| `write_package_file`: the open claims queue with a fourth facet, `pclaim_policy_agg`                                                                                                                                                                                                                                                                                                                                        | **Refused, on purpose:** step 2, `facets[3].aggregate`: the page provider "has no aggregate "pclaim_policy_agg": it defines pclaim_status_agg, pclaim_cause_agg, pclaim_adjuster_agg". The review later asked for that facet, and `app-model` wrote the aggregate (the last row) |
+| After the release candidate (below): `apply_package_changes`, `app-queue` `open-property-claims`, then `labels/en.json`, that queue, `home.json` and `navigation.json`, whole, then `app-registry`                                                                                                                                                                                                                          | `written: true`, 5 files, in 1.3 seconds. `app-queue`: "now names queues/open-property-claims.json, and no longer names queues/open-claims.json"                                                                                                                                 |
+| After the review (below): `apply_package_changes`, `app-model` for `pc_open_claims` again, `force`, with `aggregates: "pclaim:status,pclaim:cause,pclaim:adjuster,pclaim:policy"`; then `labels/en.json`, the two queues, `home.json` and `navigation.json`, whole: a Policy facet with `"widget": "document-link"`, and the high-reserve queue and its menu entry for managers, as its figure was                          | `written: true`, 6 files, in 11.9 seconds: the model component and the search schema written again with `pclaim_policy_agg`                                                                                                                                                      |
 
 The edits, written with `write_package_file` from layout-v2.md and app-definition-v2.md, each file
 the designer's bytes for its value:
@@ -280,11 +290,12 @@ the designer's bytes for its value:
 | By hand, what the pipeline does not check (skill, step 3): every property a field, a column, a sort, a rule, a computation, a check or a `show` names, against its type, its page provider's or the linked type | 81 references, none missing. Seen failing: `pclaim:reportedDate` in the late-report banner's rule and `ppolicy:holderName` in a queue's `show`, both named                                               |
 | The pipeline on that broken copy                                                                                                                                                                                | **Refused the `show`,** since #751, and **passed the rule:** a banner whose rule names a property the type does not have would never show (feedback, below)                                              |
 
-### Step 4. Preview in dev mode, as far as it goes (20:21, 1 minute)
+### Step 4. Preview in dev mode, as far as it goes (20:21 and 21:04, 1 minute each)
 
 | What                                                                     | Result                                                                                                                                                                                                          |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preview_package`, `DEV_SERVER_URL=http://localhost:4299`, no dev server | `served: true`: the home, the menu, the two queues, the labels, the three layouts; `app.json` not served, as the registry's. `devServer.answering: false`. The Edit form is named "the PropertyClaim Edit form" |
+| `preview_package` again, after the queue's new id and the review's edits | `served: true`, the package as committed: `queues/open-property-claims.json` and `queues/high-reserve.json`, the old `open-claims` gone from the dev folder, and the rest as above                              |
 | The dev server and the pages in a browser                                | **Not started, not seen.** The person signs in to the app with their own account, and this run had none; no server holds a `PropertyClaim` or a `PropertyPolicy` either                                         |
 
 What a browser would show is what the contracts, facilities and moves kits' runs saw for a kit no
@@ -302,14 +313,15 @@ installed anywhere.
 
 Written by hand: the write tools refuse `demo/*`, as code, and write no connector contribution. On
 the moves kit's seed. Its controls, `node business-apps/packages/pc-claims-demo/demo/seed.selftest.mjs`,
-**38 of 38 passed**. Broken on purpose sixteen ways, one at a time, in a scratch copy, each turned at
-least one control red: no type precondition, no check that `/me` answers a user, a claim linked
+**38 of 38 passed**. Broken on purpose seventeen ways, one at a time, in a scratch copy, each turned
+at least one control red: no type precondition, no check that `/me` answers a user, a claim linked
 to its policy by number instead of id, no wait for the search index, no check of the facets, no
 order check, a claim's attachments written over, an emptied denial reason not emptied, the Basic
 header printed, no parameter given to the policy's claims, any trashed name like a record's
 restored, no write over an existing record, `registered.json` missing a field, the connector keyed
-on a property the model lacks, an address in the contribution, and the claim reported on the 30th
-day moved to the 31st.
+on a property the model lacks, an address in the contribution, the claim reported on the 30th day
+moved to the 31st, and, after the review's Policy facet, a policy's bucket looked for by its number
+instead of its id.
 
 ### The lists of kits, and the release candidate (20:28, 11 minutes)
 
@@ -324,15 +336,48 @@ day moved to the 31st.
   byte for byte. Seen failing with one Edit form field written across four lines, as `app-form`
   writes it, and put back.
 - **`npm run app-package:selftest`:** 124 negative controls refused and 37 sound packages built.
-- **The release candidate,** `node scripts/release-candidate.mjs --since origin/staging/enterprise-grade-app`,
+- **The release candidate,** `node scripts/release-candidate.mjs --out /tmp/pc-claims-agent/rc-1 --since origin/staging/enterprise-grade-app`,
   **refused the kit at stage 3, the kits as a set:** "the queue open-claims is contributed by
   moves-demo and pc-claims-demo". Nothing before it had said so: the write tools and the pipeline
   hold one package at a time. The queue was given the id `open-property-claims` through the write
-  tools (step 2's last row). **A departure:** the old file, `queues/open-claims.json`, was deleted
+  tools (step 2's sixth row). **A departure:** the old file, `queues/open-claims.json`, was deleted
   by hand first, since no write tool removes a file; the same call's `app-queue` took it out of the
   component. The parity corpus was written again. **Run again,** from 20:36 to 20:39, the
   candidate was assembled whole: stage 3 compared the kit's 21 names with the other seven kits' and
-  found no clash, and Maven's packages and tests passed. Nothing was signed, tagged or published.
+  found no clash, and Maven's packages and tests passed, before the review's edits below. Nothing
+  was signed, tagged or published.
+
+### The gate, the pre-PR review and the independent review (20:40, @@REVIEWMIN@@ minutes)
+
+- **The gate,** `npm run beta:gate -- --base origin/staging/enterprise-grade-app --gates
+lockfile,guardrails,sanitizer-audit,lint,test,spec-types,api-surface,reference-drift,published-links,module-boundaries,agent-mirror`:
+  11 of 11 passed at 20:43, in 2.5 minutes, and @@GATE2@@ after the review's edits.
+- **`node scripts/pre-pr-review.mjs --base origin/staging/enterprise-grade-app`:** no mechanisable
+  defect, on 8 changed files. Its skill's judgement classes, worked by hand, renamed one control
+  that claimed more than it checked: "no address and no credential" became "writes no address,
+  and names its address and its token by server settings".
+- **A reviewer agent,** given the request, the skill and the documents, and not this log, read the
+  kit and its diff, ran the pipeline, the controls, the specs and checks of its own, and found
+  nothing blocking. Its property walker found the same 81 references, none missing; it recomputed
+  the seed's expected orders and buckets from the model's NXQL, and they matched. What it found,
+  and what was done:
+
+| Finding                                                                                                                | Done                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The log's end time was a placeholder, and steps 1 and 2 both began at 20:13                                            | Filled in; step 1 began at 20:12, with the client                                                                                                                           |
+| The administrator guide still said no kit contributes a connector, and named only `deployment/` for `nxserver/config/` | Both items of its install order now name this kit's connector file                                                                                                          |
+| The connector's key exposure was understated: anyone who may create a `PropertyClaim` anywhere picks the record read   | Said plainly in "The core system's card", as an accepted risk of the demo for the connectors' security review                                                               |
+| Step 4's preview predated the queue's new id, and left the dev folder serving `open-claims`                            | `preview_package` run again; its row added                                                                                                                                  |
+| Node 25 for `npm ci` was recorded, not called a departure                                                              | Called one, with why                                                                                                                                                        |
+| The release candidate's command had no `--out`, which it requires                                                      | Given                                                                                                                                                                       |
+| Step 1 named `pc_claims_open`, a page provider the kit does not have                                                   | Said so: a name planned before the kit was written                                                                                                                          |
+| "The card would say Nothing found" holds only with the add-on, the contribution and the stand-in in place              | Said: with the kit alone, the card shows its error state                                                                                                                    |
+| The high-reserve figure was for managers, its queue and menu entry for everyone                                        | The queue and its entry given the same `visibleWhen`, through the write tools                                                                                               |
+| #751's facets by title were not used, nor said to be considered                                                        | A Policy facet on the open claims, `pclaim_policy_agg` with `"widget": "document-link"`, through `app-model --force` and the write tools; the seed checks its buckets by id |
+
+After the edits: the pipeline, with `--model` and `--registered`, passed; the controls passed, 38 of
+38, and the seventeen breaks each turned one red; the parity corpus was written again and
+`DeploymentValidatorParityTest` passed; the round trip held the kit's files, 55 tests.
 
 ## Building it
 
@@ -437,7 +482,8 @@ node business-apps/packages/pc-claims-demo/demo/seed.mjs
   - **open claims:** PC-24008, PC-24001, PC-24004, PC-24003, PC-24002 and PC-24007, oldest report
     first. The Status facet: two each of `Reported`, `Investigating` and `Approved`; Cause of loss:
     two `Fire`, two `Water`, one `Wind`, one `Hail`; Adjuster: two for `noor.halvorsen`, one each
-    for `tobias.renner` and `imani.castell`, and two claims with none;
+    for `tobias.renner` and `imani.castell`, and two claims with none; Policy, by each policy's
+    title: two on POL-PC-1001, one each on POL-PC-1002 and POL-PC-1003, two on POL-PC-1005;
   - **reserves over $50,000:** PC-24003 (140,000), PC-24001 (85,000) and PC-24008 (52,000);
   - **reported late:** PC-24003, 38 days after the loss, and PC-24006, 50, show the banner;
     PC-24005, reported on the 30th day, does not;
@@ -457,7 +503,8 @@ node business-apps/packages/pc-claims-demo/demo/seed.mjs
 - **It checks what it wrote:** the three page providers must return every seeded record that
   belongs in them and none that does not, in their order, the policy's claims given each policy's
   id; the open claims are asked again until the search index agrees, up to `NUXEO_INDEX_WAIT_MS`
-  (15 seconds by default), and their three facets must count at least the seeded open claims.
+  (15 seconds by default), and their four facets must count at least the seeded open claims, the
+  Policy facet's buckets found by each policy's id.
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default.
   `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met, before
   anything is written: no credentials, no server, or one that answers `/me` with an error, with
@@ -571,6 +618,10 @@ Each reversible, each the agent's recommendation:
   and fields, in `demo/` rather than the bundle; the stand-in core system left unchanged.
 - **The claim number read-only** in the Edit form.
 - **The queue id `open-property-claims`,** after the clash with the moves kit's.
+- **The high-reserve queue, its menu entry and its home figure for claims managers only,** and the
+  rest for everyone. Hiding a queue is not a security control.
+- **A Policy facet on the open claims,** shown by title, the one reference a facet could group by:
+  status, cause and adjuster are not references.
 - **Banners not asked for:** a denied claim, a policy not in force, a policy ending within 30 days.
 
 ## Not done yet

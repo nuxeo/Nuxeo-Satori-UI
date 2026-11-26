@@ -30,5 +30,6 @@
     { "field": "pclaim:adjuster", "widget": "user" }
   ],
   "sort": [{ "field": "pclaim:reserve", "order": "desc" }],
-  "pageSize": 50
+  "pageSize": 50,
+  "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["property-claims-managers"] }
 }

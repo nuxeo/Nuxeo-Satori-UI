@@ -14,6 +14,7 @@
     "pc-claims.facet.status": "Status",
     "pc-claims.facet.cause": "Cause of loss",
     "pc-claims.facet.adjuster": "Adjuster",
+    "pc-claims.facet.policy": "Policy",
     "pc-claims.banner.claim.reportedLate": "This claim was reported more than 30 days after the loss.",
     "pc-claims.banner.claim.denied": "This claim was denied. The reason is in the Denial card.",
     "pc-claims.banner.policy.notInForce": "This policy is not in force: it lapsed or was cancelled.",

@@ -112,10 +112,14 @@ The order the [demo server](../../business-apps/demo-server/README.md) installs 
    ([records kit README](../../business-apps/packages/records-demo/README.md#installing-it-on-a-server-of-your-own)).
 2. **The connectors bundle, only where a kit contributes a connector.** It has no package: its jar
    goes into `nxserver/bundles/` ([connectors README](../../nuxeo-agentic-connectors/README.md),
-   "Installing it"). No kit contributes one yet: the Payers kit's opt-in is described and "not
-   done here" (same README, "How a kit opts in").
+   "Installing it"). One kit configures one: the P&C claims kit's `pcclaims.policyPayments`, whose
+   contribution is `demo/pc-claims-connectors-config.xml`, outside its package, since the bundle has
+   no package to depend on
+   ([P&C claims README](../../business-apps/packages/pc-claims-demo/README.md#connecting-the-core-system)).
+   The Payers kit's opt-in is described and "not done here" (same README, "How a kit opts in").
 3. **The deployment's own contributions, into `nxserver/config/`.** Each kit's
-   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list. A file there
+   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list, and, with the
+   connectors bundle, the P&C claims kit's `demo/pc-claims-connectors-config.xml`. A file there
    whose name ends in `-config.xml` is a contribution the server reads at start. Never place
    `deployment/build-allow-list.json`: it is a build input
    ([demo server README](../../business-apps/demo-server/README.md), step 4;

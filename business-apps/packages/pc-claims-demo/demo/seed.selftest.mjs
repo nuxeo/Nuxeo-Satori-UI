@@ -10,7 +10,7 @@
  * id, `Document.Untrash`, NXQL through `Repository.Query`, trash renaming a document to
  * `<name>._<time>_.trashed`, and the kit's three page providers, answered as
  * `pc-claims-demo-model.xml` defines them, the policy's claims given their parameter as
- * `queryParams`, and the open claims queue's with its three aggregates and a search index that can
+ * `queryParams`, and the open claims queue's with its four aggregates and a search index that can
  * lag. So a pass proves the script's logic: each of its preconditions, a claim's policy written as
  * its id, a second run that adds nothing, puts back what was changed and leaves a claim's
  * attachments alone, a trashed record restored and put back, a trashed sibling whose name only
@@ -264,6 +264,7 @@ function standIn({
                 pclaim_status_agg: { buckets: buckets(found, 'pclaim:status') },
                 pclaim_cause_agg: { buckets: buckets(found, 'pclaim:cause') },
                 pclaim_adjuster_agg: { buckets: buckets(found, 'pclaim:adjuster') },
+                pclaim_policy_agg: { buckets: buckets(found, 'pclaim:policy') },
               };
         }
         const answer = { ...page(found, index), ...(aggregations ? { aggregations } : {}) };
@@ -617,7 +618,8 @@ await against({ brokenProvider: 'pc_open_claims' }, async ({ run }) => {
     status === 1 &&
       /pc_open_claims does not return PC-24001/.test(output) &&
       /pclaim_status_agg counts nothing in Reported/.test(output) &&
-      /pclaim_adjuster_agg counts nothing in noor\.halvorsen/.test(output),
+      /pclaim_adjuster_agg counts nothing in noor\.halvorsen/.test(output) &&
+      /pclaim_policy_agg counts nothing in POL-PC-1001/.test(output),
     'open claims the index never lists fail the run once the wait is over, naming them and their buckets',
     output,
   );
@@ -636,7 +638,8 @@ await against({ noAggregates: true }, async ({ run }) => {
     status === 1 &&
       /answers no aggregate pclaim_status_agg/.test(output) &&
       /answers no aggregate pclaim_cause_agg/.test(output) &&
-      /answers no aggregate pclaim_adjuster_agg/.test(output),
+      /answers no aggregate pclaim_adjuster_agg/.test(output) &&
+      /answers no aggregate pclaim_policy_agg/.test(output),
     "open claims answered with no aggregate fail the run: the queue's facets would not show",
     output,
   );
@@ -714,7 +717,7 @@ await against({ noAggregates: true }, async ({ run }) => {
       ) &&
       /property="nuxeo\.agentic\.connectors\.pcclaims\.policyPayments\.token"/.test(xml) &&
       /env="NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN"/.test(xml),
-    "the contribution holds no address and no credential, only the server settings' names, under the connector's own prefix",
+    "the contribution writes no address, and names its address and its token by server settings under the connector's own prefix",
   );
 }
 

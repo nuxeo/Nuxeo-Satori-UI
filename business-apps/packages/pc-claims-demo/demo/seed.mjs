@@ -41,8 +41,8 @@
  * return every seeded record that belongs in it and none that does not, in its order: the claims
  * over the reserve threshold and each policy's claims, from the repository; and the open claims,
  * from the search index, which lists a write a moment later, so it is asked again until it agrees
- * or NUXEO_INDEX_WAIT_MS has passed. Its three facets' buckets must count at least the seeded open
- * claims. Another record on the server may be in them: the seed checks its own.
+ * or NUXEO_INDEX_WAIT_MS has passed. Its four facets' buckets must count at least the seeded open
+ * claims, the Policy facet's by each policy's id. Another record on the server may be in them: the seed checks its own.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -317,7 +317,7 @@ async function disagreements({ policies, claims }) {
     const { uids, aggregations } = await indexed('pc_open_claims');
     open = [
       ...compare('pc_open_claims', uids, EXPECTED.pc_open_claims),
-      ...bucketProblems(aggregations),
+      ...bucketProblems(aggregations, policies),
     ];
     if (open.length === 0 || Date.now() >= deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -326,8 +326,12 @@ async function disagreements({ policies, claims }) {
   return problems;
 }
 
-/** Where the open claims' facets count fewer than the seeded open claims in a bucket. */
-function bucketProblems(aggregations) {
+/**
+ * Where the open claims' facets count fewer than the seeded open claims in a bucket. The Policy
+ * facet's buckets are the policies' ids, `pclaim:policy`, and `OPEN_BUCKETS` names them by number:
+ * each is looked for by the id the seed wrote for its number, `policies`.
+ */
+function bucketProblems(aggregations, policies) {
   const problems = [];
   for (const [aggregate, expected] of Object.entries(OPEN_BUCKETS)) {
     const buckets = aggregations?.[aggregate]?.buckets;
@@ -336,7 +340,8 @@ function bucketProblems(aggregations) {
       continue;
     }
     for (const [key, count] of Object.entries(expected)) {
-      const bucket = buckets.find((b) => String(b?.key) === key);
+      const wanted = aggregate === 'pclaim_policy_agg' ? policies.get(key) : key;
+      const bucket = buckets.find((b) => String(b?.key) === wanted);
       if (!bucket || !(Number(bucket.docCount) >= count))
         problems.push(
           `pc_open_claims's ${aggregate} counts ${bucket ? bucket.docCount : 'nothing'} in ${key}, not at least ${count}`,

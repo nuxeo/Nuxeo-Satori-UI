@@ -243,6 +243,9 @@ export const OPEN_BUCKETS = {
   pclaim_status_agg: count(open.map((c) => c.status)),
   pclaim_cause_agg: count(open.map((c) => c.cause)),
   pclaim_adjuster_agg: count(open.filter((c) => c.adjuster).map((c) => c.adjuster)),
+  // By the policy's number here: the server's buckets are the policies' ids, which the seed maps
+  // back, and the queue's Policy facet shows each by its policy's title.
+  pclaim_policy_agg: count(open.map((c) => c.policy)),
 };
 
 function count(keys) {
