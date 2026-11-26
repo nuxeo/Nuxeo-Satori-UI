@@ -132,7 +132,7 @@ leaves the place for the photo: the claim's attachments, `files:files`.
 
 ## How it was built: the log
 
-Run on 26 November 2026, from 05:25 to about 06:30 IST, in a worktree of
+Run on 26 November 2026, from 05:25 to 07:35 IST, in a worktree of
 `staging/enterprise-grade-app` at `749cbd660`, on Node 24.22.1, against the local Docker Nuxeo
 (container `nuxeo`, port 8080, which has the Satori package and the Payers and contracts kits
 installed), signed in with its default administrator account from the environment. **Nothing was
@@ -262,6 +262,15 @@ page provider with a `?` is given its value as `queryParams`, and answers 400 wi
 page provider of the search index answers `aggregations.<id>.buckets`, each `{ key, docCount }`
 (`payers_unassigned_claims`'s `claim_status_agg`).
 
+### After merging staging (07:32, 1 minute)
+
+Staging gained a rule while the kit was built (#731): each kit names its own schemas for the
+Properties panel, `layout.schema.<schema>`, which the skill now says and
+`kit-schema-labels.spec.ts` in `libs/shared/document-layouts` holds every kit to. After the merge
+that spec failed for this kit, naming `layout.schema.move`, `layout.schema.moveitem` and
+`layout.schema.damageclaim`. One `write_package_file` of `labels/en.json` with the three texts
+answered `written: true`, and the spec passed; the kit was added to its list of kits found.
+
 ## Building it
 
 ```bash
@@ -269,7 +278,7 @@ npm run app-package -- business-apps/packages/moves-demo --platform 0.2.0
 ```
 
 It writes `dist/moves-demo-0.1.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model.
+ships a stand-in model: sha256 `690b2b54…5348` after the last write, on 26 November 2026.
 
 ## Installing it on a local Nuxeo
 
@@ -429,7 +438,11 @@ kit; the rest are follow-up candidates.
 14. **Nothing in the repository connects an agent to the MCP server without registering it** in
     the person's Claude configuration (the tutorial's item 12): this run used a client of its own,
     outside the repository, as the contracts kit's did.
-15. **What went well:** every write answered with the files it changed and the pipeline's own
+15. **No generator writes a schema's Properties heading,** `layout.schema.<schema>`, though
+    `app-model` writes the schema and `app-layout` a card's label: each kit adds it by hand, and
+    only a unit test outside the pipeline, `kit-schema-labels.spec.ts`, asks for it, so the write
+    tools passed this kit without it until staging's spec was merged in.
+16. **What went well:** every write answered with the files it changed and the pipeline's own
     lines; each refusal named the file, the place and the reason, and left the package as it was;
     the demo-kit order in the skill worked first time in one call; and `app-model --aggregates`
     wrote the facets' page provider, the part the facilities kit wrote by hand.
