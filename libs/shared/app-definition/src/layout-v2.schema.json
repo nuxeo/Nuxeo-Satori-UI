@@ -35,6 +35,10 @@
       "$ref": "#/$defs/shareLinks",
       "description": "View mode only. A picture's record page lists its share links for people outside, offers a new one and revoke, and shows their downloads, to those the server lets manage them."
     },
+    "capture": {
+      "$ref": "#/$defs/capture",
+      "description": "View mode only. Photos taken on a phone, on the capture page, are filed on a record of the type: added to property, as the Attachments panel adds a file. The record page links to the capture page for those who may write the record."
+    },
     "cards": {
       "type": "array",
       "items": {
@@ -82,6 +86,34 @@
       "additionalProperties": false,
       "properties": {},
       "description": "No options yet: {} turns the share links on. Drawn only for a record with the picture schema and not the video one; the content model, when given, holds the type to that. The server (nuxeo-agentic-assets) decides who may share, and what a link serves until when."
+    },
+    "capture": {
+      "type": "object",
+      "required": ["property"],
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "$ref": "#/$defs/xpath",
+          "not": { "pattern": "^(ecm|var):" },
+          "description": "The property each photo is added to: a list of files, a complex list with a file subfield as files:files is, or a list of blobs. Never an ecm: or var: name."
+        },
+        "findBy": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/xpath",
+            "not": { "pattern": "^(ecm|var):" }
+          },
+          "description": "The text properties a number typed, pasted or scanned on the capture page is looked up in, such as the record's own number and its case's. Without it, the page finds a record of the type by its id or its link only."
+        },
+        "keepLocation": {
+          "type": "boolean",
+          "description": "Whether the photos keep where they were taken. Default false: the page strips the location from each photo before it is uploaded."
+        }
+      },
+      "description": "Photos from a phone, filed on the record. The server decides who may add a file to it."
     },
     "banner": {
       "type": "object",

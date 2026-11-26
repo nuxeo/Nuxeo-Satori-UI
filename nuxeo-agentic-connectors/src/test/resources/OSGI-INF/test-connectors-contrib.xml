@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- What a kit gives the add-on, for the tests: a Claim type keyed by its number, and a connector to
+     the stand-in core system, with a bearer credential. The address, the credential, the time to
+     live and the events secret are server properties each test sets: never in a contribution. -->
+<component name="org.nuxeo.agentic.connectors.test.contrib">
+
+  <require>org.nuxeo.agentic.connectors</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="test_claim" prefix="claim" src="schemas/claim.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <doctype name="Claim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="test_claim" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.agentic.connectors" point="connectors">
+    <connector id="test.claimPayments">
+      <type>Claim</type>
+      <address property="nuxeo.agentic.connectors.test.claimPayments.address" />
+      <path>/claims/{key}</path>
+      <key xpath="claim:number" />
+      <credential header="Authorization" prefix="Bearer "
+                  property="nuxeo.agentic.connectors.test.claimPayments.token" />
+      <field name="paymentStatus" pointer="/payment/status" />
+      <field name="paidAmount" pointer="/payment/amount" />
+    </connector>
+  </extension>
+
+</component>

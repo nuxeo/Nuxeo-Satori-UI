@@ -12425,7 +12425,10 @@ function checkAdoptedPatternsNotBypassed() {
  * with nothing to replace it, and a baseline of thirty files would say more about the controls'
  * gaps than about anyone's bypass. A listed library has no such use.
  */
-const NXS_CONTROL_FEATURES = Object.freeze(['libs/features/layout-designer']);
+const NXS_CONTROL_FEATURES = Object.freeze([
+  'libs/features/capture',
+  'libs/features/layout-designer',
+]);
 
 /** The Material entry points the `nxs-` controls own, and what replaces what each one draws. */
 const NXS_CONTROL_ENTRY_POINTS = new Map([

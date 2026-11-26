@@ -1537,6 +1537,8 @@
       "tick-not-accepted": "The server did not accept this change to the checklist."
     },
     "external": {
+      "age": "Read from the other system {{when}}",
+      "age-now": "Read from the other system just now",
       "empty": "Nothing found in the other system",
       "failed": "The other system's information could not be loaded",
       "loading": "Loading from the other system",
@@ -1739,7 +1741,10 @@
       "storyboard-none": "The server has made no storyboard for this video.",
       "unplayable": "This browser cannot play this video's files"
     },
-    "yes": "Yes"
+    "yes": "Yes",
+    "capture": {
+      "link": "Take photos and file them here"
+    }
   },
   "drawer": {
     "administration-analytics": "Analytics",
@@ -3889,5 +3894,111 @@
     "saved-search": "Saved Search",
     "unblock": "Unblock",
     "update": "Update"
+  },
+  "capture": {
+    "title": "Photograph and file",
+    "intro": "Choose the record, photograph what it is about, and file the photos on it.",
+    "record": {
+      "heading": "The record",
+      "loading": "Opening the record",
+      "failed": "The record could not be opened",
+      "number": "Number {{number}}",
+      "chosen": "Photos will be filed on {{record}}.",
+      "read-only": "You may not add files to {{record}}. Ask whoever manages it to let you edit it.",
+      "no-capture": "Photos are not filed on this kind of record. Choose another record.",
+      "another": "Choose another record",
+      "open": "Open the record"
+    },
+    "find": {
+      "label": "Number, barcode or link",
+      "submit": "Find",
+      "hint": "Type or paste the record's number or a link to it, or scan its barcode with a scanner.",
+      "finding": "Finding the record",
+      "none": "No record has the number {{code}}.",
+      "too-many": "More than 20 records have the number {{code}}. Type all of it.",
+      "choices": "Records with the number {{code}}: {{count}}. Choose one.",
+      "choices-label": "Records with the number {{code}}",
+      "choose": "Choose {{record}}",
+      "choose-short": "Choose",
+      "empty": "Type, paste or scan the record's number first.",
+      "too-long": "That is too long to be a record's number.",
+      "failed": "The record could not be looked up"
+    },
+    "photos": {
+      "heading": "Photos",
+      "take": "Take a photo",
+      "choose": "Choose photos",
+      "location-removed": "Where each photo was taken is removed from it before it is sent.",
+      "location-kept": "Each photo keeps where it was taken, as this kind of record asks.",
+      "none": "No photos yet.",
+      "list": "Photos to file",
+      "photo": "Photo {{position}}",
+      "progress": "Sending photo {{position}}",
+      "remove": "Remove photo {{position}}",
+      "removed": "Photo {{position}} removed.",
+      "added": "Photos added: {{count}}.",
+      "not-pictures": "Only pictures are filed here, so the other files were left out.",
+      "too-many": "One filing takes {{max}} photos at most, so the others were left out.",
+      "state": {
+        "preparing": "Getting it ready",
+        "ready": "Ready to file, {{size}}",
+        "waiting": "Waiting its turn",
+        "uploading": "Sending, {{percent}}%",
+        "retrying": "The connection dropped. Trying again",
+        "done": "Filed"
+      },
+      "refused": {
+        "unreadable": "Not a picture this page can read, so it will not be filed.",
+        "too-large": "Too large to read, so it will not be filed.",
+        "location": "Where it was taken could not be removed, so it will not be filed."
+      },
+      "failed": {
+        "connection": "Not filed: the connection dropped.",
+        "too-large": "Not filed: the server does not take a file this large.",
+        "refused": "Not filed: the server refused it.",
+        "forbidden": "Not filed: you may not add files to this record.",
+        "gone": "Not filed: the record is no longer there.",
+        "server": "Not filed: the server could not file it. Try again later."
+      }
+    },
+    "note": {
+      "label": "Note (optional)",
+      "hint": "Filed beside the photos, as a text file.",
+      "photos": "Photos filed with this note:",
+      "failed": {
+        "connection": "The note was not filed: the connection dropped.",
+        "too-large": "The note was not filed: the server does not take a file this large.",
+        "refused": "The note was not filed: the server refused it.",
+        "forbidden": "The note was not filed: you may not add files to this record.",
+        "gone": "The note was not filed: the record is no longer there.",
+        "server": "The note was not filed: the server could not file it."
+      }
+    },
+    "filing": {
+      "heading": "Note and filing",
+      "file": "File the photos",
+      "filing": "Filing the photos",
+      "started": "Filing the photos: {{count}} to send.",
+      "done": "Photos filed on the record: {{count}}.",
+      "done-note": "Photos filed on the record: {{count}}, with the note.",
+      "partly": "Photos not filed: {{count}}. Remove them, or file them on another record.",
+      "more-button": "Take more photos",
+      "more": "Ready for more photos.",
+      "retry": "Try again",
+      "stopped": {
+        "connection": "The connection dropped, so the filing stopped. The photos not filed are kept: try again once there is a signal.",
+        "forbidden": "You may not add files to this record, so the filing stopped.",
+        "gone": "The record is no longer there, so the filing stopped.",
+        "too-large": "The note was too large for the server, so it was not filed.",
+        "refused": "The server refused the note, so it was not filed.",
+        "server": "The server could not file the note, so it was not filed."
+      },
+      "wait": "The photos are being filed on this record: choose another once they are."
+    },
+    "leave": {
+      "title": "Leave without filing?",
+      "message": "Photos not filed yet: {{count}}. They are lost if you leave.",
+      "confirm": "Leave"
+    }
   }
 }

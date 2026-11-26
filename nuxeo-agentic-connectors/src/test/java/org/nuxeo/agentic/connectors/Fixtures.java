@@ -76,6 +76,51 @@ final class Fixtures {
             properties.put(HTTP_ALLOWED, "true");
             return this;
         }
+
+        /** Keeps the test connector's answers this many seconds. */
+        Settings ttl(String seconds) {
+            properties.put(CACHE_TTL, seconds);
+            return this;
+        }
+
+        Settings eventsSecret(String secret) {
+            properties.put(EVENTS_SECRET, secret);
+            return this;
+        }
+    }
+
+    static final String CACHE_TTL = "nuxeo.agentic.connectors.test.claimPayments.cache.ttl";
+
+    static final String CACHE_MAX_ENTRIES = "nuxeo.agentic.connectors.test.claimPayments.cache.maxEntries";
+
+    static final String EVENTS_SECRET = "nuxeo.agentic.connectors.test.claimPayments.events.secret";
+
+    /** A secret made for one test run: 32 random bytes, as 64 hexadecimal digits. Never a real one. */
+    static String generatedSecret() {
+        byte[] bytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(bytes);
+        return java.util.HexFormat.of().formatHex(bytes);
+    }
+
+    /** A clock a test moves on, rather than waiting. */
+    static final class Clock implements java.time.InstantSource {
+
+        private volatile java.time.Instant now = java.time.Instant.parse("2026-11-26T12:00:00Z");
+
+        @Override
+        public java.time.Instant instant() {
+            return now;
+        }
+
+        Clock advance(java.time.Duration by) {
+            now = now.plus(by);
+            return this;
+        }
+    }
+
+    /** Metrics in a registry of the test's own. */
+    static ConnectorMetrics metrics() {
+        return new ConnectorMetrics(new io.dropwizard.metrics5.MetricRegistry());
     }
 
     /** A Claim holding {@code claim:number} as given, or no such property at all. */
@@ -113,12 +158,20 @@ final class Fixtures {
         /** What {@code getDocument} answers: the document as the repository stores it. */
         DocumentModel stored = claim("CLAIM-000130", true);
 
+        /** Whether the session's user is an administrator. */
+        boolean administrator;
+
         Session(String... granted) {
             this.granted = Set.of(granted);
         }
 
         Session storing(DocumentModel document) {
             stored = document;
+            return this;
+        }
+
+        Session administrator() {
+            administrator = true;
             return this;
         }
 
@@ -135,6 +188,12 @@ final class Fixtures {
                     case "getDocument" -> {
                         asked.add("getDocument " + args[0]);
                         yield stored;
+                    }
+                    case "getPrincipal" -> {
+                        asked.add("getPrincipal");
+                        yield new org.nuxeo.ecm.core.api.impl.UserPrincipal(
+                                administrator ? "an-administrator" : "a-reader",
+                                List.of(administrator ? "administrators" : "members"), false, administrator);
                     }
                     case "toString" -> "session";
                     case "hashCode" -> System.identityHashCode(proxy);

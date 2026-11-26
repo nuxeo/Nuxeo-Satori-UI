@@ -29,6 +29,7 @@ export {
   readRecordList,
   showOf,
   type EntryReading,
+  type RecordCapture,
   type RecordListEntry,
   type RecordListSort,
   type RecordPropertyField,

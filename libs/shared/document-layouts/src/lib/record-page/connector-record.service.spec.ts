@@ -59,6 +59,18 @@ describe('connectorAnswerOf', () => {
     ).toEqual({ status: 'Paid', amount: 412.5, paid: true });
   });
 
+  it('keeps an age in whole seconds, and drops one that is not, or none', () => {
+    expect(connectorAnswerOf({ ...sound, age: 0 }, 'c').age).toBe(0);
+    expect(connectorAnswerOf({ ...sound, age: 42 }, 'c').age).toBe(42);
+    for (const age of [-1, 1.5, '42', null, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53]) {
+      const answer = connectorAnswerOf({ ...sound, age }, 'c');
+      expect(answer).toEqual({ connector: 'c', status: 'found', fields: {} });
+      expect(Object.hasOwn(answer, 'age')).toBe(false);
+    }
+    // A server older than the cache sends none.
+    expect(Object.hasOwn(connectorAnswerOf(sound, 'c'), 'age')).toBe(false);
+  });
+
   it('refuses, as a server error, an answer that is not the operation’s', () => {
     for (const body of [
       null,

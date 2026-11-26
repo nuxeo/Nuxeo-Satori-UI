@@ -457,6 +457,11 @@ node nuxeo-agentic-connectors/demo/core-system.mjs
 `http.allowed` is for the demo's plain `http` stand-in only. Not `/etc/nuxeo/conf.d/` on a
 container that has started before: the add-on's README says why.
 
+These three are all the connector needs. Since the add-on's version 0.1.0, a server may also keep
+its answers, `$P.cache.ttl` in seconds, and take the core system's change events, `$P.events.secret`;
+neither is set here, so every card drawn asks the core system, as before (the add-on's README,
+"The cache" and "Change events").
+
 ### Removing it
 
 **Not run.** **First delete the seeded workspace,** `/default-domain/workspaces/pc-claims-demo`,

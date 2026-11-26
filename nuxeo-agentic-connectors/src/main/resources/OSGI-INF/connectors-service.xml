@@ -11,8 +11,13 @@
 
     What each server sets, never a contribution, a document, a layout or the client: the system's
     address, in the server property the connector's address element names, https only unless
-    nuxeo.agentic.connectors.(the connector's id).http.allowed is true; and its credential, in the
-    server property or the environment variable its credential element names.
+    nuxeo.agentic.connectors.(the connector's id).http.allowed is true; its credential, in the
+    server property or the environment variable its credential element names; how long its answers
+    are kept, nuxeo.agentic.connectors.(id).cache.ttl in seconds, and how many,
+    .cache.maxEntries, none unless set; and the secret its system signs change events with,
+    nuxeo.agentic.connectors.(id).events.secret, no events unless set. A change event, POST
+    /nuxeo/agentic-connectors/events/(id), drops the answers kept for the record it names, and
+    nothing else.
   </documentation>
 
   <implementation class="org.nuxeo.agentic.connectors.ConnectorComponent" />
@@ -24,9 +29,10 @@
   <extension-point name="connectors">
     <documentation>
       One connector per element. Only id, at least one type, address, path, key and at least one
-      field are required. The server properties it names are its own: nuxeo.agentic.connectors.,
-      its id, a dot and one name; an environment variable is NUXEO_CONNECTOR_, its id in capitals
-      with dots and dashes as underscores, an underscore and one name of capitals and digits.
+      field are required. The id does not end in .http, .cache or .events. The server properties it
+      names are its own: nuxeo.agentic.connectors., its id, a dot and one name; an environment
+      variable is NUXEO_CONNECTOR_, its id in capitals with dots and dashes as underscores, an
+      underscore and one name of capitals and digits.
 
       <code>
         <connector id="payers.claimPayments">

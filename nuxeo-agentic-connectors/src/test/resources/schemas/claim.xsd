@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- A stand-in for a kit's claim schema, for the tests: the one property a connector keys on. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/agentic-connectors-test/claim"
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/agentic-connectors-test/claim">
+
+  <xs:element name="number" type="xs:string" />
+
+</xs:schema>
