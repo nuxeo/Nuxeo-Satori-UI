@@ -51,6 +51,11 @@
       "type": "string",
       "description": "With pageProvider: properties of the type, <prefix>:<name> separated by commas, that a queue's facets or a home's figures group the records by. The page provider then reads the search index, which alone answers aggregates, with a terms aggregate <prefix>_<name>_agg for each, and the type gets a search document, <Type>Search. Not with a ? in where: a queue has no record to fill it."
     },
+    "attachments": {
+      "type": "boolean",
+      "description": "With properties, when the type is first written: give it Nuxeo's own files schema as well, files:files, which holds a record's attachments as a File's does. The document page's Attachments panel adds to it, and a file-list field shows it. The type still opens as a record page: only the file and note schemas keep a record's own view.",
+      "default": false
+    },
     "force": {
       "type": "boolean",
       "description": "Write the type's schema again from properties, or the page provider again, when the package has it already.",
