@@ -59,7 +59,7 @@ final class AuditExportFiles implements Closeable {
     static final List<String> COLUMNS = List.of("entry_id", "event_date", "logged_date", "kind", "event", "what", "user",
             "record_uid", "record_path", "record_type", "record_exists", "lifecycle_state", "comment", "retain_until",
             "run_number", "run_uid", "certificate_uid", "certificate_sha256", "download_reason", "blob_xpath", "file_name",
-            "category", "extended");
+            "barcode", "custody_from", "custody_to", "borrower", "due_back", "category", "extended");
 
     /** The extended information with a column of its own: everything else is in {@code extended}. */
     static final Map<String, String> EXTENDED_COLUMNS = extendedColumns();
@@ -74,11 +74,19 @@ final class AuditExportFiles implements Closeable {
         columns.put(RecordsAudit.DOWNLOAD_REASON, "download_reason");
         columns.put(RecordsAudit.BLOB_XPATH, "blob_xpath");
         columns.put(RecordsAudit.BLOB_FILENAME, "file_name");
+        columns.put(RecordsAudit.BARCODE, "barcode");
+        columns.put(RecordsAudit.FROM_PATH, "custody_from");
+        columns.put(RecordsAudit.TO_PATH, "custody_to");
+        columns.put(RecordsAudit.BORROWER, "borrower");
+        columns.put(RecordsAudit.DUE_BACK, "due_back");
         return Map.copyOf(columns);
     }
 
-    /** The format's version, in the JSON's header: a column added, removed or renamed raises it. */
-    static final int FORMAT = 1;
+    /**
+     * The format's version, in the JSON's header: a column added, removed or renamed raises it. 2
+     * added a physical record's barcode and its custody's from, to, borrower and due date.
+     */
+    static final int FORMAT = 2;
 
     private final DigestOutputStream csvDigest;
 

@@ -24,7 +24,9 @@
   </xs:complexType>
 
   <xs:element name="disposedAt" type="xs:date" />
-  <!-- deleted: permanently, through CoreSession.removeDocument -->
+  <!-- How its records were disposed of, each method once, in this order: deleted, permanently,
+       through CoreSession.removeDocument, for an electronic record; destroyed or transferred, for
+       a physical one, whose document is kept. -->
   <xs:element name="method" type="xs:string" />
   <xs:element name="recordCount" type="xs:long" />
   <xs:element name="records" type="nxs:records" />
@@ -42,6 +44,13 @@
       <xs:element name="ruleId" type="xs:string" />
       <xs:element name="ruleTitle" type="xs:string" />
       <xs:element name="retentionEnded" type="xs:date" />
+      <!-- A physical record's barcode; and, for each record, what the run did, as the run's own
+           record says it: delete, destroy or transfer, and to whom a transferred one went. Its
+           fields are the run's record's, less the status and the reason: the repository keys a
+           complex type by its name, so the two "record" types must agree on every field they share. -->
+      <xs:element name="barcode" type="xs:string" />
+      <xs:element name="disposal" type="xs:string" />
+      <xs:element name="transferTo" type="xs:string" />
     </xs:sequence>
   </xs:complexType>
 

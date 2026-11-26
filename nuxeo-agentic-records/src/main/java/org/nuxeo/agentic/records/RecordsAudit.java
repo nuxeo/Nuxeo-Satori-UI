@@ -33,7 +33,10 @@ import org.nuxeo.runtime.api.Framework;
  * <li>a disposition run's decisions, one entry per record of the run, so that each record's history
  * says which run held it, who decided and, once disposed of, its certificate: the platform logs the
  * deletion itself as the add-on's system session's;</li>
- * <li>{@code recordsAuditExported}: an audit export written, on the export.</li>
+ * <li>{@code recordsAuditExported}: an audit export written, on the export;</li>
+ * <li>a physical record's custody: registered at its location when it is made, moved, checked out
+ * and returned, each with who, from where to where, when and why; and, once a run has disposed of
+ * it, {@code recordDestroyed} or {@code recordTransferred}, since it is not deleted.</li>
  * </ul>
  * Each is a document event of the add-on's, fired in the transaction of what it records, so that a
  * refused or failed request records nothing; {@link RecordsAuditWriter} writes them to the audit
@@ -60,9 +63,24 @@ final class RecordsAudit {
 
     static final String AUDIT_EXPORTED = "recordsAuditExported";
 
+    /** A physical record disposed of by a run: destroyed or transferred, its document kept. */
+    static final String RECORD_DESTROYED = "recordDestroyed";
+
+    static final String RECORD_TRANSFERRED = "recordTransferred";
+
+    /** A physical record's custody. */
+    static final String CUSTODY_REGISTERED = "custodyRegistered";
+
+    static final String CUSTODY_MOVED = "custodyMoved";
+
+    static final String CUSTODY_CHECKED_OUT = "custodyCheckedOut";
+
+    static final String CUSTODY_RETURNED = "custodyReturned";
+
     /** The events the add-on fires for the audit, which {@link RecordsAuditWriter} writes. */
     static final Set<String> EVENTS = Set.of(RECORD_VIEWED, RUN_STARTED, RUN_APPROVED, RUN_REJECTED, RUN_HALTED,
-            RECORD_DISPOSED, AUDIT_EXPORTED);
+            RECORD_DISPOSED, RECORD_DESTROYED, RECORD_TRANSFERRED, CUSTODY_REGISTERED, CUSTODY_MOVED,
+            CUSTODY_CHECKED_OUT, CUSTODY_RETURNED, AUDIT_EXPORTED);
 
     // --- The extended information of the add-on's entries, and the platform's it reads ----------------
 
@@ -87,6 +105,26 @@ final class RecordsAudit {
     static final String RETAIN_UNTIL = "retainUntil";
 
     static final String LEGAL_HOLD = "legalHold";
+
+    /** A physical record's: its barcode, and a custody entry's from where, to where, to whom and until when. */
+    static final String BARCODE = "barcode";
+
+    static final String FROM_LOCATION = "fromLocation";
+
+    static final String FROM_PATH = "fromPath";
+
+    static final String TO_LOCATION = "toLocation";
+
+    static final String TO_PATH = "toPath";
+
+    static final String BORROWER = "borrower";
+
+    static final String DUE_BACK = "dueBack";
+
+    /** A physical record's disposal: destroyed or transferred, and to whom. */
+    static final String METHOD = "method";
+
+    static final String TRANSFER_TO = "transferTo";
 
     /** The platform's, on its {@code download} entries. */
     static final String DOWNLOAD_REASON = "downloadReason";
@@ -119,6 +157,8 @@ final class RecordsAudit {
 
     static final String KIND_EXPORT = "export";
 
+    static final String KIND_CUSTODY = "custody";
+
     static final String KIND_CHANGE = "change";
 
     static final String KIND_OTHER = "other";
@@ -144,6 +184,13 @@ final class RecordsAudit {
         map.put(RUN_REJECTED, new String[] { KIND_DISPOSITION, "Disposition run rejected: record kept" });
         map.put(RUN_HALTED, new String[] { KIND_DISPOSITION, "Disposition run halted: nothing disposed of" });
         map.put(RECORD_DISPOSED, new String[] { KIND_DISPOSITION, "Disposed of: deleted, permanently" });
+        map.put(RECORD_DESTROYED, new String[] { KIND_DISPOSITION, "Disposed of: destroyed, its record kept" });
+        map.put(RECORD_TRANSFERRED, new String[] { KIND_DISPOSITION, "Disposed of: transferred, its record kept" });
+        // A physical record's custody, the add-on's.
+        map.put(CUSTODY_REGISTERED, new String[] { KIND_CUSTODY, "Registered at its location" });
+        map.put(CUSTODY_MOVED, new String[] { KIND_CUSTODY, "Moved" });
+        map.put(CUSTODY_CHECKED_OUT, new String[] { KIND_CUSTODY, "Checked out" });
+        map.put(CUSTODY_RETURNED, new String[] { KIND_CUSTODY, "Returned" });
         // The platform's deletions.
         map.put("documentRemoved", new String[] { KIND_DELETION, "Deleted" });
         map.put("versionRemoved", new String[] { KIND_DELETION, "Version deleted" });

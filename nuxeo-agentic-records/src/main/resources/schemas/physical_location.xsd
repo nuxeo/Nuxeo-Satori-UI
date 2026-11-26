@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- A location where physical records are kept, in a hierarchy: a site holds rooms, a room shelves,
+     a shelf positions. The creator writes kind when it is made; the path is the server's. Neither,
+     nor the location's title, changes afterwards: every record there carries the path. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/physical-location"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/physical-location">
+
+  <!-- site, room, shelf or position -->
+  <xs:element name="kind" type="xs:string" />
+
+  <!-- Its title and every title above it, its site first, joined by " / ". -->
+  <xs:element name="path" type="xs:string" />
+
+</xs:schema>

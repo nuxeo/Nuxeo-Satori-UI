@@ -29,6 +29,11 @@
       <xs:element name="ruleId" type="xs:string" />
       <xs:element name="ruleTitle" type="xs:string" />
       <xs:element name="retentionEnded" type="xs:date" />
+      <!-- A physical record's barcode; and how the run disposes of the record: delete, an
+           electronic record's, or destroy or transfer, a physical one's, to transferTo. -->
+      <xs:element name="barcode" type="xs:string" />
+      <xs:element name="disposal" type="xs:string" />
+      <xs:element name="transferTo" type="xs:string" />
       <!-- awaiting, disposed, kept or refused -->
       <xs:element name="status" type="xs:string" />
       <xs:element name="reason" type="xs:string" />
