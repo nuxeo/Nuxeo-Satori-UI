@@ -1,0 +1,73 @@
+@let current = state();
+<section
+  class="record-panel"
+  [attr.aria-label]="'embedded-panels.label' | translate"
+  [attr.aria-busy]="
+    current.status === 'starting' || current.status === 'signing-in' || current.status === 'loading'
+  "
+  [attr.data-state]="current.status"
+>
+  @switch (current.status) {
+    @case ('ready') {
+      <lib-record-page [document]="current.document" [layout]="current.layout" [readOnly]="true" />
+    }
+    @case ('refused') {
+      <nxs-error-state
+        [status]="403"
+        [heading]="
+          (current.reason === 'origin'
+            ? 'embedded-panels.refused-origin'
+            : 'embedded-panels.refused-attributes'
+          ) | translate
+        "
+        [headingLevel]="3"
+      />
+    }
+    @case ('forbidden') {
+      <nxs-error-state
+        [status]="403"
+        [heading]="'embedded-panels.forbidden' | translate"
+        [headingLevel]="3"
+      />
+    }
+    @case ('not-found') {
+      <nxs-empty-state
+        icon="search_off"
+        [heading]="'embedded-panels.not-found' | translate"
+        [message]="'embedded-panels.not-found-message' | translate"
+        [headingLevel]="3"
+      />
+    }
+    @case ('no-layout') {
+      <nxs-empty-state
+        icon="search_off"
+        [heading]="'embedded-panels.no-layout' | translate"
+        [headingLevel]="3"
+      />
+    }
+    @case ('failed') {
+      <nxs-error-state
+        [status]="current.error"
+        [heading]="'embedded-panels.failed' | translate"
+        [headingLevel]="3"
+        [retryable]="current.error !== 401"
+        (retry)="retry()"
+      />
+    }
+    @default {
+      <div class="record-panel__waiting">
+        @switch (current.status) {
+          @case ('loading') {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.loading' | translate" />
+          }
+          @case ('signing-in') {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.signing-in' | translate" />
+          }
+          @default {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.starting' | translate" />
+          }
+        }
+      </div>
+    }
+  }
+</section>

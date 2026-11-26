@@ -883,6 +883,19 @@ expectRefused(
   2,
   `OSGI-INF/payers-claims-demo-model.xml contributes to org.nuxeo.agentic.ui.operations's "anything" point`,
 );
+// Embedded panels (decision F): which systems may sign the server's users in is the deployment's.
+expectRefused(
+  'a package that registers a host application for embedded panels',
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      '<extension target="org.nuxeo.agentic.embedded" point="hosts">\n' +
+        '    <host id="crm"><assertion algorithm="HS256" issuer="x" /></host>\n  </extension>\n</component>',
+    ),
+  2,
+  `contributes to org.nuxeo.agentic.embedded's "hosts" point, the host applications`,
+);
 expectRefused(
   "a package that names the allow-list's component as a service, which Nuxeo reads as the same",
   ({ edit }) =>
