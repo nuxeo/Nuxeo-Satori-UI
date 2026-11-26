@@ -616,7 +616,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "Runs one of the Builder kit's app generators on a package, as npx nx g" +
         ' ./tools/satori-generators:<generator> would: app-package for a new package, app-layout,' +
         ' app-form, app-queue, app-action, app-registry, app-connector for a connector an external' +
-        ' card reads, or app-model for a demo kit. It runs in a' +
+        ' card reads, app-dependency for an add-on the kit needs, in package.xml, or app-model for' +
+        ' a demo kit. It runs in a' +
         ' process of its own, on the staging copy, and every file it would write must be inside the' +
         ' package and one a generator writes, or nothing is written. A new demo kit, refused until' +
         ' it has a model and a record page, takes several generators in one call: use' +

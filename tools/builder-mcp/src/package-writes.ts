@@ -81,6 +81,7 @@ export const APP_GENERATORS = [
   'app-registry',
   'app-model',
   'app-connector',
+  'app-dependency',
 ] as const;
 export type AppGenerator = (typeof APP_GENERATORS)[number];
 export const MAX_CHANGES = 32;
@@ -272,6 +273,8 @@ function writtenBy(path: string): string {
   if (path.startsWith('connectors/')) return 'app-connector writes it, and takes a connector out';
   if (path.startsWith('bundle/OSGI-INF/'))
     return 'the generator of what it contributes writes it: app-layout, app-form, app-queue, app-action, app-registry or app-model';
+  if (path === 'package/package.xml')
+    return 'app-package writes it, and app-dependency a dependency in it. A version is raised by a person, in package.xml, app.json and the manifest together';
   return 'app-package writes it. A version is raised by a person, in package.xml, app.json and the manifest together';
 }
 

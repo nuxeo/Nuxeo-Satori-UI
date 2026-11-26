@@ -262,7 +262,8 @@ What each writes, and what it leaves to you:
     (`Versionable` brings `uid` too); an add-on's, such as `Signable`, must be described by a
     content model: `--model`, a model exported into the checkout's `tmp/` from a server with the
     add-on, or the kit's own when it has the facet already. One neither describes is refused:
-    tell the person.
+    tell the person. A kit that names an add-on's facet depends on the add-on: `app-dependency`,
+    `{ "name": "nuxeo-agentic-signature", "version": "0.1.0" }`, in `package/package.xml`.
   - **A type with no schema of its own,** its properties all a facet's: `--schemaless` with
     `--facets`.
   - **A folder whose Create menu offers the kit's types,** such as a register: `--folder` with

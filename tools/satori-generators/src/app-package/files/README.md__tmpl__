@@ -20,8 +20,10 @@ What each file may say is [app-definition-v2.md](<%= docs %>/app-definition-v2.m
 
 ## Adding to it
 
-Each of these generators writes its file and has the component name it. From the repository's
-root:
+The package has none of these yet: each is the next step only if the app needs it. The Builder
+kit's agent writes each through the Builder MCP server's write tools, which check the package
+first (`.cursor/skills/app-builder/SKILL.md`); by hand, each generator writes its file and has
+the component name it. From the repository's root:
 
 ```bash
 # A record page, and an Edit form
@@ -29,8 +31,10 @@ npx nx g ./tools/satori-generators:app-layout --package=<%= projectRoot %> --typ
 npx nx g ./tools/satori-generators:app-form --package=<%= projectRoot %> --type=<Type> --mode=edit --model=<content-model.json>
 # A queue, queues/<id>.json
 npx nx g ./tools/satori-generators:app-queue --package=<%= projectRoot %> --id=<queue> --pageProvider=<page provider>
-# A button, in actions.json
+# A button on a record or a queue's rows, in actions.json, if the app has one
 npx nx g ./tools/satori-generators:app-action --package=<%= projectRoot %> --id=<%= appId %>.<name> --transition=<transition>
+# A card of another system's fields: its connector, beside the bundle
+npx nx g ./tools/satori-generators:app-connector --package=<%= projectRoot %> --id=<%= appId %>.<name> --type=<Type> --key=<prefix>:<name> --path=/<path>/{key} --fields=<name>,...
 ```
 
 ## Checking and building it

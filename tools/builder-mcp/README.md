@@ -137,7 +137,9 @@ the package pipeline passes the package as it would then be:
   component's `<app>`, or its `<layout>` for a layout. A file another still names, a queue the menu
   opens say, is refused until that one is written without it, in one `apply_package_changes`;
 - `apply_generator`, `{ package, generator, options }`: one of `app-package`, `app-layout`,
-  `app-form`, `app-queue`, `app-action`, `app-registry` and `app-model`, with its options named as
+  `app-form`, `app-queue`, `app-action`, `app-registry`, `app-model`, `app-connector`, a
+  connector of the kit's own beside its bundle, and `app-dependency`, a package it depends on, in
+  `package.xml`, with its options named as
   `npx nx g ./tools/satori-generators:<generator>` takes them;
 - `apply_package_changes`, `{ package, changes }`: up to 32 of them, in order, each
   `{ "kind": "write", "path", "content" }`, `{ "kind": "remove", "path" }` or
@@ -170,7 +172,7 @@ What each does:
      such as `demo/*.mjs`; or `dist/`;
    - a path one of whose folders, or itself, differs from one the package holds only in case:
      where case is ignored it is that one, under a name it was not given;
-   - a generator other than those seven; an option its schema does not have, or not of its type,
+   - a generator other than those nine; an option its schema does not have, or not of its type,
      its values or its pattern; `package`, `name` or `directory` among the options, which the
      package argument gives; and `modelServer`, since a generator given an address sends
      `NUXEO_USER` and `NUXEO_PASS` there. `app-model` runs only for a demo kit: a package the same

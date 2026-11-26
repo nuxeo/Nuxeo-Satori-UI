@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppDependency",
+  "title": "Satori business app dependency",
+  "description": "Has the package depend on another Marketplace package, in package/package.xml: an add-on whose facet, schema or operation the kit names.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "name": {
+      "type": "string",
+      "description": "The Marketplace package it depends on, such as nuxeo-agentic-signature.",
+      "x-prompt": "Which package does it depend on (e.g. nuxeo-agentic-signature)?",
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "description": "The version it needs at least, such as 0.1.0, or a range, 0.1.0:1.0.0. Not with remove."
+    },
+    "remove": {
+      "type": "boolean",
+      "description": "Take the dependency out. Never nuxeo-agentic-ui, the platform's own.",
+      "default": false
+    }
+  },
+  "required": ["package", "name"]
+}

@@ -58,6 +58,12 @@
       "description": "Write a connector of a business app's own, beside its bundle: the fields one record's key reads from another system, for a layout's external card, which the package pipeline holds to them. No address and no credential is written. Internal: it writes a package this repository's pipeline checks (scripts/app-package.mjs), so it is not shipped in @nuxeo/satori-platform.",
       "x-satori-internal": true
     },
+    "app-dependency": {
+      "factory": "./src/app-dependency/generator",
+      "schema": "./src/app-dependency/schema.json",
+      "description": "Have a business app's package depend on another Marketplace package, in package/package.xml: an add-on whose facet, schema or operation the kit names. Internal: it writes a package this repository's pipeline checks (scripts/app-package.mjs), so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
     "app-queue": {
       "factory": "./src/app-queue/generator",
       "schema": "./src/app-queue/schema.json",
