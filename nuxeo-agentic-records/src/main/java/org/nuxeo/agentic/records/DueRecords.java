@@ -101,6 +101,11 @@ final class DueRecords {
         if (doc.isFolder()) {
             return "is a folder, whose contents a run does not review";
         }
+        // A document that is no folder may still hold others, which its deletion would take with it,
+        // unlisted, those its starter cannot read among them: read with the add-on's session.
+        if (privileged.hasChildren(doc.getRef())) {
+            return "holds other documents, which a run does not review";
+        }
         if (!doc.hasFacet(RECORD_FACET) || !doc.isRecord()) {
             return "is not a record of the retention module's";
         }

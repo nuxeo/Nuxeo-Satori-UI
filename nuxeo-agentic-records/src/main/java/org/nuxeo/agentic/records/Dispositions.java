@@ -121,7 +121,14 @@ final class Dispositions {
             try {
                 work.run();
             } finally {
-                store.compareAndSet(LOCK_KEY, owner, null);
+                try {
+                    store.compareAndSet(LOCK_KEY, owner, null);
+                } catch (RuntimeException e) {
+                    // The request's own transaction has committed, or rolled back, already: what it
+                    // did stands, and the lock is given back when its hold ends.
+                    log.warn("Disposition review: the cluster's lock could not be given back, and is held until it "
+                            + "expires: {}", e.toString());
+                }
             }
         }
     };

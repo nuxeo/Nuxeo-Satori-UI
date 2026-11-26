@@ -20,8 +20,8 @@ that review will read.
   neither. It reads them, and reviews what they leave.
 - **A run holds the records due:** records of the module's whose retention has ended, under no
   legal hold, whose rule has no end action of its own, and in no other run awaiting approval, that
-  its starter may read; documents, not folders, and none of the add-on's own. At most 200 by
-  default. A record in the trash is reviewed as any other: the trash is not a disposition.
+  its starter may read; documents, not folders nor documents holding others, and none of the
+  add-on's own. At most 200 by default. A record in the trash is reviewed as any other: the trash is not a disposition.
 - **Two people approve it,** each with the add-on's `ApproveDisposition` permission, neither of
   them the one who started it. Only then is anything disposed of.
 - **Disposed of means deleted, permanently**, in one transaction, after every record is checked
@@ -184,7 +184,14 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   - two servers of a cluster are held apart by the cluster's key-value store, which the tests run in
     memory, on one server: no test runs two servers;
   - should a server stop while it holds the cluster's lock, the others wait for it to expire, 10
-    minutes, refusing each request after 30 seconds, 409, to be filed again.
+    minutes, refusing each request after 30 seconds, 409, to be filed again; on one server, a request
+    waits for the one before it with no limit;
+  - whoever may file in the runs folder may file a document of another type there, such as a file
+    titled like a certificate: the queues list the add-on's types alone, and browsing the folder
+    shows it;
+  - an approver may make a live proxy of the folder or of a run in a folder of their own, which shows
+    the run's records list to that folder's readers; a proxy is no second folder, and takes no
+    request.
 
 ## What is not built
 
@@ -221,9 +228,9 @@ the second approval by one person, the re-check at disposal and the hold check i
 in one run at a time, the server's lock, the one transaction, the folder's block, the add-on's
 properties, the administrator's deletion, the server's runs and certificates, the one folder, the
 rule's end action, the retention end, the retention, and the CSV's formula guard; then, after the
-review, the folder at the root, a request taken only there, the add-on's own documents and folders
-never due, a run withdrawn by its own starter alone, and the cluster's lock leaving the person's
-transaction alone (with `ClusterService.runAtomically` in its place, a refused request kept what the
+review, the folder at the root, a request taken only there, the add-on's own documents, folders
+and documents holding others never due, a run withdrawn by its own starter alone, and the
+cluster's lock leaving the person's transaction alone (with `ClusterService.runAtomically` in its place, a refused request kept what the
 person wrote before it). A wrong SHA-256 for the module's jar fails the build.
 
 ```bash

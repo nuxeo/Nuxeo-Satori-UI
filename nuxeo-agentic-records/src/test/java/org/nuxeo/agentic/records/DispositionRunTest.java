@@ -203,13 +203,15 @@ public class DispositionRunTest extends DispositionTestCase {
         assertTrue(session.exists(certificate.getRef()));
     }
 
-    /** Deleting a folder deletes what it holds, which no run reviewed: a folder is never due. */
+    /**
+     * Deleting a folder deletes what it holds, which no run reviewed: a folder is never due, an empty
+     * one too, since it may hold documents by the time the run is disposed of.
+     */
     @Test
     public void aFolderIsNeverDue() {
         DocumentModel holder = session.createDocumentModel(Fixtures.RECORDS, "box-17", "Folder");
         holder.setPropertyValue("dc:title", "Box 17");
         holder = session.createDocument(holder);
-        session.createDocument(session.createDocumentModel(holder.getPathAsString(), "inside", "File"));
         session.makeRecord(holder.getRef());
         holder = session.getDocument(holder.getRef());
         holder.addFacet(Disposition.RECORD_FACET);
@@ -218,6 +220,25 @@ public class DispositionRunTest extends DispositionTestCase {
         session.saveDocument(holder);
         commit(session);
         assertEquals("nothing-due", Fixtures.refused(() -> start(session, "alice")));
+    }
+
+    /**
+     * A document that is no folder may hold others, its starter unable to read them: its deletion
+     * would take them with it, unlisted, so it is not due.
+     */
+    @Test
+    public void aRecordHoldingOtherDocumentsIsNotDue() {
+        DocumentModel record = ended(session, "Claim 1001", rule, daysAgo(10));
+        DocumentModel inside = session.createDocument(
+                session.createDocumentModel(record.getPathAsString(), "attachment", "Note"));
+        ACP blocked = new ACPImpl();
+        ACL acl = new ACLImpl(ACL.LOCAL_ACL);
+        acl.add(ACE.BLOCK);
+        blocked.addACL(acl);
+        session.setACP(inside.getRef(), blocked, true);
+        commit(session);
+        assertEquals("nothing-due", Fixtures.refused(() -> start(session, "alice")));
+        assertTrue(session.exists(inside.getRef()));
     }
 
     /** The trash is not a disposition: a record in it is due as any other, and is reviewed. */
