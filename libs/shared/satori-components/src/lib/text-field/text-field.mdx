@@ -1,0 +1,89 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TextFieldStories from './text-field.stories';
+
+<Meta of={TextFieldStories} name="Overview" />
+
+# Text field
+
+The text field is a labelled field for text: Angular Material's form field round a native
+`<input>`, or a `<textarea>` when it is `multiline`, in your theme's colours. Use it for a name, an
+ID, a label key or a rule written out.
+
+## Key features
+
+- **Labelled.** `label` is required, and the form field links it to the control, so it is the
+  field's accessible name.
+- **Two moments to act on.** `value` is two-way and changes as each key is typed. `valueCommit`
+  fires when an edit is finished — the field is left, or Enter is pressed in a one-line field — for
+  a host that checks or saves a finished edit rather than every key.
+- **One line or several.** `multiline` makes it a textarea of `rows` lines.
+- **Suggestions.** `suggestions` are values the browser offers to complete from, as a native
+  `<datalist>`. `autocomplete="off"` stops the browser offering what it remembers as well.
+- **Outline or fill.** `appearance` is `outline`, as the library's own forms draw their fields, or
+  `fill`.
+- **A font for code.** Set `--nxs-text-field-font-family` on the element or an ancestor —
+  `monospace` for a field holding JSON, say. The label keeps the theme's font.
+
+## Demo showcase
+
+<Canvas of={TextFieldStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTextFieldComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-text-field
+  [label]="'acme.card.label' | translate"
+  [value]="card.label"
+  (valueCommit)="rename(card, $event)"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input, and it takes text you have already translated, as `placeholder`
+does. The field needs no providers, and has no registered ID: place it in a template by its selector.
+
+## Examples
+
+### A rule, written out
+
+A textarea of three rows, with a placeholder, in the code font its host sets.
+
+<Canvas of={TextFieldStories.Multiline} />
+
+### With suggestions
+
+<Canvas of={TextFieldStories.WithSuggestions} />
+
+### Fill
+
+<Canvas of={TextFieldStories.Fill} />
+
+### Disabled
+
+<Canvas of={TextFieldStories.Disabled} />
+
+### The keyboard
+
+<Canvas of={TextFieldStories.KeyboardContract} />
+
+## Accessibility
+
+- **Name.** The control is named by `label`, through the form field's `<label for>`. A placeholder
+  is a hint, not a name: it is gone once the field holds text.
+- **Keyboard.** Tab reaches the native control, and typing, the arrow keys and the browser's own
+  editing keys work as in any field. Leaving it, or Enter in a one-line field, commits the edit.
+  Disabled, it is a native disabled control that Tab skips.
+- **Suggestions.** The browser draws the suggestions and announces them as a list; the arrow keys
+  move through them.
+- **Focus.** A host that moves the focus to the field finds the native `input` or `textarea` inside
+  the element and focuses that.
