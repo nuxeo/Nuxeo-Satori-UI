@@ -15,11 +15,11 @@ wait for a security review, and some are built on open decisions
 | Package                     | What it is                                                                                                                                  | Depends on                                                   | On staging            | Installed so far                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------- | ------------------------------------------------- |
 | `nuxeo-agentic-ui`          | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                      | 2026.0.2 once stamped | Earlier builds, on the local server only          |
-| `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints, and an asset's share links                                  | Nothing                                                      | 0.2.0                 | Nowhere                                           |
+| `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints and video operations, and an asset's share links             | Nothing                                                      | 0.3.0                 | Nowhere                                           |
 | `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                   | 2026.0.2-SNAPSHOT     | Nowhere                                           |
 | `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                 | Nowhere                                           |
 | `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                                  | 0.6.0                 | 0.3.0 on the local server; 0.4.0 to 0.6.0 nowhere |
-| `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`    | 0.2.3                 | 0.2.0 on the local server; 0.1.1 to 0.2.3 nowhere |
+| `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.3.0`    | 0.2.4                 | 0.2.0 on the local server; 0.1.1 to 0.2.4 nowhere |
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
 | `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                 | Nowhere                                           |
@@ -359,6 +359,11 @@ for its videos.
   type. A preview is served whatever the rights.
 - **One policy per exact type.** A later policy for the type replaces it whole; `enabled="false"`
   removes it.
+- **A video's,** from 0.3.0: a transcoded video is decided by its conversion's name, at the
+  download endpoints whether named or at its place, every storyboard frame by the policy's one
+  `<storyboard>`, and the platform's `Video.*` operations as a download of the file they read. The add-on replaces those five
+  operations by its own of the same ids: on a server without the platform's video bundle, its
+  component waits for it, and the server log's `Component Loading Status` lists it.
 - **If the add-on cannot run at all,** its class not loading or its service not started, every
   download on the server is refused, not only assets'. Check the server log after every install.
 - **Decision B is open, and its security review is pending:** the README says not to rely on it

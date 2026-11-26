@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- In place of the platform's video tools service, which runs ffmpeg: one that answers which file
+     it was given, so that a test sees the platform's operation run, and on what. -->
+<component name="org.nuxeo.agentic.assets.test.video-tools">
+
+  <implementation class="org.nuxeo.agentic.assets.rights.video.FakeVideoTools" />
+
+  <service>
+    <provide interface="org.nuxeo.ecm.platform.video.tools.VideoToolsService" />
+  </service>
+
+</component>

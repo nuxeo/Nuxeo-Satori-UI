@@ -147,6 +147,11 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     }
 
     @Override
+    public Set<String> coveredTypes() {
+        return policies.keySet();
+    }
+
+    @Override
     public LocalDate today() {
         return LocalDate.now(clock.withZone(ZoneOffset.UTC));
     }
