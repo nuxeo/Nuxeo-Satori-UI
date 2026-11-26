@@ -403,6 +403,19 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     })),
   );
 
+  const folderArgument = z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'The package folder, such as business-apps/packages/payers-claims-demo, as the write tools name it',
+    );
+  const directoryArgument = z
+    .string()
+    .min(1)
+    .optional()
+    .describe('The same, under its older name: give package or directory, not both');
+
   server.registerTool(
     'validate_package',
     {
@@ -419,7 +432,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         ' The zip is built in a temporary folder and removed; nothing is published. Paths are' +
         ' relative to the repository, and must be inside it.',
       inputSchema: z.object({
-        directory: z.string().min(1).describe('Such as business-apps/packages/payers-claims-demo'),
+        package: folderArgument,
+        directory: directoryArgument,
         allowList: z
           .string()
           .optional()
@@ -447,7 +461,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         openWorldHint: false,
       },
     },
-    (args: PackageRequest) => answer(() => validate(args)),
+    (args: FolderArgs) => answer(() => validate(folderRequest(args))),
   );
 
   server.registerTool(
@@ -466,7 +480,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         " folder and, while it runs, a folder of its own in the package's dist/. Paths are" +
         ' relative to the repository, and must be inside it.',
       inputSchema: z.object({
-        directory: z.string().min(1).describe('Such as business-apps/packages/payers-claims-demo'),
+        package: folderArgument,
+        directory: directoryArgument,
         allowList: z
           .string()
           .optional()
@@ -489,7 +504,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         openWorldHint: false,
       },
     },
-    (args: PackageRequest) => answer(() => preview(args)),
+    (args: FolderArgs) => answer(() => preview(folderRequest(args))),
   );
 
   const packageArgument = z
@@ -567,6 +582,33 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
 
   server.registerTool(
+    'remove_package_file',
+    {
+      title: 'Remove a package file, if the result validates',
+      description:
+        "Takes one file of a package's app definition out, one write_package_file writes," +
+        ' but app.json: a queue, a layout, a labels file, a task form, the home, the menu or the' +
+        " actions; then runs app-registry, so that the component names it no more, in the app's" +
+        ' files or as a layout. A file another names, such as a queue the menu or the home' +
+        ' opens, is refused until that one is written without it: use apply_package_changes,' +
+        ' with a remove change, for both at once. The generated files (the component, the' +
+        ' manifest, package/, build.mjs, content-model.json, the schemas) are the generators' +
+        ' to take out, and are refused.' +
+        VALIDATED,
+      inputSchema: z.object({ package: packageArgument, path: pathArgument }),
+      annotations: writes(true),
+    },
+    (args: { package: string; path: string }) =>
+      writing({
+        package: args.package,
+        changes: [
+          { kind: 'remove', path: args.path },
+          { kind: 'generator', generator: 'app-registry' },
+        ],
+      }),
+  );
+
+  server.registerTool(
     'apply_generator',
     {
       title: 'Run an app generator, if the result validates',
@@ -599,10 +641,12 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       title: 'Make several changes to a package, if the result validates',
       description:
         'Makes several changes to one package, in order, each as write_package_file or' +
-        ' apply_generator makes one, and checks the package once, when they are all made: for' +
+        ' apply_generator makes one, or a remove, which takes one file of the app definition out,' +
+        ' as remove_package_file does, and checks the package once, when they are all made: for' +
         ' steps that would each be refused alone, such as a new demo kit (app-package, then' +
-        ' app-model, then app-layout), or a hand-written home.json with the app-registry that' +
-        ' names it. All are written, or none.' +
+        ' app-model, then app-layout), a hand-written home.json with the app-registry that' +
+        ' names it, or a queue given another id: remove its file, write the new one and the menu' +
+        ' that names it, then app-registry. All are written, or none.' +
         VALIDATED,
       inputSchema: z.object({
         package: packageArgument,
@@ -610,6 +654,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           .array(
             z.discriminatedUnion('kind', [
               z.object({ kind: z.literal('write'), path: pathArgument, content: contentArgument }),
+              z.object({ kind: z.literal('remove'), path: pathArgument }),
               z.object({
                 kind: z.literal('generator'),
                 generator: generatorArgument,
@@ -628,6 +673,30 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
 
   return server;
+}
+
+/** `validate_package`'s and `preview_package`'s arguments: the folder as `package` or `directory`. */
+type FolderArgs = Omit<PackageRequest, 'directory'> & {
+  readonly package?: string;
+  readonly directory?: string;
+};
+
+/**
+ * The request a folder's arguments make. The write tools and the readers name the folder
+ * `package`, and these two named it `directory` first, so each takes either (P&C kit feedback,
+ * item 9); two that disagree are refused rather than one chosen.
+ */
+function folderRequest({ package: named, directory, ...rest }: FolderArgs): PackageRequest {
+  if (named !== undefined && directory !== undefined && named !== directory)
+    throw new Error(
+      `package and directory name two folders, ${named} and ${directory}: give the package folder once, as package.`,
+    );
+  const folder = named ?? directory;
+  if (folder === undefined)
+    throw new Error(
+      'package: give the package folder, such as business-apps/packages/acme-contracts.',
+    );
+  return { ...rest, directory: folder };
 }
 
 /** A tool's answer as JSON text, or its error as a tool error the agent can read and act on. */

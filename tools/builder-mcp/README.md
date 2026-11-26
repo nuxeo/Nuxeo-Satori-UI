@@ -39,8 +39,9 @@ The plan gives the server four jobs. Three are here:
 | `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                        | none                                                                               |
 | `preview_package`        | A package validated, then served to the local dev server: the address to open, each page, what could not be served and why, and what the dev server answers | none                                                                               |
 | `write_package_file`     | One app definition file written whole, if the package then passes the pipeline; otherwise the findings, and nothing written                                 | none                                                                               |
+| `remove_package_file`    | One app definition file taken out, and the component's mention of it with `app-registry`, if the package then passes; otherwise the findings                | none                                                                               |
 | `apply_generator`        | One app generator run on the package, its files written if the package then passes; otherwise the findings, and nothing written                             | none                                                                               |
-| `apply_package_changes`  | Several writes and generator runs, in order, checked once at the end: all written, or none                                                                  | none                                                                               |
+| `apply_package_changes`  | Several writes, removals and generator runs, in order, checked once at the end: all written, or none                                                        | none                                                                               |
 
 Some things about them are worth knowing before relying on them:
 
@@ -91,7 +92,8 @@ Some things about them are worth knowing before relying on them:
   every operation unless it is given an allow-list, or the package names the one it is built
   against, `deployment/build-allow-list.json`, as CI gives the pipeline.
 - **`validate_package` is the pipeline itself.** It runs `scripts/app-package.mjs` as a command,
-  as `npm run app-package` and CI do. Given the folder alone it passes what the workflow passes,
+  as `npm run app-package` and CI do. It and `preview_package` take the folder as `package`, as
+  the write tools and the readers name it, or as `directory`, their first name for it. Given the folder alone it passes what the workflow passes,
   `--platform` with `libs/platform`'s version, and the package's build allow-list when it has one,
   and answers `asCi: true`. Another allow-list, a registered file or another platform version are
   the deployment's, change what is checked, and are listed under `departsFromCi`. It gives no
@@ -125,19 +127,26 @@ Some things about them are worth knowing before relying on them:
 
 ## Writing a package
 
-The agent writes a package with these three tools, and never with its own file tools: the app
+The agent writes a package with these four tools, and never with its own file tools: the app
 builder skill says so. Each takes the package folder and what to change, and writes it only when
 the package pipeline passes the package as it would then be:
 
 - `write_package_file`, `{ package, path, content }`: one file of the app definition, whole;
+- `remove_package_file`, `{ package, path }`: one file of the app definition taken out, any
+  `write_package_file` writes but `app.json`, then `app-registry`, which takes it out of the
+  component's `<app>`, or its `<layout>` for a layout. A file another still names, a queue the menu
+  opens say, is refused until that one is written without it, in one `apply_package_changes`;
 - `apply_generator`, `{ package, generator, options }`: one of `app-package`, `app-layout`,
   `app-form`, `app-queue`, `app-action`, `app-registry` and `app-model`, with its options named as
   `npx nx g ./tools/satori-generators:<generator>` takes them;
-- `apply_package_changes`, `{ package, changes }`: up to 32 of either, in order, each
-  `{ "kind": "write", "path", "content" }` or `{ "kind": "generator", "generator", "options" }`,
-  checked once at the end. It is for steps each refused alone: a new demo kit is refused until it
-  has a model and a record page (`app-package`, `app-model`, `app-layout`), and a hand-written
-  `home.json` until `app-registry` has the component name it.
+- `apply_package_changes`, `{ package, changes }`: up to 32 of them, in order, each
+  `{ "kind": "write", "path", "content" }`, `{ "kind": "remove", "path" }` or
+  `{ "kind": "generator", "generator", "options" }`, checked once at the end. It is for steps each
+  refused alone: a new demo kit is refused until it has a model and a record page (`app-package`,
+  `app-model`, `app-layout`), a hand-written `home.json` until `app-registry` has the component
+  name it, and a queue given another id until its old file is gone, the new one written, the menu
+  and the home name it, and `app-registry` names the new file: a remove, three writes and
+  `app-registry`, in one call.
 
 What each does:
 
@@ -185,7 +194,11 @@ What each does:
    written. Its process gets from the environment what the pipeline does: no credential.
 3. **It validates the staging copy as `validate_package` validates a folder alone, as CI does:**
    steps 1 to 6, with the package's own `deployment/build-allow-list.json` when it has one,
-   `libs/platform`'s version, and its own `content-model.json` when it ships a stand-in model. It
+   `libs/platform`'s version, and its own `content-model.json` when it ships a stand-in model, and
+   with `--kits` the folder the package is in, so that its names are compared with the other
+   kits' there, as CI compares a kit in `business-apps/packages/` with the others: a queue id, an
+   app address or a page provider another kit has is refused at write time, not at the release
+   candidate (`package-pipeline.md`, section 2). It
    takes no other allow-list, registered file or platform version, so nothing the agent passes can
    register an id: an unregistered widget, rule or operation is refused at write time. Each app
    definition file the changes touch must be a JSON object of `"version": 2`, since the validator

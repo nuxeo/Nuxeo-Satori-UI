@@ -55,7 +55,9 @@ function chmodAll(folder: string): void {
   }
 }
 
-const OPTIONS: WriteOptions = { packageRoots: [packages], workIn: work };
+// Several copies of one kit share the scratch root, so their names are compared with no other
+// kit's here: the comparison has tests of its own, each in a root of its own.
+const OPTIONS: WriteOptions = { packageRoots: [packages], workIn: work, kits: null };
 const CONFIG = 'bundle/agentic-ui-config';
 const LABELS = `${CONFIG}/labels/en.json`;
 const QUEUE = `${CONFIG}/queues/up-for-renewal.json`;
@@ -372,6 +374,31 @@ describe('writePackage, refusing before anything runs', () => {
     rmSync(join(scratch, 'model.json'));
   });
 
+  it('refuses to remove app.json, a generated file, or a path outside the app definition', async () => {
+    const root = kit('contracts-demo', 'remove-refused');
+    const remove = (path: string) =>
+      writePackage({ package: root, changes: [{ kind: 'remove', path }] }, NEVER);
+    await expect(remove(`${CONFIG}/app.json`)).rejects.toThrow('is the app itself');
+    await expect(remove('bundle/OSGI-INF/contracts-demo-config.xml')).rejects.toThrow(
+      'is written by the generators only, and taken out by them',
+    );
+    await expect(remove('build.mjs')).rejects.toThrow('is written by the generators only');
+    await expect(remove('../contracts-demo/README.md')).rejects.toThrow('leaves the package');
+    await expect(remove('demo/seed.mjs')).rejects.toThrow('is code');
+  });
+
+  it('refuses to remove a file the package does not hold, before the pipeline runs', async () => {
+    const root = kit('contracts-demo', 'remove-missing');
+    const before = fingerprint(root);
+    await expect(
+      writePackage(
+        { package: root, changes: [{ kind: 'remove', path: `${CONFIG}/queues/none.json` }] },
+        NEVER,
+      ),
+    ).rejects.toThrow('is not a file of');
+    expect(fingerprint(root)).toEqual(before);
+  });
+
   it('refuses a package that does not exist, unless app-package makes it', async () => {
     expect(
       await refusal({ package: join(packages, 'not-yet'), changes: writing(LABELS) }),
@@ -614,6 +641,131 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       ]);
       expect(read(root, 'bundle/OSGI-INF/contracts-demo-config.xml')).toContain(
         'queues/all-contracts.json',
+      );
+    });
+
+    it('removes a file the component names, with app-registry, once nothing else names it', async () => {
+      const root = kit('contracts-demo', 'remove-queue');
+      const before = fingerprint(root);
+      const component = 'bundle/OSGI-INF/contracts-demo-config.xml';
+      // The menu and the home still open it: refused, and nothing changes.
+      const named = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: QUEUE },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expectRefused(named, root, before);
+      expect(named.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: QUEUE, change: 'removed' },
+      ]);
+      expect(named.validation?.findings.map((finding) => finding.file)).toContain(
+        `${CONFIG}/navigation.json`,
+      );
+      // Given another id: the old file removed, the new one and the two that open it written.
+      const queue = `${CONFIG}/queues/renewals-due.json`;
+      const renamed = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: QUEUE },
+            { kind: 'write', path: queue, content: read(root, QUEUE) },
+            {
+              kind: 'write',
+              path: `${CONFIG}/navigation.json`,
+              content: edited(
+                root,
+                `${CONFIG}/navigation.json`,
+                '"up-for-renewal"',
+                '"renewals-due"',
+              ),
+            },
+            {
+              kind: 'write',
+              path: `${CONFIG}/home.json`,
+              content: edited(root, `${CONFIG}/home.json`, '"up-for-renewal"', '"renewals-due"'),
+            },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expect(renamed.written, JSON.stringify(renamed.validation?.stdout)).toBe(true);
+      expect(renamed.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: `${CONFIG}/home.json`, change: 'updated' },
+        { path: `${CONFIG}/navigation.json`, change: 'updated' },
+        { path: queue, change: 'created' },
+        { path: QUEUE, change: 'removed' },
+      ]);
+      expect(existsSync(join(root, ...QUEUE.split('/')))).toBe(false);
+      expect(read(root, component)).toContain('queues/renewals-due.json');
+      expect(read(root, component)).not.toContain('queues/up-for-renewal.json');
+    });
+
+    it('removes a layout, and app-registry takes it out of the component', async () => {
+      const root = kit('contracts-demo', 'remove-layout');
+      const edit = `${CONFIG}/layouts/Contract/edit.layout.json`;
+      const component = 'bundle/OSGI-INF/contracts-demo-config.xml';
+      expect(read(root, component)).toContain('mode="edit"');
+      const result = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: edit },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expect(result.written, JSON.stringify(result.validation?.stdout)).toBe(true);
+      expect(result.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: edit, change: 'removed' },
+      ]);
+      expect(read(root, component)).not.toContain('mode="edit"');
+      expect(result.generatorOutput.join('\n')).toContain(
+        'No longer contributes the layouts, whose files are gone: Contract/edit',
+      );
+    });
+
+    it("compares the package's names with the other kits in its root, and refuses a clash", async () => {
+      const own = mkdtempSync(join(scratch, 'kits-'));
+      const at = (name: string) => {
+        cpSync(join(KITS, 'contracts-demo'), join(own, name), {
+          recursive: true,
+          filter: (source) => relative(join(KITS, 'contracts-demo'), source) !== 'dist',
+        });
+        return join(own, name);
+      };
+      const root = at('contracts-a');
+      const options: WriteOptions = { packageRoots: [own], workIn: work };
+      const content = edited(root, LABELS, '"Contract manager"', '"Account manager"');
+      // Alone in its root, the write passes; beside a copy of itself, every name is the copy's.
+      const alone = await writeFile(root, LABELS, content, options);
+      expect(alone.written, JSON.stringify(alone.validation?.stdout)).toBe(true);
+      expect(alone.validation?.stdout.join('\n')).toContain('Compared with the 0 other kits in');
+      at('contracts-b');
+      const before = fingerprint(root);
+      const beside = await writeFile(
+        root,
+        LABELS,
+        edited(root, LABELS, '"Account manager"', '"Contract owner"'),
+        options,
+      );
+      expectRefused(beside, root, before);
+      expect(beside.validation?.findings).toContainEqual(
+        expect.objectContaining({
+          file: `${CONFIG}/queues/up-for-renewal.json`,
+          place: 'queue "up-for-renewal"',
+          message: 'contracts-b contributes it too',
+          kind: 'clash',
+        }),
       );
     });
 
