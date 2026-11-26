@@ -26,6 +26,8 @@
     "controlled-documents.field.purpose": "Issued for",
     "controlled-documents.field.originator": "Originator",
     "controlled-documents.field.issuedOn": "Issued on",
-    "controlled-documents.field.description": "Description"
+    "controlled-documents.field.description": "Description",
+    "layout.schema.engdoc": "Engineering document",
+    "layout.schema.controlled_document": "Document control"
   }
 }

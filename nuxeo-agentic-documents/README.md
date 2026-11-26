@@ -240,7 +240,7 @@ From the repository's root, with JDK 21 and Maven:
 mvn -pl nuxeo-agentic-documents -am verify
 ```
 
-It runs the module's 46 tests and writes the bundle and the Marketplace package,
+It runs the module's 45 tests and writes the bundle and the Marketplace package,
 `nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.1.0.zip`. `build-marketplace.yml` builds
 and tests it on every pull request it runs for, without uploading or publishing it.
 
