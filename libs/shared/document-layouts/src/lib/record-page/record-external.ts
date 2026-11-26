@@ -35,6 +35,7 @@ import {
   type RecordValueContext,
   type RecordValueView,
   computedDefinition,
+  relativeDateText,
   showValue,
 } from './record-field-view';
 import type { RecordExternalEntry, RecordExternalField } from './record-layout';
@@ -87,6 +88,11 @@ function widgetFor(value: ConnectorValue): string {
  * fields has a value; nothing to look up, when the record holds no key; and an error, with Retry
  * for one that is not the reader's doing. It is asked again when it is given another record, the
  * same record modified, or another connector.
+ *
+ * Under the fields, or under nothing found, it says how old the other system's answer is, from the
+ * answer's `age`: the server may have kept it for a while (nuxeo-agentic-connectors' cache). An
+ * answer with no age, from a server older than the cache, says nothing of it. The file has nothing to
+ * set for it.
  */
 @Component({
   selector: 'lib-record-external',
@@ -172,6 +178,21 @@ export class RecordExternalComponent {
     return state.status === 'loaded' && state.answer.status === 'no-key'
       ? 'document-layouts.external.no-key'
       : 'document-layouts.external.empty';
+  });
+
+  /**
+   * How old the answer is, as the card says it: "just now" under a minute, else the largest whole
+   * unit, as a `relative-date` says it; `null` for an answer with no age.
+   */
+  protected readonly ageText = computed<string | null>(() => {
+    this.translations();
+    const state = this.state();
+    if (state.status !== 'loaded' || state.answer.age === undefined) return null;
+    const { age } = state.answer;
+    if (age < 60) return this.translate.instant('document-layouts.external.age-now');
+    const today = this.today();
+    const when = relativeDateText(new Date(today.getTime() - age * 1000), today, this.locale);
+    return this.translate.instant('document-layouts.external.age', { when });
   });
 
   constructor() {

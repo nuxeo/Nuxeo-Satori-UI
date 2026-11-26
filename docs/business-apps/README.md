@@ -85,7 +85,8 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
 - [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md): an asset's rights, refused at the
   platform's download permission (phase 5).
 - [`nuxeo-agentic-connectors`](../../nuxeo-agentic-connectors/README.md): a record of another
-  system, read for the record page by `Connector.Read` (phase 7).
+  system, read for the record page by `Connector.Read`, kept for a time each server sets, and
+  dropped when the system's signed change event names it (phase 7).
 - [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md): controlled documents,
   numbered from the platform's sequencer, and a new revision superseding the one before it in the
   same transaction (phase 8), with its kit,

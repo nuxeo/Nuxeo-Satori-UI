@@ -1537,6 +1537,8 @@
       "tick-not-accepted": "The server did not accept this change to the checklist."
     },
     "external": {
+      "age": "Read from the other system {{when}}",
+      "age-now": "Read from the other system just now",
       "empty": "Nothing found in the other system",
       "failed": "The other system's information could not be loaded",
       "loading": "Loading from the other system",

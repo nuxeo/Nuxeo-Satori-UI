@@ -313,6 +313,21 @@ way.
     access rules are not applied reader by reader: whoever may read the record sees its connector's
     fields. Token exchange, decision F, is what would change that.
 
+- **D, the connectors add-on's caching and change events (26 November 2026).** Built against the
+  same recommendation: the add-on's version 0.1.0 keeps `Connector.Read`'s answers for a time each
+  server sets per connector, and takes the system of record's signed change events at
+  `/nuxeo/agentic-connectors/events/<connector>`, which drop the answers kept for a record and do
+  nothing else ([the connectors README](../../nuxeo-agentic-connectors/README.md#the-cache)). The
+  reader is not in the cache's key: every check runs before the lookup, and the answer does not
+  depend on who reads, since F is not touched. Outbound webhooks are not built. What changes if D
+  goes another way:
+  - **A separate integration service, reached through Nuxeo:** the service may keep answers and
+    take events itself; `Connector.Read` keeps its checks before any kept answer, and the card,
+    which reads `age`, does not change.
+  - **A separate service the client calls itself:** the cache and the events move to the service,
+    and the card reads the same `age` from it.
+  - **If F passes the reader's identity on,** the reader joins the cache's key.
+
 - **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
   "exchange in phase 7": a record page's panel inside another system's page,
   [embedded-panels.md](embedded-panels.md), and its server's half,

@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * What {@code Connector.Read} answers:
  *
  * <pre>
- * { "connector": "payers.claimPayments", "status": "found",
+ * { "connector": "payers.claimPayments", "status": "found", "age": 42,
  *   "fields": { "paymentStatus": "Paid", "paidAmount": 412.5 } }
  * </pre>
  *
@@ -22,8 +22,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <li>{@code no-key}: the document holds no key the connector can send, so the system was not
  * called.</li>
  * </ul>
+ *
+ * {@code age} is how long ago, in whole seconds, the system gave the answer: 0 when it was just asked,
+ * more when the answer comes from the connector's cache ({@link ConnectorCache}). An answer the system
+ * did not give, {@code no-key}, has none.
  */
-public record ConnectorAnswer(String connector, Status status, Map<String, JsonNode> fields) {
+public record ConnectorAnswer(String connector, Status status, Map<String, JsonNode> fields, Long age) {
 
     public enum Status {
         FOUND("found"), NOT_FOUND("not-found"), NO_KEY("no-key");
@@ -41,8 +45,18 @@ public record ConnectorAnswer(String connector, Status status, Map<String, JsonN
         fields = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(fields));
     }
 
+    /** An answer with no age yet: as the system gave it, before the reader says how old it is. */
+    public ConnectorAnswer(String connector, Status status, Map<String, JsonNode> fields) {
+        this(connector, status, fields, null);
+    }
+
     static ConnectorAnswer without(String connector, Status status) {
         return new ConnectorAnswer(connector, status, Map.of());
+    }
+
+    /** The same answer, given {@code seconds} after the system gave it. */
+    ConnectorAnswer aged(long seconds) {
+        return new ConnectorAnswer(connector, status, fields, Math.max(0, seconds));
     }
 
     /**
@@ -66,6 +80,9 @@ public record ConnectorAnswer(String connector, Status status, Map<String, JsonN
         ObjectNode root = JSON.createObjectNode();
         root.put("connector", connector);
         root.put("status", status.json);
+        if (age != null) {
+            root.put("age", age);
+        }
         ObjectNode out = root.putObject("fields");
         fields.forEach(out::set);
         try {
