@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional move schema of the Move type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/moves-demo/move"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/moves-demo/move">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="customer" type="xs:string" />
+  <xs:element name="customerPhone" type="xs:string" />
+  <xs:element name="customerEmail" type="xs:string" />
+  <xs:element name="origin" type="xs:string" />
+  <xs:element name="destination" type="xs:string" />
+  <xs:element name="loadDate" type="xs:date" />
+  <xs:element name="deliveryDate" type="xs:date" />
+  <xs:element name="deliveredOn" type="xs:date" />
+  <xs:element name="state">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Booked" />
+        <xs:enumeration value="Packed" />
+        <xs:enumeration value="In transit" />
+        <xs:enumeration value="Delivered" />
+        <xs:enumeration value="Cancelled" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="coordinator" type="xs:string" />
+  <xs:element name="crewLead" type="xs:string" />
+  <xs:element name="crew" type="nxs:stringList" />
+  <xs:element name="truck" type="xs:string" />
+  <xs:element name="declaredValue" type="xs:double" />
+  <xs:element name="notes" type="xs:string" />
+</xs:schema>
