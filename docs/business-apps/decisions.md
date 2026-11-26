@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 25 November 2026.
+Updated 26 November 2026.
 
 ## Open: from the plan
 
@@ -144,6 +144,24 @@ way.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
     dropped from the kit, and every customer then gets the download permission, which refuses
     nothing until a policy is contributed.
+
+- **B, the records module's server add-on (26 November 2026).** Built against the recommendation,
+  "one add-on per domain module": the disposition review is
+  [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the records kit,
+  [`records-demo`](../../business-apps/packages/records-demo/README.md), depends on; nothing of it
+  went into `nuxeo-agentic-core`. It builds on the platform's retention module, `nuxeo-retention`,
+  which its package depends on: Nuxeo publishes the module for LTS 2025, and the add-on reads its
+  records, rules and holds rather than keeping its own. Decision 3 is not touched: the add-on
+  registers no operation and no endpoint, and a person reaches it by filing a document, which a
+  listener checks. Decision G, tenancy, is not built. What changes if B goes another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, with its dependency
+    on `nuxeo-retention`, and the kit's `package.xml` depends on that package in place of
+    `nuxeo-agentic-records`. The type, schema and permission names do not change.
+  - **Into `nuxeo-agentic-core`:** every customer would then get the records components, which
+    stay unresolved on a server without the retention module; so the records types would stop
+    requiring the module's, and the review would be switched on by a setting instead, off by
+    default.
 
 - **D, the connectors add-on's first slice (24 November 2026).** Built against the
   recommendation: inside Nuxeo, as an add-on of its own, not a separate service.

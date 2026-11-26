@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- The folder that holds a repository's disposition runs, their decisions and their certificates.
+     Written by the add-on alone: the number it gave the last run. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/disposition-runs"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/disposition-runs">
+
+  <xs:element name="sequence" type="xs:long" default="0" />
+
+</xs:schema>

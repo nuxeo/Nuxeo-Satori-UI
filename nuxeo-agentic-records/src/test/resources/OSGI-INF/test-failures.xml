@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- Test-only listeners: a failure while a run is disposed of, and two requests held as they are filed,
+     before the add-on's listener (priority 50) sees them, until both have been filed. Each does
+     nothing until a test arms it. -->
+<component name="org.nuxeo.agentic.records.test.failures">
+
+  <require>org.nuxeo.agentic.records.listener</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticRecordsTestFailOnRemove" async="false" postCommit="false"
+      class="org.nuxeo.agentic.records.TestHooks$FailOnRemove">
+      <event>aboutToRemove</event>
+    </listener>
+    <listener name="agenticRecordsTestFilingBarrier" async="false" postCommit="false" priority="1"
+      class="org.nuxeo.agentic.records.TestHooks$FilingBarrier">
+      <event>aboutToCreate</event>
+    </listener>
+  </extension>
+
+</component>

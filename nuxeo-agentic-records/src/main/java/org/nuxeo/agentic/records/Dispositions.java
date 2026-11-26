@@ -1,0 +1,501 @@
+package org.nuxeo.agentic.records;
+
+import static org.nuxeo.agentic.records.Disposition.*;
+
+import java.io.Serializable;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.nuxeo.ecm.core.api.Blob;
+import org.nuxeo.ecm.core.api.Blobs;
+import org.nuxeo.ecm.core.api.CoreInstance;
+import org.nuxeo.ecm.core.api.CoreSession;
+import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.DocumentRef;
+import org.nuxeo.ecm.core.api.IdRef;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
+import org.nuxeo.ecm.core.api.security.ACE;
+import org.nuxeo.ecm.core.api.security.ACL;
+import org.nuxeo.ecm.core.api.security.ACP;
+import org.nuxeo.ecm.core.api.security.SecurityConstants;
+import org.nuxeo.runtime.api.Framework;
+import org.nuxeo.runtime.cluster.ClusterService;
+import org.nuxeo.runtime.transaction.TransactionHelper;
+
+/**
+ * What a person's request does: a run started, a run approved or rejected, a run disposed of.
+ *
+ * <h2>Who</h2>
+ * Each request is checked with the person's own permissions, the ones the add-on defines, on the
+ * repository's one {@code DispositionRuns} folder, which must block every permission it would
+ * inherit. A run is disposed of once {@value Disposition#APPROVALS_REQUIRED} different people with
+ * {@code ApproveDisposition} have approved it, none of them its starter. Names are compared without
+ * their case, as {@code LayerService} compares an approver with a draft's makers.
+ *
+ * <h2>One at a time, each in a transaction of its own</h2>
+ * Every request is handled inside one lock: the server's, and the cluster's
+ * ({@code ClusterService.runAtomically}, which runs the work at once on a server that is not in a
+ * cluster), as {@code LayerService} makes its changes. Inside it, the request runs in a transaction
+ * of its own, which reads the runs as the last request left them and is committed before the lock is
+ * given back. So two approvals at once are taken one after the other: one person's second is refused
+ * as theirs, and a run's second approval disposes of it once. A refusal writes nothing. A failure
+ * while disposing rolls that transaction back whole, the records deleted so far included, so a run is
+ * disposed of whole, with its certificate, or not at all.
+ *
+ * <p>
+ * The request document itself is written afterwards, by the person's own transaction, with what came
+ * of it. Should that transaction fail after the request's own committed, the run keeps what the
+ * request did, and the request document is missing: the run, not the request, is the record of
+ * what was decided.
+ */
+final class Dispositions {
+
+    private static final Logger log = LogManager.getLogger(Dispositions.class);
+
+    /** Runs the work alone: on this server, and across a cluster. */
+    interface Lock {
+
+        void run(Runnable work);
+    }
+
+    private static final Object SERVER = new Object();
+
+    /** The server's lock, then the cluster's: tried for 30 seconds, every 100 ms. */
+    static final Lock CLUSTER = work -> {
+        synchronized (SERVER) {
+            ClusterService cluster = Framework.getService(ClusterService.class);
+            if (cluster == null) {
+                work.run();
+            } else {
+                cluster.runAtomically(LOCK_KEY, Duration.ofSeconds(30), Duration.ofMillis(100), work);
+            }
+        }
+    };
+
+    /** What a request came to: the run's state after it, and the run. */
+    record Outcome(String outcome, String runId, long runNumber) {
+    }
+
+    private final Clock clock;
+
+    private final Lock lock;
+
+    Dispositions(Clock clock, Lock lock) {
+        this.clock = clock;
+        this.lock = lock;
+    }
+
+    // --- The folder ---------------------------------------------------------------------------------
+
+    /** A new {@code DispositionRuns} folder: an administrator's, and only one per repository. */
+    void folderCreated(CoreSession session, DocumentModel folder) {
+        if (!session.getPrincipal().isAdministrator()) {
+            throw new DispositionRefusal(403, "administrators-only",
+                    "Only an administrator makes the repository's disposition runs folder.");
+        }
+        boolean exists = CoreInstance.doPrivileged(session, (CoreSession privileged) -> !privileged.query(
+                "SELECT * FROM " + RUNS_TYPE + " WHERE ecm:isProxy = 0 AND ecm:isVersion = 0", null, 1, 0, false)
+                .isEmpty());
+        if (exists) {
+            throw new DispositionRefusal(409, "folder-exists",
+                    "The repository has its disposition runs folder already: there is one, so that no run misses another's records.");
+        }
+        folder.setPropertyValue(SEQUENCE, 0L);
+    }
+
+    // --- A request filed ----------------------------------------------------------------------------
+
+    /** Handles {@code request}, filed by the person of {@code session}, and fills in what came of it; or refuses it. */
+    void file(CoreSession session, DocumentModel request) {
+        NuxeoPrincipal person = person(session);
+        String action = text(request, REQUEST_ACTION);
+        String runId = text(request, REQUEST_RUN);
+        String comment = text(request, REQUEST_COMMENT);
+        if (!START.equals(action) && !APPROVE.equals(action) && !REJECT.equals(action)) {
+            throw new DispositionRefusal(400, "bad-request",
+                    "A request's action, dreq:action, is \"start\", \"approve\" or \"reject\".");
+        }
+        if (!START.equals(action) && !DueRecords.ID.matcher(runId).matches()) {
+            throw new DispositionRefusal(400, "bad-request", "A request to approve or reject names its run's id, dreq:run.");
+        }
+        if (comment.length() > MAX_COMMENT) {
+            throw new DispositionRefusal(400, "bad-request", "A request's comment is at most " + MAX_COMMENT + " characters.");
+        }
+        DocumentRef folderRef = request.getParentRef();
+        String repository = session.getRepositoryName();
+        Outcome[] outcome = new Outcome[1];
+        RuntimeException[] failed = new RuntimeException[1];
+        lock.run(() -> {
+            try {
+                outcome[0] = TransactionHelper.runInNewTransaction(
+                        () -> CoreInstance.doPrivileged(repository, (CoreSession privileged) -> {
+                            CoreSession as = CoreInstance.getCoreSession(repository, person);
+                            DocumentModel folder = folderOf(privileged, folderRef);
+                            Instant now = clock.instant();
+                            return START.equals(action) ? start(as, privileged, folder, person, now)
+                                    : decide(as, privileged, folder, person.getName(), action, runId, now);
+                        }));
+            } catch (RuntimeException e) {
+                failed[0] = e;
+            }
+        });
+        if (failed[0] != null) {
+            throw failed[0];
+        }
+        Outcome done = outcome[0];
+        request.setPropertyValue(TITLE, switch (action) {
+        case START -> "Start of disposition run " + done.runNumber();
+        case APPROVE -> "Approval of disposition run " + done.runNumber();
+        default -> "Rejection of disposition run " + done.runNumber();
+        } + " by " + person.getName());
+        request.setPropertyValue(REQUEST_ACTION, action);
+        request.setPropertyValue(REQUEST_RUN, done.runId());
+        request.setPropertyValue(REQUEST_RUN_NUMBER, done.runNumber());
+        request.setPropertyValue(REQUEST_COMMENT, comment.isEmpty() ? null : comment);
+        request.setPropertyValue(REQUEST_BY, person.getName());
+        request.setPropertyValue(REQUEST_AT, calendar(clock.instant()));
+        request.setPropertyValue(REQUEST_OUTCOME, done.outcome());
+    }
+
+    // --- A run started ------------------------------------------------------------------------------
+
+    /** A new run holding the records due that {@code as}, its starter, may read; or a refusal. */
+    private static Outcome start(CoreSession as, CoreSession privileged, DocumentModel folder, NuxeoPrincipal starter,
+            Instant now) {
+        if (!as.hasPermission(folder.getRef(), START_PERMISSION)) {
+            throw new DispositionRefusal(403, "permission",
+                    "Starting a disposition run needs the StartDisposition permission on the disposition runs folder.");
+        }
+        int max = maxRecords();
+        List<DueRecords.Due> due = DueRecords.find(as, privileged, heldByOpenRuns(privileged), max, now);
+        if (due.isEmpty()) {
+            throw new DispositionRefusal(409, "nothing-due",
+                    "No record you may read is due for disposition: none whose retention has ended, under no hold and in no other run.");
+        }
+        long number = longValue(folder.getPropertyValue(SEQUENCE)) + 1;
+        folder.setPropertyValue(SEQUENCE, number);
+        ServiceWrites.run(() -> privileged.saveDocument(folder));
+
+        List<Map<String, Serializable>> records = new ArrayList<>();
+        for (DueRecords.Due record : due) {
+            records.add(row(record, AWAITING, null));
+        }
+        DocumentModel run = privileged.createDocumentModel(folder.getPathAsString(), "run-" + number, RUN_TYPE);
+        run.setPropertyValue(TITLE, "Disposition run " + number);
+        run.setPropertyValue(RUN_NUMBER, number);
+        run.setPropertyValue(RUN_STATE, PENDING);
+        run.setPropertyValue(RUN_STARTED_BY, starter.getName());
+        run.setPropertyValue(RUN_STARTED_AT, calendar(now));
+        run.setPropertyValue(RUN_RECORD_COUNT, (long) records.size());
+        run.setPropertyValue(RUN_RECORDS, (Serializable) records);
+        DocumentModel created = ServiceWrites.run(() -> privileged.createDocument(run));
+        log.info("Disposition run {} started by {}, holding {} record(s){}", number, printable(starter.getName()),
+                records.size(), due.size() >= max ? ", the most a run holds" : "");
+        return new Outcome(STARTED, created.getId(), number);
+    }
+
+    /** The records the runs still awaiting approval hold, so that no record is in two. */
+    private static Set<String> heldByOpenRuns(CoreSession privileged) {
+        Set<String> held = new HashSet<>();
+        for (DocumentModel open : privileged.query("SELECT * FROM " + RUN_TYPE + " WHERE " + RUN_STATE + " = '"
+                + PENDING + "' AND ecm:isProxy = 0 AND ecm:isVersion = 0")) {
+            for (Map<String, Serializable> record : records(open)) {
+                if (record.get("uid") instanceof String uid) {
+                    held.add(uid);
+                }
+            }
+        }
+        return held;
+    }
+
+    // --- A run approved or rejected -----------------------------------------------------------------
+
+    private Outcome decide(CoreSession as, CoreSession privileged, DocumentModel folder, String name, String action,
+            String runId, Instant now) {
+        IdRef ref = new IdRef(runId);
+        DocumentModel run = privileged.exists(ref) ? privileged.getDocument(ref) : null;
+        if (run == null || !RUN_TYPE.equals(run.getType()) || run.isProxy() || run.isVersion()
+                || !folder.getRef().equals(run.getParentRef())) {
+            throw new DispositionRefusal(404, "no-run", "The request names no disposition run of this folder.");
+        }
+        boolean approver = as.hasPermission(ref, APPROVE_PERMISSION);
+        if (APPROVE.equals(action) && !approver
+                || REJECT.equals(action) && !approver && !as.hasPermission(ref, START_PERMISSION)) {
+            throw new DispositionRefusal(403, "permission", APPROVE.equals(action)
+                    ? "Approving a disposition run needs the ApproveDisposition permission."
+                    : "Rejecting a disposition run needs the ApproveDisposition or StartDisposition permission.");
+        }
+        long number = longValue(run.getPropertyValue(RUN_NUMBER));
+        String state = String.valueOf(run.getPropertyValue(RUN_STATE));
+        if (!PENDING.equals(state)) {
+            throw new DispositionRefusal(409, "not-pending", "The run is " + state + ": it awaits no decision.");
+        }
+        String outcome;
+        if (APPROVE.equals(action)) {
+            if (name.equalsIgnoreCase(String.valueOf(run.getPropertyValue(RUN_STARTED_BY)))) {
+                throw new DispositionRefusal(403, "self-approval", "You started this run, so two other people approve it.");
+            }
+            List<Map<String, Serializable>> approvals = approvals(run);
+            for (Map<String, Serializable> approval : approvals) {
+                if (name.equalsIgnoreCase(String.valueOf(approval.get("by")))) {
+                    throw new DispositionRefusal(409, "already-approved",
+                            "You have approved this run already: a second person approves it.");
+                }
+            }
+            Map<String, Serializable> approval = new LinkedHashMap<>();
+            approval.put("by", name);
+            approval.put("at", calendar(now));
+            approvals.add(approval);
+            run.setPropertyValue(RUN_APPROVALS, (Serializable) approvals);
+            outcome = approvals.size() >= APPROVALS_REQUIRED ? dispose(privileged, folder, run, name, now) : APPROVED;
+        } else {
+            List<Map<String, Serializable>> records = records(run);
+            for (Map<String, Serializable> record : records) {
+                record.put("status", KEPT);
+            }
+            run.setPropertyValue(RUN_RECORDS, (Serializable) records);
+            close(run, REJECTED, name, now);
+            outcome = REJECTED;
+        }
+        ServiceWrites.run(() -> privileged.saveDocument(run));
+        log.info("Disposition run {}: {} by {}, now {}", number, action, printable(name), outcome);
+        return new Outcome(outcome, run.getId(), number);
+    }
+
+    // --- A run disposed of --------------------------------------------------------------------------
+
+    /**
+     * Disposes of every record of {@code run}, or of none: each is checked again first, and if any
+     * may no longer be disposed of, the run is halted and nothing is deleted. Then each is deleted,
+     * and the certificate written. A failure on the way throws, and the transaction is rolled back.
+     */
+    private String dispose(CoreSession privileged, DocumentModel folder, DocumentModel run, String by, Instant now) {
+        List<Map<String, Serializable>> records = records(run);
+        List<DueRecords.Due> current = new ArrayList<>();
+        Map<String, String> refused = new LinkedHashMap<>();
+        for (Map<String, Serializable> record : records) {
+            String uid = String.valueOf(record.get("uid"));
+            IdRef ref = new IdRef(uid);
+            String why;
+            DocumentModel doc = null;
+            if (!DueRecords.ID.matcher(uid).matches() || !privileged.exists(ref)) {
+                why = "no longer exists";
+            } else {
+                doc = privileged.getDocument(ref);
+                why = DueRecords.why(doc, privileged, now);
+                if (why == null && !String.valueOf(record.get("ruleId")).equals(DueRecords.ruleId(doc))) {
+                    why = "has another retention rule than when the run started";
+                }
+            }
+            if (why != null) {
+                refused.put(uid, why);
+            } else {
+                current.add(DueRecords.of(doc, privileged));
+            }
+        }
+        if (!refused.isEmpty()) {
+            for (Map<String, Serializable> record : records) {
+                String why = refused.get(String.valueOf(record.get("uid")));
+                record.put("status", why == null ? KEPT : REFUSED);
+                record.put("reason", why == null ? null : "It " + why + ".");
+            }
+            run.setPropertyValue(RUN_RECORDS, (Serializable) records);
+            run.setPropertyValue(RUN_HALT_REASON, refused.size() + " of the run's " + records.size()
+                    + " records may no longer be disposed of, so nothing was disposed of.");
+            close(run, HALTED, by, now);
+            log.warn("Disposition run {} halted at its second approval: {} record(s) may no longer be disposed of",
+                    longValue(run.getPropertyValue(RUN_NUMBER)), refused.size());
+            return HALTED;
+        }
+
+        // Deleted, permanently. The repository itself refuses to delete a record under retention or a
+        // legal hold, whoever asks: a second check, below this add-on's.
+        for (DueRecords.Due record : current) {
+            privileged.removeDocument(new IdRef(record.uid()));
+        }
+        Calendar disposedAt = calendar(now);
+        Map<String, DueRecords.Due> byUid = new HashMap<>();
+        current.forEach(record -> byUid.put(record.uid(), record));
+        List<Map<String, Serializable>> updated = new ArrayList<>();
+        for (Map<String, Serializable> record : records) {
+            updated.add(row(byUid.get(String.valueOf(record.get("uid"))), DISPOSED, null));
+        }
+        run.setPropertyValue(RUN_RECORDS, (Serializable) updated);
+        DocumentModel certificate = certificate(privileged, folder, run, current, disposedAt);
+        run.setPropertyValue(RUN_CERTIFICATE, certificate.getId());
+        run.setPropertyValue(RUN_CERTIFICATE_SHA256, certificate.getPropertyValue(CERT_SHA256));
+        close(run, DISPOSED, by, now);
+        log.info("Disposition run {} disposed of {} record(s); certificate {}", longValue(run.getPropertyValue(RUN_NUMBER)),
+                current.size(), certificate.getId());
+        return DISPOSED;
+    }
+
+    /** The certificate, written beside the run and made a record, so that its CSV cannot be replaced. */
+    private static DocumentModel certificate(CoreSession privileged, DocumentModel folder, DocumentModel run,
+            List<DueRecords.Due> records, Calendar disposedAt) {
+        long number = longValue(run.getPropertyValue(RUN_NUMBER));
+        String startedBy = String.valueOf(run.getPropertyValue(RUN_STARTED_BY));
+        Calendar startedAt = (Calendar) run.getPropertyValue(RUN_STARTED_AT);
+        List<CertificateCsv.Approval> approvals = new ArrayList<>();
+        for (Map<String, Serializable> approval : approvals(run)) {
+            approvals.add(new CertificateCsv.Approval(String.valueOf(approval.get("by")), (Calendar) approval.get("at")));
+        }
+        byte[] csv = CertificateCsv.write(number, startedBy, startedAt, approvals, disposedAt, records);
+        String sha256 = CertificateCsv.sha256(csv);
+        Blob blob = Blobs.createBlob(csv);
+        blob.setMimeType("text/csv");
+        blob.setEncoding("UTF-8");
+        blob.setFilename("disposition-certificate-" + number + ".csv");
+
+        DocumentModel certificate = privileged.createDocumentModel(folder.getPathAsString(), "certificate-" + number,
+                CERTIFICATE_TYPE);
+        certificate.setPropertyValue(TITLE, "Disposition certificate, run " + number);
+        certificate.setPropertyValue(CERT_RUN, run.getId());
+        certificate.setPropertyValue(CERT_RUN_NUMBER, number);
+        certificate.setPropertyValue(CERT_STARTED_BY, startedBy);
+        certificate.setPropertyValue(CERT_STARTED_AT, startedAt);
+        certificate.setPropertyValue(CERT_APPROVALS, (Serializable) approvals(run));
+        certificate.setPropertyValue(CERT_DISPOSED_AT, disposedAt);
+        certificate.setPropertyValue(CERT_METHOD, METHOD);
+        certificate.setPropertyValue(CERT_RECORD_COUNT, (long) records.size());
+        List<Map<String, Serializable>> rows = new ArrayList<>();
+        for (DueRecords.Due record : records) {
+            Map<String, Serializable> row = row(record, null, null);
+            row.remove("status");
+            row.remove("reason");
+            rows.add(row);
+        }
+        certificate.setPropertyValue(CERT_RECORDS, (Serializable) rows);
+        certificate.setPropertyValue(CERT_SHA256, sha256);
+        certificate.setPropertyValue(FILE_CONTENT, (Serializable) blob);
+        DocumentModel created = ServiceWrites.run(() -> privileged.createDocument(certificate));
+        // A record's main file cannot be changed or removed: the repository keeps the CSV as written.
+        ServiceWrites.run(() -> privileged.makeRecord(created.getRef()));
+        return created;
+    }
+
+    // --- Shared -------------------------------------------------------------------------------------
+
+    /**
+     * The repository's {@code DispositionRuns} folder at {@code parent}, checked: a request is filed in
+     * it and nowhere else, and it blocks every permission it would inherit, so that only its own
+     * grants count.
+     */
+    private static DocumentModel folderOf(CoreSession privileged, DocumentRef parent) {
+        DocumentModel folder = parent == null || !privileged.exists(parent) ? null : privileged.getDocument(parent);
+        if (folder == null || !RUNS_TYPE.equals(folder.getType()) || folder.isProxy() || folder.isVersion()) {
+            throw new DispositionRefusal(400, "not-in-runs-folder",
+                    "A disposition request is filed in the repository's disposition runs folder, a " + RUNS_TYPE + ".");
+        }
+        if (!blocksInheritance(privileged.getACP(folder.getRef()))) {
+            throw new DispositionRefusal(409, "folder-inherits",
+                    "The disposition runs folder must block the permissions it would inherit, so that only its own grants "
+                            + "count; until an administrator blocks them, no request is taken.");
+        }
+        return folder;
+    }
+
+    /** Whether the folder's own ACL holds the block: everything denied to everyone, for all time. */
+    static boolean blocksInheritance(ACP acp) {
+        ACL local = acp == null ? null : acp.getACL(ACL.LOCAL_ACL);
+        if (local == null) {
+            return false;
+        }
+        for (ACE ace : local.getACEs()) {
+            if (SecurityConstants.EVERYONE.equals(ace.getUsername())
+                    && SecurityConstants.EVERYTHING.equals(ace.getPermission()) && !ace.isGranted()
+                    && ace.getBegin() == null && ace.getEnd() == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The person filing: never the system or an anonymous user. */
+    private static NuxeoPrincipal person(CoreSession session) {
+        NuxeoPrincipal principal = session.getPrincipal();
+        if (principal == null || principal.isAnonymous()
+                || SecurityConstants.SYSTEM_USERNAME.equals(principal.getName())) {
+            throw new DispositionRefusal(403, "not-a-person", "A disposition request is filed by a person.");
+        }
+        return principal;
+    }
+
+    private static String text(DocumentModel doc, String xpath) {
+        return doc.getPropertyValue(xpath) instanceof String value ? value.trim() : "";
+    }
+
+    private static void close(DocumentModel run, String state, String by, Instant now) {
+        run.setPropertyValue(RUN_STATE, state);
+        run.setPropertyValue(RUN_CLOSED_BY, by);
+        run.setPropertyValue(RUN_CLOSED_AT, calendar(now));
+    }
+
+    private static Map<String, Serializable> row(DueRecords.Due record, String status, String reason) {
+        Map<String, Serializable> row = new LinkedHashMap<>();
+        row.put("uid", record.uid());
+        row.put("path", record.path());
+        row.put("title", record.title());
+        row.put("type", record.type());
+        row.put("ruleId", record.ruleId());
+        row.put("ruleTitle", record.ruleTitle());
+        row.put("retentionEnded", record.retentionEnded());
+        row.put("status", status);
+        row.put("reason", reason);
+        return row;
+    }
+
+    static List<Map<String, Serializable>> records(DocumentModel run) {
+        return copyList(run, RUN_RECORDS);
+    }
+
+    static List<Map<String, Serializable>> approvals(DocumentModel run) {
+        return copyList(run, RUN_APPROVALS);
+    }
+
+    /** A list of complex values, copied, so that changing it changes nothing until it is set back. */
+    static List<Map<String, Serializable>> copyList(DocumentModel doc, String xpath) {
+        List<Map<String, Serializable>> copy = new ArrayList<>();
+        if (doc.getPropertyValue(xpath) instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Map<String, Serializable> entry = new LinkedHashMap<>();
+                    map.forEach((key, value) -> entry.put(String.valueOf(key), (Serializable) value));
+                    copy.add(entry);
+                }
+            }
+        }
+        return copy;
+    }
+
+    static long longValue(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    static Calendar calendar(Instant instant) {
+        GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+        calendar.setTimeInMillis(instant.toEpochMilli());
+        return calendar;
+    }
+
+    /** A name as the log shows it: no character that could start a line of its own. */
+    static String printable(String name) {
+        StringBuilder out = new StringBuilder();
+        String.valueOf(name).codePoints().limit(128)
+                .forEach(point -> out.appendCodePoint(Character.isISOControl(point) ? '?' : point));
+        return out.toString();
+    }
+}

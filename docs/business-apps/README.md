@@ -71,6 +71,21 @@ Designer, the development plan and its decisions. Start here when you pick this 
     and in what order, every server setting with its default, upgrading and removing a kit, the
     demo server, the logs, and what is not ready for production.
 
+## The domain modules' server add-ons
+
+One add-on per domain module, on decision B's recommendation ([decision log](decisions.md)), each a
+Maven module beside `nuxeo-agentic-core` with a Marketplace package of its own:
+
+- [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md): an asset's rights, enforced at
+  the platform's download endpoints (phase 5).
+- [`nuxeo-agentic-connectors`](../../nuxeo-agentic-connectors/README.md): a record of another
+  system, read for a document by `Connector.Read` (phase 7).
+- [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md): the disposition review, on the
+  platform's retention module: the records due held in a run, approved by two people other than
+  its starter, deleted, and a certificate kept (phase 9). Its kit is
+  [`records-demo`](../../business-apps/packages/records-demo/README.md). Held for its security
+  review.
+
 ## Facts that hold
 
 Checked first-hand; build on them rather than re-checking.

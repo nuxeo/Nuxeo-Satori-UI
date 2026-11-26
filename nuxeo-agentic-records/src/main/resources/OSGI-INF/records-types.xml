@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.records.types" version="1.0">
+
+  <documentation>
+    The disposition review's document types. A repository has one DispositionRuns folder, made by an
+    administrator, which holds every request a person files, every run and every certificate. A
+    person files a DispositionRequest; runs and certificates are written by the add-on alone.
+
+    The records a run reviews are the platform's retention module's (nuxeo-retention): a run reads
+    its Record facet, record:ruleIds and record:retainUntil, and the rule's retention_def:endActions.
+    This component requires the module's types, so that without the module none of these types is
+    registered and the add-on does nothing.
+  </documentation>
+
+  <require>org.nuxeo.ecm.core.CoreExtensions</require>
+  <require>org.nuxeo.retention.types</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="disposition_runs" prefix="druns" src="schemas/disposition_runs.xsd" />
+    <schema name="disposition_run" prefix="drun" src="schemas/disposition_run.xsd" />
+    <schema name="disposition_request" prefix="dreq" src="schemas/disposition_request.xsd" />
+    <schema name="disposition_certificate" prefix="dcert" src="schemas/disposition_certificate.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- No Versionable facet on any of them: a request, a run or a certificate is never checked in
+         or restored to an earlier state. -->
+    <doctype name="DispositionRuns" extends="Folder">
+      <schema name="disposition_runs" />
+      <subtypes>
+        <type>DispositionRequest</type>
+        <type>DispositionRun</type>
+        <type>DispositionCertificate</type>
+      </subtypes>
+    </doctype>
+
+    <doctype name="DispositionRun" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="disposition_run" />
+    </doctype>
+
+    <doctype name="DispositionRequest" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="disposition_request" />
+    </doctype>
+
+    <doctype name="DispositionCertificate" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <schema name="disposition_certificate" />
+    </doctype>
+  </extension>
+
+</component>

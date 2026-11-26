@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.certificates",
+  "pageProvider": "records_certificates",
+  "columns": [
+    { "field": "dcert:runNumber", "widget": "number" },
+    "dc:title",
+    { "field": "dcert:disposedAt", "widget": "date" },
+    { "field": "dcert:recordCount", "widget": "number" },
+    { "field": "dcert:startedBy", "widget": "user" }
+  ],
+  "sort": [
+    {
+      "field": "dcert:disposedAt",
+      "order": "desc"
+    }
+  ],
+  "pageSize": 50
+}
