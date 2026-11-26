@@ -1,0 +1,171 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "reported-late",
+      "tone": "warning",
+      "labelKey": "pc-claims.banner.claim.reportedLate",
+      "visibleWhen": {
+        "type": "app.rules.dateAfter",
+        "parameters": [{ "field": "pclaim:reportedOn" }, { "field": "pclaim:lossDate" }, 30]
+      }
+    },
+    {
+      "id": "denied",
+      "tone": "negative",
+      "labelKey": "pc-claims.banner.claim.denied",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "pclaim:status" }, "Denied"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "pc-claims.card.propertyClaim.claim",
+      "fields": [
+        "pclaim:number",
+        { "field": "dc:title", "labelKey": "pc-claims.field.claimTitle" },
+        {
+          "field": "pclaim:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Reported": "info",
+              "Investigating": "warning",
+              "Approved": "positive",
+              "Denied": "negative",
+              "Closed": "neutral"
+            }
+          }
+        },
+        { "field": "pclaim:adjuster", "widget": "user" },
+        { "field": "pclaim:reserve", "widget": "currency", "parameters": { "currency": "USD" } }
+      ]
+    },
+    {
+      "id": "loss",
+      "labelKey": "pc-claims.card.propertyClaim.loss",
+      "fields": [
+        { "field": "pclaim:lossDate", "widget": "date", "parameters": { "format": "long" } },
+        "pclaim:cause",
+        "pclaim:lossLocation",
+        { "field": "pclaim:lossDescription", "widget": "long-text" },
+        { "field": "pclaim:reportedOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysToReport",
+          "labelKey": "pc-claims.field.daysToReport",
+          "widget": "number",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "pclaim:lossDate" }, { "field": "pclaim:reportedOn" }, "days"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "policy",
+      "labelKey": "pc-claims.card.propertyClaim.policy",
+      "fields": [
+        {
+          "field": "pclaim:policy",
+          "widget": "document-link",
+          "parameters": { "types": ["PropertyPolicy"] }
+        },
+        {
+          "id": "policyNumber",
+          "field": "pclaim:policy",
+          "widget": "document-link",
+          "parameters": { "types": ["PropertyPolicy"], "show": "ppolicy:number" }
+        },
+        {
+          "id": "policyHolder",
+          "field": "pclaim:policy",
+          "widget": "document-link",
+          "parameters": { "types": ["PropertyPolicy"], "show": "ppolicy:holder" }
+        },
+        {
+          "id": "insuredProperty",
+          "field": "pclaim:policy",
+          "widget": "document-link",
+          "parameters": { "types": ["PropertyPolicy"], "show": "ppolicy:propertyAddress" }
+        }
+      ]
+    },
+    {
+      "id": "core",
+      "labelKey": "pc-claims.card.propertyClaim.core",
+      "external": {
+        "connector": "pcclaims.policyPayments",
+        "fields": [
+          {
+            "name": "policyStatus",
+            "labelKey": "pc-claims.core.policyStatus",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": { "In force": "positive", "Lapsed": "negative", "Cancelled": "neutral" }
+            }
+          },
+          { "name": "policyNumber", "labelKey": "pc-claims.core.policyNumber" },
+          {
+            "name": "deductibleMet",
+            "labelKey": "pc-claims.core.deductibleMet",
+            "widget": "boolean"
+          },
+          {
+            "name": "paymentStatus",
+            "labelKey": "pc-claims.core.paymentStatus",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Paid": "positive",
+                "Partially paid": "info",
+                "Scheduled": "info",
+                "Pending": "warning",
+                "Denied": "negative"
+              }
+            }
+          },
+          {
+            "name": "paidAmount",
+            "labelKey": "pc-claims.core.paidAmount",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          {
+            "name": "paidOn",
+            "labelKey": "pc-claims.core.paidOn",
+            "widget": "date",
+            "parameters": { "format": "long" }
+          },
+          { "name": "paymentReference", "labelKey": "pc-claims.core.paymentReference" }
+        ]
+      }
+    },
+    {
+      "id": "attachments",
+      "labelKey": "pc-claims.card.propertyClaim.attachments",
+      "span": 2,
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "denial",
+      "labelKey": "pc-claims.card.propertyClaim.denial",
+      "span": 2,
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "pclaim:status" }, "Denied"]
+      },
+      "fields": [{ "field": "pclaim:denialReason", "widget": "long-text" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "pc-claims.card.propertyClaim.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

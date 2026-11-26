@@ -101,6 +101,7 @@ describe('every list of kits kept outside the kits', () => {
         'facilities-demo',
         'moves-demo',
         'payers-claims-demo',
+        'pc-claims-demo',
       ]),
     );
   });

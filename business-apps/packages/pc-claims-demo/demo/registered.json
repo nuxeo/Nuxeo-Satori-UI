@@ -1,0 +1,13 @@
+{
+  "connectors": {
+    "pcclaims.policyPayments": [
+      "policyStatus",
+      "policyNumber",
+      "deductibleMet",
+      "paymentStatus",
+      "paidAmount",
+      "paidOn",
+      "paymentReference"
+    ]
+  }
+}

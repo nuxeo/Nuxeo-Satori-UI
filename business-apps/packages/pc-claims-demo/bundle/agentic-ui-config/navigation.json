@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "pc-claims.nav.home", "icon": "home", "page": "home" },
+    { "id": "open-property-claims", "icon": "inbox", "queue": "open-property-claims" },
+    {
+      "id": "high-reserve",
+      "icon": "list",
+      "queue": "high-reserve",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["property-claims-managers"] }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ wait for a security review, and some are built on open decisions
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
 | `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.0                 | Nowhere                                           |
+| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, two queues, a core-system card                                | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                 | Nowhere                                           |
 | `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents             | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                 | Nowhere                                           |
 | `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging              | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                 | Nowhere                                           |
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                 | Nowhere                                           |
@@ -40,6 +41,7 @@ installed on any server yet"), and the kits' READMEs:
 [contracts](../../business-apps/packages/contracts-demo/README.md),
 [facilities](../../business-apps/packages/facilities-demo/README.md),
 [moves](../../business-apps/packages/moves-demo/README.md),
+[P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
 [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md) and
 [records](../../business-apps/packages/records-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
@@ -110,10 +112,14 @@ The order the [demo server](../../business-apps/demo-server/README.md) installs 
    ([records kit README](../../business-apps/packages/records-demo/README.md#installing-it-on-a-server-of-your-own)).
 2. **The connectors bundle, only where a kit contributes a connector.** It has no package: its jar
    goes into `nxserver/bundles/` ([connectors README](../../nuxeo-agentic-connectors/README.md),
-   "Installing it"). No kit contributes one yet: the Payers kit's opt-in is described and "not
-   done here" (same README, "How a kit opts in").
+   "Installing it"). One kit configures one: the P&C claims kit's `pcclaims.policyPayments`, whose
+   contribution is `demo/pc-claims-connectors-config.xml`, outside its package, since the bundle has
+   no package to depend on
+   ([P&C claims README](../../business-apps/packages/pc-claims-demo/README.md#connecting-the-core-system)).
+   The Payers kit's opt-in is described and "not done here" (same README, "How a kit opts in").
 3. **The deployment's own contributions, into `nxserver/config/`.** Each kit's
-   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list. A file there
+   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list, and, with the
+   connectors bundle, the P&C claims kit's `demo/pc-claims-connectors-config.xml`. A file there
    whose name ends in `-config.xml` is a contribution the server reads at start. Never place
    `deployment/build-allow-list.json`: it is a build input
    ([demo server README](../../business-apps/demo-server/README.md), step 4;
@@ -379,20 +385,21 @@ included, so `members` is everyone signed in
 [api-integrations.md](../api-integrations.md), section 36). An administrator sees what their
 groups give them, and gets every diagnostic.
 
-| App, and its address            | Groups                                                      |
-| ------------------------------- | ----------------------------------------------------------- |
-| `payers-claims`                 | `claims-adjusters`, `claims-supervisors`, `member-services` |
-| `brand-assets`                  | `brand-team`, `creative-review`                             |
-| `contracts`, at `contract-desk` | `contract-managers`, `legal-reviewers`                      |
-| `facilities`                    | `facilities-coordinators`, `facilities-technicians`         |
-| `moves`                         | `move-coordinators`, `move-claims-adjusters`                |
-| `controlled-documents`          | `document-controllers`, `engineers`                         |
-| `records`                       | `records-managers`, `records-approvers`                     |
+| App, and its address              | Groups                                                      |
+| --------------------------------- | ----------------------------------------------------------- |
+| `payers-claims`                   | `claims-adjusters`, `claims-supervisors`, `member-services` |
+| `brand-assets`                    | `brand-team`, `creative-review`                             |
+| `contracts`, at `contract-desk`   | `contract-managers`, `legal-reviewers`                      |
+| `facilities`                      | `facilities-coordinators`, `facilities-technicians`         |
+| `moves`                           | `move-coordinators`, `move-claims-adjusters`                |
+| `pc-claims`, at `property-claims` | `property-claims-adjusters`, `property-claims-managers`     |
+| `controlled-documents`            | `document-controllers`, `engineers`                         |
+| `records`                         | `records-managers`, `records-approvers`                     |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
-- **Create the groups yourself.** The contracts, brand assets, moves, controlled documents and
-  records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
+- **Create the groups yourself.** The contracts, brand assets, moves, P&C claims, controlled
+  documents and records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
   for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
@@ -501,14 +508,15 @@ has the Admin Center's install path been rehearsed
 ## 6. Removing a kit safely
 
 **Not run yet,** for any kit (each kit's README, "Removing it"). The steps follow the Payers
-kit's install, which was run; the contracts, facilities and moves kits were never installed.
+kit's install, which was run; the contracts, facilities, moves and P&C claims kits were never
+installed.
 
 1. **Delete the kit's documents first, and empty them from the trash.** A document whose type is
    gone cannot be read, and breaks the folder and the searches that hold it. Do the same before you
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
-   `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo` and
-   `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
+   `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo`,
+   `/default-domain/workspaces/pc-claims-demo` and `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
    and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.
