@@ -20,6 +20,7 @@ public class SignatureProviderException extends RuntimeException {
         NOT_FOUND("the e-signature service has no such envelope"),
         NOT_SIGNED("the e-signature service does not say the envelope is signed"),
         NOT_DECLINED("the e-signature service does not say the envelope is declined"),
+        UNACCEPTABLE("the e-signature service's signed file or evidence is not one the server keeps"),
         TOO_LARGE("the e-signature service's answer was larger than the server takes"),
         UNREADABLE("the e-signature service's answer could not be read");
 

@@ -30,6 +30,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -54,7 +56,7 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  *
  * <ol>
  * <li>{@code POST} only, to a provider registered and configured on this server; anything else is
- * 405, 404 or 503, and nothing of the body is read.</li>
+ * 405, 404 or 503, and nothing of the body is parsed.</li>
  * <li>The body is at most {@value #MAX_BODY} bytes, refused past it unread
  * ({@link CallbackServlet}).</li>
  * <li><strong>Authenticated by the provider</strong> ({@link SignatureProvider#authenticate}): its
@@ -63,10 +65,12 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li><strong>Fresh:</strong> its signed time within the window of the server's, either way
  * ({@link SignatureService#callbackWindow}); a stale one is 401.</li>
  * <li><strong>Taken once:</strong> its id claimed across the cluster for twice the window, past
- * which it is stale; a callback whose id is claimed already is a replay, 409. A claim is released
- * when its callback did not end a request, so that the provider's retry of it can.</li>
- * <li><strong>Its request,</strong> by the provider and the envelope: none is 404; one that is no
- * longer out, or ending at this moment, 409.</li>
+ * which it is stale; a callback whose id is claimed already is a replay, refused: nothing is done,
+ * and it is answered 200, "already received", so that a provider's redelivery stops. A claim is
+ * released when its callback did not end a request, so that the provider's retry of it can.</li>
+ * <li><strong>Its request,</strong> by the provider and the envelope: none is 404, retried, since
+ * its send may not have committed yet; one no longer out is 200, "no longer out", and nothing done;
+ * one ending at this moment 409, retried.</li>
  * <li><strong>Signed:</strong> the signed file and the evidence are fetched from the provider, with
  * the server's credential, so a callback alone files nothing: the provider's own service must say
  * the envelope is signed. The signed file takes the sent file's place on the record, the evidence
@@ -109,9 +113,20 @@ final class CallbackEndpoint {
 
     static final Response NOT_ALLOWED = new Response(405, "{\"error\":\"method not allowed\"}");
 
-    static final Response ALREADY = new Response(409, "{\"error\":\"already received\"}");
+    /**
+     * A callback whose id was acted on already: refused, nothing done, and answered 2xx, so that a
+     * provider redelivering one whose first answer it lost stops; a replay learns nothing from it.
+     */
+    static final Response ALREADY = new Response(200, "{\"status\":\"already received\"}");
 
-    static final Response ENDED = new Response(409, "{\"error\":\"the request is no longer out\"}");
+    /** A request no longer out: nothing done, and 2xx, so that a late event is not retried. */
+    static final Response ENDED = new Response(200, "{\"status\":\"the request is no longer out\"}");
+
+    /** A request another callback or a cancelling is ending at this moment: 409, so that it is retried. */
+    static final Response BUSY = new Response(409, "{\"error\":\"the request is ending at this moment\"}");
+
+    /** A signed result the server does not keep: retrying cannot change it, so 422, and logged as an error. */
+    static final Response UNPROCESSABLE = new Response(422, "{\"error\":\"the signed result is not one the server keeps\"}");
 
     static final Response TOO_LARGE = new Response(413, "{\"error\":\"too large\"}");
 
@@ -121,7 +136,7 @@ final class CallbackEndpoint {
 
     /** What ending a request came to. */
     enum Ending {
-        DONE, IGNORED, UNKNOWN, ENDED
+        DONE, IGNORED, UNKNOWN, ENDED, BUSY
     }
 
     private final SignatureService service;
@@ -158,37 +173,37 @@ final class CallbackEndpoint {
             return NOT_FOUND;
         }
         if (!provider.configured()) {
-            log.warn("E-signature: a callback to {}, which this server has not configured, is refused", providerId);
+            log.info("E-signature: a callback to {}, which this server has not configured, is refused", providerId);
             return UNAVAILABLE;
         }
         CallbackEvent event;
         try {
             event = provider.authenticate(new Callback(headers, body));
         } catch (CallbackRefusedException e) {
-            log.warn("E-signature: a callback to {} is refused: {}", providerId, e.reason());
+            log.info("E-signature: a callback to {} is refused: {}", providerId, e.reason());
             return REFUSED;
         } catch (RuntimeException e) {
-            log.warn("E-signature: a callback to {} could not be authenticated, and is refused ({})", providerId,
+            log.info("E-signature: a callback to {} could not be authenticated, and is refused ({})", providerId,
                     e.getClass().getSimpleName());
             return REFUSED;
         }
         if (event == null || event.id() == null || !EXTERNAL_ID.matcher(event.id()).matches()
                 || event.envelope() == null || !EXTERNAL_ID.matcher(event.envelope()).matches()
                 || event.outcome() == null) {
-            log.warn("E-signature: an authenticated callback to {} names no callback or envelope it could", providerId);
+            log.info("E-signature: an authenticated callback to {} names no callback or envelope it could", providerId);
             return MALFORMED;
         }
         Duration window = service.callbackWindow();
         Instant now = clock.instant();
         Instant at = event.timestamp();
         if (at == null || at.isBefore(now.minus(window)) || at.isAfter(now.plus(window))) {
-            log.warn("E-signature: a callback to {} is refused: its time is outside the {} s window", providerId,
+            log.info("E-signature: a callback to {} is refused: its time is outside the {} s window", providerId,
                     window.toSeconds());
             return REFUSED;
         }
         String taken = "callback." + providerId + "." + event.id();
         if (!service.claim(taken, event.envelope(), window.toSeconds() * 2 + 60, false)) {
-            log.warn("E-signature: callback {} to {} is refused: it was received already", event.id(), providerId);
+            log.info("E-signature: callback {} to {} is refused: it was received already", event.id(), providerId);
             return ALREADY;
         }
         boolean keep = false;
@@ -201,8 +216,14 @@ final class CallbackEndpoint {
                 case DONE, IGNORED -> RECEIVED;
                 case UNKNOWN -> NOT_FOUND;
                 case ENDED -> ENDED;
+                case BUSY -> BUSY;
             };
         } catch (SignatureProviderException e) {
+            if (e.kind() == SignatureProviderException.Kind.UNACCEPTABLE) {
+                log.error("E-signature: callback {} to {}: the signed result is not one the server keeps; the request "
+                        + "stays out until it is cancelled", event.id(), providerId);
+                return UNPROCESSABLE;
+            }
             log.warn("E-signature: callback {} to {}: the provider's service failed: {}", event.id(), providerId,
                     e.kind());
             return PROVIDER_FAILED;
@@ -230,7 +251,7 @@ final class CallbackEndpoint {
         if (found.size() > 1) {
             log.error("E-signature: callback {} to {}: more than one request has its envelope; none is ended",
                     event.id(), providerId);
-            return Ending.ENDED;
+            return Ending.BUSY;
         }
         DocumentModel request = found.get(0);
         if (!SENT.equals(text(request, STATUS))) {
@@ -246,7 +267,7 @@ final class CallbackEndpoint {
                 SignatureRequestListener.CLAIM_TTL, true)) {
             log.info("E-signature: callback {} to {}: request {} is ending at this moment", event.id(), providerId,
                     request.getId());
-            return Ending.ENDED;
+            return Ending.BUSY;
         }
         if (event.outcome() == Outcome.SIGNED) {
             signed(system, providerId, provider, event, request);
@@ -266,18 +287,20 @@ final class CallbackEndpoint {
     private void signed(CoreSession system, String providerId, SignatureProvider provider, CallbackEvent event,
             DocumentModel request) {
         SignedResult result = provider.fetchSigned(event.envelope());
-        if (result == null || result.content() == null || result.content().length == 0
-                || result.content().length > provider.maxBytes() + MAX_EVIDENCE || result.evidence() == null
-                || result.evidence().length == 0 || result.evidence().length > MAX_EVIDENCE) {
+        if (result == null || result.content() == null || result.content().length == 0 || result.evidence() == null
+                || result.evidence().length == 0) {
             throw new SignatureProviderException(SignatureProviderException.Kind.UNREADABLE);
+        }
+        if (result.content().length > provider.maxBytes() + MAX_EVIDENCE || result.evidence().length > MAX_EVIDENCE) {
+            throw new SignatureProviderException(SignatureProviderException.Kind.UNACCEPTABLE);
         }
         String mimeType = bare(result.mimeType());
         if (mimeType == null || !provider.accepts().contains(mimeType)) {
-            throw new SignatureProviderException(SignatureProviderException.Kind.UNREADABLE);
+            throw new SignatureProviderException(SignatureProviderException.Kind.UNACCEPTABLE);
         }
         String evidenceType = bare(result.evidenceMimeType());
         if (evidenceType == null || !EVIDENCE_TYPES.contains(evidenceType)) {
-            throw new SignatureProviderException(SignatureProviderException.Kind.UNREADABLE);
+            throw new SignatureProviderException(SignatureProviderException.Kind.UNACCEPTABLE);
         }
         String sentName = text(request, SENT_FILE_NAME);
         Blob signedFile = blob(result.content(), mimeType, signedName(sentName));
@@ -288,14 +311,29 @@ final class CallbackEndpoint {
         DocumentModel record = SignatureRequestListener.endRecord(system, recordId, request.getId(), SIGNED, evidence);
         if (record != null) {
             String xpath = text(request, FILE);
-            if (Stored.blobAt(record, xpath) == null) {
-                log.warn("E-signature: the record {} has no file where request {} sent one; the signed file is "
-                        + "kept on the request only", recordId, request.getId());
-                record.setPropertyValue(Signatures.SGN_FILE, null);
-                SignatureRequestListener.saveRecord(system, record);
-            } else {
+            String filedAt = null;
+            if (isTheFileSent(record, xpath, text(request, Signatures.SENT_DIGEST), provider.maxBytes())) {
+                // In its place: the record's file is still the one sent.
                 record.setPropertyValue(xpath, (Serializable) signedFile);
-                SignatureRequestListener.saveRecord(system, record);
+                filedAt = xpath;
+            } else if (record.hasSchema("files")) {
+                // Changed since it was sent, as no one but a transaction under way while it was sent could
+                // have changed it: the signed file goes beside it, and nothing is written over it.
+                List<Map<String, Serializable>> files = new ArrayList<>(Stored.entries(record, "files:files"));
+                Map<String, Serializable> entry = new HashMap<>();
+                entry.put("file", (Serializable) signedFile);
+                files.add(entry);
+                record.setPropertyValue("files:files", (Serializable) files);
+                filedAt = "files:files/" + (files.size() - 1) + "/file";
+                log.warn("E-signature: the record {} no longer holds the file request {} sent; the signed file is "
+                        + "filed beside it", recordId, request.getId());
+            } else {
+                log.warn("E-signature: the record {} no longer holds the file request {} sent; the signed file is "
+                        + "kept on the request only", recordId, request.getId());
+            }
+            record.setPropertyValue(Signatures.SGN_FILE, filedAt);
+            SignatureRequestListener.saveRecord(system, record);
+            if (filedAt != null) {
                 DocumentRef version = system.checkIn(record.getRef(), VersioningOption.MAJOR,
                         "Signed through the e-signature service " + providerId + ", envelope " + event.envelope());
                 versionId = version.reference().toString();
@@ -324,6 +362,20 @@ final class CallbackEndpoint {
                 DECLINED, null);
         if (record != null) {
             SignatureRequestListener.saveRecord(system, record);
+        }
+    }
+
+    /** Whether the record's file at {@code xpath} is the bytes sent, by their SHA-256, read no further than the bound. */
+    static boolean isTheFileSent(DocumentModel record, String xpath, String sentDigest, long maxBytes) {
+        Blob current = Stored.blobAt(record, xpath);
+        if (current == null || sentDigest == null || current.getLength() > maxBytes) {
+            return false;
+        }
+        try (java.io.InputStream in = current.getStream()) {
+            byte[] bytes = in.readNBytes((int) Math.min(maxBytes + 1, Integer.MAX_VALUE - 8));
+            return bytes.length <= maxBytes && Stored.sha256(bytes).equals(sentDigest);
+        } catch (IOException e) {
+            throw new NuxeoException("E-signature: the record's file could not be read", e);
         }
     }
 

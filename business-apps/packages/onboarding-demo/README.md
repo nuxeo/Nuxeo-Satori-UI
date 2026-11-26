@@ -59,7 +59,7 @@ nothing for real.
 | `bundle/OSGI-INF/onboarding-demo-config.xml`                                                                    | The configuration component: the layouts, and the app for the registry                   | The generators                                      |
 | `bundle/META-INF/MANIFEST.MF`, `package/package.xml`                                                            | The bundle and the Marketplace package, which depends on `nuxeo-agentic-signature:0.1.0` | `app-package`, then **by hand**                     |
 | `content-model.json`                                                                                            | The model as a server with the add-on and the kit would answer it, for the pipeline      | `app-model`, then **by hand**                       |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                                      | The seed, its fictional records and its 17 controls. Not packaged                        | By hand: the write tools write no code              |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                                      | The seed, its fictional records and its 18 controls. Not packaged                        | By hand: the write tools write no code              |
 
 ## The stand-in model
 
@@ -107,7 +107,8 @@ and the kit seeded (below). Not run: no server has either package.
    shows the three SHA-256s. The request leaves Awaiting signature.
 6. **The other ways it ends:** `decline <envelope> <reason>` on `ONB-1001`'s request shows the
    banner and the reason; the officer sets a request's status to cancelled in its Edit form, and it
-   ends; a callback sent twice is refused.
+   ends. `resend <envelope>` posts a callback again, and nothing changes; `forge <envelope>` posts
+   one signed with another secret, and Nuxeo refuses it, 401.
 
 A dispute analyst's part: Open disputes, by reason; `DSP-2002` overdue; its Edit form asks for
 the resolution once it is resolved.
@@ -174,12 +175,12 @@ node business-apps/packages/onboarding-demo/demo/seed.mjs
 - **What it needs:** Node 24. `NUXEO_USER` and `NUXEO_PASS` have no default and must be an
   administrator's. Exit 2 is a precondition, before anything is written: no credentials, no server,
   a `/me` that is not a user, not an administrator, or the add-on or a kit type missing.
-- **Its controls,** `node business-apps/packages/onboarding-demo/demo/seed.selftest.mjs`, 17 of 17,
-  against a stand-in for the REST API: they prove the script, not a server. Nine ways of breaking
+- **Its controls,** `node business-apps/packages/onboarding-demo/demo/seed.selftest.mjs`, 18 of 18,
+  against a stand-in for the REST API: they prove the script, not a server. Ten ways of breaking
   the seed, one at a time, each turned at least one red: no administrator check, no check that
-  `/me` is a user, no add-on precondition, the checklist written on every run, a case's attachments
-  written over, the Basic header printed, no check of the queues, a signature request sent by the
-  seed, and another type's place written over.
+  `/me` is a user, no add-on precondition, no dispute type precondition, the checklist written on
+  every run, a case's attachments written over, the Basic header printed, no check of the queues, a
+  signature request sent by the seed, and another type's place written over.
 
 ## How it was built: the log
 
@@ -286,9 +287,11 @@ page providers.
 ### The seed (21:15)
 
 Written by hand: the write tools refuse `demo/*.mjs`, as code. On the records and moves kits'
-model. Its controls, 17 of 17, and the nine ways of breaking it, are [above](#seeding-it). One
+model. Its controls, 18 of 18, and the ten ways of breaking it, are [above](#seeding-it). One
 control was too weak at first: a `/me` that was not a user was refused by the administrator check
-anyway, so removing the user check left it green; it now answers an administrator with no id.
+anyway, so removing the user check left it green; it now answers an administrator with no id. The
+independent review found the dispute type missing from the preflight, which would have stopped the
+run after its first writes rather than before them; it is checked now, with a control of its own.
 
 ## Where the tools fell short: phase 7 feedback
 

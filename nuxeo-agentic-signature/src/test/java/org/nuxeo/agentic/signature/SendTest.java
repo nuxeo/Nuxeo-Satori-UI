@@ -219,6 +219,48 @@ public class SendTest {
         refused(409, ALICE, s -> s.createDocument(Desk.requestModel(s, caseId, "agreement.pdf", ONE_SIGNER)));
     }
 
+    /** Another send of the record under way, on this node or another: the claim refuses this one. */
+    @Test
+    public void aRecordBeingSentAtThisMomentIsNotSentTwice() {
+        String caseId = Desk.newCase(repository, "onb-1", "agreement.pdf");
+        SignatureService service = org.nuxeo.runtime.api.Framework.getService(SignatureService.class);
+        assertTrue(service.claim(SignatureRequestListener.openKey(caseId), "another send", 60, false));
+        refused(409, ALICE, s -> s.createDocument(Desk.requestModel(s, caseId, "agreement.pdf", ONE_SIGNER)));
+        service.release(SignatureRequestListener.openKey(caseId));
+        Desk.send(repository, ALICE, caseId, "agreement.pdf");
+        assertEquals(1, stub.envelopeCount());
+    }
+
+    /**
+     * The file changed, and committed, by another transaction while the service took the old one:
+     * the send's transaction does not see it. Filing does: the signed old file goes beside the new
+     * one, and nothing is written over it.
+     */
+    @Test
+    public void aFileChangedWhileItIsSentIsNotWrittenOver() {
+        String caseId = Desk.newCase(repository, "onb-1", "agreement.pdf");
+        byte[] meanwhile = "%PDF-1.4 changed meanwhile".getBytes();
+        stub.onSend = () -> TransactionHelper.runInTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(
+                repository, (CoreSession s) -> {
+                    DocumentModel record = s.getDocument(new org.nuxeo.ecm.core.api.IdRef(caseId));
+                    record.setPropertyValue("files:files/0/file", (Serializable) Desk.pdf("agreement.pdf", meanwhile));
+                    return s.saveDocument(record);
+                }));
+        String requestId = Desk.send(repository, ALICE, caseId, "agreement.pdf");
+        stub.onSend = null;
+        String envelope = text(Desk.stored(repository, requestId), Signatures.ENVELOPE);
+        assertArrayEquals(PDF, stub.envelope(envelope).content());
+
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.signed", envelope, null));
+        DocumentModel record = Desk.stored(repository, caseId);
+        assertArrayEquals(meanwhile, Desk.bytes((org.nuxeo.ecm.core.api.Blob) record.getPropertyValue(
+                "files:files/0/file")));
+        assertArrayEquals(StandInStub.signed(PDF, envelope), Desk.bytes((org.nuxeo.ecm.core.api.Blob)
+                record.getPropertyValue("files:files/1/file")));
+        assertEquals("files:files/1/file", text(record, Signatures.SGN_FILE));
+        assertEquals(1, Desk.versions(repository, caseId).size());
+    }
+
     @Test
     public void aRecordsSignaturePropertiesAreNotGivenWhenItIsCreated() {
         refused(400, ALICE, s -> {

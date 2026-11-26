@@ -39,6 +39,19 @@ final class ServerWrite implements Serializable {
         return doc.getContextData(KEY) == this;
     }
 
+    /**
+     * Whether the document's write is marked {@code this}, taking the mark off: a mark lets the one
+     * write through, and not a later save of the same model, such as the copy that
+     * {@code session.copy} returns once the listener has written it.
+     */
+    boolean consumes(DocumentModel doc) {
+        if (!marks(doc)) {
+            return false;
+        }
+        doc.getContextData().remove(KEY);
+        return true;
+    }
+
     @Override
     public String toString() {
         return what;

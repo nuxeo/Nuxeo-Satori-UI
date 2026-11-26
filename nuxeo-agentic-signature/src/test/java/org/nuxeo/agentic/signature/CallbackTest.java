@@ -263,6 +263,40 @@ public class CallbackTest {
         assertEquals(1, Desk.versions(repository, caseId).size());
     }
 
+    /** Another ending under way, a callback or a cancelling: 409, retried, and nothing done meanwhile. */
+    @Test
+    public void aRequestEndingAtThisMomentIsRetriedNotEnded() {
+        SignatureService service = org.nuxeo.runtime.api.Framework.getService(SignatureService.class);
+        assertEquals(true, service.claim(SignatureRequestListener.endKey(requestId), "another", 60, false));
+        unchanged(signed("evt_1"), CallbackEndpoint.BUSY);
+        service.release(SignatureRequestListener.endKey(requestId));
+        assertEquals(CallbackEndpoint.RECEIVED, signed("evt_1"));
+    }
+
+    /** A signed result the server does not keep: 422, which retrying cannot change, and nothing filed. */
+    @Test
+    public void aSignedResultTheServerDoesNotKeepIsUnprocessable() {
+        stub.mode = StandInStub.Mode.BAD_EVIDENCE;
+        unchanged(signed("evt_1"), CallbackEndpoint.UNPROCESSABLE);
+        assertEquals(422, CallbackEndpoint.UNPROCESSABLE.status());
+    }
+
+    /** Redelivered, or replayed: nothing done, and answered 2xx so that a provider stops; an attacker learns nothing. */
+    @Test
+    public void aDuplicateOrALateCallbackIsAcknowledgedAndChangesNothing() {
+        assertEquals(200, CallbackEndpoint.ALREADY.status());
+        assertEquals(200, CallbackEndpoint.ENDED.status());
+        assertEquals(CallbackEndpoint.RECEIVED, signed("evt_1"));
+        DocumentModel before = Desk.stored(repository, requestId);
+        assertEquals(CallbackEndpoint.ALREADY, signed("evt_1"));
+        assertEquals(CallbackEndpoint.ENDED, Desk.callback(repository, "evt_late", "envelope.declined", envelope,
+                null));
+        DocumentModel after = Desk.stored(repository, requestId);
+        assertEquals(text(before, Signatures.EVENT), text(after, Signatures.EVENT));
+        assertEquals(Signatures.SIGNED, text(after, Signatures.STATUS));
+        assertEquals(1, Desk.versions(repository, caseId).size());
+    }
+
     @Test
     public void onlyAPostToARegisteredConfiguredProviderIsRead() {
         byte[] body = StandInStub.callbackBody("evt_1", "envelope.signed", envelope, null);

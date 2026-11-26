@@ -152,9 +152,12 @@ public class SignatureRequestListener implements EventListener {
                 case DocumentEventTypes.DOCUMENT_CREATED -> documentCreated(context, doc);
                 case DocumentEventTypes.DOCUMENT_CREATED_BY_COPY -> copied(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
-                case DocumentEventTypes.ABOUT_TO_REMOVE, "aboutToRemoveVersion", "documentTrashed" -> removal(context, doc);
+                case DocumentEventTypes.ABOUT_TO_REMOVE, "aboutToRemoveVersion", "documentTrashed" -> removal(event.getName(),
+                        context, doc);
+                case DocumentEventTypes.BEFORE_DOC_RESTORE -> beforeRestore(doc);
+                case DocumentEventTypes.DOCUMENT_RESTORED -> restored(context, doc);
                 default -> {
-                    // Not one of ours: the contribution lists the seven above.
+                    // Not one of ours: the contribution lists the nine above.
                 }
             }
         } catch (NuxeoException e) {
@@ -168,7 +171,7 @@ public class SignatureRequestListener implements EventListener {
     // ------------------------------------------------------------------ sending
 
     private void aboutToCreate(DocumentEventContext context, DocumentModel doc) {
-        if (doc.hasFacet(SIGNABLE_FACET) && !ServerWrite.RECORD.marks(doc)) {
+        if (doc.hasFacet(SIGNABLE_FACET) && !ServerWrite.RECORD.consumes(doc)) {
             List<String> given = SIGNABLE_PROPERTIES.stream()
                                                     .filter(p -> Stored.value(doc, SIGNABLE_SCHEMA, p) != null)
                                                     .toList();
@@ -427,6 +430,9 @@ public class SignatureRequestListener implements EventListener {
         if (blob == null) {
             throw conflict("The file to sign is no longer on the record");
         }
+        // Held from now on. A change committed by another transaction while the provider took the
+        // file is not seen here, in this one: so filing checks the file is still the bytes sent,
+        // by their SHA-256, and files the signed one beside it otherwise (CallbackEndpoint).
         List<String> names = Stored.entries(request, SIGNERS).stream().map(e -> trimmed(e.get("name"))).toList();
         record.setPropertyValue(SGN_STATUS, SENT);
         record.setPropertyValue(SGN_REQUEST, request.getId());
@@ -458,14 +464,49 @@ public class SignatureRequestListener implements EventListener {
         if (doc.hasFacet(REQUEST_FACET)) {
             throw invalid("A signature request is not copied: it is the record of one send");
         }
-        if (isLive(doc, SIGNABLE_FACET)
-                && SIGNABLE_PROPERTIES.stream().anyMatch(p -> Stored.value(doc, SIGNABLE_SCHEMA, p) != null)) {
-            // A copy was never sent: none of its original's signature comes with it.
-            for (String property : SIGNABLE_PROPERTIES) {
-                doc.setPropertyValue(property, null);
-            }
-            saveRecord(context.getCoreSession(), doc);
+        if (isLive(doc, SIGNABLE_FACET) && signed(doc)) {
+            unsign(context.getCoreSession(), doc);
         }
+        // Nuxeo tells a copy's root only: what it holds is the folder's to check.
+        if (doc.isFolder() && !doc.isProxy() && !doc.isVersion()) {
+            CoreSession session = context.getCoreSession();
+            if (holds(session, doc, "ecm:mixinType = '" + REQUEST_FACET + "'")) {
+                throw invalid("A folder that holds signature requests is not copied: each is the record of one send");
+            }
+            CoreInstance.doPrivileged(session, (CoreSession system) -> {
+                for (DocumentModel record : system.query(below(doc) + " AND ecm:mixinType = '" + SIGNABLE_FACET
+                        + "' AND sgn:status IS NOT NULL")) {
+                    unsign(system, record);
+                }
+            });
+        }
+    }
+
+    private static boolean signed(DocumentModel doc) {
+        return SIGNABLE_PROPERTIES.stream().anyMatch(p -> Stored.value(doc, SIGNABLE_SCHEMA, p) != null);
+    }
+
+    /** A copy was never sent: none of its original's signature comes with it. */
+    private static void unsign(CoreSession session, DocumentModel copy) {
+        for (String property : SIGNABLE_PROPERTIES) {
+            copy.setPropertyValue(property, null);
+        }
+        saveRecord(session, copy);
+    }
+
+    /** The live documents below a folder, as NXQL: its id is a document's, which quotes nothing. */
+    private static String below(DocumentModel folder) {
+        String id = folder.getId();
+        if (id == null || !DOCUMENT_ID.matcher(id).matches()) {
+            throw new NuxeoException("E-signature: a folder with no id is not checked");
+        }
+        return "SELECT * FROM Document WHERE ecm:ancestorId = '" + id + "' AND ecm:isVersion = 0 AND ecm:isProxy = 0";
+    }
+
+    /** Whether a folder holds, at any depth, a document the condition finds, as the system sees it. */
+    private static boolean holds(CoreSession session, DocumentModel folder, String condition) {
+        String query = below(folder) + " AND " + condition;
+        return CoreInstance.doPrivileged(session, (CoreSession system) -> !system.query(query, 1).isEmpty());
     }
 
     // ------------------------------------------------------------------ changes
@@ -493,7 +534,7 @@ public class SignatureRequestListener implements EventListener {
     }
 
     private void requestChange(DocumentEventContext context, DocumentModel previous, DocumentModel doc) {
-        if (ServerWrite.REQUEST.marks(doc)) {
+        if (ServerWrite.REQUEST.consumes(doc)) {
             return;
         }
         List<String> changed = new ArrayList<>(Stored.changes(previous, doc, REQUEST_SCHEMA, REQUEST_PROPERTIES));
@@ -575,7 +616,7 @@ public class SignatureRequestListener implements EventListener {
     }
 
     private void recordChange(DocumentModel previous, DocumentModel doc) {
-        if (ServerWrite.RECORD.marks(doc)) {
+        if (ServerWrite.RECORD.consumes(doc)) {
             return;
         }
         List<String> changed = Stored.changes(previous, doc, SIGNABLE_SCHEMA, SIGNABLE_PROPERTIES);
@@ -596,18 +637,55 @@ public class SignatureRequestListener implements EventListener {
 
     // ------------------------------------------------------------------ removal
 
-    private void removal(DocumentEventContext context, DocumentModel doc) {
+    /**
+     * A request, a record out for signature, and a folder holding either, are kept. Trashed, by no
+     * one while out: trash is undone, so an envelope voided for it could not be. Deleted, by an
+     * administrator only, the escape when a signer never answers: each envelope out below it is
+     * voided once the deletion commits. Nuxeo tells a folder's removal at its root only, so the
+     * folder answers for what it holds, and no child of a bulk trash is refused part way.
+     */
+    private void removal(String event, DocumentEventContext context, DocumentModel doc) {
         NuxeoPrincipal principal = context.getPrincipal();
+        boolean trash = "documentTrashed".equals(event);
+        boolean administrator = Refusal.isAdministrator(principal);
+        CoreSession session = context.getCoreSession();
         if (isLive(doc, REQUEST_FACET)) {
-            if (SENT.equals(text(doc, STATUS))) {
+            boolean out = SENT.equals(text(doc, STATUS));
+            if (out && (trash || !administrator)) {
                 throw conflict("A signature request out for signature is cancelled before it is deleted or trashed");
             }
-            if (!Refusal.isAdministrator(principal)) {
+            if (!administrator) {
                 throw forbidden("A signature request is kept: only an administrator deletes or trashes one");
             }
+            if (out) {
+                voidOnCommit(doc);
+            }
         }
-        if (isLive(doc, SIGNABLE_FACET) && SENT.equals(text(doc, SGN_STATUS))) {
+        if (isLive(doc, SIGNABLE_FACET) && SENT.equals(text(doc, SGN_STATUS)) && (trash || !administrator)) {
             throw conflict("A record out for signature is not deleted or trashed: its request is cancelled first");
+        }
+        if (doc.isFolder() && !doc.isProxy() && !doc.isVersion()) {
+            String sentRequests = "ecm:mixinType = '" + REQUEST_FACET + "' AND sigreq:status = '" + SENT + "'";
+            if ((trash || !administrator) && holds(session, doc, sentRequests)) {
+                throw conflict("This folder holds a signature request out for signature: it is cancelled before the "
+                        + "folder is deleted or trashed");
+            }
+            if ((trash || !administrator)
+                    && holds(session, doc, "ecm:mixinType = '" + SIGNABLE_FACET + "' AND sgn:status = '" + SENT + "'")) {
+                throw conflict("This folder holds a record out for signature: its request is cancelled before the "
+                        + "folder is deleted or trashed");
+            }
+            if (!administrator && holds(session, doc, "ecm:mixinType = '" + REQUEST_FACET + "'")) {
+                throw forbidden("This folder holds signature requests, which are kept: only an administrator deletes "
+                        + "or trashes it");
+            }
+            if (administrator && !trash) {
+                CoreInstance.doPrivileged(session, (CoreSession system) -> {
+                    for (DocumentModel request : system.query(below(doc) + " AND " + sentRequests)) {
+                        voidOnCommit(request);
+                    }
+                });
+            }
         }
         if (doc.isVersion() && doc.hasFacet(SIGNABLE_FACET) && !Refusal.isAdministrator(principal)) {
             String requestId = text(doc, SGN_REQUEST);
@@ -622,6 +700,72 @@ public class SignatureRequestListener implements EventListener {
                 throw forbidden("The version that holds a signed file is kept: only an administrator deletes it");
             }
         }
+    }
+
+    /** A request deleted while out: its envelope voided, and its record's claim released, once that commits. */
+    private static void voidOnCommit(DocumentModel request) {
+        String providerId = text(request, PROVIDER);
+        String envelope = text(request, ENVELOPE);
+        String recordId = text(request, DOCUMENT);
+        SignatureService service = Framework.getService(SignatureService.class);
+        TransactionSynchronizations.whenCommitted(() -> {
+            if (recordId != null) {
+                service.release(openKey(recordId));
+            }
+            SignatureProvider provider = service.provider(providerId);
+            if (provider != null && envelope != null) {
+                voidQuietly(provider, providerId, envelope);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ restore
+
+    /** A record out for signature keeps its file: it is not restored to a version, by anyone. */
+    private void beforeRestore(DocumentModel doc) {
+        if (isLive(doc, SIGNABLE_FACET) && SENT.equals(text(doc, SGN_STATUS))) {
+            throw conflict("A record out for signature is not restored to a version: its request is cancelled first");
+        }
+    }
+
+    /**
+     * A record restored to a version gets that version's sgn: properties, which may say anything
+     * since: so they are written again from its latest request, as the system.
+     */
+    private void restored(DocumentEventContext context, DocumentModel doc) {
+        if (!isLive(doc, SIGNABLE_FACET)) {
+            return;
+        }
+        String id = doc.getId();
+        if (id == null || !DOCUMENT_ID.matcher(id).matches()) {
+            return;
+        }
+        CoreInstance.doPrivileged(context.getCoreSession(), (CoreSession system) -> {
+            DocumentModel record = system.getDocument(new IdRef(id));
+            List<DocumentModel> latest = system.query("SELECT * FROM Document WHERE ecm:mixinType = '"
+                    + REQUEST_FACET + "' AND sigreq:document = '" + id + "' AND ecm:isVersion = 0 AND ecm:isProxy = 0 "
+                    + "ORDER BY sigreq:requestedAt DESC", 1);
+            for (String property : SIGNABLE_PROPERTIES) {
+                record.setPropertyValue(property, null);
+            }
+            if (!latest.isEmpty()) {
+                DocumentModel request = latest.get(0);
+                String status = text(request, STATUS);
+                record.setPropertyValue(SGN_STATUS, status);
+                record.setPropertyValue(SGN_REQUEST, request.getId());
+                record.setPropertyValue(SGN_SIGNERS, (Serializable) Stored.entries(request, SIGNERS)
+                                                                         .stream()
+                                                                         .map(e -> trimmed(e.get("name")))
+                                                                         .toList());
+                record.setPropertyValue(SGN_SENT_AT, request.getPropertyValue(REQUESTED_AT));
+                record.setPropertyValue(SGN_COMPLETED_AT, request.getPropertyValue(COMPLETED_AT));
+                if (SIGNED.equals(status)) {
+                    record.setPropertyValue(SGN_FILE, text(request, FILE));
+                    record.setPropertyValue(SGN_EVIDENCE, request.getPropertyValue(Signatures.EVIDENCE));
+                }
+            }
+            saveRecord(system, record);
+        });
     }
 
     static Calendar now() {

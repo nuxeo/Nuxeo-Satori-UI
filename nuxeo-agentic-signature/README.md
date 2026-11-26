@@ -27,51 +27,53 @@ the service's selftest. The install and the demo below are for the reviewer.
   and the record is marked out for signature. No Automation operation: a person creates a request
   as every client creates a document, through the app's Create form, and a workflow's chain may
   create one the same way.
-- **The provider's callback is authenticated before it is read,** at
+- **The provider's callback is authenticated before it is parsed,** at
   `/nuxeo/agentic-signature/callback/<provider>`, with no sign-in: a signature over its time and
   body, made with a secret the server and the provider share, compared in constant time; its time
-  within five minutes of the server's; its id taken once, across the cluster. Only then does it end
-  the request: signed or declined.
-- **Signed, the signed file is fetched from the provider** with the server's credential, so a
-  callback alone files nothing, and takes the sent file's place on the record, which is checked in
-  as a new major version with the provider's evidence on it. Declined, the provider's service is
-  asked too, and must say so. The request keeps the signed file,
-  the evidence, their SHA-256 and the version's id.
+  within five minutes of the server's; its id taken once, across the cluster. Only then may it end
+  the request, signed or declined, and only when the provider's own service, asked with the
+  server's credential, says the same.
+- **Signed, the signed file is fetched from the provider** and takes the sent file's place on the
+  record, which is checked in as a new major version with the provider's evidence on it; a file
+  changed since it was sent is not written over, and the signed one goes beside it. The request
+  keeps the signed file, the evidence, their SHA-256 and the version's id.
 - **Provider credentials are server settings only,** in `nuxeo.conf` or the environment: never in a
   contribution, a document or a request, and never in a log line, which a test holds to.
 - **What no one but the server changes:** a request once sent, but for its cancelling by its
   requester or an administrator; a record's `sgn:` properties; the file out for signature, while it
-  is out; and the request, the record while it is out and the signed version, which are kept.
+  is out. **What is kept:** a request, a record while it is out, a folder holding either, and the
+  signed version. No one trashes one while it is out, or restores a record out to a version; an
+  administrator alone deletes a request, its envelope voided when it is out.
 
 ## What is in it
 
-| File                                                         | What it is                                                                                                                     |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `src/main/java/org/nuxeo/agentic/signature/`                 | The bundle: the provider interface and its types, the service, the listener, the callback's endpoint                           |
-| `src/main/java/org/nuxeo/agentic/signature/standin/`         | The stand-in provider, `StandInProvider`                                                                                       |
-| `src/main/resources/OSGI-INF/signature-schema-contrib.xml`   | The two facets and their schemas                                                                                               |
-| `src/main/resources/OSGI-INF/signature-service.xml`          | The component `org.nuxeo.agentic.signature`, its service and its `providers` extension point                                   |
-| `src/main/resources/OSGI-INF/signature-standin-contrib.xml`  | Registers the stand-in, `standin`: inert until the server configures it                                                        |
-| `src/main/resources/OSGI-INF/signature-listener-contrib.xml` | The listener: sending, cancelling, and the guards                                                                              |
-| `src/main/resources/OSGI-INF/deployment-fragment.xml`        | The callback's servlet, at `/nuxeo/agentic-signature/*`, with no authentication filter                                         |
-| `src/main/package/`                                          | The Marketplace package, `nuxeo-agentic-signature` 0.1.0                                                                       |
-| `src/test/java/`                                             | 54 tests: 52 in Nuxeo's test framework, with a stub of the service on the loopback interface, and 2 against the service itself |
-| `demo/esign-stand-in.mjs`                                    | The stand-in e-signature service: takes envelopes, a demo signer signs or declines, it calls back                              |
-| `demo/esign-stand-in.selftest.mjs`                           | Its controls, 14 of them                                                                                                       |
+| File                                                         | What it is                                                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `src/main/java/org/nuxeo/agentic/signature/`                 | The bundle: the provider interface and its types, the service, the listener, the callback's endpoint |
+| `src/main/java/org/nuxeo/agentic/signature/standin/`         | The stand-in provider, `StandInProvider`                                                             |
+| `src/main/resources/OSGI-INF/signature-schema-contrib.xml`   | The two facets and their schemas                                                                     |
+| `src/main/resources/OSGI-INF/signature-service.xml`          | The component `org.nuxeo.agentic.signature`, its service and its `providers` extension point         |
+| `src/main/resources/OSGI-INF/signature-standin-contrib.xml`  | Registers the stand-in, `standin`: inert until the server configures it                              |
+| `src/main/resources/OSGI-INF/signature-listener-contrib.xml` | The listener: sending, cancelling, and the guards                                                    |
+| `src/main/resources/OSGI-INF/deployment-fragment.xml`        | The callback's servlet, at `/nuxeo/agentic-signature/*`, with no authentication filter               |
+| `src/main/package/`                                          | The Marketplace package, `nuxeo-agentic-signature` 0.1.0                                             |
+| `src/test/java/`                                             | 69 tests: 55 in Nuxeo's test framework, 12 with no runtime, 2 against the stand-in service           |
+| `demo/esign-stand-in.mjs`                                    | The stand-in e-signature service: takes envelopes, a demo signer signs or declines, it calls back    |
+| `demo/esign-stand-in.selftest.mjs`                           | Its controls, 16 of them                                                                             |
 
 ## The model
 
 **`Signable`, on a kit's record type.** Every property is the server's.
 
-| Property                        | What it holds                                                                            |
-| ------------------------------- | ---------------------------------------------------------------------------------------- |
-| `sgn:status`                    | `sent`, `signed`, `declined` or `cancelled`: its latest request's. None before the first |
-| `sgn:request`                   | That request, by id                                                                      |
-| `sgn:signers`                   | The signers' names, not their addresses                                                  |
-| `sgn:sentAt`, `sgn:completedAt` | When it was sent, and when it ended                                                      |
-| `sgn:file`                      | Where the file sent is: `file:content`, or `files:files/<n>/file`                        |
-| `sgn:fileDigest`                | While it is out: the file's digest, length and name, which may not change                |
-| `sgn:evidence`                  | The provider's evidence, on the version that holds the signed file and every one after   |
+| Property                        | What it holds                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `sgn:status`                    | `sent`, `signed`, `declined` or `cancelled`: its latest request's. None before the first  |
+| `sgn:request`                   | That request, by id                                                                       |
+| `sgn:signers`                   | The signers' names, not their addresses                                                   |
+| `sgn:sentAt`, `sgn:completedAt` | When it was sent, and when it ended                                                       |
+| `sgn:file`                      | Where the file sent is, `file:content` or `files:files/<n>/file`, and then the signed one |
+| `sgn:fileDigest`                | While it is out: the file's digest, length and name, which may not change                 |
+| `sgn:evidence`                  | The provider's evidence, on the version that holds the signed file and every one after    |
 
 The type must be versionable, the `Versionable` facet and the `uid` schema: the signed file is
 filed as a version, and a request naming a record that keeps none is refused.
@@ -122,9 +124,10 @@ requester. Every refusal rolls the creation back, with the status the REST API a
 
 ## How a callback goes
 
-`CallbackServlet` gives `CallbackEndpoint` the method, the path, the headers and at most 64 KiB of
-body; a larger one is 413, unread past the bound. Each answer is a few fixed words as JSON, and
-names nothing of the callback, the request or the record.
+`CallbackServlet` gives `CallbackEndpoint` the method, the path, the headers by lower-case name
+(64 at most, each 4 KiB at most) and at most 64 KiB of body; a larger one is 413, by its declared
+length unread, or as it arrives. Each answer is a few fixed words as JSON, and names nothing of the
+callback, the request or the record.
 
 1. **`POST` to `/callback/<provider id>`,** a provider registered here: any other path is 404, any
    other method 405, a provider the server has not configured 503.
@@ -135,24 +138,47 @@ names nothing of the callback, the request or the record.
 3. **Fresh:** `t` within the window of the server's clock, either way, 5 minutes by default. A stale
    or future callback is 401.
 4. **Taken once:** its id is claimed in the key/value store for twice the window and a minute, past
-   which its time is stale anyway. A callback whose id is claimed is a replay: 409, and nothing is
-   read. A claim is released when its callback ended nothing (unknown envelope, a failure), so that
-   the provider's retry of it can.
+   which its time is stale anyway. A callback whose id was acted on already is a replay, or a
+   redelivery whose first answer the provider lost: nothing is done, and it is answered 200,
+   "already received", so that a provider stops redelivering it. A claim is released when its
+   callback ended nothing, so that the provider's retry of it can.
 5. **Its request:** by the provider and the envelope, both one segment of letters, digits, `.`,
-   `_` and `-`, so nothing in the query is quoted from outside. None is 404; one no longer out, or
-   being ended at this moment by another callback or a cancelling, 409.
+   `_` and `-`, so nothing in the query is quoted from outside. None is 404, which a provider
+   retries, since a send may not have committed yet; one no longer out is 200, "no longer out", and
+   nothing is done; one being ended at this moment by another callback or a cancelling is 409,
+   retried.
 6. **Signed:** `fetchSigned`, with the server's credential: the provider's own service must say the
-   envelope is signed, and give a file whose SHA-256 is the one it states, of a type the provider
-   takes, and evidence of a type the add-on keeps (JSON, PDF, XML or text, 5 MiB at most); anything
-   else is 502, and nothing is filed. The signed file takes the sent file's place, named
-   `<name>-signed.<ext>`, the evidence goes in `sgn:evidence`, and the record is checked in as a
+   envelope is signed, and give a file whose SHA-256 is the one it states; otherwise 502, retried.
+   A file of a type the provider does not take, or evidence the add-on does not keep (JSON, PDF, XML
+   or text, 5 MiB at most), is 422, which retrying cannot change, logged as an error. The signed
+   file takes the sent file's place, named `<name>-signed.<ext>`, when the record's file there is
+   still the bytes sent, by their SHA-256; otherwise it goes beside it, as a new attachment, and
+   nothing is written over. The evidence goes in `sgn:evidence`, and the record is checked in as a
    new major version, as the system. **Declined:** `status`, with the server's credential: the
    service must say the envelope is declined, or it is 502 and nothing ends; then the request and
-   the record say so, with the reason, control characters dropped, 1,000 characters at most. **Anything else** the provider
-   sends is taken, and changes nothing.
+   the record say so, with the reason, control characters dropped, 1,000 characters at most.
+   **Anything else** the provider sends is taken, and changes nothing.
 
 Every step after authentication runs in one transaction; a failure rolls it back, and is 502 or
-503, so the provider retries.
+503, so the provider retries. Anonymous refusals are logged at `INFO`, as users' refusals are, so
+that requests to an address that needs no sign-in cannot fill the log with warnings.
+
+## The guards
+
+| What                                                          | Who may                                                                           |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Change a request once sent                                    | No one; its requester or an administrator cancels it while it is out              |
+| Change a record's `sgn:` properties                           | The server only: a mark on its own writes, taken off by the write it lets through |
+| Change, move or remove the file out for signature             | No one, while it is out                                                           |
+| Copy a request, or a folder holding one                       | No one. A copied record, or one in a copied folder, is not out: `sgn:` is emptied |
+| Trash a request out, a record out, or a folder holding either | No one: trash is undone, and a voided envelope is not                             |
+| Delete a request, or a folder holding one                     | An administrator; a request out has its envelope voided once the deletion commits |
+| Delete a record out, or a folder holding one                  | An administrator                                                                  |
+| Delete the version that holds a signed file                   | An administrator                                                                  |
+| Restore a record out to a version                             | No one. Restored otherwise, its `sgn:` says what its latest request says again    |
+
+Nuxeo tells a folder's copy, removal and trash at its root only, so the folder answers for what it
+holds, by a query of its descendants as the system; no child of a bulk trash is refused part way.
 
 ## The provider interface
 
@@ -187,30 +213,36 @@ kit's files do not.
 
 **The provider,** `StandInProvider`, for development and demonstration servers:
 
-| Setting                                                                                        | What it is                                                                       |
-| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `nuxeo.agentic.signature.provider=standin`                                                     | Use it                                                                           |
-| `nuxeo.agentic.signature.standin.address`                                                      | The service: `https`, a host, no user, query or fragment                         |
-| `nuxeo.agentic.signature.standin.http.allowed=true`                                            | Lets the address be plain `http`: for a demo on one machine only                 |
-| `nuxeo.agentic.signature.standin.apiKey`, or `NUXEO_SIGNATURE_STANDIN_API_KEY`                 | Sent as a bearer token on every call. A character a header may not carry: unused |
-| `nuxeo.agentic.signature.standin.callbackSecret`, or `NUXEO_SIGNATURE_STANDIN_CALLBACK_SECRET` | The callbacks' shared secret, 32 characters at least: shorter, unused            |
-| `nuxeo.agentic.signature.callback.window`                                                      | The callback window, in seconds, 30 to 3600; 300 otherwise                       |
+| Setting                                                                                                          | What it is                                                                         |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `nuxeo.agentic.signature.provider=standin`                                                                       | Use it                                                                             |
+| `nuxeo.agentic.signature.standin.address`                                                                        | The service: `https`, a host, no user, query or fragment                           |
+| `nuxeo.agentic.signature.standin.http.allowed=true`                                                              | Lets the address be plain `http`: for a demo on one machine only                   |
+| `nuxeo.agentic.signature.standin.apiKey`, or `NUXEO_SIGNATURE_STANDIN_API_KEY`                                   | Sent as a bearer token on every call. A character a header may not carry: unused   |
+| `nuxeo.agentic.signature.standin.callbackSecret`, or `NUXEO_SIGNATURE_STANDIN_CALLBACK_SECRET`                   | The callbacks' shared secret, 32 characters at least: shorter, unused              |
+| `nuxeo.agentic.signature.standin.callbackSecret.previous`, or `NUXEO_SIGNATURE_STANDIN_CALLBACK_SECRET_PREVIOUS` | While the secret is rotated: the one before, taken too, compared whichever matches |
+| `nuxeo.agentic.signature.callback.window`                                                                        | The callback window, in seconds, 30 to 3600; 300 otherwise                         |
 
 **The service,** `demo/esign-stand-in.mjs`, Node 24 and nothing else, in memory, on 127.0.0.1 by
 default. It takes an envelope (`POST /envelopes`, the bearer key compared in constant time, the
-file's SHA-256 checked), gives a signed one's result (`GET /envelopes/<id>/result`: the file with a
-line after the PDF's end saying it was not signed for real, its SHA-256, and a JSON evidence
-naming both files' SHA-256 and the signers), voids one (`DELETE`), and plays the signer:
-`POST /envelopes/<id>/sign` or `/decline` marks it and posts the callback to `NUXEO_CALLBACK_URL`,
-signed as the provider checks it. It logs methods, paths, statuses and callback ids only.
+file's SHA-256 checked), says where one is (`GET /envelopes/<id>`), gives a signed one's result
+(`GET /envelopes/<id>/result`: the file with a line after the PDF's end saying it was not signed
+for real, its SHA-256, and a JSON evidence naming both files' SHA-256 and the signers), voids one
+(`DELETE`), and plays the signer: `POST /envelopes/<id>/sign` or `/decline` marks it and posts the
+callback to `NUXEO_CALLBACK_URL`, signed as the provider checks it, again after 2, 5, 15, 30 and 60
+seconds while Nuxeo does not answer 2xx. For the demo, `/resend` posts the last callback again,
+signed anew, and `/forge` posts it signed with another secret. It logs methods, paths, statuses and
+callback ids only.
 
 ```bash
-node nuxeo-agentic-signature/demo/esign-stand-in.selftest.mjs   # 14 of 14
+node nuxeo-agentic-signature/demo/esign-stand-in.selftest.mjs   # 16 of 16
 ```
 
 One of its controls holds its signing to the vector the Java tests hold the provider to, computed
-with OpenSSL, and `StandInServiceTest` runs the provider against the service itself: send, the
-signer's callback, its authentication, the signed result; a decline and a void.
+with OpenSSL, and `StandInServiceTest` runs the provider against the service itself: send, each
+status, the signer's callback, its authentication, the signed result; a decline and a void. Broken
+on purpose three ways, the key's comparison always matching, no retry, and a resend signed with
+another secret, the selftest went red each time.
 
 ## Building it
 
@@ -219,31 +251,52 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-signature/pom.xml verify
-# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 54 tests
+# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 69 tests
 ```
 
 The root `pom.xml` lists the module, and the Marketplace workflow (`build-marketplace.yml`) builds
 and tests it, and runs the service's selftest, on the pull requests it sees; it does not publish it.
+`StandInServiceTest` needs `node` on the path, which that job sets up: without it, its two tests
+are skipped, and say so.
 
-| Test                     | What it holds                                                                                                                                                                                                                                                                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SendTest`, 17           | The file sent and the record marked; each refusal, with nothing sent and nothing saved; a service that fails, redirects or is not configured; an envelope voided when its request is not saved                                                                                                                   |
-| `CallbackTest`, 12       | Signed: the file filed, a major version with the evidence; declined, and a decline the service does not confirm; another event; a forged, altered, stale, future, malformed, replayed or unknown callback refused; the service not saying signed, or a tampered result; paths, methods, an unconfigured provider |
-| `GuardTest`, 9           | A request not changed once sent; cancelling, by its requester or an administrator only; a request kept; not copied; `sgn:` the server's; the file out held; a record out not trashed or deleted; a copy not out; the signed version kept                                                                         |
-| `StandInProviderTest`, 7 | Settings and addresses; the OpenSSL vector; authentication, each refusal by its reason; nothing loggable holds a secret                                                                                                                                                                                          |
-| `StandInServiceTest`, 2  | The provider against the stand-in service itself: each status, the callbacks, the signed result                                                                                                                                                                                                                  |
-| `LogTest`, 1             | Every line the add-on logs, at every level, through sends, refusals and callbacks: no key, secret, signature, address or file                                                                                                                                                                                    |
-| `BundleTest`, 6          | The components, the facets and schemas, the stand-in inert until configured, no Automation operation, the window, the version                                                                                                                                                                                    |
+| Test                     | What it holds                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SendTest`, 19           | The file sent and the record marked; each refusal, with nothing sent and nothing saved; a record being sent at this moment; a service that fails, redirects or is not configured; an envelope voided when its request is not saved; a file changed while it is sent, not written over                                                                                                                         |
+| `CallbackTest`, 15       | Signed: the file filed, a major version with the evidence; declined, and a decline the service does not confirm; another event; a forged, altered, stale, future, malformed, replayed or unknown callback refused; a duplicate and a late one acknowledged; a request ending at this moment; the service not saying signed, a tampered result, an unprocessable one; paths, methods, an unconfigured provider |
+| `GuardTest`, 14          | A request not changed once sent; cancelling, by its requester or an administrator only, and not while a callback ends it; a request kept, deleted by an administrator, its envelope voided; not copied; `sgn:` the server's, a copy's too; the file out held; a record out not trashed or deleted; a folder's copy, removal and trash; a restore; the signed version kept                                     |
+| `StandInProviderTest`, 8 | Settings and addresses; the OpenSSL vector; authentication, each refusal by its reason; the secret before, while it is rotated; nothing loggable holds a secret                                                                                                                                                                                                                                               |
+| `CallbackServletTest`, 4 | The body's bound, declared and as it arrives; headers by lower-case name, bounded; the one refusal on a failure                                                                                                                                                                                                                                                                                               |
+| `StandInServiceTest`, 2  | The provider against the stand-in service itself                                                                                                                                                                                                                                                                                                                                                              |
+| `LogTest`, 1             | Every line the add-on logs, at every level, through sends, refusals and callbacks: no key, secret, signature, address or file                                                                                                                                                                                                                                                                                 |
+| `BundleTest`, 6          | The components, the facets and schemas, the stand-in inert until configured, no Automation operation, the window, the version                                                                                                                                                                                                                                                                                 |
 
-**Each guard was seen failing.** Eighteen mutations of the code, one at a time, each turned at
-least one of these tests red: the constant-time comparison always matching, no window, no replay
-claim, an unknown envelope taken, filing without the service saying signed, a decline the service
-does not confirm, the signed file's digest not checked, no `Write` check, the file out not held, anyone cancelling, `sgn:` writable,
-server properties given by the requester, the API key logged, an envelope never saved not voided,
-and the signed version deletable. Two were green at first, and the tests were wrong: the stub had
-no way to say "not signed yet" in a result, and the signed version's test removed a version Nuxeo
-itself refuses to remove. With those fixed, the last control found a real fault: the guard listened
-to `aboutToRemove`, and a version's removal fires `aboutToRemoveVersion`. It listens to both now.
+**Each guard was seen failing.** Thirty mutations of the code, one at a time, each turned at least
+one of these tests red ([below](#how-the-guards-were-seen-failing)).
+
+## How the guards were seen failing
+
+Each mutation below was made to the code, one at a time, the named tests run, and the code put
+back. On the final code, 29 of the 30 went red at once; the one that stayed green, 17, had no test,
+which was then written, and went red too:
+
+1. The signature comparison always matching. 2. No freshness window. 3. No replay claim. 4. An
+   unknown envelope taken as found. 5. Filing without the service saying signed. 6. A decline the
+   service does not confirm. 7. The signed file's digest not checked. 8. No ending claim. 9. An
+   unacceptable result answered as retryable. 10. A changed file written over. 11. No `Write` check
+   on the record. 12. No claim on a record being sent. 13. Server properties given by the requester.
+2. An envelope never saved not voided. 15. The file out not held. 16. Anyone cancelling. 17. No
+   cancelling claim. 18. `sgn:` writable by anyone. 19. The server's mark left on the model after its
+   write. 20. A folder holding requests copied. 21. A folder's copy keeping its records out. 22. A
+   folder holding a request out deleted. 23. A request out trashed by an administrator. 24. An
+   administrator's deletion leaving the envelope. 25. A record out restored. 26. A restored record
+   keeping its version's `sgn:`. 27. The signed version deletable. 28. The API key logged. 29. The
+   secret before not taken. 30. The servlet reading past its bound.
+
+The first run, before the independent review, found two tests that were wrong (the stub could not
+say "not signed yet", and a version's test removed one Nuxeo itself refuses to remove) and one real
+fault: the signed version's guard listened to `aboutToRemove`, and a version's removal fires
+`aboutToRemoveVersion`. The review then found what the folder, copy, restore, race and retry rows
+above now hold; each came with its test, which went red with its guard taken out.
 
 ## Installing it on the local Docker Nuxeo, for the demo
 
@@ -291,8 +344,9 @@ In the onboarding kit, once it is installed and seeded ([its README](../business
    envelope shown on the request's page.
 4. The case shows the signed agreement in the agreement's place, "signed", and its history a new
    version, 1.0; the request shows the evidence's SHA-256 and links the version.
-5. `decline <envelope> <reason>` on another case's request shows the decline, and a callback sent
-   twice, or with the secret changed, is refused: the service's log shows Nuxeo's 409 and 401.
+5. `resend <envelope>` posts the same callback again: the service's log shows Nuxeo's 200, "already
+   received", and nothing changes; `forge <envelope>` shows Nuxeo's 401. `decline <envelope>
+<reason>` on another case's request shows the decline.
 
 ## For the security review
 
@@ -302,26 +356,30 @@ which is deferred until the app is finished, as every security review is
 
 - **The callback's authentication.** The path takes no sign-in, so the signature is the only gate.
   Check: the scheme (HMAC-SHA256 over the signed time and the raw body, the header's form exact, the
-  comparison `MessageDigest.isEqual` on equal-length ASCII), that nothing of the body is parsed
-  before it matches, the 64 KiB bound before it, and the secret's length and where each server
-  keeps it. A vendor's provider brings its own scheme: review it with that provider.
-- **Replays.** The window (5 minutes, a server setting from 30 seconds to an hour) and the claim of
-  each callback's id for twice the window and a minute, in the server's key/value store, which must
-  be one store for the whole cluster; a claim released when its callback ended nothing; and the
-  request's own state, which refuses a second ending whatever the claims say. Check the claim's
-  store on a cluster, and the server clocks.
-- **A forged callback, with the secret.** A callback alone ends nothing: signed, the file and the
-  evidence are fetched from the provider with the server's credential, and the provider must say
-  the envelope is signed; declined, the provider must say it is declined. Check that each vendor's
-  API can be asked the same two questions.
+  comparison `MessageDigest.isEqual` on equal-length ASCII, both secrets compared while one is
+  rotated), that nothing of the body is parsed before it matches, the 64 KiB bound before it, and
+  the secret's length and where each server keeps it. A vendor's provider brings its own scheme:
+  review it with that provider.
+- **Replays and redeliveries.** The window (5 minutes, a server setting from 30 seconds to an hour)
+  and the claim of each callback's id for twice the window and a minute, in the server's key/value
+  store, which must be one store for the whole cluster; a claim released when its callback ended
+  nothing; a duplicate acknowledged with nothing done; and the request's own state, which refuses a
+  second ending whatever the claims say. Check the claim's store on a cluster, and the server clocks.
+- **A callback signed with the secret.** It ends nothing alone: signed, the file and the evidence
+  are fetched from the provider with the server's credential, and the provider must say the
+  envelope is signed; declined, the provider must say it is declined. Check that each vendor's API
+  can be asked the same two questions.
 - **Who sends.** `Write` on the record, as the requester, before anything is sent; the request
   names its record by id and the file by name, nothing else of the record; the signers' addresses
   go to the provider, which mails them. Check: that anyone who may create a request type somewhere
   and write a record may send its files to outside addresses, which is what the step is for; a kit
   should keep its request type where its officers create.
 - **Filing as the system.** The signed file and the evidence are written by the system, on the
-  record the request named when it was sent, at the place the file was, which no one may change
-  while it is out. Check the record's types: a record of a type that keeps versions only.
+  record the request named when it was sent, in the file's place only while it is the bytes sent.
+  Check the record's types: a record of a type that keeps versions only.
+- **What is kept, and by whom.** The table of guards above: each is the listener's, in the
+  transaction of the change, and a folder answers for what it holds. Check the administrators'
+  exceptions against each server's own practice for deleting records.
 - **Credentials.** The API key and the callback secret are read per call from the server's
   properties or environment, under the provider's own names; never logged (`LogTest`), never in an
   answer, an error or a document. Check where each server keeps `nuxeo.conf` and any `conf.d` file
@@ -344,7 +402,6 @@ which is deferred until the app is finished, as every security review is
 - **A button.** A request is created from its register's Create menu, with the case picked; a
   record page cannot create a related record yet (the onboarding kit's README, "Where the tools
   fell short").
-- **Restoring a version over a record out for signature** is not guarded, and nor is an import:
-  both are administrators' tools.
-- **The record deleted after it was signed** takes its versions with it, as Nuxeo removes a
-  document's versions; the request keeps the signed file and the evidence whatever becomes of it.
+- **What the listener sees:** changes made through a session, as every client and workflow makes
+  them. Java code that writes the repository with the system's rights below the session is that
+  code's to answer for.

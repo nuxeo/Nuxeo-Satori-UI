@@ -136,9 +136,22 @@ public class StandInProvider implements SignatureProvider {
     }
 
     private String callbackSecret() {
-        String secret = settings.secret(property("callbackSecret"), env("CALLBACK_SECRET"));
+        return secret("callbackSecret", "CALLBACK_SECRET");
+    }
+
+    /**
+     * The secret the service signed with before the current one, while it is rotated:
+     * {@code callbackSecret.previous}, or {@code NUXEO_SIGNATURE_<ID>_CALLBACK_SECRET_PREVIOUS}. A
+     * callback signed with either is the service's; unset it once the service signs with the new one.
+     */
+    private String previousCallbackSecret() {
+        return secret("callbackSecret.previous", "CALLBACK_SECRET_PREVIOUS");
+    }
+
+    private String secret(String name, String envName) {
+        String secret = settings.secret(property(name), env(envName));
         if (secret != null && secret.length() < MIN_SECRET) {
-            log.warn("E-signature: {}'s callback secret is shorter than {} characters, so it is not used", id,
+            log.warn("E-signature: {}'s {} is shorter than {} characters, so it is not used", id, property(name),
                     MIN_SECRET);
             return null;
         }
@@ -440,9 +453,16 @@ public class StandInProvider implements SignatureProvider {
             throw new CallbackRefusedException(Reason.MISSING);
         }
         String time = matcher.group(1);
-        String expected = sign(secret, time, callback.body());
-        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),
-                matcher.group(2).getBytes(StandardCharsets.US_ASCII))) {
+        byte[] given = matcher.group(2).getBytes(StandardCharsets.US_ASCII);
+        boolean matches = MessageDigest.isEqual(sign(secret, time, callback.body()).getBytes(
+                StandardCharsets.US_ASCII), given);
+        String previous = previousCallbackSecret();
+        if (previous != null) {
+            // Both compared, whichever matches, so the time taken does not say which secret signed it.
+            matches |= MessageDigest.isEqual(sign(previous, time, callback.body()).getBytes(
+                    StandardCharsets.US_ASCII), given);
+        }
+        if (!matches) {
             throw new CallbackRefusedException(Reason.MISMATCH);
         }
         // Authenticated: only now is the body read.

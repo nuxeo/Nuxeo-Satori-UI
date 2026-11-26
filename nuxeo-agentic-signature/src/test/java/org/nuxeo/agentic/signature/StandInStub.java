@@ -46,7 +46,7 @@ final class StandInStub implements AutoCloseable {
 
     /** How the stub answers, one way of failing at a time. */
     enum Mode {
-        NORMAL, SEND_FAILS, NOT_SIGNED, PENDING, TAMPERED, REDIRECT
+        NORMAL, SEND_FAILS, NOT_SIGNED, PENDING, TAMPERED, BAD_EVIDENCE, REDIRECT
     }
 
     private final HttpServer server;
@@ -63,6 +63,9 @@ final class StandInStub implements AutoCloseable {
     private final AtomicInteger next = new AtomicInteger();
 
     volatile Mode mode = Mode.NORMAL;
+
+    /** Run while an envelope is being taken, before it is answered: what happens meanwhile elsewhere. */
+    volatile Runnable onSend;
 
     StandInStub() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
@@ -105,6 +108,10 @@ final class StandInStub implements AutoCloseable {
             if (mode == Mode.SEND_FAILS) {
                 answer(exchange, 500, "{\"error\":\"the stub fails\"}");
                 return;
+            }
+            Runnable meanwhile = onSend;
+            if (meanwhile != null) {
+                meanwhile.run();
             }
             JsonNode sent = JSON.readTree(body);
             String id = "env_" + next.incrementAndGet();
@@ -169,7 +176,7 @@ final class StandInStub implements AutoCloseable {
         document.put("content", Base64.getEncoder().encodeToString(signed));
         ObjectNode evidence = result.putObject("evidence");
         evidence.put("fileName", sent.id() + "-evidence.json");
-        evidence.put("mimeType", "application/json");
+        evidence.put("mimeType", mode == Mode.BAD_EVIDENCE ? "image/png" : "application/json");
         evidence.put("content", Base64.getEncoder().encodeToString(evidence(sent.id())));
         return JSON.writeValueAsString(result);
     }

@@ -77,7 +77,7 @@ public class CallbackServlet extends HttpServlet {
         return body.length > CallbackEndpoint.MAX_BODY ? null : body;
     }
 
-    private static Map<String, String> headers(HttpServletRequest request) {
+    static Map<String, String> headers(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         if (request.getHeaderNames() == null) {
             return headers;

@@ -62,15 +62,18 @@ check(
   ) === '43027280a4fd060c6233a9b1f34dfa7a0871d6ec529236dbbb579579c829771c',
 );
 
-// A fake Nuxeo, which keeps each callback.
+// A fake Nuxeo, which keeps each callback, and answers 503 to as many as `unavailable` says.
 const callbacks = [];
+let unavailable = 0;
 const nuxeo = createHttpServer((request, response) => {
   const chunks = [];
   request.on('data', (chunk) => chunks.push(chunk));
   request.on('end', () => {
     callbacks.push({ headers: request.headers, body: Buffer.concat(chunks), path: request.url });
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end('{"status":"received"}');
+    const down = unavailable > 0;
+    if (down) unavailable--;
+    response.writeHead(down ? 503 : 200, { 'Content-Type': 'application/json' });
+    response.end(down ? '{"error":"unavailable"}' : '{"status":"received"}');
   });
 });
 await new Promise((resolve) => nuxeo.listen(0, '127.0.0.1', resolve));
@@ -82,6 +85,7 @@ const service = createServer({
   secret: SECRET,
   callbackUrl,
   log: (line) => logged.push(line),
+  retryDelays: [20, 20],
 });
 await new Promise((resolve) => service.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${service.address().port}`;
@@ -209,7 +213,43 @@ try {
     `${voided}, ${late}`,
   );
 
-  // 14. Nothing logged holds the key, the secret, a signature, an address or a file.
+  // 14. Retried: Nuxeo unavailable at first, the same event posted again until it answers 2xx.
+  const fourth = (await call('POST', '/envelopes', { json: envelope() })).json.id;
+  unavailable = 1;
+  const before14 = callbacks.length;
+  await call('POST', `/envelopes/${fourth}/sign`);
+  for (let i = 0; i < 50 && callbacks.length < before14 + 2; i++)
+    await new Promise((r) => setTimeout(r, 20));
+  const attempts = callbacks.slice(before14).map((c) => JSON.parse(c.body.toString('utf8')));
+  check(
+    'retries a callback Nuxeo did not take, the same event',
+    attempts.length === 2 && attempts[0].id === attempts[1].id && attempts[0].envelope === fourth,
+    JSON.stringify(attempts),
+  );
+
+  // 15. Resent: the same event, signed anew with the secret; forged: one the secret does not sign.
+  const before15 = callbacks.length;
+  await call('POST', `/envelopes/${fourth}/resend`);
+  await call('POST', `/envelopes/${fourth}/forge`);
+  const [resent, forged] = callbacks.slice(before15);
+  const verifies = (c) => {
+    const m = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(c?.headers['x-standin-signature'] ?? '');
+    return (
+      m !== null &&
+      m[2] === createHmac('sha256', SECRET).update(`${m[1]}.`).update(c.body).digest('hex')
+    );
+  };
+  check(
+    'resend posts the same event signed with the secret; forge posts it signed otherwise',
+    resent !== undefined &&
+      forged !== undefined &&
+      JSON.parse(resent.body.toString('utf8')).id === attempts[0].id &&
+      verifies(resent) &&
+      !verifies(forged) &&
+      forged.body.equals(resent.body),
+  );
+
+  // 16. Nothing logged holds the key, the secret, a signature, an address or a file.
   const signatures = callbacks.map((c) => c.headers['x-standin-signature']);
   const leaks = logged.filter((line) =>
     [API_KEY, SECRET, 'rowan.vale@example.com', '%PDF', ...signatures].some((secret) =>

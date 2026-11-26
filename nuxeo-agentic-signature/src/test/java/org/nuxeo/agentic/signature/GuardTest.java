@@ -126,6 +126,19 @@ public class GuardTest {
         assertEquals(Signatures.CANCELLED, text(Desk.stored(repository, again), Signatures.STATUS));
     }
 
+    /** A callback ending the request at this moment, on this node or another: the cancelling waits for it. */
+    @Test
+    public void aRequestEndingAtThisMomentIsNotCancelled() {
+        SignatureService service = Framework.getService(SignatureService.class);
+        assertTrue(service.claim(SignatureRequestListener.endKey(requestId), "signed", 60, false));
+        refused(409, ALICE, s -> cancel(s, requestId));
+        assertEquals(Signatures.SENT, text(Desk.stored(repository, requestId), Signatures.STATUS));
+        assertEquals(List.of(), stub.voided);
+        service.release(SignatureRequestListener.endKey(requestId));
+        Desk.inTransactionAs(repository, ALICE, s -> cancel(s, requestId));
+        assertEquals(Signatures.CANCELLED, text(Desk.stored(repository, requestId), Signatures.STATUS));
+    }
+
     private static DocumentModel cancel(CoreSession s, String id) {
         DocumentModel request = s.getDocument(new IdRef(id));
         request.setPropertyValue(Signatures.STATUS, Signatures.CANCELLED);
@@ -134,8 +147,13 @@ public class GuardTest {
 
     @Test
     public void aRequestIsKeptButByAnAdministratorOnceItHasEnded() {
-        refused(409, ADMINISTRATOR, s -> {
+        refused(409, ALICE, s -> {
             s.removeDocument(new IdRef(requestId));
+            return null;
+        });
+        // Out, it is not trashed even by an administrator: trash is undone, and a voided envelope is not.
+        refused(409, ADMINISTRATOR, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new IdRef(requestId)));
             return null;
         });
         Desk.inTransactionAs(repository, ALICE, s -> cancel(s, requestId));
@@ -232,11 +250,30 @@ public class GuardTest {
             Framework.getService(TrashService.class).trashDocument(s.getDocument(new IdRef(caseId)));
             return null;
         });
-        refused(409, ADMINISTRATOR, s -> {
+        refused(409, ALICE, s -> {
             s.removeDocument(new IdRef(caseId));
             return null;
         });
+        refused(409, ADMINISTRATOR, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new IdRef(caseId)));
+            return null;
+        });
         assertFalse(Desk.stored(repository, caseId).isTrashed());
+    }
+
+    /** The escape when a signer never answers: an administrator deletes a request out, and its envelope is voided. */
+    @Test
+    public void anAdministratorDeletesARequestOutAndItsEnvelopeIsVoided() {
+        String envelope = text(Desk.stored(repository, requestId), Signatures.ENVELOPE);
+        Desk.inTransactionAs(repository, ADMINISTRATOR, s -> {
+            s.removeDocument(new IdRef(requestId));
+            return null;
+        });
+        assertEquals(0, Desk.requestCount(repository));
+        assertEquals(List.of(envelope), stub.voided);
+        // Its callback, later, names an envelope no request has.
+        assertEquals(CallbackEndpoint.NOT_FOUND, Desk.callback(repository, "evt_1", "envelope.signed", envelope,
+                null));
     }
 
     @Test
@@ -248,6 +285,94 @@ public class GuardTest {
         assertNull(text(copied, Signatures.SGN_REQUEST));
         // And so it may be sent on its own.
         Desk.send(repository, ALICE, copy, "agreement.pdf");
+    }
+
+    /** The copy {@code session.copy} returns, saved again, is held to the guard: the server's mark went with its write. */
+    @Test
+    public void aCopysSignaturePropertiesStayTheServers() {
+        refused(400, ALICE, s -> {
+            DocumentModel copy = s.copy(new IdRef(caseId), new org.nuxeo.ecm.core.api.PathRef(Desk.CASES), "copy");
+            copy.setPropertyValue(Signatures.SGN_STATUS, Signatures.SIGNED);
+            return s.saveDocument(copy);
+        });
+    }
+
+    /** Nuxeo tells a folder's copy, removal and trash at its root only: the folder answers for what it holds. */
+    @Test
+    public void aFolderAnswersForTheRequestsAndRecordsItHolds() {
+        // A folder holding a request is not copied, by anyone.
+        refused(400, ALICE, s -> s.copy(new org.nuxeo.ecm.core.api.PathRef(Desk.REQUESTS),
+                new org.nuxeo.ecm.core.api.PathRef(Desk.CASES), "requests-copy"));
+        refused(400, ADMINISTRATOR, s -> s.copy(new org.nuxeo.ecm.core.api.PathRef("/desk"),
+                new org.nuxeo.ecm.core.api.PathRef("/"), "desk-copy"));
+        // A folder holding a record out is copied, and the copy of the record is not out.
+        String copy = Desk.inTransactionAs(repository, ALICE, s -> s.copy(new org.nuxeo.ecm.core.api.PathRef(
+                Desk.CASES), new org.nuxeo.ecm.core.api.PathRef(Desk.REQUESTS), "cases-copy").getId());
+        DocumentModel copied = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> {
+                    DocumentModel doc = s.getChild(new IdRef(copy), "onb-1");
+                    doc.detach(true);
+                    return doc;
+                }));
+        assertNull(text(copied, Signatures.SGN_STATUS));
+        assertEquals(Signatures.SENT, text(Desk.stored(repository, caseId), Signatures.SGN_STATUS));
+
+        // Not deleted or trashed while it holds a request out, or a record out: deleted by an administrator only.
+        refused(409, ALICE, s -> {
+            s.removeDocument(new org.nuxeo.ecm.core.api.PathRef(Desk.CASES));
+            return null;
+        });
+        refused(409, ALICE, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new org.nuxeo.ecm.core.api.PathRef(
+                    Desk.REQUESTS)));
+            return null;
+        });
+        refused(409, ADMINISTRATOR, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new org.nuxeo.ecm.core.api.PathRef(
+                    "/desk")));
+            return null;
+        });
+        assertEquals(List.of(), stub.voided);
+        // Once it has ended, its requests are still kept, but for an administrator.
+        Desk.inTransactionAs(repository, ALICE, s -> cancel(s, requestId));
+        refused(403, ALICE, s -> {
+            s.removeDocument(new org.nuxeo.ecm.core.api.PathRef("/desk"));
+            return null;
+        });
+        assertTrue(Desk.requestCount(repository) == 1);
+        Desk.inTransactionAs(repository, ADMINISTRATOR, s -> {
+            s.removeDocument(new org.nuxeo.ecm.core.api.PathRef(Desk.REQUESTS));
+            return null;
+        });
+        assertEquals(0, Desk.requestCount(repository));
+    }
+
+    /** Restoring a version: refused while out; otherwise sgn: is the latest request's, not the version's. */
+    @Test
+    public void aRestoredRecordSaysWhatItsLatestRequestSays() {
+        // A version made while it is out, which says "sent": restored later, it would say so still.
+        String early = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> {
+                    DocumentModel record = s.getDocument(new IdRef(caseId));
+                    record.setPropertyValue("dc:description", "Before the restore");
+                    record.putContextData(org.nuxeo.ecm.core.api.versioning.VersioningService.VERSIONING_OPTION,
+                            org.nuxeo.ecm.core.api.VersioningOption.MINOR);
+                    s.saveDocument(record);
+                    return s.getLastDocumentVersionRef(new IdRef(caseId)).reference().toString();
+                }));
+        refused(409, ALICE, s -> s.restoreToVersion(new IdRef(caseId), new IdRef(early)));
+        assertEquals(Signatures.SENT, text(Desk.stored(repository, caseId), Signatures.SGN_STATUS));
+
+        String envelope = text(Desk.stored(repository, requestId), Signatures.ENVELOPE);
+        stub.declare(envelope, "declined");
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.declined", envelope,
+                "Not now"));
+        Desk.inTransactionAs(repository, ALICE, s -> s.restoreToVersion(new IdRef(caseId), new IdRef(early)));
+        DocumentModel restored = Desk.stored(repository, caseId);
+        // The version said "sent", for this very request: the record says what the request says.
+        assertEquals(Signatures.DECLINED, text(restored, Signatures.SGN_STATUS));
+        assertEquals(requestId, text(restored, Signatures.SGN_REQUEST));
+        assertNull(text(restored, Signatures.SGN_FILE_DIGEST));
     }
 
     @Test

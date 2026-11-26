@@ -278,6 +278,16 @@ const caseAt = (stub, number) =>
   );
   stub.server.close();
 }
+{
+  const stub = await standIn({ types: TYPES.filter((type) => type !== 'DisputeCase') });
+  const result = await run(stub.url);
+  check(
+    'the dispute type missing: exit 2, before anything is written',
+    result.status === 2 && writes(stub.requests).length === 0,
+    result.output,
+  );
+  stub.server.close();
+}
 
 // 6 to 13. A first run, then a second.
 {

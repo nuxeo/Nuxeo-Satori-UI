@@ -10,6 +10,7 @@
  *
  *   STANDIN_API_KEY=<key> node nuxeo-agentic-signature/demo/esign-stand-in.mjs sign <envelope>
  *   STANDIN_API_KEY=<key> node nuxeo-agentic-signature/demo/esign-stand-in.mjs decline <envelope> [reason]
+ *   STANDIN_API_KEY=<key> node nuxeo-agentic-signature/demo/esign-stand-in.mjs resend|forge <envelope>
  *
  * It speaks as the add-on's stand-in provider (`StandInProvider`) expects:
  *
@@ -19,7 +20,10 @@
  * - `DELETE /envelopes/<id>` voids one;
  * - `POST /envelopes/<id>/sign` and `/decline` are the demo's signer: each marks the envelope and
  *   posts the callback to Nuxeo, `NUXEO_CALLBACK_URL`, signed as the provider checks it:
- *   `X-StandIn-Signature: t=<unix seconds>,v1=<hex of HMAC-SHA256(secret, "<t>.<body>")>`.
+ *   `X-StandIn-Signature: t=<unix seconds>,v1=<hex of HMAC-SHA256(secret, "<t>.<body>")>`. An answer
+ *   that is not 2xx is retried, the same event, after 2, 5, 15, 30 and 60 seconds;
+ * - `POST /envelopes/<id>/resend` posts the last callback again, the same event signed anew, and
+ *   `/forge` posts it signed with another secret: the demo's redelivery and forgery.
  *
  * - **The API key and the secret are required,** with no default: the Nuxeo server holds the same
  *   two, in its own settings. Make them up for the demo, `openssl rand -hex 32`, never a real one.
@@ -38,6 +42,8 @@ import { fileURLToPath } from 'node:url';
 export const SIGNATURE_HEADER = 'x-standin-signature';
 export const MIN_SECRET = 32;
 export const MAX_BODY = 16 * 1024 * 1024;
+/** The waits between a callback's attempts, after an answer that is not 2xx: about 2 minutes in all. */
+export const RETRY_DELAYS = [2_000, 5_000, 15_000, 30_000, 60_000];
 const MAX_FILE = 10 * 1024 * 1024;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,7 +68,8 @@ function same(a, b) {
 
 /**
  * The service, not started: `apiKey`, `secret`, `callbackUrl`, and for the selftest a `log`, a
- * clock `now` (milliseconds) and the `post` callbacks are sent with.
+ * clock `now` (milliseconds), the `post` callbacks are sent with, and `retryDelays`, the waits
+ * between a callback's attempts, in milliseconds, after an answer that is not 2xx.
  */
 export function createServer({
   apiKey,
@@ -71,12 +78,28 @@ export function createServer({
   log = console.log,
   now = Date.now,
   post = postJson,
+  retryDelays = RETRY_DELAYS,
 }) {
   if (!apiKey || !apiKey.trim()) throw new Error('STANDIN_API_KEY is required');
   if (!secret || secret.length < MIN_SECRET)
     throw new Error(`STANDIN_CALLBACK_SECRET is required, ${MIN_SECRET} characters at least`);
   const envelopes = new Map();
 
+  /** One attempt at a callback's body, signed now with `key`: Nuxeo's answer's status, 0 for none. */
+  async function deliver(envelope, body, eventId, key, what) {
+    const time = Math.floor(now() / 1000);
+    const status = await post(callbackUrl, body, {
+      'Content-Type': 'application/json',
+      'X-StandIn-Signature': `t=${time},v1=${sign(key, String(time), body)}`,
+    });
+    log(`callback ${eventId} for ${envelope.id}${what}: Nuxeo answered ${status}`);
+    return status;
+  }
+
+  /**
+   * The envelope's callback, signed with the secret and posted; on an answer that is not 2xx, posted
+   * again after each of `retryDelays`, the same event each time, as a provider redelivers one.
+   */
   async function callback(envelope, type, reason) {
     const event = {
       id: `evt_${randomBytes(9).toString('hex')}`,
@@ -86,13 +109,22 @@ export function createServer({
       ...(reason ? { reason } : {}),
     };
     const body = Buffer.from(JSON.stringify(event));
-    const time = Math.floor(now() / 1000);
-    const status = await post(callbackUrl, body, {
-      'Content-Type': 'application/json',
-      'X-StandIn-Signature': `t=${time},v1=${sign(secret, String(time), body)}`,
-    });
-    log(`callback ${event.id} (${type}) for ${envelope.id}: Nuxeo answered ${status}`);
+    envelope.callback = { id: event.id, body };
+    const status = await deliver(envelope, body, event.id, secret, '');
+    if (status < 200 || status > 299) retry(envelope, body, event.id, 0);
     return { event: event.id, status };
+  }
+
+  function retry(envelope, body, eventId, attempt) {
+    if (attempt >= retryDelays.length) {
+      log(`callback ${eventId} for ${envelope.id}: no more attempts`);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const status = await deliver(envelope, body, eventId, secret, `, attempt ${attempt + 2}`);
+      if (status < 200 || status > 299) retry(envelope, body, eventId, attempt + 1);
+    }, retryDelays[attempt]);
+    timer.unref?.();
   }
 
   function result(envelope) {
@@ -188,7 +220,7 @@ export function createServer({
       log(`envelope ${id} created: ${signers.length} signer(s), ${content.length} bytes`);
       return answer(201, { id, status: 'sent' });
     }
-    const match = /^\/envelopes\/([^/]+)(?:\/(result|sign|decline))?$/.exec(path);
+    const match = /^\/envelopes\/([^/]+)(?:\/(result|sign|decline|resend|forge))?$/.exec(path);
     if (!match || !ID.test(match[1])) return answer(404, { error: 'not found' });
     const envelope = envelopes.get(match[1]);
     if (!envelope) return answer(404, { error: 'not found' });
@@ -222,6 +254,23 @@ export function createServer({
         typeof reason === 'string' ? reason : undefined,
       );
       return answer(200, { envelope: envelope.id, status: envelope.status, callback: sent });
+    }
+    if (method === 'POST' && (action === 'resend' || action === 'forge')) {
+      // The demo's: the last callback again, the same event, as a redelivery or a replay (resend), or
+      // signed with a secret that is not the one Nuxeo holds (forge), so that Nuxeo's answer shows.
+      if (!envelope.callback) return answer(409, { error: 'no callback sent yet' });
+      const key = action === 'resend' ? secret : `forged-${randomBytes(24).toString('hex')}`;
+      const status = await deliver(
+        envelope,
+        envelope.callback.body,
+        envelope.callback.id,
+        key,
+        ` (${action})`,
+      );
+      return answer(200, {
+        envelope: envelope.id,
+        callback: { event: envelope.callback.id, status },
+      });
     }
     return answer(405, { error: 'method not allowed' });
   }
@@ -282,7 +331,7 @@ async function main(args) {
     console.error(`--port ${option('--port', '')} is not a port`);
     process.exit(2);
   }
-  if (args[0] === 'sign' || args[0] === 'decline') {
+  if (['sign', 'decline', 'resend', 'forge'].includes(args[0])) {
     const envelope = args[1];
     if (!envelope || !ID.test(envelope)) {
       console.error(`Name the envelope: ${args[0]} <envelope id>, such as env_0123abcd`);
@@ -296,7 +345,11 @@ async function main(args) {
         args[0] === 'decline' && args[2] ? { reason: args.slice(2).join(' ') } : {},
       ),
       redirect: 'manual',
-    }).catch(() => null);
+    }).catch((error) => {
+      // No answer at all: said below, with the reason, and the exit code says it failed.
+      console.error(`No answer: ${error?.cause?.code ?? error?.name ?? 'unknown'}.`);
+      return null;
+    });
     if (!response) {
       console.error(`The stand-in service does not answer on ${host}:${port}: start it first.`);
       process.exit(1);

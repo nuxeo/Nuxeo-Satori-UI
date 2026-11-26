@@ -26,6 +26,8 @@
       <event>aboutToRemove</event>
       <event>aboutToRemoveVersion</event>
       <event>documentTrashed</event>
+      <event>beforeRestoringDocument</event>
+      <event>documentRestored</event>
     </listener>
   </extension>
 

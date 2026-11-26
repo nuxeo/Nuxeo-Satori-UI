@@ -138,6 +138,27 @@ public class StandInProviderTest {
         assertRefused(provider(properties, Map.of()), good, body, Reason.NOT_CONFIGURED);
     }
 
+    /** Rotating the secret: a callback signed with the one before is the service's too, until it is unset. */
+    @Test
+    public void whileTheSecretIsRotatedTheOneBeforeIsTaken() {
+        String before = "the-secret-before-0123456789-0123456789";
+        byte[] body = StandInStub.callbackBody("evt_9", "envelope.signed", "env_7", null);
+        Map<String, String> signedBefore = StandInStub.signedHeaders(before, 100L, body);
+        Map<String, String> properties = settings("https://esign.example.com");
+        assertRefused(provider(properties, Map.of()), signedBefore, body, Reason.MISMATCH);
+        properties.put("nuxeo.agentic.signature.standin.callbackSecret.previous", before);
+        StandInProvider rotating = provider(properties, Map.of());
+        assertEquals("evt_9", rotating.authenticate(new Callback(signedBefore, body)).id());
+        assertEquals("evt_9", rotating.authenticate(new Callback(StandInStub.signedHeaders(StandInStub.SECRET, 100L,
+                body), body)).id());
+        assertRefused(rotating, StandInStub.signedHeaders("neither-secret-0123456789-0123456789", 100L, body), body,
+                Reason.MISMATCH);
+        // A secret before that is too short is not used either.
+        properties.put("nuxeo.agentic.signature.standin.callbackSecret.previous", "short");
+        assertRefused(provider(properties, Map.of()), StandInStub.signedHeaders("short", 100L, body), body,
+                Reason.MISMATCH);
+    }
+
     private static void assertRefused(StandInProvider provider, Map<String, String> headers, byte[] body,
             Reason reason) {
         CallbackRefusedException e = assertThrows(CallbackRefusedException.class,

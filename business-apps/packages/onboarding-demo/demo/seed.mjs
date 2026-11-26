@@ -229,6 +229,7 @@ async function preflight() {
     ['/config/types/ESignatureRequest', 'this kit, onboarding-demo'],
     ['/config/types/OnboardingRegister', 'this kit, onboarding-demo'],
     ['/config/types/DisputeRegister', 'this kit, onboarding-demo'],
+    ['/config/types/DisputeCase', 'this kit, onboarding-demo'],
   ]) {
     if ((await find(path)) === null)
       throw new Precondition(
