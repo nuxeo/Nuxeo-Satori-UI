@@ -137,6 +137,33 @@ public class DispositionGuardTest extends DispositionTestCase {
                 dave.createDocumentModel("/", "mine", Disposition.RUNS_TYPE))));
     }
 
+    /**
+     * At the root, so that no one but an administrator deletes, trashes, moves or copies a folder
+     * above it: the repository removes a folder's contents with no event of their own.
+     */
+    @Test
+    public void theRunsFolderIsMadeAtTheRoot() {
+        session.removeDocument(folder.getRef());
+        DocumentModel area = session.createDocument(session.createDocumentModel("/", "area", "Folder"));
+        commit(session);
+        assertEquals("not-at-root", refused(() -> session.createDocument(
+                session.createDocumentModel(area.getPathAsString(), "runs", Disposition.RUNS_TYPE))));
+    }
+
+    @Test
+    public void aRunsFolderMovedFromTheRootTakesNoRequest() {
+        ended(session, "Claim 1001", rule, daysAgo(10));
+        DocumentModel area = session.createDocument(session.createDocumentModel("/", "area", "Folder"));
+        commit(session);
+        session.move(folder.getRef(), area.getRef(), null);
+        commit(session);
+        DocumentModel moved = session.getDocument(folder.getRef());
+        CoreSession alice = Fixtures.as(session, "alice");
+        DocumentModel request = alice.createDocumentModel(moved.getPathAsString(), "start", Disposition.REQUEST_TYPE);
+        request.setPropertyValue(Disposition.REQUEST_ACTION, Disposition.START);
+        assertEquals("folder-misplaced", refused(() -> alice.createDocument(request)));
+    }
+
     @Test
     public void aFolderThatInheritsPermissionsTakesNoRequest() {
         ended(session, "Claim 1001", rule, daysAgo(10));

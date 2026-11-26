@@ -14,6 +14,7 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import org.nuxeo.ecm.core.api.CoreSession;
@@ -33,8 +34,11 @@ import org.nuxeo.ecm.core.api.IdRef;
  * <li>its rule, the first of {@code record:ruleIds}, can be read, and has no end action. A rule
  * with one, {@code Document.Delete} or {@code Document.Trash}, disposes of its records itself when
  * their retention ends, with no review: those records are never a run's;</li>
- * <li>it is the live document: not a version, not a proxy.</li>
+ * <li>it is the live document: not a version, not a proxy;</li>
+ * <li>it is a document, not a folder, since deleting a folder deletes what it holds, and none of the
+ * add-on's own documents, a certificate made a record among them.</li>
  * </ul>
+ * A record in the trash is still a record, and is due as any other: the trash is not a disposition.
  * A run finds them with its starter's session, so it holds only records its starter may read. Each
  * is checked again, with the add-on's, when the run is disposed of.
  */
@@ -62,7 +66,9 @@ final class DueRecords {
      */
     static List<Due> find(CoreSession reader, CoreSession privileged, Set<String> held, int max, Instant now) {
         String query = "SELECT * FROM Document WHERE ecm:mixinType = '" + RECORD_FACET + "' AND ecm:isRecord = 1"
-                + " AND ecm:isProxy = 0 AND ecm:isVersion = 0 AND " + RECORD_RETAIN_UNTIL + " < TIMESTAMP '"
+                + " AND ecm:mixinType <> 'Folderish' AND ecm:primaryType NOT IN ('" + String.join("', '",
+                        new TreeSet<>(Disposition.TYPES))
+                + "') AND ecm:isProxy = 0 AND ecm:isVersion = 0 AND " + RECORD_RETAIN_UNTIL + " < TIMESTAMP '"
                 + now.truncatedTo(ChronoUnit.MILLIS) + "' ORDER BY " + RECORD_RETAIN_UNTIL + ", ecm:uuid";
         List<Due> due = new ArrayList<>();
         for (long offset = 0; offset < SCAN && due.size() < max; offset += PAGE) {
@@ -87,6 +93,13 @@ final class DueRecords {
     static String why(DocumentModel doc, CoreSession privileged, Instant now) {
         if (doc.isVersion() || doc.isProxy()) {
             return "is a version or a proxy, not a record itself";
+        }
+        if (Disposition.TYPES.contains(doc.getType())) {
+            return "is one of the disposition review's own documents";
+        }
+        // Deleting a folder deletes what it holds, which no one reviewed: a run holds documents alone.
+        if (doc.isFolder()) {
+            return "is a folder, whose contents a run does not review";
         }
         if (!doc.hasFacet(RECORD_FACET) || !doc.isRecord()) {
             return "is not a record of the retention module's";

@@ -3,10 +3,15 @@
  * record: the references, titles and offices are made up.
  */
 
-/** The workspace the seed writes into, under /default-domain/workspaces, and its two folders. */
+/** The workspace the seed writes the records into, under /default-domain/workspaces, and its folder. */
 export const WORKSPACE = { name: 'records-demo', title: 'Records (demo)' };
 export const FILES = { name: 'files', title: 'Records files' };
-export const RUNS = { name: 'disposition', title: 'Disposition runs' };
+
+/**
+ * The repository's disposition runs folder, at its root, where the records add-on takes requests
+ * only: as the retention module keeps its rules in /RetentionRules.
+ */
+export const RUNS = { name: 'disposition-runs', title: 'Disposition runs' };
 
 /**
  * The retention rule the seed makes in the retention module's /RetentionRules: one minute from when

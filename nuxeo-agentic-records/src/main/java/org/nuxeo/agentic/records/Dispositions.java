@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -33,6 +34,8 @@ import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.SecurityConstants;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.cluster.ClusterService;
+import org.nuxeo.runtime.kv.KeyValueService;
+import org.nuxeo.runtime.kv.KeyValueStore;
 import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
@@ -46,9 +49,9 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * their case, as {@code LayerService} compares an approver with a draft's makers.
  *
  * <h2>One at a time, each in a transaction of its own</h2>
- * Every request is handled inside one lock: the server's, and the cluster's
- * ({@code ClusterService.runAtomically}, which runs the work at once on a server that is not in a
- * cluster), as {@code LayerService} makes its changes. Inside it, the request runs in a transaction
+ * Every request is handled inside one lock: the server's, and in a cluster the cluster's, an entry
+ * of the cluster's key-value store ({@link #CLUSTER}), as {@code LayerService} makes its changes
+ * inside the server's and the cluster's locks. Inside it, the request runs in a transaction
  * of its own, which reads the runs as the last request left them and is committed before the lock is
  * given back. So two approvals at once are taken one after the other: one person's second is refused
  * as theirs, and a run's second approval disposes of it once. A refusal writes nothing. A failure
@@ -73,14 +76,52 @@ final class Dispositions {
 
     private static final Object SERVER = new Object();
 
-    /** The server's lock, then the cluster's: tried for 30 seconds, every 100 ms. */
+    /** The cluster's key-value store, which the cluster service keeps its own locks in. */
+    static final String CLUSTER_STORE = "cluster";
+
+    /** How long a server waits for another's lock, and how often it tries. */
+    static final Duration WAIT = Duration.ofSeconds(30);
+
+    static final Duration POLL = Duration.ofMillis(100);
+
+    /**
+     * How long a lock is held at most, should its server stop holding it: longer than a transaction
+     * may last, so that no request outlives its lock.
+     */
+    static final Duration HOLD = Duration.ofMinutes(10);
+
+    /**
+     * The server's lock, then, in a cluster, the cluster's: an entry in the cluster's key-value store,
+     * set only when it is free, which another server waits for. Not {@code ClusterService.runAtomically}:
+     * in a cluster that commits the caller's transaction before it runs the work, and the person's
+     * transaction is the request's, to be rolled back whole when the request is refused.
+     */
     static final Lock CLUSTER = work -> {
         synchronized (SERVER) {
             ClusterService cluster = Framework.getService(ClusterService.class);
-            if (cluster == null) {
+            if (cluster == null || !cluster.isEnabled()) {
                 work.run();
-            } else {
-                cluster.runAtomically(LOCK_KEY, Duration.ofSeconds(30), Duration.ofMillis(100), work);
+                return;
+            }
+            KeyValueStore store = Framework.getService(KeyValueService.class).getKeyValueStore(CLUSTER_STORE);
+            String owner = cluster.getNodeId() + "/" + UUID.randomUUID();
+            long deadline = System.nanoTime() + WAIT.toNanos();
+            while (!store.compareAndSet(LOCK_KEY, null, owner, HOLD.toSeconds())) {
+                if (System.nanoTime() > deadline) {
+                    throw new DispositionRefusal(409, "busy",
+                            "Another server is taking a disposition request: file this one again.");
+                }
+                try {
+                    Thread.sleep(POLL.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new DispositionRefusal(409, "busy", "The request was interrupted before it was taken.");
+                }
+            }
+            try {
+                work.run();
+            } finally {
+                store.compareAndSet(LOCK_KEY, owner, null);
             }
         }
     };
@@ -100,20 +141,41 @@ final class Dispositions {
 
     // --- The folder ---------------------------------------------------------------------------------
 
-    /** A new {@code DispositionRuns} folder: an administrator's, and only one per repository. */
+    /**
+     * A new {@code DispositionRuns} folder: an administrator's, at the repository's root, and only one
+     * per repository. At the root, as the retention module keeps its rules, so that no one but an
+     * administrator can delete, trash, move or copy a folder above it: the repository removes a
+     * folder's contents with no event of their own, so the add-on's guard sees only what is removed
+     * itself.
+     */
     void folderCreated(CoreSession session, DocumentModel folder) {
         if (!session.getPrincipal().isAdministrator()) {
             throw new DispositionRefusal(403, "administrators-only",
                     "Only an administrator makes the repository's disposition runs folder.");
         }
-        boolean exists = CoreInstance.doPrivileged(session, (CoreSession privileged) -> !privileged.query(
-                "SELECT * FROM " + RUNS_TYPE + " WHERE ecm:isProxy = 0 AND ecm:isVersion = 0", null, 1, 0, false)
-                .isEmpty());
-        if (exists) {
-            throw new DispositionRefusal(409, "folder-exists",
-                    "The repository has its disposition runs folder already: there is one, so that no run misses another's records.");
-        }
+        CoreInstance.doPrivileged(session, (CoreSession privileged) -> {
+            if (!atRoot(privileged, folder.getParentRef())) {
+                throw new DispositionRefusal(400, "not-at-root",
+                        "The disposition runs folder is made at the repository's root, where no one but an administrator removes or copies what holds it.");
+            }
+            if (folders(privileged) > 0) {
+                throw new DispositionRefusal(409, "folder-exists",
+                        "The repository has its disposition runs folder already: there is one, so that no run misses another's records.");
+            }
+        });
         folder.setPropertyValue(SEQUENCE, 0L);
+    }
+
+    /** Whether {@code parent}, by id or by path, is the repository's root. */
+    private static boolean atRoot(CoreSession privileged, DocumentRef parent) {
+        return parent != null && privileged.exists(parent)
+                && privileged.getDocument(parent).getId().equals(privileged.getRootDocument().getId());
+    }
+
+    /** How many {@code DispositionRuns} folders the repository has, the trashed ones counted. */
+    private static long folders(CoreSession privileged) {
+        return privileged.query("SELECT * FROM " + RUNS_TYPE + " WHERE ecm:isProxy = 0 AND ecm:isVersion = 0", null, 2,
+                0, false).size();
     }
 
     // --- A request filed ----------------------------------------------------------------------------
@@ -232,11 +294,13 @@ final class Dispositions {
             throw new DispositionRefusal(404, "no-run", "The request names no disposition run of this folder.");
         }
         boolean approver = as.hasPermission(ref, APPROVE_PERMISSION);
-        if (APPROVE.equals(action) && !approver
-                || REJECT.equals(action) && !approver && !as.hasPermission(ref, START_PERMISSION)) {
+        // The starter withdraws their own run; anyone else who rejects one is an approver.
+        boolean starter = name.equalsIgnoreCase(String.valueOf(run.getPropertyValue(RUN_STARTED_BY)))
+                && as.hasPermission(ref, START_PERMISSION);
+        if (APPROVE.equals(action) && !approver || REJECT.equals(action) && !approver && !starter) {
             throw new DispositionRefusal(403, "permission", APPROVE.equals(action)
                     ? "Approving a disposition run needs the ApproveDisposition permission."
-                    : "Rejecting a disposition run needs the ApproveDisposition or StartDisposition permission.");
+                    : "Rejecting a disposition run needs the ApproveDisposition permission, or to be its starter with StartDisposition.");
         }
         long number = longValue(run.getPropertyValue(RUN_NUMBER));
         String state = String.valueOf(run.getPropertyValue(RUN_STATE));
@@ -399,6 +463,13 @@ final class Dispositions {
         if (folder == null || !RUNS_TYPE.equals(folder.getType()) || folder.isProxy() || folder.isVersion()) {
             throw new DispositionRefusal(400, "not-in-runs-folder",
                     "A disposition request is filed in the repository's disposition runs folder, a " + RUNS_TYPE + ".");
+        }
+        // Where no one but an administrator removes or copies what holds it, and the only one: a
+        // folder an administrator moved or copied elsewhere takes no request until it is put back.
+        if (!atRoot(privileged, folder.getParentRef()) || folders(privileged) != 1 || folder.isTrashed()) {
+            throw new DispositionRefusal(409, "folder-misplaced",
+                    "The repository's disposition runs folder must be its one, at the repository's root, out of the trash; "
+                            + "until an administrator puts it back, no request is taken.");
         }
         if (!blocksInheritance(privileged.getACP(folder.getRef()))) {
             throw new DispositionRefusal(409, "folder-inherits",

@@ -328,7 +328,10 @@ function theSet() {
   // Marketplace, as nuxeo-agentic-records depends on nuxeo-retention: not the candidate's to hold.
   const platform = setProblems([
     ui('2026.0.2'),
-    kit({ dependencies: ['nuxeo-agentic-ui:2026.0.2', 'nuxeo-retention:2025.0.0'] }),
+    kit({
+      name: 'nuxeo-agentic-records',
+      dependencies: ['nuxeo-agentic-ui:2026.0.2', 'nuxeo-retention:2025.0.0'],
+    }),
   ]);
   check(
     "a dependency on one of Nuxeo's own packages, which the Marketplace installs",
@@ -341,6 +344,11 @@ function theSet() {
       'a dependency on a package of neither the candidate nor Nuxeo',
       [ui('2026.0.2'), kit({ dependencies: ['nuxeo-retention-extra:2025.0.0'] })],
       /has no package nuxeo-retention-extra/,
+    ],
+    [
+      "a dependency on one of Nuxeo's own packages from a package not listed for it",
+      [ui('2026.0.2'), kit({ dependencies: ['nuxeo-retention:2025.0.0'] })],
+      /has no package nuxeo-retention/,
     ],
     [
       'a dependency at a snapshot of its release',

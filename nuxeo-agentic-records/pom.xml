@@ -80,8 +80,9 @@
     </dependency>
     <!--
       TransactionHelper, which runs each request in a transaction of its own and marks a refused one's
-      for rollback, and ClusterService, whose lock holds requests to one at a time across a cluster;
-      both are in the server's nxserver/bundles, as nuxeo-agentic-core reads them.
+      for rollback; ClusterService, which says whether the server is in a cluster; and the key-value
+      store of the cluster's, where the add-on's lock holds requests to one at a time across it. All
+      are in the server's nxserver/bundles.
     -->
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
@@ -91,6 +92,11 @@
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
       <artifactId>nuxeo-runtime-cluster</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-kv</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>

@@ -414,14 +414,13 @@ export function readDescriptor(xml) {
 
 /**
  * Nuxeo's own Marketplace packages that a package of the candidate may depend on, by name, with the
- * package that needs it. The server installs them from Nuxeo's Marketplace, as `nuxeoctl
+ * packages of the candidate that may: `nuxeo-agentic-records` reviews the retention module's
+ * records for disposition. The server installs them from Nuxeo's Marketplace, as `nuxeoctl
  * mp-install` resolves a dependency, never from this repository, so no version of them is the
- * candidate's to show met, and a dependency on one is not a problem of the set. Any other dependency
- * outside the candidate still is.
+ * candidate's to show met, and such a dependency is not a problem of the set. Any other dependency
+ * outside the candidate still is, and so is one of these from any other package.
  */
-export const PLATFORM_PACKAGES = new Map([
-  ['nuxeo-retention', 'nuxeo-agentic-records, which reviews the retention module\'s records for disposition'],
-]);
+export const PLATFORM_PACKAGES = new Map([['nuxeo-retention', new Set(['nuxeo-agentic-records'])]]);
 
 /**
  * Every way the candidate's packages fail one another: a package named twice, a dependency the
@@ -453,7 +452,7 @@ export function setProblems(packages) {
     for (const text of each.dependencies) {
       const dependency = parseDependency(text);
       const held = byName.get(dependency.name);
-      if (!held && PLATFORM_PACKAGES.has(dependency.name)) continue;
+      if (!held && PLATFORM_PACKAGES.get(dependency.name)?.has(each.name)) continue;
       if (!held) {
         problems.push(
           `${who} depends on ${text}, and the candidate has no package ${dependency.name}. A dependency outside the candidate is not one this run can show met.`,

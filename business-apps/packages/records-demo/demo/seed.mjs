@@ -10,11 +10,13 @@
  * Needs, installed first: the retention module (nuxeo-retention), the records add-on
  * (nuxeo-agentic-records) and this kit, whose stand-in type, RecordsFile, the records are.
  *
- * Writes, under /default-domain/workspaces/records-demo, and nowhere else but the rule:
- *   - files/: the records of data.mjs, each made a record with the rule attached, by the module's
- *     own Retention.AttachRule, and the one data.mjs marks put under a hold, by Document.Hold;
- *   - disposition/: the DispositionRuns folder, its inherited permissions blocked, with
- *     StartDisposition for records-managers and ApproveDisposition for records-approvers;
+ * Writes:
+ *   - under /default-domain/workspaces/records-demo/files, the records of data.mjs, each made a
+ *     record with the rule attached, by the module's own Retention.AttachRule, and the one data.mjs
+ *     marks put under a hold, by Document.Hold;
+ *   - at the repository's root, /disposition-runs, the DispositionRuns folder, its inherited
+ *     permissions blocked, with StartDisposition for records-managers and ApproveDisposition for
+ *     records-approvers: the add-on takes requests in a folder at the root only;
  *   - and in /RetentionRules, the module's folder, the rule: one minute from its attachment, with no
  *     end action, so that the module leaves the records to a review.
  *
@@ -182,7 +184,7 @@ async function preflight() {
 
 /** The document at `parent/name`, created with `properties` when it is not there; refused when it is another type. */
 async function ensure(parent, name, type, properties) {
-  const path = `${parent}/${name}`;
+  const path = `${parent === '/' ? '' : parent}/${name}`;
   const existing = await find(`/path${pathOf(path)}`);
   if (existing === null) {
     const created = await call('POST', `/path${pathOf(parent)}`, {
@@ -221,13 +223,13 @@ async function ensureRunsFolder() {
   const found = await call('GET', '/search/lang/NXQL/execute', {
     query: 'SELECT * FROM DispositionRuns WHERE ecm:isProxy = 0 AND ecm:isVersion = 0 AND ecm:isTrashed = 0',
   });
-  const mine = `${ROOT}/${RUNS.name}`;
+  const mine = `/${RUNS.name}`;
   const other = (found?.entries ?? []).find((each) => each.path !== mine);
   if (other)
     throw new Error(
       `The repository has its disposition runs folder already, at ${other.path}: a repository has one, so the seed makes none.`,
     );
-  return ensure(ROOT, RUNS.name, 'DispositionRuns', { 'dc:title': RUNS.title });
+  return ensure('/', RUNS.name, 'DispositionRuns', { 'dc:title': RUNS.title });
 }
 
 /** The two groups' permissions on the folder, and the block of every permission it would inherit. */

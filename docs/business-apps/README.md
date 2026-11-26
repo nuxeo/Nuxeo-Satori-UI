@@ -83,8 +83,8 @@ Maven module beside `nuxeo-agentic-core` with a Marketplace package of its own:
 - [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md): the disposition review, on the
   platform's retention module: the records due held in a run, approved by two people other than
   its starter, deleted, and a certificate kept (phase 9). Its kit is
-  [`records-demo`](../../business-apps/packages/records-demo/README.md). Held for its security
-  review.
+  [`records-demo`](../../business-apps/packages/records-demo/README.md). Its security review is
+  deferred until the app is finished; its README's security notes are what that review will read.
 
 ## Facts that hold
 

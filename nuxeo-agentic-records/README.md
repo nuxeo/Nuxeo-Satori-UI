@@ -10,7 +10,8 @@ note says what changes if it goes another way.
 
 **Nothing here is installed on any server.** It is proven by its tests, in Nuxeo's own test
 framework. Its kit is [`records-demo`](../business-apps/packages/records-demo/README.md).
-**Held for its security review**, below.
+**Its security review is deferred until the app is finished;** the security notes below are what
+that review will read.
 
 ## The short version
 
@@ -19,7 +20,8 @@ framework. Its kit is [`records-demo`](../business-apps/packages/records-demo/RE
   neither. It reads them, and reviews what they leave.
 - **A run holds the records due:** records of the module's whose retention has ended, under no
   legal hold, whose rule has no end action of its own, and in no other run awaiting approval, that
-  its starter may read. At most 200 by default.
+  its starter may read; documents, not folders, and none of the add-on's own. At most 200 by
+  default. A record in the trash is reviewed as any other: the trash is not a disposition.
 - **Two people approve it,** each with the add-on's `ApproveDisposition` permission, neither of
   them the one who started it. Only then is anything disposed of.
 - **Disposed of means deleted, permanently**, in one transaction, after every record is checked
@@ -91,14 +93,15 @@ A **listener**, not the route model: `DispositionListener`, synchronous, on the 
 document events. A workflow's task would need its node's chain to call an operation, which the app
 could then reach too; a document event needs none.
 
-A person files a **`DispositionRequest`** in the repository's **`DispositionRuns`** folder, over the
-REST API (`POST /api/v1/path/<the folder>`), with `dreq:action`:
+A person files a **`DispositionRequest`** in the repository's **`DispositionRuns`** folder, which an
+administrator makes at the repository's root, over the REST API (`POST /api/v1/path/<the folder>`),
+with `dreq:action`:
 
-| Action    | Also       | Who                                                                 | What it does                                                                                        |
-| --------- | ---------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `start`   |            | `StartDisposition` on the folder                                    | A new `DispositionRun` holding the records due that the person may read; refused, 409, when none is |
-| `approve` | `dreq:run` | `ApproveDisposition`, and not the run's starter                     | An approval; the second, by another person, disposes of the run, or halts it                        |
-| `reject`  | `dreq:run` | `ApproveDisposition`, or `StartDisposition` (the starter withdraws) | The run is closed, its records kept, and free for another run                                       |
+| Action    | Also       | Who                                                                                      | What it does                                                                                        |
+| --------- | ---------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `start`   |            | `StartDisposition` on the folder                                                         | A new `DispositionRun` holding the records due that the person may read; refused, 409, when none is |
+| `approve` | `dreq:run` | `ApproveDisposition`, and not the run's starter                                          | An approval; the second, by another person, disposes of the run, or halts it                        |
+| `reject`  | `dreq:run` | `ApproveDisposition`, or the run's own starter with `StartDisposition`, who withdraws it | The run is closed, its records kept, and free for another run                                       |
 
 `dreq:comment` is the filer's too, up to 2000 characters. Everything else on the request (who,
 when, the run's number, the outcome) is written by the server, over whatever the filer sent. The
@@ -119,7 +122,8 @@ that deletes the records, then made a record, so that the repository keeps its f
   (the run's number, starter and start, both approvers and when, when disposed of, how, and the
   record's identifiers, rule and retention end), so that a records specialist can sort and filter it
   in a spreadsheet. RFC 4180, UTF-8 with a byte order mark, times in UTC. A field that a spreadsheet
-  would read as a formula (`=`, `+`, `-`, `@`, a tab, a carriage return) starts with `'`.
+  would read as a formula (`=`, `+`, `-`, `@`, a tab, a carriage return) starts with `'`, so such a
+  title reads in the CSV with a `'` the certificate's properties do not have.
 
 The run keeps the certificate's id and the CSV's SHA-256 too.
 
@@ -129,8 +133,13 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   Read and AddChildren. Nuxeo counts `Everything` as holding both, and administrators as holding
   all: the folder **must block every permission it would inherit**, and the add-on refuses every
   request in one that does not, 409, so that an inherited `Everything` grants neither.
-- **One folder per repository,** made by an administrator alone, so that no one makes a folder of
-  their own where they hold `Everything`, and no run misses another's records.
+- **One folder per repository, at its root,** made by an administrator alone, so that no one makes a
+  folder of their own where they hold `Everything`, and no run misses another's records. At the root
+  because the repository deletes, trashes, moves and copies a folder's contents with no event of
+  their own: under a workspace, whoever could delete or copy the workspace could delete every run
+  and certificate, or copy the folder into a second one with its pending runs and their approvals.
+  Above the root's folder there is only the root. A folder an administrator has moved, trashed or
+  copied takes no request until it is the one folder at the root again.
 - **The two-person rule** is checked on the server, against the run as the last request left it:
   the starter may not approve, nor anyone twice, with names compared without their case, as
   `LayerService` compares an approver with a draft's makers. The system and anonymous users file
@@ -140,13 +149,18 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   records schedule names. A run holds only records its starter may read, so a run shows no one a
   record its starter could not see; the people who may read the folder see the run's list.
 - **One at a time, each in a transaction of its own.** Every request is taken inside one lock, the
-  server's and the cluster's (`ClusterService.runAtomically`), as `LayerService` makes its changes,
-  and runs in a transaction of its own, committed before the lock is given back. Two approvals at
-  once are taken one after the other: one person's second is refused, and a run is disposed of once.
-  A request whose transaction fails writes nothing, and its records are back. The request document
-  is written afterwards, by the person's own transaction: should that one fail after the request's
-  own committed, the run keeps what was done, and the request document is missing. The run is the
-  record of what was decided.
+  server's and, in a cluster, the cluster's, as `LayerService` makes its changes inside both. The
+  cluster's is an entry of the cluster's key-value store, the one `ClusterService` keeps its locks
+  in, set only when free and held at most 10 minutes; not `ClusterService.runAtomically` itself,
+  which in a cluster commits its caller's transaction before it runs the work. Inside the lock the
+  request runs in a transaction of its own, suspended from the person's and committed before the
+  lock is given back. Two approvals at once are taken one after the other: one person's second is
+  refused, and a run is disposed of once. A request whose transaction fails writes nothing, and its
+  records are back. The person's own transaction is never committed by the add-on: a refusal rolls
+  it back whole, what the person wrote before the request included. The request document is written
+  afterwards, by the person's transaction: should that one fail after the request's own committed,
+  the run keeps what was done, and the request document is missing. The run is the record of what
+  was decided.
 - **Everything else on the add-on's documents is refused**, administrators included: a run or a
   certificate made by anyone but the add-on, a change to a property of the add-on's schemas or a
   certificate's file, a move, copy, check-in, restore or trash. A deletion is an administrator's
@@ -162,7 +176,15 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   - the add-on is a control only as far as the server's administrators: one of them may delete a run
     or a certificate, or uninstall the add-on;
   - the run's records list is a copy, as the starter could read the records: if a record's title is
-    itself sensitive, the folder's readers see it.
+    itself sensitive, the folder's readers see it;
+  - an approval is counted as it was given: one whose approver has since lost `ApproveDisposition`
+    still counts at the second approval;
+  - a start reads at most 5000 candidates, the oldest retention end first: if as many are held or
+    not due, a record due after them waits for a later run;
+  - two servers of a cluster are held apart by the cluster's key-value store, which the tests run in
+    memory, on one server: no test runs two servers;
+  - should a server stop while it holds the cluster's lock, the others wait for it to expire, 10
+    minutes, refusing each request after 30 seconds, 409, to be filed again.
 
 ## What is not built
 
@@ -187,7 +209,8 @@ alone, and some JDK packages opened.
 | `DispositionRunTest`       | Which records a run holds and which it does not; two approvals dispose and certify; a rejection frees the records; the platform's own expiry makes a record due              |
 | `DispositionRefusalTest`   | Every refusal: no permission to start or approve, the starter's approval, a second by the same person, a hold, a retention or a retention end since the start, a record gone |
 | `DispositionAtomicityTest` | A failure partway through disposes of nothing; two approvals, two second approvals, one person's two, and two starts, at once                                                |
-| `DispositionGuardTest`     | The add-on's documents are its own; one folder per repository, an administrator's; a folder that inherits takes no request                                                   |
+| `DispositionGuardTest`     | The add-on's documents are its own; one folder per repository, an administrator's, at the root; a folder moved from it, or that inherits, takes no request                   |
+| `DispositionClusterTest`   | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                             |
 | `CertificateCsvTest`       | The CSV's rows, quoting and formula guard                                                                                                                                    |
 | `RetentionModelTest`       | What the add-on reads of the module, held to the module's own files                                                                                                          |
 | `BundleTest`               | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                        |
@@ -195,10 +218,13 @@ alone, and some JDK packages opened.
 **Each refusal was seen failing without its check**: every check above was removed in turn, and its
 test failed (26 November 2026): the start and approve permissions, the self-approval and its case,
 the second approval by one person, the re-check at disposal and the hold check itself, the record
-in one run at a time, the lock, the one transaction, the folder's block, the add-on's properties,
-the administrator's deletion, the server's runs and certificates, the one folder, the rule's end
-action, the retention end, the retention, and the CSV's formula guard. A wrong SHA-256 for the
-module's jar fails the build.
+in one run at a time, the server's lock, the one transaction, the folder's block, the add-on's
+properties, the administrator's deletion, the server's runs and certificates, the one folder, the
+rule's end action, the retention end, the retention, and the CSV's formula guard; then, after the
+review, the folder at the root, a request taken only there, the add-on's own documents and folders
+never due, a run withdrawn by its own starter alone, and the cluster's lock leaving the person's
+transaction alone (with `ClusterService.runAtomically` in its place, a refused request kept what the
+person wrote before it). A wrong SHA-256 for the module's jar fails the build.
 
 ```bash
 mvn verify -pl nuxeo-agentic-records -am

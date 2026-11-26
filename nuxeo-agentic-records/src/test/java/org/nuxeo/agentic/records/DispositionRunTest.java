@@ -31,6 +31,7 @@ import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.impl.ACLImpl;
 import org.nuxeo.ecm.core.api.security.impl.ACPImpl;
+import org.nuxeo.ecm.core.api.trash.TrashService;
 import org.nuxeo.ecm.core.bulk.BulkService;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.event.impl.EventContextImpl;
@@ -181,6 +182,53 @@ public class DispositionRunTest extends DispositionTestCase {
         assertEquals(first.getId(), listed.get(0).get("uid"));
         assertEquals(rule.getId(), listed.get(0).get("ruleId"));
         assertNotNull(listed.get(0).get("retentionEnded"));
+    }
+
+    /** A certificate is a record, and given the module's facet and a past retention end it would look due: it never is. */
+    @Test
+    public void noneOfTheReviewsOwnDocumentsIsEverDue() {
+        ended(session, "Claim 1001", rule, daysAgo(10));
+        commit(session);
+        DocumentModel run = start(session, "alice");
+        decide(session, "bob", run, Disposition.APPROVE);
+        decide(session, "carol", run, Disposition.APPROVE);
+        DocumentModel certificate = session.getDocument(
+                new IdRef((String) session.getDocument(run.getRef()).getPropertyValue(Disposition.RUN_CERTIFICATE)));
+        certificate.addFacet(Disposition.RECORD_FACET);
+        certificate.setPropertyValue(Disposition.RECORD_RULE_IDS, new String[] { rule.getId() });
+        certificate.setPropertyValue(Disposition.RECORD_RETAIN_UNTIL, Fixtures.calendar(daysAgo(1)));
+        session.saveDocument(certificate);
+        commit(session);
+        assertEquals("nothing-due", Fixtures.refused(() -> start(session, "alice")));
+        assertTrue(session.exists(certificate.getRef()));
+    }
+
+    /** Deleting a folder deletes what it holds, which no run reviewed: a folder is never due. */
+    @Test
+    public void aFolderIsNeverDue() {
+        DocumentModel holder = session.createDocumentModel(Fixtures.RECORDS, "box-17", "Folder");
+        holder.setPropertyValue("dc:title", "Box 17");
+        holder = session.createDocument(holder);
+        session.createDocument(session.createDocumentModel(holder.getPathAsString(), "inside", "File"));
+        session.makeRecord(holder.getRef());
+        holder = session.getDocument(holder.getRef());
+        holder.addFacet(Disposition.RECORD_FACET);
+        holder.setPropertyValue(Disposition.RECORD_RULE_IDS, new String[] { rule.getId() });
+        holder.setPropertyValue(Disposition.RECORD_RETAIN_UNTIL, Fixtures.calendar(daysAgo(10)));
+        session.saveDocument(holder);
+        commit(session);
+        assertEquals("nothing-due", Fixtures.refused(() -> start(session, "alice")));
+    }
+
+    /** The trash is not a disposition: a record in it is due as any other, and is reviewed. */
+    @Test
+    public void aRecordInTheTrashIsStillDue() {
+        DocumentModel record = ended(session, "Claim 1001", rule, daysAgo(10));
+        Framework.getService(TrashService.class).trashDocument(record);
+        commit(session);
+        assertTrue(session.getDocument(record.getRef()).isTrashed());
+        DocumentModel run = start(session, "alice");
+        assertEquals(List.of(record.getId()), uids(run));
     }
 
     @Test

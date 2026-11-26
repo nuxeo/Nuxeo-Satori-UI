@@ -74,7 +74,7 @@ public class DispositionAtomicityTest extends DispositionTestCase {
         commit(session);
         DocumentModel run = start(session, "alice");
 
-        List<String> kept = together(run, "bob", "carol");
+        List<String> kept = together(session, run, "bob", "carol");
         assertEquals(List.of("bob", "carol"), kept);
         Fixtures.assertState(session, run, Disposition.DISPOSED);
         List<String> approvers = new ArrayList<>(approvers(run));
@@ -91,7 +91,7 @@ public class DispositionAtomicityTest extends DispositionTestCase {
         commit(session);
         DocumentModel run = start(session, "alice");
 
-        List<String> kept = together(run, "bob", "bob");
+        List<String> kept = together(session, run, "bob", "bob");
         assertEquals(List.of("bob"), kept);
         assertEquals(List.of("bob"), approvers(run));
         Fixtures.assertState(session, run, Disposition.PENDING);
@@ -107,7 +107,7 @@ public class DispositionAtomicityTest extends DispositionTestCase {
         DocumentModel run = start(session, "alice");
         decide(session, "bob", run, Disposition.APPROVE);
 
-        List<String> kept = together(run, "carol", "erin");
+        List<String> kept = together(session, run, "carol", "erin");
         assertEquals(1, kept.size());
         Fixtures.assertState(session, run, Disposition.DISPOSED);
         assertEquals(List.of("bob", kept.get(0)), approvers(run));
@@ -120,7 +120,7 @@ public class DispositionAtomicityTest extends DispositionTestCase {
     public void twoStartsAtOnceHoldNoRecordTwice() throws Exception {
         ended(session, "Claim 1001", rule, daysAgo(10));
         commit(session);
-        List<String> kept = together(null, "alice", "alice");
+        List<String> kept = together(session, null, "alice", "alice");
         assertEquals(List.of("alice"), kept);
         assertEquals(1, session.query("SELECT * FROM " + Disposition.RUN_TYPE).size());
         assertEquals(1L, session.getDocument(folder.getRef()).getPropertyValue(Disposition.SEQUENCE));
@@ -131,7 +131,7 @@ public class DispositionAtomicityTest extends DispositionTestCase {
      * own, held as they are filed until both have been: approvals of {@code run}, or starts when it
      * is {@code null}. The names whose request was kept, sorted.
      */
-    private List<String> together(DocumentModel run, String first, String second) throws Exception {
+    static List<String> together(CoreSession session, DocumentModel run, String first, String second) throws Exception {
         TestHooks.filing = new CyclicBarrier(2);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         List<Future<?>> filings = new ArrayList<>();

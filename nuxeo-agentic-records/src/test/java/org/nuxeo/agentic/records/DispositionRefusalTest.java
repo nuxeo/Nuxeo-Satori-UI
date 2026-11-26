@@ -120,6 +120,19 @@ public class DispositionRefusalTest extends DispositionTestCase {
         Fixtures.assertState(session, run, Disposition.PENDING);
     }
 
+    /** StartDisposition lets a starter withdraw their own run, and no one else's. */
+    @Test
+    public void onlyItsStarterWithdrawsARunWithoutApproveDisposition() {
+        ended(session, "Claim 1001", rule, daysAgo(10));
+        ACP acp = session.getACP(folder.getRef());
+        acp.getACL("local").add(0, new ACE("sam", Disposition.START_PERMISSION, true));
+        session.setACP(folder.getRef(), acp, true);
+        commit(session);
+        DocumentModel run = start(session, "alice");
+        assertEquals("permission", refused(() -> decide(session, "sam", run, Disposition.REJECT)));
+        Fixtures.assertState(session, run, Disposition.PENDING);
+    }
+
     @Test
     public void aClosedRunTakesNoDecision() {
         ended(session, "Claim 1001", rule, daysAgo(10));

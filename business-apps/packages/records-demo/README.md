@@ -30,7 +30,8 @@ its controls' stand-in.
 - **A stand-in model:** one fictional type, `RecordsFile`, for the seed's records. The run, the
   request and the certificate are the add-on's types, not the kit's.
 - **A seed** that writes the records under a retention rule of the module's, one of them under a
-  legal hold, and the disposition runs folder with the kit's groups' permissions. It starts no run.
+  legal hold, and the disposition runs folder, at the repository's root, with the kit's groups'
+  permissions. It starts no run.
 
 ## What is in it
 
@@ -92,12 +93,13 @@ Not done on any server. In this order:
 Phase 9's demo step 2, by three people of the server's groups: a records manager, and two
 approvers. Each step is a document filed in the disposition runs folder, over the REST API, with the
 person's own credentials; the add-on checks it on the server and answers 403 or 409 when it refuses.
-`$RUNS` is the folder's path the seed printed.
+The folder is `/disposition-runs`, at the repository's root, where the add-on takes requests only.
 
 1. **The records due.** A records manager starts a run:
 
    ```bash
-   curl -su "$MANAGER" -H 'Content-Type: application/json' -X POST "$NUXEO_URL/nuxeo/api/v1/path$RUNS" \
+   curl -sS --fail-with-body -u "$MANAGER" -H 'Content-Type: application/json' \
+     -X POST "$NUXEO_URL/nuxeo/api/v1/path/disposition-runs" \
      -d '{"entity-type":"document","type":"DispositionRequest","name":"start","properties":{"dreq:action":"start"}}'
    ```
 

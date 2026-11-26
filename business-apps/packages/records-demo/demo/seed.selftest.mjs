@@ -35,6 +35,7 @@ function standIn({ administrator = true, types = ['RetentionRule', 'DispositionR
     docs.set(path, doc);
     return doc;
   };
+  add('/', 'Root');
   add('/default-domain/workspaces', 'WorkspaceRoot');
   add('/RetentionRules', 'RetentionRules');
   const byUid = (uid) => [...docs.values()].find((doc) => doc.uid === uid);
@@ -57,7 +58,7 @@ function standIn({ administrator = true, types = ['RetentionRule', 'DispositionR
       if (api.startsWith('/path')) {
         const path = decodeURIComponent(api.slice(5));
         if (request.method === 'GET') return docs.has(path) ? send(200, view(docs.get(path))) : send(404, {});
-        const created = add(`${path}/${json.name}`, json.type, json.properties);
+        const created = add(`${path === '/' ? '' : path}/${json.name}`, json.type, json.properties);
         return send(201, view(created));
       }
       if (api === '/search/lang/NXQL/execute')
@@ -142,8 +143,8 @@ const filedRequests = (requests) => requests.filter((each) => each.json?.type ==
   check('seeded: the record data.mjs marks, and it alone, held', JSON.stringify(held) === JSON.stringify(RECORDS.filter((each) => each.hold).map((each) => each.reference)), held.join(', '));
   const rule = stub.docs.get(`/RetentionRules/${RULE.name}`);
   check('seeded: the rule, with no end action', rule && Array.isArray(rule.properties['retention_def:endActions']) && rule.properties['retention_def:endActions'].length === 0);
-  const folder = stub.docs.get('/default-domain/workspaces/records-demo/disposition');
-  check('seeded: the disposition runs folder', folder?.type === 'DispositionRuns');
+  const folder = stub.docs.get('/disposition-runs');
+  check('seeded: the disposition runs folder, at the root', folder?.type === 'DispositionRuns');
   for (const { group, permission } of GRANTS)
     check(`seeded: ${permission} for ${group}`, folder.acl.some((ace) => ace.username === group && ace.permission === permission && ace.granted));
   check('seeded: the folder blocks what it would inherit', folder.acl.some((ace) => ace.username === 'Everyone' && ace.permission === 'Everything' && !ace.granted));

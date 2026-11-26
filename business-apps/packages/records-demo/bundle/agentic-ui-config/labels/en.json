@@ -53,6 +53,7 @@
     "layout.schema.disposition_run": "Disposition run",
     "layout.schema.disposition_certificate": "Disposition certificate",
     "layout.schema.disposition_request": "Disposition request",
-    "layout.schema.recordsfile": "Records file"
+    "layout.schema.recordsfile": "Records file",
+    "layout.schema.disposition_runs": "Disposition runs"
   }
 }
