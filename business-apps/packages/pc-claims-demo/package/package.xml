@@ -1,0 +1,17 @@
+<package type="addon" name="pc-claims-demo" version="0.1.0">
+  <title>Property Claims</title>
+  <description>
+    <p>The Property Claims app definition, a Nuxeo Satori business app.</p>
+  </description>
+  <vendor>Nuxeo</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <dependencies>
+    <package>nuxeo-agentic-ui:2026.0.2</package>
+  </dependencies>
+  <visibility>PRIVATE</visibility>
+</package>

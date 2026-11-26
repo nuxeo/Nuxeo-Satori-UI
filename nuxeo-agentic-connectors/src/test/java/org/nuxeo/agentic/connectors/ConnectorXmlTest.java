@@ -179,6 +179,43 @@ class ConnectorXmlTest {
     }
 
     /**
+     * Every connector a kit in this repository ships, read from its own file by XMap and registered
+     * as the server would, together with the add-on's demo connector: a rule of this version, such as
+     * an id that may not end in {@code .cache} or {@code .events}, that refused a kit's connector would
+     * fail here rather than on a server.
+     */
+    @Test
+    void everyConnectorAKitShipsIsOneTheServerRegisters() throws Exception {
+        List<Path> files;
+        try (java.util.stream.Stream<Path> walk = Files.walk(Path.of("..", "business-apps", "packages"))) {
+            files = walk.filter(p -> p.toString().endsWith(".xml"))
+                        .filter(p -> !p.toString().contains("node_modules") && !p.toString().contains("dist"))
+                        .sorted()
+                        .toList();
+        }
+        ConnectorComponent component = new ConnectorComponent();
+        List<String> ids = new ArrayList<>();
+        for (Path file : files) {
+            Matcher extension = EXTENSION.matcher(Files.readString(file));
+            while (extension.find()) {
+                for (ConnectorDescriptor descriptor : load(extension.group())) {
+                    Connector connector = assertDoesNotThrow(() -> Connector.of(descriptor), file.toString());
+                    component.register(descriptor, file.toString());
+                    ids.add(connector.id());
+                }
+            }
+        }
+        Matcher demo = EXTENSION.matcher(Files.readString(Path.of("demo", "payers-claim-payments-config.xml")));
+        assertTrue(demo.find());
+        load(demo.group()).forEach(d -> component.register(d, "the add-on's demo"));
+        assertTrue(ids.contains("pcclaims.policyPayments"), "the P&C claims kit's connector, among " + ids);
+        for (String id : ids) {
+            assertNotNull(component.getConnector(id), id + " is registered beside the others");
+        }
+        assertNotNull(component.getConnector("payers.claimPayments"));
+    }
+
+    /**
      * What the demo tells the validator its server registers, and the fields its layout names, are
      * the demo connector's: a field added to one and not the others is a demo that refuses itself.
      */

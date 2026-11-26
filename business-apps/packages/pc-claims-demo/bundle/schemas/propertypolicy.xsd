@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional propertypolicy schema of the PropertyPolicy type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertypolicy"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertypolicy">
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="holder" type="xs:string" />
+  <xs:element name="holderEmail" type="xs:string" />
+  <xs:element name="holderPhone" type="xs:string" />
+  <xs:element name="propertyAddress" type="xs:string" />
+  <xs:element name="product">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Homeowners" />
+        <xs:enumeration value="Condominium" />
+        <xs:enumeration value="Landlord" />
+        <xs:enumeration value="Small business" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="In force" />
+        <xs:enumeration value="Lapsed" />
+        <xs:enumeration value="Cancelled" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="effective" type="xs:date" />
+  <xs:element name="expiry" type="xs:date" />
+  <xs:element name="coverageLimit" type="xs:double" />
+  <xs:element name="deductible" type="xs:double" />
+</xs:schema>

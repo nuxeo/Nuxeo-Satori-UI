@@ -1,0 +1,53 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "pc-claims.card.propertyClaim.claim",
+      "fields": [
+        { "field": "dc:title", "labelKey": "pc-claims.field.claimTitle", "required": true },
+        { "field": "pclaim:number", "readOnlyWhen": "core.true" },
+        { "field": "pclaim:policy", "required": true },
+        { "field": "pclaim:status", "required": true },
+        "pclaim:adjuster",
+        { "field": "pclaim:reserve", "widget": "currency", "parameters": { "currency": "USD" } }
+      ]
+    },
+    {
+      "id": "loss",
+      "labelKey": "pc-claims.card.propertyClaim.loss",
+      "fields": [
+        { "field": "pclaim:lossDate", "required": true },
+        { "field": "pclaim:cause", "required": true },
+        "pclaim:lossLocation",
+        { "field": "pclaim:lossDescription", "widget": "long-text" },
+        {
+          "field": "pclaim:reportedOn",
+          "required": true,
+          "checks": [
+            {
+              "type": "core.notBefore",
+              "parameters": [{ "field": "pclaim:lossDate" }],
+              "labelKey": "pc-claims.check.lossAfterReport"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "denial",
+      "labelKey": "pc-claims.card.propertyClaim.denial",
+      "fields": [
+        {
+          "field": "pclaim:denialReason",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "pclaim:status" }, "Denied"]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -49,7 +49,7 @@ reviewer.
 | `src/main/resources/OSGI-INF/connectors-service.xml`            | The component `org.nuxeo.agentic.connectors`, its service and its `connectors` extension point                                                                                    |
 | `src/main/resources/OSGI-INF/connectors-operations-contrib.xml` | Registers `Connector.Read`                                                                                                                                                        |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`           | Maps the change events' servlet on `/agentic-connectors/events/*`, with no authentication filter                                                                                  |
-| `src/test/java/`                                                | 108 tests, with an embedded HTTP stub (`SystemOfRecordStub`); 16 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`) |
+| `src/test/java/`                                                | 109 tests, with an embedded HTTP stub (`SystemOfRecordStub`); 16 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`) |
 | `demo/core-system.mjs`                                          | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims, and `notify`, which sends a signed change event                               |
 | `demo/change-event.mjs`                                         | How the stand-in signs a change event                                                                                                                                             |
 | `demo/core-system.selftest.mjs`                                 | Its controls, 16 of them                                                                                                                                                          |
@@ -335,7 +335,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -pl nuxeo-agentic-connectors -am verify
-# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 108 tests
+# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 109 tests
 node nuxeo-agentic-connectors/demo/core-system.selftest.mjs   # 16 of 16
 ```
 
