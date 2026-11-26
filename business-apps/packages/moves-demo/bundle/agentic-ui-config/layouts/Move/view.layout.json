@@ -1,0 +1,164 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "past-delivery",
+      "tone": "warning",
+      "labelKey": "moves.banner.move.pastDelivery",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "move:state" }, "Booked", "Packed", "In transit"]
+          },
+          { "type": "app.rules.datePassed", "parameters": [{ "field": "move:deliveryDate" }] }
+        ]
+      }
+    },
+    {
+      "id": "cancelled",
+      "tone": "negative",
+      "labelKey": "moves.banner.move.cancelled",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "move:state" }, "Cancelled"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "move",
+      "labelKey": "moves.card.move.move",
+      "fields": [
+        "move:number",
+        { "field": "dc:title", "labelKey": "moves.field.moveTitle" },
+        {
+          "field": "move:state",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Booked": "info",
+              "Packed": "info",
+              "In transit": "warning",
+              "Delivered": "positive",
+              "Cancelled": "neutral"
+            }
+          }
+        },
+        "move:customer",
+        { "field": "move:customerPhone", "widget": "phone" },
+        { "field": "move:customerEmail", "widget": "email" }
+      ]
+    },
+    {
+      "id": "route",
+      "labelKey": "moves.card.move.route",
+      "fields": [
+        "move:origin",
+        "move:destination",
+        { "field": "move:loadDate", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "move:deliveryDate", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "move:deliveredOn", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "crew",
+      "labelKey": "moves.card.move.crew",
+      "fields": [
+        { "field": "move:coordinator", "widget": "user" },
+        { "field": "move:crewLead", "widget": "user" },
+        { "field": "move:crew", "widget": "user" },
+        "move:truck"
+      ]
+    },
+    {
+      "id": "valuation",
+      "labelKey": "moves.card.move.valuation",
+      "fields": [
+        {
+          "field": "move:declaredValue",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "move:notes", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "inventory",
+      "labelKey": "moves.card.move.inventory",
+      "span": 2,
+      "related": {
+        "pageProvider": "moves_move_items",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "moveitem:tag",
+          { "field": "dc:title", "labelKey": "moves.field.itemTitle" },
+          "moveitem:room",
+          {
+            "field": "moveitem:condition",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Good": "positive",
+                "Worn": "neutral",
+                "Scratched": "warning",
+                "Damaged": "negative"
+              }
+            }
+          },
+          {
+            "field": "moveitem:declaredValue",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          }
+        ],
+        "sort": [{ "field": "moveitem:tag", "order": "asc" }],
+        "pageSize": 50
+      }
+    },
+    {
+      "id": "claims",
+      "labelKey": "moves.card.move.claims",
+      "span": 2,
+      "related": {
+        "pageProvider": "moves_move_claims",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dmg:number",
+          { "field": "dc:title", "labelKey": "moves.field.claimTitle" },
+          {
+            "field": "dmg:state",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Filed": "info",
+                "In review": "warning",
+                "Approved": "positive",
+                "Denied": "negative",
+                "Paid": "positive"
+              }
+            }
+          },
+          { "field": "dmg:filedOn", "widget": "date" },
+          {
+            "field": "dmg:amountClaimed",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          { "field": "dmg:adjuster", "widget": "user" }
+        ],
+        "sort": [{ "field": "dmg:filedOn", "order": "desc" }],
+        "pageSize": 10
+      }
+    },
+    {
+      "id": "history",
+      "labelKey": "moves.card.move.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

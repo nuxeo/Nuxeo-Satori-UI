@@ -24,6 +24,7 @@ export interface AppModelSchema {
   sort?: string;
   pageSize?: number;
   aggregates?: string | string[];
+  attachments?: boolean;
   force?: boolean;
 }
 
@@ -552,6 +553,8 @@ const DUBLIN_CORE = {
     valid: 'date',
   },
 };
+/** Nuxeo's own `files` schema, a record's attachments, as the export describes it: no prefix. */
+const FILES = { name: 'files', fields: { files: { type: 'complex[]', fields: { file: 'blob' } } } };
 
 /**
  * Write a stand-in model into an app definition package: the document type, its schema and its
@@ -564,7 +567,9 @@ const DUBLIN_CORE = {
  *   element (`name`, `name:long`, `name:string[]`, or `status=Draft|Active` for a string of those
  *   values), and in the model component, `bundle/OSGI-INF/<name>-model.xml`, the schema, the type
  *   (extending `Document`, with `common`, `dublincore` and its schema, so it opens as a record
- *   page) and the default lifecycle.
+ *   page) and the default lifecycle. **`--attachments`** gives a new type Nuxeo's `files` schema
+ *   too, `files:files`, where the document page's Attachments panel adds a record's files: it
+ *   still opens as a record page, since only `file` and `note` keep a record's own view.
  * - **`--pageProvider`** writes a page provider over the type, reading the repository so that it
  *   lists a write at once: `SELECT * FROM Document WHERE ecm:primaryType = '<Type>'`, `--where`'s
  *   condition, and no version, proxy or trashed record. A `?` in it is a parameter, bound as a
@@ -618,6 +623,11 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   }
   if (properties.length === 0 && (options.schema ?? options.prefix) !== undefined) {
     throw new Error('--schema and --prefix name the schema --properties writes: give those too.');
+  }
+  if (properties.length === 0 && options.attachments) {
+    throw new Error(
+      '--attachments gives the type --properties writes the files schema: give those too.',
+    );
   }
   const pageProvider = options.pageProvider;
   if (pageProvider !== undefined && !PAGE_PROVIDER.test(pageProvider)) {
@@ -716,6 +726,9 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     );
   }
 
+  // Whether the type has Nuxeo's files schema, its attachments: given when it is first written,
+  // and kept, as the component has it, when its own schema is written again.
+  let attachments = options.attachments === true;
   if (properties.length > 0) {
     const hasType = named(markup, 'doctype', type).length > 0;
     if (hasType && !options.force) {
@@ -734,6 +747,13 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
           `The type ${type} in ${modelFile} has no schema ${schema}: give its --schema.`,
         );
       }
+      const hasFiles = named(body, 'schema', 'files').length > 0;
+      if (attachments && !hasFiles) {
+        throw new Error(
+          `The type ${type} in ${modelFile} has no files schema, and --force writes its own schema only: give --attachments when the type is first written.`,
+        );
+      }
+      attachments = hasFiles;
     }
     const schemaEntries = named(markup, 'schema', schema).filter(
       ([tag]) => attribute(tag, 'src') !== undefined,
@@ -762,10 +782,14 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
         modelFile,
         'org.nuxeo.ecm.core.schema.TypeService',
         'doctype',
-        `<!-- Not a folder and holds no file, so it opens as a record page. -->\n` +
+        (attachments
+          ? `<!-- Not a folder, and holds no file of its own: its attachments are files:files. So it\n` +
+            `     opens as a record page. -->\n`
+          : `<!-- Not a folder and holds no file, so it opens as a record page. -->\n`) +
           `<doctype name="${type}" extends="Document">\n` +
           '  <schema name="common" />\n' +
           '  <schema name="dublincore" />\n' +
+          (attachments ? '  <schema name="files" />\n' : '') +
           `  <schema name="${schema}" />\n` +
           '</doctype>',
       );
@@ -909,11 +933,11 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     (current['doctypes'] as Record<string, unknown>)[type] = {
       parent: 'Document',
       facets: [],
-      schemas: ['common', 'dublincore', schema],
+      schemas: ['common', 'dublincore', ...(attachments ? ['files'] : []), schema],
     };
     const schemas = current['schemas'] as unknown[];
     const nameOf = (entry: unknown) => (isRecord(entry) ? entry['name'] : undefined);
-    for (const own of [COMMON, DUBLIN_CORE]) {
+    for (const own of [COMMON, DUBLIN_CORE, ...(attachments ? [FILES] : [])]) {
       if (!schemas.some((entry) => nameOf(entry) === own.name)) schemas.push(own);
     }
     const described = {
@@ -942,7 +966,7 @@ Wrote the stand-in model, for a demo:
 
   ${written.join('\n  ')}
 
-  Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties` : `${type}, unchanged`}
+  Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : `${type}, unchanged`}
   Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
 ${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}
 Lay the type out against the content model beside it:

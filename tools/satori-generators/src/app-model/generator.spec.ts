@@ -121,6 +121,40 @@ describe('app-model generator', () => {
     expect(model.schemas.get('dublincore')?.properties.get('title')?.type).toBe('string');
   });
 
+  it("gives a new type Nuxeo's files schema with --attachments, and keeps it with --force", async () => {
+    await generate({ properties: 'number, status=Open|Closed', attachments: true });
+    expect(read(tree, MODEL)).toContain(
+      '    <doctype name="Contract" extends="Document">\n' +
+        '      <schema name="common" />\n' +
+        '      <schema name="dublincore" />\n' +
+        '      <schema name="files" />\n' +
+        '      <schema name="contract" />\n' +
+        '    </doctype>',
+    );
+    const described = () => {
+      const model = readModel(JSON.parse(read(tree, `${ROOT}/content-model.json`)), 'model');
+      const type = model.types.get('Contract');
+      return { model, schemas: type && schemasOf(model, type) };
+    };
+    const { model, schemas } = described();
+    expect(schemas).toEqual(['common', 'dublincore', 'files', 'contract']);
+    const files = model.schemas.get('files')?.properties.get('files');
+    expect(files?.list).toBe(true);
+    expect(files?.fields?.get('file')?.type).toBe('blob');
+
+    await generate({ properties: 'number, status=Open|Closed|Archived', force: true });
+    expect(read(tree, MODEL)).toContain('<schema name="files" />');
+    expect(described().schemas).toEqual(['common', 'dublincore', 'files', 'contract']);
+  });
+
+  it('writes no files schema without --attachments', async () => {
+    await contract();
+    expect(read(tree, MODEL)).not.toContain('<schema name="files" />');
+    await expect(
+      generate({ properties: 'number', attachments: true, force: true }),
+    ).rejects.toThrow('give --attachments when the type is first written');
+  });
+
   it('writes a page provider over the type, reading the repository, a ? bound as a literal', async () => {
     await contract();
     await generate({
@@ -406,6 +440,11 @@ describe('app-model generator', () => {
         'its parentheses and quotes closed',
       ],
       ['a schema with no properties', { pageProvider: 'p', schema: 'x' }, 'give those too'],
+      [
+        'attachments with no properties',
+        { pageProvider: 'p', attachments: true },
+        '--attachments gives the type',
+      ],
       [
         'a condition with an order',
         { pageProvider: 'p', where: 'a = 1 ORDER BY b' },

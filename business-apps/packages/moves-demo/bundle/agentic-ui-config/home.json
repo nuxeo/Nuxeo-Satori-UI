@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "moves.home.title",
+  "cards": [
+    {
+      "id": "open-claims",
+      "labelKey": "moves.home.openClaims",
+      "kpi": { "pageProvider": "moves_open_claims", "aggregate": "dmg_state_agg" },
+      "queue": "open-claims"
+    },
+    {
+      "id": "this-week",
+      "labelKey": "moves.home.thisWeek",
+      "kpi": { "pageProvider": "moves_this_week" },
+      "queue": "moves-this-week",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["move-coordinators"] }
+    },
+    {
+      "id": "filed",
+      "labelKey": "moves.home.filed",
+      "kpi": {
+        "pageProvider": "moves_open_claims",
+        "aggregate": "dmg_state_agg",
+        "bucket": "Filed"
+      },
+      "queue": "open-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["move-claims-adjusters"] }
+    }
+  ]
+}
