@@ -1679,7 +1679,8 @@ layout generated from the type, with the reason in the console under `[agentic-u
 `fetch-schema: fields` it returns each of the type's schemas nested, with `@prefix` when it has
 one, and per-field `constraints` — a `directoryResolver` names the vocabulary a value is bound to
 (`itemConstraints` for a list). The `/config/types` and `/config/schemas` lists ignore that header;
-the per-schema read below honours it. A failed read is not cached, so the next document of the
+the per-schema read below honours it. A failed read, or one with no answer within 10 s
+(`LAYOUT_LOAD_TIMEOUT_MS`, which is then cancelled), is not cached, so the next document of the
 type asks again.
 
 A dynamic facet adds schemas to one document, not to its type, so no type read has them. The

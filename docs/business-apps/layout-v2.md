@@ -1347,9 +1347,11 @@ search section 11 describes, `SELECT * FROM Document WHERE ecm:uuid IN (?, …)`
   queue's facets, which ask with the same schemas (app-definition-v2.md, section 4), so a record a
   cell and a bucket both name is read once. A read with more schemas that fails keeps the one
   before it: the title read already still shows.
-- **The types' definitions are waited for 10 seconds at most,** as a layout file is: a type that
-  does not answer counts as one not read, its `show` is left out, and the page's other links are
-  read without it.
+- **The types' definitions are waited for 10 seconds at most,** as a layout file is, and every
+  type's read is since 26 November 2026: a type that does not answer counts as one not read, is
+  asked for again by the next page that needs it, its `show` is left out, and the page's other
+  links are read without it. A page drawn anew with another file, as the designer's preview is on
+  every edit, reads nothing more until that file's types are known, and keeps what it has shown.
 - **The schemas come from the types `types` lists:** each type's definition,
   `/config/types/<type>`, read once per session as the open record's is, and the first of them
   with a schema of the shown property's prefix gives the schema and the property's type. A `show`
