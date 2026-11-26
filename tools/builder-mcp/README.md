@@ -44,6 +44,14 @@ The plan gives the server four jobs. Three are here:
 
 Some things about them are worth knowing before relying on them:
 
+- **A demo kit's own model is read from its package.** The first five take `package`, a package
+  folder as the write tools take one. When the package ships a stand-in model, a
+  `content-model.json` beside `bundle/` as `app-model` writes, they answer from it, and from the
+  page providers its manifest's components define, read as the server would register them,
+  with `source: "package"` (`src/package-model.ts`). What the package does not have, such as a
+  stock type or the server's `default_search`, the server answers, with `source: "server"` and a
+  `packageNote` saying why; so does every read of a package with no stand-in model. A package
+  answer needs no server and no credential.
 - **Prefixes are the ones an app definition writes.** Nuxeo reports `file`, `uid` and `files` with
   an empty prefix and addresses them by name, as `file:content`
   ([AGENTS/11-beta-program.md](../../AGENTS/11-beta-program.md), section 3). So does every tool here.

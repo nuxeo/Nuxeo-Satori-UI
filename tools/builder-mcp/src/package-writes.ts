@@ -258,7 +258,7 @@ function writtenBy(path: string): string {
 
 // ------------------------------------------------------------------------------- the package
 
-interface Target {
+export interface Target {
   readonly directory: string;
   readonly name: string;
   /** As the answers name it: from the repository when inside it. */
@@ -276,7 +276,7 @@ function fromRepository(path: string): string | null {
 }
 
 /** The package folder a request names, or why it is not one the tools write. */
-function packageFolder(path: string, roots: readonly string[]): Target {
+export function packageFolder(path: string, roots: readonly string[]): Target {
   // A `..` is refused rather than resolved: the file system follows a link before it, and the
   // text does not, so `<root>/link/../x` names one folder to `relative` and another to `lstat`.
   if (path.split(/[\\/]/).some((part) => part === '..' || part === '.'))

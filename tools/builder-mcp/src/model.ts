@@ -54,6 +54,15 @@ export async function readContentModel(nuxeo: NuxeoReads): Promise<ContentModel>
     nuxeo.get('/config/facets'),
     nuxeo.get('/config/schemas'),
   ]);
+  return modelOf(types, facets, schemas);
+}
+
+/**
+ * The content model from what `/config/types`, `/config/facets` and `/config/schemas` answer, or a
+ * file in their shape, `{ doctypes, facets, schemas }`, as `npm run app-package:model` exports one
+ * and `app-model` writes a demo kit's: its `doctypes` are the first answer's.
+ */
+export function modelOf(types: unknown, facets: unknown, schemas: unknown): ContentModel {
   const doctypes = record(record(types, '/config/types')['doctypes'], "/config/types' doctypes");
   return {
     types: Object.entries(doctypes)

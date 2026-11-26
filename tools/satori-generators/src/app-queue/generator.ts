@@ -39,6 +39,8 @@ const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
  *
  * The page provider must exist on the server, and nothing here can see the server: read it first
  * with the Builder MCP server's `describe_page_provider`, which says how many parameters it takes.
+ * Given the package, it reads a demo kit's own page provider from the package, which no server has
+ * until the kit is installed.
  * A queue has no open record, so a parameter is a literal, written by hand. Neither the pipeline
  * nor the content model checks its columns yet (package-pipeline.md, section 7), so a column the
  * listed records do not have is found only when the queue is drawn.
@@ -114,7 +116,8 @@ Wrote ${file}
   Columns:        ${columns.join(', ')}
 ${keptLabels.length > 0 ? `  Kept the text labels/en.json already had for ${keptLabels.join(', ')}\n` : ''}${appContributionSaid(pkg, app)}
 Check that ${options.pageProvider} exists, and how many parameters it takes, with the Builder MCP
-server's describe_page_provider. Then:
+server's describe_page_provider, { "name": "${options.pageProvider}", "package": "${pkg.root}" }:
+for a demo kit whose stand-in model defines it, the package answers, else the server. Then:
 
   npm run app-package -- ${pkg.root} --platform <platform version>
 `);

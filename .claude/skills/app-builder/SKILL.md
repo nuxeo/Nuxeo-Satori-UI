@@ -63,6 +63,13 @@ shows nothing.
 | the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow` `{ "name" }` |
 | an operation's parameters                         | `list_operations`, `describe_operation` `{ "id" }` |
 
+- **A demo kit's own model is the package's, not the server's,** until the kit is installed. Give
+  `get_content_model`, `describe_document_type`, `describe_schema`, `list_page_providers` and
+  `describe_page_provider` the kit's folder as `package`, such as
+  `{ "name": "moves_open_claims", "package": "business-apps/packages/moves-demo" }`: when the
+  package ships a stand-in model, they answer from its `content-model.json` and its components,
+  with `source: "package"`; what it does not have, the server answers, with `source: "server"` and
+  a `packageNote` saying why.
 - **The type the person names must exist.** If it does not, stop: creating it is Studio's, not
   yours. Say which types are there. Only when the person asks for a demo kit with a stand-in model
   of its own, write one with `app-model` (step 2), never on a server that holds a customer's model.
