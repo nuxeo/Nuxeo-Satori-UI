@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.share.operations">
+
+  <documentation>
+    The share links' operations, for signed-in users: ShareLink.Create, ShareLink.List,
+    ShareLink.Revoke and ShareLink.Downloads. Each needs WriteSecurity on its input document, which
+    the service checks on the caller's own session.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.share</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.assets.share.CreateShareLinkOperation" />
+    <operation class="org.nuxeo.agentic.assets.share.ListShareLinksOperation" />
+    <operation class="org.nuxeo.agentic.assets.share.RevokeShareLinkOperation" />
+    <operation class="org.nuxeo.agentic.assets.share.ShareLinkDownloadsOperation" />
+  </extension>
+
+</component>

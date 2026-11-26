@@ -9,8 +9,8 @@
  *   subfield's type, as a field's does. An address's `parts` name subfields of its property too.
  * - **A checklist's property** is on the type, a list of complex values, with the subfields
  *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
- * - **A review** is for a type with the `picture` schema and without the `video` one, the records
- *   whose page shows a picture.
+ * - **A review**, and **share links**, are for a type with the `picture` schema and without the
+ *   `video` one, the records whose page shows a picture.
  *
  * Each finding is `unknown` or `parameter`, never `structure`, so that the app, loading a file
  * tolerantly, would leave out the field it is in and show the rest. It runs once the file's own
@@ -224,6 +224,22 @@ export function againstModel(
         'review',
         'unknown',
         `a review is drawn on a picture, and the type "${type}" has the "video" schema: its record page keeps its player, not its picture`,
+      );
+  }
+  // Share links serve a picture's views, and are drawn with the picture: the same rule.
+  if (isRecord(file['shareLinks'])) {
+    const schemas = schemasOf(model, type);
+    if (!schemas.has('picture'))
+      add(
+        'shareLinks',
+        'unknown',
+        `share links serve a picture's views, and the type "${type}" has no "picture" schema: its record page shows no picture`,
+      );
+    else if (schemas.has('video'))
+      add(
+        'shareLinks',
+        'unknown',
+        `share links serve a picture's views, and the type "${type}" has the "video" schema: its record page keeps its player, not its picture`,
       );
   }
   return findings;
