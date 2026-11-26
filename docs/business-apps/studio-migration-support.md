@@ -199,8 +199,9 @@ command line; the `--allow-list` file, if any; with `--from`, the earlier run's
      [--allow-list ~/cases/<case>/allow.json] [--from ~/cases/<case>/earlier]
    ```
 
-4. Compare with theirs. The files name their folder in full, so replace each run's folder with the
-   same word first; nothing else differs between two runs of the same inputs at the same commit:
+4. Compare with theirs. The files name the run's folder in full, and `decisions.txt` the
+   `--from` it was given, so replace each with the same word first. Two runs of the same package
+   and allow-list, at the same commit and on Node.js 24, should differ in nothing else:
 
    ```bash
    diff <(sed "s#<their --out>#OUT#g" ~/cases/<case>/theirs/report.txt) \
@@ -208,7 +209,8 @@ command line; the `--allow-list` file, if any; with `--from`, the earlier run's
    ```
 
    `inventory.txt`, `check.txt` and `conversion/report.json` compare the same way. A difference
-   means the inputs or the commit differ: settle that before anything else.
+   means the inputs, the commit or the Node.js version differ: settle that before anything else.
+   If none does, the difference is itself a **Tool** finding: escalate it with both runs.
 
 5. To look again at their run without running it, `check` and `report` print the checks and the
    report with the decisions as they are in its `decisions.json` now, and write nothing. Give them

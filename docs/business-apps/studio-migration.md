@@ -4,8 +4,8 @@ How a customer's Web UI, configured in Nuxeo Studio Designer as Polymer files, m
 app, with AI agents doing the conversion and a harness proving that nothing was lost.
 
 Written on 21 November 2026 from a sample Studio package (project `Nuxeo-Satori`, LTS 2025), the
-[Studio parity plan](../nuxeo-studio-parity-plan.md) and its decisions of 19 November, and the
-[architecture](architecture.md). Everything about the sample was read from its files, and nothing
+Studio parity plan and its decisions of 19 November, a document that is not in this repository,
+and the [architecture](architecture.md). Everything about the sample was read from its files, and nothing
 in it was run. The rest is a proposal.
 
 ## The short version
