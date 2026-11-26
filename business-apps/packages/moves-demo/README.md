@@ -302,7 +302,7 @@ it found, and what was done:
 
 | Finding                                                                                                           | Done                                                                                                                                            |
 | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| The branch changes a generator, which the skill says not to                                                       | Kept, as item 1 below says, and flagged in the pull request for the generator's owner                                                           |
+| The branch changes a generator, which the skill says not to                                                       | Kept, as item 1 below says, and flagged in the pull request for the generator's owner; approved by the plan's author on 26 November 2026        |
 | The administrator guide's groups table leaves out `moves`                                                         | Added, with the seed's creating no group                                                                                                        |
 | The server validator's parity corpus (`KIT_NAMES` in `server-validator-build.mjs`) lists the four other kits only | Added, the corpus written again with `npm run app-definition:server-validator`; `DeploymentValidatorParityTest` passed with Maven, and its spec |
 | The Edit form lets a person type the copies, `dmg:moveNumber` and `dmg:deliveredOn`, apart from `dmg:move`        | The three made read-only with `readOnlyWhen` `core.true`, through `write_package_file`: `written: true`                                         |
@@ -476,7 +476,9 @@ the kit, because it blocked it; items 2 to 4 were built in a later one, and the 
 1. **A stand-in type could not have attachments.** `app-model` gave a type `common`, `dublincore`
    and its own schema, and nothing else could write the model, so a claim had no place for a photo.
    **Fixed in this pull request:** `app-model --attachments`, which gives a new type Nuxeo's
-   `files` schema. Tiny and kit-blocking, in a commit of its own.
+   `files` schema. Tiny and kit-blocking, in a commit of its own. Approved by the plan's author,
+   for the generators' owner, on 26 November 2026 ([decisions.md](../../../docs/business-apps/decisions.md),
+   "Settled").
 2. **No registered rule compares two dates, or a date with an offset in the past.**
    `app.rules.datePassed` and `app.rules.dateWithin` compare one date with today, forward, and a
    rule's parameters are literals or properties, never a computation, so `core.dateDiff` cannot
