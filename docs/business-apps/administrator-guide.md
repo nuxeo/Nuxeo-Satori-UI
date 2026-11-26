@@ -547,8 +547,8 @@ decision G, are not built: the registry knows groups only
   Payers kit 0.3.0; the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs).
 - **On no server:** `nuxeo-agentic-assets`; the connectors; the deployment layer; the operation
-  buttons; Payers 0.4.0 to 0.5.0; brand assets 0.1.1 and 0.2.0; the contracts and facilities kits;
-  every kit's removal.
+  buttons; Payers 0.4.0 to 0.5.0; brand assets 0.1.1 and 0.2.0; the contracts, facilities and
+  moves kits; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push
