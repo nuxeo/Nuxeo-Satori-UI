@@ -131,69 +131,62 @@
     </section>
 
     <div class="layer-panel__actions">
-      <button
-        mat-flat-button
-        type="button"
+      <nxs-button
+        appearance="filled"
         data-layer-action="save"
         [disabled]="!canSave()"
-        (click)="save()"
+        (press)="save()"
       >
         {{ 'layout-designer.layer.save' | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="outlined"
         data-layer-action="submit"
         [disabled]="!canSubmit()"
-        (click)="submit()"
+        (press)="submit()"
       >
         {{ 'layout-designer.layer.submit' | translate }}
-      </button>
-      <button
-        mat-flat-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="filled"
         data-layer-action="approve"
         [disabled]="!canApprove()"
-        (click)="approve()"
+        (press)="approve()"
       >
         {{ 'layout-designer.layer.approve' | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="outlined"
         data-layer-action="rollback"
         [disabled]="!canRollBack()"
-        (click)="rollBack()"
+        (press)="rollBack()"
       >
         {{ 'layout-designer.layer.rollback' | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="outlined"
         data-layer-action="rollback-package"
         [disabled]="!canRestorePackage()"
-        (click)="restorePackage()"
+        (press)="restorePackage()"
       >
         {{ 'layout-designer.layer.rollback-package' | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="outlined"
         data-layer-action="discard"
         [disabled]="!canDiscard()"
-        (click)="discard()"
+        (press)="discard()"
       >
         {{ 'layout-designer.layer.discard' | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
+      </nxs-button>
+      <nxs-button
+        appearance="outlined"
         data-layer-action="open"
         [disabled]="!state.draft && !state.live"
-        (click)="openNewest()"
+        (press)="openNewest()"
       >
         {{ 'layout-designer.layer.open' | translate }}
-      </button>
+      </nxs-button>
     </div>
     @if (!saveable()) {
       <p class="layer-panel__message" data-layer-why="save">

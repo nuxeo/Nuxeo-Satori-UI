@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import {
   PACKAGED_REGISTRIES,
   readContentModel,
@@ -20,6 +21,7 @@ import { NxsConfirmDialogComponent, provideNxsComponents } from '@nuxeo/satori-p
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { BehaviorSubject, Subject, firstValueFrom, of, startWith, type Observable } from 'rxjs';
 
+import { controlContract } from '../control-contract.testing';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { LayoutDesignerPageComponent } from './layout-designer-page';
@@ -277,8 +279,9 @@ describe('LayoutDesignerPageComponent', () => {
     await settle();
   }
 
+  /** The native button of the `nxs-` button `selector` names. */
   const button = (selector: string): HTMLButtonElement => {
-    const found = root().querySelector<HTMLButtonElement>(selector);
+    const found = root().querySelector<HTMLButtonElement>(`${selector} button`);
     if (!found) throw new Error(`no ${selector}`);
     return found;
   };
@@ -372,11 +375,15 @@ describe('LayoutDesignerPageComponent', () => {
 
   it('keeps the focus on the field it moves, and on the next one when it hides one', async () => {
     await open();
+    // The action is read only off a native button: the focus is on the button inside the
+    // `nxs-` element that carries `data-action`, never on the element itself.
     const focused = (): [string | null | undefined, string | undefined] => {
       const element = document.activeElement as HTMLElement | null;
       return [
         element?.closest('[data-field]')?.getAttribute('data-field'),
-        element?.dataset['action'],
+        element instanceof HTMLButtonElement
+          ? (element.closest<HTMLElement>('[data-action]')?.dataset['action'] ?? undefined)
+          : undefined,
       ];
     };
     button('[data-field="member:status"] [data-action="up"]').click();
@@ -437,6 +444,23 @@ describe('LayoutDesignerPageComponent', () => {
       labelKey: 'payers.member.heading',
     });
     expect(page.saveState()).toBe('saveable');
+  });
+
+  it("writes a card's text once the field is left, not as each key is typed", async () => {
+    await open();
+    const field = root().querySelector<HTMLInputElement>(
+      '[data-card="cards[0]"] [data-text="label"] input',
+    );
+    if (!field) throw new Error('no heading text field');
+    field.value = 'The member';
+    field.dispatchEvent(new Event('input'));
+    await settle();
+    expect(page.file()).toEqual(MEMBER_VIEW);
+    expect(field.value).toBe('The member');
+    field.dispatchEvent(new Event('change'));
+    await settle();
+    expect((page.file()?.['cards'] as LayoutJson[])[0]).toMatchObject({ label: 'The member' });
+    expect(field.value).toBe('The member');
   });
 
   describe('saving', () => {
@@ -575,7 +599,7 @@ describe('LayoutDesignerPageComponent', () => {
 
   it('opens a type by its button, not as the picker changes', async () => {
     await settle();
-    const picker = root().querySelector<HTMLSelectElement>('[data-picker="type"]');
+    const picker = root().querySelector<HTMLSelectElement>('[data-picker="type"] select');
     if (!picker) throw new Error('no type picker');
     expect(button('[data-action="open"]').disabled).toBe(true);
     picker.value = 'Member/view';
@@ -663,7 +687,8 @@ describe('LayoutDesignerPageComponent', () => {
     await settle();
     const added = document.activeElement as HTMLElement | null;
     expect(added?.closest('[data-field]')?.getAttribute('data-field')).toBe('member:email');
-    expect(added?.dataset['action']).toBe('up');
+    expect(added).toBeInstanceOf(HTMLButtonElement);
+    expect(added?.closest<HTMLElement>('[data-action]')?.dataset['action']).toBe('up');
 
     button('[data-action="reset"]').click();
     await settle();
@@ -671,11 +696,11 @@ describe('LayoutDesignerPageComponent', () => {
   });
 
   describe('forms', () => {
-    /** Sets a picker or a field, as the person does, and lets it say so. */
+    /** Sets the native control of the picker or field `selector` names, as the person does. */
     const change = (selector: string, value: string): void => {
       const element = root().querySelector<
         HTMLSelectElement | HTMLTextAreaElement | HTMLInputElement
-      >(selector);
+      >(`${selector} select, ${selector} textarea, ${selector} input`);
       if (!element) throw new Error(`no ${selector}`);
       element.value = value;
       element.dispatchEvent(new Event('change'));
@@ -769,7 +794,7 @@ describe('LayoutDesignerPageComponent', () => {
       });
       expect(
         root().querySelector<HTMLTextAreaElement>(
-          '[data-field="member:status"] [data-rule="visibleWhen"]',
+          '[data-field="member:status"] [data-rule="visibleWhen"] textarea',
         )?.value,
       ).toBe(JSON.stringify({ type: 'app.rules.inGroup', parameters: ['members'] }, null, 2));
       expect(page.findings()).toEqual([]);
@@ -860,5 +885,120 @@ describe('LayoutDesignerPageComponent', () => {
       button('[data-action="download"]').click();
       expect(clicked).toEqual([{ download: 'create.layout.json' }]);
     });
+
+    it("names the pickers' choices anew when the catalogue changes, as the translate pipe did", async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(
+        translate.getCurrentLang() ?? 'en',
+        {
+          'layout-designer': {
+            'required-no': 'Optional',
+            'choice-new': '{{type}}: {{mode}}, not served yet',
+          },
+        },
+        true,
+      );
+      await settle();
+      const labels = (selector: string): (string | undefined)[] =>
+        [...root().querySelectorAll<HTMLOptionElement>(`${selector} option`)].map((option) =>
+          option.textContent?.trim(),
+        );
+      expect(labels('[data-field="member:status"] [data-rule="required-choice"]')[0]).toBe(
+        'Optional',
+      );
+      expect(labels('[data-picker="type"]')).toContain('Claim: edit form, not served yet');
+    });
+
+    it("keeps a form's keyboard contract: each control's element, name, state, value and order", async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      change('[data-field="member:status"] [data-rule="required-choice"]', 'rule');
+      await settle();
+      expect(controlContract(root())).toEqual([
+        'a "Layout files"',
+        'a "Queues"',
+        'select "Layout file" [Choose a file | Member: record page | *Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+        'button "Open"',
+        'select "Preview with" [*Jane Doe | John Roe]',
+        'h2 "The Member edit form" tabindex=-1',
+        'input "Card ID" = "member"',
+        'input "Heading text" = ""',
+        'input "Heading label key" = ""',
+        'button "Move member:phone up" disabled',
+        'button "Move member:phone down"',
+        'button "Hide member:phone"',
+        'summary "Rules of member:phone (1)"',
+        'select "Required" [Not required | *Always | While a rule passes]',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
+        'button "Move member:status up"',
+        'button "Move member:status down"',
+        'button "Hide member:status"',
+        'summary "Rules of member:status (1)"',
+        'select "Required" [Not required | Always | *While a rule passes]',
+        'textarea "Required while" = ""',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
+        'button "Move member:email up"',
+        'button "Move member:email down" disabled',
+        'button "Hide member:email"',
+        'summary "Rules of member:email (1)"',
+        'select "Required" [Not required | Always | *While a rule passes]',
+        'textarea "Required while" = "{\\n  \\"type\\": \\"app.rules.fieldIn\\",\\n  \\"parameters\\": [\\n    {\\n      \\"field\\": \\"member:status\\"\\n    },\\n    \\"Active\\"\\n  ]\\n}"',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
+        'select "Add a property" [*Choose a property | dc:title | member:birthDate]',
+        'button "Add" disabled',
+        'button "Download edit.layout.json" disabled',
+        'button "Undo every change"',
+        'summary "edit.layout.json as it will be saved"',
+      ]);
+    });
+  });
+
+  it("keeps a record page's keyboard contract: each control's element, name, state, value and order", async () => {
+    await open();
+    button('[data-field="member:phone"] [data-action="hide"]').click();
+    await settle();
+    // A property added, so that the add picker is seen choosing nothing again.
+    page.choose(page.cards()[0], 'member:email');
+    await settle();
+    button('[data-card="cards[0]"] [data-action="add"]').click();
+    await settle();
+    expect(controlContract(root())).toEqual([
+      'a "Layout files"',
+      'a "Queues"',
+      'select "Layout file" [Choose a file | *Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+      'button "Open"',
+      'select "Preview with" [*Jane Doe | John Roe]',
+      'h2 "The Member record page" tabindex=-1',
+      'input "Card ID" = "member"',
+      'input "Heading text" = ""',
+      'input "Heading label key" = "payers.member.card"',
+      'button "Move age up" disabled',
+      'button "Move age down"',
+      'button "Hide age"',
+      'summary "Rules of age (0)"',
+      'textarea "Shown while" = ""',
+      'button "Move member:status up"',
+      'button "Move member:status down"',
+      'button "Hide member:status"',
+      'summary "Rules of member:status (0)"',
+      'textarea "Shown while" = ""',
+      'button "Move member:email up"',
+      'button "Move member:email down" disabled',
+      'button "Hide member:email"',
+      'summary "Rules of member:email (0)"',
+      'textarea "Shown while" = ""',
+      'select "Add a property" [*Choose a property | dc:title | member:birthDate | member:phone]',
+      'button "Add" disabled',
+      'input "Card ID" = "claims"',
+      'input "Heading text" = ""',
+      'input "Heading label key" = "payers.member.claims"',
+      'button "Show member:phone again"',
+      'button "Download view.layout.json"',
+      'button "Undo every change"',
+      'summary "view.layout.json as it will be saved"',
+    ]);
   });
 });

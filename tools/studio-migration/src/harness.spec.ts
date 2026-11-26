@@ -66,7 +66,7 @@ describe('the harness on a sound conversion', () => {
   it('says what each partial check did not run, and why', () => {
     const reason = (number: number) => result.checks.find((c) => c.number === number)?.reason;
     expect(reason(3)).toBe(
-      "1 name rests on the platform's own model, which only the migration server can confirm: dc:title",
+      "1 name rests on the platform's own model, which only a server can confirm, such as the migration server, in lab mode: dc:title",
     );
     expect(reason(5)).toBe(
       "The truth tables of 5 conditions ran against Web UI's and the app's code as written; evaluating each original in Web UI itself, on the migration server, has not run",

@@ -9,6 +9,7 @@ import {
   type LayerChange,
   type LayerReading,
 } from './deployment-layer.service';
+import { controlContract } from '../control-contract.testing';
 import { LayerPanelComponent } from './layer-panel';
 import type { LayerLive, LayerState } from './layer-state';
 
@@ -118,8 +119,11 @@ describe('LayerPanelComponent', () => {
   });
 
   const root = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  /** The native button of the `nxs-` button for `action`. */
   const button = (action: string): HTMLButtonElement =>
-    root().querySelector<HTMLButtonElement>(`[data-layer-action="${action}"]`) as HTMLButtonElement;
+    root().querySelector<HTMLButtonElement>(
+      `[data-layer-action="${action}"] button`,
+    ) as HTMLButtonElement;
 
   async function show(reading: LayerReading): Promise<void> {
     fixture.detectChanges();
@@ -328,5 +332,18 @@ describe('LayerPanelComponent', () => {
     button('open').click();
     expect(fixture.componentInstance.opened).toEqual([DRAFT]);
     expect(fixture.componentInstance.opened[0]).not.toBe(DRAFT);
+  });
+
+  it("keeps the panel's keyboard contract: each control's element, name, state and order", async () => {
+    await show({ kind: 'state', state: state({ draft: submittedDraft() }) });
+    expect(controlContract(root())).toEqual([
+      'button "Save draft"',
+      'button "Submit for approval" disabled',
+      'button "Approve and publish" disabled',
+      'button "Roll back"',
+      'button "Put the package\'s version back"',
+      'button "Discard draft"',
+      'button "Open the newest version here"',
+    ]);
   });
 });

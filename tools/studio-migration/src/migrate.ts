@@ -286,7 +286,7 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
     lines.push(
       '',
       'Checks that still need the migration lab server:',
-      '  The lab server is a Nuxeo server with your Studio package installed, and Web UI running beside the new app on the same documents. Each check below has a half that needs what only that server holds: its model, and Web UI as it runs your package. This tool does not run those halves: none of it talks to a server yet.',
+      "  The lab server is a Nuxeo server with your Studio package installed, and Web UI running beside the new app on the same documents. Each check below has a half that needs what only that server holds: its model, and Web UI as it runs your package. This command does not run those halves: it talks to no server. The tool's lab mode runs some of them, on such a server.",
     );
     for (const check of server)
       lines.push(

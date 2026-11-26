@@ -271,6 +271,19 @@ export {
   type NxsTrashListResults,
   type NxsTrashListView,
 } from './lib/trash-list/trash-list.component';
+export {
+  NxsButtonComponent,
+  type NxsButtonAppearance,
+  type NxsButtonType,
+} from './lib/button/button.component';
+export { NxsIconButtonComponent } from './lib/icon-button/icon-button.component';
+export type { NxsFieldAppearance } from './lib/field-appearance';
+export { NxsTextFieldComponent } from './lib/text-field/text-field.component';
+export {
+  NxsSelectComponent,
+  type NxsSelectGroup,
+  type NxsSelectOption,
+} from './lib/select/select.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

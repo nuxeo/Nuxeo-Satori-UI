@@ -1,0 +1,13 @@
+<button
+  class="nxs-button__button"
+  [matButton]="appearance()"
+  [type]="type()"
+  [disabled]="disabled()"
+  [attr.aria-label]="name() || null"
+  (click)="pressed()"
+>
+  @if (icon()) {
+    <nxs-icon [name]="icon()" />
+  }
+  <ng-content />
+</button>
