@@ -25,6 +25,16 @@
  *   was; one inside the repository, under `business-apps/packages/` or elsewhere; one whose folder
  *   is not there, which it does not make; a `--since` that is no commit; and a version it could not
  *   carry. Each exits 2 having written nothing.
+ * - **The kits' signatures.** Given `--signatures`, a kit the pipeline built and a run-time key
+ *   signed is taken, with what its signature records; refused are a kit with no signature, one
+ *   signed by a key no trusted signer has, one signed from a commit not merged, one changed at the
+ *   same version since it was signed, and another version's signature under this version's name.
+ *   What is merged, in a repository of its own: HEAD's history and `origin/main`'s, not a staging
+ *   branch's or a feature branch's. The command refuses neither `--signatures` nor
+ *   `--unsigned-kits`, both, a `--signatures` that is no folder, trusted signers that name no
+ *   signer, and `--trusted-signers` without `--signatures`, each with exit 2 having written
+ *   nothing; and, on the pinned Node with Maven on the PATH, it refuses at stage 2 a candidate
+ *   whose kits are unsigned, and removes its folder.
  * - **The demo listing.** The repository's kit demos are listed, with the users, seeds and
  *   environment each needs; a steps file that names a kit and declares no `serverRun`, or declares
  *   it for another kit, or a seed the kit does not have, is a problem that stops the listing.
@@ -34,6 +44,7 @@
  * Usage: node scripts/release-candidate.selftest.mjs
  */
 import { spawnSync } from 'node:child_process';
+import { generateKeyPairSync } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -49,6 +60,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { keyIdOf, readTrustedSigners, signWithKey } from './package-signature.mjs';
 import { demoSteps, readSource } from './release-candidate-demo.mjs';
 import {
   allowListArguments,
@@ -57,6 +69,8 @@ import {
   dependencyMatches,
   descriptorOf,
   duplicatesAcross,
+  inProtectedHistory,
+  kitSignature,
   nuxeoVersion,
   parseDependency,
   platformRange,
@@ -96,6 +110,7 @@ try {
   theUncommittedPaths();
   kitsFromZips();
   theCommand();
+  theSignatures();
   await theDemoListing();
 } finally {
   rmSync(scratch, { recursive: true, force: true });
@@ -745,6 +760,328 @@ function theCommand() {
       /is not a version a release candidate can carry/.test(badVersion.stderr) &&
       !existsSync(fresh),
     badVersion.stderr,
+  );
+}
+
+// ── The kits' signatures ──────────────────────────────────────────────────────────────────────
+/** A kit through the pipeline into a folder of its own, and the zip it wrote. */
+function kitZip(directory, label) {
+  const out = join(scratch, 'signed', label);
+  const built = spawnSync(
+    process.execPath,
+    [
+      join(REPO, 'scripts', 'app-package.mjs'),
+      directory,
+      '--out',
+      out,
+      '--platform',
+      platformVersion(),
+      ...allowListArguments(directory),
+    ],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (built.status !== 0)
+    throw new Error(`the pipeline refused ${label}: ${built.stdout}${built.stderr}`);
+  return join(
+    out,
+    readdirSync(out).find((name) => name.endsWith('.zip')),
+  );
+}
+
+/** An Ed25519 key made for this run, and a trusted-signers file that names it alone. */
+function runTimeSigner(id) {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const file = join(scratch, `${id}.signers.json`);
+  const publicPem = publicKey.export({ type: 'spki', format: 'pem' });
+  writeFileSync(file, JSON.stringify({ signers: [{ id, kind: 'ed25519', publicKey: publicPem }] }));
+  return { privateKey, keyId: keyIdOf(publicKey), file };
+}
+
+/**
+ * `inProtectedHistory`, in a repository of its own: a commit on HEAD and on `origin/main` is
+ * merged; one on a staging branch, which no ruleset protects, or on a feature branch, local or
+ * remote, is not, nor is one git does not have.
+ */
+function theProtectedHistory() {
+  const repo = join(scratch, 'history');
+  mkdirSync(repo);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_AUTHOR_NAME: 'Selftest',
+    GIT_AUTHOR_EMAIL: 'selftest@example.invalid',
+    GIT_COMMITTER_NAME: 'Selftest',
+    GIT_COMMITTER_EMAIL: 'selftest@example.invalid',
+  };
+  const git = (args, input) => {
+    const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8', env, input });
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git(['init', '-q']);
+  const tree = git(['mktree'], '');
+  const commit = (message) => git(['commit-tree', '--no-gpg-sign', tree, '-m', message]);
+  const [head, main, staging, feature] = ['head', 'main', 'staging', 'feature'].map(commit);
+  git(['update-ref', 'refs/heads/work', head]);
+  git(['symbolic-ref', 'HEAD', 'refs/heads/work']);
+  git(['update-ref', 'refs/remotes/origin/main', main]);
+  git(['update-ref', 'refs/remotes/origin/staging/enterprise-grade-app', staging]);
+  git(['update-ref', 'refs/remotes/origin/feature/unmerged', feature]);
+  git(['update-ref', 'refs/heads/feature', feature]);
+  check(
+    "a signed commit in HEAD's history or on origin/main is merged",
+    [head, main].every((sha) => inProtectedHistory(sha, repo)),
+    JSON.stringify({ head, main }),
+    false,
+  );
+  check(
+    'refused: a signed commit only on a feature branch, local or remote, as merged',
+    !inProtectedHistory(feature, repo),
+    feature,
+  );
+  check(
+    'refused: a signed commit only on a staging branch, which no ruleset protects, as merged',
+    !inProtectedHistory(staging, repo),
+    staging,
+  );
+  check(
+    'refused: a signed commit git does not have, as merged',
+    !inProtectedHistory('0123456789abcdef0123456789abcdef01234567', repo),
+    'taken',
+  );
+}
+
+function theSignatures() {
+  theProtectedHistory();
+  // Signed from this commit, which is in the candidate's history, as a tag on a merged one is.
+  const commit = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: REPO,
+    encoding: 'utf8',
+  }).stdout.trim();
+  // The command's own check, as it runs it.
+  const inHistory = (sha) => inProtectedHistory(sha, REPO);
+  const { name, version } = descriptorOf(
+    readFileSync(join(CONTRACTS, 'package', 'package.xml'), 'utf8'),
+  );
+  const zip = kitZip(CONTRACTS, 'contracts');
+  const signer = runTimeSigner('release-signer');
+  /** `target` signed by `key`, written into `folder` under the name the candidate looks for. */
+  const sign = (target, key, folder, as = basename(target), from = commit) => {
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(
+      join(folder, `${as}.sig.json`),
+      JSON.stringify(signWithKey({ zip: target, privateKey: key.privateKey, commit: from })),
+    );
+    return folder;
+  };
+  /** `target` held to its signature in `folder`, as stage 2 holds a kit, by the trusted signer. */
+  const hold = (folder, target = zip) =>
+    kitSignature({
+      zip: target,
+      name,
+      version,
+      signatures: folder,
+      trusted: readTrustedSigners(signer.file),
+      inHistory,
+    });
+
+  const taken = hold(sign(zip, signer, join(scratch, 'signatures')));
+  check(
+    'a kit signed by a trusted signer over the zip built is taken, with what its signature records',
+    taken.ok &&
+      taken.record.package === name &&
+      taken.record.version === version &&
+      taken.record.commit === commit &&
+      taken.record.signer === 'release-signer' &&
+      taken.record.keyId === signer.keyId,
+    JSON.stringify(taken),
+    false,
+  );
+
+  // A trusted signer's signature from a commit the candidate's history does not have: a tag on a
+  // commit that was never merged.
+  const unmerged = hold(
+    sign(
+      zip,
+      signer,
+      join(scratch, 'signed-from-an-unmerged-commit'),
+      basename(zip),
+      '0123456789abcdef0123456789abcdef01234567',
+    ),
+  );
+  check(
+    "refused: a kit signed from a commit that is not in the candidate's history",
+    !unmerged.ok &&
+      /which is neither in this candidate's history nor on origin\/main/.test(
+        unmerged.problems.join(' '),
+      ),
+    JSON.stringify(unmerged),
+  );
+
+  const empty = join(scratch, 'no-signatures');
+  mkdirSync(empty);
+  const unsigned = hold(empty);
+  check(
+    'refused: a kit with no signature',
+    !unsigned.ok && /is not signed: there is no signature at /.test(unsigned.problems.join(' ')),
+    JSON.stringify(unsigned),
+  );
+
+  const stranger = runTimeSigner('a-stranger');
+  const wrongSigner = hold(sign(zip, stranger, join(scratch, 'signed-by-a-stranger')));
+  check(
+    'refused: a kit signed by a key no trusted signer has',
+    !wrongSigner.ok && /none of the trusted signers' keys/.test(wrongSigner.problems.join(' ')),
+    JSON.stringify(wrongSigner),
+  );
+
+  // Signed as it was, then changed at the same version: the candidate builds other bytes.
+  const changed = kitCopy(CONTRACTS, 'changed-after-signing', (edit) =>
+    edit(
+      'bundle/agentic-ui-config/labels/en.json',
+      '"labels": {',
+      '"labels": {\n    "selftest.changed": "Changed after signing",',
+    ),
+  );
+  const otherBytes = hold(
+    sign(zip, signer, join(scratch, 'signed-before-the-change')),
+    kitZip(changed, 'changed-after-signing'),
+  );
+  check(
+    'refused: a kit changed at the same version since it was signed',
+    !otherBytes.ok && /the zip is not the one signed/.test(otherBytes.problems.join(' ')),
+    JSON.stringify(otherBytes),
+  );
+
+  // The next version's signature, under this version's name.
+  const nextVersion = version.replace(/(\d+)$/, (patch) => String(Number(patch) + 1));
+  const next = kitCopy(CONTRACTS, 'next-version', (edit) => {
+    edit('package/package.xml', `version="${version}"`, `version="${nextVersion}"`);
+    edit(
+      'bundle/agentic-ui-config/app.json',
+      `"packageVersion": "${version}"`,
+      `"packageVersion": "${nextVersion}"`,
+    );
+    edit(
+      'bundle/META-INF/MANIFEST.MF',
+      `Bundle-Version: ${version}`,
+      `Bundle-Version: ${nextVersion}`,
+    );
+  });
+  const replay = hold(
+    sign(
+      kitZip(next, 'next-version'),
+      signer,
+      join(scratch, 'another-versions-signature'),
+      basename(zip),
+    ),
+  );
+  check(
+    "refused: another version's signature, under this version's name",
+    !replay.ok &&
+      replay.problems.some((problem) => problem.includes(`, not ${version}.`)) &&
+      /the zip is not the one signed/.test(replay.problems.join(' ')),
+    JSON.stringify(replay),
+  );
+
+  // The command's own refusals of the options, each before anything is built.
+  const neither = command(['--out', join(scratch, 'neither'), '--since', 'HEAD']);
+  check(
+    'refused: neither --signatures nor --unsigned-kits, exit 2, nothing made',
+    neither.status === 2 &&
+      /Give --signatures <folder>, to hold each kit to its signature, or --unsigned-kits/.test(
+        neither.stderr,
+      ) &&
+      !existsSync(join(scratch, 'neither')),
+    neither.stderr,
+  );
+  const both = command([
+    '--out',
+    join(scratch, 'both'),
+    '--since',
+    'HEAD',
+    '--signatures',
+    empty,
+    '--unsigned-kits',
+  ]);
+  check(
+    'refused: --signatures with --unsigned-kits, exit 2, nothing made',
+    both.status === 2 &&
+      /say opposite things/.test(both.stderr) &&
+      !existsSync(join(scratch, 'both')),
+    both.stderr,
+  );
+  const fresh = join(scratch, 'signed-candidate');
+  const notAFolder = command([
+    '--out',
+    fresh,
+    '--since',
+    'HEAD',
+    '--signatures',
+    join(scratch, 'no-such-folder'),
+  ]);
+  check(
+    'refused: --signatures that is no folder, exit 2, nothing made',
+    notAFolder.status === 2 &&
+      /--signatures .* is not a folder/.test(notAFolder.stderr) &&
+      !existsSync(fresh),
+    notAFolder.stderr,
+  );
+  const alone = command(['--out', fresh, '--since', 'HEAD', '--trusted-signers', signer.file]);
+  check(
+    'refused: --trusted-signers without --signatures, exit 2, nothing made',
+    alone.status === 2 && /only --signatures gives/.test(alone.stderr) && !existsSync(fresh),
+    alone.stderr,
+  );
+  const nobody = join(scratch, 'nobody.signers.json');
+  writeFileSync(nobody, '{"signers": []}');
+  const wrongFile = command([
+    '--out',
+    fresh,
+    '--since',
+    'HEAD',
+    '--signatures',
+    empty,
+    '--trusted-signers',
+    nobody,
+  ]);
+  check(
+    'refused: trusted signers that name no signer, exit 2, nothing made',
+    wrongFile.status === 2 && /names no signer/.test(wrongFile.stderr) && !existsSync(fresh),
+    wrongFile.stderr,
+  );
+
+  // The whole command, to stage 2, where unsigned kits refuse the candidate: only on the pinned
+  // Node, which the command requires, and with Maven, which its first stage looks for.
+  const pinned = readFileSync(join(REPO, '.nvmrc'), 'utf8').trim().replace(/^v/, '').split('.')[0];
+  const maven = spawnSync('mvn', ['-v'], { encoding: 'utf8' });
+  if (process.versions.node.split('.')[0] !== pinned || maven.status !== 0) {
+    process.stdout.write(
+      `skip      the command's stage 2 with unsigned kits: this is Node ${process.versions.node}` +
+        `${maven.status === 0 ? '' : ' with no Maven'}, and the command runs on Node ${pinned} with Maven\n`,
+    );
+    return;
+  }
+  const refused = command([
+    '--out',
+    fresh,
+    '--since',
+    'HEAD',
+    '--signatures',
+    empty,
+    '--trusted-signers',
+    signer.file,
+  ]);
+  check(
+    'refused: a candidate whose kits are unsigned, at stage 2, exit 1, and its folder removed',
+    refused.status === 1 &&
+      /stage 2: \d+ kit\(s\) not signed by a trusted signer over the zip built here/.test(
+        refused.stderr,
+      ) &&
+      refused.stdout.includes(`${name}-${version}.zip is not signed`) &&
+      !existsSync(fresh),
+    `${refused.status} ${refused.stderr.slice(-600)}`,
   );
 }
 

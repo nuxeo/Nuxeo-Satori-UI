@@ -86,6 +86,7 @@ describe("the Properties panel's generated headings in each business-apps kit", 
         'moves-demo',
         'onboarding-demo',
         'payers-claims-demo',
+        'pc-claims-demo',
         'records-demo',
       ]),
     );
