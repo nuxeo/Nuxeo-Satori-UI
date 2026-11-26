@@ -195,8 +195,10 @@ export class LayoutDesignerPageComponent {
   private readonly registries = this.service.registries();
 
   /**
-   * Ticks when the language or its catalogue changes, so that the pickers' labels, looked up with
-   * `instant`, follow it as the template's `translate` pipe does.
+   * Ticks when the language or its catalogue changes, so that labels looked up with `instant` in a
+   * `computed` follow it as the template's `translate` pipe does. ngx-translate 18 reads its
+   * catalogue from signals, so such a `computed` follows it without this too; the tick keeps that
+   * true on the service's documented events rather than on how it stores its catalogue.
    */
   private readonly translationTick = toSignal(
     merge(

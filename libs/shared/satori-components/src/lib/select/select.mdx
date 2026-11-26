@@ -74,11 +74,12 @@ template by its selector.
 
 - **Role and name.** It is a native `select`, a combobox to assistive technology, named by `label`
   through the form field's `<label for>`. Group headings are read with their choices.
-- **Keyboard.** Tab reaches it. The arrow keys, and typing the first letters of a choice, move
-  through the choices, and the platform opens the list on Space, Enter or Alt and the down arrow,
-  as in any select. Disabled, it is a native disabled select that Tab skips.
-- **Choosing is not acting.** In some browsers the arrow keys change a closed select's value
-  directly, so `value` changes as the user moves through the choices. Where a choice opens or
-  loads something, act on a button beside the select rather than on every change.
+- **Keyboard.** Tab reaches it. From there the keys are the platform's, as in every native
+  select: which keys open the list, and whether the arrow keys change a closed select's value,
+  differs between browsers and systems. Typing the first letters of a choice moves to it. Disabled,
+  it is a native disabled select that Tab skips.
+- **Choosing is not acting.** Where the arrow keys change a closed select's value, `value` changes
+  as the user moves through the choices. Where a choice opens or loads something, act on a button
+  beside the select rather than on every change.
 - **Focus.** A host that moves the focus to the select finds the native `select` inside the element
   and focuses that.

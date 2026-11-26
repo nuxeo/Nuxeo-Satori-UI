@@ -48,7 +48,10 @@ export class NxsTextFieldComponent {
   readonly multiline = input(false, { transform: booleanAttribute });
   /** How many lines a multiline field shows. */
   readonly rows = input(2, { transform: numberAttribute });
-  /** Values the browser offers to complete from as the user types. None by default. */
+  /**
+   * Values the browser offers to complete from as the user types, in a one-line field: a textarea
+   * takes no `list`. None by default.
+   */
   readonly suggestions = input<readonly string[]>([]);
   /**
    * The native `autocomplete` attribute of a one-line field: `off` stops the browser offering what

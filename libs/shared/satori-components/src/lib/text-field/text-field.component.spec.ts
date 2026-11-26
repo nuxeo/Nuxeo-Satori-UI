@@ -77,7 +77,7 @@ describe('NxsTextFieldComponent', () => {
     const control = await render();
     expect(control).toBeInstanceOf(HTMLInputElement);
     expect(
-      [...(control as HTMLInputElement).labels].map((label) => label.textContent?.trim()),
+      [...((control as HTMLInputElement).labels ?? [])].map((label) => label.textContent?.trim()),
     ).toEqual(['Card ID']);
     expect(control.value).toBe('member');
     expect(control.tabIndex).toBe(0);

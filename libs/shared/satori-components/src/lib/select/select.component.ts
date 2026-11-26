@@ -30,8 +30,8 @@ export interface NxsSelectGroup {
  * A labelled choice of one value from a list: Angular Material's form field round a native
  * `<select>`, in the theme's colours.
  *
- * Native, so the list opens as the platform's own — a sheet on a phone — and the arrow keys and
- * typing a letter move through it as they do in every select. The label is required, already
+ * Native, so the list opens as the platform's own — a sheet on a phone — and its keys are the
+ * platform's, as in every select. The label is required, already
  * translated: it is the select's accessible name. `options` are the choices, flat or under group
  * headings, and `placeholder`, when it is set, is a first choice whose value is `''`, such as
  * "Choose a file". `value` is the value chosen, two-way, changed when the user chooses.

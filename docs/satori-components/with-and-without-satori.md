@@ -960,7 +960,7 @@ The faceted filter panel inside the assets drawer: a full-text box, a collapsibl
 
 ![Button: without Satori on the left, with Satori on the right](button-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same three Material buttons in both — filled, outlined and text — each a native button; the theme sets their shape, type and colours. Satori has no button component of its own: it themes Material's.
+The same three Material buttons in both — filled, outlined and text — each a native button; the theme sets their shape, type and colours. Satori's own buttons, the important button, the tonal icon button and the split button, are not adopted: this is Material's button in Satori's theme.
 
 ### Icon button
 
@@ -973,7 +973,7 @@ The same three Material buttons in both — filled, outlined and text — each a
 
 ![Icon button: without Satori on the left, with Satori on the right](icon-button-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same row of Material icon buttons in both, the first disabled, each named by what it does to which field; the theme sets their colours and state layers.
+The same row of Material icon buttons in both, the first disabled, each named by what it does to which field; the theme sets their colours and state layers. Satori's tonal icon button is not adopted.
 
 ### Text field
 

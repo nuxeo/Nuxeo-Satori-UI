@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import {
   PACKAGED_REGISTRIES,
   readContentModel,
@@ -885,44 +886,68 @@ describe('LayoutDesignerPageComponent', () => {
       expect(clicked).toEqual([{ download: 'create.layout.json' }]);
     });
 
-    it("keeps a form's keyboard contract: every control's element, name, state and order", async () => {
+    it("names the pickers' choices anew when the catalogue changes, as the translate pipe did", async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(
+        translate.getCurrentLang() ?? 'en',
+        {
+          'layout-designer': {
+            'required-no': 'Optional',
+            'choice-new': '{{type}}: {{mode}}, not served yet',
+          },
+        },
+        true,
+      );
+      await settle();
+      const labels = (selector: string): (string | undefined)[] =>
+        [...root().querySelectorAll<HTMLOptionElement>(`${selector} option`)].map((option) =>
+          option.textContent?.trim(),
+        );
+      expect(labels('[data-field="member:status"] [data-rule="required-choice"]')[0]).toBe(
+        'Optional',
+      );
+      expect(labels('[data-picker="type"]')).toContain('Claim: edit form, not served yet');
+    });
+
+    it("keeps a form's keyboard contract: each control's element, name, state, value and order", async () => {
       await open(MEMBER_EDIT, 'Member/edit');
       change('[data-field="member:status"] [data-rule="required-choice"]', 'rule');
       await settle();
       expect(controlContract(root())).toEqual([
         'a "Layout files"',
         'a "Queues"',
-        'select "Layout file" [Choose a file | Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+        'select "Layout file" [Choose a file | Member: record page | *Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
         'button "Open"',
-        'select "Preview with" [Jane Doe | John Roe]',
+        'select "Preview with" [*Jane Doe | John Roe]',
         'h2 "The Member edit form" tabindex=-1',
-        'input "Card ID"',
-        'input "Heading text"',
-        'input "Heading label key"',
+        'input "Card ID" = "member"',
+        'input "Heading text" = ""',
+        'input "Heading label key" = ""',
         'button "Move member:phone up" disabled',
         'button "Move member:phone down"',
         'button "Hide member:phone"',
         'summary "Rules of member:phone (1)"',
-        'select "Required" [Not required | Always | While a rule passes]',
-        'textarea "Read-only while"',
-        'textarea "Shown while"',
+        'select "Required" [Not required | *Always | While a rule passes]',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
         'button "Move member:status up"',
         'button "Move member:status down"',
         'button "Hide member:status"',
         'summary "Rules of member:status (1)"',
-        'select "Required" [Not required | Always | While a rule passes]',
-        'textarea "Required while"',
-        'textarea "Read-only while"',
-        'textarea "Shown while"',
+        'select "Required" [Not required | Always | *While a rule passes]',
+        'textarea "Required while" = ""',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
         'button "Move member:email up"',
         'button "Move member:email down" disabled',
         'button "Hide member:email"',
         'summary "Rules of member:email (1)"',
-        'select "Required" [Not required | Always | While a rule passes]',
-        'textarea "Required while"',
-        'textarea "Read-only while"',
-        'textarea "Shown while"',
-        'select "Add a property" [Choose a property | dc:title | member:birthDate]',
+        'select "Required" [Not required | Always | *While a rule passes]',
+        'textarea "Required while" = "{\\n  \\"type\\": \\"app.rules.fieldIn\\",\\n  \\"parameters\\": [\\n    {\\n      \\"field\\": \\"member:status\\"\\n    },\\n    \\"Active\\"\\n  ]\\n}"',
+        'textarea "Read-only while" = ""',
+        'textarea "Shown while" = ""',
+        'select "Add a property" [*Choose a property | dc:title | member:birthDate]',
         'button "Add" disabled',
         'button "Download edit.layout.json" disabled',
         'button "Undo every change"',
@@ -931,35 +956,45 @@ describe('LayoutDesignerPageComponent', () => {
     });
   });
 
-  it("keeps a record page's keyboard contract: every control's element, name, state and order", async () => {
+  it("keeps a record page's keyboard contract: each control's element, name, state, value and order", async () => {
     await open();
     button('[data-field="member:phone"] [data-action="hide"]').click();
+    await settle();
+    // A property added, so that the add picker is seen choosing nothing again.
+    page.choose(page.cards()[0], 'member:email');
+    await settle();
+    button('[data-card="cards[0]"] [data-action="add"]').click();
     await settle();
     expect(controlContract(root())).toEqual([
       'a "Layout files"',
       'a "Queues"',
-      'select "Layout file" [Choose a file | Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+      'select "Layout file" [Choose a file | *Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
       'button "Open"',
-      'select "Preview with" [Jane Doe | John Roe]',
+      'select "Preview with" [*Jane Doe | John Roe]',
       'h2 "The Member record page" tabindex=-1',
-      'input "Card ID"',
-      'input "Heading text"',
-      'input "Heading label key"',
+      'input "Card ID" = "member"',
+      'input "Heading text" = ""',
+      'input "Heading label key" = "payers.member.card"',
       'button "Move age up" disabled',
       'button "Move age down"',
       'button "Hide age"',
       'summary "Rules of age (0)"',
-      'textarea "Shown while"',
+      'textarea "Shown while" = ""',
       'button "Move member:status up"',
-      'button "Move member:status down" disabled',
+      'button "Move member:status down"',
       'button "Hide member:status"',
       'summary "Rules of member:status (0)"',
-      'textarea "Shown while"',
-      'select "Add a property" [Choose a property | dc:title | member:birthDate | member:email | member:phone]',
+      'textarea "Shown while" = ""',
+      'button "Move member:email up"',
+      'button "Move member:email down" disabled',
+      'button "Hide member:email"',
+      'summary "Rules of member:email (0)"',
+      'textarea "Shown while" = ""',
+      'select "Add a property" [*Choose a property | dc:title | member:birthDate | member:phone]',
       'button "Add" disabled',
-      'input "Card ID"',
-      'input "Heading text"',
-      'input "Heading label key"',
+      'input "Card ID" = "claims"',
+      'input "Heading text" = ""',
+      'input "Heading label key" = "payers.member.claims"',
       'button "Show member:phone again"',
       'button "Download view.layout.json"',
       'button "Undo every change"',

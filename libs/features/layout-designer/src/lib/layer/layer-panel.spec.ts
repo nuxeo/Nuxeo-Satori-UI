@@ -334,7 +334,7 @@ describe('LayerPanelComponent', () => {
     expect(fixture.componentInstance.opened[0]).not.toBe(DRAFT);
   });
 
-  it("keeps the panel's keyboard contract: every control's element, name, state and order", async () => {
+  it("keeps the panel's keyboard contract: each control's element, name, state and order", async () => {
     await show({ kind: 'state', state: state({ draft: submittedDraft() }) });
     expect(controlContract(root())).toEqual([
       'button "Save draft"',

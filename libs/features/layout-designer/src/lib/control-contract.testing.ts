@@ -11,10 +11,11 @@
  * - its **accessible name**, computed as `computeAccessibleName` does for these elements, in this
  *   order: `aria-labelledby`, `aria-label`, the `<label>`s that label it, then its text;
  * - whether it is **disabled**, and any `tabindex` set on it;
- * - for a `select`, its options in order, and for a field, whether it **suggests** from a list.
+ * - what it **holds**: a field's text, and a `select`'s options in order, the chosen one marked
+ *   `*`; and whether a field **suggests** from a list.
  *
  * Each page's spec holds the list its state draws, written out in full, so that a change to any
- * control's element, name, order or options fails there.
+ * control's element, name, state, value, order or options fails there.
  */
 
 const REACHABLE = 'a[href], button, input, select, textarea, summary, [tabindex]';
@@ -47,19 +48,26 @@ function accessibleName(element: HTMLElement): string {
     : squash(element.textContent);
 }
 
-function describe(element: HTMLElement): string {
+/** One element of the contract, as one line. */
+function contractLine(element: HTMLElement): string {
   const parts = [element.tagName.toLowerCase(), `"${accessibleName(element)}"`];
   if ('disabled' in element && element.disabled === true) parts.push('disabled');
   const tabindex = element.getAttribute('tabindex');
   if (tabindex !== null) parts.push(`tabindex=${tabindex}`);
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    parts.push(`= ${JSON.stringify(element.value)}`);
+  }
   if (element instanceof HTMLInputElement && element.getAttribute('list')) parts.push('suggests');
   if (element instanceof HTMLSelectElement) {
-    parts.push(`[${[...element.options].map((option) => squash(option.textContent)).join(' | ')}]`);
+    const options = [...element.options].map(
+      (option) => `${option.selected ? '*' : ''}${squash(option.textContent)}`,
+    );
+    parts.push(`[${options.join(' | ')}]`);
   }
   return parts.join(' ');
 }
 
 /** The keyboard contract of everything under `root`, one line per element, in document order. */
 export function controlContract(root: Element): string[] {
-  return [...root.querySelectorAll<HTMLElement>(REACHABLE)].map(describe);
+  return [...root.querySelectorAll<HTMLElement>(REACHABLE)].map(contractLine);
 }

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import { readContentModel, type ContentModel } from '@agentic-ui/shared/app-definition';
 import { QueuePageComponent } from '@agentic-ui/shared/queues';
 import { NxsConfirmDialogComponent, provideNxsComponents } from '@nuxeo/satori-platform/components';
@@ -556,7 +557,32 @@ describe('QueueDesignerPageComponent', () => {
     expect(held.defaultPrevented).toBe(true);
   });
 
-  it("keeps the queue's keyboard contract: every control's element, name, state and order", async () => {
+  it("names the order picker's choices anew when the catalogue changes, as the translate pipe did", async () => {
+    await open({ ...RENEWALS, sort: [{ field: 'dc:title' }] });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      translate.getCurrentLang() ?? 'en',
+      { 'layout-designer': { queue: { 'order-none': 'Unsorted', 'order-asc': 'A to Z' } } },
+      true,
+    );
+    await settle();
+    expect(
+      [...root().querySelectorAll<HTMLOptionElement>('[data-picker="order"] option')].map(
+        (option) => option.textContent?.trim(),
+      ),
+    ).toEqual(['Unsorted', 'A to Z', 'Descending']);
+  });
+
+  it('moves the focus to adding a sort once the last sort is removed', async () => {
+    await open();
+    button('[data-sort="contract:end"] [data-action="remove"]').click();
+    await settle();
+    const element = document.activeElement;
+    expect(element).toBeInstanceOf(HTMLSelectElement);
+    expect(element?.closest('[data-picker]')?.getAttribute('data-picker')).toBe('add-sort');
+  });
+
+  it("keeps the queue's keyboard contract: each control's element, name, state, value and order", async () => {
     // A sort with no order, so that the order picker offers its "none" too.
     await open({
       ...RENEWALS,
@@ -564,39 +590,48 @@ describe('QueueDesignerPageComponent', () => {
     });
     button('[data-column="dc:title"] [data-action="hide"]').click();
     await settle();
+    // A sort added, so that the sort picker is seen choosing nothing again.
+    page.choose('sort', 'contract:number');
+    await settle();
+    button('[data-action="add-sort"]').click();
+    await settle();
     expect(controlContract(root())).toEqual([
       'a "Layout files"',
       'a "Queues"',
-      'input "Queue ID" suggests',
+      'input "Queue ID" = "up-for-renewal" suggests',
       'button "Open"',
       'h2 "The up-for-renewal queue" tabindex=-1',
-      'input "Name text"',
-      'input "Name label key"',
+      'input "Name text" = ""',
+      'input "Name label key" = "contracts.queue.up-for-renewal"',
       'button "Move the column contract:number up" disabled',
       'button "Move the column contract:number down"',
       'button "Hide the column contract:number"',
       'button "Move the column contract:end up"',
       'button "Move the column contract:end down" disabled',
       'button "Hide the column contract:end"',
-      'input "Add a column: a property" suggests',
+      'input "Add a column: a property" = "" suggests',
       'button "Add" disabled',
       'button "Show the column dc:title again"',
       'button "Move the sort on contract:end up" disabled',
       'button "Move the sort on contract:end down"',
       'button "Remove the sort on contract:end"',
-      'select "Order of contract:end" [Ascending | Descending]',
+      'select "Order of contract:end" [*Ascending | Descending]',
       'button "Move the sort on dc:title up"',
-      'button "Move the sort on dc:title down" disabled',
+      'button "Move the sort on dc:title down"',
       'button "Remove the sort on dc:title"',
-      'select "Order of dc:title" [As the page provider sorts | Ascending | Descending]',
-      'select "Sort on a column" [Choose a column | contract:number]',
+      'select "Order of dc:title" [*As the page provider sorts | Ascending | Descending]',
+      'button "Move the sort on contract:number up"',
+      'button "Move the sort on contract:number down" disabled',
+      'button "Remove the sort on contract:number"',
+      'select "Order of contract:number" [*Ascending | Descending]',
+      'select "Sort on a column" [*Choose a column]',
       'button "Add" disabled',
       'button "Move the facet contract_status up" disabled',
       'button "Move the facet contract_status down" disabled',
       'button "Remove the facet contract_status"',
-      'input "Name of the facet contract_status"',
-      'input "Label key of the facet contract_status"',
-      'input "Add a facet: an aggregate\'s ID"',
+      'input "Name of the facet contract_status" = "Status"',
+      'input "Label key of the facet contract_status" = ""',
+      'input "Add a facet: an aggregate\'s ID" = ""',
       'button "Add" disabled',
       'button "Download up-for-renewal.json"',
       'button "Undo every change"',

@@ -11774,7 +11774,7 @@ function checkGeneratorsEsmSafe() {
           const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
           fail(
             `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
-              "this source with Node's native type stripping, where the module is ESM and it is " +
+              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
               'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
               'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
               'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
@@ -12464,7 +12464,7 @@ const MATERIAL_CONTROL_ATTRIBUTES = new Set(
 );
 
 /** What ships nothing: specs, the spec setup and spec-only support. */
-const NXS_CONTROL_SCAN_SKIP = /(\.spec\.ts|\.testing\.ts|test-setup\.ts)$/;
+const NXS_CONTROL_SCAN_SKIP = /(\.spec\.ts|\.spec\.html|\.testing\.ts|test-setup\.ts)$/;
 
 /**
  * Every opening tag in a template, its element name and the names of its attributes, with the
@@ -12497,8 +12497,8 @@ function templateTags(body) {
  *
  * `checkAdoptedPatternsNotBypassed` could not have caught the layout designer drawing its buttons,
  * fields and selects with Material: it guards the Satori entry points behind adopted primitives,
- * and Satori has no button or field — it themes Material's — so there was nothing adopted to
- * bypass, and until `nxs-button`, `nxs-icon-button`, `nxs-text-field` and `nxs-select` existed
+ * and none of these is one — Satori has no text field or select, and its important, tonal icon and
+ * split buttons are not adopted — so there was nothing adopted to bypass, and until `nxs-button`, `nxs-icon-button`, `nxs-text-field` and `nxs-select` existed
  * there was nothing to use instead. Now there is, and a library listed in `NXS_CONTROL_FEATURES`
  * is held to them: none of its shipped `.ts` imports one of `NXS_CONTROL_ENTRY_POINTS` (a subpath,
  * a re-export, a type-only or a dynamic import included), and none of its templates uses

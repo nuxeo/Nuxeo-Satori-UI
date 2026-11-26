@@ -10491,13 +10491,14 @@ expectGreen(
 
 falsePositiveControls += 1;
 expectGreen(
-  "a spec or a spec-only helper of a listed feature ships nothing, so Material's harnesses are fine there",
+  'a spec, its host template or a spec-only helper of a listed feature ships nothing, so Material is fine there',
   'checkNxsControlsNotBypassed',
   controlsTree({
     [`${DESIGNER}/layout-designer-page.spec.ts`]:
       "import { MatButtonHarness } from '@angular/material/button/testing';\n",
     'libs/features/layout-designer/src/lib/controls.testing.ts':
       "import { MatInputHarness } from '@angular/material/input/testing';\n",
+    [`${DESIGNER}/layout-designer-page.spec.html`]: '<button mat-stroked-button>Open</button>\n',
   }),
 );
 
