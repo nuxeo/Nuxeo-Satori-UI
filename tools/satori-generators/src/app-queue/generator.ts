@@ -41,9 +41,10 @@ const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
  * with the Builder MCP server's `describe_page_provider`, which says how many parameters it takes.
  * Given the package, it reads a demo kit's own page provider from the package, which no server has
  * until the kit is installed.
- * A queue has no open record, so a parameter is a literal, written by hand. Neither the pipeline
- * nor the content model checks its columns yet (package-pipeline.md, section 7), so a column the
- * listed records do not have is found only when the queue is drawn.
+ * A queue has no open record, so a parameter is a literal, written by hand. The pipeline holds its
+ * columns and sort to the type a page provider of the package's own lists, when its NXQL says
+ * (package-pipeline.md, section 2); on the server's page provider, a column the listed records do
+ * not have is found only when the queue is drawn.
  *
  * Row and bulk actions, facets and `visibleWhen` are the next edit; `app-action --queue` adds a
  * package action to it.

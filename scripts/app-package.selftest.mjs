@@ -1535,6 +1535,109 @@ expectBuilt(
     edit(QUEUE, '"pageProvider": "payers_unassigned_claims"', '"pageProvider": "default_search"'),
 );
 
+// A queue's and a related list's columns and sorts name properties of the records their page
+// provider lists. On a page provider of the package's own whose NXQL names its type, they are held
+// to that type in the content model, as a layout's fields are held to the type its path names; a
+// misspelt column otherwise shows an empty cell, and a misspelt sort fails on the server.
+const MEMBER = 'bundle/agentic-ui-config/layouts/Member/view.layout.json';
+expectRefused(
+  "a queue's column naming a property the records its page provider lists do not have",
+  ({ edit }) =>
+    edit(QUEUE, '"field": "claim:received", "widget"', '"field": "claim:recieved", "widget"'),
+  2,
+  'queues/unassigned-claims.json: columns[3].field: "claim:recieved" is not a property of the type "Claim", which the page provider "payers_unassigned_claims" (OSGI-INF/payers-claims-demo-model.xml) lists, or of its facets [unknown]',
+);
+expectRefused(
+  "a queue's sort on a property the records do not have",
+  ({ edit }) =>
+    edit(QUEUE, '"sort": [{ "field": "claim:received"', '"sort": [{ "field": "claim:receivedOn"'),
+  2,
+  'queues/unassigned-claims.json: sort[0].field: "claim:receivedOn" is not a property of the type "Claim"',
+);
+expectRefused(
+  "a related list's column naming a property the listed records do not have",
+  ({ edit }) => edit(MEMBER, '          "claim:status"\n', '          "claim:state"\n'),
+  2,
+  'layouts/Member/view.layout.json: cards[1].related.columns[2]: "claim:state" is not a property of the type "Claim", which the page provider "member_claims"',
+);
+expectRefused(
+  "a related list's sort on a property the listed records do not have",
+  ({ edit }) =>
+    edit(
+      MEMBER,
+      '"sort": [{ "field": "claim:serviceDate"',
+      '"sort": [{ "field": "claim:servicedOn"',
+    ),
+  2,
+  'cards[1].related.sort[0].field: "claim:servicedOn" is not a property of the type "Claim"',
+);
+expectRefused(
+  "a column whose widget does not show its property's type",
+  ({ edit }) =>
+    edit(QUEUE, '"claim:number",', '{ "field": "claim:number", "widget": "relative-date" },'),
+  2,
+  'queues/unassigned-claims.json: columns[0].widget: the widget "relative-date" does not show "claim:number", a string property of the type "Claim"',
+);
+// The controls on those: a page provider the package does not define is the server's, whose type
+// this stage cannot read; and the server's own properties, ecm:, are in no schema.
+expectBuilt(
+  "a misspelt column on a page provider the package does not define, the server's",
+  ({ edit }) => {
+    edit(QUEUE, '"pageProvider": "payers_unassigned_claims"', '"pageProvider": "default_search"');
+    edit(
+      QUEUE,
+      '"facets": [{ "aggregate": "claim_status_agg", "labelKey": "payers.facet.status" }],',
+      '',
+    );
+    edit(QUEUE, '"field": "claim:received", "widget"', '"field": "claim:recieved", "widget"');
+  },
+);
+expectBuilt("a column of one of the server's own properties", ({ edit }) =>
+  edit(QUEUE, '"claim:number",', '"claim:number", "ecm:currentLifeCycleState",'),
+);
+// The moves kit's log (its README, step 3): the two misspellings that passed the pipeline before,
+// a queue's column and a related list's, on the kit's own page providers and its own model.
+{
+  negative++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-moves-'));
+  const directory = join(scratch, 'moves-demo');
+  cpSync(join(REPO, 'business-apps', 'packages', 'moves-demo'), directory, {
+    recursive: true,
+    filter: (path) => basename(path) !== 'dist',
+  });
+  try {
+    const edit = (file, from, to) => {
+      const path = join(directory, file);
+      const text = readFileSync(path, 'utf8');
+      if (!text.includes(from)) throw new Error(`the moves control's edit does not apply: ${from}`);
+      writeFileSync(path, text.replace(from, to));
+    };
+    edit(
+      'bundle/agentic-ui-config/queues/open-claims.json',
+      '"dmg:adjuster", "widget"',
+      '"dmg:adjustor", "widget"',
+    );
+    edit(
+      'bundle/agentic-ui-config/layouts/Move/view.layout.json',
+      '"moveitem:room",',
+      '"moveitem:rooms",',
+    );
+    const { status, output } = run(directory, join(scratch, 'out'));
+    const expected = [
+      'queues/open-claims.json: columns[6].field: "dmg:adjustor" is not a property of the type "DamageClaim", which the page provider "moves_open_claims"',
+      'layouts/Move/view.layout.json: cards[4].related.columns[2]: "moveitem:rooms" is not a property of the type "MoveItem", which the page provider "moves_move_items"',
+      'step 2 refused it',
+    ];
+    const missing = expected.filter((line) => !output.includes(line));
+    if (status !== 1 || missing.length > 0)
+      failures.push(
+        `the moves kit's two misspellings: exit ${status}; no ${missing.join('; no ')}\n${output}`,
+      );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 // A label key is looked up in the package's labels, then in the platform's catalogue: one with a
 // text in neither shows a heading's id made readable, or nothing, so it is refused, by its key.
 expectRefused(

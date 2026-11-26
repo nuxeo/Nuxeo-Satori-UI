@@ -206,8 +206,10 @@ What each writes, and what it leaves to you:
   input: `vocabulary`, a picker. A file, or a value holding one, is left out: files are changed in
   Attachments. The component contributes it, as it does the record page. A field rule in plain
   words is the next edit (below).
-- **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
-  against the model yet. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
+- **`app-queue`:** the page provider, columns, sort and page size. The pipeline holds the columns
+  and the sort, and a related list's, to the type a page provider of the package's own lists, as
+  its NXQL says (`ecm:primaryType = '<Type>'`, as `app-model` writes it); on the server's, nothing
+  checks them. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
 "labelKey": "<key>" }]`, each an aggregate the page provider defines, which
   `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
   page provider in the package's own model does not define.
@@ -299,9 +301,10 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   check, rename an id to something unregistered, write the file some other way, or run the
   pipeline without the model to get a pass.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
-  a facet's aggregate on a page provider of the server's, a queue's or a related list's columns,
-  the properties a rule or a computation names, and a vocabulary widget's directory against its
-  property's. Check those by reading the server.
+  a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
+  and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
+  `app-model` writes it, they are held to that type), the properties a rule or a computation names,
+  and a vocabulary widget's directory against its property's. Check those by reading the server.
 
 ## 4. Preview in dev mode, as far as it goes
 

@@ -28,6 +28,9 @@ added on 25 November 2026 (section 10); its server-side half is not built.
 - **A facet names an aggregate its page provider defines,** when the package's own model defines
   that page provider; so does a home's figure. Only the search index answers aggregates, and a facet
   on anything else is left out of the queue, said only in the browser's console.
+- **A queue's or a related list's columns and sorts are the listed records' properties,** when
+  the package's own page provider says, in its NXQL, which type it lists: held to that type in the
+  content model, as a layout's fields are held to theirs (section 2).
 - **Its version is held to what changed.** Given the package as it was, a version that did not move
   when the content changed is refused, and so is one that moved less than the changes need: a
   queue removed needs a major. Each build writes what changed beside the zip (section 8).
@@ -68,8 +71,9 @@ the presales Payers model replaces it. Since 0.4.0 a third contributes phase 2's
 workflow: a route model, as a zip the bundle carries, with its variable schemas and chains. The
 builder holds its XML to what Nuxeo can load, as it does every component's; nothing in the pipeline
 checks the schemas, types, page providers or route model themselves, nor that a layout's page
-provider exists. The one thing step 2 reads in a page provider the package defines is the
-aggregates it lists, which a queue's facets and a home's figures must name (section 2). The kit's
+provider exists. What step 2 reads in a page provider the package defines is the aggregates it
+lists, which a queue's facets and a home's figures must name, and the type its NXQL lists, which a
+queue's and a related list's columns and sorts are held to (section 2). The kit's
 own controls check its route model
 ([its README](../../business-apps/packages/payers-claims-demo/README.md)).
 
@@ -82,16 +86,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                                                                                                                                                                       |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version, the platform's English catalogue, and a content model: the one given, or a stand-in package's own (section 4). Every label key has a text; a facet or a figure on the package's own page provider names an aggregate it defines; the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
-| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8), and the upgrade keeps every customer configuration (section 10), the platform's side too given `--previous-platform`                                                                                                                                                |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                                                                                                                                                                     |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                                                                                                                                                                                                                                                  |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version, the platform's English catalogue, and a content model: the one given, or a stand-in package's own (section 4). Every label key has a text; a facet or a figure on the package's own page provider names an aggregate it defines, and a column or a sort on one names a property of the type its NXQL lists; the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8), and the upgrade keeps every customer configuration (section 10), the platform's side too given `--previous-platform`                                                                                                                                                                                                                           |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                                                                                                                                                                                                                                                |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -137,6 +141,20 @@ page provider, the component and the aggregates it does define; a `coreQueryPage
 none is said to read the repository, and `app-model --aggregates` writes the indexed kind. A page
 provider the package does not define is the server's, which the pipeline does not read, and its
 facets are not checked; nor are those of one whose only definition is disabled.
+
+Step 2 holds a queue's columns and sort, and a related list's, to the records their page
+provider lists, given a content model: the one given, or a stand-in package's own (section 4).
+For a page provider the package defines, the type it lists is read from its NXQL, the pattern's
+`WHERE` or the where clause's fixed part, as the server builds the query, and only where it says
+so plainly: `ecm:primaryType = '<Type>'`, as `app-model` writes it, among conditions joined by
+`AND` alone and not under a `NOT`, or a pattern `FROM <Type>`. Each column's property, and each
+sort's, must be one of that type's or of a facet it declares, and a column's widget must show its
+property's type, as a layout's field is held (section 4). One that is not is a finding in the
+validator's form, naming the file, the place, the type, the page provider and its component. Not
+checked: a page provider the package does not define, which is the server's; one whose NXQL does
+not say its type, such as one with an `OR` at its top, or whose type the model does not have; the
+server's own properties, `ecm:`; and a column a computation fills
+(`libs/shared/app-definition/src/lib/page-providers.ts`).
 
 Step 2 holds the app the component contributes to the same files. The package contributes its app
 once, under the id its `app.json` gives, from `agentic-ui-config/app.json`, the file the validator
@@ -315,9 +333,10 @@ reaches only when the integration branch does, and a tag names exactly what is p
   refused when a model is given, and the message names the facet. The record page shows it on a
   record that has the facet. Whether the pipeline should accept it, perhaps when a rule shows the
   field only on records with that facet, is open.
-- **Not held to the model yet:** a related list's columns, which are other records'; a queue's
-  columns; the properties a computation, a rule or a widget parameter names; a task form's fields;
-  and a vocabulary widget's `directory` against the one its property is bound to.
+- **Not held to the model yet:** a queue's or a related list's columns and sorts on the server's
+  page provider, or on one whose NXQL does not say plainly which type it lists (section 2); the
+  properties a computation, a rule or a widget parameter names; a task form's fields; and a
+  vocabulary widget's `directory` against the one its property is bound to.
 
 ## 8. Versions
 
