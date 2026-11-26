@@ -460,6 +460,32 @@ describe('QueueDesignerPageComponent', () => {
       expect(page.saveState()).toBe('saveable');
     });
 
+    it("says when the app's actions.json is read and none of its actions shows in a list", async () => {
+      actions.next({
+        state: 'read',
+        value: {
+          version: 2,
+          actions: [
+            { id: 'contracts.contract.archive', label: 'Archive' },
+            { id: 'contracts.contract.renew', label: 'Renew', on: ['row'] },
+          ],
+        },
+      });
+      await open();
+      const note = (list: string): string | null | undefined =>
+        root().querySelector(`[data-part="${list}"] [data-offered]`)?.textContent;
+      // Its actions are read, so the page does not say no actions.json is: none is a bulk action.
+      expect(note('bulkActions')).toContain(
+        "None of the app's own actions, from its actions.json, is shown in this list",
+      );
+      expect(note('bulkActions')).not.toContain('no actions.json with actions has been read');
+      expect(note('rowActions')).toContain("then the app's own");
+      expect(offeredIn('bulkActions')).not.toContain('contracts.contract.archive');
+      expect(root().querySelector('[data-actions]')?.textContent).toContain(
+        'checked against those of the app open',
+      );
+    });
+
     it('refuses an unknown action: never offered nor added, and the validator refuses one named', async () => {
       await open();
       page.choose('rowActions', 'acme.made.up');
@@ -880,9 +906,9 @@ describe('QueueDesignerPageComponent', () => {
       'button "Move the row action app.rowActions.download down" disabled',
       'button "Remove the row action app.rowActions.download"',
       'select "Add a row action" [*Choose an action | app.rowActions.rename, registered by this build | app.rowActions.copyTo, registered by this build | app.rowActions.moveTo, registered by this build | app.rowActions.delete, registered by this build]',
-      'button "Add" disabled',
+      'button "Add the row action" disabled',
       'select "Add a bulk action" [*Choose an action | app.bulkActions.downloadZip, registered by this build | app.bulkActions.addToCollection, registered by this build | app.bulkActions.compare, registered by this build | app.bulkActions.addToClipboard, registered by this build | app.bulkActions.publish, registered by this build | app.bulkActions.delete, registered by this build]',
-      'button "Add" disabled',
+      'button "Add the bulk action" disabled',
       'button "Download up-for-renewal.json"',
       'button "Undo every change"',
       'summary "up-for-renewal.json as it will be saved"',

@@ -42,7 +42,6 @@ import { LayerPanelComponent } from '../layer/layer-panel';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import { layoutFileText, type DesignerField, type LayoutJson } from '../layout-edits';
 import {
-  QUEUE_ACTION_LISTS,
   actionsOf,
   addAction,
   addColumn,
@@ -306,36 +305,6 @@ export class QueueDesignerPageComponent {
   readonly sorts = computed<readonly DesignerSort[]>(() => sortsOf(this.file()));
   readonly facets = computed<readonly DesignerFacet[]>(() => facetsOf(this.file()));
 
-  /** The two lists of actions, in the order the page draws them. */
-  protected readonly actionLists = QUEUE_ACTION_LISTS;
-
-  /** Each list of actions' words, by their keys. */
-  protected readonly actionTexts: Readonly<
-    Record<
-      QueueActionList,
-      Readonly<Record<'heading' | 'hint' | 'none' | 'add' | 'up' | 'down' | 'remove', string>>
-    >
-  > = {
-    rowActions: {
-      heading: 'layout-designer.queue.row-actions',
-      hint: 'layout-designer.queue.row-actions-hint',
-      none: 'layout-designer.queue.no-row-actions',
-      add: 'layout-designer.queue.add-row-action',
-      up: 'layout-designer.queue.move-row-action-up',
-      down: 'layout-designer.queue.move-row-action-down',
-      remove: 'layout-designer.queue.remove-row-action',
-    },
-    bulkActions: {
-      heading: 'layout-designer.queue.bulk-actions',
-      hint: 'layout-designer.queue.bulk-actions-hint',
-      none: 'layout-designer.queue.no-bulk-actions',
-      add: 'layout-designer.queue.add-bulk-action',
-      up: 'layout-designer.queue.move-bulk-action-up',
-      down: 'layout-designer.queue.move-bulk-action-down',
-      remove: 'layout-designer.queue.remove-bulk-action',
-    },
-  };
-
   /** The queue's row and bulk actions, in their order, each with where it comes from. */
   readonly actions = computed<Readonly<Record<QueueActionList, readonly QueueAction[]>>>(() => {
     const file = this.file();
@@ -387,10 +356,23 @@ export class QueueDesignerPageComponent {
     return { rowActions: options('rowActions'), bulkActions: options('bulkActions') };
   });
 
-  /** Whether any of the app's own actions is offered: its `actions.json` is read, with some. */
-  readonly offersAppActions = computed(
-    () => this.appActions().rowActions.size > 0 || this.appActions().bulkActions.size > 0,
-  );
+  /**
+   * What each list offers, as its note says: `reading` while the app's `actions.json` is read;
+   * `all` when some of the app's own actions show in the list; `none-here` when the app has actions
+   * and none shows there, its `on` naming neither `row` nor `bulk` as the list is; and `registered`
+   * when no `actions.json` with actions is read, served or not, or one could not be read.
+   */
+  readonly offeredFrom = computed<
+    Readonly<Record<QueueActionList, 'reading' | 'all' | 'none-here' | 'registered'>>
+  >(() => {
+    const reading = this.packageActions().state === 'reading';
+    const from = (list: QueueActionList): 'reading' | 'all' | 'none-here' | 'registered' => {
+      if (reading) return 'reading';
+      if (this.appActions()[list].size > 0) return 'all';
+      return this.hasPackageActions() ? 'none-here' : 'registered';
+    };
+    return { rowActions: from('rowActions'), bulkActions: from('bulkActions') };
+  });
 
   readonly label = computed(() => this.text('label'));
   readonly labelKey = computed(() => this.text('labelKey'));

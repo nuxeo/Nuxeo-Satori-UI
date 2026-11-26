@@ -15,8 +15,6 @@ import { fieldOf, placeKey, type DesignerField, type LayoutJson } from './layout
 /** A queue's lists of actions: each row's menu, and what the selection bar offers for the rows chosen. */
 export type QueueActionList = 'rowActions' | 'bulkActions';
 
-export const QUEUE_ACTION_LISTS: readonly QueueActionList[] = ['rowActions', 'bulkActions'];
-
 /** A queue's lists the designer edits. */
 export type QueueList = 'columns' | 'sort' | 'facets' | QueueActionList;
 

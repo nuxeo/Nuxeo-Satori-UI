@@ -9,8 +9,11 @@
  * few that cannot, by design, are listed in `NOT_BYTE_FOR_BYTE` with why, and this spec holds the
  * list to the kits: a file that stops round-tripping fails here, and so does one listed that does.
  *
- * Then a single edit changes only the edited place: every line outside the list or object the edit
- * is made in is the same bytes before and after, at the same place.
+ * Then each single edit made here changes only the edited place: every line outside the list or
+ * object the edit is made in is the same bytes before and after, at the same place. It is measured
+ * against what the designer writes of the file unedited, which is the file itself but for the four
+ * listed. Not every edit of every file can be confined, as the README says; none made here on a
+ * kit's file fails to be.
  *
  * Through the pages, the download included, is `round-trip.pages.spec.ts`.
  */
@@ -182,42 +185,52 @@ interface Edit {
 
 /** The single edits the designer makes on a layout file, each where this file allows it. */
 function layoutEdits(file: LayoutJson): Edit[] {
-  const card = cardsOf(file).find((each) => each.shows === 'fields' && each.fields.length >= 2);
-  if (!card) return [];
-  const { place, path } = card;
-  return [
-    {
-      name: 'a field moved down',
-      edit: (f) => moveField(f, place, 0, 1),
-      within: `${path}.fields`,
-    },
-    {
-      name: 'a field hidden',
-      edit: (f) => removeField(f, place, 1).file,
-      within: `${path}.fields`,
-    },
-    {
-      name: 'a property added',
-      edit: (f) => addProperty(f, place, 'dc:description'),
-      within: `${path}.fields`,
-    },
-    {
-      name: "a card's id changed",
-      edit: (f) => setCardText(f, place, 'id', `${card.id}2`),
-      within: `${path}.id`,
-    },
-    {
-      name: "a card's heading text set",
-      edit: (f) => setCardText(f, place, 'label', 'A heading'),
-      within: `${path}.label`,
-      added: card.label === '',
-    },
-    {
-      name: "a field's rule set",
-      edit: (f) => setFieldRule(f, place, 0, 'visibleWhen', 'app.rules.canWrite'),
-      within: `${path}.fields[0]`,
-    },
-  ];
+  const cards = cardsOf(file);
+  const edits: Edit[] = [];
+  const first = cards[0];
+  if (first)
+    edits.push(
+      {
+        name: "a card's id changed",
+        edit: (f) => setCardText(f, first.place, 'id', `${first.id}2`),
+        within: `${first.path}.id`,
+      },
+      {
+        name: "a card's heading text set",
+        edit: (f) => setCardText(f, first.place, 'label', 'A heading'),
+        within: `${first.path}.label`,
+        added: first.label === '',
+      },
+    );
+  const some = cards.find((each) => each.shows === 'fields' && each.fields.length >= 1);
+  if (some)
+    edits.push(
+      {
+        name: 'a property added',
+        edit: (f) => addProperty(f, some.place, 'dc:description'),
+        within: `${some.path}.fields`,
+      },
+      {
+        name: "a field's rule set",
+        edit: (f) => setFieldRule(f, some.place, 0, 'visibleWhen', 'app.rules.canWrite'),
+        within: `${some.path}.fields[0]`,
+      },
+    );
+  const two = cards.find((each) => each.shows === 'fields' && each.fields.length >= 2);
+  if (two)
+    edits.push(
+      {
+        name: 'a field moved down',
+        edit: (f) => moveField(f, two.place, 0, 1),
+        within: `${two.path}.fields`,
+      },
+      {
+        name: 'a field hidden',
+        edit: (f) => removeField(f, two.place, 1).file,
+        within: `${two.path}.fields`,
+      },
+    );
+  return edits;
 }
 
 /** The single edits the designer makes on a queue, each where this queue allows it. */

@@ -459,8 +459,9 @@ the designer's three slices, at `/#/administration/layout-designer` and its `que
   repository's Prettier lays it out afresh. Opened and saved unedited, 15 of the four kits' 19
   record pages, edit forms and queues come back byte for byte; four cannot by design, since each
   keeps an object across lines that fits on one, as Prettier keeps what its author wrote, and the
-  server serves the designer the value, not the text; and a single edit changes only the edited
-  place. The round-trip tests walk every kit's folders, so a kit added later is held too
+  server serves the designer the value, not the text. Each single edit the tests make on a kit's
+  file changes only the edited place, though not every edit can be, since the value is laid out
+  afresh. The round-trip tests walk every kit's folders, so a kit added later is held too
   ([the designer's README](../../libs/features/layout-designer/README.md#byte-for-byte)).
 - **What it checks:** the validator checks every change, a layout file in its own mode, and the file
   is downloaded only when it finds nothing. A layout file is held to the server's content model when

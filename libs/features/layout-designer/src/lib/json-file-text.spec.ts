@@ -40,7 +40,13 @@ function corpus(count: number, seed: number): unknown[] {
     return state / 2147483648;
   };
   const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)];
-  const CHARACTERS = [...'abcdefghij klmnop:._-', 'é', '漢', 'Ａ', '한', 'ع', 'ẞ', '"', '\\', '\n'];
+  // Narrow, wide, full-width, ambiguous (one column, as ㉈ and ①), combining, emoji drawn as
+  // emoji or as text, joined and toned emoji, a flag, and what JSON escapes.
+  const CHARACTERS = [
+    ...'abcdefghij klmnop:._-',
+    ...['é', '漢', 'Ａ', '한', 'ع', 'ẞ', '㉈', '①', 'ｱ', '\u0301', '\ufe0f'],
+    ...['😀', '©', '⌚', '👍🏽', '👩\u200d💻', '🇫🇷', '"', '\\', '\n', '\t'],
+  ];
   const text = (most: number): string =>
     Array.from({ length: Math.floor(random() * most) }, () => pick(CHARACTERS)).join('');
   const KEYS = ['field', 'widget', 'labelKey', 'parameters', 'id', 'type', 'x'.repeat(30), '2'];
@@ -112,6 +118,11 @@ describe('jsonFileText', () => {
       ['numbers as Prettier prints them', { a: 1e21, b: 1.5e-7, c: -0.5, d: 100000 }],
       ['texts JSON escapes', { a: 'a "quoted" \\ back\nslash\u0007' }],
       ['wide characters, two columns each', { label: '漢'.repeat(46), b: 1 }],
+      // Each on the edge of 100 columns, so that a character measured wrong moves the break.
+      ['an ambiguous character, one column: 100 columns', { a: '㉈'.repeat(89) }],
+      ['an emoji, two columns: 101 columns', { a: '😀'.repeat(45) }],
+      ['an emoji drawn as text, one column: 100 columns', { a: '©'.repeat(89) }],
+      ['a combining mark, no column: 100 columns', { a: 'e\u0301'.repeat(89) }],
       ['keys in the order they were written', { z: 1, a: 2, m: { y: 1, b: 2 } }],
       ['a key whose value is undefined, left out as JSON leaves it', { a: 1, b: undefined }],
     ])('%s', async (_, value) => {

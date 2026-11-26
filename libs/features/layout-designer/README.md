@@ -150,14 +150,15 @@ actions by their IDs, in order.
   (`withPackageActions`). An action the list names already is not offered again. Each choice says
   where it comes from.
 - **Without `actions.json`,** when the development server serves the queue, the registry serves no
-  file of actions for the app open, or it cannot be read, the page says so, as it does under
-  Validation, and offers only the registered ones; while it is read, it says that the app's own are
-  offered once it has been.
+  file of actions for the app open, or it cannot be read, the page says so under each list, as it
+  does under Validation, and offers only the registered ones; while it is read, it says that the
+  app's own are offered once it has been. A file of actions read with none for a list, its `on`
+  naming neither `row` nor `bulk` as the list is, is said to be so, under that list.
 - **Chosen, ordered and removed** one at a time: an action is added last, from its list's picker and
   its Add; moved up or down; and removed. A list left empty is taken out of the file. The focus
   goes with the action moved, to the next one's Remove once one is removed, and to the picker once
   none is left. Every button is named by its list and its action, "Move the row action
-  `app.rowActions.download` up".
+  `app.rowActions.download` up", and each list's Add by its list, "Add the row action".
 - **An unknown action is refused:** one that is not offered is never added, whatever calls the
   page's `add()`. One the file names already, such as an action of the app's own while its
   `actions.json` is not read, is listed with "unknown", and the validator's finding,
@@ -200,18 +201,29 @@ that means:
     each;
   - `facilities-demo/…/queues/open-work-orders.json`: its one sort, across four lines;
   - `payers-claims-demo/…/layouts/Case/view.layout.json`: its history card, across five lines.
-- **A single edit changes only the edited place:** every line outside the list or object the edit
-  is made in is the same bytes, at the same place. A key the designer adds is written where the file
-  format lists it, so the lines around it stay as they were, but for the comma the line before may
-  gain. A list on one line that an edit takes over 100 columns is drawn one entry a line, as
-  Prettier would.
+- **A single edit changes only the edited place,** for each edit the spec makes on each kit's
+  file: moving, hiding and adding a field or a column; a card's id and heading; a field's rule; a
+  queue's name, sort, facets and actions. Every line outside the list or object the edit is made in
+  is the same bytes, at the same place. A key the designer adds is written where the file format
+  lists it, so the lines around it stay as they were, but for the comma the line before may gain;
+  and a list on one line that an edit takes over 100 columns is drawn one entry a line.
+- **Not every edit of every file can be confined, by the same rule.** The value is laid out afresh,
+  so an edit that takes away the one reason a list or an object was drawn across lines draws it on
+  one line again, and what holds it too, if that was all that broke it: removing one of a card's two
+  `{ "field": …, "required": true }` fields can put a short file back on one line. Prettier would
+  not do that to the file a person edits, since it keeps the objects as written. No edit the spec
+  makes on a kit's file does it today. And for the four files above, an edit is confined against
+  what the designer writes of them unedited: against the file in the repository, the change also
+  draws their objects on one line.
 - **By design, beyond those four:** what a hand-written file says that its value does not is lost
   the same way. A blank line between entries; a number written `1.50` or `1e3` rather than as
   Prettier prints it; a text written with an escape JSON does not need, such as `\u00e9` or `\/`; a
   key written twice; and the place of a key that is a whole number, such as `"2"`, which a JSON value
-  puts first. No kit's file has any of them. A width is measured as Prettier measures it for ASCII,
-  the CJK blocks, Hangul, the full-width forms and emoji; a rarer wide character is counted as one
-  column.
+  puts first. No kit's file has any of them. A width is measured as Prettier measures it: a wide or
+  full-width character two columns, from Unicode's own list of them as Prettier reads it, and an
+  emoji two, or one for an emoji drawn as text, such as ©. An emoji is told by Unicode's properties
+  here and by a list of emoji in Prettier, so a sequence the two read differently may be measured
+  apart.
 - **The deployment layer** shows each version as the download writes it, and a version it opens is
   its JSON value, written by the same rule.
 
@@ -560,13 +572,15 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
   - **the writer:** the old one, `JSON.stringify` two spaces deep; no list of objects always broken;
     the width off by one; the comma after a value not counted; keys sorted; an unknown key, such as
     `$schema`, dropped; numbers as `JSON.stringify` writes them; text outside ASCII escaped; wide
-    characters counted as one column; and no last newline. A kit added for one run, with a sort
-    written across lines, was walked and failed until taken out;
+    characters counted as one column, an ambiguous one, `㉈`, as two, an emoji as one, one drawn as
+    text, `©`, as two, and a combining mark as one; and no last newline. A kit
+    added for one run, with a sort written across lines, was walked and failed until taken out;
   - **the edits:** a card's heading, a field's rule, a queue's name and a list of actions each
     written last rather than where the format lists it, and a key the file has moved;
   - **a queue's actions:** an action added that is not offered, the app's own never offered, an
     action named offered again, an unknown action shown as registered, an empty list kept, the focus
-    left where it was on removing one, and the preview drawn without `readOnly`.
+    left where it was on removing one, an `actions.json` with none for a list said not to be read,
+    and the preview drawn without `readOnly`.
 
   The third slice's, publishing, on the server: a non-administrator's write let through, an
   invalid file stored, a draft served by the registry, an approval by the draft's maker or
