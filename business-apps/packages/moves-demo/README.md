@@ -15,19 +15,20 @@ Every name in it is fictional. The log of each step, its result and each departu
 - **A Move record page:** the customer, the origin and destination, the dates, the crew, the
   state, the declared value, and two related lists: its inventory, each item with its declared
   value, and its damage claims.
-- **A Damage Claim record page:** the move it belongs to, as a `document-link`; the items claimed,
-  each a `document-link` to its inventory item; the amounts, the state, the dates, and the claim's
-  **attachments**, `files:files`, which is where the driver's photo of demo step 5 goes (below).
-- **No banner for a claim filed late.** The request was a banner when a claim is filed more than N
-  days after delivery, with a registered rule. **No registered rule says that:** every date rule
-  compares one date with today, and a rule cannot read a computation. So there is no banner, and
-  no Angular code: the claim page shows the days from delivery to filing instead, as a computed
-  field (`core.dateDiff`), and the gap is a follow-up ([below](#phase-8-feedback-where-the-tools-fell-short), item 2).
+- **A Damage Claim record page:** the move it belongs to, as a `document-link`, and its move's
+  customer, read from the move (`show`, since 0.2.0); the items claimed, each a `document-link` to
+  its inventory item; the amounts, the state, the dates, and the claim's **attachments**,
+  `files:files`, which is where the driver's photo of demo step 5 goes (below).
+- **A banner for a claim filed late,** since 0.2.0: more than 30 days after delivery, with the
+  registered rule `app.rules.dateAfter`, which this kit's build asked for
+  ([below](#phase-8-feedback-where-the-tools-fell-short), item 2). The claim page still shows the
+  days from delivery to filing as well, as a computed field (`core.dateDiff`). No Angular code.
 - **The claim's Edit form,** with the rule asked for in plain words: "a denial reason is required
   when the state is Denied", as `app.rules.fieldIn`, two more rules of the same kind and two
   checks across fields. The claim's move, move number and delivery day are read-only there:
-  they are copies the facet and the days to filing read (below).
-- **Two queues:** open claims, with facets on state and on move; and the moves this week.
+  the move number and the delivery day are copies of the move's (below).
+- **Two queues:** open claims, with facets on state and on move, the move facet showing each move
+  by its title since 0.2.0; and the moves this week.
 - **A home, a menu and labels.** Open claims by state for everyone; the moves this week for move
   coordinators; the claims waiting for review for claims adjusters.
 - **An `app.json` that names its own groups,** `move-coordinators` and `move-claims-adjusters`,
@@ -43,23 +44,24 @@ Every name in it is fictional. The log of each step, its result and each departu
 
 ## What is in it
 
-| File                                                            | What it is                                                                                    | Written by                                                   |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.1.0, two groups                                    | `app-package`                                                |
-| `bundle/agentic-ui-config/layouts/Move/view.layout.json`        | The Move record page: two banners, four cards, the inventory, the claims and the history      | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/MoveItem/view.layout.json`    | An inventory item's page: the item, its move, and the claims that name it                     | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: a banner, six cards, the attachments and the history among them | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json` | The claim's Edit form: the denial reason's rule, two more, two checks, three read-only        | `app-form`, then `write_package_file`                        |
-| `bundle/agentic-ui-config/queues/open-claims.json`              | Open claims, oldest filed first, with State and Move facets                                   | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/queues/moves-this-week.json`          | Moves loading or delivering from today to seven days ahead, both days included                | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/home.json`, `navigation.json`         | The home's three figures, and the menu: the home and the two queues                           | `write_package_file`                                         |
-| `bundle/agentic-ui-config/labels/en.json`                       | Every label key the files name, in English                                                    | The generators, then `write_package_file`                    |
-| `bundle/OSGI-INF/moves-demo-config.xml`                         | The component: the four layouts, and the app with the five files the registry serves          | The generators                                               |
-| `bundle/OSGI-INF/moves-demo-model.xml`, `bundle/schemas/*.xsd`  | **The stand-in model:** three types, a search document, five page providers                   | `app-model`                                                  |
-| `content-model.json`                                            | The stand-in model as a server would answer it, which the pipeline holds the kit to           | `app-model`                                                  |
-| `package/`, `bundle/META-INF/MANIFEST.MF`, `build.mjs`          | The Marketplace package, the manifest, and version 1's builder, byte for byte                 | `app-package`, `app-model`                                   |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`      | The seed script, its fictional records, and its controls. Not packaged                        | By hand: the write tools write no code                       |
-| `README.md`                                                     | This file                                                                                     | `app-package`, then by hand: the write tools write no README |
+| File                                                            | What it is                                                                                       | Written by                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.2.0, two groups                                       | `app-package`                                                |
+| `bundle/agentic-ui-config/layouts/Move/view.layout.json`        | The Move record page: two banners, four cards, the inventory, the claims and the history         | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/MoveItem/view.layout.json`    | An inventory item's page: the item, its move, and the claims that name it                        | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: two banners, six cards, the attachments and the history among them | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json` | The claim's Edit form: the denial reason's rule, two more, two checks, three read-only           | `app-form`, then `write_package_file`                        |
+| `bundle/agentic-ui-config/queues/open-claims.json`              | Open claims, oldest filed first, with State and Move facets, the moves by title                  | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/queues/moves-this-week.json`          | Moves loading or delivering from today to seven days ahead, both days included                   | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`         | The home's three figures, and the menu: the home and the two queues                              | `write_package_file`                                         |
+| `bundle/agentic-ui-config/labels/en.json`                       | Every label key the files name, in English                                                       | The generators, then `write_package_file`                    |
+| `bundle/OSGI-INF/moves-demo-config.xml`                         | The component: the four layouts, and the app with the five files the registry serves             | The generators                                               |
+| `bundle/OSGI-INF/moves-demo-model.xml`, `bundle/schemas/*.xsd`  | **The stand-in model:** three types, a search document, five page providers                      | `app-model`                                                  |
+| `content-model.json`                                            | The stand-in model as a server would answer it, which the pipeline holds the kit to              | `app-model`                                                  |
+| `package/`, `bundle/META-INF/MANIFEST.MF`, `build.mjs`          | The Marketplace package, the manifest, and version 1's builder, byte for byte                    | `app-package`, `app-model`                                   |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`      | The seed script, its fictional records, and its controls. Not packaged                           | By hand: the write tools write no code                       |
+| `upgrade-notes.json`                                            | The migration note for 0.2.0's Move facet, which the upgrade check reads                         | By hand, since 0.2.0                                         |
+| `README.md`                                                     | This file                                                                                        | `app-package`, then by hand: the write tools write no README |
 
 - **No hand edit to a package file.** Every file under `bundle/`, `package/`, `build.mjs` and
   `content-model.json` was written by `apply_generator`, `write_package_file` or
@@ -67,8 +69,12 @@ Every name in it is fictional. The log of each step, its result and each departu
   written by hand, unlike the facilities and contracts kits' models.
 - **No `actions.json`.** None was asked for, and moving a claim through its states is a property
   here, not a lifecycle (below).
-- **One version in three places:** 0.1.0, in `package.xml`, `app.json`'s `packageVersion` and the
-  manifest's `Bundle-Version`. No `upgrade-notes.json`: there is no version before it.
+- **One version in three places:** 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
+  manifest's `Bundle-Version`. `upgrade-notes.json` holds the note for the one item 0.2.0 removes
+  ([below](#version-020)).
+- **0.2.0 was written by hand,** not through the write tools: its edits are the engine's follow-ups
+  to items 2 to 4 below, made in the same pull request as the engine, and held to the pipeline with
+  `--previous` (below).
 
 ## The stand-in model
 
@@ -92,23 +98,23 @@ a component of its own, `moves-demo-model.xml`, as the Payers kit does.
 - **The inventory is a type of its own,** listed on the move's page, not a table on the move:
   `app-model` writes no complex property (item 6 below). So each item has a page, and a claim
   names its items as `document-link`s.
-- **A claim carries two copies of its move's values:** `dmg:deliveredOn`, which the days to filing
-  are computed from, since a record page cannot read a linked record's property yet
-  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 12, a proposal); and
-  `dmg:moveNumber`, which the Move facet groups by, since a facet on `dmg:move` would show ids
-  (item 4 below). The seed writes both from the move.
+- **A claim carries two copies of its move's values:** `dmg:deliveredOn`, which the late-filing
+  banner's rule, the days to filing and the Edit form's check read, since a rule, a computation
+  and a check read the open record only, never a linked one (item 3 below); and `dmg:moveNumber`,
+  which only the Edit form shows since 0.2.0, the Move facet grouping by `dmg:move` (item 4 below).
+  The seed writes both from the move.
 - **Not folders,** so each opens as a record page. No folder lists the types among its subtypes,
   so the Create menu does not offer them: the seed writes the records.
 - **The names are plain:** `Move`, `MoveItem`, `DamageClaim`. The server already has `Claim` and
   the prefix `claim`, the Payers kit's, which is why the claim is `DamageClaim` with `dmg:`.
 
-| Page provider       | Given        | Returns                                                                                                         | Reads            |
-| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `moves_move_items`  | A move's id  | Its inventory, by tag                                                                                           | The repository   |
-| `moves_move_claims` | A move's id  | Its claims, latest filed first                                                                                  | The repository   |
-| `moves_item_claims` | An item's id | The claims that name it (`dmg:items/* = ?`), latest filed first                                                 | The repository   |
-| `moves_open_claims` | Nothing      | Claims `Filed` or `In review`, oldest filed first, with the aggregates `dmg_state_agg` and `dmg_moveNumber_agg` | The search index |
-| `moves_this_week`   | Nothing      | Moves not cancelled that load or deliver from `NOW('-P1D')` to `NOW('P7D')`, by load date                       | The repository   |
+| Page provider       | Given        | Returns                                                                                                   | Reads            |
+| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------- | ---------------- |
+| `moves_move_items`  | A move's id  | Its inventory, by tag                                                                                     | The repository   |
+| `moves_move_claims` | A move's id  | Its claims, latest filed first                                                                            | The repository   |
+| `moves_item_claims` | An item's id | The claims that name it (`dmg:items/* = ?`), latest filed first                                           | The repository   |
+| `moves_open_claims` | Nothing      | Claims `Filed` or `In review`, oldest filed first, with the aggregates `dmg_state_agg` and `dmg_move_agg` | The search index |
+| `moves_this_week`   | Nothing      | Moves not cancelled that load or deliver from `NOW('-P1D')` to `NOW('P7D')`, by load date                 | The repository   |
 
 - **"This week" is today and the seven days after it,** eight days, not the calendar week: NXQL's
   `NOW()` takes an
@@ -311,8 +317,8 @@ it found, and what was done:
 npm run app-package -- business-apps/packages/moves-demo --platform 0.2.0
 ```
 
-It writes `dist/moves-demo-0.1.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model: sha256 `d417d693…e0ac` after the last write, on 26 November 2026.
+It writes `dist/moves-demo-0.2.0.zip`, held to the package's own `content-model.json`, since it
+ships a stand-in model: sha256 `fbd58658…ef91` for 0.2.0, on 26 November 2026.
 
 ## Installing it on a local Nuxeo
 
@@ -325,11 +331,11 @@ it when the container next starts, and removes itself: `nuxeoctl mp-install` ref
 server runs, and the server is the container's main process.
 
 ```bash
-docker cp business-apps/packages/moves-demo/dist/moves-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/moves-demo/dist/moves-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/moves-demo-0.1.0.zip --accept=true > /var/log/nuxeo/moves-kit-install.log 2>&1 || echo "moves kit: install failed, see /var/log/nuxeo/moves-kit-install.log"' 'rm -f "$0"' > /tmp/zz-moves-kit-install.sh && chmod 755 /tmp/zz-moves-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/moves-demo-0.2.0.zip --accept=true > /var/log/nuxeo/moves-kit-install.log 2>&1 || echo "moves kit: install failed, see /var/log/nuxeo/moves-kit-install.log"' 'rm -f "$0"' > /tmp/zz-moves-kit-install.sh && chmod 755 /tmp/zz-moves-kit-install.sh
 ```
 
 ```bash
@@ -427,10 +433,45 @@ Seeing an app is not a security control: Nuxeo's permissions still decide which 
 anyone reads, and the seed sets none, so its workspace has the server's defaults. A hidden card or
 banner hides nothing from the REST API.
 
+## Version 0.2.0
+
+The engine's answers to items 2 to 4 below, adopted by the kit on 26 November 2026, in the pull
+request that built them. Held to 0.1.0 on the staging branch with `--previous`: six changes, which
+need a patch; 0.2.0 raises the minor, for three new features.
+
+- **The late-filing banner,** `filed-late`, a warning: "This claim was filed more than 30 days after
+  delivery", while `app.rules.dateAfter` passes for `dmg:filedOn`, `dmg:deliveredOn` and 30. A
+  claim filed on the 30th day after delivery shows none, and one filed on the 31st does. Of the
+  seed's five claims, DC-3003, filed 43 days after its move's delivery, shows it.
+- **The claim's customer, read from its move,** a `document-link` with `show: "move:customer"` in
+  the claim card: the move's own value, read with the move's title in the page's one search for
+  linked records, with the reader's permissions. A move the reader may not read shows
+  "Unavailable".
+- **The open claims' Move facet groups by `dmg:move`,** the aggregate `dmg_move_agg`, and shows each
+  move by its title, `"widget": "document-link"`, read in one search with the queue's own linked
+  records. It replaces `dmg_moveNumber_agg`, whose buckets were the copied move numbers: its removal
+  from the search document is the one item `upgrade-notes.json` covers, which keeps the upgrade
+  check whole.
+- **Not done: `dmg:deliveredOn` stays a copy** on the claim, though the page could show the move's
+  own `move:deliveredOn` through `show`. The banner's rule, the days to filing and the Edit form's
+  `core.notBefore` all read it, and a rule, a computation and a check read the open record only:
+  decision 4 gave rules a field's value to read, a computation makes no request
+  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), sections 4 and 5), and section 12's
+  `show` is a widget's, not a rule's. Removed, the three would lose their date; shown beside it from
+  the move, the page would show two delivery days that could differ, and the banner would follow
+  the one not shown. So the copy stays, and goes stale if a move's delivery day changes after its
+  claims are filed, as before. The days to filing still say what the banner reads.
+- **`dmg:moveNumber` stays too,** though nothing but the Edit form shows it now: dropping a property
+  is a change to the model, which the kit's stand-in leaves for a real one.
+- **Not seen in a browser or on a server:** the local Nuxeo has 0.1.0's model installed, and
+  installing is the orchestrator's. The pages are held by the engine's specs, the pipeline and the
+  seed's controls, 32 of 32, its open-claims check now finding each move's bucket by the move's id.
+
 ## Phase 8 feedback: where the tools fell short
 
-What the build met, in the order it met it. Only item 1 was changed here, because it blocked the
-kit; the rest are follow-up candidates.
+What the build met, in the order it met it. Only item 1 was changed in the pull request that built
+the kit, because it blocked it; items 2 to 4 were built in a later one, and the kit adopted them in
+0.2.0 ([above](#version-020)); the rest are follow-up candidates.
 
 1. **A stand-in type could not have attachments.** `app-model` gave a type `common`, `dublincore`
    and its own schema, and nothing else could write the model, so a claim had no place for a photo.
@@ -442,12 +483,27 @@ kit; the rest are follow-up candidates.
    feed one. A banner for a claim filed more than N days after delivery cannot be written; the
    write tools refused `app.rules.dateAfter`, as they should. Candidates: a rule over two dates and
    a number of days, or rules that read a computation.
+   **Done:** `app.rules.dateAfter`, two dates, either of them `"today"`, and a whole number of
+   days, true when the first is more than that many days after the second
+   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 5). Registered, known to the
+   validator, the server's and the layout designer's, and the kit's late-filing banner uses it. A
+   rule reading a computation is not built: it does not fit decision 4's shape, and section 5 says
+   why.
 3. **A record page cannot show a linked record's property.** The claim carries a copy of its
    move's delivery day, which goes stale if the move's changes. layout-v2.md, section 12, proposes
    the fix.
+   **Done:** section 12 is built, `show` on `document-link`, in a record page's fields and a list's
+   columns, read in the page's one search for linked records with the reader's permissions; the
+   section says where it departs from the proposal. The kit shows its move's customer through it.
+   **The copy of the delivery day stays,** since the banner, the days to filing and the Edit form's
+   check read it, and they read the open record only ([above](#version-020)).
 4. **A facet on a `document-link` property buckets by id.** A facet's buckets are the stored
    values, so a Move facet on `dmg:move` would list ids. The claim carries its move's number for
    it. Candidate: a facet bucket shown as its record's title, as `document-link` shows one.
+   **Done:** a queue's facet takes `"widget": "document-link"`, and shows each bucket by its
+   record's title, read in one search, with the reader's permissions, and the key where a title
+   cannot be read ([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md),
+   section 4). The kit's Move facet groups by `dmg:move` with it.
 5. **`app-layout` cannot pick `document-link` for a stand-in reference,** since `app-model` binds
    no property to a type (the tutorial's item 7, still): four links were given their widget by
    hand, and the form edits them as ids.
@@ -489,7 +545,8 @@ kit; the rest are follow-up candidates.
 ## Not done yet
 
 - **Installing, seeding, and the live pages:** the orchestrator's.
-- **The late-filing banner:** item 2.
+- **The delivery day read from the move** for the banner and the days to filing: a rule reads the
+  open record only ([above](#version-020)).
 - **The photo from a phone:** the capture app is not built; the attachments are its place.
 - **The coordinators, crews and adjusters are names, not people.**
 - **The Properties panel beside the record page** is version 1's generated one; a `metadata`

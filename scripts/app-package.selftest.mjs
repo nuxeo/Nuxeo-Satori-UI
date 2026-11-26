@@ -1447,12 +1447,12 @@ expectVersion(
         cpSync(join(REPO, path), join(platform, path), { recursive: true });
       const registries = join(platform, 'libs/shared/app-definition/src/lib/registries.ts');
       const text = readFileSync(registries, 'utf8');
-      const anchor = "    'app.rules.dateWithin',\n  ].map(";
+      const anchor = "    'app.rules.dateAfter',\n  ].map(";
       if (!text.includes(anchor))
         throw new Error("the control cannot add a rule to the platform's registries");
       writeFileSync(
         registries,
-        text.replace(anchor, "    'app.rules.dateWithin',\n    'app.rules.isUrgent',\n  ].map("),
+        text.replace(anchor, "    'app.rules.dateAfter',\n    'app.rules.isUrgent',\n  ].map("),
       );
       return ['--previous-platform', platform];
     },
@@ -1690,6 +1690,38 @@ expectBuilt('BETWEEN with literal bounds, and a comparison written in CDATA', ({
     if (status !== 1 || missing.length > 0)
       failures.push(
         `the moves kit's two misspellings: exit ${status}; no ${missing.join('; no ')}\n${output}`,
+      );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+// A `document-link`'s `show` names a property of the types it links to (layout-v2.md, section 12):
+// the claim's move's customer, misspelt, is refused against the kit's own model, naming the type.
+{
+  negative++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-moves-show-'));
+  const directory = join(scratch, 'moves-demo');
+  cpSync(join(REPO, 'business-apps', 'packages', 'moves-demo'), directory, {
+    recursive: true,
+    filter: (path) => basename(path) !== 'dist',
+  });
+  try {
+    const path = join(directory, 'bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json');
+    const text = readFileSync(path, 'utf8');
+    const from = '"show": "move:customer"';
+    if (!text.includes(from))
+      throw new Error(`the moves show control's edit does not apply: ${from}`);
+    writeFileSync(path, text.replace(from, '"show": "move:customr"'));
+    const { status, output } = run(directory, join(scratch, 'out'));
+    const expected = [
+      'layouts/DamageClaim/view.layout.json: cards[0].fields[3].parameters.show: "move:customr" is not a property of the type "Move" or of its facets, one of the types the field links to [unknown]',
+      'step 2 refused it',
+    ];
+    const missing = expected.filter((line) => !output.includes(line));
+    if (status !== 1 || missing.length > 0)
+      failures.push(
+        `the moves kit's misspelt show: exit ${status}; no ${missing.join('; no ')}\n${output}`,
       );
   } finally {
     rmSync(scratch, { recursive: true, force: true });
