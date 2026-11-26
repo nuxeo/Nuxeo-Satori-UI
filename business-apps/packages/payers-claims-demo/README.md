@@ -282,6 +282,12 @@ the builder after changing the source.
   the adjuster approved, read-only; the step's buttons are its own. A step's variables are in
   `var_PayersClaimReview_<step>`, named after the workflow as well as the step, since a schema's name
   is shared by the whole server; the task form reads whatever `var_*` schema the task names.
+- **Every step with a task has a variables facet, even one with nothing to fill in.** Nuxeo reads a
+  task's completion through its node's variables facet (`TaskCompletionRequestJsonReader`) and
+  throws without one, so the task is never completed. `supervisorApproval` had none until 0.6.1,
+  and on the local server its Approve left the claim in review; its facet now holds the comment a
+  supervisor may give. `workflow/route-model.selftest.mjs` refuses a node with a task and no
+  variables facet.
 - **A denial with no reason, sent past the form, is refused by the server too.** No constraint can
   make a field required for one decision only, so the route model does it: its first transition
   holds, the claim stays in review, and the determination opens again. The request itself
@@ -384,7 +390,7 @@ and on no server; the demo server's own allow-list is narrower ([below](#the-ope
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/payers-claims-demo-0.6.0.zip`.
+It writes `dist/payers-claims-demo-0.6.1.zip`.
 
 After changing the route model's source, write its zip again first, and commit it:
 
@@ -394,7 +400,8 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.6.0.changes.md`. Run on 26 November 2026 against the staging branch's
+`dist/payers-claims-demo-0.6.1.changes.md`. Run on 26 November 2026 against the staging branch's
+0.6.0: 3 changes, which need a patch version, and 0.6.1 raises the patch. 0.6.0's run, against
 0.5.1, with the platform as it was there (`--previous-platform`, the upgrade check): 11 changes,
 which need a patch version, and 0.6.0 raises the minor. 0.5.1's run, against 0.5.0: 4 changes,
 which needed a patch, and 0.5.1 raised the patch. 0.5.0's, against 0.4.1: 13 changes, which needed
@@ -640,7 +647,11 @@ provider's and a claim document's schema section with the kit's label.
 
 ### Over version 0.5.1: version 0.6.0, with the open appeals and the tickable checklist
 
-**Not run yet.** 0.6.0 needs a `nuxeo-agentic-ui` whose layout engine knows `tickable`, this
+**Run on 26 November 2026,** over 0.4.1 on the local server, with `nuxeo-agentic-ui` built from the
+same staging commit and the allow-list of 0.5.0's step 2: every check below held, and after the
+seed the demo's steps files passed 40 of 40 and the appeals' 43 of 43. The claims review
+workflow's did not: the supervisor's Approve failed on the step's missing variables facet, which
+0.6.1 fixes (below). 0.6.0 needs a `nuxeo-agentic-ui` whose layout engine knows `tickable`, this
 branch's or later: an older one leaves the Case page's checklist card out, and says why in the
 console. Build both packages as for 0.5.0, then in step 3 copy and name
 `payers-claims-demo-0.6.0.zip` in place of 0.5.0's. The allow-list does not change. Then check, once
@@ -659,6 +670,24 @@ console. Build both packages as for 0.5.0, then in step 3 copy and name
 **Then seed it again** (below). It writes the third appeal, CASE-2044, and its denied claim,
 CLAIM-000146, and gives `member-services` `ReadWrite` on the cases folder. Nothing needs deleting
 first: 0.6.0 removes no type, schema, property or page provider.
+
+### Over version 0.6.0: version 0.6.1, with the supervisor step's variables facet
+
+0.6.1 gives `supervisorApproval` a variables facet,
+`facet-var_PayersClaimReview_supervisorApproval`, with its schema, and the route model's zip
+holding it. Without the facet, Nuxeo's task completion throws, and the supervisor's Approve never
+approves the claim. Build the kit as for 0.5.0, then in step 3 copy and name
+`payers-claims-demo-0.6.1.zip` in place of 0.5.0's, and leave out `nuxeo-agentic-ui.zip` when the
+server has 0.6.0's. The allow-list does not change. At the next start the routing service replaces
+the model, since the zip's digest changed. A workflow already running keeps the nodes it was
+started with, so a supervisor's approval opened under 0.6.0 still cannot be completed: cancel it,
+or let the workflow steps file put its own claims away, which it does at its start. Then check,
+once `http://localhost:8080/nuxeo/runningstatus` answers 200:
+
+- `GET /nuxeo/api/v1/config/schemas/var_PayersClaimReview_supervisorApproval` lists `comment`;
+- the workflow steps file passes its step 2, the supervisor's Approve.
+
+Nothing needs seeding again: 0.6.1 changes no record.
 
 ### Removing it
 

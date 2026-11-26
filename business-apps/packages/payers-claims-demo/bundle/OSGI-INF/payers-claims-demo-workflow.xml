@@ -19,13 +19,16 @@
        are imported when the repository starts, after every contribution is registered. -->
   <require>org.nuxeo.runtime.started</require>
 
-  <!-- The workflow's variables, and the determination step's: var_<workflow> and the step's own,
+  <!-- The workflow's variables, and each step's with a task: var_<workflow> and the step's own,
        each in the facet its route node names. -->
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
     <schema name="var_PayersClaimReview" prefix="var_PayersClaimReview" override="true"
       src="schemas/var_PayersClaimReview.xsd" />
     <schema name="var_PayersClaimReview_determine" prefix="var_PayersClaimReview_determine"
       override="true" src="schemas/var_PayersClaimReview_determine.xsd" />
+    <schema name="var_PayersClaimReview_supervisorApproval"
+      prefix="var_PayersClaimReview_supervisorApproval" override="true"
+      src="schemas/var_PayersClaimReview_supervisorApproval.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
@@ -34,6 +37,9 @@
     </facet>
     <facet name="facet-var_PayersClaimReview_determine">
       <schema name="var_PayersClaimReview_determine" />
+    </facet>
+    <facet name="facet-var_PayersClaimReview_supervisorApproval">
+      <schema name="var_PayersClaimReview_supervisorApproval" />
     </facet>
   </extension>
 

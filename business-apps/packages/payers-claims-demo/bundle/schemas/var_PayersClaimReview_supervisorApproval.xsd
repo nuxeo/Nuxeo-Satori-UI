@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The supervisor approval step's variables: the comment a supervisor may give with Approve or Send
+     back. A node with a task needs a variables facet, even with nothing in its form: Nuxeo reads
+     a task's completion through it. Named after the workflow as well as the step, since a schema's
+     name is shared by the whole server. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_supervisorApproval"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_supervisorApproval">
+
+  <xs:element name="comment" type="xs:string" />
+</xs:schema>

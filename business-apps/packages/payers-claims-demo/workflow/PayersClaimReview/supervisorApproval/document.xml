@@ -1,18 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Supervisor approval: a claim billed over 5,000 dollars that an adjuster approved, for any
      member of claims-supervisors. Approve approves it; Send back returns it to the adjuster's
-     determination. It has no variables of its own: its task form shows the claim read-only
-     (agentic-ui-config/tasks/PayersClaimReview.supervisorApproval.layout.json). Any other action
-     a client sends opens the approval again. -->
+     determination. Its task form shows the claim read-only
+     (agentic-ui-config/tasks/PayersClaimReview.supervisorApproval.layout.json), and its one
+     variable is the comment a supervisor may give. Any other action a client sends opens the
+     approval again.
+
+     It names a variables facet, as every node with a task must: Nuxeo reads a task's completion
+     through the node's variables facet (TaskCompletionRequestJsonReader), and without one it
+     throws, so the task is never completed. Found on the local server, 26 November 2026, where the
+     supervisor's Approve left the claim in review. -->
 <document repository="default" id="supervisorApproval">
   <system>
     <type>RouteNode</type>
     <path>PayersClaimReview/supervisorApproval</path>
     <lifecycle-state>validated</lifecycle-state>
     <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <facet>facet-var_PayersClaimReview_supervisorApproval</facet>
     <access-control/>
   </system>
   <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:var_PayersClaimReview_supervisorApproval="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_supervisorApproval" name="var_PayersClaimReview_supervisorApproval"></schema>
   <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
     <dc:title><![CDATA[Approve the determination]]></dc:title>
   </schema>
@@ -28,6 +36,7 @@
     <rnode:taskAssigneesExpr><![CDATA["group:claims-supervisors"]]></rnode:taskAssigneesExpr>
     <rnode:taskDueDateExpr><![CDATA[CurrentDate.days(2)]]></rnode:taskDueDateExpr>
     <rnode:allowTaskReassignment><![CDATA[true]]></rnode:allowTaskReassignment>
+    <rnode:variablesFacet><![CDATA[facet-var_PayersClaimReview_supervisorApproval]]></rnode:variablesFacet>
     <rnode:executeOnlyFirstTransition><![CDATA[true]]></rnode:executeOnlyFirstTransition>
     <rnode:inputChain><![CDATA[]]></rnode:inputChain>
     <rnode:outputChain><![CDATA[]]></rnode:outputChain>
