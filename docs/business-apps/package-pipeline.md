@@ -145,16 +145,20 @@ none is said to read the repository, and `app-model --aggregates` writes the ind
 provider the package does not define is the server's, which the pipeline does not read, and its
 facets are not checked; nor are those of one whose only definition is disabled.
 
-Step 2 checks the NXQL of each page provider the package defines, its pattern or its where
-clause's fixed part, read as the server reads it, CDATA included, before any server loads it
-(`nxqlProblems`, in `libs/shared/app-definition/src/lib/page-providers.ts`). **It is a check of
-the query's tokens, not a parser, and it does not validate NXQL.** It refuses only constructs
-Nuxeo's grammar has no place for, so as to refuse no query Nuxeo runs: a string left open; a
-parenthesis not closed, or closing nothing; `==`, `&&`, `||`, `;`, or a `!` that is not `!=`,
-outside a string; a `BETWEEN` whose bounds are not each a literal (a string, a number,
-`DATE '...'`, `TIMESTAMP '...'`) or a parameter, such as `BETWEEN NOW('-P1D') AND NOW('P7D')`,
-which a server answered 400 in the moves kit's run; and a pattern that does not start with
-`SELECT`. Each is a finding naming the component, the page provider and the element. It does not
+Step 2 checks the NXQL of each page provider the package defines that takes NXQL, a
+`coreQueryPageProvider` or a `genericPageProvider` of one of Nuxeo's NXQL classes (the search
+service's, the index's, the repository's), its pattern or its where clause's fixed part, read as
+the server reads it, CDATA included, before any server loads it (`nxqlProblems`, in
+`libs/shared/app-definition/src/lib/page-providers.ts`). A page provider of another class, such
+as the audit's, whose pattern is not NXQL, is not read. **It is a check of the query's tokens,
+not a parser, and it does not validate NXQL.** It refuses only constructs Nuxeo's grammar has no
+place for, meant to refuse no query Nuxeo runs, though only the kits' queries and the spec's
+cases have shown it: a string left open; a parenthesis not closed, or closing nothing; `==`,
+`&&`, `||`, `;`, or a `!` that is not `!=`, outside a string; a `BETWEEN` whose bounds are not
+each a literal (a string, a number, `DATE '...'`, `TIMESTAMP '...'`) or a parameter, such as
+`BETWEEN NOW('-P1D') AND NOW('P7D')`, which a server answered 400 in the moves kit's run; and a
+pattern that does not start with `SELECT`. Each is a finding naming the component, the page
+provider and the element. It does not
 check that the properties a query names exist, that an operator fits its operands, a function's
 name or arguments (`NOW()`'s duration among them), an `IN` list, the parameters a page provider
 will be given, the order of the clauses, or what the search index's conversion of NXQL refuses
@@ -167,13 +171,15 @@ provider lists, given a content model: the one given, or a stand-in package's ow
 For a page provider the package defines, the type it lists is read from its NXQL, the pattern's
 `WHERE` or the where clause's fixed part, as the server builds the query, and only where it says
 so plainly: `ecm:primaryType = '<Type>'`, as `app-model` writes it, among conditions joined by
-`AND` alone and not under a `NOT`, or a pattern `FROM <Type>`. Each column's property, and each
-sort's, must be one of that type's or of a facet it declares, and a column's widget must show its
-property's type, as a layout's field is held (section 4). One that is not is a finding in the
-validator's form, naming the file, the place, the type, the page provider and its component. Not
-checked: a page provider the package does not define, which is the server's; one whose NXQL does
-not say its type, such as one with an `OR` at its top, or whose type the model does not have; the
-server's own properties, `ecm:`; and a column a computation fills
+`AND` alone, not under a `NOT`, with no `ecm:mixinType`, whose facet would bring schemas of its
+own. A pattern `FROM <Type>` is not read, since it lists the type's subtypes too. Each column's
+property, and each sort's, must be one of that type's or of a facet it declares, and a column's
+widget must show its property's type, as a layout's field is held (section 4). One that is not is
+a finding in the validator's form, naming the file, the place, the type, the page provider and
+its component. Not checked: a page provider the package does not define, which is the server's;
+one whose NXQL does not say its type, such as one with an `OR` at its top, or whose type the
+model does not have; a package given no content model, such as a customer's in CI; the server's
+own properties, `ecm:`; and a column a computation fills
 (`libs/shared/app-definition/src/lib/page-providers.ts`).
 
 Step 2 holds the app the component contributes to the same files. The package contributes its app

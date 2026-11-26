@@ -21,6 +21,7 @@
         "{workspaceRoot}/libs/shared/app-config/src/lib/bootstrap-config.ts",
         "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/app.json",
         "{workspaceRoot}/business-apps/packages/*/package/package.xml",
+        "{workspaceRoot}/business-apps/packages/*/content-model.json",
         "{workspaceRoot}/nuxeo-agentic-core/src/test/resources/agentic-ui-validator/parity.json"
       ],
       "options": { "reportsDirectory": "coverage/libs/shared/app-definition" }

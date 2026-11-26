@@ -25,6 +25,7 @@ import {
 } from './operations.ts';
 import {
   OWN_MODEL,
+  definedIn,
   listPackagePageProviders,
   readPackageSource,
   type PackageSource,
@@ -134,7 +135,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           if (roots !== undefined && 'problem' in roots) throw new Error(roots.problem);
           const source = readPackageSource(args.package, roots ?? [DEFAULT_PACKAGE_ROOT]);
           if (source.model === null)
-            packageNote = `${source.shown} ships no stand-in model (no ${OWN_MODEL}): its types and page providers are the server's, which answered.`;
+            packageNote = `${source.shown} ships no stand-in model, a ${OWN_MODEL} with a component that registers a document type of its own: its types and page providers are the server's.`;
           else {
             const ownAnswer = own(source, args);
             if (typeof ownAnswer !== 'string')
@@ -143,20 +144,16 @@ export function createServer(dependencies: ServerDependencies): McpServer {
                 package: source.shown,
                 ...asObject(ownAnswer.found),
               };
-            packageNote = `${ownAnswer} So the server answered.`;
+            packageNote = ownAnswer;
           }
         }
         if (typeof nuxeo !== 'function')
-          throw new Error(
-            packageNote
-              ? `${packageNote.replace(/ So the server answered\.$/, '')} ${nuxeo.problem}`
-              : nuxeo.problem,
-          );
+          throw new Error(packageNote ? `${packageNote} ${nuxeo.problem}` : nuxeo.problem);
         const reader = nuxeo();
         return {
           source: 'server',
           server: reader.origin,
-          ...(packageNote ? { packageNote } : {}),
+          ...(packageNote ? { packageNote: `${packageNote} So the server answered.` } : {}),
           ...asObject(await read(reader, args)),
         };
       });
@@ -289,7 +286,12 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       (source, { name }: { name: string; package?: string }) => {
         const provider = source.pageProviders.get(name);
         return provider
-          ? { found: { defined: provider.defined, ...describeDefinition(provider.definition) } }
+          ? {
+              found: {
+                defined: definedIn(source, provider),
+                ...describeDefinition(provider.definition),
+              },
+            }
           : `${source.shown} defines no page provider "${name}"${source.pageProviders.size > 0 ? `: it defines ${[...source.pageProviders.keys()].join(', ')}` : ''}.`;
       },
       (reader, { name }) => describePageProvider(reader, name),

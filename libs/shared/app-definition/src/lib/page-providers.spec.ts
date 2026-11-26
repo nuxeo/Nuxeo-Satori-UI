@@ -34,10 +34,16 @@ describe('listedType: the one type a page provider lists, from its NXQL', () => 
     ],
     ['in double quotes', 'ecm:primaryType = "Contract" AND x:y = 1', false, 'Contract'],
     [
-      'a pattern over a type, FROM it',
+      'none, for a pattern over a type, FROM it, which lists its subtypes too',
       'SELECT * FROM Contract WHERE contract:status = ?',
       true,
-      'Contract',
+      null,
+    ],
+    [
+      'none, with a facet asked for, which brings schemas of its own',
+      "ecm:primaryType = 'A' AND ecm:mixinType = 'Reviewable'",
+      false,
+      null,
     ],
     [
       'none, when an OR at the top lets others in',
@@ -240,6 +246,12 @@ describe("nxqlProblems: what in a page provider's NXQL Nuxeo refuses, as far as 
       false,
     ],
     ['parameters', 'x:n BETWEEN ? AND :upper', false],
+    [
+      'typed parameters, given their values before the query is read',
+      'x:d BETWEEN DATE ? AND DATE ? AND x:t BETWEEN TIMESTAMP :from AND TIMESTAMP :to',
+      false,
+    ],
+    ['floats in every form', 'x:n BETWEEN .5 AND 2. AND x:m BETWEEN 1.5e3 AND -2E-1', false],
     ['NOW() compared', "move:loadDate >= NOW('-P1D') AND move:loadDate <= NOW('P7D')", false],
     [
       'every operator',

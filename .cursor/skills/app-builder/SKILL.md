@@ -208,8 +208,9 @@ What each writes, and what it leaves to you:
   words is the next edit (below).
 - **`app-queue`:** the page provider, columns, sort and page size. The pipeline holds the columns
   and the sort, and a related list's, to the type a page provider of the package's own lists, as
-  its NXQL says (`ecm:primaryType = '<Type>'`, as `app-model` writes it); on the server's, nothing
-  checks them. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
+  its NXQL says (`ecm:primaryType = '<Type>'`, as `app-model` writes it), given a content model,
+  as a demo kit's own always is; on the server's, or with no model, nothing checks them. Facets
+  are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
 "labelKey": "<key>" }]`, each an aggregate the page provider defines, which
   `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
   page provider in the package's own model does not define.
@@ -302,14 +303,15 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   pipeline without the model to get a pass.
 - **A page provider's NXQL is checked for what Nuxeo refuses, not validated.** For a page
   provider the package defines, such as one `app-model --where` wrote, the write is refused for a
-  construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)` (write `>= NOW('-P1D') AND
-<= NOW('P7D')`), a string or a parenthesis left open, `==`, `&&`. A query it passes may still be
-  refused on install: run it read-only on the development server first, as a search.
+  construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)`, for which compare with `>=` and
+  `<=`, a string or a parenthesis left open, `==`, `&&`. A query it passes may still be refused
+  on install: run it read-only on the development server first, as a search.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
   a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
   and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
-  `app-model` writes it, they are held to that type), the properties a rule or a computation names,
-  and a vocabulary widget's directory against its property's. Check those by reading the server.
+  `app-model` writes it, they are held to that type, given a model), the properties a rule or a
+  computation names, and a vocabulary widget's directory against its property's. Check those by
+  reading the server.
 
 ## 4. Preview in dev mode, as far as it goes
 

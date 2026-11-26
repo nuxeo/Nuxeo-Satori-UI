@@ -15,6 +15,7 @@
  * A warning, never a refusal: the pipeline does not ask for the heading, and the record page does
  * not use it.
  */
+import { shipsStandIn, type PackageRead } from './package-components.ts';
 
 /**
  * The schemas the Properties panel presents already, which it generates no section for:
@@ -57,10 +58,11 @@ function parsed(text: string | undefined): unknown {
 /**
  * Each heading the package's Properties panel would generate with no text, as a warning, given the
  * package's files by their path inside it (`read` answers `undefined` for one it does not hold).
- * None for a package with no `content-model.json`, or one that cannot be read: the pipeline says
- * why it cannot.
+ * None for a package that ships no stand-in model, as the pipeline decides one does
+ * (`shipsStandIn`), or whose `content-model.json` cannot be read: the pipeline says why it cannot.
  */
-export function schemaHeadingWarnings(read: (path: string) => string | undefined): string[] {
+export function schemaHeadingWarnings(read: PackageRead): string[] {
+  if (!shipsStandIn(read)) return [];
   const model = parsed(read('content-model.json'));
   if (!isRecord(model) || !isRecord(model['doctypes']) || !Array.isArray(model['schemas']))
     return [];

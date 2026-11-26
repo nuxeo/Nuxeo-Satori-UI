@@ -1,6 +1,9 @@
 /**
  * The tools as an MCP client calls them: in memory, against the recorded server.
  */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createServer } from './server.ts';
 import { connect } from './testing/client.ts';
@@ -140,6 +143,35 @@ describe('createServer', () => {
         expect(plain.json).toMatchObject({ source: 'server', server: RECORDED_ORIGIN });
       } finally {
         await client.close();
+      }
+    });
+
+    it("answers from the server for a package whose content-model.json describes a server's", async () => {
+      // A customer's package with an export beside its bundle, and no type of its own.
+      const root = mkdtempSync(join(tmpdir(), 'builder-mcp-reads-'));
+      try {
+        const pkg = join(root, 'acme-claims');
+        mkdirSync(join(pkg, 'bundle', 'META-INF'), { recursive: true });
+        writeFileSync(
+          join(pkg, 'content-model.json'),
+          JSON.stringify({ doctypes: {}, schemas: [] }),
+        );
+        writeFileSync(join(pkg, 'bundle', 'META-INF', 'MANIFEST.MF'), 'Manifest-Version: 1.0\n');
+        const client = await connect(
+          createServer({ nuxeo: () => new RecordedReads(), packageRoots: [root] }),
+        );
+        try {
+          const file = await client.call('describe_document_type', { type: 'File', package: pkg });
+          expect(file.isError, file.text).toBe(false);
+          expect(file.json).toMatchObject({ source: 'server', name: 'File' });
+          expect((file.json as { packageNote: string }).packageNote).toContain(
+            'ships no stand-in model',
+          );
+        } finally {
+          await client.close();
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
       }
     });
 

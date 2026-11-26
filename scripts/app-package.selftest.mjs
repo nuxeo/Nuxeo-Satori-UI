@@ -1632,6 +1632,19 @@ expectRefused(
   2,
   'pageProviders.member_claims.pattern: BETWEEN takes a literal',
 );
+// A page provider of a class that does not take NXQL, such as the audit's, whose pattern is a
+// query of the audit's own entries, is not read as NXQL.
+expectBuilt('an audit page provider, whose pattern is not NXQL', ({ edit }) =>
+  edit(
+    PAYERS_MODEL,
+    '<coreQueryPageProvider name="member_claims">',
+    '<genericPageProvider name="payers_claim_history" class="org.nuxeo.ecm.platform.audit.api.AuditPageProvider">\n' +
+      '      <pattern>log.docUUID = ? AND log.eventDate IS NOT NULL</pattern>\n' +
+      '      <pageSize>20</pageSize>\n' +
+      '    </genericPageProvider>\n' +
+      '    <coreQueryPageProvider name="member_claims">',
+  ),
+);
 expectBuilt('BETWEEN with literal bounds, and a comparison written in CDATA', ({ edit }) =>
   edit(
     PAYERS_MODEL,

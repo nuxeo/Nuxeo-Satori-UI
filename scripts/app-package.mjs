@@ -24,9 +24,10 @@
  *      for a package that ships a stand-in model, its own `content-model.json`. A queue's facet and
  *      a home's figure name an aggregate their page provider defines, when the package's own
  *      model defines it; the NXQL of a page provider the package defines holds nothing Nuxeo's
- *      grammar has no place for, by a check of its tokens, not a parse; a queue's and a related list's columns and sorts, on such a page
- *      provider whose NXQL says the type it lists, name that type's properties in the content
- *      model, with widgets that show them. The layouts the component contributes are the files the validator read, in the modes it
+ *      grammar has no place for, by a check of its tokens, not a parse; a queue's and a related
+ *      list's columns and sorts, on such a page provider whose NXQL says the type it lists, name
+ *      that type's properties in the content model, with widgets that show them. The layouts the
+ *      component contributes are the files the validator read, in the modes it
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
@@ -869,7 +870,7 @@ function pageProvidersOf(directory) {
         new RegExp(`<(coreQueryPageProvider|genericPageProvider)${TAG}`, 'g'),
       )) {
         const [tag, element, inside] = match;
-        const { name, enabled } = attributesOf(inside);
+        const { name, enabled, class: className } = attributesOf(inside);
         if (!name) continue;
         if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
           providers.delete(name);
@@ -897,7 +898,14 @@ function pageProvidersOf(directory) {
               );
         const pattern =
           whereClause === null ? elementText(definition, definitionKept, 'pattern') : null;
-        const nxql = pattern ?? fixedPart;
+        // Read only from a page provider that takes NXQL: the repository's, or a generic one of
+        // Nuxeo's NXQL classes. Another class's pattern, such as the audit's, is another language.
+        const takesNxql =
+          element === 'coreQueryPageProvider' ||
+          /(?:^|\.)(?:SearchServicePageProvider|ElasticSearchNxqlPageProvider|CoreQueryDocumentPageProvider|CoreQueryAndFetchPageProvider)$/.test(
+            className ?? '',
+          );
+        const nxql = takesNxql ? (pattern ?? fixedPart) : null;
         providers.set(name, {
           component,
           repository: element === 'coreQueryPageProvider',

@@ -4,8 +4,10 @@
  * package to (package-pipeline.md, section 2):
  *
  * - **The type a page provider lists** ({@link listedType}), read from its NXQL as `app-model`
- *   writes it: `ecm:primaryType = '<Type>'`, a condition every listed record meets, or a pattern
- *   `FROM <Type>`. Only when the NXQL says so plainly; otherwise none, and nothing is checked.
+ *   writes it: `ecm:primaryType = '<Type>'`, a condition every listed record meets. Only when the
+ *   NXQL says so plainly; otherwise none, and nothing is checked.
+ * - **What in its NXQL Nuxeo refuses** ({@link nxqlProblems}), by a check of its tokens, not a
+ *   parse.
  * - **A queue's and a related list's columns and sorts** ({@link listedColumnFindings}), held to
  *   that type as a layout's fields are held to the type its path names (`layout-model.ts`): each
  *   property on the type or a facet it declares, and each column's widget showing its property's
@@ -65,14 +67,16 @@ export function tokenize(nxql: string): {
       continue;
     }
     const rest = nxql.slice(at);
+    // A number in any form a float may take, `1`, `1.5`, `.5`, `1.` or `1.5e3`: read wider than
+    // the grammar, since a number read as one never makes a refusal.
     const match =
-      /^(?:\d+(?:\.\d+)?)/.exec(rest) ??
+      /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(rest) ??
       /^:[A-Za-z_]\w*/.exec(rest) ??
       /^[A-Za-z_][\w:./*-]*/.exec(rest) ??
       /^\?/.exec(rest) ??
       /^[^\s\w'"()?]+/.exec(rest);
     const text = match ? match[0] : character;
-    const kind = /^\d/.test(text)
+    const kind = /^\.?\d/.test(text)
       ? 'number'
       : text === '?' || text.startsWith(':')
         ? 'parameter'
@@ -107,46 +111,36 @@ function whereOf(tokens: readonly NxqlToken[], pattern: boolean): readonly NxqlT
 }
 
 /**
- * The one document type every record a page provider lists is of, from its NXQL, or `null`. Read
- * only where the NXQL says so plainly, so that a column is never held to a type the records may
- * not have: a where clause of conditions joined by `AND` alone at its top, one of them
- * `ecm:primaryType = '<Type>'`, not under a `NOT`, and no other mention of `ecm:primaryType`; or,
- * for a pattern, `FROM <Type>` other than `Document`, whose records have that type's schemas at
- * least.
+ * The one document type every record a page provider lists is of, and whose schemas are all the
+ * ones each record has, from its NXQL, or `null`. Read only where the NXQL says so plainly, so
+ * that a column is never held to a type the records may not have, or held to it when they have
+ * more: a where clause of conditions joined by `AND` alone at its top, one of them
+ * `ecm:primaryType = '<Type>'`, not under a `NOT`, no other mention of `ecm:primaryType`, and none
+ * of `ecm:mixinType`, whose facet would bring schemas of its own. A pattern `FROM <Type>` is not
+ * read: it lists the type's subtypes too, whose schemas may be more.
  */
 export function listedType(nxql: string, options: { readonly pattern: boolean }): string | null {
   const { tokens, unclosed } = tokenize(nxql);
   if (unclosed) return null;
   const where = whereOf(tokens, options.pattern);
-  let primary: string | null = null;
-  if (where !== null) {
-    if (where.some((token) => token.depth === 0 && keyword(token, 'OR'))) return null;
-    const mentions = where
-      .map((token, index) => ({ token, index }))
-      .filter(({ token }) => token.kind === 'name' && token.text === 'ecm:primaryType');
-    if (mentions.length > 1) return null;
-    if (mentions.length === 1) {
-      const { token, index } = mentions[0];
-      const operator = where[index + 1];
-      const value = where[index + 2];
-      if (
-        token.depth !== 0 ||
-        keyword(where[index - 1], 'NOT') ||
-        operator?.text !== '=' ||
-        value?.kind !== 'string'
-      )
-        return null;
-      primary = value.text.slice(1, -1);
-    }
-  }
-  if (primary !== null) return primary;
-  if (!options.pattern) return null;
-  const from = tokens.findIndex((token) => token.depth === 0 && keyword(token, 'FROM'));
-  const type = from === -1 ? undefined : tokens[from + 1];
-  const after = from === -1 ? undefined : tokens[from + 2];
-  if (type?.kind !== 'name' || type.text === 'Document' || (after && !keyword(after, 'WHERE')))
+  if (where === null) return null;
+  if (where.some((token) => token.depth === 0 && keyword(token, 'OR'))) return null;
+  if (where.some((token) => token.kind === 'name' && token.text === 'ecm:mixinType')) return null;
+  const mentions = where
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => token.kind === 'name' && token.text === 'ecm:primaryType');
+  if (mentions.length !== 1) return null;
+  const { token, index } = mentions[0];
+  const operator = where[index + 1];
+  const value = where[index + 2];
+  if (
+    token.depth !== 0 ||
+    keyword(where[index - 1], 'NOT') ||
+    operator?.text !== '=' ||
+    value?.kind !== 'string'
+  )
     return null;
-  return type.text;
+  return value.text.slice(1, -1);
 }
 
 /** Runs of symbols no NXQL query holds outside a string, each with what NXQL writes instead. */
@@ -164,7 +158,12 @@ function boundAt(tokens: readonly NxqlToken[], at: number): number {
   if (!token) return 0;
   if (token.kind === 'string' || token.kind === 'number' || token.kind === 'parameter') return 1;
   if ((token.text === '-' || token.text === '+') && tokens[at + 1]?.kind === 'number') return 2;
-  if ((keyword(token, 'DATE') || keyword(token, 'TIMESTAMP')) && tokens[at + 1]?.kind === 'string')
+  // A parameter is given its value before the query is read: `DATE ?` is a date then.
+  const next = tokens[at + 1]?.kind;
+  if (
+    (keyword(token, 'DATE') || keyword(token, 'TIMESTAMP')) &&
+    (next === 'string' || next === 'parameter')
+  )
     return 2;
   return 0;
 }
@@ -172,8 +171,9 @@ function boundAt(tokens: readonly NxqlToken[], at: number): number {
 /**
  * What in a page provider's NXQL Nuxeo refuses, each said with why, as far as a check of its
  * tokens can tell: **not a parser, and not a validation of NXQL.** A query it passes may still be
- * refused, or answer nothing. It finds only constructs Nuxeo's grammar has no place for, so that it
- * refuses no query Nuxeo runs:
+ * refused, or answer nothing. It finds only constructs Nuxeo's grammar has no place for, meant to
+ * refuse no query Nuxeo runs; the caller gives it only NXQL, not the pattern of an audit page
+ * provider, say, which is another language:
  *
  * - a string left open, or a parenthesis that is not closed or closes nothing;
  * - `==`, `&&`, `||`, `;`, or a `!` that is not `!=`, outside a string;

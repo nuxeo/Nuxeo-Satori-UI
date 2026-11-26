@@ -338,6 +338,14 @@ describe('app-layout generator', () => {
       }
     });
 
+    it("names the properties of the type's own schemas --schemas does not name", async () => {
+      const output = await said({ schemas: 'review' });
+      expect(output).not.toContain('Left out: nothing');
+      expect(output).toMatch(
+        /contract:number, contract:counterparty, [^\n]*: in the schema contract, which --schemas does not name/,
+      );
+    });
+
     it('says it left out nothing when --schemas names every schema', async () => {
       const output = await said({
         type: 'Counterparty',

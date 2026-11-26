@@ -6,11 +6,21 @@ import { REPO_ROOT } from './validate-package.ts';
 
 const CONFIG = 'bundle/agentic-ui-config';
 
-/** A package's files, by their path inside it. */
+/** The manifest and the component of a stand-in model, which registers a type of its own. */
+const STAND_IN = {
+  'bundle/META-INF/MANIFEST.MF': 'Manifest-Version: 1.0\nNuxeo-Component: OSGI-INF/model.xml\n',
+  'bundle/OSGI-INF/model.xml':
+    '<component name="x.model"><extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype"><doctype name="DamageClaim" extends="Document" /></extension></component>',
+};
+
+/** A demo kit's files, by their path inside it: a text as it is, anything else as JSON. */
 const files =
-  (held: Record<string, unknown>) =>
-  (path: string): string | undefined =>
-    path in held ? JSON.stringify(held[path]) : undefined;
+  (held: Record<string, unknown>, standIn = true) =>
+  (path: string): string | undefined => {
+    const all: Record<string, unknown> = standIn ? { ...STAND_IN, ...held } : held;
+    if (!(path in all)) return undefined;
+    return typeof all[path] === 'string' ? (all[path] as string) : JSON.stringify(all[path]);
+  };
 
 const MODEL = {
   doctypes: {
@@ -59,6 +69,12 @@ describe('schemaHeadingWarnings', () => {
     expect(schemaHeadingWarnings(files({ [`${CONFIG}/labels/en.json`]: { labels: {} } }))).toEqual(
       [],
     );
+    // A content-model.json with no type of the package's own behind it describes a server.
+    expect(
+      schemaHeadingWarnings(
+        files({ 'content-model.json': MODEL, [`${CONFIG}/labels/en.json`]: { labels: {} } }, false),
+      ),
+    ).toEqual([]);
   });
 
   it("presents the schemas the Properties panel presents, as document-layouts' own list", () => {

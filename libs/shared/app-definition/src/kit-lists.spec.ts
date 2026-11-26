@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PARITY, REPO, kitNames } from './server-validator-build.mjs';
@@ -68,10 +76,24 @@ function missingFromGuide(root: string, kits: readonly string[], guide: string):
   });
 }
 
+/**
+ * Every kit the guide lists: each folder of `root` with an app definition, a model of its own or
+ * not. The corpus takes only those with a model, which its cases are held to (`kitNames`).
+ */
+function appFolders(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && existsSync(join(root, entry.name, CONFIG, 'app.json')),
+    )
+    .map((entry) => entry.name)
+    .sort();
+}
+
 describe('every list of kits kept outside the kits', () => {
   const kits = kitNames();
 
   it('finds the kits, from their folders', () => {
+    expect(appFolders(KITS)).toEqual(expect.arrayContaining(kits));
     expect(kits).toEqual(
       expect.arrayContaining([
         'brand-assets-demo',
@@ -88,8 +110,8 @@ describe('every list of kits kept outside the kits', () => {
     expect(kits.filter((kit) => !held.has(kit))).toEqual([]);
   });
 
-  it("has every kit in the administrator's guide", () => {
-    expect(missingFromGuide(KITS, kits, readFileSync(GUIDE, 'utf8'))).toEqual([]);
+  it("has every kit in the administrator's guide, one on a server's model too", () => {
+    expect(missingFromGuide(KITS, appFolders(KITS), readFileSync(GUIDE, 'utf8'))).toEqual([]);
   });
 
   describe('a new kit, left out of each list, is found', () => {
@@ -110,6 +132,14 @@ describe('every list of kits kept outside the kits', () => {
           `<package type="addon" name="${kit}" version="0.1.0"></package>`,
         );
       }
+      // A kit on a server's model: no content model of its own, so in no corpus, but in the guide.
+      mkdirSync(join(root, 'server-app', CONFIG), { recursive: true });
+      mkdirSync(join(root, 'server-app', 'package'), { recursive: true });
+      writeFileSync(join(root, 'server-app', CONFIG, 'app.json'), JSON.stringify({ id: 'served' }));
+      writeFileSync(
+        join(root, 'server-app', 'package', 'package.xml'),
+        '<package type="addon" name="server-app" version="0.1.0"></package>',
+      );
       // Not a kit: no app definition.
       mkdirSync(join(root, 'demo-server'));
     });
@@ -139,10 +169,14 @@ describe('every list of kits kept outside the kits', () => {
         '| `alpha`, at `alpha-desk` | `alpha-team` |',
         '',
       ].join('\n');
-      expect(missingFromGuide(root, kitNames(root), guide)).toEqual([
+      expect(appFolders(root)).toEqual(['alpha-demo', 'new-demo', 'server-app']);
+      expect(missingFromGuide(root, appFolders(root), guide)).toEqual([
         "new-demo: no row for `new-demo` in section 1's table of packages",
         "new-demo: no row for the app `newest` in the table of the app registry's groups",
         'new-demo: its README is not linked',
+        "server-app: no row for `server-app` in section 1's table of packages",
+        "server-app: no row for the app `served` in the table of the app registry's groups",
+        'server-app: its README is not linked',
       ]);
     });
   });

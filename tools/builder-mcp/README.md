@@ -50,8 +50,11 @@ Some things about them are worth knowing before relying on them:
   page providers its manifest's components define, read as the server would register them,
   with `source: "package"` (`src/package-model.ts`). What the package does not have, such as a
   stock type or the server's `default_search`, the server answers, with `source: "server"` and a
-  `packageNote` saying why; so does every read of a package with no stand-in model. A package
-  answer needs no server and no credential.
+  `packageNote` saying why; so does every read of a package with no stand-in model. A stand-in
+  model is what the pipeline takes for one: the `content-model.json` and a component that registers
+  a document type of its own; a server's export there with no type behind it is not read.
+  `list_page_providers` given such a package lists its own page providers only, never the
+  server's. A package answer needs no server and no credential.
 - **Prefixes are the ones an app definition writes.** Nuxeo reports `file`, `uid` and `files` with
   an empty prefix and addresses them by name, as `file:content`
   ([AGENTS/11-beta-program.md](../../AGENTS/11-beta-program.md), section 3). So does every tool here.
