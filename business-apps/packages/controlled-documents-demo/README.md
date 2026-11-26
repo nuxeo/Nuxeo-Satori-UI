@@ -156,7 +156,7 @@ them.
 
    ```bash
    curl -s --fail-with-body -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
-     -X POST http://localhost:8080/nuxeo/api/v1/path/default-domain/workspaces/controlled-documents-demo/register \
+     -X POST http://localhost:8080/nuxeo/api/v1/path/default-domain/workspaces/controlled-documents/register \
      -d '{"entity-type":"document","type":"EngineeringDocument","name":"pump-house-ga-d","properties":{"dc:title":"Pump house general arrangement, revision D","docctl:supersedes":"<C'\''s id>"}}'
    ```
 

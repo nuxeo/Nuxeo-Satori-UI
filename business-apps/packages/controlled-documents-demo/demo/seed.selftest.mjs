@@ -29,10 +29,11 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CHAINS, revisionsOf } from './data.mjs';
+import { CHAINS, FOLDER, WORKSPACE, revisionsOf } from './data.mjs';
 
 const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
-const HOLDER = '/default-domain/workspaces/controlled-documents-demo/register';
+const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
+const HOLDER = `${ROOT}/${FOLDER.name}`;
 const REVISIONS = CHAINS.reduce((count, chain) => count + chain.revisions.length, 0);
 /** What the server gives: a creation may name a series or a predecessor, and nothing else of these. */
 const SERVER_GIVEN = ['docctl:number', 'docctl:revision', 'docctl:status', 'docctl:supersededBy'];
@@ -60,6 +61,7 @@ function standIn({
   oneNumber = false,
   brokenProvider = null,
   widenedProvider = null,
+  segmentMax = Infinity,
 }) {
   const byPath = new Map();
   const byId = new Map();
@@ -165,7 +167,8 @@ function standIn({
           own = { ...own, ...given.properties };
           previous = given.previous ?? null;
         }
-        const created = add(`${at}/${name}`, type, own);
+        // Nuxeo cuts a name to nuxeo.path.segment.maxsize, 24 by default, without a word.
+        const created = add(`${at}/${String(name).slice(0, segmentMax)}`, type, own);
         if (previous) {
           previous.properties['docctl:status'] = 'superseded';
           previous.properties['docctl:supersededBy'] = created.uid;
@@ -352,9 +355,9 @@ const close = (stand) => new Promise((done) => stand.server.close(done));
 // 15. A place of another type is left alone, and stops the run.
 {
   const stand = standIn({ user: 'seed-selftest', password: 'p' });
-  stand.byPath.set('/default-domain/workspaces/controlled-documents-demo', {
+  stand.byPath.set(ROOT, {
     uid: randomUUID(),
-    path: '/default-domain/workspaces/controlled-documents-demo',
+    path: ROOT,
     type: 'Note',
     properties: {},
   });
@@ -389,6 +392,34 @@ for (const [options, what, says] of [
     broken.output,
   );
   await close(broken.stand);
+}
+
+// 19. A server that cuts names, as Nuxeo does past nuxeo.path.segment.maxsize: the seed stops at
+// the first document stored under another name, saying so, rather than looking for it where it is
+// not. Ten characters cuts the workspace's own name, and with it every place below.
+{
+  const cut = await run({ segmentMax: 10 });
+  expect(
+    cut.code === 1 && cut.output.includes('the server named it otherwise'),
+    'a name the server cuts stops the run, and says so',
+    cut.output,
+  );
+  expect(
+    !cut.stand.writes.some((write) => write.path.startsWith(`${HOLDER}/`)),
+    'and nothing is written where the seed thought its folder was',
+  );
+  await close(cut.stand);
+}
+
+// And every name data.mjs gives is short enough for Nuxeo's default.
+{
+  const names = [
+    WORKSPACE.name,
+    FOLDER.name,
+    ...CHAINS.flatMap((chain) => revisionsOf(chain).map((revision) => revision.name)),
+  ];
+  const long = names.filter((name) => name.length > 24);
+  expect(long.length === 0, 'every name in data.mjs is 24 characters or fewer', long.join(', '));
 }
 
 if (failures.length > 0) {
