@@ -22,8 +22,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pnav{background:var(--sat-platform-nav-background,var(--mat-sys-primary));color:var(--mat-sys-on-primary);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;position:sticky;top:0;height:100vh}
 .pnav .app-ic{width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .pnav button{width:40px;height:40px;border-radius:12px;border:0;background:none;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;min-height:0}
-.pnav button:hover{background:var(--sat-sys-on-primary-opacity-08,rgba(255,255,255,.08))}
-.pnav button[aria-current=page]{background:var(--sat-sys-on-primary-opacity-12,rgba(255,255,255,.12))}
+.pnav button:hover{background:color-mix(in srgb,var(--mat-sys-on-primary) 8%,transparent)}
+.pnav button[aria-current=page]{background:color-mix(in srgb,var(--mat-sys-on-primary) 12%,transparent)}
 .pnav .sp{flex:1}
 .avatar{width:32px;height:32px;border-radius:50%;background:var(--sat-sys-cat-teal-container);color:var(--sat-sys-on-cat-teal-container);display:flex;align-items:center;justify-content:center;font:var(--mat-sys-label-medium)}
 .hdr{display:flex;align-items:center;gap:12px;min-height:64px;padding:0 24px;border-bottom:1px solid var(--mat-sys-outline-variant);background:var(--mat-sys-surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
