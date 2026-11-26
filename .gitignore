@@ -182,3 +182,6 @@ scripts/Untitled*
 # would put Satori output in this public repository. Build it locally with
 # `node docs/prototype/business-apps/src/build.cjs`.
 /docs/prototype/business-apps/index.html
+
+# Same for the studio-designer-satori prototype's built page; storybook-pages.yml builds and publishes it.
+/docs/prototype/studio-designer-satori/index.html
