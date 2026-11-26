@@ -671,6 +671,25 @@ export function readKit(zip, scratch) {
   };
 }
 
+/** The branches a signed commit may be on, as this clone has them: what is merged, and nothing else. */
+export const PROTECTED_BRANCHES = /^refs\/remotes\/origin\/(main|staging\/.+|integration\/.+)$/;
+
+/**
+ * Whether `commit` is in the history the candidate is built from, `HEAD`, or of a protected branch
+ * this clone has: a commit tagged on `main` is not in a staging branch's history, and is merged.
+ * `commit` is a full commit id, as `verifySignature` takes one; one git does not have is in none.
+ */
+export function inProtectedHistory(commit, cwd) {
+  if (spawnSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], { cwd }).status === 0)
+    return true;
+  const refs = spawnSync(
+    'git',
+    ['for-each-ref', '--contains', commit, '--format=%(refname)', 'refs/remotes/origin/'],
+    { cwd, encoding: 'utf8' },
+  );
+  return refs.status === 0 && refs.stdout.split('\n').some((ref) => PROTECTED_BRANCHES.test(ref));
+}
+
 /**
  * A kit's zip held to its signature, given `--signatures`: the file `<zip name>.sig.json` in
  * `signatures`, checked against `trusted` as `app-package-signature.mjs verify` checks one, for the
@@ -679,7 +698,7 @@ export function readKit(zip, scratch) {
  * signer, or signed over other bytes or for another version, and a kit it takes is the one signed:
  * the candidate's build is reproducible, so a kit unchanged since it was signed has the same digest.
  *
- * `inHistory` answers whether a commit is in the candidate's history. A signature made from a
+ * `inHistory` answers whether a commit is merged (`inProtectedHistory`). A signature made from a
  * commit that is not is refused too: a tag pushed on a commit that was never merged runs the
  * workflow as that commit has it, and the trusted workflow's identity says nothing about review.
  */
@@ -700,7 +719,7 @@ export function kitSignature({
       signature,
       ok: false,
       problems: [
-        `${basename(zip)} was signed from ${verified.record.commit}, which is not in this candidate's history: a tag on a commit that was never merged.`,
+        `${basename(zip)} was signed from ${verified.record.commit}, which is neither in this candidate's history nor on a protected branch: a tag on a commit that was never merged.`,
       ],
     };
   return { signature, ...verified };

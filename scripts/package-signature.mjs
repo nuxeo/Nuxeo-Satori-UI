@@ -153,6 +153,17 @@ export function readTrustedSigners(file) {
         workflow: entry.workflow,
       };
     }
+    // A public key's PEM and nothing else: Node would take a private key here too, and derive its
+    // public half, so a private key pasted in would be committed and work.
+    if (
+      typeof entry.publicKey !== 'string' ||
+      !/^-----BEGIN PUBLIC KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END PUBLIC KEY-----\s*$/.test(
+        entry.publicKey.trim(),
+      )
+    )
+      throw wrong(
+        `${at} (${entry.id}): "publicKey" is not a public key's PEM, SubjectPublicKeyInfo and nothing else.`,
+      );
     let publicKey;
     try {
       publicKey = createPublicKey(entry.publicKey);
@@ -341,9 +352,32 @@ export function ghArguments({ zip, bundle, signer, name, version, commit, truste
   ];
 }
 
+/** A signature document's statement, decoded but not verified, or `null` when it has none. */
+function statementIn(document) {
+  const isBundle =
+    isObject(document) &&
+    typeof document.mediaType === 'string' &&
+    document.mediaType.startsWith(BUNDLE_MEDIA_TYPE);
+  const envelope = isBundle ? document.dsseEnvelope : document;
+  if (!isObject(envelope) || !Array.isArray(envelope.signatures)) return null;
+  const payload = strictBase64(envelope.payload);
+  try {
+    const statement = payload === null ? null : JSON.parse(payload.toString('utf8'));
+    return isObject(statement) ? { isBundle, envelope, payload, statement } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Verify `zip` against its signature and the trusted signers. Returns `{ ok: true, record }`, with
  * what the signature records and the trusted signer's id, or `{ ok: false, problems }`.
+ *
+ * The signature file is one JSON document, a Sigstore bundle or a DSSE envelope; or JSON lines, as
+ * `gh attestation download` writes the attestations of a digest, one bundle a line, the build
+ * provenance among them. Then each line whose statement is a package signature is verified on its
+ * own, as if it were the whole file, and the zip passes when one of them does: a run of the `sign`
+ * job attempted twice attests twice.
  *
  * `env` is the environment `gh` is started with, for a keyless signature; `gh` the command.
  */
@@ -357,48 +391,96 @@ export function verifySignature({
   env = process.env,
   gh = 'gh',
 }) {
-  const problems = [];
   const bytes = zipBytes(zip);
   if (bytes === null) return { ok: false, problems: [`${zip} is not a file.`] };
-  const digest = sha256(bytes);
   if (!statSync(signature, { throwIfNoEntry: false })?.isFile())
     return {
       ok: false,
       problems: [`${basename(zip)} is not signed: there is no signature at ${signature}.`],
     };
-  const signatureBytes = readFileSync(signature);
-  let document;
+  const text = readFileSync(signature, 'utf8').replace(/^\uFEFF/, '');
+  const checking = {
+    zip,
+    digest: sha256(bytes),
+    signature,
+    trusted,
+    name,
+    version,
+    trustedRoot,
+    env,
+    gh,
+  };
+  let whole;
   try {
-    document = JSON.parse(signatureBytes.toString('utf8').replace(/^\uFEFF/, ''));
-  } catch (error) {
-    return { ok: false, problems: [`${signature} is not one JSON document: ${error.message}`] };
+    whole = JSON.parse(text);
+  } catch {
+    whole = undefined;
   }
-  const isBundle =
-    isObject(document) &&
-    typeof document.mediaType === 'string' &&
-    document.mediaType.startsWith(BUNDLE_MEDIA_TYPE);
-  const envelope = isBundle ? document.dsseEnvelope : document;
-  if (!isObject(envelope) || !Array.isArray(envelope.signatures))
+  if (whole !== undefined) return verifyDocument({ ...checking, text, document: whole });
+  const lines = text.split('\n').map((line, index) => ({ line: index + 1, text: line.trim() }));
+  const documents = [];
+  for (const { line, text: lineText } of lines.filter((each) => each.text !== '')) {
+    try {
+      documents.push({ line, text: lineText, document: JSON.parse(lineText) });
+    } catch (error) {
+      return {
+        ok: false,
+        problems: [
+          `${signature} is neither one JSON document nor JSON lines: line ${line}, ${error.message}`,
+        ],
+      };
+    }
+  }
+  const signatures = documents.filter(
+    ({ document }) => statementIn(document)?.statement.predicateType === PREDICATE_TYPE,
+  );
+  if (signatures.length === 0)
     return {
       ok: false,
       problems: [
-        `${signature} is neither a Sigstore bundle of a DSSE envelope nor a DSSE envelope.`,
+        `${basename(zip)} is not signed: ${signature} holds ${documents.length} attestation(s), and none is a package signature, ${PREDICATE_TYPE}.`,
       ],
     };
+  const problems = [];
+  for (const each of signatures) {
+    const result = verifyDocument({ ...checking, text: each.text, document: each.document });
+    if (result.ok) return result;
+    problems.push(...result.problems.map((problem) => `line ${each.line}: ${problem}`));
+  }
+  return { ok: false, problems };
+}
+
+/** One signature document, `document`, parsed from `text`, held to the zip and the trusted signers. */
+function verifyDocument({
+  zip,
+  digest,
+  signature,
+  trusted,
+  name,
+  version,
+  trustedRoot,
+  env,
+  gh,
+  text,
+  document,
+}) {
+  const problems = [];
+  const read = statementIn(document);
+  if (read === null)
+    return {
+      ok: false,
+      problems: [
+        `${signature} is neither a Sigstore bundle of a DSSE envelope nor a DSSE envelope with a statement this can read.`,
+      ],
+    };
+  const { isBundle, envelope, payload, statement } = read;
   if (envelope.payloadType !== PAYLOAD_TYPE)
     return {
       ok: false,
       problems: [`${signature} signs a ${envelope.payloadType}, not an in-toto statement.`],
     };
-  const payload = strictBase64(envelope.payload);
-  let statement = null;
-  try {
-    statement = payload === null ? null : JSON.parse(payload.toString('utf8'));
-  } catch {
-    statement = null;
-  }
-  if (!isObject(statement) || !isObject(statement.predicate))
-    return { ok: false, problems: [`${signature}'s payload is not a statement this can read.`] };
+  if (!isObject(statement.predicate))
+    return { ok: false, problems: [`${signature}'s statement has no predicate.`] };
   const { predicate } = statement;
 
   // What the statement says, against the zip and what the caller expects.
@@ -443,18 +525,21 @@ export function verifySignature({
         `the signature is for ${predicate.package} ${predicate.version}, not ${version}.`,
       );
   }
-  if (!COMMIT.test(predicate.commit ?? ''))
+  if (typeof predicate.commit !== 'string' || !COMMIT.test(predicate.commit))
     problems.push('the predicate records no full commit id.');
   if (envelope.signatures.length !== 1)
     problems.push(
       `${signature} carries ${envelope.signatures.length} signatures, and a package's carries one.`,
     );
+  else if (!isObject(envelope.signatures[0]) || typeof envelope.signatures[0].sig !== 'string')
+    problems.push(`${signature}'s signature is not an object with a "sig".`);
 
   // Who signed: a trusted signer, by the signature itself, not by what the predicate says.
   let signer = null;
   const claimed = isObject(predicate.signer) ? predicate.signer : {};
   if (!isBundle) {
-    const [{ keyid, sig } = {}] = envelope.signatures;
+    const [first] = envelope.signatures;
+    const { keyid, sig } = isObject(first) ? first : {};
     signer = trusted.find((each) => each.kind === 'ed25519' && each.keyId === keyid) ?? null;
     if (signer === null) {
       problems.push(
@@ -495,7 +580,7 @@ export function verifySignature({
       const scratch = mkdtempSync(join(tmpdir(), 'app-package-signature-'));
       try {
         const bundle = join(scratch, 'bundle.json');
-        writeFileSync(bundle, signatureBytes);
+        writeFileSync(bundle, text);
         const checked = spawnSync(
           gh,
           ghArguments({
@@ -546,7 +631,7 @@ export function verifySignature({
         : {
             workflow: `${signer.repository}/${signer.workflow}`,
             ref: claimed.ref,
-            run: claimed.run ?? null,
+            run: typeof claimed.run === 'string' ? claimed.run : null,
           }),
     },
   };

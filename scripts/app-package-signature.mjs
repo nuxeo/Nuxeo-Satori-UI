@@ -155,6 +155,12 @@ function sign(zip, options) {
     commit = head.status === 0 ? head.stdout.trim() : '';
     if (!commit)
       throw new Usage(`git could not say which commit this is: give --commit.\n${USAGE}`);
+    // HEAD is what the zip was built from only when nothing is uncommitted.
+    const status = spawnSync('git', ['status', '--porcelain'], { cwd: REPO, encoding: 'utf8' });
+    if (status.status !== 0 || status.stdout.trim() !== '')
+      throw new Usage(
+        `the working tree has uncommitted changes, so ${commit.slice(0, 12)} may not be what the zip was built from: give --commit.\n${USAGE}`,
+      );
   }
   const envelope = signWithKey({ zip, privateKey, commit });
   const out = resolve(options.out ?? signatureFileFor(zip));

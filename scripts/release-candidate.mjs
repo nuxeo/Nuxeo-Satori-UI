@@ -5,7 +5,7 @@
  * development plan's phase 10, "a release candidate across all kits").
  *
  *   node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]
- *     [--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>]]
+ *     (--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>] | --unsigned-kits)
  *
  * In order, each stage stopping the run when it refuses, the cheap ones first:
  *
@@ -26,8 +26,12 @@
  *      (`kitSignature`, `package-signature.mjs`), against `business-apps/trusted-signers.json` or
  *      `--trusted-signers`: a kit unsigned, signed by no trusted signer, or signed over other bytes
  *      or for another version refuses the candidate. `--trusted-root` is Sigstore's trusted root for
- *      `gh attestation verify`, for a keyless signature checked offline. Without `--signatures` no
- *      kit is held to a signature, and the manifest and the release note say so.
+ *      `gh attestation verify`, for a keyless signature checked offline. A signature made from a
+ *      commit that neither the candidate's history nor a protected branch this clone has holds,
+ *      `main`, `staging/*` or `integration/*`, is refused too (`inProtectedHistory`). The verified
+ *      signature is written beside the kit's zip. `--unsigned-kits` takes kits with no signature
+ *      instead, as every kit is until its first tag, and the manifest and the release note say so;
+ *      one of the two must be given.
  *   3. The kits as a set, read from the zips the pipeline wrote: no two contribute the same package
  *      name, app id, address, queue, action, component, document type, facet, schema, lifecycle,
  *      page provider, automation chain or operation, directory, workflow, layout, rights policy, or
@@ -109,6 +113,7 @@ import {
   bundleDifferences,
   descriptorOf,
   duplicatesAcross,
+  inProtectedHistory,
   kitSignature,
   readKit,
   setProblems,
@@ -129,7 +134,7 @@ const DEPLOYED_BUNDLE = ['web', 'nuxeo.war', 'agentic-ui'];
 const NOT_PACKAGED = 'agentic-ui-config';
 const USAGE =
   'usage: node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]\n' +
-  '         [--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>]]';
+  '         (--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>] | --unsigned-kits)';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 const VALUED = [
   '--out',
@@ -151,7 +156,9 @@ function parse(argv) {
     const arg = argv[index];
     // An empty value is refused, not taken as no option: `--since "$BASE"` unset would otherwise
     // hold no kit to anything.
-    if (
+    if (arg === '--unsigned-kits' && options['unsigned-kits'] === undefined)
+      options['unsigned-kits'] = true;
+    else if (
       VALUED.includes(arg) &&
       argv[index + 1] !== undefined &&
       argv[index + 1] !== '' &&
@@ -323,6 +330,14 @@ const signatures = options.signatures === undefined ? null : resolve(options.sig
 if (signatures === null && (options['trusted-signers'] || options['trusted-root'])) {
   console.error(
     `--trusted-signers and --trusted-root hold the kits to their signatures, which only --signatures gives.\n${USAGE}`,
+  );
+  process.exit(2);
+}
+// A candidate holds every kit to its signature unless it is told, in so many words, to take kits
+// no tag has signed: until the first tag, none has been.
+if ((signatures === null) === (options['unsigned-kits'] === undefined)) {
+  console.error(
+    `${signatures === null ? 'Give --signatures <folder>, to hold each kit to its signature, or --unsigned-kits, to take kits no tag has signed.' : '--signatures and --unsigned-kits say opposite things: give one.'}\n${USAGE}`,
   );
   process.exit(2);
 }
@@ -562,8 +577,7 @@ async function buildKits() {
         trustedRoot: options['trusted-root'],
         env: childEnv(),
         // The commit it was signed from, in the history the candidate is built from.
-        inHistory: (commit) =>
-          run('git', ['merge-base', '--is-ancestor', commit, 'HEAD']).status === 0,
+        inHistory: (commit) => inProtectedHistory(commit, REPO),
       });
       await checkpoint();
       if (!held.ok) {
@@ -573,7 +587,8 @@ async function buildKits() {
         for (const problem of held.problems) process.stdout.write(`  - ${problem}\n`);
         unsigned.push(`${descriptor.name} ${descriptor.version}`);
       } else {
-        signature = held.record;
+        signature = { ...held.record, file: fromOut(join(kitsOut, basename(held.signature))) };
+        copyFileSync(held.signature, join(kitsOut, basename(held.signature)));
         process.stdout.write(
           `${name}: signed by ${signature.signer}, from ${signature.commit.slice(0, 12)}, over the zip built here.\n`,
         );
@@ -906,6 +921,15 @@ function write({ kits, bundle, server, demo }) {
     }),
     ...kits.flatMap((kit) => [
       artifact('kit', { name: kit.name, version: kit.version }, join(out, kit.path)),
+      ...(kit.signature
+        ? [
+            artifact(
+              'kit signature',
+              { name: kit.name, version: kit.version, signer: kit.signature.signer },
+              join(out, kit.signature.file),
+            ),
+          ]
+        : []),
       ...(kit.changes
         ? [
             artifact(
@@ -930,7 +954,7 @@ function write({ kits, bundle, server, demo }) {
     // Whether each kit was held to its signature, and by whom it may be signed.
     signatures:
       signatures === null
-        ? { checked: false }
+        ? { checked: false, unsignedKits: true }
         : {
             checked: true,
             trustedSigners: fromRepo(trustedSigners),
@@ -963,7 +987,7 @@ function write({ kits, bundle, server, demo }) {
   process.stdout.write(
     `\nRelease candidate ${version} written to ${fromRepo(out)}: ${artifacts.length} artifacts in manifest.json, ` +
       `${sums.length} files in SHA256SUMS, RELEASE-NOTES.md and DEMO-STEPS.md. ` +
-      `${signatures === null ? 'No kit was held to a signature. ' : `Each of the ${kits.length} kits was held to its signature. `}` +
+      `${signatures === null ? 'Its kits were taken unsigned (--unsigned-kits). ' : `Each of the ${kits.length} kits was held to its signature. `}` +
       'Nothing was signed, tagged or published.\n',
   );
 }
@@ -978,7 +1002,7 @@ function releaseNotes({ kits, bundle, server }) {
       `and compared with --since, ${options.since} (${sinceCommit.slice(0, 12)}). Not signed, ` +
       'not published, and installed on no server. ' +
       (signatures === null
-        ? 'No kit was held to a signature: the candidate was given no --signatures.'
+        ? 'Its kits were taken unsigned, with --unsigned-kits: no kit was held to a signature.'
         : `Each kit was held to its signature, by the trusted signers in \`${fromRepo(trustedSigners)}\`.`),
     '',
     '## The platform',

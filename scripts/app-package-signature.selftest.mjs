@@ -21,7 +21,10 @@
  *   which is gh's: a real bundle is first checked on a tag build. Refused are a changed byte, a
  *   workflow that is not a trusted signer, a certificate of another repository's workflow under a
  *   predicate claiming the trusted one, a certificate of another version's tag, a self-hosted
- *   runner, and no gh on the PATH. With gh installed, every flag passed to it is one it has.
+ *   runner, a commit the certificate's run was not on, and no gh on the PATH. JSON lines, as
+ *   `gh attestation download` writes them, pass by a genuine signature among a forged one and the
+ *   provenance, and are refused when none is a package signature or every one is refused. With
+ *   gh installed, every flag passed to it is one it has.
  * - **The skip logic of the `sign` job** (`ci-plan`): with an identity, on GitHub's runners, from the
  *   trusted workflow, it signs, and its predicate verifies once signed; with no identity, on a
  *   self-hosted runner, or from a fork, it skips with a warning and `sign=false`; on a branch, or
@@ -230,6 +233,17 @@ function theTrustedSigners() {
       ],
     ],
   ];
+  // A private key where the public key goes, which Node would otherwise read as its public half.
+  wrong.push([
+    'a private key where the public key goes',
+    [
+      {
+        id: 'oops',
+        kind: 'ed25519',
+        publicKey: key.privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      },
+    ],
+  ]);
   for (const [label, signers] of wrong) {
     let thrown = null;
     try {
@@ -391,6 +405,21 @@ function keySignatures(current, next) {
     "refused: a run-time key's signature, by the repository's trusted signers",
     repository.status === 1 && /none of the trusted signers' keys/.test(repository.err),
     repository.all,
+  );
+
+  // A signature entry that is not an object: refused with a reason, not a stack trace.
+  const nullEntry = copyInto('null-signature-entry', current.zip);
+  writeFileSync(
+    `${nullEntry}.sig.json`,
+    JSON.stringify({ ...JSON.parse(readFileSync(signature, 'utf8')), signatures: [null] }),
+  );
+  const entry = cli(['verify', nullEntry, '--trusted-signers', signers]);
+  check(
+    'refused: a signature entry that is not an object, exit 1 and no stack trace',
+    entry.status === 1 &&
+      /is not an object with a "sig"/.test(entry.err) &&
+      !/TypeError/.test(entry.err),
+    entry.all,
   );
 
   // No signature.
@@ -761,6 +790,75 @@ function keylessSignatures(current, next) {
     otherRef.all,
   );
 
+  // The predicate's commit is bound by the certificate: one the run did not build from is refused.
+  const otherCommit = keyless(
+    'other-commit',
+    current,
+    bundleFor(
+      current.zip,
+      workflowPredicate(current),
+      certificateFor(tag, { sourceDigest: 'b'.repeat(40) }),
+    ),
+  );
+  check(
+    "refused: a predicate naming a commit the certificate's run was not on, by the stand-in gh",
+    otherCommit.status === 1 && /--source-digest/.test(otherCommit.err),
+    otherCommit.all,
+  );
+
+  // JSON lines, as `gh attestation download` writes them: the provenance, and the signatures.
+  const provenance = JSON.stringify({
+    ...JSON.parse(bundleFor(current.zip, { buildDefinition: {} }, certificateFor(tag))),
+    dsseEnvelope: {
+      payload: Buffer.from(
+        JSON.stringify({
+          _type: 'https://in-toto.io/Statement/v1',
+          subject: [{ name: basename(current.zip), digest: { sha256: sha256(current.zip) } }],
+          predicateType: 'https://slsa.dev/provenance/v1',
+          predicate: {},
+        }),
+      ).toString('base64'),
+      payloadType: 'application/vnd.in-toto+json',
+      signatures: [{ sig: 'c3RhbmQtaW4=' }],
+    },
+  });
+  const genuine = bundleFor(current.zip, workflowPredicate(current), certificateFor(tag)).trim();
+  const forged = bundleFor(
+    current.zip,
+    workflowPredicate(current),
+    certificateFor(tag, {
+      repository: fork,
+      san: `https://github.com/${fork}/${TRUSTED_WORKFLOW}@${tag}`,
+    }),
+  ).trim();
+  const lines = keyless('json-lines', current, `${provenance}\n${forged}\n${genuine}\n`);
+  check(
+    "verified: JSON lines of the provenance and two signatures, one of them a fork's, by the genuine one",
+    lines.status === 0 && / Verified\.$/m.test(lines.out) && lines.calls.length === 2,
+    `${lines.all} ${lines.calls.length}`,
+    false,
+  );
+  const noneOfOurs = keyless(
+    'json-lines-provenance-only',
+    current,
+    `${provenance}\n${provenance}\n`,
+  );
+  check(
+    'refused: JSON lines holding no package signature, only the provenance',
+    noneOfOurs.status === 1 &&
+      /none is a package signature/.test(noneOfOurs.err) &&
+      noneOfOurs.calls.length === 0,
+    noneOfOurs.all,
+  );
+  const allForged = keyless('json-lines-forged', current, `${provenance}\n${forged}\n${forged}\n`);
+  check(
+    'refused: JSON lines whose every signature is refused, each by its line',
+    allForged.status === 1 &&
+      /line 2: gh attestation verify refused/.test(allForged.err) &&
+      /line 3: gh attestation verify refused/.test(allForged.err),
+    allForged.all,
+  );
+
   const selfHosted = keyless(
     'self-hosted',
     current,
@@ -1043,6 +1141,13 @@ function workflowProblems(text) {
   if (nos < 0) problems.push('publish does not publish');
   if (verify < 0 || verify > nos)
     problems.push('publish does not verify the signature before it publishes');
+  for (const [job, steps] of [
+    ['sign', signSteps],
+    ['publish', publishSteps],
+  ])
+    for (const step of steps.filter((each) => /app-package-signature\.mjs verify/.test(each)))
+      if (!step.includes('--name "${named%%/*}" --version "${named#*/}"'))
+        problems.push(`${job} verifies without pinning the tag's name and version`);
   return problems;
 }
 
@@ -1090,6 +1195,17 @@ function theWorkflow() {
           '$1',
         ),
       /runs whether or not ci-plan said to sign/,
+    ],
+    [
+      "publish verifying without the tag's version",
+      (t) => {
+        const { jobs } = jobsOf(t);
+        const step = stepsOf(jobs.get('publish')).find((each) =>
+          /app-package-signature\.mjs verify/.test(each),
+        );
+        return t.replace(step, step.replace(' --version "${named#*/}"', ''));
+      },
+      /publish verifies without pinning the tag's name and version/,
     ],
     [
       'every job given an identity',

@@ -44,7 +44,7 @@ stood beside. What was checked is offline: its controls, and its dry run on a ca
   the repository:
 
   ```bash
-  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release>
+  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release> --unsigned-kits
   ```
 
 - **The secrets,** exported in the shell that runs the command:

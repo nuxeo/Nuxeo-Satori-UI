@@ -73,12 +73,14 @@ on any server").
   ([package-pipeline.md, section 11](package-pipeline.md#11-a-release-candidate-across-all-kits)):
 
   ```bash
-  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release>
+  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release> --unsigned-kits
   ```
 
   It writes the server packages in `server/`, the kits in `kits/`, a `SHA256SUMS`, a
-  `manifest.json` and a `RELEASE-NOTES.md`. No kit is signed yet either: a kit is signed by its
-  tag's run, and checked before it is installed
+  `manifest.json` and a `RELEASE-NOTES.md`. No kit is signed yet either, so the command is told to
+  take them unsigned, `--unsigned-kits`, and says so in its manifest and release note; given the
+  kits' signatures instead, `--signatures <folder>`, it holds each kit to its own. A kit is signed
+  by its tag's run, and checked before it is installed
   ([section 3](#checking-a-kit-before-you-install-it)).
 
 - **A stamped `nuxeo-agentic-ui`.** A plain `mvn package` leaves `@VERSION@` in the package's
@@ -173,17 +175,27 @@ gh attestation verify payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI 
 ```
 
 or from a clone of the repository, with the signature beside the zip,
-`payers-claims-demo-0.7.0.zip.sig.json` from the tag run's artifact `app-package-signature`. This
-also holds the zip to its own `package.xml`, and the signer to the repository's trusted signers,
+`payers-claims-demo-0.7.0.zip.sig.json`: the tag run's artifact `app-package-signature` for 30
+days, and at any time the repository's attestations of the zip, downloaded and renamed. This also
+holds the zip to its own `package.xml`, and the signer to the repository's trusted signers,
 `business-apps/trusted-signers.json`, or yours with `--trusted-signers`:
 
 ```bash
-npm run app-package:signature -- verify /tmp/payers-claims-demo-0.7.0.zip --version 0.7.0
+gh attestation download /tmp/payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+  --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1
+mv sha256:*.jsonl /tmp/payers-claims-demo-0.7.0.zip.sig.json
+npm run app-package:signature -- verify /tmp/payers-claims-demo-0.7.0.zip \
+  --name payers-claims-demo --version 0.7.0
 ```
 
-- **Each says it verified the zip, or refuses it and says why.** Both name the tag of the version
-  you install, so a zip of another version, one changed by a byte, or a signature made by another
-  workflow, from another repository or for another tag, is refused.
+- **Each says it verified the zip, or refuses it and says why.** Both name the package and the
+  tag of the version you install, so a zip of another version, one changed by a byte, or a
+  signature made by another workflow, from another repository or for another tag, is refused.
+  Checked with the GitHub CLI 2.83.1; an older one that lacks a flag refuses it, and checks nothing.
+- **A tag moved since the release** is not seen: a tag deleted and pushed again on another commit
+  signs another zip of the same version, and both pass. Until a ruleset forbids moving these tags
+  ([package-pipeline.md](package-pipeline.md), section 9.1), keep the SHA-256 of each version you
+  install, `sha256sum` of its zip, and refuse a zip of the same version with another.
 - **A server with no network:** export Sigstore's trusted root once where there is one,
   `gh attestation trusted-root > trusted_root.jsonl`, and give it with `--trusted-root`. Not tried
   yet.

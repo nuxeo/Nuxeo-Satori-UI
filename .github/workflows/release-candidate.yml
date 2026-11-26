@@ -2,10 +2,13 @@ name: Release candidate
 
 # Phase 10's release candidate across all kits (docs/business-apps/package-pipeline.md, section 11),
 # assembled offline by scripts/release-candidate.mjs: no Nuxeo server, no signature, no tag and no
-# publishing. The command holds each kit to its signature when given `--signatures`; this workflow
-# gives none, since no kit has been signed yet: a kit is signed by its tag's run in app-packages.yml,
-# and no `app-package/*` tag has been pushed. Its controls see the refusals of an unsigned kit, a
-# wrong signer, other bytes and another version's signature.
+# publishing. The command holds each kit to its signature, `--signatures`, unless it is told to take
+# unsigned kits, `--unsigned-kits`, which this workflow says: a kit is signed by its tag's run in
+# app-packages.yml, and no `app-package/*` tag has been pushed, so no kit has a signature yet. The
+# manifest and the release note say the kits were taken unsigned. Taking that flag out, once kits
+# are signed, is a change to the step, by hand, as moving `--since` to a release is. Its controls
+# see the refusals of an unsigned kit, a wrong signer, other bytes, another version's signature and
+# a commit never merged.
 #
 # - `controls`, on a pull request that touches the candidate or what its controls read, and on
 #   every push to a `staging/**` branch: release-candidate.selftest.mjs, which breaks each of its
@@ -167,7 +170,8 @@ jobs:
             echo "::warning::the commit before this push is not in this clone, so each kit is held to origin/main."
           fi
           out="$RUNNER_TEMP/release-candidate"
-          node scripts/release-candidate.mjs --out "$out" --since "$since"
+          # No kit is signed until its first tag: see the header.
+          node scripts/release-candidate.mjs --out "$out" --since "$since" --unsigned-kits
           cat "$out/RELEASE-NOTES.md" "$out/DEMO-STEPS.md" >> "$GITHUB_STEP_SUMMARY"
 
       # The record only, as the header says: no zip, jar or bundle file.

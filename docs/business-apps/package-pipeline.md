@@ -16,8 +16,9 @@ added on 25 November 2026 (section 10); its server-side half is not built.
 
 - **Checked on every pull request, with Node and `unzip` alone.** A package that names a widget
   the platform does not have fails, and the log names the file, the place and the widget.
-- **Signed and published only when someone tags it.** The tag goes on a merged commit, and the
-  package goes to Nuxeo Marketplace preprod, as the platform's own package does. It is signed
+- **Signed and published only when someone tags it.** The tag is meant to go on a merged commit,
+  which nothing enforces yet (section 9.1), and the package goes to Nuxeo Marketplace preprod, as
+  the platform's own package does. It is signed
   keyless, through Sigstore with the run's GitHub identity, and published only once its signature
   verifies against the trusted signers, as the release candidate and an administrator verify it
   (section 9).
@@ -508,9 +509,13 @@ signature is detached, `<name>-<version>.zip.sig.json` beside the zip, and the z
   [`business-apps/trusted-signers.json`](../../business-apps/trusted-signers.json): today the
   `app-packages.yml` workflow of `nuxeo/Nuxeo-Satori-UI`, and no key. A deployment may keep a copy
   of its own, with its own keys, and give it with `--trusted-signers`. The file is read strictly: a
-  kind or a field it does not know, an id given twice, or a key that is not Ed25519 is an error.
+  kind or a field it does not know, an id given twice, a key that is not Ed25519, or anything but a
+  public key's PEM, a private key above all, which Node would otherwise take for its public half,
+  is an error.
 - **What a verification holds a zip to,** `app-package-signature.mjs verify`, each a refusal:
-  - a signature, one JSON document, beside the zip or where `--signature` says;
+  - a signature, beside the zip or where `--signature` says: one JSON document, or JSON lines as
+    `gh attestation download` writes them, each line whose statement is a package signature
+    verified on its own, the zip passing when one of them does;
   - a trusted signer. An Ed25519 envelope is checked with the trusted key its key id names, never
     with a key the file carries. A Sigstore bundle is checked by the GitHub CLI,
     `gh attestation verify`, with the certificate's identity pinned whole to the trusted workflow's
@@ -540,11 +545,18 @@ npm run app-package:signature -- sign business-apps/packages/payers-claims-demo/
 npm run app-package:signature -- verify business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.7.0.zip \
   --trusted-signers /tmp/signers.json
 # A tag's signature, beside its zip, against the repository's trusted signers.
-npm run app-package:signature -- verify payers-claims-demo-0.7.0.zip --version 0.7.0
+npm run app-package:signature -- verify payers-claims-demo-0.7.0.zip --name payers-claims-demo --version 0.7.0
+# Once the run's artifact has expired: the repository's attestations of the zip, renamed.
+gh attestation download payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+  --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1
+mv sha256:*.jsonl payers-claims-demo-0.7.0.zip.sig.json
 ```
 
 It exits 0 when the zip is verified, 1 when it is refused, with each reason, and 2 when the command
-or the trusted signers are wrong. `verify` needs Node, `unzip` and, for a keyless signature, the
+or the trusted signers are wrong. `sign` records `git rev-parse HEAD` as the commit only when the
+working tree has nothing uncommitted; otherwise `--commit` must say which commit the zip was built
+from. The GitHub CLI's flags were checked on 2.83.1; one that lacks a flag refuses it as unknown,
+so the check fails closed. `verify` needs Node, `unzip` and, for a keyless signature, the
 GitHub CLI, which reads Sigstore's trusted root over the network unless `--trusted-root` gives a
 file of it, for a server offline: `gh attestation trusted-root > trusted_root.jsonl`, once, where
 there is a network. Not tried yet.
@@ -586,32 +598,37 @@ its own reason, and the sound package passes:
   private key is written. Refused: a changed byte; the statement changed after it was signed; a key
   no trusted signer has; another key's signature under a trusted key's id; no signature; another
   version's signature beside its zip, on its own zip renamed, and held to `--version`; a trusted
-  signer's statement naming a version the zip's `package.xml` does not declare; the repository's
-  trusted signers, which name no key; a `--key` inside the repository; and trusted signers that are
-  empty, of an unknown kind, with an id twice, a field not read, an RSA key, or a workflow outside
-  `.github/workflows/`.
+  signer's statement naming a version the zip's `package.xml` does not declare; a signature entry
+  that is not an object, with a reason and not a stack trace; the repository's trusted signers,
+  which name no key; a `--key` inside the repository; and trusted signers that are empty, of an
+  unknown kind, with an id twice, a field not read, an RSA key, a private key, or a workflow
+  outside `.github/workflows/`.
 - **Keyless,** with `gh` stood in for by a script on the PATH that holds a bundle to a stand-in
   certificate in it, as gh holds a real bundle to its certificate: the good one verifies, and gh
   was given exactly the pinned arguments. Refused: a changed byte, and another version's signature
   beside its zip, before gh is asked; a workflow that is not a trusted signer; a predicate whose run
   was for another tag; a fork's certificate under a predicate claiming the trusted workflow; a
-  certificate of another version's tag; a self-hosted runner; and no gh on the PATH. These prove
+  certificate of another version's tag; a self-hosted runner; a commit the certificate's run was
+  not on; and no gh on the PATH. JSON lines of the provenance, a fork's signature and the genuine
+  one verify by the genuine one; JSON lines with no package signature, or whose every signature is
+  refused, are refused, each line by its reason. These prove
   this repository's side, what it pins and what it refuses, and not Sigstore's cryptography, which
   is gh's. With the GitHub CLI installed, every flag passed to it is one it has: 2.83.1 here.
 - **`ci-plan`:** it signs with the identity, and its predicate, signed, verifies; it skips with no
   identity, on a self-hosted runner, on a fork's run and on another server; it refuses a branch, and
   a tag of another version.
 - **The workflow:** only `sign` has an identity, its signing steps run only when `ci-plan` said so,
-  and `publish` runs only when `sign` signed, verifying before it publishes. Each, broken in a copy
-  of the workflow's text, is refused.
+  `publish` runs only when `sign` signed, verifying before it publishes, and each verification pins
+  the tag's name and version. Each, broken in a copy of the workflow's text, is refused.
 
 Each check was also seen failing from the other side, on 26 November 2026: the verifier broken in
 place one way at a time, the controls run, and the verifier put back. Not comparing the digest
 failed 4 controls; not comparing the subject's name, 1; trusting any key, 1; not checking the
 signature's bytes, 2; not holding the file name, 1, or the version expected, 1; not pinning the
-certificate's identity, 3; not holding the predicate's tag, 1; taking gh's refusal as a pass, 3;
-not refusing a missing signature, 1; not reading `package.xml`, 1; and in `ci-plan`, not checking
-the identity, the runner or the signer, 1 each. The release candidate's, in section 11.
+certificate's identity, 5, or the source commit, 4; not holding the predicate's tag, 1; taking
+gh's refusal as a pass, 6; not refusing a missing signature, 1; not reading `package.xml`, 1;
+taking any PEM for a public key, 1; passing JSON lines on any line, 2; and in `ci-plan`, not
+checking the identity, the runner or the signer, 1 each. The release candidate's, in section 11.
 
 **Departures from the proposal:**
 
@@ -628,12 +645,15 @@ the identity, the runner or the signer, 1 each. The release candidate's, in sect
 **Not built, and still proposals:**
 
 - promotion after a person approves, and any publish to production (9.2);
-- a ruleset for who may create `app-package/*` tags (section 7). Until there is one, whoever can
-  push a tag starts a run the trusted signers accept, and a signature says that this workflow ran
-  for this tag on this commit, not that the commit was reviewed. A tag's run takes the workflow as
+- a ruleset for who may create `app-package/*` tags, and that none may be moved or deleted
+  (section 7). Until there is one, whoever can push a tag starts a run the trusted signers accept,
+  and a signature says that this workflow ran for this tag on this commit, not that the commit was
+  reviewed. The certificate names the tag, not its commit: a tag deleted and pushed again on
+  another commit signs a second zip of the same version, which a publish and an administrator's
+  check take as they take the first. A tag's run takes the workflow as
   the tagged commit has it, so a tag on a commit that changed the workflow signs with that change.
-  The release candidate refuses a signature from a commit its history does not have (section 11);
-  a publish and an administrator's check do not;
+  The release candidate refuses a signature from a commit that neither its history nor a
+  protected branch holds (section 11); a publish and an administrator's check do not;
 - a key the team holds, in a cloud KMS, if a customer's policy asks for one: the trusted signers
   take an Ed25519 key already, and nothing else of it is built;
 - the release candidate's workflow giving `--signatures`, which waits for a kit to be signed;
@@ -1047,7 +1067,7 @@ branch ([in CI](#in-ci), below). The first, the merge of pull request #718 into
 and #719, whose controls failed until #721.
 
 ```bash
-npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release>
+npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release> --unsigned-kits
 ```
 
 - **`--out`** is a directory that does not exist yet, in a folder that does, outside the
@@ -1066,16 +1086,20 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
   released as, because Nuxeo counts neither `2026.0.2-SNAPSHOT` nor `2026.0.2-rc.1` as meeting a
   kit's dependency on `nuxeo-agentic-ui:2026.0.2` (below). A package that keeps a version of its
   own keeps it: `nuxeo-agentic-assets` is 0.1.0, its `assets.package.version`.
-- **`--signatures`** is a folder of the kits' signatures, as their tag builds made them,
-  `<name>-<version>.zip.sig.json`. Given it, stage 2 holds each kit's zip to its own, against
+- **`--signatures` or `--unsigned-kits`,** one of the two, or the command stops with exit 2.
+  `--signatures` is a folder of the kits' signatures, as their tag builds made them,
+  `<name>-<version>.zip.sig.json`, or the JSON lines `gh attestation download` writes, renamed so
+  (section 9.1). Stage 2 holds each kit's zip to its own, against
   `business-apps/trusted-signers.json` or `--trusted-signers`: a kit with no signature, signed by
-  no trusted signer, whose signature is over other bytes or for another version, or was made from
-  a commit the candidate's history does not have, a tag on a commit never merged, refuses the
-  candidate. The build is reproducible, so a kit unchanged since its tag has the digest its
-  signature names. A keyless signature is checked with `gh attestation verify`, which reads
-  Sigstore's trusted root over the network unless `--trusted-root` gives it. Without
-  `--signatures`, no kit is held to a signature, and the manifest and the release note say so. The
-  server packages are not signed by this pipeline (section 9).
+  no trusted signer, whose signature is over other bytes or for another version, or was made from a
+  commit neither the candidate's history nor a protected branch the clone has holds (`main`,
+  `staging/*`, `integration/*`), a tag on a commit never merged, refuses the candidate. The build
+  is reproducible, so a kit unchanged since its tag has the digest its signature names, and the
+  signature verified is written beside the zip in `kits/`. A keyless signature is checked with
+  `gh attestation verify`, which reads Sigstore's trusted root over the network unless
+  `--trusted-root` gives it. `--unsigned-kits` takes kits with no signature instead, as every kit
+  is until its first tag, and the manifest and the release note say so. The server packages are
+  not signed by this pipeline (section 9).
 - It needs the Node `.nvmrc` pins, 24, and refuses another, since the client is built with the Node
   that runs it; Maven with a JDK, `unzip`, git, `tar`, which the upgrade check's export uses, and an
   installed workspace (`npm ci`). It took about
@@ -1116,7 +1140,7 @@ any other classifier, such as `build-marketplace.yml`'s `2026.0.2-PR-12-BUILD-3`
 | `DEMO-STEPS.md`    | The demo steps a server run would execute                                                                                                                                                                                                                                                                                                                         |
 | `client/`          | The production bundle, as the package deploys it, and its files' digests                                                                                                                                                                                                                                                                                          |
 | `server/`          | Each module's jar, at the candidate's version, and each Nuxeo package Maven built                                                                                                                                                                                                                                                                                 |
-| `kits/`            | Each kit's zip, checksum and changelog, as the pipeline wrote them                                                                                                                                                                                                                                                                                                |
+| `kits/`            | Each kit's zip, checksum and changelog, as the pipeline wrote them, and, given `--signatures`, its signature as verified                                                                                                                                                                                                                                          |
 
 The working tree is built as it is. A candidate built with changes nobody committed says so, in the
 run's first line, in the manifest and in the release note.
@@ -1164,9 +1188,10 @@ push to a `staging/**` branch.
   jobs, as ci.yml's jobs do. The candidate's step runs with no token and checks so, and the script
   takes every token out of what it starts. No signing key, Marketplace credential or write
   permission is in the workflow.
-- **No signatures.** The workflow gives no `--signatures`: a kit is signed by its tag's run in
-  `app-packages.yml`, and no tag has been pushed. Once kits are signed, giving their signatures is
-  a change to the workflow's step, by hand, as moving `--since` to a release is.
+- **Unsigned kits, said so.** The workflow gives `--unsigned-kits`: a kit is signed by its tag's
+  run in `app-packages.yml`, and no tag has been pushed. Once kits are signed, giving their
+  signatures instead is a change to the workflow's step, by hand, as moving `--since` to a release
+  is.
 - **The record is uploaded, not the candidate.** The repository is public, so anyone signed in can
   download a run's artifacts, and the bundle carries the `@hylandsoftware` packages: uploading it
   would publish them. The run's artifact is the manifest, the checksums and the two notes, and the
@@ -1195,12 +1220,15 @@ push to a `staging/**` branch.
 - a kit the pipeline built and a run-time key signed is taken; refused are one with no signature,
   one signed by a key no trusted signer has, one signed from a commit not in the candidate's
   history, one changed at the same version since it was signed, and another version's signature
-  under its name; and the command's `--signatures` that is no
-  folder, trusted signers that name no signer, and `--trusted-signers` without `--signatures`,
-  each exit 2. On the pinned Node with Maven, the command itself, given an empty `--signatures`, is
+  under its name; a signed commit in HEAD's history, on `origin/main` or on a staging branch
+  taken as merged, and one only on a feature branch, or one git does not have, refused, in a
+  repository of the control's own; and the command's neither `--signatures` nor
+  `--unsigned-kits`, both, a `--signatures` that is no folder, trusted signers that name no
+  signer, and `--trusted-signers` without `--signatures`, each exit 2. On the pinned Node with Maven, the command itself, given an empty `--signatures`, is
   refused at stage 2 for every kit, and removes its folder. Each was seen failing from the other
-  side: the candidate's check broken to drop the version, to skip the folder's check, to take any
-  commit, and to refuse for another reason, each failed its control.
+  side: the candidate's check broken to drop the version, to skip the folder's check, to take
+  `--signatures` and `--unsigned-kits` together, to take any commit as merged, or a feature
+  branch's, not to ask, and to refuse for another reason, each failed its control.
 
 It builds no client and runs no Maven. Stage 6's other refusals, a Maven run that fails, a module
 that builds nothing, a zip with no `package.xml`, and no package deploying the client, are reached

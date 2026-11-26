@@ -27,12 +27,14 @@
  *   carry. Each exits 2 having written nothing.
  * - **The kits' signatures.** Given `--signatures`, a kit the pipeline built and a run-time key
  *   signed is taken, with what its signature records; refused are a kit with no signature, one
- *   signed by a key no trusted signer has, one signed from a commit not in the candidate's history,
- *   one changed at the same version since it was signed, and another version's signature under
- *   this version's name. The command refuses a `--signatures`
- *   that is no folder, trusted signers that name no signer, and `--trusted-signers` without
- *   `--signatures`, each with exit 2 having written nothing; and, on the pinned Node with Maven on
- *   the PATH, it refuses at stage 2 a candidate whose kits are unsigned, and removes its folder.
+ *   signed by a key no trusted signer has, one signed from a commit not merged, one changed at the
+ *   same version since it was signed, and another version's signature under this version's name.
+ *   What is merged, in a repository of its own: HEAD's history, `origin/main`'s and a staging
+ *   branch's, not a feature branch's. The command refuses neither `--signatures` nor
+ *   `--unsigned-kits`, both, a `--signatures` that is no folder, trusted signers that name no
+ *   signer, and `--trusted-signers` without `--signatures`, each with exit 2 having written
+ *   nothing; and, on the pinned Node with Maven on the PATH, it refuses at stage 2 a candidate
+ *   whose kits are unsigned, and removes its folder.
  * - **The demo listing.** The repository's kit demos are listed, with the users, seeds and
  *   environment each needs; a steps file that names a kit and declares no `serverRun`, or declares
  *   it for another kit, or a seed the kit does not have, is a problem that stops the listing.
@@ -67,6 +69,7 @@ import {
   dependencyMatches,
   descriptorOf,
   duplicatesAcross,
+  inProtectedHistory,
   kitSignature,
   nuxeoVersion,
   parseDependency,
@@ -794,14 +797,65 @@ function runTimeSigner(id) {
   return { privateKey, keyId: keyIdOf(publicKey), file };
 }
 
+/**
+ * `inProtectedHistory`, in a repository of its own: a commit on HEAD, on `origin/main` and on a
+ * staging branch is merged; one on a feature branch, local or remote, is not, nor is one git does
+ * not have.
+ */
+function theProtectedHistory() {
+  const repo = join(scratch, 'history');
+  mkdirSync(repo);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_AUTHOR_NAME: 'Selftest',
+    GIT_AUTHOR_EMAIL: 'selftest@example.invalid',
+    GIT_COMMITTER_NAME: 'Selftest',
+    GIT_COMMITTER_EMAIL: 'selftest@example.invalid',
+  };
+  const git = (args, input) => {
+    const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8', env, input });
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git(['init', '-q']);
+  const tree = git(['mktree'], '');
+  const commit = (message) => git(['commit-tree', '--no-gpg-sign', tree, '-m', message]);
+  const [head, main, staging, feature] = ['head', 'main', 'staging', 'feature'].map(commit);
+  git(['update-ref', 'refs/heads/work', head]);
+  git(['symbolic-ref', 'HEAD', 'refs/heads/work']);
+  git(['update-ref', 'refs/remotes/origin/main', main]);
+  git(['update-ref', 'refs/remotes/origin/staging/enterprise-grade-app', staging]);
+  git(['update-ref', 'refs/remotes/origin/feature/unmerged', feature]);
+  git(['update-ref', 'refs/heads/feature', feature]);
+  check(
+    "a signed commit in HEAD's history, on origin/main or on a staging branch is merged",
+    [head, main, staging].every((sha) => inProtectedHistory(sha, repo)),
+    JSON.stringify({ head, main, staging }),
+    false,
+  );
+  check(
+    'refused: a signed commit only on a feature branch, local or remote, as merged',
+    !inProtectedHistory(feature, repo),
+    feature,
+  );
+  check(
+    'refused: a signed commit git does not have, as merged',
+    !inProtectedHistory('0123456789abcdef0123456789abcdef01234567', repo),
+    'taken',
+  );
+}
+
 function theSignatures() {
+  theProtectedHistory();
   // Signed from this commit, which is in the candidate's history, as a tag on a merged one is.
   const commit = spawnSync('git', ['rev-parse', 'HEAD'], {
     cwd: REPO,
     encoding: 'utf8',
   }).stdout.trim();
-  const inHistory = (sha) =>
-    spawnSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: REPO }).status === 0;
+  // The command's own check, as it runs it.
+  const inHistory = (sha) => inProtectedHistory(sha, REPO);
   const { name, version } = descriptorOf(
     readFileSync(join(CONTRACTS, 'package', 'package.xml'), 'utf8'),
   );
@@ -853,7 +907,10 @@ function theSignatures() {
   );
   check(
     "refused: a kit signed from a commit that is not in the candidate's history",
-    !unmerged.ok && /which is not in this candidate's history/.test(unmerged.problems.join(' ')),
+    !unmerged.ok &&
+      /which is neither in this candidate's history nor on a protected branch/.test(
+        unmerged.problems.join(' '),
+      ),
     JSON.stringify(unmerged),
   );
 
@@ -924,6 +981,32 @@ function theSignatures() {
   );
 
   // The command's own refusals of the options, each before anything is built.
+  const neither = command(['--out', join(scratch, 'neither'), '--since', 'HEAD']);
+  check(
+    'refused: neither --signatures nor --unsigned-kits, exit 2, nothing made',
+    neither.status === 2 &&
+      /Give --signatures <folder>, to hold each kit to its signature, or --unsigned-kits/.test(
+        neither.stderr,
+      ) &&
+      !existsSync(join(scratch, 'neither')),
+    neither.stderr,
+  );
+  const both = command([
+    '--out',
+    join(scratch, 'both'),
+    '--since',
+    'HEAD',
+    '--signatures',
+    empty,
+    '--unsigned-kits',
+  ]);
+  check(
+    'refused: --signatures with --unsigned-kits, exit 2, nothing made',
+    both.status === 2 &&
+      /say opposite things/.test(both.stderr) &&
+      !existsSync(join(scratch, 'both')),
+    both.stderr,
+  );
   const fresh = join(scratch, 'signed-candidate');
   const notAFolder = command([
     '--out',
