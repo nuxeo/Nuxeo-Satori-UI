@@ -710,14 +710,19 @@ await against({ noAggregates: true }, async ({ run }) => {
     'the connector reads PropertyClaim records, keyed on a property the model gives the type, pclaim:number',
     JSON.stringify({ type, keyXpath, schema: schema?.name }),
   );
+  // The component element itself, after the file's leading comment: no comment inside it, so
+  // nothing it holds is read past, and no address.
+  const component = xml.includes('<component') ? xml.slice(xml.indexOf('<component')) : '';
   expect(
-    !/https?:|\/\/|:\d{2,5}\b/.test(xml.replace(/<!--[\s\S]*?-->/g, '')) &&
+    component !== '' &&
+      !component.includes('<!--') &&
+      !/https?:|\/\/|:\d{2,5}\b/.test(component) &&
       /<address property="nuxeo\.agentic\.connectors\.pcclaims\.policyPayments\.address"/.test(
         xml,
       ) &&
       /property="nuxeo\.agentic\.connectors\.pcclaims\.policyPayments\.token"/.test(xml) &&
       /env="NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN"/.test(xml),
-    "the contribution writes no address, and names its address and its token by server settings under the connector's own prefix",
+    "the contribution's component writes no address and holds no comment, and names its address and its token by server settings under the connector's own prefix",
   );
 }
 
