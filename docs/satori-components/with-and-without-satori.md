@@ -962,6 +962,58 @@ The grid view of the asset search screen: a thumbnail, the document's name and i
 
 The faceted filter panel inside the assets drawer: a full-text box, a collapsible group per facet with its result counts, and a footer that resets, saves the search or runs it. The same component in both; the theme sets the type, the switch and the buttons.
 
+### Button
+
+| Field           | Value                         |
+| --------------- | ----------------------------- |
+| Component       | `NxsButtonComponent`          |
+| Registered ID   | —                             |
+| With Satori     | Same component; theme only    |
+| Storybook story | `actions-button--appearances` |
+
+![Button: without Satori on the left, with Satori on the right](button-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same three Material buttons in both — filled, outlined and text — each a native button; the theme sets their shape, type and colours. Satori's own buttons, the important button, the tonal icon button and the split button, are not adopted: this is Material's button in Satori's theme.
+
+### Icon button
+
+| Field           | Value                        |
+| --------------- | ---------------------------- |
+| Component       | `NxsIconButtonComponent`     |
+| Registered ID   | —                            |
+| With Satori     | Same component; theme only   |
+| Storybook story | `actions-icon-button--a-row` |
+
+![Icon button: without Satori on the left, with Satori on the right](icon-button-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same row of Material icon buttons in both, the first disabled, each named by what it does to which field; the theme sets their colours and state layers. Satori's tonal icon button is not adopted.
+
+### Text field
+
+| Field           | Value                        |
+| --------------- | ---------------------------- |
+| Component       | `NxsTextFieldComponent`      |
+| Registered ID   | —                            |
+| With Satori     | Same component; theme only   |
+| Storybook story | `fields-text-field--default` |
+
+![Text field: without Satori on the left, with Satori on the right](text-field-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same Material form field round a native input in both, holding a card's ID; the theme sets the outline, the label and the type. Satori has no text field of its own.
+
+### Select
+
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsSelectComponent`       |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `fields-select--default`   |
+
+![Select: without Satori on the left, with Satori on the right](select-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same Material form field round a native select in both, its choices grouped by type; the list itself is the platform's under either theme. Satori has no select of its own.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -1077,6 +1129,10 @@ The components in the library today:
 | Storyboard                      | `nxs.components.storyboard`                                                                                                  | Same component; theme only   |
 | Asset grid                      | `nxs.components.assetGrid`                                                                                                   | Same component; theme only   |
 | Asset facets drawer             | `nxs.components.assetFacetsDrawer`                                                                                           | Same component; theme only   |
+| Button                          | —                                                                                                                            | Same component; theme only   |
+| Icon button                     | —                                                                                                                            | Same component; theme only   |
+| Text field                      | —                                                                                                                            | Same component; theme only   |
+| Select                          | —                                                                                                                            | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

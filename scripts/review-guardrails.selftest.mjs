@@ -10359,6 +10359,170 @@ expectGreen(
   }),
 );
 
+/* ---------------- checkNxsControlsNotBypassed ---------------- */
+
+/** The listed feature, as the guardrail reads it: one component and its template. */
+const DESIGNER = 'libs/features/layout-designer/src/lib/layout-designer-page';
+
+/** A component on the `nxs-` controls, opening a dialog through Material, which no control replaces. */
+const DESIGNER_TS =
+  "import { MatDialog } from '@angular/material/dialog';\n" +
+  "import { NxsButtonComponent, NxsSelectComponent } from '@nuxeo/satori-platform/components';\n" +
+  'export class LayoutDesignerPageComponent {}\n';
+
+/** Its template, on the controls, naming Material only in a comment, a class and a key. */
+const DESIGNER_HTML = `<!-- Was a <mat-form-field> round a select matNativeControl, and a mat-stroked-button. -->
+<nxs-select
+  class="mat-form-field layout-designer__picker"
+  data-picker="type"
+  [label]="'layout-designer.mat-select' | translate"
+  [(value)]="fileChosen"
+/>
+<nxs-button appearance="outlined" data-action="open" (press)="open()">
+  {{ 'layout-designer.open' | translate }}
+</nxs-button>
+<nxs-icon-button icon="arrow_up" [label]="up > 0 ? 'a' : 'b'" (press)="moveUp()" />
+`;
+
+const controlsTree = (extra = {}) => ({
+  [`${DESIGNER}/layout-designer-page.ts`]: DESIGNER_TS,
+  [`${DESIGNER}/layout-designer-page.html`]: DESIGNER_HTML,
+  ...extra,
+});
+
+expectRed(
+  'a listed feature imports a Material entry point an nxs- control owns',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/layout-designer-page.ts`]:
+      "import { MatButtonModule } from '@angular/material/button';\n" + DESIGNER_TS,
+  }),
+  null,
+  /layout-designer-page\.ts:1 imports `@angular\/material\/button`[\s\S]*`nxs-button` or `nxs-icon-button`/,
+);
+
+expectRed(
+  'each owned entry point is caught: form-field, input and select as well as button',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/fields.ts`]:
+      "import { MatFormFieldModule } from '@angular/material/form-field';\n" +
+      "import { MatInputModule } from '@angular/material/input';\n" +
+      "import type { MatSelect } from '@angular/material/select';\n" +
+      'export const FIELDS = [MatFormFieldModule, MatInputModule];\n',
+  }),
+  null,
+  /fields\.ts:1 imports `@angular\/material\/form-field`[\s\S]*fields\.ts:2 imports `@angular\/material\/input`[\s\S]*fields\.ts:3 imports `@angular\/material\/select`[\s\S]*`nxs-select`/,
+);
+
+expectRed(
+  'a re-export, a dynamic import and a subpath are imports too',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/barrel.ts`]:
+      "export { MatButton } from '@angular/material/button';\n" +
+      "export const lazy = () => import('@angular/material/select');\n" +
+      "export { MatButtonHarness } from '@angular/material/button/testing';\n",
+  }),
+  null,
+  /barrel\.ts:1 imports `@angular\/material\/button`[\s\S]*barrel\.ts:2 imports `@angular\/material\/select`[\s\S]*barrel\.ts:3 imports `@angular\/material\/button\/testing`/,
+);
+
+expectRed(
+  "a listed feature's template uses Material's button selector, as an attribute",
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/layout-designer-page.html`]:
+      DESIGNER_HTML + '<button\n  mat-stroked-button\n  type="button"\n>Open</button>\n',
+  }),
+  null,
+  /layout-designer-page\.html:12 draws `mat-stroked-button`, Angular Material's own/,
+);
+
+expectRed(
+  "a listed feature's template draws a Material form field round a native control",
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/layout-designer-page.html`]:
+      DESIGNER_HTML +
+      '<mat-form-field>\n  <mat-label>Card ID</mat-label>\n  <input matInput [value]="id" />\n</mat-form-field>\n',
+  }),
+  null,
+  /html:12 draws `<mat-form-field>`[\s\S]*html:13 draws `<mat-label>`[\s\S]*html:14 draws `matInput`/,
+);
+
+expectRed(
+  'a bound selector is still the selector: [matButton] and a select with matNativeControl',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/layout-designer-page.html`]:
+      DESIGNER_HTML +
+      '<button [matButton]="appearance()" (click)="go()">Go</button>\n' +
+      '<select matNativeControl [value]="x"></select>\n',
+  }),
+  null,
+  /html:12 draws `matButton`[\s\S]*html:13 draws `matNativeControl`/,
+);
+
+expectRed(
+  'a listed feature that is gone checked nothing, which is a failure, not a pass',
+  'checkNxsControlsNotBypassed',
+  { 'libs/features/search/src/lib/search.ts': 'export class SearchComponent {}\n' },
+  null,
+  /libs\/features\/layout-designer is listed in NXS_CONTROL_FEATURES and has no source/,
+);
+
+expectGreen(
+  "a listed feature on the nxs- controls, opening Material's dialog, which no control replaces",
+  'checkNxsControlsNotBypassed',
+  controlsTree(),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'Material named in a comment, a class, a translation key or a string is not a use',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/notes.ts`]:
+      "// Was MatButtonModule from '@angular/material/button'.\n" +
+      "export const NOTE = 'import from @angular/material/select';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spec, its host template or a spec-only helper of a listed feature ships nothing, so Material is fine there',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/layout-designer-page.spec.ts`]:
+      "import { MatButtonHarness } from '@angular/material/button/testing';\n",
+    'libs/features/layout-designer/src/lib/controls.testing.ts':
+      "import { MatInputHarness } from '@angular/material/input/testing';\n",
+    [`${DESIGNER}/layout-designer-page.spec.html`]: '<button mat-stroked-button>Open</button>\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a feature that is not listed keeps its Material buttons and fields until it moves',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    'libs/features/search/src/lib/search.ts':
+      "import { MatButtonModule } from '@angular/material/button';\n",
+    'libs/features/search/src/lib/search.html': '<button mat-stroked-button>Search</button>\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a longer entry point that merely starts with an owned one is not owned',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${DESIGNER}/toggle.ts`]:
+      "import { MatButtonToggleModule } from '@angular/material/button-toggle';\n",
+  }),
+);
+
 /* ---------------- checkWorkflowRefGates ---------------- */
 
 /**

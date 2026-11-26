@@ -29,45 +29,23 @@
         } @else {
           <!-- Opened by its button, not as the choice changes: arrow keys on a closed select change it
                in some browsers, and each change would open another file. -->
-          <mat-form-field class="layout-designer__picker" subscriptSizing="dynamic">
-            <mat-label>{{ 'layout-designer.type' | translate }}</mat-label>
-            <select
-              matNativeControl
-              data-picker="type"
-              [value]="fileChosen()"
-              (change)="fileChosen.set(valueOf($event))"
-            >
-              <option value="">{{ 'layout-designer.type-choose' | translate }}</option>
-              @for (group of choices(); track group.type) {
-                <optgroup [label]="group.type">
-                  @for (choice of group.choices; track choice.key) {
-                    <option [value]="choice.key" [selected]="choice.key === fileChosen()">
-                      @if (choice.served) {
-                        {{
-                          'layout-designer.choice'
-                            | translate: { type: choice.type, mode: modeName(choice.mode) }
-                        }}
-                      } @else {
-                        {{
-                          'layout-designer.choice-new'
-                            | translate: { type: choice.type, mode: modeName(choice.mode) }
-                        }}
-                      }
-                    </option>
-                  }
-                </optgroup>
-              }
-            </select>
-          </mat-form-field>
-          <button
-            mat-stroked-button
-            type="button"
+          <nxs-select
+            class="layout-designer__picker"
+            appearance="fill"
+            data-picker="type"
+            [label]="'layout-designer.type' | translate"
+            [placeholder]="'layout-designer.type-choose' | translate"
+            [options]="typeOptions()"
+            [(value)]="fileChosen"
+          />
+          <nxs-button
+            appearance="outlined"
             data-action="open"
             [disabled]="fileChosen() === ''"
-            (click)="open(fileChosen())"
+            (press)="open(fileChosen())"
           >
             {{ 'layout-designer.open' | translate }}
-          </button>
+          </nxs-button>
         }
       }
     }
@@ -90,24 +68,18 @@
               {{ 'layout-designer.records-none' | translate: { type } }}
             </p>
           } @else {
-            <mat-form-field class="layout-designer__picker" subscriptSizing="dynamic">
-              <mat-label>{{
+            <nxs-select
+              class="layout-designer__picker"
+              appearance="fill"
+              data-picker="record"
+              [label]="
                 (mode() === 'create' ? 'layout-designer.folder' : 'layout-designer.record')
                   | translate
-              }}</mat-label>
-              <select
-                matNativeControl
-                data-picker="record"
-                [value]="recordUid() ?? ''"
-                (change)="chooseRecord(valueOf($event))"
-              >
-                @for (record of recordList(); track record.uid) {
-                  <option [value]="record.uid" [selected]="record.uid === recordUid()">
-                    {{ record.title }}
-                  </option>
-                }
-              </select>
-            </mat-form-field>
+              "
+              [options]="recordOptions()"
+              [value]="recordUid() ?? ''"
+              (valueChange)="chooseRecord($event)"
+            />
           }
         }
       }
@@ -157,33 +129,27 @@
               {{ 'layout-designer.card' | translate: { id: card.id || card.path } }}
             </h3>
             <div class="layout-designer__card-texts">
-              <mat-form-field subscriptSizing="dynamic">
-                <mat-label>{{ 'layout-designer.card-id' | translate }}</mat-label>
-                <input
-                  matInput
-                  data-text="id"
-                  [value]="card.id"
-                  (change)="setText(card, 'id', valueOf($event))"
-                />
-              </mat-form-field>
-              <mat-form-field subscriptSizing="dynamic">
-                <mat-label>{{ 'layout-designer.card-label' | translate }}</mat-label>
-                <input
-                  matInput
-                  data-text="label"
-                  [value]="card.label"
-                  (change)="setText(card, 'label', valueOf($event))"
-                />
-              </mat-form-field>
-              <mat-form-field subscriptSizing="dynamic">
-                <mat-label>{{ 'layout-designer.card-label-key' | translate }}</mat-label>
-                <input
-                  matInput
-                  data-text="labelKey"
-                  [value]="card.labelKey"
-                  (change)="setText(card, 'labelKey', valueOf($event))"
-                />
-              </mat-form-field>
+              <nxs-text-field
+                appearance="fill"
+                data-text="id"
+                [label]="'layout-designer.card-id' | translate"
+                [value]="card.id"
+                (valueCommit)="setText(card, 'id', $event)"
+              />
+              <nxs-text-field
+                appearance="fill"
+                data-text="label"
+                [label]="'layout-designer.card-label' | translate"
+                [value]="card.label"
+                (valueCommit)="setText(card, 'label', $event)"
+              />
+              <nxs-text-field
+                appearance="fill"
+                data-text="labelKey"
+                [label]="'layout-designer.card-label-key' | translate"
+                [value]="card.labelKey"
+                (valueCommit)="setText(card, 'labelKey', $event)"
+              />
             </div>
 
             @switch (card.shows) {
@@ -220,41 +186,32 @@
                           }
                         </span>
                         <span class="layout-designer__field-actions">
-                          <button
-                            mat-icon-button
-                            type="button"
+                          <nxs-icon-button
+                            icon="arrow_up"
                             data-action="up"
                             [disabled]="first"
-                            [attr.aria-label]="
+                            [label]="
                               'layout-designer.move-up' | translate: { field: fieldName(field) }
                             "
-                            (click)="moveUp(card, field)"
-                          >
-                            <nxs-icon name="arrow_up" />
-                          </button>
-                          <button
-                            mat-icon-button
-                            type="button"
+                            (press)="moveUp(card, field)"
+                          />
+                          <nxs-icon-button
+                            icon="arrow_down"
                             data-action="down"
                             [disabled]="last"
-                            [attr.aria-label]="
+                            [label]="
                               'layout-designer.move-down' | translate: { field: fieldName(field) }
                             "
-                            (click)="moveDown(card, field)"
-                          >
-                            <nxs-icon name="arrow_down" />
-                          </button>
-                          <button
-                            mat-icon-button
-                            type="button"
+                            (press)="moveDown(card, field)"
+                          />
+                          <nxs-icon-button
+                            icon="view_off"
                             data-action="hide"
-                            [attr.aria-label]="
+                            [label]="
                               'layout-designer.hide' | translate: { field: fieldName(field) }
                             "
-                            (click)="hide(card, field)"
-                          >
-                            <nxs-icon name="view_off" />
-                          </button>
+                            (press)="hide(card, field)"
+                          />
                         </span>
                       </div>
                       @if (field.kind !== 'other') {
@@ -267,70 +224,47 @@
                           </summary>
                           <div class="layout-designer__rules-body">
                             @if (isForm() && field.kind === 'property') {
-                              <mat-form-field subscriptSizing="dynamic">
-                                <mat-label>{{ 'layout-designer.required' | translate }}</mat-label>
-                                <select
-                                  matNativeControl
-                                  data-rule="required-choice"
-                                  [value]="requiredOf(field)"
-                                  (change)="setRequired(card, field, valueOf($event))"
-                                >
-                                  <option value="no" [selected]="requiredOf(field) === 'no'">
-                                    {{ 'layout-designer.required-no' | translate }}
-                                  </option>
-                                  <option
-                                    value="always"
-                                    [selected]="requiredOf(field) === 'always'"
-                                  >
-                                    {{ 'layout-designer.required-always' | translate }}
-                                  </option>
-                                  <option value="rule" [selected]="requiredOf(field) === 'rule'">
-                                    {{ 'layout-designer.required-rule' | translate }}
-                                  </option>
-                                </select>
-                              </mat-form-field>
+                              <nxs-select
+                                appearance="fill"
+                                data-rule="required-choice"
+                                [label]="'layout-designer.required' | translate"
+                                [options]="requiredOptions()"
+                                [value]="requiredOf(field)"
+                                (valueChange)="setRequired(card, field, $event)"
+                              />
                               @if (requiredOf(field) === 'rule') {
-                                <mat-form-field subscriptSizing="dynamic">
-                                  <mat-label>{{
-                                    'layout-designer.required-when' | translate
-                                  }}</mat-label>
-                                  <textarea
-                                    matInput
-                                    rows="3"
-                                    data-rule="required"
-                                    [placeholder]="'layout-designer.rule-placeholder' | translate"
-                                    [value]="ruleOf(field, 'required')"
-                                    (change)="setRule(card, field, 'required', valueOf($event))"
-                                  ></textarea>
-                                </mat-form-field>
-                              }
-                              <mat-form-field subscriptSizing="dynamic">
-                                <mat-label>{{
-                                  'layout-designer.read-only-when' | translate
-                                }}</mat-label>
-                                <textarea
-                                  matInput
-                                  rows="2"
-                                  data-rule="readOnlyWhen"
+                                <nxs-text-field
+                                  appearance="fill"
+                                  multiline
+                                  rows="3"
+                                  data-rule="required"
+                                  [label]="'layout-designer.required-when' | translate"
                                   [placeholder]="'layout-designer.rule-placeholder' | translate"
-                                  [value]="ruleOf(field, 'readOnlyWhen')"
-                                  (change)="setRule(card, field, 'readOnlyWhen', valueOf($event))"
-                                ></textarea>
-                              </mat-form-field>
-                            }
-                            <mat-form-field subscriptSizing="dynamic">
-                              <mat-label>{{
-                                'layout-designer.visible-when' | translate
-                              }}</mat-label>
-                              <textarea
-                                matInput
+                                  [value]="ruleOf(field, 'required')"
+                                  (valueCommit)="setRule(card, field, 'required', $event)"
+                                />
+                              }
+                              <nxs-text-field
+                                appearance="fill"
+                                multiline
                                 rows="2"
-                                data-rule="visibleWhen"
+                                data-rule="readOnlyWhen"
+                                [label]="'layout-designer.read-only-when' | translate"
                                 [placeholder]="'layout-designer.rule-placeholder' | translate"
-                                [value]="ruleOf(field, 'visibleWhen')"
-                                (change)="setRule(card, field, 'visibleWhen', valueOf($event))"
-                              ></textarea>
-                            </mat-form-field>
+                                [value]="ruleOf(field, 'readOnlyWhen')"
+                                (valueCommit)="setRule(card, field, 'readOnlyWhen', $event)"
+                              />
+                            }
+                            <nxs-text-field
+                              appearance="fill"
+                              multiline
+                              rows="2"
+                              data-rule="visibleWhen"
+                              [label]="'layout-designer.visible-when' | translate"
+                              [placeholder]="'layout-designer.rule-placeholder' | translate"
+                              [value]="ruleOf(field, 'visibleWhen')"
+                              (valueCommit)="setRule(card, field, 'visibleWhen', $event)"
+                            />
                             <p class="layout-designer__message">
                               {{ 'layout-designer.rule-hint' | translate }}
                             </p>
@@ -352,31 +286,23 @@
                   }
                 } @else {
                   <div class="layout-designer__add">
-                    <mat-form-field subscriptSizing="dynamic">
-                      <mat-label>{{ 'layout-designer.add' | translate }}</mat-label>
-                      <select
-                        matNativeControl
-                        data-picker="add"
-                        [value]="chosen(card)"
-                        (change)="choose(card, valueOf($event))"
-                      >
-                        <option value="">{{ 'layout-designer.add-choose' | translate }}</option>
-                        @for (xpath of addable(card); track xpath) {
-                          <option [value]="xpath" [selected]="xpath === chosen(card)">
-                            {{ xpath }}
-                          </option>
-                        }
-                      </select>
-                    </mat-form-field>
-                    <button
-                      mat-stroked-button
-                      type="button"
+                    <nxs-select
+                      appearance="fill"
+                      data-picker="add"
+                      [label]="'layout-designer.add' | translate"
+                      [placeholder]="'layout-designer.add-choose' | translate"
+                      [options]="addOptions(card)"
+                      [value]="chosen(card)"
+                      (valueChange)="choose(card, $event)"
+                    />
+                    <nxs-button
+                      appearance="outlined"
                       data-action="add"
                       [disabled]="chosen(card) === ''"
-                      (click)="add(card)"
+                      (press)="add(card)"
                     >
                       {{ 'layout-designer.add-button' | translate }}
-                    </button>
+                    </nxs-button>
                   </div>
                 }
               }
@@ -424,15 +350,13 @@
                       'layout-designer.hidden-from' | translate: { card: field.cardId }
                     }}</span>
                   </span>
-                  <button
-                    mat-button
-                    type="button"
+                  <nxs-button
                     data-action="show"
-                    [attr.aria-label]="'layout-designer.show' | translate: { field: field.name }"
-                    (click)="show(field)"
+                    [label]="'layout-designer.show' | translate: { field: field.name }"
+                    (press)="show(field)"
                   >
                     {{ 'layout-designer.show-button' | translate }}
-                  </button>
+                  </nxs-button>
                 </li>
               }
             </ul>
@@ -494,25 +418,23 @@
             {{ 'layout-designer.save' | translate }}
           </h3>
           <div class="layout-designer__save-actions">
-            <button
-              mat-flat-button
-              type="button"
+            <nxs-button
+              appearance="filled"
+              icon="download"
               data-action="download"
               [disabled]="saveState() !== 'saveable'"
-              (click)="download()"
+              (press)="download()"
             >
-              <nxs-icon name="download" />
               {{ 'layout-designer.download' | translate: { file: fileName() } }}
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
+            </nxs-button>
+            <nxs-button
+              appearance="outlined"
               data-action="reset"
               [disabled]="!unsaved()"
-              (click)="reset()"
+              (press)="reset()"
             >
               {{ 'layout-designer.reset' | translate }}
-            </button>
+            </nxs-button>
           </div>
           @switch (saveState()) {
             @case ('refused') {

@@ -22,6 +22,7 @@ belongs to this ticket.
 | Action menu                    | `KeyboardContract`                                                        | Enter opens; arrows wrap past a disabled item; selection emits the entry; Escape closes and restores focus                             |
 | Banner                         | `TrashedDocument`                                                         | Enter/Space invoke the corresponding action; Tab reaches the next action                                                               |
 | Breadcrumbs                    | `FollowingALink`                                                          | Enter follows the router link and produces the expected URL                                                                            |
+| Button                         | `KeyboardContract`                                                        | Enter and Space each emit `press` once and keep the focus; Tab skips a disabled button, which does not press                           |
 | Card                           | `KeyboardContract`                                                        | Space selects without opening; Enter/Space on the title open the card                                                                  |
 | Checkbox                       | `KeyboardContract`                                                        | Space asks for the other state and emits it; with no owner setting it, the box stays as it was and keeps the focus                     |
 | Chip set                       | `KeyboardContract`                                                        | Enter/Space emit the chip whose remove button was focused; Tab reaches the next button                                                 |
@@ -37,6 +38,7 @@ belongs to this ticket.
 | Dropzone                       | `KeyboardContract`                                                        | Enter/Space invoke the native chooser; its file result is emitted                                                                      |
 | Error state                    | `ServerErrorWithRetry`                                                    | Enter/Space request retry                                                                                                              |
 | Favorite toggle                | `KeyboardContract`                                                        | Enter/Space toggle the confirmed state, emit it and update `aria-pressed` while retaining focus                                        |
+| Icon button                    | `KeyboardContract`                                                        | Enter and Space each emit `press` once and keep the focus; Tab skips a disabled button                                                 |
 | Manage versions                | `KeyboardContract`                                                        | Enter opens the version list and selects a version through its radio menu item                                                         |
 | Metadata editor                | `AsTabs`                                                                  | Keyboard selection of a schema tab reveals that schema's fields                                                                        |
 | Pager                          | `KeyboardContract`                                                        | Enter/Space emit the previous/next page index; Tab and Shift+Tab move between controls                                                 |
@@ -48,6 +50,7 @@ belongs to this ticket.
 | Search filters                 | `KeyboardContract`                                                        | Enter resets filters; Reset and Save As then become disabled                                                                           |
 | Tag editor                     | `Editable`                                                                | ArrowDown changes the active option; Enter saves the selected suggestion instead of the prefix; new tags remain normalized             |
 | Tag input                      | `KeyboardContract`                                                        | ArrowDown activates distinct options; Enter adds the selected suggestion instead of the prefix and returns to an empty focused input   |
+| Text field                     | `KeyboardContract`                                                        | Typing changes `value`; leaving the field with Tab emits `valueCommit` once, with the text                                             |
 | Tabs                           | `SelectedFromTheKeyboard`                                                 | Arrows move focus, Enter activates and emits the exact tab, Home/End jump, and `aria-controls` identifies its panel                    |
 | Toast                          | `WithAnAction`                                                            | Keyboard activation invokes Undo and dismisses the toast                                                                               |
 | Upload queue                   | `Refused`                                                                 | Enter requests retry for a failed upload                                                                                               |
@@ -56,6 +59,12 @@ belongs to this ticket.
 | Administration user/group list | `Populated`                                                               | Enter emits the chosen user's ID                                                                                                       |
 | Administration user details    | `Profile`                                                                 | Enter emits the chosen group's ID                                                                                                      |
 | Administration group details   | `Profile`                                                                 | Enter emits the chosen member's ID                                                                                                     |
+
+The select (`nxs-select`) is a native `<select>`: its keys are the browser's, and a script's
+synthetic key press does not move a native select, so no story can assert them. Its `Choosing` story
+asserts what choosing does — the value it emits — and the layout designer's keyboard contract
+(`libs/features/layout-designer/src/lib/control-contract.testing.ts`) asserts that each of its
+pickers is that native element, named and in order.
 
 The confirm dialog's `Asking` story asserts that keyboard confirmation closes with `true`.
 `KeyboardCancellation` in change-password, create-version, delete-permission, drive,

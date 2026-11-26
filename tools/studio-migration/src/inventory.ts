@@ -1029,7 +1029,7 @@ function writesUser(document: Document): boolean {
 /** The elements that show what they hold only while a condition passes. */
 const CONDITIONS = new Set(['nuxeo-filter', 'dom-if']);
 
-function isCondition(element: Element): boolean {
+export function isCondition(element: Element): boolean {
   return (
     CONDITIONS.has(element.localName) ||
     (element.localName === 'template' && element.getAttribute('is')?.trim() === 'dom-if')

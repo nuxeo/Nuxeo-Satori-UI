@@ -13,31 +13,23 @@
 
   <div class="layout-designer__pickers">
     <!-- Opened by its button, as a layout file is: each change of the id would read another file. -->
-    <mat-form-field class="layout-designer__picker" subscriptSizing="dynamic">
-      <mat-label>{{ 'layout-designer.queue.id' | translate }}</mat-label>
-      <input
-        matInput
-        data-picker="queue"
-        list="queue-designer-ids"
-        autocomplete="off"
-        [value]="idChosen()"
-        (input)="idChosen.set(valueOf($event))"
-      />
-      <datalist id="queue-designer-ids">
-        @for (each of menuQueueList(); track each) {
-          <option [value]="each"></option>
-        }
-      </datalist>
-    </mat-form-field>
-    <button
-      mat-stroked-button
-      type="button"
+    <nxs-text-field
+      class="layout-designer__picker"
+      appearance="fill"
+      data-picker="queue"
+      autocomplete="off"
+      [label]="'layout-designer.queue.id' | translate"
+      [suggestions]="menuQueueList()"
+      [(value)]="idChosen"
+    />
+    <nxs-button
+      appearance="outlined"
       data-action="open"
       [disabled]="!idValid()"
-      (click)="open(idChosen())"
+      (press)="open(idChosen())"
     >
       {{ 'layout-designer.open' | translate }}
-    </button>
+    </nxs-button>
     @if (failed(menuQueues()); as problem) {
       <p class="layout-designer__message">
         {{ 'layout-designer.queue.menu-failed' | translate: { problem } }}
@@ -75,24 +67,20 @@
             {{ 'layout-designer.queue.name' | translate }}
           </h3>
           <div class="layout-designer__card-texts">
-            <mat-form-field subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.queue.label' | translate }}</mat-label>
-              <input
-                matInput
-                data-text="label"
-                [value]="label()"
-                (change)="setName('label', valueOf($event))"
-              />
-            </mat-form-field>
-            <mat-form-field subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.queue.label-key' | translate }}</mat-label>
-              <input
-                matInput
-                data-text="labelKey"
-                [value]="labelKey()"
-                (change)="setName('labelKey', valueOf($event))"
-              />
-            </mat-form-field>
+            <nxs-text-field
+              appearance="fill"
+              data-text="label"
+              [label]="'layout-designer.queue.label' | translate"
+              [value]="label()"
+              (valueCommit)="setName('label', $event)"
+            />
+            <nxs-text-field
+              appearance="fill"
+              data-text="labelKey"
+              [label]="'layout-designer.queue.label-key' | translate"
+              [value]="labelKey()"
+              (valueCommit)="setName('labelKey', $event)"
+            />
           </div>
         </section>
 
@@ -112,43 +100,34 @@
                   }
                 </span>
                 <span class="layout-designer__field-actions">
-                  <button
-                    mat-icon-button
-                    type="button"
+                  <nxs-icon-button
+                    icon="arrow_up"
                     data-action="up"
                     [disabled]="first"
-                    [attr.aria-label]="
+                    [label]="
                       'layout-designer.queue.move-column-up'
                         | translate: { field: columnName(column) }
                     "
-                    (click)="move('columns', column.index, -1)"
-                  >
-                    <nxs-icon name="arrow_up" />
-                  </button>
-                  <button
-                    mat-icon-button
-                    type="button"
+                    (press)="move('columns', column.index, -1)"
+                  />
+                  <nxs-icon-button
+                    icon="arrow_down"
                     data-action="down"
                     [disabled]="last"
-                    [attr.aria-label]="
+                    [label]="
                       'layout-designer.queue.move-column-down'
                         | translate: { field: columnName(column) }
                     "
-                    (click)="move('columns', column.index, 1)"
-                  >
-                    <nxs-icon name="arrow_down" />
-                  </button>
-                  <button
-                    mat-icon-button
-                    type="button"
+                    (press)="move('columns', column.index, 1)"
+                  />
+                  <nxs-icon-button
+                    icon="view_off"
                     data-action="hide"
-                    [attr.aria-label]="
+                    [label]="
                       'layout-designer.queue.hide-column' | translate: { field: columnName(column) }
                     "
-                    (click)="hideColumn(column)"
-                  >
-                    <nxs-icon name="view_off" />
-                  </button>
+                    (press)="hideColumn(column)"
+                  />
                 </span>
               </li>
             } @empty {
@@ -158,31 +137,23 @@
             }
           </ol>
           <div class="layout-designer__add">
-            <mat-form-field subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.queue.add-column' | translate }}</mat-label>
-              <input
-                matInput
-                data-picker="add-column"
-                list="queue-designer-properties"
-                autocomplete="off"
-                [value]="toAdd().columns"
-                (input)="choose('columns', valueOf($event))"
-              />
-              <datalist id="queue-designer-properties">
-                @for (xpath of properties(); track xpath) {
-                  <option [value]="xpath"></option>
-                }
-              </datalist>
-            </mat-form-field>
-            <button
-              mat-stroked-button
-              type="button"
+            <nxs-text-field
+              appearance="fill"
+              data-picker="add-column"
+              autocomplete="off"
+              [label]="'layout-designer.queue.add-column' | translate"
+              [suggestions]="properties()"
+              [value]="toAdd().columns"
+              (valueChange)="choose('columns', $event)"
+            />
+            <nxs-button
+              appearance="outlined"
               data-action="add-column"
               [disabled]="toAdd().columns.trim() === ''"
-              (click)="add('columns')"
+              (press)="add('columns')"
             >
               {{ 'layout-designer.add-button' | translate }}
-            </button>
+            </nxs-button>
           </div>
         </section>
 
@@ -197,17 +168,15 @@
                   <span class="layout-designer__field-name">
                     <code>{{ column.name }}</code>
                   </span>
-                  <button
-                    mat-button
-                    type="button"
+                  <nxs-button
                     data-action="show"
-                    [attr.aria-label]="
+                    [label]="
                       'layout-designer.queue.show-column' | translate: { field: column.name }
                     "
-                    (click)="showColumn(column)"
+                    (press)="showColumn(column)"
                   >
                     {{ 'layout-designer.show-button' | translate }}
-                  </button>
+                  </nxs-button>
                 </li>
               }
             </ul>
@@ -226,66 +195,42 @@
                     <code>{{ sort.field || ('layout-designer.queue.no-field' | translate) }}</code>
                   </span>
                   <span class="layout-designer__field-actions">
-                    <button
-                      mat-icon-button
-                      type="button"
+                    <nxs-icon-button
+                      icon="arrow_up"
                       data-action="up"
                       [disabled]="first"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.move-sort-up' | translate: { field: sort.field }
                       "
-                      (click)="move('sort', sort.index, -1)"
-                    >
-                      <nxs-icon name="arrow_up" />
-                    </button>
-                    <button
-                      mat-icon-button
-                      type="button"
+                      (press)="move('sort', sort.index, -1)"
+                    />
+                    <nxs-icon-button
+                      icon="arrow_down"
                       data-action="down"
                       [disabled]="last"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.move-sort-down' | translate: { field: sort.field }
                       "
-                      (click)="move('sort', sort.index, 1)"
-                    >
-                      <nxs-icon name="arrow_down" />
-                    </button>
-                    <button
-                      mat-icon-button
-                      type="button"
+                      (press)="move('sort', sort.index, 1)"
+                    />
+                    <nxs-icon-button
+                      icon="trash"
                       data-action="remove"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.remove-sort' | translate: { field: sort.field }
                       "
-                      (click)="remove('sort', sort.index)"
-                    >
-                      <nxs-icon name="trash" />
-                    </button>
+                      (press)="remove('sort', sort.index)"
+                    />
                   </span>
                 </div>
-                <mat-form-field subscriptSizing="dynamic">
-                  <mat-label>{{
-                    'layout-designer.queue.order' | translate: { field: sort.field }
-                  }}</mat-label>
-                  <select
-                    matNativeControl
-                    data-picker="order"
-                    [value]="sort.order ?? ''"
-                    (change)="setOrder(sort, valueOf($event))"
-                  >
-                    @if (sort.order === null) {
-                      <option value="" selected>
-                        {{ 'layout-designer.queue.order-none' | translate }}
-                      </option>
-                    }
-                    <option value="asc" [selected]="sort.order === 'asc'">
-                      {{ 'layout-designer.queue.order-asc' | translate }}
-                    </option>
-                    <option value="desc" [selected]="sort.order === 'desc'">
-                      {{ 'layout-designer.queue.order-desc' | translate }}
-                    </option>
-                  </select>
-                </mat-form-field>
+                <nxs-select
+                  appearance="fill"
+                  data-picker="order"
+                  [label]="'layout-designer.queue.order' | translate: { field: sort.field }"
+                  [options]="sort.order === null ? orderOptions().unset : orderOptions().set"
+                  [value]="sort.order ?? ''"
+                  (valueChange)="setOrder(sort, $event)"
+                />
               </li>
             } @empty {
               <li class="layout-designer__field layout-designer__field--none">
@@ -294,29 +239,23 @@
             }
           </ol>
           <div class="layout-designer__add">
-            <mat-form-field subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.queue.add-sort' | translate }}</mat-label>
-              <select
-                matNativeControl
-                data-picker="add-sort"
-                [value]="toAdd().sort"
-                (change)="choose('sort', valueOf($event))"
-              >
-                <option value="">{{ 'layout-designer.queue.add-sort-choose' | translate }}</option>
-                @for (xpath of unsorted(); track xpath) {
-                  <option [value]="xpath" [selected]="xpath === toAdd().sort">{{ xpath }}</option>
-                }
-              </select>
-            </mat-form-field>
-            <button
-              mat-stroked-button
-              type="button"
+            <nxs-select
+              appearance="fill"
+              data-picker="add-sort"
+              [label]="'layout-designer.queue.add-sort' | translate"
+              [placeholder]="'layout-designer.queue.add-sort-choose' | translate"
+              [options]="unsortedOptions()"
+              [value]="toAdd().sort"
+              (valueChange)="choose('sort', $event)"
+            />
+            <nxs-button
+              appearance="outlined"
               data-action="add-sort"
               [disabled]="toAdd().sort === ''"
-              (click)="add('sort')"
+              (press)="add('sort')"
             >
               {{ 'layout-designer.add-button' | translate }}
-            </button>
+            </nxs-button>
           </div>
         </section>
 
@@ -332,70 +271,57 @@
                     <code>{{ facet.aggregate }}</code>
                   </span>
                   <span class="layout-designer__field-actions">
-                    <button
-                      mat-icon-button
-                      type="button"
+                    <nxs-icon-button
+                      icon="arrow_up"
                       data-action="up"
                       [disabled]="first"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.move-facet-up'
                           | translate: { field: facet.aggregate }
                       "
-                      (click)="move('facets', facet.index, -1)"
-                    >
-                      <nxs-icon name="arrow_up" />
-                    </button>
-                    <button
-                      mat-icon-button
-                      type="button"
+                      (press)="move('facets', facet.index, -1)"
+                    />
+                    <nxs-icon-button
+                      icon="arrow_down"
                       data-action="down"
                       [disabled]="last"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.move-facet-down'
                           | translate: { field: facet.aggregate }
                       "
-                      (click)="move('facets', facet.index, 1)"
-                    >
-                      <nxs-icon name="arrow_down" />
-                    </button>
-                    <button
-                      mat-icon-button
-                      type="button"
+                      (press)="move('facets', facet.index, 1)"
+                    />
+                    <nxs-icon-button
+                      icon="trash"
                       data-action="remove"
-                      [attr.aria-label]="
+                      [label]="
                         'layout-designer.queue.remove-facet' | translate: { field: facet.aggregate }
                       "
-                      (click)="remove('facets', facet.index)"
-                    >
-                      <nxs-icon name="trash" />
-                    </button>
+                      (press)="remove('facets', facet.index)"
+                    />
                   </span>
                 </div>
                 <div class="layout-designer__card-texts">
-                  <mat-form-field subscriptSizing="dynamic">
-                    <mat-label>{{
+                  <nxs-text-field
+                    appearance="fill"
+                    data-text="facet-label"
+                    [label]="
                       'layout-designer.queue.facet-label'
                         | translate: { aggregate: facet.aggregate }
-                    }}</mat-label>
-                    <input
-                      matInput
-                      data-text="facet-label"
-                      [value]="facet.label"
-                      (change)="setFacet(facet, 'label', valueOf($event))"
-                    />
-                  </mat-form-field>
-                  <mat-form-field subscriptSizing="dynamic">
-                    <mat-label>{{
+                    "
+                    [value]="facet.label"
+                    (valueCommit)="setFacet(facet, 'label', $event)"
+                  />
+                  <nxs-text-field
+                    appearance="fill"
+                    data-text="facet-labelKey"
+                    [label]="
                       'layout-designer.queue.facet-label-key'
                         | translate: { aggregate: facet.aggregate }
-                    }}</mat-label>
-                    <input
-                      matInput
-                      data-text="facet-labelKey"
-                      [value]="facet.labelKey"
-                      (change)="setFacet(facet, 'labelKey', valueOf($event))"
-                    />
-                  </mat-form-field>
+                    "
+                    [value]="facet.labelKey"
+                    (valueCommit)="setFacet(facet, 'labelKey', $event)"
+                  />
                 </div>
               </li>
             } @empty {
@@ -405,25 +331,22 @@
             }
           </ol>
           <div class="layout-designer__add">
-            <mat-form-field subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.queue.add-facet' | translate }}</mat-label>
-              <input
-                matInput
-                data-picker="add-facet"
-                autocomplete="off"
-                [value]="toAdd().facets"
-                (input)="choose('facets', valueOf($event))"
-              />
-            </mat-form-field>
-            <button
-              mat-stroked-button
-              type="button"
+            <nxs-text-field
+              appearance="fill"
+              data-picker="add-facet"
+              autocomplete="off"
+              [label]="'layout-designer.queue.add-facet' | translate"
+              [value]="toAdd().facets"
+              (valueChange)="choose('facets', $event)"
+            />
+            <nxs-button
+              appearance="outlined"
               data-action="add-facet"
               [disabled]="toAdd().facets.trim() === ''"
-              (click)="add('facets')"
+              (press)="add('facets')"
             >
               {{ 'layout-designer.add-button' | translate }}
-            </button>
+            </nxs-button>
           </div>
           <p class="layout-designer__message">
             {{ 'layout-designer.queue.facet-hint' | translate }}
@@ -490,25 +413,23 @@
             {{ 'layout-designer.save' | translate }}
           </h3>
           <div class="layout-designer__save-actions">
-            <button
-              mat-flat-button
-              type="button"
+            <nxs-button
+              appearance="filled"
+              icon="download"
               data-action="download"
               [disabled]="saveState() !== 'saveable'"
-              (click)="download()"
+              (press)="download()"
             >
-              <nxs-icon name="download" />
               {{ 'layout-designer.download' | translate: { file: fileName() } }}
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
+            </nxs-button>
+            <nxs-button
+              appearance="outlined"
               data-action="reset"
               [disabled]="!unsaved()"
-              (click)="reset()"
+              (press)="reset()"
             >
               {{ 'layout-designer.reset' | translate }}
-            </button>
+            </nxs-button>
           </div>
           @switch (saveState()) {
             @case ('refused') {
