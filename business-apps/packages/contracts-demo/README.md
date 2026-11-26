@@ -372,18 +372,20 @@ node business-apps/packages/contracts-demo/demo/seed.mjs
 - **Its controls,** `node business-apps/packages/contracts-demo/demo/seed.selftest.mjs`, run it
   against a stand-in for the REST API: they prove the script, not the server. CI does not run them.
   25 controls, each behaviour above among them, and a last one that no run, the refused ones
-  included, prints a password or its Basic header. Since 0.2.1, a renewals page provider that leaves
-  out the ended contracts fails the run, naming CTR-1007 alone; and one control reads the kit's
-  labels rather than the script: the queue's and the home figure's names must say "overdue" while
-  the data expects an ended contract there. Broken on purpose, each went red: the seed's check of a
-  missing renewal turned off, and the two names put back to "Up for renewal". Each was seen failing: with the seed broken one
+  included, prints a password or its Basic header. Each was seen failing: with the seed broken one
   way at a time (no check for a contract that does not belong, no write over an existing one, no
   emptied termination reason, no `/default-domain/workspaces` or `/me` precondition, the header or
   the refused password printed, any trashed name like a contract's restored, no order check), each
   of the nine turned at least one control red.
+- **Two controls since 0.2.1.** The seed already failed a renewals page provider that leaves out
+  the ended contracts, since its data expects CTR-1007 there; one control now proves it, and that
+  the run names CTR-1007 alone. The other reads the kit's files rather than the script: the names
+  the queue's file and the home's card for it give by their `labelKey` must say "overdue" while
+  the data expects an ended contract in the queue. Each went red when broken on purpose: the
+  seed's check for a missing renewal turned off, and the two names put back to "Up for renewal".
 
-It prints the home, the queue and two record pages, on the app at `APP_URL`
-(`http://localhost:4200` by default).
+It prints the home, the queue and three record pages, one up for renewal, one overdue and one
+terminated, on the app at `APP_URL` (`http://localhost:4200` by default).
 
 ### Seeing it under `nx serve`, and "Switch app"
 

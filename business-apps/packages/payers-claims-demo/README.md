@@ -617,6 +617,14 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 With no contribution in `nxserver/config/`, the registry serves neither button, and the server log
 says so: an allow-list nobody installed allows nothing.
 
+### Over version 0.5.0: version 0.5.1, with the schema headings
+
+**Not run yet.** 0.5.1 adds four labels and nothing else, so it needs no new `nuxeo-agentic-ui`
+and no change to the allow-list. Build the kit as in step 1 above, then in step 3 copy and name
+`payers-claims-demo-0.5.1.zip` in place of 0.5.0's, and leave out `nuxeo-agentic-ui.zip` when the
+server already has the one 0.5.0 needs. The Properties panel then heads a claim's, a case's, a
+provider's and a claim document's schema section with the kit's label.
+
 ### Removing it
 
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it

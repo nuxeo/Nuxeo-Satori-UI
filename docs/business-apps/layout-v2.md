@@ -48,9 +48,9 @@ It sits where version 1 does ([extension-reference.md](../extension-reference.md
 
 A type with no file for a mode keeps today's generated layout for it. With no `view` file, the
 record page is today's document page. With no `metadata` file, the Properties panel has a section
-for each schema it does not already present, headed by the package's label
-`layout.schema.<schema>`, else by the schema's name made readable: give a kit's own schemas a
-heading in its labels (app-definition-v2.md, section 7).
+for each schema it does not already present, headed by the label `layout.schema.<schema>`, the
+package's or, winning over it, the manifest's, else by the schema's name made readable: give a
+kit's own schemas a heading in its labels (app-definition-v2.md, section 7).
 
 ## 2. The shape of a file
 

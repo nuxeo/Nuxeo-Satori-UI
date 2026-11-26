@@ -14,8 +14,9 @@
  * alone, two trashed copies refused, a document of another type left alone, a server that hangs up
  * or pages forever stopping the run, the credentials never printed, and a check that fails when a
  * page provider leaves out a contract, holds one it should not, or is out of order, an ended
- * contract left out of the renewals among them. One control reads the kit's labels, not the
- * script: the queue's name says it holds ended contracts while the data expects one there.
+ * contract left out of the renewals among them. One control reads the kit's files, not the
+ * script: the queue, its menu entry and its home card are named for the ended contracts the data
+ * expects in it.
  * It says nothing about whether a real server accepts the stand-in model or answers as the
  * stand-in does: only a run against one shows that, and none has run yet.
  *
@@ -35,7 +36,8 @@ import { CONTRACTS, RENEWALS, dayFrom } from './data.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SEED = join(HERE, 'seed.mjs');
-const LABELS = join(HERE, '..', 'bundle', 'agentic-ui-config', 'labels', 'en.json');
+const CONFIG = join(HERE, '..', 'bundle', 'agentic-ui-config');
+const RENEWALS_QUEUE = 'up-for-renewal';
 const HOLDER = '/default-domain/workspaces/contracts-demo/contracts';
 
 const failures = [];
@@ -490,20 +492,31 @@ await against({ unendedRenewals: true }, async ({ run }) => {
   );
 });
 
-// The kit's labels, not the script: the queue and the home's figure for it are named for the
-// ended contracts the data expects in the renewals. Under "Up for renewal" alone a browser
-// walkthrough found CTR-1007, ended ten days before, and flagged it.
+// The kit's files, not the script: the queue, its menu entry and the home's card for it are named
+// for the ended contracts the data expects in the renewals. Under "Up for renewal" alone a browser
+// walkthrough found CTR-1007, ended ten days before, and flagged it. Each name is read as the app
+// reads it: a literal `label` first, else its `labelKey`'s text; a menu entry with neither shows
+// the queue's own name.
 {
-  const { labels } = JSON.parse(readFileSync(LABELS, 'utf8'));
-  const names = ['contracts.queue.up-for-renewal', 'contracts.home.renewals'].map((key) => [
-    key,
-    labels[key],
-  ]);
+  const read = (file) => JSON.parse(readFileSync(join(CONFIG, file), 'utf8'));
+  const { labels } = read('labels/en.json');
+  const nameOf = (item) => item?.label ?? labels[item?.labelKey];
+  const queue = read(`queues/${RENEWALS_QUEUE}.json`);
+  const card = read('home.json').cards.find((each) => each.queue === RENEWALS_QUEUE);
+  const entry = read('navigation.json').entries.find((each) => each.queue === RENEWALS_QUEUE);
+  const names = [
+    ['the queue', nameOf(queue)],
+    ["the home's card", nameOf(card)],
+    ['the menu entry', nameOf(entry) ?? nameOf(queue)],
+  ];
   const unnamed = names.filter(([, text]) => !/\boverdue\b/i.test(text ?? ''));
   expect(
-    RENEWALS.overdue.length > 0 && unnamed.length === 0,
-    `the renewals queue's name and its home figure's say "overdue" while the data expects ${RENEWALS.overdue.join(', ') || 'no ended contract'} there`,
-    unnamed.map(([key, text]) => `${key}: ${JSON.stringify(text)}`).join('\n'),
+    RENEWALS.overdue.length > 0 &&
+      card !== undefined &&
+      entry !== undefined &&
+      unnamed.length === 0,
+    `the renewals queue, its menu entry and its home card are named "overdue" while the data expects ${RENEWALS.overdue.join(', ') || 'no ended contract'} there`,
+    unnamed.map(([what, text]) => `${what}: ${JSON.stringify(text)}`).join('\n'),
   );
 }
 
