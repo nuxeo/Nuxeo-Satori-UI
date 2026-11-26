@@ -196,7 +196,7 @@ demo/                                starter kits only; not checked
   2026** for the records kit's barcode lookup
   ([its README](../../business-apps/packages/records-demo/README.md)):
 
-  ```json queues/barcode-lookup.json
+  ```json
   {
     "version": 2,
     "labelKey": "records.queue.barcode-lookup",

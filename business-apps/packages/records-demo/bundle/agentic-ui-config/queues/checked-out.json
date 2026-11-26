@@ -11,11 +11,6 @@
     "phys:dueBack",
     "phys:locationPath"
   ],
-  "sort": [
-    {
-      "field": "phys:dueBack",
-      "order": "asc"
-    }
-  ],
+  "sort": [{ "field": "phys:dueBack", "order": "asc" }],
   "pageSize": 50
 }
