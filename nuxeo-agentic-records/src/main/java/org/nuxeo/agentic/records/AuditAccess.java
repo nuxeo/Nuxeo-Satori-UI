@@ -23,8 +23,9 @@ import org.nuxeo.runtime.api.Framework;
  * {@code org.nuxeo.audit.service.AuditService}, names the same store, {@code default}, and is asked
  * first. On 11.5 there is no such service, and the platform's own lookup is the audit.</li>
  * <li><b>An entry's extended information.</b> On LTS 2025 an entry is immutable, its
- * {@code getExtendedInfos()} refuses, and {@code getExtended()} holds its values; on 11.5 there is no
- * {@code getExtended()}, and {@code getExtendedInfos()} holds them.</li>
+ * {@code getExtendedInfos()} refuses, and {@code getExtended()}, which the 2025 interface declares and
+ * the 11.5 one the add-on is compiled against does not, holds its values: so it is called by
+ * reflection. On 11.5, {@code getExtendedInfos()} holds them.</li>
  * </ul>
  * Everything else the add-on calls, {@code buildEntryFromEvent}, {@code addLogEntries} and
  * {@code queryLogs}, has the same name and erasure on both.

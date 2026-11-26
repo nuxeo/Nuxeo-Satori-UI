@@ -249,8 +249,17 @@ final class RecordsAudit {
      */
     static void fire(String event, CoreSession session, NuxeoPrincipal by, DocumentModel doc, String comment,
             Map<String, Serializable> extended) {
+        Event fired = event(event, session, by, doc, comment, extended);
+        if (fired != null) {
+            Framework.getService(EventService.class).fireEvent(fired);
+        }
+    }
+
+    /** The event {@link #fire} fires, or {@code null} for a document with no path. */
+    static Event event(String event, CoreSession session, NuxeoPrincipal by, DocumentModel doc, String comment,
+            Map<String, Serializable> extended) {
         if (doc.getPathAsString() == null) {
-            return;
+            return null;
         }
         DocumentModel snapshot = doc instanceof ShallowDocumentModel ? doc
                 : snapshot(doc.getId(), doc.getRepositoryName(), doc.getPathAsString(), doc.getType(), doc.isFolder(),
@@ -265,8 +274,7 @@ final class RecordsAudit {
             context.setProperty("comment", comment);
         }
         context.setProperty(EXTENDED_INFOS, new HashMap<>(extended));
-        Event fired = context.newEvent(event);
-        Framework.getService(EventService.class).fireEvent(fired);
+        return context.newEvent(event);
     }
 
     /** What the audit reads of a document, kept as it is now: never read again in the background. */

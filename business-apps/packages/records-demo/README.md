@@ -34,8 +34,9 @@ its controls' stand-in.
   sees only their own.
 - **A records file's page, for a records manager:** the file, and its history, newest first, from
   the platform's audit with the add-on's entries: its rule applied, its retention, its holds placed
-  and lifted, each disposition run that held it and each decision, and its views and file reads,
-  with a filter by kind.
+  and lifted, each disposition run that held it and each decision, with a filter by kind; and, for
+  records managers, its views and file reads. Showing reads to them alone is not a control: the
+  platform's audit gives a record's entries to whoever may read it.
 - **No button.** A run is started, approved or rejected, and an export filed, by filing a document
   in the disposition runs folder, which the add-on checks on the server (below, "The demo").
   Decision 3 is open, so the app runs no operation, and the add-on registers none. An export has no
@@ -97,8 +98,10 @@ npm run app-package -- business-apps/packages/records-demo --platform 0.2.0 \
   --previous /tmp/base/business-apps/packages/records-demo
 ```
 
-0.1.1 adds a layout, a queue, a menu entry and their labels, and depends on the add-on's 0.2.0:
-nothing a customer may override is removed or renamed, so a patch. The pipeline holds the kit to its own
+0.1.1 adds two layouts, a queue, a menu entry and their labels, and depends on the add-on's 0.2.0:
+nothing a customer may override is removed or renamed, so a patch. Seen failing on 26 November
+2026: with its version left at 0.1.0, step 3 refused it, "the content changed since 0.1.0 (52
+changes)". The pipeline holds the kit to its own
 `content-model.json`, since it ships a stand-in model.
 
 ## Installing it, on a server of your own
@@ -156,8 +159,9 @@ The folder is `/disposition-runs`, at the repository's root, where the add-on ta
           "rexp:from":"<the demo day>T00:00:00Z","rexp:to":"<the next day>T00:00:00Z"}}'
    ```
 
-   An approver filing the same is refused, 403, `permission`. The export is written in the
-   background, a moment later: it is in the queue of audit exports, `done`. Its page gives the
+   An approver filing the same is refused, 403, `permission`. A period that ends after the
+   filing ends when it is filed. The export is written in the background, 30 seconds after its
+   period's end, once the audit's last entries are in: it is in the queue of audit exports, `done`. Its page gives the
    number of entries and each file's SHA-256; the CSV, its file, has a row per entry of the audit,
    and the JSON file the same. For each record disposed of: its rule applied, the run that held it,
    both approvals, its disposal with the certificate's id and SHA-256, and the platform's deletion;

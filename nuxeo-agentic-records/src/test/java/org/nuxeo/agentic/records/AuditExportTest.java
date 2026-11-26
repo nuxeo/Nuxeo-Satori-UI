@@ -61,7 +61,7 @@ public class AuditExportTest extends RecordsAuditTestCase {
             assertEquals(name, "permission", refused(() -> Fixtures.export(session, name, Fixtures.RECORDS, from, to)));
         }
         assertEquals(0, exports());
-        // Neither may anyone holding the permission through the folder's inheritance alone, as Everything.
+        // grace, granted it on the folder, may.
         assertEquals("grace may", Disposition.EXPORT_DONE,
                 value(waited(Fixtures.export(session, "grace", Fixtures.RECORDS, from, to)), Disposition.EXPORT_STATE));
     }
@@ -405,6 +405,8 @@ public class AuditExportTest extends RecordsAuditTestCase {
         assertEquals("grace", value(stored, Disposition.EXPORT_BY));
         assertEquals(Fixtures.RECORDS, value(stored, Disposition.EXPORT_PATH));
         assertEquals(Disposition.EXPORT_DONE, value(stored, Disposition.EXPORT_STATE));
+        assertEquals("a period asked to end tomorrow ends when the export is filed",
+                value(stored, Disposition.EXPORT_AT), value(stored, Disposition.EXPORT_TO));
         assertEquals(CertificateCsv.sha256(csvBlob(stored).getByteArray()),
                 value(stored, Disposition.EXPORT_CSV_SHA256));
         assertFalse(new String(csvBlob(stored).getByteArray(), StandardCharsets.UTF_8).contains("forged"));

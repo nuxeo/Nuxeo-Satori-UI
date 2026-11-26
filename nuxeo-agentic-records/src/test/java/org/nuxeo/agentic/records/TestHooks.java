@@ -18,9 +18,24 @@ public final class TestHooks {
     /** The barrier two requests wait at, as they are filed, while armed. */
     static volatile CyclicBarrier filing;
 
+    /** Whether recording a view fails, while armed. */
+    static volatile boolean failOnView;
+
     static void reset() {
         failOnRemove = null;
         filing = null;
+        failOnView = false;
+    }
+
+    /** A failure while a view is recorded: a listener of the view's event throws, and says it must bubble. */
+    public static class FailOnView implements EventListener {
+        @Override
+        public void handleEvent(Event event) {
+            if (failOnView) {
+                event.markBubbleException();
+                throw new NuxeoException("The test's failure, recording a view");
+            }
+        }
     }
 
     /** A failure partway through a disposal: the deletion of one record throws. */

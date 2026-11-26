@@ -44,7 +44,7 @@ that review will read.
   to anyone else ([below](#the-audit-export)).
 - **Access logging:** every file of a record downloaded or shown is in the platform's audit already,
   its `download` event; the add-on adds a record's views, a record under retention or a legal hold
-  sent to a person as a document of its own, at about 0.09 ms a read, and each disposition run's
+  sent to a person as a document of its own, at under 0.1 ms a read, and each disposition run's
   decisions on each of its records ([below](#access-logging)).
 
 ## The platform's retention module: used, and how
@@ -106,28 +106,37 @@ version removal policy says.
 A person with `ExportRecordsAudit` on the repository's disposition runs folder files a
 `RecordsAuditExport` there, over the REST API (`POST /api/v1/path/<the folder>`), naming:
 
-| Property       | What it is                                                                                           |
-| -------------- | ---------------------------------------------------------------------------------------------------- |
-| `rexp:path`    | The folder it covers, by its path or its id, which the person may read; not a document, nor the root |
-| `rexp:from`    | The period's start: every entry whose event happened then or after                                   |
-| `rexp:to`      | The period's end, after `rexp:from`: every entry whose event happened before it                      |
-| `rexp:comment` | Optional, up to 2000 characters                                                                      |
+| Property       | What it is                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `rexp:path`    | The folder it covers, by its path or its id, which the person may read; not a document, nor the root                     |
+| `rexp:from`    | The period's start: every entry whose event happened then or after                                                       |
+| `rexp:to`      | The period's end, after `rexp:from`: every entry whose event happened before it; at the latest, when the export is filed |
+| `rexp:comment` | Optional, up to 2000 characters                                                                                          |
 
 The listener checks it in the person's transaction, and refuses it, with nothing written: 403
 `permission` without `ExportRecordsAudit`; 404 `no-folder` for a folder that does not exist or that
 the person may not read, named the same way so that the answer says nothing of it; 400 for a period
 or a scope it cannot take; 409 for a folder that inherits, as for any request. Everything else on
 the export is the server's, over whatever the filer sent: who filed it and when (`rexp:by`,
-`rexp:at`), its title, the folder's path as the repository has it, and its state, `pending`.
+`rexp:at`), its title, the folder's path as the repository has it, and its state, `pending`. **A
+period that ends after the export is filed ends when it is filed:** what is to come is not in the
+audit yet, so `rexp:to` is written as the filing time, and the export says the period it covers.
 
 Once the person's transaction has committed, the add-on writes the export **in the background**, as
-the filer, so that a long period never holds anyone's request: it reads the audit 500 entries at a
+the filer, so that a long period never holds anyone's request. It first waits until 30 seconds have
+passed since the period's end, since the platform writes its entries a moment after their events
+and the add-on writes its own in the background (`nuxeo.agentic.records.audit.export.settleSeconds`,
+0 to 600; `AuditExportGenerationTest` holds that an entry written after the filing is in it). Then
+it reads the audit 500 entries at a
 time, by entry id, each page after the last, and writes each entry to two files on disk as it goes,
 so that **no period is held in memory**, whatever its length; then it keeps both files on the
 export, with their SHA-256 and their counts, makes the export a record, and writes the export's own
 entry to the audit, `recordsAuditExported`. Its state is then `done`. An export that cannot be
 written keeps no file and is `failed`, with one sentence, and the server's log says why; it is filed
-again. The writing has a transaction of its own, of up to four hours.
+again, as is one whose filer the background work cannot tell. The writing has a transaction of its
+own, of up to four hours. An export still `pending` minutes after its period's end and settling was
+not written, should the server have stopped meanwhile: the server's log says why, and it is filed
+again.
 
 ### What it holds
 
@@ -280,12 +289,17 @@ not the same on every LTS 2025 server (`event` on 2025.10, `routes` on the build
 module's newest version needs).
 
 **What it costs a read** (`RecordAccessCostTest`, 26 November 2026, on a laptop): a person's request
-for a document that is no record, read, written as JSON and committed, 148 µs; the same request for
-a record under retention, 236 µs; so a logged view adds **89 µs a read**. Best of three rounds of 400
-reads each; the test refuses more than 2 ms. For a document that is no record under retention, the
-check reads only what the document already holds. The entry itself is written afterwards, by the
-add-on's writer, off the reader's time; on a server whose work queues are streams, the event is
-serialised once per transaction for it.
+for a document that is no record, read, written as JSON and committed, 118 to 228 µs over four runs;
+the same request for a record under retention, 190 to 315 µs; so a logged view adds **71 to 89 µs a
+read**. Best of three rounds of 400 reads each; the test refuses more than 2 ms. For a document that
+is no record under retention, the check reads only what the document already holds.
+
+**What it costs afterwards,** off the reader's time: the add-on's writer builds the view's entry and
+adds it to the audit in the background, one work and one write per read transaction, **41 µs an
+entry** on the tests' audit, a JPA store in H2 (the same test, measured, not bounded). On a server
+the write goes to the audit's own store, on LTS 2025 OpenSearch, one request per transaction, where
+the platform batches its own entries through a stream; on a server whose work queues are streams,
+the event is serialised once per transaction for the work.
 
 **What is not logged,** for the review and the specialist:
 
@@ -377,7 +391,7 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   the run keeps what was done, and the request document is missing. The run is the record of what
   was decided.
 - **Everything else on the add-on's documents is refused**, administrators included: a run or a
-  certificate made by anyone but the add-on, a change to a property of the add-on's schemas or a
+  certificate made by anyone but the add-on, any of its documents imported, a change to a property of the add-on's schemas or a
   certificate's file, a move, copy, check-in, restore or trash. A deletion is an administrator's
   alone, and is logged. Hiding a run in the app is not the control: this is.
 - **The logs** name who did what, and never a record's title. Names are written with control
@@ -447,6 +461,15 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   - an add-on that replaces the same JSON writer at the same priority would turn views off;
   - an export's background transaction lasts up to four hours: a longer one fails, and is filed
     again over a shorter period;
+  - an entry the audit writes more than the settling time after its event, or one a transaction
+    holds back while later entries are written, is not in an export whose period has just ended:
+    filed again later, it is;
+  - the platform's audit shows a document's entries, its views and downloads included, to whoever
+    may read the document (its REST adapter, `@audit`). The kit's record page shows reads to records
+    managers only, which is not a control: the export is its filer's alone because it lists the
+    reads of every record of a folder;
+  - each read transaction that views a record costs the add-on's writer one background work and one
+    write to the audit, where the platform batches its own entries through a stream;
   - the add-on's LTS 2025 paths to the audit (`AuditAccess`) are tested against stand-ins, since
     the tests run on 11.5's platform; no LTS 2025 server has run them.
 
@@ -469,22 +492,22 @@ retention module's model from its jar. Nuxeo's 11.5 test framework is the last o
 repository; on Java 21 it needs a newer ASM and Chronicle Queue, which the pom pins for the tests
 alone, and some JDK packages opened.
 
-| Test                        | What it proves                                                                                                                                                                                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DispositionRunTest`        | Which records a run holds and which it does not; two approvals dispose and certify; a rejection frees the records; the platform's own expiry makes a record due                                                                                                                                                       |
-| `DispositionRefusalTest`    | Every refusal: no permission to start or approve, the starter's approval, a second by the same person, a hold, a retention or a retention end since the start, a record gone                                                                                                                                          |
-| `DispositionAtomicityTest`  | A failure partway through disposes of nothing; two approvals, two second approvals, one person's two, and two starts, at once                                                                                                                                                                                         |
-| `DispositionGuardTest`      | The add-on's documents are its own; one folder per repository, an administrator's, at the root; a folder moved from it, or that inherits, takes no request                                                                                                                                                            |
-| `DispositionClusterTest`    | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                                                                                                                                                                      |
-| `CertificateCsvTest`        | The CSV's rows, quoting and formula guard                                                                                                                                                                                                                                                                             |
-| `RetentionModelTest`        | What the add-on reads of the module, held to the module's own files; the module's audited events, as the tests register them                                                                                                                                                                                          |
-| `BundleTest`                | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                                                                                                                                                                 |
-| `AuditExportTest`           | Refused without the permission, and what it cannot cover; filed in the runs folder alone; its contents for a seeded period; a period longer than a page; its checksums; kept as written; its filer's alone; the folder by path or id; the server writes the rest                                                      |
-| `AuditExportGenerationTest` | Written once; an export whose audit fails keeps nothing and says so                                                                                                                                                                                                                                                   |
-| `AccessLogTest`             | A view of a record under retention or a hold logged with who, when and what, and nothing else's; a record listed is not viewed; the server's own reads, and a read for a person; a read rolled back; a download is the platform's own entry; the registry picks the add-on's writer, which writes the platform's JSON |
-| `RecordAccessCostTest`      | What a logged view adds to a read, measured, and held under 2 ms                                                                                                                                                                                                                                                      |
-| `DispositionAuditTest`      | A run's decisions in each record's history: held, approved twice, disposed of with its certificate; rejected; halted; a refusal records nothing                                                                                                                                                                       |
-| `AuditAccessTest`           | The audit reached on 11.5 and, through stand-ins, as on LTS 2025: its service's default store, and an entry's extended information                                                                                                                                                                                    |
+| Test                        | What it proves                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DispositionRunTest`        | Which records a run holds and which it does not; two approvals dispose and certify; a rejection frees the records; the platform's own expiry makes a record due                                                                                                                                                                                                                |
+| `DispositionRefusalTest`    | Every refusal: no permission to start or approve, the starter's approval, a second by the same person, a hold, a retention or a retention end since the start, a record gone                                                                                                                                                                                                   |
+| `DispositionAtomicityTest`  | A failure partway through disposes of nothing; two approvals, two second approvals, one person's two, and two starts, at once                                                                                                                                                                                                                                                  |
+| `DispositionGuardTest`      | The add-on's documents are its own; one folder per repository, an administrator's, at the root; a folder moved from it, or that inherits, takes no request                                                                                                                                                                                                                     |
+| `DispositionClusterTest`    | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                                                                                                                                                                                                                               |
+| `CertificateCsvTest`        | The CSV's rows, quoting and formula guard                                                                                                                                                                                                                                                                                                                                      |
+| `RetentionModelTest`        | What the add-on reads of the module, held to the module's own files; the module's audited events, as the tests register them                                                                                                                                                                                                                                                   |
+| `BundleTest`                | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                                                                                                                                                                                                                          |
+| `AuditExportTest`           | Refused without the permission, and what it cannot cover; filed in the runs folder alone; its contents for a seeded period; a period longer than a page; its checksums; kept as written; its filer's alone; the folder by path or id; the server writes the rest                                                                                                               |
+| `AuditExportGenerationTest` | Written once; waits for its period to settle, so that an entry written after the filing is in it; an export whose audit fails, or whose filer is not known, keeps nothing and says so                                                                                                                                                                                          |
+| `AccessLogTest`             | A view of a record under retention or a hold logged with who, when and what, and nothing else's; a record listed is not viewed; the server's own reads, and a read for a person; a read rolled back; a view that cannot be recorded does not refuse the read; a download is the platform's own entry; the registry picks the add-on's writer, which writes the platform's JSON |
+| `RecordAccessCostTest`      | What a logged view adds to a read, measured, and held under 2 ms; what its entry costs the background, measured                                                                                                                                                                                                                                                                |
+| `DispositionAuditTest`      | A run's decisions in each record's history: held, approved twice, disposed of with its certificate; rejected; halted; a refusal records nothing                                                                                                                                                                                                                                |
+| `AuditAccessTest`           | The audit reached on 11.5 and, through stand-ins, as on LTS 2025: its service's default store, and an entry's extended information                                                                                                                                                                                                                                             |
 
 The audit tests run the platform's own audit, as its `AuditFeature` deploys it, its JPA store in H2,
 through `RecordsAuditFeature`, whose waiter waits for an entry of its own rather than the audit
@@ -502,7 +525,7 @@ cluster's lock leaving the person's transaction alone (with `ClusterService.runA
 person wrote before it). A wrong SHA-256 for the module's jar fails the build.
 
 **The audit export's and access logging's checks, seen failing** the same way (26 November 2026),
-each taken out in turn, and the test that holds it went red: the export's permission, the folder its filer may read, an unreadable document left out, the scope held exactly, the period, every page read, the CSV's checksum, the export made a record, its files and figures guarded, the export its filer's alone, the server writing the rest of it, an export written once, a failed export keeping nothing, a view at the answer only, a record under retention only, the server's own reads, the writer writing, a disposed record's entry, a document kept as fired, the cost's bound, and the LTS 2025 entry's extended information.
+each taken out in turn, and the test that holds it went red: the export's permission, the folder its filer may read, an unreadable document left out, the scope held exactly, the period, every page read, the CSV's checksum, the export made a record, its files and figures guarded, the export its filer's alone, the server writing the rest of it, an export written once, a failed export keeping nothing, a view at the answer only, a record under retention only, the server's own reads, the writer writing, a disposed record's entry, a document kept as fired, the cost's bound, a period ending when the export is filed, the period settled before it is read, a view's failure never refusing the read, and the LTS 2025 entry's extended information.
 
 ```bash
 mvn verify -pl nuxeo-agentic-records -am
@@ -519,6 +542,9 @@ mvn verify -pl nuxeo-agentic-records -am
 | `src/main/resources/OSGI-INF/records-audit.xml`    | The JSON writer for a document, the audit entries' writer, and the export's                                                                                                                         |
 | `src/main/package/`, `src/main/assemble/`          | The Marketplace package, `nuxeo-agentic-records` 0.2.0, which depends on `nuxeo-retention`                                                                                                          |
 | `src/test/`                                        | The tests, the module's types and audited events as the tests register them, the platform's audit as the tests deploy it, and test-only listeners and stand-ins                                     |
+
+`nuxeo.agentic.records.audit.export.settleSeconds`, in `nuxeo.conf`, sets how long after its period's
+end an export waits before it reads the audit, 0 to 600, 30 by default.
 
 `nuxeo.agentic.records.disposition.maxRecords`, in `nuxeo.conf`, sets the most records a run holds,
 1 to 1000, 200 by default, so that a disposal is one transaction of a bounded size.

@@ -14,6 +14,7 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.platform.audit.api.LogEntry;
 
 import com.fasterxml.jackson.core.JsonEncoding;
@@ -217,6 +219,9 @@ final class AuditExportFiles implements Closeable {
         if (value instanceof Boolean bool) {
             return bool ? "yes" : "no";
         }
+        if (value instanceof Blob blob) {
+            return "file " + blob.getFilename() + (blob.getDigest() == null ? "" : ", " + blob.getDigest());
+        }
         if (value instanceof Map<?, ?> map) {
             return map.isEmpty() ? "" : AuditExportFiles.toJson(map);
         }
@@ -254,7 +259,9 @@ final class AuditExportFiles implements Closeable {
             }
             json.writeEndArray();
         } else if (value instanceof Object[] array) {
-            write(json, List.of(array));
+            write(json, Arrays.asList(array));
+        } else if (value instanceof Blob blob) {
+            json.writeString(text(blob));
         } else {
             json.writeString(String.valueOf(value));
         }

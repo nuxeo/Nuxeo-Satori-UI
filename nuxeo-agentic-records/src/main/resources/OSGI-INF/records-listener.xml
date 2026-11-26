@@ -18,6 +18,7 @@
     <listener name="agenticRecordsDisposition" async="false" postCommit="false" priority="50"
       class="org.nuxeo.agentic.records.DispositionListener">
       <event>aboutToCreate</event>
+      <event>aboutToImport</event>
       <event>documentCreated</event>
       <event>beforeDocumentModification</event>
       <event>aboutToRemove</event>

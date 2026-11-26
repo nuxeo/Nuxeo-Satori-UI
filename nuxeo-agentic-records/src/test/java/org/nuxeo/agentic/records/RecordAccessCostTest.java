@@ -72,6 +72,42 @@ public class RecordAccessCostTest extends RecordsAuditTestCase {
                 addedMicros * 1000 < BOUND.toNanos());
     }
 
+    /**
+     * What a view costs afterwards, off the reader's time: the add-on's writer building the view's
+     * entry and adding it to the audit, one transaction's view at a time, as the background work of
+     * each read does. On the tests' audit, a JPA store in H2; on a server, the audit's own store.
+     */
+    @Test
+    public void aViewsEntryIsWrittenInTheBackgroundAtAMeasuredCost() {
+        DocumentModel record = retained("Claim 3003", Instant.now().plus(Duration.ofDays(3650)));
+        audited();
+        DocumentModel read = Fixtures.as(session, "dave").getDocument(record.getRef());
+        RecordsAuditWriter writer = new RecordsAuditWriter();
+        java.util.function.Supplier<org.nuxeo.ecm.core.event.EventBundle> bundle = () -> {
+            org.nuxeo.ecm.core.event.impl.EventBundleImpl one = new org.nuxeo.ecm.core.event.impl.EventBundleImpl();
+            one.push(RecordsAudit.event(RecordsAudit.RECORD_VIEWED, read.getCoreSession(),
+                    read.getCoreSession().getPrincipal(), read, null, new java.util.HashMap<>()));
+            return one;
+        };
+        for (int index = 0; index < WARM_UP; index++) {
+            writer.handleEvent(bundle.get());
+        }
+        long best = Long.MAX_VALUE;
+        for (int round = 0; round < 3; round++) {
+            long start = System.nanoTime();
+            for (int index = 0; index < READS; index++) {
+                writer.handleEvent(bundle.get());
+            }
+            best = Math.min(best, System.nanoTime() - start);
+        }
+        double micros = best / 1000.0 / READS;
+        System.out.println(String.format(Locale.ROOT,
+                "RecordAccessCostTest: a view's entry costs the background %.0f µs to build and write (best of 3 rounds of %d)",
+                micros, READS));
+        audited();
+        assertEquals(WARM_UP + 3 * READS, entries(RecordsAudit.RECORD_VIEWED, record).size());
+    }
+
     /** {@code count} reads of {@code doc} by {@code reader}, each in its own transaction: the nanoseconds they took. */
     private static long reads(CoreSession reader, DocumentModel doc, int count) throws IOException {
         if (TransactionHelper.isTransactionActive()) {

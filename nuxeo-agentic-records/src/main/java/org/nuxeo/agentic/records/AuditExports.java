@@ -7,6 +7,7 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -74,6 +75,17 @@ final class AuditExports {
     /** The longest an export may take to write, in seconds: its own transaction's timeout. */
     static final int GENERATION_TIMEOUT = 4 * 60 * 60;
 
+    /**
+     * How long after its period's end an export waits before it reads the audit, in seconds: the
+     * platform writes its entries a moment after their events, and the add-on's in the background, so
+     * that an export of a period that has just ended would miss its last ones.
+     */
+    static final String SETTLE_PROPERTY = "nuxeo.agentic.records.audit.export.settleSeconds";
+
+    static final int DEFAULT_SETTLE = 30;
+
+    static final int LIMIT_SETTLE = 600;
+
     private final Clock clock;
 
     private final Supplier<AuditReader> audit;
@@ -98,11 +110,19 @@ final class AuditExports {
         NuxeoPrincipal person = Dispositions.person(session);
         String path = text(export, EXPORT_PATH);
         Calendar from = date(export, EXPORT_FROM);
-        Calendar to = date(export, EXPORT_TO);
+        Calendar asked = date(export, EXPORT_TO);
         String comment = text(export, EXPORT_COMMENT);
-        if (from == null || to == null || !from.before(to)) {
+        if (from == null || asked == null || !from.before(asked)) {
             throw new DispositionRefusal(400, "bad-request",
                     "An audit export names its period, rexp:from and rexp:to, the first before the second.");
+        }
+        // A period that ends after the export is filed ends when it is filed: what is to come is not
+        // in the audit yet, and the export says the period it covers.
+        Instant now = clock.instant();
+        Calendar to = asked.toInstant().isAfter(now) ? Dispositions.calendar(now) : asked;
+        if (!from.before(to)) {
+            throw new DispositionRefusal(400, "bad-request",
+                    "An audit export's period has begun before it is filed: rexp:from is in the past.");
         }
         if (comment.length() > MAX_COMMENT) {
             throw new DispositionRefusal(400, "bad-request", "An export's comment is at most " + MAX_COMMENT + " characters.");
@@ -134,7 +154,7 @@ final class AuditExports {
             }
             scope[0] = covered.getPathAsString();
         });
-        Instant now = clock.instant();
+        export.setPropertyValue(EXPORT_TO, to);
         export.setPropertyValue(TITLE, "Audit export of " + scope[0] + ", " + from.toInstant() + " to " + to.toInstant()
                 + ", by " + person.getName());
         export.setPropertyValue(EXPORT_PATH, scope[0]);
@@ -176,6 +196,12 @@ final class AuditExports {
         if (TransactionHelper.isTransactionActive()) {
             TransactionHelper.commitOrRollbackTransaction();
         }
+        if (by == null) {
+            log.error("Audit export {}: its filer is not known, so it is not written, and is marked failed", exportId);
+            failed(repository, exportId);
+            TransactionHelper.startTransaction();
+            return;
+        }
         Path csv = null;
         Path json = null;
         boolean done = false;
@@ -184,6 +210,11 @@ final class AuditExports {
             json = Framework.createTempFilePath("records-audit-", ".json");
             Path csvFile = csv;
             Path jsonFile = json;
+            settle(inTransaction(0, () -> CoreInstance.doPrivileged(repository, (CoreSession privileged) -> {
+                IdRef ref = new IdRef(exportId);
+                return privileged.exists(ref) && privileged.getDocument(ref).getPropertyValue(EXPORT_TO) instanceof Calendar to
+                        ? to.toInstant() : null;
+            })));
             done = inTransaction(GENERATION_TIMEOUT, () -> CoreInstance.doPrivileged(repository,
                     (CoreSession privileged) -> write(privileged, exportId, by, csvFile, jsonFile)));
         } catch (IOException | RuntimeException e) {
@@ -196,6 +227,39 @@ final class AuditExports {
         }
         if (done) {
             log.info("Audit export {} written", exportId);
+        }
+    }
+
+    /**
+     * Waits, with no transaction open, until {@code end} is {@value #DEFAULT_SETTLE} seconds past, or as
+     * many as {@value #SETTLE_PROPERTY} says, 0 to {@value #LIMIT_SETTLE}.
+     */
+    private void settle(Instant end) {
+        if (end == null) {
+            return;
+        }
+        long wait = Duration.between(clock.instant(), end.plusSeconds(settleSeconds())).toMillis();
+        if (wait <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(Math.min(wait, LIMIT_SETTLE * 1000L));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("The export was interrupted before it read the audit", e);
+        }
+    }
+
+    static int settleSeconds() {
+        String value = Framework.getProperty(SETTLE_PROPERTY);
+        if (value == null || value.isBlank()) {
+            return DEFAULT_SETTLE;
+        }
+        try {
+            int seconds = Integer.parseInt(value.trim());
+            return seconds < 0 || seconds > LIMIT_SETTLE ? DEFAULT_SETTLE : seconds;
+        } catch (NumberFormatException e) {
+            return DEFAULT_SETTLE;
         }
     }
 
@@ -350,12 +414,16 @@ final class AuditExports {
         } else {
             TransactionHelper.startTransaction();
         }
+        boolean done = false;
         try {
-            return work.get();
-        } catch (RuntimeException e) {
-            TransactionHelper.setTransactionRollbackOnly();
-            throw e;
+            R result = work.get();
+            done = true;
+            return result;
         } finally {
+            // Whatever stopped the work, an Error included, nothing of it is kept.
+            if (!done) {
+                TransactionHelper.setTransactionRollbackOnly();
+            }
             TransactionHelper.commitOrRollbackTransaction();
         }
     }

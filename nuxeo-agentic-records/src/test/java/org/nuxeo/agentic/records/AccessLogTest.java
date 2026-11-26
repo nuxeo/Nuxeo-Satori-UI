@@ -141,6 +141,22 @@ public class AccessLogTest extends RecordsAuditTestCase {
         }
     }
 
+    /** Should recording a view fail, the read is still answered, whole, and its transaction commits. */
+    @Test
+    public void aViewThatCannotBeRecordedDoesNotRefuseTheRead() throws IOException {
+        DocumentModel record = retained("Claim 2008", LATER);
+        audited();
+
+        TestHooks.failOnView = true;
+        String json = answer(Fixtures.as(session, "dave").getDocument(record.getRef()));
+        TestHooks.failOnView = false;
+        assertTrue(json.contains("\"uid\":\"" + record.getId() + "\""));
+        assertTrue(json.endsWith("}"));
+        audited();
+
+        assertEquals(List.of(), entries(RecordsAudit.RECORD_VIEWED, record));
+    }
+
     /** A view is logged once the read's transaction commits: a rolled-back one logs nothing. */
     @Test
     public void aReadRolledBackLogsNothing() throws IOException {

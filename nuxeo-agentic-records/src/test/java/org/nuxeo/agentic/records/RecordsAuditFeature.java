@@ -55,6 +55,8 @@ public class RecordsAuditFeature implements RunnerFeature {
     @Override
     public void beforeSetup(FeaturesRunner runner, FrameworkMethod method, Object test) {
         clear();
+        // The tests wait for the audit themselves: an export reads it at once, unless a test says.
+        Framework.getProperties().setProperty(AuditExports.SETTLE_PROPERTY, "0");
     }
 
     /** Waits for the audit's writer to have written everything committed before it was asked. */

@@ -128,6 +128,8 @@ public class DispositionListener implements EventListener {
                         "A disposition request, run or certificate stays where it was filed.");
             }
         }
+        case "aboutToImport" -> throw new DispositionRefusal(403, "server-only",
+                "The disposition review's documents are written by the server alone, not imported.");
         default -> throw new DispositionRefusal(403, "kept",
                 "A disposition request, run or certificate is not copied, checked in or restored.");
         }

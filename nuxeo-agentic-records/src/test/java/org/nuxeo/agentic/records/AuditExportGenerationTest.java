@@ -53,6 +53,54 @@ public class AuditExportGenerationTest extends RecordsAuditTestCase {
         assertEquals(1, entries(RecordsAudit.AUDIT_EXPORTED, export).size());
     }
 
+    /**
+     * An export waits for its period's end to settle before it reads the audit: an entry the audit
+     * writes a moment after its event, as it writes every entry, is in it.
+     */
+    @Test
+    public void anExportWaitsForItsPeriodToSettle() throws InterruptedException, java.io.IOException {
+        org.nuxeo.runtime.api.Framework.getProperties().setProperty(AuditExports.SETTLE_PROPERTY, "2");
+        DocumentModel export = pending();
+        java.util.Date end = ((java.util.Calendar) export.getPropertyValue(Disposition.EXPORT_TO)).getTime();
+        Thread late = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            TransactionHelper.runInTransaction(() -> {
+                org.nuxeo.ecm.platform.audit.api.AuditLogger logger = AuditAccess.logger();
+                org.nuxeo.ecm.platform.audit.api.LogEntry entry = logger.newLogEntry();
+                entry.setEventId("documentModified");
+                entry.setEventDate(new java.util.Date(end.getTime() - 1));
+                entry.setPrincipalName("someone");
+                entry.setDocUUID("00000000-0000-0000-0000-000000000001");
+                entry.setDocPath(Fixtures.RECORDS + "/written-late");
+                entry.setRepositoryId(session.getRepositoryName());
+                logger.addLogEntries(List.of(entry));
+            });
+        });
+        late.start();
+        new AuditExports(Clock.systemUTC()).generate(session.getRepositoryName(), export.getId(),
+                Fixtures.person("grace"));
+        late.join();
+        DocumentModel written = session.getDocument(export.getRef());
+        assertEquals(Disposition.EXPORT_DONE, written.getPropertyValue(Disposition.EXPORT_STATE));
+        String csv = new String(((org.nuxeo.ecm.core.api.Blob) written.getPropertyValue(Disposition.FILE_CONTENT))
+                .getByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("the entry written after the export was filed is in it", csv.contains("/written-late"));
+    }
+
+    /** An export whose filer is not known is marked failed, not left pending. */
+    @Test
+    public void anExportWithNoFilerIsMarkedFailed() {
+        DocumentModel export = pending();
+        new AuditExports(Clock.systemUTC()).generate(session.getRepositoryName(), export.getId(), null);
+        assertEquals(Disposition.EXPORT_FAILED,
+                session.getDocument(export.getRef()).getPropertyValue(Disposition.EXPORT_STATE));
+    }
+
     @Test
     public void anExportWhoseAuditFailsKeepsNothingAndSaysSo() {
         DocumentModel export = pending();

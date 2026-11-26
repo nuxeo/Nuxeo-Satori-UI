@@ -43,9 +43,8 @@ public class AuditExportListener implements PostCommitFilteringEventListener {
             DocumentEventContext context = (DocumentEventContext) event.getContext();
             DocumentModel export = context.getSourceDocument();
             NuxeoPrincipal filer = context.getPrincipal();
-            if (filer != null) {
-                exports.generate(export.getRepositoryName(), export.getId(), filer);
-            }
+            // An export with no filer known is marked failed, not left pending.
+            exports.generate(export.getRepositoryName(), export.getId(), filer);
         }
     }
 }

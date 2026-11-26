@@ -65,6 +65,7 @@
     "records.card.export.files": "The JSON file",
     "records.card.export.history": "History",
     "records.card.recordsFile.history": "History",
+    "records.card.recordsFile.reads": "Reads",
     "layout.field.rexp:path": "Folder",
     "layout.field.rexp:from": "From",
     "layout.field.rexp:to": "Until",
