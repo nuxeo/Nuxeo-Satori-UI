@@ -14,14 +14,29 @@ name: App definition packages
 #   summary. The upgrade is checked against the same commit (section 10): what a customer may
 #   override or name in the package, and what the package names of the platform, is removed only
 #   with a migration note and the version it needs, so the platform's sources are paths here too.
-# - `sign-and-publish`, only for a tag `app-package/<name>/<version>`, which someone pushes on
-#   purpose: a build provenance attestation for the zip, then Nuxeo Marketplace preprod, the way
+# - `sign`, only for a tag `app-package/<name>/<version>`, which someone pushes on purpose: the
+#   zip's signature, keyless, through Sigstore with the run's GitHub OIDC identity, by
+#   `actions/attest` over the statement scripts/app-package-signature.mjs writes (the package, its
+#   version, the zip's SHA-256, the commit and this workflow's run), and a build provenance
+#   attestation beside it. `ci-plan` decides first: with no identity, on a runner that is not
+#   GitHub's, or from a workflow business-apps/trusted-signers.json does not name, such as a fork's,
+#   nothing is signed, and the run says so in a warning and its summary. Once signed, the signature
+#   is verified as every later reader verifies it, and kept beside the zip in its own artifact.
+# - `publish`, only when `sign` signed: the signature verified again, against the trusted signers
+#   and the tag's package and version, then Nuxeo Marketplace preprod, the way
 #   build-marketplace.yml publishes the platform's own package. Nothing publishes on a merge,
 #   because a build nobody asked for does not belong in the shared preprod list.
 #
-# The second job never runs a package's code. It downloads the zip the first job built, checks its
-# checksum, and signs and publishes that, so the secrets are never in the same job as a package's
-# build.mjs. The first job runs only a build.mjs that is byte for byte the generator's.
+# **Permissions.** Only `sign` has `id-token: write`, for Sigstore's certificate, and
+# `attestations: write`, to record its attestations with the repository; it reads no secret.
+# `publish` reads the Marketplace credentials and has `contents: read` alone. Before 26 November
+# 2026 one job, `sign-and-publish`, held both.
+#
+# Neither of the last two jobs runs a package's code. Each downloads the zip the first job built and
+# checks its checksum; each runs only this repository's scripts. So the secrets are never in the same
+# job as a package's build.mjs, and the first job runs only a build.mjs that is byte for byte the
+# generator's. A value from the tag reaches a shell only through an environment variable, since a
+# tag's name may hold `$(` and the rest.
 #
 # The `paths` lists are duplicated rather than shared: GitHub Actions does not resolve YAML anchors.
 # A tag push is not filtered by paths.
@@ -40,6 +55,11 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      # What signs and verifies a zip, and who may sign one.
+      - 'scripts/package-signature.mjs'
+      - 'scripts/app-package-signature.mjs'
+      - 'scripts/app-package-signature.selftest.mjs'
+      - 'business-apps/trusted-signers.json'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
       # The server half, and what it reads a server with.
@@ -70,6 +90,11 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      # What signs and verifies a zip, and who may sign one.
+      - 'scripts/package-signature.mjs'
+      - 'scripts/app-package-signature.mjs'
+      - 'scripts/app-package-signature.selftest.mjs'
+      - 'business-apps/trusted-signers.json'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
       # The server half, and what it reads a server with.
@@ -136,6 +161,9 @@ jobs:
           set -euo pipefail
           node scripts/app-package.selftest.mjs
           node scripts/app-upgrade-check.selftest.mjs
+          # Signing and verifying, with keys made at run time and gh stood in for, and this
+          # workflow's own signing and publishing jobs, held to their permissions and conditions.
+          node scripts/app-package-signature.selftest.mjs
           # The server half's, against a stand-in Nuxeo on the runner: no server and no credential.
           node scripts/app-upgrade-server.selftest.mjs
 
@@ -218,16 +246,29 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  sign-and-publish:
-    name: Sign and publish to preprod
+  sign:
+    name: Sign
     needs: check
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-package/')
     runs-on: ubuntu-latest
+    # The one job with an identity: id-token for Sigstore's certificate, attestations to record the
+    # attestations with the repository, so `gh attestation verify --repo` finds them. No secret.
     permissions:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      signed: ${{ steps.plan.outputs.sign }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - uses: actions/download-artifact@v4
         with:
           name: app-packages
@@ -243,13 +284,96 @@ jobs:
           (cd packages && sha256sum -c "$(basename "$zip").sha256")
           echo "path=$zip" >> "$GITHUB_OUTPUT"
 
-      # Signed: an attestation, by GitHub's Sigstore, that this repository's workflow built this
-      # zip from this commit. Anyone can check it with
-      # `gh attestation verify <zip> --repo nuxeo/Nuxeo-Satori-UI`.
+      # Signs only a tag build of this package, on GitHub's runners, with an OIDC identity, by this
+      # workflow as the trusted signers name it. Otherwise sign=false and a warning saying why.
+      - name: Decide whether this run can sign
+        id: plan
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+        run: node scripts/app-package-signature.mjs ci-plan "$ZIP" --predicate-out "$RUNNER_TEMP/app-package-signature.json"
+
       - name: Sign the zip
-        uses: actions/attest-build-provenance@v2
+        id: attest
+        uses: actions/attest@v2
+        if: steps.plan.outputs.sign == 'true'
         with:
           subject-path: ${{ steps.zip.outputs.path }}
+          predicate-type: ${{ steps.plan.outputs.predicate-type }}
+          predicate-path: ${{ steps.plan.outputs.predicate-path }}
+
+      # The SLSA provenance the workflow made before, which `gh attestation verify <zip> --repo`
+      # checks by default.
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@v2
+        if: steps.plan.outputs.sign == 'true'
+        with:
+          subject-path: ${{ steps.zip.outputs.path }}
+
+      - name: Keep the signature beside the zip, and verify it
+        if: steps.plan.outputs.sign == 'true'
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" "$ZIP.sig.json"
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          node scripts/app-package-signature.mjs verify "$ZIP" --name "${named%%/*}" --version "${named#*/}"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.sign == 'true'
+        with:
+          name: app-package-signature
+          path: packages/*.zip.sig.json
+          retention-days: 30
+          if-no-files-found: error
+
+  publish:
+    name: Publish to preprod
+    needs: [check, sign]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-package/') && needs.sign.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-packages
+          path: packages
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-package-signature
+          path: packages
+
+      - name: Check the zip is the one the check job built
+        id: zip
+        run: |
+          set -euo pipefail
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          zip="packages/${named%%/*}-${named#*/}.zip"
+          if [ ! -f "$zip" ]; then echo "::error::$zip was not built"; exit 1; fi
+          (cd packages && sha256sum -c "$(basename "$zip").sha256")
+          echo "path=$zip" >> "$GITHUB_OUTPUT"
+
+      # Nothing is published that this does not verify: the signature against the trusted signers,
+      # for the tag's own package and version.
+      - name: Verify the signature before publishing
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+        run: |
+          set -euo pipefail
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          node scripts/app-package-signature.mjs verify "$ZIP" --name "${named%%/*}" --version "${named#*/}"
 
       - name: Publish to Nuxeo Marketplace (preprod)
         uses: Alfresco/alfresco-build-tools/.github/actions/nuxeo/nos-publish@v12.10.3
