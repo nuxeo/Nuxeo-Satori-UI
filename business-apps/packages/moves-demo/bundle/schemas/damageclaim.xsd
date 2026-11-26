@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional damageclaim schema of the DamageClaim type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/moves-demo/damageclaim"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/moves-demo/damageclaim">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="move" type="xs:string" />
+  <xs:element name="moveNumber" type="xs:string" />
+  <xs:element name="items" type="nxs:stringList" />
+  <xs:element name="deliveredOn" type="xs:date" />
+  <xs:element name="filedOn" type="xs:date" />
+  <xs:element name="amountClaimed" type="xs:double" />
+  <xs:element name="amountApproved" type="xs:double" />
+  <xs:element name="state">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Filed" />
+        <xs:enumeration value="In review" />
+        <xs:enumeration value="Approved" />
+        <xs:enumeration value="Denied" />
+        <xs:enumeration value="Paid" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="adjuster" type="xs:string" />
+  <xs:element name="details" type="xs:string" />
+  <xs:element name="decidedOn" type="xs:date" />
+  <xs:element name="denialReason" type="xs:string" />
+</xs:schema>
