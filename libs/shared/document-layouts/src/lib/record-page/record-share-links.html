@@ -1,0 +1,278 @@
+@let current = state();
+@let shown = createdShown();
+<!-- A 403 on the links: the user may not manage them, and the page draws nothing of them. -->
+@if (current.status !== 'hidden') {
+  <section class="record-share-links" [attr.aria-labelledby]="id + '-heading'">
+    <div
+      class="record-share-links__heading"
+      role="heading"
+      [attr.aria-level]="headingLevel()"
+      [id]="id + '-heading'"
+    >
+      {{ 'document-layouts.share-links.heading' | translate }}
+    </div>
+    @switch (current.status) {
+      @case ('failed') {
+        <nxs-error-state
+          [status]="current.error"
+          [heading]="'document-layouts.share-links.failed' | translate"
+          [headingLevel]="subLevel()"
+          [retryable]="current.error === 500"
+          (retry)="retry()"
+        />
+      }
+      @case ('loaded') {
+        <p class="record-share-links__note">
+          {{ 'document-layouts.share-links.note' | translate }}
+        </p>
+
+        @if (current.links.length === 0) {
+          <p class="record-share-links__empty" data-share-links-empty>
+            {{ 'document-layouts.share-links.none' | translate }}
+          </p>
+        } @else {
+          <!-- role="list": a list styled with no markers loses its role in Safari. -->
+          <ul
+            class="record-share-links__list"
+            role="list"
+            [attr.aria-label]="'document-layouts.share-links.list' | translate"
+          >
+            @for (link of current.links; track link.id) {
+              <li
+                class="record-share-links__link"
+                [attr.data-link]="label(link.id)"
+                [attr.data-state]="link.state"
+              >
+                <span class="record-share-links__name">
+                  {{ 'document-layouts.share-links.link' | translate: { label: label(link.id) } }}
+                </span>
+                <span class="cdk-visually-hidden">, </span>
+                <span class="record-share-links__state">
+                  {{ 'document-layouts.share-links.state.' + link.state | translate }}
+                </span>
+                <span class="cdk-visually-hidden">, </span>
+                <span class="record-share-links__items">{{ itemNames(link.renditions) }}</span>
+                <span class="cdk-visually-hidden">, </span>
+                <span class="record-share-links__end">
+                  {{ 'document-layouts.share-links.until' | translate: { day: endDay(link.end) } }}
+                </span>
+                <span class="cdk-visually-hidden">, </span>
+                <span class="record-share-links__created">
+                  {{
+                    'document-layouts.share-links.created-by'
+                      | translate: { user: link.createdBy, when: when(link.created) }
+                  }}
+                </span>
+                @if (link.revoked !== null) {
+                  <span class="cdk-visually-hidden">, </span>
+                  <span class="record-share-links__revoked">
+                    {{
+                      'document-layouts.share-links.revoked-by'
+                        | translate: { user: link.revokedBy ?? '', when: when(link.revoked) }
+                    }}
+                  </span>
+                }
+                @if (!readOnly() && link.state === 'active') {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="record-share-links__revoke"
+                    disabledInteractive
+                    [disabled]="saving()"
+                    [attr.aria-label]="
+                      'document-layouts.share-links.revoke.label'
+                        | translate: { label: label(link.id) }
+                    "
+                    (click)="revoke(link)"
+                  >
+                    {{ 'document-layouts.share-links.revoke.button' | translate }}
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+
+        <!-- What the server answered to Create and Revoke: said where it was asked. -->
+        <div class="record-share-links__live" role="status">
+          @if (shown) {
+            <div class="record-share-links__created-link" data-share-link-created>
+              <p class="record-share-links__created-heading">
+                {{
+                  'document-layouts.share-links.created.heading' | translate: { label: shown.label }
+                }}
+              </p>
+              <p class="record-share-links__created-once">
+                {{ 'document-layouts.share-links.created.once' | translate }}
+              </p>
+              <!-- The address as text, selectable: never a link this page would open itself. -->
+              <p class="record-share-links__address">
+                <span class="record-share-links__address-label">{{
+                  'document-layouts.share-links.created.address' | translate
+                }}</span>
+                <code class="record-share-links__url">{{ shown.url }}</code>
+              </p>
+              <div class="record-share-links__created-actions">
+                <button mat-flat-button type="button" (click)="copy()">
+                  {{ 'document-layouts.share-links.created.copy' | translate }}
+                </button>
+                <button mat-stroked-button type="button" (click)="dismiss()">
+                  {{ 'document-layouts.share-links.created.done' | translate }}
+                </button>
+              </div>
+            </div>
+          }
+          @if (refused().length > 0) {
+            <div class="record-share-links__refused" data-share-links-refused>
+              <p>{{ 'document-layouts.share-links.refused.heading' | translate }}</p>
+              <ul role="list">
+                @for (refusal of refused(); track refusal.item) {
+                  <li [attr.data-item]="refusal.item">
+                    {{ refusal.title ?? ('document-layouts.share-links.original' | translate) }}:
+                    {{ refusal.key | translate }}
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+          @if (writeError(); as error) {
+            <p class="record-share-links__error" data-share-links-error>{{ error }}</p>
+          }
+        </div>
+
+        @if (!readOnly()) {
+          <form
+            class="record-share-links__form"
+            [attr.aria-labelledby]="id + '-create-heading'"
+            (submit)="$event.preventDefault(); create()"
+          >
+            <div
+              class="record-share-links__subheading"
+              role="heading"
+              [attr.aria-level]="subLevel()"
+              [id]="id + '-create-heading'"
+            >
+              {{ 'document-layouts.share-links.create.heading' | translate }}
+            </div>
+            @if (offered().length === 0) {
+              <p class="record-share-links__empty">
+                {{ 'document-layouts.share-links.create.nothing' | translate }}
+              </p>
+            } @else {
+              <fieldset class="record-share-links__items-field">
+                <legend>
+                  {{ 'document-layouts.share-links.create.items' | translate: { max: maxItems } }}
+                </legend>
+                @for (each of offered(); track each.item) {
+                  <mat-checkbox
+                    class="record-share-links__item"
+                    [attr.data-item]="each.item"
+                    [checked]="isChosen(each.item)"
+                    (change)="toggle(each.item, $event.checked)"
+                  >
+                    {{ each.title ?? ('document-layouts.share-links.original' | translate) }}
+                  </mat-checkbox>
+                }
+              </fieldset>
+              <nxs-date-input
+                class="record-share-links__end-field"
+                [label]="'document-layouts.share-links.create.end' | translate"
+                [hint]="'document-layouts.share-links.create.end-hint' | translate"
+                [min]="minDate()"
+                [max]="maxDate()"
+                [required]="true"
+                [value]="endDate()"
+                (valueChange)="setEnd($event)"
+              />
+              <button
+                mat-flat-button
+                type="submit"
+                class="record-share-links__create"
+                disabledInteractive
+                [disabled]="!creatable()"
+              >
+                {{ 'document-layouts.share-links.create.button' | translate }}
+              </button>
+            }
+          </form>
+        }
+
+        <section class="record-share-links__downloads" [attr.aria-labelledby]="id + '-downloads'">
+          <div
+            class="record-share-links__subheading"
+            role="heading"
+            [attr.aria-level]="subLevel()"
+            [id]="id + '-downloads'"
+          >
+            {{ 'document-layouts.share-links.downloads.heading' | translate }}
+          </div>
+          @let log = downloads();
+          @switch (log.status) {
+            @case ('failed') {
+              <nxs-error-state
+                [status]="log.error"
+                [heading]="'document-layouts.share-links.downloads.failed' | translate"
+                [headingLevel]="subLevel()"
+                [retryable]="log.error === 500"
+                (retry)="retryDownloads()"
+              />
+            }
+            @case ('loaded') {
+              @if (log.log.downloads.length === 0) {
+                <p class="record-share-links__empty" data-share-links-no-downloads>
+                  {{ 'document-layouts.share-links.downloads.none' | translate }}
+                </p>
+              } @else {
+                <table class="record-share-links__table">
+                  <caption class="cdk-visually-hidden">
+                    {{
+                      'document-layouts.share-links.downloads.heading' | translate
+                    }}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">
+                        {{ 'document-layouts.share-links.downloads.time' | translate }}
+                      </th>
+                      <th scope="col">
+                        {{ 'document-layouts.share-links.downloads.link' | translate }}
+                      </th>
+                      <th scope="col">
+                        {{ 'document-layouts.share-links.downloads.item' | translate }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (entry of log.log.downloads; track $index) {
+                      <tr [attr.data-link]="label(entry.link)">
+                        <td>{{ when(entry.time) }}</td>
+                        <td>{{ label(entry.link) }}</td>
+                        <td>{{ itemName(entry.rendition) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                @if (log.log.truncated) {
+                  <p class="record-share-links__truncated">
+                    {{ 'document-layouts.share-links.downloads.truncated' | translate }}
+                  </p>
+                }
+              }
+            }
+            @default {
+              <nxs-spinner
+                diameter="24"
+                [label]="'document-layouts.share-links.downloads.loading' | translate"
+              />
+            }
+          }
+        </section>
+      }
+      @default {
+        <div class="record-share-links__loading">
+          <nxs-spinner diameter="32" [label]="'document-layouts.share-links.loading' | translate" />
+        </div>
+      }
+    }
+  </section>
+}

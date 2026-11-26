@@ -5,8 +5,14 @@ on:
   # AGENTS/06-git-workflow.md), so a PR into one needs the same gate as a PR into `main`.
   # nx-set-shas diffs a PR against its own base branch, so the affected set is the sub-PR's
   # change, not the whole integration branch.
+  #
+  # `staging/<name>` branches collect a programme's PRs and reach `integration/<name>` as one
+  # reviewed PR, so a PR into one needs the same gate too. Until 26 November 2026 they had none
+  # of this workflow: a `feat/` or `spike/` branch into `staging/enterprise-grade-app` matched
+  # neither filter, and of its merged PRs #717, #719, #720, #724, #725, #726 and #735 never ran
+  # it. Only the `fix/` ones did, through `push`.
   pull_request:
-    branches: [main, 'integration/**']
+    branches: [main, 'integration/**', 'staging/**']
   # Long-lived feature branches are validated on push as well as on PR, so work in
   # progress is never only "green on my machine". nx-set-shas falls back to comparing
   # against the default branch when a push has no previous successful run to diff from.

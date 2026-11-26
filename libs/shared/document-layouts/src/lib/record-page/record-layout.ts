@@ -230,6 +230,12 @@ export interface RecordLayoutFile {
    * the file's `review`, unless a finding about it left it out. A record with no picture shows none.
    */
   readonly review: boolean;
+  /**
+   * Whether the page lists the picture's share links (layout-v2.md, section 2, "Share links"):
+   * the file's `shareLinks`, unless a finding about it left them out. A record with no picture
+   * shows none.
+   */
+  readonly shareLinks: boolean;
   /** The tabs, or `null` when the file lists its cards directly. */
   readonly tabs: readonly RecordTabEntry[] | null;
   /** The cards of a file without tabs; empty when it has tabs. */
@@ -268,15 +274,16 @@ export function labelOf(
 }
 
 /**
- * The entry a finding is about: the review, the banner, or the innermost tab, card, field, list
- * column, row action or field from another system its path passes through, as `review`,
- * `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
+ * The entry a finding is about: the review, the share links, the banner, or the innermost tab,
+ * card, field, list column, row action or field from another system its path passes through, as
+ * `review`, `shareLinks`, `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
  * `cards[4].external.fields[0]`. A widget's own lists — a table's `parameters.columns` — are not
  * fields of the file, so a finding inside one names the field whose widget it is. `null` for a
  * finding about the file as a whole.
  */
 export function entryOf(path: string): string | null {
   if (path === 'review' || path.startsWith('review.')) return 'review';
+  if (path === 'shareLinks' || path.startsWith('shareLinks.')) return 'shareLinks';
   let entry: string | null = null;
   for (const match of path.matchAll(
     /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions|external\.fields)\[(\d+)\]/g,
@@ -802,10 +809,20 @@ export function readRecordLayout(
 
   // A finding about the review, such as an option this build does not have, leaves it out alone.
   const review = isRecord(content['review']) && !leftOut.has('review');
+  // The same for the share links: a finding about them leaves them out, and nothing else.
+  const shareLinks = isRecord(content['shareLinks']) && !leftOut.has('shareLinks');
 
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;
   if (!Array.isArray(content['tabs'])) {
-    return { columns, banners, review, tabs: null, cards: cards(content['cards'], ''), problems };
+    return {
+      columns,
+      banners,
+      review,
+      shareLinks,
+      tabs: null,
+      cards: cards(content['cards'], ''),
+      problems,
+    };
   }
   const tabs = content['tabs'].flatMap((tab: unknown, index): RecordTabEntry[] => {
     const place = `tabs[${index}]`;
@@ -822,5 +839,5 @@ export function readRecordLayout(
       },
     ];
   });
-  return { columns, banners, review, tabs, cards: [], problems };
+  return { columns, banners, review, shareLinks, tabs, cards: [], problems };
 }

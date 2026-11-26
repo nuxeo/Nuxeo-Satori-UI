@@ -1280,13 +1280,19 @@ describe('entryOf', () => {
     // So is the review, and anything inside it.
     ['review', 'review'],
     ['review.rounds', 'review'],
+    // And the share links.
+    ['shareLinks', 'shareLinks'],
+    ['shareLinks.maxDays', 'shareLinks'],
   ])('%s is about %s', (path, entry) => {
     expect(entryOf(path)).toBe(entry);
   });
 
-  it.each(['', 'columns', '$schema', 'reviewer'])('"%s" is about the file as a whole', (path) => {
-    expect(entryOf(path)).toBeNull();
-  });
+  it.each(['', 'columns', '$schema', 'reviewer', 'shareLinksAll'])(
+    '"%s" is about the file as a whole',
+    (path) => {
+      expect(entryOf(path)).toBeNull();
+    },
+  );
 });
 
 describe('the review, as the app reads it', () => {
@@ -1315,6 +1321,41 @@ describe('the review, as the app reads it', () => {
   it('refuses the file for a review that is not an object, as for a banner', () => {
     expect(readRecordLayout(page({ review: true }), { rules: known })).toEqual({
       invalid: 'review: review is an object: {} turns it on',
+    });
+  });
+});
+
+describe('the share links, as the app reads them', () => {
+  const page = (extra: Record<string, unknown>) => ({
+    version: 2,
+    ...extra,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('are on for a file with them, beside cards or tabs, and off for one without', () => {
+    expect(read(page({ shareLinks: {} })).shareLinks).toBe(true);
+    const tabbed = { version: 2, shareLinks: {}, tabs: [{ id: 't', cards: [page({}).cards[0]] }] };
+    expect(read(tabbed).shareLinks).toBe(true);
+    expect(read(page({})).shareLinks).toBe(false);
+    // Each is its own: a review alone turns on no share links, nor the reverse.
+    expect(read(page({ review: {} })).shareLinks).toBe(false);
+    expect(read(page({ shareLinks: {} })).review).toBe(false);
+  });
+
+  it('leaves out share links with an option this build does not have, and says so', () => {
+    const file = read(page({ shareLinks: { maxDays: 30 }, review: {} }));
+    expect(file.shareLinks).toBe(false);
+    // The rest of the page stays, the review included.
+    expect(file.review).toBe(true);
+    expect(file.cards.map((card) => card.id)).toEqual(['c']);
+    expect(file.problems).toEqual([
+      'shareLinks.maxDays: "maxDays" is not a key version 2 has; shareLinks left out',
+    ]);
+  });
+
+  it('refuses the file for share links that are not an object, as for a review', () => {
+    expect(readRecordLayout(page({ shareLinks: true }), { rules: known })).toEqual({
+      invalid: 'shareLinks: shareLinks is an object: {} turns them on',
     });
   });
 });

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.share" version="1.0">
+
+  <documentation>
+    Share links: an asset's picture views, and its original where its rights allow, given to
+    someone who is not signed in, through /nuxeo/agentic-share/ and a token of 256 bits, of which
+    the server keeps the SHA-256 only. A link is bound to one document, the items it lists and its
+    last day, in UTC. It opens only while it is not revoked and not past that day, its creator still
+    holds WriteSecurity on the document, and the document's rights policy
+    (org.nuxeo.agentic.assets.rights) allows each item, with the asset's rights not ended, previews
+    included. Every byte it serves is watermarked here, and every download is logged, with the time,
+    the link and the item only.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+  <require>org.nuxeo.agentic.assets.share.directories</require>
+
+  <implementation class="org.nuxeo.agentic.assets.share.ShareLinkComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.share.ShareLinkService" />
+  </service>
+
+</component>

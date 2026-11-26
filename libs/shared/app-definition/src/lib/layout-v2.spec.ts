@@ -590,6 +590,49 @@ describe('a review', () => {
   });
 });
 
+describe('share links', () => {
+  const shared = (shareLinks: unknown) => ({
+    version: 2,
+    shareLinks,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('are turned on by an empty object, beside cards or tabs, and beside a review', () => {
+    expect(messages(shared({}))).toEqual([]);
+    expect(messages({ ...shared({}), review: {} })).toEqual([]);
+    expect(
+      messages({
+        version: 2,
+        shareLinks: {},
+        tabs: [{ id: 't', cards: [{ id: 'c', fields: [] }] }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('are refused outside view mode, and in a task form', () => {
+    for (const mode of ['metadata', 'edit', 'create'] as const) {
+      expect(messages(shared({}), mode)).toEqual([
+        'shareLinks: share links belong in view mode only [structure]',
+      ]);
+    }
+    expect(validateTaskForm(shared({})).map((finding) => finding.message)).toEqual([
+      'share links belong in view mode only',
+    ]);
+  });
+
+  it('are refused as anything but an object, and an option they do not have is unknown', () => {
+    for (const shape of [true, 'links', [], null]) {
+      expect(messages(shared(shape))).toEqual([
+        'shareLinks: shareLinks is an object: {} turns them on [structure]',
+      ]);
+    }
+    // Unknown, not structure: the app, loading the file tolerantly, leaves the links out alone.
+    expect(messages(shared({ maxDays: 30 }))).toEqual([
+      'shareLinks.maxDays: "maxDays" is not a key version 2 has [unknown]',
+    ]);
+  });
+});
+
 describe('the date rules', () => {
   const rule = (visibleWhen: unknown) =>
     messages({ version: 2, cards: [{ id: 'c', fields: [{ field: 'dc:title', visibleWhen }] }] });

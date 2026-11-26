@@ -303,9 +303,53 @@ describe('the layout edits', () => {
     expect(layoutFileName('edit')).toBe('edit.layout.json');
   });
 
-  it('writes the file as JSON, two spaces deep, with a last newline', () => {
-    const text = layoutFileText({ version: 2, cards: [] });
-    expect(text).toBe('{\n  "version": 2,\n  "cards": []\n}\n');
+  it("writes the file as the repository's Prettier lays it out, with a last newline", () => {
+    // On one line where it fits in 100 columns, as Prettier writes a short file. The layout is held
+    // to Prettier itself by json-file-text.spec.ts, and to every kit's files by round-trip.spec.ts.
+    expect(layoutFileText({ version: 2, cards: [] })).toBe('{ "version": 2, "cards": [] }\n');
     expect(JSON.parse(layoutFileText(MEMBER))).toEqual(MEMBER);
+  });
+
+  it('writes a heading or a rule it adds where version 2 lists its key, every other key in place', () => {
+    const file: LayoutJson = {
+      version: 2,
+      cards: [{ id: 'c', fields: [{ field: 'dc:title', widget: 'text', required: true }] }],
+    };
+    const headed = setCardText(setCardText(file, member, 'labelKey', 'k'), member, 'label', 'L');
+    expect(Object.keys((headed['cards'] as LayoutJson[])[0])).toEqual([
+      'id',
+      'label',
+      'labelKey',
+      'fields',
+    ]);
+    const ruled = setFieldRule(file, member, 0, 'visibleWhen', 'app.rules.canWrite');
+    expect(Object.keys((fieldsOf(ruled) as LayoutJson[])[0])).toEqual([
+      'field',
+      'widget',
+      'visibleWhen',
+      'required',
+    ]);
+    // A key it already has keeps its place, written where the format would not put it included.
+    const again = setFieldRule(ruled, member, 0, 'required', false);
+    expect(Object.keys((fieldsOf(again) as LayoutJson[])[0])).toEqual([
+      'field',
+      'widget',
+      'visibleWhen',
+      'required',
+    ]);
+    // `checks` is listed after `required`, and written before it here.
+    const unordered: LayoutJson = {
+      version: 2,
+      cards: [{ id: 'c', fields: [{ field: 'dc:title', checks: [], required: true }] }],
+    };
+    const changed = (
+      fieldsOf(setFieldRule(unordered, member, 0, 'required', false)) as LayoutJson[]
+    )[0];
+    expect(changed).toEqual({ field: 'dc:title', checks: [], required: false });
+    expect(Object.keys(changed)).toEqual(['field', 'checks', 'required']);
+    expect(file).toEqual({
+      version: 2,
+      cards: [{ id: 'c', fields: [{ field: 'dc:title', widget: 'text', required: true }] }],
+    });
   });
 });

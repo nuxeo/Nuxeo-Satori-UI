@@ -20,6 +20,7 @@ import {
 } from '@nuxeo/satori-platform/components';
 import { type Observable, map, of, switchMap } from 'rxjs';
 
+import { jsonFileText } from '../json-file-text';
 import {
   DeploymentLayerService,
   type LayerChange,
@@ -178,9 +179,9 @@ export class LayerPanelComponent {
       });
   }
 
-  /** A version as JSON text, two spaces deep, as the download writes it. */
+  /** A version as JSON text, as the download writes it (`jsonFileText`). */
   json(content: unknown): string {
-    return content === undefined ? '' : JSON.stringify(content, null, 2);
+    return content === undefined ? '' : jsonFileText(content);
   }
 
   save(): void {
