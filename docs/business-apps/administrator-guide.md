@@ -466,8 +466,10 @@ after sign-in.
 
    An error is exit 1; a warning leaves the exit code alone; exit 2 is a server it could not
    identify, or a read it could not make. Run on the local Docker Nuxeo for payers 0.6.1 over the
-   0.6.1 installed, 26 November 2026: kept, with the one error the registry already reported. An
-   upgrade with changes has been checked only against a stand-in for the server so far.
+   0.6.1 installed, 26 November 2026: kept, with the one error the registry already reported; and
+   for payers 0.7.0 over the same 0.6.1: kept, its claims review route model replaced with no
+   workflow running on it. What neither run reached has been checked only against a stand-in for
+   the server ([package-pipeline.md, section 10](package-pipeline.md#on-a-server-before-the-install)).
 
 4. **Install the new version** with the one-off script. `mp-install` upgrades a kit, removing the
    version before first, and the records stay: so the Payers kit went from 0.2.0 to 0.3.0, on 23

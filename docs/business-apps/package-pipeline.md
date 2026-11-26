@@ -867,8 +867,13 @@ switched off, and one warning, the error the registry already reports for the ki
 `payers.claim.referToInvestigations`, whose operation the server's allow-list does not hold. The
 package manager's file was the same, byte for byte, after the run. Since the version installed was
 the version checked, that run read the identity, the version, the layouts, the content model, two
-counts and the layer's switch; what an upgrade with changes reads, the counts of what it removes,
-the page providers run, the route models, the vocabulary and the layer's files, has been run only
+counts and the layer's switch. A second run, the same day, held payers 0.7.0, from the staging
+branch, to the 0.6.1 installed, given as `--previous` from the commit before 0.7.0 merged: kept,
+exit 0, with the same warning. It read that 0.7.0 replaces the route model `PayersClaimReview`,
+whose zip changed, and counted no workflow running on the server's model, by its `docri:modelId`;
+and that the server has no vocabulary `PayersAppealDecision` yet, which 0.7.0 adds. The package
+manager's file was again the same after it. What neither run reached, the counts of what an upgrade
+removes, a page provider run, a vocabulary's entries and the layer's files, has been run only
 against the stand-in. The answers the stand-in gives were each read first from that server, by
 hand and read only: `/me`, the distribution, the package manager's listing, the registry, the
 layouts, the content model, an NXQL count, a page provider's definition and its `execute` with
