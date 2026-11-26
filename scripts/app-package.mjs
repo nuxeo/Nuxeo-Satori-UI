@@ -23,7 +23,8 @@
  *      package's labels must give every label key a text, and a content model: the one given, or,
  *      for a package that ships a stand-in model, its own `content-model.json`. A queue's facet and
  *      a home's figure name an aggregate their page provider defines, when the package's own
- *      model defines it; a queue's and a related list's columns and sorts, on such a page
+ *      model defines it; the NXQL of a page provider the package defines holds nothing Nuxeo's
+ *      grammar has no place for, by a check of its tokens, not a parse; a queue's and a related list's columns and sorts, on such a page
  *      provider whose NXQL says the type it lists, name that type's properties in the content
  *      model, with widgets that show them. The layouts the component contributes are the files the validator read, in the modes it
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
@@ -102,7 +103,7 @@ import {
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** The validator's library, which Node loads as it is through the hook imported above. */
 const LIBRARY = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'lib');
-const { listedColumnFindings, listedType } = await import(
+const { listedColumnFindings, listedType, nxqlProblems } = await import(
   pathToFileURL(join(LIBRARY, 'page-providers.ts')).href
 );
 const { readContentModel } = await import(pathToFileURL(join(LIBRARY, 'content-model.ts')).href);
@@ -367,6 +368,14 @@ function run({
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
+  const refusedQueries = refusedNxql(directory);
+  if (refusedQueries.length > 0) {
+    for (const finding of refusedQueries) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a page provider's NXQL holds what Nuxeo refuses, listed above. This is a check of its tokens, not of the query: one it passes may still be refused on the server.",
+    );
+  }
   const unanswered = unansweredAggregates(directory, root);
   if (unanswered.length > 0) {
     for (const finding of unanswered) process.stdout.write(`${finding}\n`);
@@ -969,6 +978,26 @@ function unansweredAggregates(directory, root) {
       if (isObject(kpi))
         check('home.json', `cards[${index}].kpi.aggregate`, kpi.pageProvider, kpi.aggregate);
     });
+  return findings;
+}
+
+/**
+ * What Nuxeo refuses in the NXQL of each page provider the package defines, as a finding in the
+ * validator's form: the component, the page provider and the element, why (`nxqlProblems`). A
+ * check of the query's tokens for constructs Nuxeo's grammar has no place for, such as
+ * `BETWEEN NOW(...)`, which a server answered 400: not a parse, so a query it passes may still be
+ * refused on install (package-pipeline.md, section 2).
+ */
+function refusedNxql(directory) {
+  const findings = [];
+  for (const [name, { component, nxql }] of pageProvidersOf(directory)) {
+    if (nxql === null) continue;
+    const place = `pageProviders.${name}.${nxql.pattern ? 'pattern' : 'whereClause.fixedPart'}`;
+    for (const problem of nxqlProblems(nxql.text, { pattern: nxql.pattern }))
+      findings.push(
+        `${join(directory, 'bundle', ...component.split('/'))}: ${place}: ${problem} [structure]`,
+      );
+  }
   return findings;
 }
 

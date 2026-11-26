@@ -1,7 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readContentModel, type ContentModel } from './content-model';
-import { listedColumnFindings, listedType, type ListingProvider } from './page-providers';
+import {
+  listedColumnFindings,
+  listedType,
+  nxqlProblems,
+  type ListingProvider,
+} from './page-providers';
 
 const KITS = join(import.meta.dirname, '..', '..', '..', '..', '..', 'business-apps', 'packages');
 const read = (...path: string[]): unknown => JSON.parse(readFileSync(join(KITS, ...path), 'utf8'));
@@ -191,5 +196,99 @@ describe("listedColumnFindings: a list's columns and sorts, held to the type its
         (finding) => finding.path,
       ),
     ).toEqual(['tabs[0].cards[4].related.columns[2]']);
+  });
+});
+
+describe("nxqlProblems: what in a page provider's NXQL Nuxeo refuses, as far as a pattern check tells", () => {
+  it("finds the moves kit's BETWEEN NOW(...), which the server answered 400", () => {
+    const where =
+      "ecm:primaryType = 'Move' AND move:loadDate BETWEEN NOW('-P1D') AND NOW('P7D') AND ecm:isTrashed = 0";
+    expect(nxqlProblems(where, { pattern: false })).toEqual([
+      expect.stringContaining('BETWEEN takes a literal on each side of its AND'),
+    ]);
+    // The condition is shown, as far as it goes.
+    expect(nxqlProblems(`SELECT * FROM Document WHERE ${where}`, { pattern: true })[0]).toContain(
+      `"BETWEEN NOW('-P1D') AND NOW('P7D')" does not`,
+    );
+    expect(nxqlProblems('(x:a BETWEEN NOW() AND 3) OR x:b = 1', { pattern: false })[0]).toContain(
+      '"BETWEEN NOW() AND 3" does not',
+    );
+  });
+
+  const refused: [string, string, boolean, string][] = [
+    ['a property as a bound', 'x:a BETWEEN x:b AND 3', false, 'BETWEEN takes a literal'],
+    ['a bound missing', "x:a BETWEEN 'a'", false, 'BETWEEN takes a literal'],
+    ['an unclosed string', "dc:title = 'open", false, 'a string is not closed'],
+    ['an unclosed parenthesis', '(dc:title = 1 AND (x:y = 2)', false, 'a "(" is not closed'],
+    ['a parenthesis that closes nothing', 'dc:title = 1)', false, 'a ")" closes nothing'],
+    ['==', 'dc:title == 1', false, '"==" is not NXQL'],
+    ['&&', 'x:a = 1 && x:b = 2', false, '"&&" is not NXQL'],
+    ['||', 'x:a = 1 || x:b = 2', false, '"||" is not NXQL'],
+    ['a second statement', 'x:a = 1; x:b = 2', false, '";" is not NXQL'],
+    ['a NOT written !', '! x:a = 1', false, '"!" is not NXQL'],
+    ['a pattern that is not a query', "ecm:primaryType = 'A'", true, 'a pattern is a whole query'],
+  ];
+  it.each(refused)('finds %s', (_, nxql, pattern, problem) => {
+    expect(nxqlProblems(nxql, { pattern }).join('\n')).toContain(problem);
+  });
+
+  const passed: [string, string, boolean][] = [
+    ['literal bounds', "dc:created BETWEEN DATE '2020-01-01' AND DATE '2021-01-01'", false],
+    [
+      'numbers and timestamps',
+      "x:n BETWEEN -1 AND 2.5 AND x:t NOT BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND ?",
+      false,
+    ],
+    ['parameters', 'x:n BETWEEN ? AND :upper', false],
+    ['NOW() compared', "move:loadDate >= NOW('-P1D') AND move:loadDate <= NOW('P7D')", false],
+    [
+      'every operator',
+      "a:b <> 'x' AND a:c != 1 AND a:d <= 2 AND a:e >= 3 AND a:f < 4 AND a:g > 5 AND a:h LIKE 'x%' AND a:i ILIKE 'y' AND a:j IS NOT NULL AND a:k IN ('A', 'B') AND a:l STARTSWITH '/x'",
+      false,
+    ],
+    [
+      'quotes, escapes and symbols inside strings',
+      "dc:title = 'it\\'s == && || ; ! (' AND dc:description = \"a ) b\"",
+      false,
+    ],
+    [
+      'a list property and a path',
+      "dc:subjects/* = 'x' AND files:files/*1/file/name LIKE '%.pdf'",
+      false,
+    ],
+    ['a whole query', "SELECT * FROM Document WHERE ecm:primaryType = 'A' ORDER BY dc:title", true],
+  ];
+  it.each(passed)('passes %s', (_, nxql, pattern) => {
+    expect(nxqlProblems(nxql, { pattern })).toEqual([]);
+  });
+
+  it("passes every kit's own page providers, as their components hold them", () => {
+    const decoded = (text: string): string =>
+      text
+        .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
+    let read = 0;
+    for (const kit of readdirSync(KITS)) {
+      const components = join(KITS, kit, 'bundle', 'OSGI-INF');
+      if (!existsSync(components)) continue;
+      for (const file of readdirSync(components).filter((name) => name.endsWith('.xml'))) {
+        const xml = readFileSync(join(components, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+        for (const [, element, text] of xml.matchAll(
+          /<(pattern|fixedPart)[^>]*>([\s\S]*?)<\/\1>/g,
+        )) {
+          read++;
+          expect(
+            nxqlProblems(decoded(text), { pattern: element === 'pattern' }),
+            `${kit}/${file}`,
+          ).toEqual([]);
+        }
+      }
+    }
+    // Every kit's page providers were read: 21 when this was written.
+    expect(read).toBeGreaterThanOrEqual(21);
   });
 });

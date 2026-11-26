@@ -469,6 +469,37 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(again.warnings).toBeUndefined();
     });
 
+    it('refuses a page provider whose NXQL Nuxeo would refuse, naming its component', async () => {
+      const root = kit('moves-demo', 'between-now');
+      const before = fingerprint(root);
+      const result = await writePackage(
+        {
+          package: root,
+          changes: [
+            {
+              kind: 'generator',
+              generator: 'app-model',
+              options: {
+                type: 'DamageClaim',
+                pageProvider: 'moves_filed_this_month',
+                where: "dmg:filedOn BETWEEN NOW('-P30D') AND NOW()",
+              },
+            },
+          ],
+        },
+        OPTIONS,
+      );
+      expectRefused(result, root, before);
+      expect(result.validation?.refusedAt?.step).toBe(2);
+      expect(result.validation?.findings).toEqual([
+        expect.objectContaining({
+          file: 'bundle/OSGI-INF/moves-demo-model.xml',
+          place: 'pageProviders.moves_filed_this_month.pattern',
+          message: expect.stringContaining('BETWEEN takes a literal on each side of its AND'),
+        }),
+      ]);
+    });
+
     it('answers a write of what the file already holds with nothing to write', async () => {
       const root = kit('contracts-demo', 'same-write');
       const result = await writeFile(root, LABELS, read(root, LABELS));

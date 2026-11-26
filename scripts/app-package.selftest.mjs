@@ -1595,6 +1595,51 @@ expectBuilt(
 expectBuilt("a column of one of the server's own properties", ({ edit }) =>
   edit(QUEUE, '"claim:number",', '"claim:number", "ecm:currentLifeCycleState",'),
 );
+// A page provider's NXQL is checked for what Nuxeo's grammar has no place for, before a server
+// loads it: the moves kit's run found BETWEEN NOW(...) only by a query, which answered 400. Not a
+// parse: these are the constructs it refuses, and the controls below are what it must pass.
+const PAYERS_MODEL = 'bundle/OSGI-INF/payers-claims-demo-model.xml';
+expectRefused(
+  "a page provider's pattern with BETWEEN NOW(...), which Nuxeo answers 400",
+  ({ edit }) =>
+    edit(
+      PAYERS_MODEL,
+      "ecm:primaryType = 'Claim' AND claim:member = ?",
+      "ecm:primaryType = 'Claim' AND claim:member = ? AND claim:serviceDate BETWEEN NOW('-P30D') AND NOW()",
+    ),
+  2,
+  `OSGI-INF/payers-claims-demo-model.xml: pageProviders.member_claims.pattern: BETWEEN takes a literal on each side of its AND`,
+);
+expectRefused(
+  "a page provider's fixed part with a parenthesis left open",
+  ({ edit }) =>
+    edit(
+      PAYERS_MODEL,
+      "ecm:primaryType = 'Claim' AND claim:adjuster IS NULL",
+      "ecm:primaryType = 'Claim' AND (claim:adjuster IS NULL",
+    ),
+  2,
+  'pageProviders.payers_unassigned_claims.whereClause.fixedPart: a "(" is not closed',
+);
+expectRefused(
+  'BETWEEN NOW(...) in a CDATA section, which is read as the server reads it',
+  ({ edit }) =>
+    edit(
+      PAYERS_MODEL,
+      "SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:member = ?",
+      "<![CDATA[SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:member = ? AND claim:serviceDate BETWEEN NOW('-P30D') AND NOW()]]>",
+    ),
+  2,
+  'pageProviders.member_claims.pattern: BETWEEN takes a literal',
+);
+expectBuilt('BETWEEN with literal bounds, and a comparison written in CDATA', ({ edit }) =>
+  edit(
+    PAYERS_MODEL,
+    "SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:member = ?",
+    "<![CDATA[SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:member = ? AND claim:serviceDate <= NOW('P1D') AND dc:created BETWEEN DATE '2020-01-01' AND DATE '2030-01-01']]>",
+  ),
+);
+
 // The moves kit's log (its README, step 3): the two misspellings that passed the pipeline before,
 // a queue's column and a related list's, on the kit's own page providers and its own model.
 {

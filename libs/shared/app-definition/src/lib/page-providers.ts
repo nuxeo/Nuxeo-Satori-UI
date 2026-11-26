@@ -149,6 +149,99 @@ export function listedType(nxql: string, options: { readonly pattern: boolean })
   return type.text;
 }
 
+/** Runs of symbols no NXQL query holds outside a string, each with what NXQL writes instead. */
+const NOT_NXQL: readonly (readonly [RegExp, string, string])[] = [
+  [/==/, '==', 'which compares with ='],
+  [/&&/, '&&', 'which joins conditions with AND'],
+  [/\|\|/, '||', 'which joins conditions with OR'],
+  [/;/, ';', 'and a page provider is one query'],
+  [/!(?!=)/, '!', 'which negates with NOT, and writes "not equal" as <> or !='],
+];
+
+/** The literal a BETWEEN bound may be, from `at`: its length in tokens, or 0 when it is none. */
+function boundAt(tokens: readonly NxqlToken[], at: number): number {
+  const token = tokens[at];
+  if (!token) return 0;
+  if (token.kind === 'string' || token.kind === 'number' || token.kind === 'parameter') return 1;
+  if ((token.text === '-' || token.text === '+') && tokens[at + 1]?.kind === 'number') return 2;
+  if ((keyword(token, 'DATE') || keyword(token, 'TIMESTAMP')) && tokens[at + 1]?.kind === 'string')
+    return 2;
+  return 0;
+}
+
+/**
+ * What in a page provider's NXQL Nuxeo refuses, each said with why, as far as a check of its
+ * tokens can tell: **not a parser, and not a validation of NXQL.** A query it passes may still be
+ * refused, or answer nothing. It finds only constructs Nuxeo's grammar has no place for, so that it
+ * refuses no query Nuxeo runs:
+ *
+ * - a string left open, or a parenthesis that is not closed or closes nothing;
+ * - `==`, `&&`, `||`, `;`, or a `!` that is not `!=`, outside a string;
+ * - a `BETWEEN` whose bounds are not each a literal (a string, a number, `DATE '...'`,
+ *   `TIMESTAMP '...'`) or a parameter: `BETWEEN NOW('-P1D') AND NOW('P7D')`, which a server
+ *   answered 400 (the moves kit's README, step 1), is one;
+ * - for a pattern, a query that does not start with `SELECT`.
+ *
+ * Not checked, among much else: that the properties exist (a column's are, by
+ * {@link listedColumnFindings}), that an operator fits its operands, a function's name or its
+ * arguments, `NOW()`'s duration among them, an `IN` list, what the parameters will be, the order
+ * of the clauses, and what the search index's conversion of NXQL refuses that the repository
+ * takes.
+ */
+export function nxqlProblems(nxql: string, options: { readonly pattern: boolean }): string[] {
+  const problems: string[] = [];
+  const say = (problem: string) => {
+    if (!problems.includes(problem)) problems.push(problem);
+  };
+  const { tokens, unclosed } = tokenize(nxql);
+  if (unclosed) say('a string is not closed, so Nuxeo cannot read the query');
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.kind === 'open') depth++;
+    if (token.kind !== 'close') continue;
+    if (depth === 0) say('a ")" closes nothing, so Nuxeo cannot read the query');
+    else depth--;
+  }
+  if (depth > 0 && !unclosed) say('a "(" is not closed, so Nuxeo cannot read the query');
+  for (const token of tokens) {
+    if (token.kind !== 'symbol') continue;
+    for (const [pattern, text, instead] of NOT_NXQL)
+      if (pattern.test(token.text)) say(`"${text}" is not NXQL, ${instead}`);
+  }
+  tokens.forEach((token, index) => {
+    if (!keyword(token, 'BETWEEN')) return;
+    const first = boundAt(tokens, index + 1);
+    const and = index + 1 + first;
+    const second = first > 0 && keyword(tokens[and], 'AND') ? boundAt(tokens, and + 1) : 0;
+    if (first > 0 && second > 0) return;
+    // The condition, to show the person what was refused: up to the end of its group, or the
+    // AND or OR after its own AND.
+    let end = index + 1;
+    let ands = 0;
+    for (; end < tokens.length; end++) {
+      const next = tokens[end];
+      if (next.depth < token.depth) break;
+      if (next.depth !== token.depth) continue;
+      if (keyword(next, 'OR') || (keyword(next, 'AND') && ++ands > 1)) break;
+    }
+    const shown = tokens
+      .slice(index, end)
+      .map((each) => each.text)
+      .join(' ')
+      .replace(/\( /g, '(')
+      .replace(/ \)/g, ')')
+      .replace(/(\w) \(/g, '$1(');
+    say(
+      `BETWEEN takes a literal on each side of its AND, a string, a number, DATE '...' or TIMESTAMP '...', or a parameter, and "${shown}" does not: Nuxeo refuses such a query, answering 400. Compare with >= and <= instead, which take NOW(...)`,
+    );
+  });
+  if (options.pattern && tokens.length > 0 && !keyword(tokens[0], 'SELECT'))
+    say(
+      'a pattern is a whole query, SELECT * FROM <type> WHERE ..., and this one does not start with SELECT',
+    );
+  return problems;
+}
+
 /** A page provider of the package's own, as the pipeline read it from its component. */
 export interface ListingProvider {
   /** The type it lists, {@link listedType}'s answer: `null` when its NXQL does not say. */

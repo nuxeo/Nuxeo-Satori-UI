@@ -300,6 +300,11 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   `cards[0].fields[1].widget: the widget "calendar" is not registered [unknown]`. Never weaken a
   check, rename an id to something unregistered, write the file some other way, or run the
   pipeline without the model to get a pass.
+- **A page provider's NXQL is checked for what Nuxeo refuses, not validated.** For a page
+  provider the package defines, such as one `app-model --where` wrote, the write is refused for a
+  construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)` (write `>= NOW('-P1D') AND
+<= NOW('P7D')`), a string or a parenthesis left open, `==`, `&&`. A query it passes may still be
+  refused on install: run it read-only on the development server first, as a search.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
   a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
   and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
