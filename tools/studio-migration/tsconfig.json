@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
+  "$comment": "allowJs is for the Beta harness's identity guard, which lab mode judges /me with: plain ESM with JSDoc types, as for tools/builder-mcp.",
   "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
     "module": "commonjs",
     "moduleResolution": "node",
     "lib": ["ES2022", "DOM"],

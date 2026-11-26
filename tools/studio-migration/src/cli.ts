@@ -15,6 +15,10 @@
  *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
  *                                                             all of them in order, for a customer's own
  *                                                             package (migrate.ts)
+ *   lab       <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>]
+ *             [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
+ *                                                             lab mode: the documents in Web UI and the
+ *                                                             new app, on a real server (lab-cli.ts)
  *
  * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
  * becomes an action only when its operation is on it. `check` and `report` read the list the
@@ -53,7 +57,7 @@ import {
   type Outcome,
 } from './convert';
 import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
-import { runHarness, type HarnessResult } from './harness';
+import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
 import { migrate } from './migrate';
 import {
@@ -88,6 +92,7 @@ const USAGE = `usage:
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+  studio-migration lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 `;
 
 /** What a command expects: its positional arguments, the flags it takes, and those with a value. */
@@ -307,7 +312,7 @@ function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string>
   return path === undefined ? undefined : allowListOf(readJson(io, path), path);
 }
 
-function readPackage(io: CliIo, path: string): StudioPackage {
+export function readPackage(io: CliIo, path: string): StudioPackage {
   let archive: Buffer;
   try {
     archive = io.readFile(path);
@@ -370,15 +375,7 @@ export function harnessSummary(
 
 /** The ten checks, each with what it found, then the verdict and what stands in its way. */
 function checkLines(result: Pick<HarnessResult, 'checks' | 'ready' | 'blockers'>): string[] {
-  const lines: string[] = [];
-  for (const check of result.checks) {
-    const head = `${String(check.number).padStart(2)}  ${check.name.padEnd(26)}`;
-    if (check.status === 'not run') lines.push(`${head} not run: ${check.reason}`);
-    else if (check.status === 'partial') lines.push(`${head} partial: ${check.reason}`);
-    else lines.push(`${head} ${check.status === 'pass' ? 'pass' : 'FAIL'}`);
-    for (const finding of check.findings) lines.push(`      - ${finding}`);
-    if (check.status === 'fail' && check.reason) lines.push(`      Not run: ${check.reason}`);
-  }
+  const lines = checkResultLines(result.checks);
   lines.push('', `Verdict: ${result.ready ? 'ready' : 'not ready'}`);
   for (const blocker of result.blockers) lines.push(`  - ${blocker}`);
   return lines;
@@ -610,9 +607,16 @@ function toJson(result: Inventory, accounting: Accounting): unknown {
 }
 
 if (require.main === module) {
-  process.exitCode = main(process.argv.slice(2), {
+  const argv = process.argv.slice(2);
+  const io: CliIo = {
     out: (text) => process.stdout.write(text),
     err: (text) => process.stderr.write(text),
     readFile: (path) => readFileSync(path),
-  });
+  };
+  // `lab` drives a browser, so it is asynchronous, and loaded only when it runs (lab-cli.ts).
+  if (argv[0] === 'lab')
+    void import('./lab-cli').then(async ({ lab }) => {
+      process.exitCode = await lab(argv.slice(1), io);
+    });
+  else process.exitCode = main(argv, io);
 }

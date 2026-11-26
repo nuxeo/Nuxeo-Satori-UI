@@ -12,10 +12,16 @@ declare module 'jsdom' {
   export interface ConstructorOptions {
     readonly contentType?: string;
     readonly virtualConsole?: VirtualConsole;
+    /**
+     * `outside-only` lets the caller run its own script with `window.eval`, and still runs none the
+     * markup holds: lab mode's spec runs the script it sends the page, never a package's.
+     */
+    readonly runScripts?: 'outside-only';
   }
 
   export class JSDOM {
     constructor(markup?: string, options?: ConstructorOptions);
-    readonly window: Window;
+    /** With `runScripts: 'outside-only'`, it has `eval`, which runs a script in the page. */
+    readonly window: Window & { eval(script: string): unknown };
   }
 }

@@ -13,7 +13,9 @@
  * - **nothing is asked that Web UI does not ask:** every queue and action comes from the package.
  *
  * Recording the requests both apps send, and comparing the result counts once search has caught up
- * with recent writes, needs the migration server: that half has not run, and the check says so.
+ * with recent writes, needs the migration server: that half does not run here, and the check says
+ * so. Lab mode records the requests of a document's page on a server (`lab.ts`); lists and buttons
+ * are still to come.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { appIdOf, queuePageSize } from './app-files';
