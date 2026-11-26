@@ -806,7 +806,7 @@ not copied, nor deleted but by an administrator; a record deleted by an administ
 copied and not checked in; a request kept as filed, and its filer's alone; a record checked out
 not due; the same disposition action at disposal; a physical record not deleted; one disposed of
 no candidate, and not due; the custody entry, the registration and the destruction in the audit;
-the export's custody columns; a reason; not moved to where it is; and, after the review, a location with a record filed inside it not deleted, a record not moved into a location, a folder holding a record not put in the trash but by an administrator, and a barcode held already skipped. The folder's trash is the one of the 54 that did not go red cleanly: taken out, the trash went through, so the test's refusal was not raised, and the run then hung in the test framework's cleanup, behind the trash's background work on the folder's records, until it was stopped. The seed's controls were
+the export's custody columns; a reason; not moved to where it is; and, after the review, a location with a record filed inside it not deleted, a record not moved into a location, a folder holding a record not put in the trash but by an administrator, and a barcode held already skipped. The folder's trash goes red as the others do: should a trash not be refused, the test removes the folder before it fails, so that the trash's background work, which the add-on refuses record by record, ends rather than holding the test framework's cleanup. The seed's controls were
 seen failing with the desk's grant, and with an older rule's update, taken out.
 
 The tests set the sequencer as LTS 2025 does, `KeyValueStoreUIDSequencer` on the SQL key/value

@@ -175,10 +175,23 @@ public class CustodyHistoryTest extends PhysicalTestCase {
             return null;
         }));
         // Nor puts it in the trash, which would put the record in the trash after it, as erin.
-        assertEquals("kept", refused(() -> {
+        String trashed;
+        try {
             Framework.getService(TrashService.class).trashDocument(erin.getDocument(boxes.getRef()));
-            return null;
-        }));
+            trashed = "not refused";
+        } catch (DispositionRefusal refusal) {
+            trashed = refusal.getCode();
+        }
+        Fixtures.rollback();
+        if (!"kept".equals(trashed)) {
+            // Not refused, the trash's background work is putting the folder's records in the trash
+            // as erin, which the add-on refuses record by record, so that the work never ends and the
+            // run would hang in the framework's cleanup: the folder goes, the work with it, and the
+            // test fails here.
+            session.removeDocument(boxes.getRef());
+            commit(session);
+        }
+        assertEquals("kept", trashed);
         assertTrue(!session.getDocument(boxes.getRef()).isTrashed());
         assertTrue(session.exists(inside.getRef()));
         assertTrue(session.exists(box.getRef()));
