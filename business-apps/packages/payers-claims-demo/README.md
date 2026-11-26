@@ -29,7 +29,8 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   `claim:status`'s values. An adjuster determines a claim; one billed over $5,000 that they approve
   goes to a supervisor. Phase 2's first three demo steps are written for it, in
   [`scripts/beta-harness/steps/payers-claims-workflow.mjs`](../../../scripts/beta-harness/steps/payers-claims-workflow.mjs)
-  ([below](#the-claims-review-workflow)). **Not run on a server yet:** the kit is not installed.
+  ([below](#the-claims-review-workflow)). Its steps file passed 43 of 43 on the local server with
+  0.6.1, on 26 November 2026; its Send back step, 0.7.0's, has not run.
 - **The appeals,** version 0.4.1's: an appeal is a Case of the category `appeal`, opened against a
   denied claim, which it links to. Its record page adds a checklist, layout version 2's
   `checklist` card, whose items the Case layout lists and whose state, done or not with who and
@@ -38,7 +39,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   the open appeals have a queue of their own. The seed writes three appeals, two open and one
   decided. Phase 2's demo step 6 is written for them, in
   [`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs)
-  ([below](#the-appeals)). **Not run on a server yet** either.
+  ([below](#the-appeals)). Its steps file passed 43 of 43 on the local server with 0.6.1.
 - **The appeal review workflow,** version 0.7.0's: a second route model, `PayersAppealReview`,
   started on an appeal. Its one step with a task goes to the appeal's specialist in member services,
   who upholds or overturns the denial, with a rationale, through its task form. Upholding decides
@@ -1125,9 +1126,10 @@ Exit 2 means a precondition is not met, and says which: the run's user is not `a
 `PAYERS_DEMO_PASSWORD`, in `claims-supervisors` and not `claims-adjusters`; the package is older
 than 0.4.0; the claims folder is missing or the adjuster may not add to it; the dev server serves
 other task forms, labels or Claim page; or an earlier run's claims could not be put away: their
-workflows cancelled, and they trashed. Run on 26 November 2026 on 0.6.0, before Send back was in
-it: 27 of 32, the supervisor's Approve failing on the step's missing variables facet, which 0.6.1
-fixes. **Not run since,** and its Send back step not run at all.
+workflows cancelled, and they trashed. Run on 26 November 2026 on the local server, before Send
+back was in it: on 0.6.0, 27 of 32, the supervisor's Approve failing on the step's missing
+variables facet; on 0.6.1, which fixes it, 43 of 43, four runs in a row. **The Send back step,
+0.7.0's, has not run.**
 
 ### The appeals
 
@@ -1344,10 +1346,9 @@ included, is shown no app. The demo itself still runs on a development server, a
   record page lists the transitions the claim's state allows; one followed there, approve or deny
   in review, makes the workflow's own next transition fail when its step completes, and the
   workflow is then abandoned from the task panel. The demo follows none.
-- **The claims review workflow ran on a server once,** on the local server with 0.6.0, on
-  26 November 2026: its steps file passed 27 of 32, the supervisor's Approve failing on the step's
-  missing variables facet, which 0.6.1 fixes. Neither 0.6.1 nor 0.7.0, whose start reopens a
-  denied claim, has run since.
+- **The claims review workflow ran on the local server,** on 26 November 2026: its steps file
+  passed 43 of 43 on 0.6.1, four runs in a row, after 27 of 32 on 0.6.0. 0.7.0, whose start
+  reopens a denied claim, has not run, nor the file's Send back step.
 - **Who follows a claim's lifecycle is not the workflow's alone.** Adjusters and supervisors hold
   `ReadWrite` on claims, which includes `WriteLifeCycle`, so anyone of them may follow `approve`
   through the API, outside the workflow, and a supervisor may approve a claim they determined

@@ -18,7 +18,7 @@ wait for a security review, and some are built on open decisions
 | `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints, and an asset's share links                                  | Nothing                                                      | 0.2.0                 | Nowhere                                           |
 | `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                   | 2026.0.2-SNAPSHOT     | Nowhere                                           |
 | `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                 | Nowhere                                           |
-| `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons              | `nuxeo-agentic-ui:2026.0.2`                                  | 0.7.0                 | 0.6.0 on the local server; 0.6.1, 0.7.0 nowhere   |
+| `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons              | `nuxeo-agentic-ui:2026.0.2`                                  | 0.7.0                 | 0.6.1 on the local server; 0.7.0 nowhere          |
 | `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`    | 0.2.3                 | 0.2.0 on the local server; 0.1.1 to 0.2.3 nowhere |
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
@@ -452,7 +452,7 @@ after sign-in.
    checklist is left out; Payers
    0.5.0 needs a `nuxeo-agentic-ui` with the allow-list, and the allow-list in `nxserver/config/`;
    Payers 0.4.0 adds a claim lifecycle, so claims seeded under 0.3.0 wait in `project` until the
-   seed runs again. Of these, 0.4.0 and 0.6.0 were installed on the local server, and 0.5.0, 0.6.1
+   seed runs again. Of these, 0.4.0, 0.6.0 and 0.6.1 were installed on the local server, and 0.5.0
    and 0.7.0 on none ([Payers README](../../business-apps/packages/payers-claims-demo/README.md)).
 5. **Check it,** as after an install: the install log, `Component Loading Status`, and no new error
    in the diagnostics ([section 8](#8-logs-and-diagnostics)).
@@ -575,21 +575,10 @@ decision G, are not built: the registry knows groups only
 
 ### Security reviews pending
 
-- **The asset rights add-on:** "Needs its security review before anyone relies on it"
-  ([assets README](../../nuxeo-agentic-assets/README.md)).
-- **The connectors:** "The plan's phase 7 is not done until its security review is"
-  ([connectors README](../../nuxeo-agentic-connectors/README.md)).
-- **The operation buttons' allow-list:** pull request #717 lists what its security review must
-  check.
-- **The deployment layer:** pull request #720 was held for an independent security review; the
-  [layout designer README](../../libs/features/layout-designer/README.md) lists what it must
-  cover.
-- **The share links:** the [assets README](../../nuxeo-agentic-assets/README.md#for-the-security-review)
-  lists what their security review must cover.
-- **The disposition review:** deferred until the app is finished; the
-  [records add-on's README](../../nuxeo-agentic-records/README.md#security-notes-for-the-review)
-  lists what it does and what it guards, for the review.
-- **The registered computations and rules:** decision 4.
+Every security review waits until the app is finished, as decided on 26 November 2026. The
+[register](security-reviews.md) lists each one: what it covers, where its notes for the reviewer
+are, and the decision it rests on. Until a review is done, nothing it covers is to be relied on
+outside a development or demonstration server.
 
 ### Installed or shown only on a local server, or nowhere
 
@@ -597,26 +586,27 @@ decision G, are not built: the registry knows groups only
   - `nuxeo-agentic-ui` built from the staging branch, with the app registry and the operation
     buttons' allow-list in `nxserver/config/`;
   - `nuxeo-agentic-assets` 0.1.0, with the brand assets kit 0.2.0;
-  - Payers 0.6.0, with its seed and the demo users;
+  - Payers 0.6.1, with its seed and the demo users;
   - contracts 0.2.1;
   - moves 0.1.0;
   - `nuxeo-agentic-documents` 0.1.0, with the controlled documents kit 0.1.0.
 
   Earlier, Payers 0.3.0 to 0.4.1 and the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs). On 26 November
-  2026, through the development server:
-  - the Payers demo's steps files passed 40 of 40;
-  - the appeals' passed 43 of 43;
-  - the operation buttons' passed 31 of 32: the one failure was the steps file reading the button's
-    text rather than its accessible name, fixed with 0.6.1;
-  - the claims review workflow's passed 27 of 32: the supervisor's Approve failed on the step's
-    missing variables facet, which Payers 0.6.1 fixes.
+  2026, through the development server, on Payers 0.6.1, every Payers steps file passed:
+  - the demo's, 40 of 40;
+  - the claims review workflow's, 43 of 43, four runs in a row;
+  - the appeals', 43 of 43;
+  - the operation buttons', 32 of 32.
+
+  The moves and controlled documents seeds ran there, the second checking the server's numbering
+  and supersession.
 
 - **On no server:** the connectors; the deployment layer, which `nuxeo-agentic-ui` holds switched
-  off; `nuxeo-agentic-assets` 0.2.0 and its share links; Payers 0.6.1 and 0.7.0, with 0.7.0's
-  appeal review workflow; brand assets 0.2.1 to
-  0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs only in
-  its tests; every kit's removal.
+  off; `nuxeo-agentic-assets` 0.2.0 and its share links, left off the local server because a share
+  link is reached without signing in; Payers 0.7.0, with its appeal review workflow; brand assets
+  0.2.1 to 0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs
+  only in its tests, and which needs `nuxeo-retention` from the Marketplace; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push
