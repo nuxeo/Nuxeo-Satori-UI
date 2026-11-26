@@ -855,7 +855,7 @@ the index; an override naming a row action the deployment registers; and those t
 After every run each request the stand-in saw must be a `GET` with the credentials, of an address
 on a list the selftest writes apart from the check's own, one for one with the reads the report
 lists, and neither the password nor the encoded header may be in what the check printed or in an
-address. MUTATIONS
+address. Each check taken out of the script, or turned to the wrong version or model, each refusal, the guard's method, encoded-path and address checks, the credentials header, the report's list of reads, the selftest's own list and the routing of `--server` turn their control red: 60 such changes, each seen failing. The workflow runs it beside the offline half's controls.
 
 **Run on the local Docker Nuxeo,** 26 November 2026, read only, as its administrator: payers
 0.6.1 against the 0.6.1 installed, the version read from the package manager, the registry showing
