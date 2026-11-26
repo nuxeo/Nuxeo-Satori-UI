@@ -6,11 +6,7 @@
       "id": "transmittal",
       "labelKey": "controlled-documents.card.transmittal",
       "fields": [
-        {
-          "field": "dc:title",
-          "labelKey": "controlled-documents.field.subject",
-          "required": true
-        },
+        { "field": "dc:title", "labelKey": "controlled-documents.field.subject", "required": true },
         {
           "field": "trm:purpose",
           "labelKey": "controlled-documents.field.transmittalPurpose",

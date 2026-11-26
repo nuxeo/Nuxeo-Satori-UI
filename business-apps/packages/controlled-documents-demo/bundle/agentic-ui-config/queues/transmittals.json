@@ -12,27 +12,14 @@
       "widget": "vocabulary",
       "parameters": { "directory": "ControlledDocumentsPurpose" }
     },
-    {
-      "field": "trm:dueDate",
-      "labelKey": "controlled-documents.field.dueDate",
-      "widget": "date"
-    },
+    { "field": "trm:dueDate", "labelKey": "controlled-documents.field.dueDate", "widget": "date" },
     {
       "field": "trm:issuedBy",
       "labelKey": "controlled-documents.field.issuedBy",
       "widget": "user"
     },
-    {
-      "field": "trm:issuedAt",
-      "labelKey": "controlled-documents.field.issuedAt",
-      "widget": "date"
-    }
+    { "field": "trm:issuedAt", "labelKey": "controlled-documents.field.issuedAt", "widget": "date" }
   ],
-  "sort": [
-    {
-      "field": "trm:issuedAt",
-      "order": "desc"
-    }
-  ],
+  "sort": [{ "field": "trm:issuedAt", "order": "desc" }],
   "pageSize": 50
 }
