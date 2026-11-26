@@ -16,9 +16,10 @@
     The document control module's server add-on, its first slice: controlled documents numbered
     from Nuxeo's own sequencer, unique in their number series and never reused, and a new
     revision that supersedes the one before it, the old one marked and linked both ways in the
-    same transaction, refused when the user may not write the old one. Its own Marketplace
-    package, beside nuxeo-agentic-core: one add-on per domain module (decision B's
-    recommendation).
+    same transaction, refused when the user may not write the old one; transmittals and review
+    cycles; and export-control marks, a revision's download, renditions and transmittal refused to
+    anyone outside its mark's groups. Its own Marketplace package, beside nuxeo-agentic-core: one
+    add-on per domain module (decision B's recommendation).
   </description>
 
   <properties>
@@ -27,7 +28,7 @@
       nuxeo-agentic-ui, and a kit's package depends on it by this version. The manifest's
       Bundle-Version repeats it, and BundleTest refuses a build where the two differ.
     -->
-    <documents.package.version>0.2.0</documents.package.version>
+    <documents.package.version>0.3.0</documents.package.version>
   </properties>
 
   <!--
@@ -120,6 +121,36 @@
       <artifactId>log4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!--
+      Since 0.3.0, for export-control marks: the platform's download service, whose permissions the
+      add-on contributes one to, and its JSON writers, which the exportMark enricher extends.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-io</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- A recipient's groups, and whether a mark's groups exist: the user manager. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-usermanager</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      The platform's audit, which each mark change is written to: AuditLogger and LogEntry. Reached
+      through AuditAccess, as the records add-on reaches it, since LTS 2025 keeps these names beside
+      its new ones.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
 
     <!--
       The Nuxeo test framework: a real runtime and repository in the test's JVM, VCS on H2 by
@@ -163,6 +194,38 @@
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <!--
+      Since 0.3.0, the export-control marks' tests: the user manager with its test directories, for
+      recipients and groups (UserManagerFeature, PlatformFeature), and the platform's audit, its
+      service, its listener and its store, an H2 database, as the records add-on's tests run it.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      The script engine Nuxeo LTS 2025 evaluates download permissions with: nashorn-core 15.7, as
+      the server's nxserver/lib holds it, and as the assets add-on's tests run it. Java 21 has none
+      of its own.
+    -->
+    <dependency>
+      <groupId>org.openjdk.nashorn</groupId>
+      <artifactId>nashorn-core</artifactId>
+      <version>15.7</version>
+      <scope>test</scope>
     </dependency>
     <!--
       FeaturesRunner orders a test's methods by reading its class with ASM, and 11.5 brings ASM 9.0,

@@ -6,6 +6,10 @@
  * A chain's first revision names its series; each later one is created naming the one before it
  * in `docctl:supersedes`, so the server gives it that revision's number and the next revision, and
  * marks the one before it superseded. The numbers are the server's: the seed never writes one.
+ *
+ * Since 0.3.0, two chains carry a fictional export-control mark, `mark`: a classification and the
+ * groups that may receive the revision. The seed writes it on the chain's first revision, and the
+ * server carries it to each one after, whatever the seed sends with it.
  */
 
 /**
@@ -57,7 +61,9 @@ export const CHAINS = [
   {
     key: 'single-line',
     series: 'DWG',
-    revisions: ['A'],
+    // Since 0.3.0, a second revision, so that the seed shows a mark carried to the next one.
+    revisions: ['A', 'B'],
+    mark: { classification: 'EC-2', groups: ['ec2-cleared'] },
     fields: {
       category: 'Drawing',
       discipline: 'Electrical',
@@ -65,8 +71,8 @@ export const CHAINS = [
       description:
         'Single-line diagram of the station, from the incoming supply to the motor starters.',
     },
-    issued: [45],
-    purpose: ['For information'],
+    issued: [45, 15],
+    purpose: ['For information', 'For construction'],
   },
   {
     key: 'pump-performance',
@@ -85,6 +91,7 @@ export const CHAINS = [
     key: 'commissioning',
     series: 'SPEC',
     revisions: ['1'],
+    mark: { classification: 'EC-1', groups: ['ec1-cleared'] },
     fields: {
       category: 'Procedure',
       discipline: 'Process',
@@ -104,10 +111,15 @@ export const CHAINS = [
  */
 export const MARKER = 'Controlled documents kit demo (fictional)';
 
-/** The kit's groups, which `app.json` serves the app to. */
+/**
+ * The kit's groups: the two `app.json` serves the app to, and, since 0.3.0, the two fictional
+ * export-control marks' groups, whose members may receive a revision so marked.
+ */
 export const GROUPS = [
   { name: 'document-controllers', label: 'Document controllers' },
   { name: 'engineers', label: 'Engineers' },
+  { name: 'ec1-cleared', label: 'Cleared for EC-1 (fictional)' },
+  { name: 'ec2-cleared', label: 'Cleared for EC-2 (fictional)' },
 ];
 
 /**
@@ -119,11 +131,28 @@ export const USERS = [
     username: 'avega',
     firstName: 'Ana',
     lastName: 'Vega',
-    groups: ['document-controllers', 'engineers'],
+    groups: ['document-controllers', 'engineers', 'ec1-cleared', 'ec2-cleared'],
   },
-  { username: 'kosei', firstName: 'Kofi', lastName: 'Osei', groups: ['engineers'] },
-  { username: 'mlind', firstName: 'Maja', lastName: 'Lind', groups: ['engineers'] },
+  {
+    username: 'kosei',
+    firstName: 'Kofi',
+    lastName: 'Osei',
+    groups: ['engineers', 'ec2-cleared'],
+  },
+  {
+    username: 'mlind',
+    firstName: 'Maja',
+    lastName: 'Lind',
+    groups: ['engineers', 'ec1-cleared'],
+  },
 ];
+
+/**
+ * Since 0.3.0: whom each fictional mark lets receive a revision, and whom it excludes, so that the
+ * demo shows both. `CLEARED` holds EC-2, the single-line diagram's; `UNCLEARED` does not.
+ */
+export const CLEARED = 'kosei';
+export const UNCLEARED = 'mlind';
 
 /** Who issues the demo's transmittals, and receives one: demo steps 1 and 2. */
 export const ENGINEER = 'avega';
@@ -132,17 +161,24 @@ export const RECIPIENT = 'kosei';
 /**
  * The groups' permissions on the workspace, in its local ACL, which everything in it inherits: both
  * may read and write the register, the transmittals and the review cycles. The server decides the
- * rest: only a receipt's recipient answers it, only a cycle's opener resolves and closes it.
+ * rest: only a receipt's recipient answers it, only a cycle's opener resolves and closes it. Since
+ * 0.3.0, document controllers hold the add-on's `ChangeExportMark` too, so that they set, change and
+ * remove a revision's mark; engineers do not.
  */
 export const GRANTS = [
   { group: 'engineers', permission: 'ReadWrite' },
   { group: 'document-controllers', permission: 'ReadWrite' },
+  { group: 'document-controllers', permission: 'ChangeExportMark' },
 ];
 
 // ------------------------------------------------------------------ since 0.2.0: transmittals and reviews
 
 /** The register of transmittals, whose Create menu offers a transmittal, and the review cycles' folder. */
-export const TRANSMITTALS = { name: 'transmittals', title: 'Transmittals', type: 'TransmittalRegister' };
+export const TRANSMITTALS = {
+  name: 'transmittals',
+  title: 'Transmittals',
+  type: 'TransmittalRegister',
+};
 export const REVIEWS = { name: 'reviews', title: 'Review cycles', type: 'Folder' };
 
 /**
@@ -191,7 +227,11 @@ export const TITLES = {
   commissioning: 'Commissioning procedure',
 };
 
-/** Each revision of a chain, in order: its place in the folder, and what the seed writes on it. */
+/**
+ * Each revision of a chain, in order: its place in the folder, and what the seed writes on it. A
+ * marked chain's every revision names its mark: the server takes it on the first, and carries the
+ * first's to each one after.
+ */
 export function revisionsOf(chain, today = new Date()) {
   return chain.revisions.map((revision, index) => ({
     name: `${chain.key}-${revision.toLowerCase()}`,
@@ -205,8 +245,19 @@ export function revisionsOf(chain, today = new Date()) {
       'engdoc:originator': chain.fields.originator,
       'engdoc:purpose': chain.purpose[index],
       'engdoc:issuedOn': dayFrom(-chain.issued[index], today),
+      ...markOf(chain),
     },
   }));
+}
+
+/** A chain's mark as the seed writes it, or nothing for an unmarked one. */
+export function markOf(chain) {
+  return chain.mark
+    ? {
+        'docmark:classification': chain.mark.classification,
+        'docmark:groups': [...chain.mark.groups],
+      }
+    : {};
 }
 
 /** The day `offset` days from `today`'s UTC day, as Nuxeo stores a day: its midnight UTC. */
