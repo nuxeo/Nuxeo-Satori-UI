@@ -328,8 +328,14 @@ export class QueuePageComponent {
     computation: () => '',
   });
 
-  /** Whether the next results are a search's first, which open their one record when the queue says so. */
-  private openNext = false;
+  /**
+   * Whether the next results are a search's first, which open their one record when the queue says
+   * so. Another queue, or a bucket chosen, starts again with none.
+   */
+  private readonly openNext = linkedSignal<QueueFile | null, boolean>({
+    source: this.queue,
+    computation: () => false,
+  });
 
   /**
    * The page provider's parameters: the queue's, and with a search what was searched for, last.
@@ -743,8 +749,8 @@ export class QueuePageComponent {
    * on the server rather than page by page, so the page does not hold it to the window.
    */
   protected onLoaded(results: PageProviderResults): void {
-    if (this.openNext) {
-      this.openNext = false;
+    if (this.openNext()) {
+      this.openNext.set(false);
       const entries = results.entries ?? [];
       // One record alone, and the server counts no other: a scanned barcode's item.
       if (entries.length === 1 && (resultWindow(results, 1).total ?? 1) === 1) {
@@ -770,9 +776,15 @@ export class QueuePageComponent {
     const queue = this.queue();
     if (!queue?.search) return;
     const text = this.searchDraft().trim();
-    if (text === '' || text === this.searched()) return;
-    this.openNext = queue.search.openSingle && !this.readOnly();
-    this.searched.set(text);
+    if (text === '') return;
+    this.openNext.set(queue.search.openSingle && !this.readOnly());
+    // Another search is another list, as a bucket chosen is: its selection and its count go.
+    if (!this.readOnly()) this.selection.clear();
+    this.allResults.set(false);
+    this.total.set(-1);
+    // The same text again, a label scanned twice or a search that failed: the list is read again.
+    if (text === this.searched()) this.documentChanges.notify();
+    else this.searched.set(text);
   }
 
   /** Selects every result of the query in place of rows: the app's selection of rows is cleared. */
@@ -1001,6 +1013,8 @@ export class QueuePageComponent {
     this.allResults.set(false);
     // The count is the last page's, for the buckets it was read with: none until the next page.
     this.total.set(-1);
+    // What a search found alone is opened only from the search's own results.
+    this.openNext.set(false);
   }
 
   /** The list's selection, kept in the app's, as the browse list keeps its own. */

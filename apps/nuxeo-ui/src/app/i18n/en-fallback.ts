@@ -388,6 +388,8 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'permissions.update-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
   'queues.filters': 'Filters',
+  'queues.search.button': 'Search',
+  'queues.search.label': 'Search',
   'layout-designer.add': 'Add a property',
   'layout-designer.add-choose': 'Choose a property',
   'layout-designer.card': 'Card {{id}}',

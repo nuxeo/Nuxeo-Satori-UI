@@ -20,7 +20,7 @@ import org.nuxeo.runtime.api.Framework;
  * {@value #PREFIX_PROPERTY} says another; the sequencer's value, with leading zeros to
  * {@value #DIGITS} digits, or more when it is wider, never cut; and a check digit, the Luhn
  * algorithm's over those digits, so that a barcode mistyped by one digit, or with two neighbouring
- * digits swapped, is not one. {@code PR000000428}: a code-128 or code-39 label prints it as it is.</li>
+ * digits swapped, is not one. {@code PR000000422}: a code-128 or code-39 label prints it as it is.</li>
  * <li><b>Unique, and never given twice:</b> the sequencer gives each value once, for the whole
  * cluster, from its key/value store, which does not take part in the caller's transaction. A
  * creation rolled back leaves a gap, never a value given again. Every prefix counts in the same

@@ -85,6 +85,18 @@ public class PhysicalRecordTest extends PhysicalTestCase {
     }
 
     @Test
+    public void aBarcodeHeldAlreadyIsNeverGivenAgainShouldTheSequenceBeSetBack() {
+        long first = value(Physicals.item(session, "Box 1", a1));
+        long second = value(Physicals.item(session, "Box 2", a1));
+        commit(session);
+        org.nuxeo.runtime.api.Framework.getService(org.nuxeo.ecm.core.uidgen.UIDGeneratorService.class)
+                                       .getSequencer()
+                                       .initSequence(Barcodes.SEQUENCE_KEY, first - 1);
+        long third = value(Physicals.item(session, "Box 3", a1));
+        assertEquals(second + 1, third);
+    }
+
+    @Test
     public void aRecordIsKeptAtALocationItsCreatorMayRead() {
         // erin may file records but not read the second shelf.
         ACP records = session.getACP(new org.nuxeo.ecm.core.api.PathRef(Fixtures.RECORDS));

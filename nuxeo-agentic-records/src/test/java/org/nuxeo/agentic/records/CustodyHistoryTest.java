@@ -174,6 +174,12 @@ public class CustodyHistoryTest extends PhysicalTestCase {
             erin.removeDocument(boxes.getRef());
             return null;
         }));
+        // Nor puts it in the trash, which would put the record in the trash after it, as erin.
+        assertEquals("kept", refused(() -> {
+            Framework.getService(TrashService.class).trashDocument(erin.getDocument(boxes.getRef()));
+            return null;
+        }));
+        assertTrue(!session.getDocument(boxes.getRef()).isTrashed());
         assertTrue(session.exists(inside.getRef()));
         assertTrue(session.exists(box.getRef()));
         session.removeDocument(box.getRef());
@@ -228,6 +234,35 @@ public class CustodyHistoryTest extends PhysicalTestCase {
             erin.removeDocument(archive.getRef());
             return null;
         }));
+        assertEquals("holds-records", refused(() -> {
+            Framework.getService(TrashService.class).trashDocument(erin.getDocument(archive.getRef()));
+            return null;
+        }));
+        // Nor one with a record, or such a folder, filed inside it rather than kept at it: its
+        // deletion would take them along. A record is not moved into a location.
+        DocumentModel filed = Physicals.item(session, "Box 4", b1);
+        commit(session);
+        assertEquals("kept", refused(() -> session.move(filed.getRef(), a1.getRef(), null)));
+        DocumentModel model = session.createDocumentModel(a1.getPathAsString(), "box-5", Physical.RECORD_TYPE);
+        model.setPropertyValue(Physical.KIND, "box");
+        model.setPropertyValue(Physical.LOCATION, b1.getId());
+        DocumentModel inside = session.createDocument(model);
+        commit(session);
+        assertTrue(Physical.RECORD_TYPE.equals(inside.getType()));
+        assertEquals("kept", refused(() -> {
+            erin.removeDocument(a1.getRef());
+            return null;
+        }));
+        session.removeDocument(inside.getRef());
+        session.removeDocument(filed.getRef());
+        session.move(archive.getRef(), shelfA.getRef(), null);
+        commit(session);
+        assertEquals("holds-records", refused(() -> {
+            erin.removeDocument(shelfA.getRef());
+            return null;
+        }));
+        session.move(archive.getRef(), new PathRef(Physicals.LOCATIONS), null);
+        commit(session);
         // A location that holds none goes, in the trash or for good.
         Framework.getService(TrashService.class).trashDocument(erin.getDocument(a1.getRef()));
         commit(erin);

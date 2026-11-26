@@ -93,7 +93,7 @@
         "parameters": [{ "field": "phys:state" }, "out"]
       },
       "fields": [
-        { "field": "phys:borrower", "widget": "user" },
+        "phys:borrower",
         { "field": "phys:dueBack", "widget": "date", "parameters": { "format": "long" } },
         { "field": "phys:checkedOutBy", "widget": "user" },
         { "field": "phys:checkedOutAt", "widget": "date", "parameters": { "format": "long" } }
@@ -152,7 +152,7 @@
               { "field": "phys:by", "widget": "user", "labelKey": "records.column.by" },
               { "field": "phys:fromPath", "labelKey": "records.column.from" },
               { "field": "phys:toPath", "labelKey": "records.column.to" },
-              { "field": "phys:borrower", "widget": "user", "labelKey": "records.column.borrower" },
+              { "field": "phys:borrower", "labelKey": "records.column.borrower" },
               { "field": "phys:dueBack", "widget": "date", "labelKey": "records.column.dueBack" },
               { "field": "phys:transferredTo", "labelKey": "records.column.transferredTo" },
               { "field": "phys:reason", "labelKey": "records.column.reason" }

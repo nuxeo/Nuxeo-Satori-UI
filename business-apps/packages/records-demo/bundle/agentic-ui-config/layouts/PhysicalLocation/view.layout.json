@@ -21,7 +21,7 @@
           "phys:kind",
           "phys:state",
           "phys:locationPath",
-          { "field": "phys:borrower", "widget": "user" },
+          "phys:borrower",
           { "field": "phys:dueBack", "widget": "date" }
         ],
         "sort": [{ "field": "phys:locationPath", "order": "asc" }],

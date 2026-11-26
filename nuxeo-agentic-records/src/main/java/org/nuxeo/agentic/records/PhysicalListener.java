@@ -52,6 +52,10 @@ public class PhysicalListener implements EventListener {
     /** What a folder's copy would take along, with no event of its own. */
     private static final List<String> COPIED = List.of(RECORD_TYPE, LOCATION_TYPE, REQUEST_TYPE);
 
+    /** What is done to a folder of anyone's that takes what it holds along. */
+    private static final java.util.Set<String> FOLDER_EVENTS = java.util.Set.of(DocumentEventTypes.ABOUT_TO_COPY,
+            DocumentEventTypes.ABOUT_TO_REMOVE, "documentTrashed");
+
     private final PhysicalRecords records;
 
     private final Custody custody;
@@ -76,9 +80,9 @@ public class PhysicalListener implements EventListener {
         }
         String name = event.getName();
         boolean ours = Physical.TYPES.contains(doc.getType());
-        // Another document matters only as a folder, copied or deleted with what it holds.
-        if (!ours && (!doc.isFolder() || doc.isProxy() || doc.isVersion()
-                || !DocumentEventTypes.ABOUT_TO_COPY.equals(name) && !DocumentEventTypes.ABOUT_TO_REMOVE.equals(name))) {
+        // Another document matters only as a folder, copied, deleted or put in the trash with what it
+        // holds.
+        if (!ours && (!doc.isFolder() || doc.isProxy() || doc.isVersion() || !FOLDER_EVENTS.contains(name))) {
             return;
         }
         CoreSession session = context.getCoreSession();
@@ -144,6 +148,8 @@ public class PhysicalListener implements EventListener {
                 return;
             }
             if (LOCATION_TYPE.equals(type)) {
+                // What it holds by where its records are kept, and what is below it as a folder: a
+                // record, or a folder of sites, filed inside it, which its deletion would take along.
                 if (holdsRecords(session, doc)) {
                     if (!isAdministrator(session)) {
                         throw new DispositionRefusal(409, "holds-records",
@@ -151,7 +157,9 @@ public class PhysicalListener implements EventListener {
                     }
                     log.warn("Physical records: {} {}s the location {}, which holds physical records", who(session),
                             DocumentEventTypes.ABOUT_TO_REMOVE.equals(event) ? "delete" : "trashe", doc.getId());
+                    return;
                 }
+                folder(event, session, doc);
                 return;
             }
             if (!isAdministrator(session)) {
@@ -165,8 +173,14 @@ public class PhysicalListener implements EventListener {
             // A record is filed where its records are, and refiled as they are; the rest stays put.
             // A rename in place moves nothing: the trash renames a document so before it trashes it,
             // and the trash's own rules then apply.
-            if (RECORD_TYPE.equals(type) || DESK_TYPE.equals(type) && isAdministrator(session)
-                    || inPlace(session, context, doc)) {
+            if (inPlace(session, context, doc) || DESK_TYPE.equals(type) && isAdministrator(session)) {
+                return;
+            }
+            if (RECORD_TYPE.equals(type)) {
+                if (intoPlace(session, context)) {
+                    throw new DispositionRefusal(403, "kept", "A physical record is filed where its records are, not "
+                            + "inside a location or the custody desk: where it is kept is its custody's, by a move.");
+                }
                 return;
             }
             throw new DispositionRefusal(403, "kept", LOCATION_TYPE.equals(type)
@@ -183,7 +197,11 @@ public class PhysicalListener implements EventListener {
         }
     }
 
-    /** A folder of anyone's, copied or deleted: refused when it would take physical records along. */
+    /**
+     * A folder of anyone's, copied, deleted or put in the trash: refused when it would take physical
+     * records along. The trash puts a folder's documents in the trash after it, in the background, as
+     * the person who trashed it, which an administrator's alone takes a physical record's.
+     */
     private static void folder(String event, CoreSession session, DocumentModel folder) {
         CoreInstance.doPrivileged(session, (CoreSession privileged) -> {
             if (DocumentEventTypes.ABOUT_TO_COPY.equals(event)) {
@@ -197,14 +215,15 @@ public class PhysicalListener implements EventListener {
             if (isAdministrator(session)) {
                 if (PhysicalRecords.holds(privileged, folder, List.of(RECORD_TYPE))
                         || PhysicalRecords.sitesHoldRecords(privileged, folder)) {
-                    log.warn("Physical records: {} deletes the folder {}, which holds physical records or their locations",
-                            who(session), folder.getId());
+                    log.warn("Physical records: {} {} the folder {}, which holds physical records or their locations",
+                            who(session), DocumentEventTypes.ABOUT_TO_REMOVE.equals(event) ? "deletes" : "trashes",
+                            folder.getId());
                 }
                 return;
             }
             if (PhysicalRecords.holds(privileged, folder, List.of(RECORD_TYPE))) {
-                throw new DispositionRefusal(403, "kept",
-                        "This folder holds physical records, whose custody is kept: only an administrator deletes it.");
+                throw new DispositionRefusal(403, "kept", "This folder holds physical records, whose custody is kept: "
+                        + "only an administrator deletes it, or puts it in the trash.");
             }
             if (PhysicalRecords.sitesHoldRecords(privileged, folder)) {
                 throw new DispositionRefusal(409, "holds-records",
@@ -221,6 +240,20 @@ public class PhysicalListener implements EventListener {
         }
         return CoreInstance.doPrivileged(session, (CoreSession privileged) -> privileged.exists(destination)
                 && privileged.getDocument(destination).getId().equals(privileged.getDocument(doc.getParentRef()).getId()));
+    }
+
+    /** Whether a move puts a document inside a location or the custody desk, which hold their own kinds alone. */
+    private static boolean intoPlace(CoreSession session, DocumentEventContext context) {
+        if (!(context.getProperty(CoreEventConstants.DESTINATION_REF) instanceof DocumentRef destination)) {
+            return false;
+        }
+        return CoreInstance.doPrivileged(session, (CoreSession privileged) -> {
+            if (!privileged.exists(destination)) {
+                return false;
+            }
+            String into = privileged.getDocument(destination).getType();
+            return LOCATION_TYPE.equals(into) || DESK_TYPE.equals(into);
+        });
     }
 
     private static boolean holdsRecords(CoreSession session, DocumentModel location) {

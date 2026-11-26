@@ -94,7 +94,33 @@ final class PhysicalRecords {
                 "Registered at its location when it was made."));
         item.setPropertyValue(CUSTODY, (Serializable) custody);
         // Last, once nothing else can refuse the record, so that a refusal spends no barcode.
-        item.setPropertyValue(BARCODE, Barcodes.issue());
+        item.setPropertyValue(BARCODE, unusedBarcode(session));
+    }
+
+    /** How many values held already a record skips, should its sequence have been set back, before it is refused. */
+    static final int MAX_TAKEN = 100;
+
+    /**
+     * The sequencer's next barcode that no record holds already: the sequencer never gives a value
+     * twice, unless its sequence is set back or its store lost, and then the values already held are
+     * skipped, each logged, rather than given a second time. Read with the add-on's session, since a
+     * record the creator may not read holds its barcode all the same.
+     */
+    private static String unusedBarcode(CoreSession session) {
+        return CoreInstance.doPrivileged(session, (CoreSession privileged) -> {
+            for (int attempt = 0; attempt < MAX_TAKEN; attempt++) {
+                String barcode = Barcodes.issue();
+                // Capital letters and digits alone: nothing of it can change the query.
+                if (privileged.queryProjection("SELECT ecm:uuid FROM " + RECORD_TYPE + " WHERE " + BARCODE + " = '"
+                        + barcode + "' AND ecm:isProxy = 0", 1, 0).isEmpty()) {
+                    return barcode;
+                }
+                log.warn("Physical records: the barcode {} is held already, and the next is taken: was the sequence {} set back?",
+                        barcode, Barcodes.SEQUENCE_KEY);
+            }
+            throw new DispositionRefusal(409, "barcode-taken", "The next " + MAX_TAKEN + " barcodes are held already: the "
+                    + "platform's sequence for barcodes was set back, and an administrator sets it past them.");
+        });
     }
 
     /** Once made, its registration in the audit: who, where, when. */

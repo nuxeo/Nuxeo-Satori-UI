@@ -719,7 +719,7 @@ describe('QueuePageComponent', () => {
       expect(text('.queue-page')).toContain('Nothing matches this search');
     });
 
-    it('opens nothing unless the queue says so, nor when the same text is searched again', async () => {
+    it('opens nothing unless the queue says so', async () => {
       create();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
       await open('barcode-list');
@@ -727,9 +727,39 @@ describe('QueuePageComponent', () => {
       await answer([claim(1)], undefined);
       expect(navigate).not.toHaveBeenCalled();
       expect(list()?.documents()).toHaveLength(1);
+    });
+
+    it('reads the list again for the same text, a label scanned twice, and opens what it finds then', async () => {
+      create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      await open('barcode-lookup');
+      await search('PR000000422');
+      await answer([], undefined);
       const asked = execute.mock.calls.length;
       await search('PR000000422');
-      expect(execute.mock.calls.length).toBe(asked);
+      expect(execute.mock.calls.length).toBe(asked + 1);
+      await answer([claim(1)], undefined);
+      expect(navigate).toHaveBeenCalledWith(documentNavigationUrl(claim(1)));
+    });
+
+    it('starts each search with no row selected, and opens nothing from a list a bucket filters', async () => {
+      create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      const clear = vi.spyOn(TestBed.inject(SelectionService), 'clear');
+      files['barcode-lookup'] = {
+        kind: 'file',
+        content: { ...LOOKUP, facets: [{ aggregate: 'claim_type_agg', label: 'Claim type' }] },
+      };
+      await open('barcode-lookup');
+      await search('PR0000');
+      expect(clear).toHaveBeenCalledTimes(1);
+      await answer([claim(1), claim(2)]);
+      await search('PR0001');
+      expect(clear).toHaveBeenCalledTimes(2);
+      // A bucket chosen before the search's results arrive: what comes is the bucket's list.
+      await tick('claim_type_agg', 'dental');
+      await answer([claim(3)]);
+      expect(navigate).not.toHaveBeenCalled();
     });
 
     it('opens nothing in a preview, which draws the search for reading only', async () => {

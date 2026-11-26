@@ -49,8 +49,8 @@ its controls' stand-in.
 - **Checked out** and **Overdue**, two queues of the physical records checked out, the soonest due
   back first, and of those past the time they were due back.
 - **A barcode lookup:** a queue with a search, an `nxs-` text field and a Search button. A barcode
-  typed, or scanned with a scanner that types it and presses Enter, opens its record's page; one
-  that finds none says so. No camera: the platform's queue search
+  scanned with a scanner that types it and presses Enter, or typed as printed, in capitals and with
+  no spaces, opens its record's page; one that finds none says so. No camera: the platform's queue search
   ([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section 4).
 - **No button.** A run is started, approved or rejected, an export filed, and a physical record
   moved, checked out or returned, by filing a document in the disposition runs folder or the custody
@@ -184,8 +184,8 @@ clerk.
    approver, with the reason.
 
 3. **Refused on the server.** The same request again is refused, 409, `checked-out`: a record
-   checked out is not checked out again, nor moved, until it is returned. An approver filing it,
-   who holds no `RecordCustody`, is refused, 403, `permission`.
+   checked out is not checked out again, nor moved, until it is returned. An approver filing it is
+   refused, 403: the desk grants approvers nothing, so they may not file in it at all.
 
 4. **Overdue.** Two minutes later, the box is in the Overdue queue. Its page's banner says overdue
    from the next day: a layout's date rule counts days, the queue the time.
