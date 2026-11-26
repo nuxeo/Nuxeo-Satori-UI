@@ -23,6 +23,7 @@ wait for a security review, and some are built on open decisions
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
 | `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.0                 | Nowhere                                           |
+| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, two queues, a core-system card                                | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                 | Nowhere                                           |
 | `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents             | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                 | Nowhere                                           |
 | `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging              | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                 | Nowhere                                           |
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                 | Nowhere                                           |
@@ -40,6 +41,7 @@ installed on any server yet"), and the kits' READMEs:
 [contracts](../../business-apps/packages/contracts-demo/README.md),
 [facilities](../../business-apps/packages/facilities-demo/README.md),
 [moves](../../business-apps/packages/moves-demo/README.md),
+[P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
 [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md) and
 [records](../../business-apps/packages/records-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
@@ -73,11 +75,15 @@ on any server").
   ([package-pipeline.md, section 11](package-pipeline.md#11-a-release-candidate-across-all-kits)):
 
   ```bash
-  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release>
+  npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release> --unsigned-kits
   ```
 
   It writes the server packages in `server/`, the kits in `kits/`, a `SHA256SUMS`, a
-  `manifest.json` and a `RELEASE-NOTES.md`.
+  `manifest.json` and a `RELEASE-NOTES.md`. No kit is signed yet either, so the command is told to
+  take them unsigned, `--unsigned-kits`, and says so in its manifest and release note; given the
+  kits' signatures instead, `--signatures <folder>`, it holds each kit to its own. A kit is signed
+  by its tag's run, and checked before it is installed
+  ([section 3](#checking-a-kit-before-you-install-it)).
 
 - **A stamped `nuxeo-agentic-ui`.** A plain `mvn package` leaves `@VERSION@` in the package's
   `package.xml`, which Nuxeo reads as 0.0.0, so it does not upgrade an installed one; and Nuxeo
@@ -97,6 +103,9 @@ on any server").
 
 ## 3. Installing, in order
 
+**Check each kit's signature before you install it**
+([below](#checking-a-kit-before-you-install-it)), and install nothing the check refuses.
+
 The order the [demo server](../../business-apps/demo-server/README.md) installs in, at one start,
 "What it does, in order", steps 2 to 8:
 
@@ -110,10 +119,14 @@ The order the [demo server](../../business-apps/demo-server/README.md) installs 
    ([records kit README](../../business-apps/packages/records-demo/README.md#installing-it-on-a-server-of-your-own)).
 2. **The connectors bundle, only where a kit contributes a connector.** It has no package: its jar
    goes into `nxserver/bundles/` ([connectors README](../../nuxeo-agentic-connectors/README.md),
-   "Installing it"). No kit contributes one yet: the Payers kit's opt-in is described and "not
-   done here" (same README, "How a kit opts in").
+   "Installing it"). One kit configures one: the P&C claims kit's `pcclaims.policyPayments`, whose
+   contribution is `demo/pc-claims-connectors-config.xml`, outside its package, since the bundle has
+   no package to depend on
+   ([P&C claims README](../../business-apps/packages/pc-claims-demo/README.md#connecting-the-core-system)).
+   The Payers kit's opt-in is described and "not done here" (same README, "How a kit opts in").
 3. **The deployment's own contributions, into `nxserver/config/`.** Each kit's
-   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list. A file there
+   `deployment/*-config.xml`, which today is the Payers kit's operation allow-list, and, with the
+   connectors bundle, the P&C claims kit's `demo/pc-claims-connectors-config.xml`. A file there
    whose name ends in `-config.xml` is a contribution the server reads at start. Never place
    `deployment/build-allow-list.json`: it is a build input
    ([demo server README](../../business-apps/demo-server/README.md), step 4;
@@ -151,6 +164,55 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 
 On a first install there is nothing to remove: the README's first script runs `mp-install`
 alone. **Not run yet** for 0.5.0; the README's install of 0.3.0 was run, on 23 November 2026.
+
+### Checking a kit before you install it
+
+A kit released by its tag `app-package/<name>/<version>` is signed by the repository's
+`app-packages.yml` workflow, keyless, through Sigstore
+([package-pipeline.md](package-pipeline.md), section 9). Before `nuxeoctl mp-install`, check that
+the zip you hold is the one that workflow signed, for the version you mean to install. Either with
+the GitHub CLI, signed in to GitHub, which reads the signature from the repository's attestations:
+
+```bash
+gh attestation verify payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+  --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1 \
+  --cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/payers-claims-demo/0.7.0 \
+  --source-ref refs/tags/app-package/payers-claims-demo/0.7.0 --deny-self-hosted-runners
+```
+
+or from a clone of the repository, with the signature beside the zip,
+`payers-claims-demo-0.7.0.zip.sig.json`: the tag run's artifact `app-package-signature` for 30
+days, and at any time the repository's attestations of the zip, downloaded and renamed. This also
+holds the zip to its own `package.xml`, and the signer to the repository's trusted signers,
+`business-apps/trusted-signers.json`, or yours with `--trusted-signers`:
+
+```bash
+gh attestation download /tmp/payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+  --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1
+mv "sha256:$(sha256sum /tmp/payers-claims-demo-0.7.0.zip | cut -d' ' -f1).jsonl" /tmp/payers-claims-demo-0.7.0.zip.sig.json
+npm run app-package:signature -- verify /tmp/payers-claims-demo-0.7.0.zip \
+  --name payers-claims-demo --version 0.7.0
+```
+
+- **Each says it verified the zip, or refuses it and says why.** Both name the package and the
+  tag of the version you install, so a zip of another version, one changed by a byte, or a
+  signature made by another workflow, from another repository or for another tag, is refused.
+  Checked with the GitHub CLI 2.83.1; an older one that lacks a flag refuses it, and checks nothing.
+- **A tag moved since the release** is not seen: a tag deleted and pushed again on another commit
+  signs another zip of the same version, and both pass. Until a ruleset forbids moving these tags
+  ([package-pipeline.md](package-pipeline.md), section 9.1), keep the SHA-256 of each version you
+  install, `sha256sum` of its zip, and refuse a zip of the same version with another.
+- **A server with no network:** export Sigstore's trusted root once where there is one,
+  `gh attestation trusted-root > trusted_root.jsonl`, and give it with `--trusted-root`. Not tried
+  yet.
+- **Not signed:** a kit built from source, as the release candidate builds one, which is as sound
+  as the clone it came from (the candidate given the kits' signatures, `--signatures`, holds each
+  kit it builds to its release's, [package-pipeline.md](package-pipeline.md), section 11); and the
+  server packages, `nuxeo-agentic-ui` and the add-ons, which this pipeline does not sign.
+- **No kit has been signed yet:** no tag has been pushed. And nothing on the server checks a
+  signature: the check is yours, before the install.
+- **A signature says which run built the zip, from which commit,** not that the kit is right or
+  approved.
 
 ### On an existing Docker container: `conf.d` is read at the first start only
 
@@ -379,20 +441,21 @@ included, so `members` is everyone signed in
 [api-integrations.md](../api-integrations.md), section 36). An administrator sees what their
 groups give them, and gets every diagnostic.
 
-| App, and its address            | Groups                                                      |
-| ------------------------------- | ----------------------------------------------------------- |
-| `payers-claims`                 | `claims-adjusters`, `claims-supervisors`, `member-services` |
-| `brand-assets`                  | `brand-team`, `creative-review`                             |
-| `contracts`, at `contract-desk` | `contract-managers`, `legal-reviewers`                      |
-| `facilities`                    | `facilities-coordinators`, `facilities-technicians`         |
-| `moves`                         | `move-coordinators`, `move-claims-adjusters`                |
-| `controlled-documents`          | `document-controllers`, `engineers`                         |
-| `records`                       | `records-managers`, `records-approvers`                     |
+| App, and its address              | Groups                                                      |
+| --------------------------------- | ----------------------------------------------------------- |
+| `payers-claims`                   | `claims-adjusters`, `claims-supervisors`, `member-services` |
+| `brand-assets`                    | `brand-team`, `creative-review`                             |
+| `contracts`, at `contract-desk`   | `contract-managers`, `legal-reviewers`                      |
+| `facilities`                      | `facilities-coordinators`, `facilities-technicians`         |
+| `moves`                           | `move-coordinators`, `move-claims-adjusters`                |
+| `pc-claims`, at `property-claims` | `property-claims-adjusters`, `property-claims-managers`     |
+| `controlled-documents`            | `document-controllers`, `engineers`                         |
+| `records`                         | `records-managers`, `records-approvers`                     |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
-- **Create the groups yourself.** The contracts, brand assets, moves, controlled documents and
-  records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
+- **Create the groups yourself.** The contracts, brand assets, moves, P&C claims, controlled
+  documents and records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
   for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
@@ -501,14 +564,15 @@ has the Admin Center's install path been rehearsed
 ## 6. Removing a kit safely
 
 **Not run yet,** for any kit (each kit's README, "Removing it"). The steps follow the Payers
-kit's install, which was run; the contracts, facilities and moves kits were never installed.
+kit's install, which was run; the contracts, facilities, moves and P&C claims kits were never
+installed.
 
 1. **Delete the kit's documents first, and empty them from the trash.** A document whose type is
    gone cannot be read, and breaks the folder and the searches that hold it. Do the same before you
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
-   `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo` and
-   `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
+   `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo`,
+   `/default-domain/workspaces/pc-claims-demo` and `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
    and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.
@@ -654,8 +718,8 @@ outside a development or demonstration server.
 - **The upgrade check:** its offline half, and its server half, which reads a running server
   before an install; the server-side test that installs and upgrades is not built
   ([package-pipeline.md](package-pipeline.md), section 10).
-- **Publishing:** never run ([tutorial.md](tutorial.md), step 10). Signatures and promotion after
-  approval are a proposal, and nothing of them is built
+- **Publishing:** never run ([tutorial.md](tutorial.md), step 10). Signing is built and has
+  signed nothing, since no tag has been pushed, and promotion after approval is a proposal
   ([package-pipeline.md](package-pipeline.md), sections 7 and 9).
 - **No Marketplace package** for `nuxeo-agentic-connectors`.
 - **The Studio migration** reports "not ready" for every package, and installing a migrated app is

@@ -1,0 +1,96 @@
+{
+  "doctypes": {
+    "PropertyPolicy": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "propertypolicy"]
+    },
+    "PropertyClaim": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "files", "propertyclaim"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "propertypolicy",
+      "prefix": "ppolicy",
+      "@prefix": "ppolicy",
+      "fields": {
+        "number": "string",
+        "holder": "string",
+        "holderEmail": "string",
+        "holderPhone": "string",
+        "propertyAddress": "string",
+        "product": "string",
+        "status": "string",
+        "effective": "date",
+        "expiry": "date",
+        "coverageLimit": "double",
+        "deductible": "double"
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "propertyclaim",
+      "prefix": "pclaim",
+      "@prefix": "pclaim",
+      "fields": {
+        "number": "string",
+        "policy": "string",
+        "lossDate": "date",
+        "cause": "string",
+        "lossLocation": "string",
+        "lossDescription": "string",
+        "reportedOn": "date",
+        "status": "string",
+        "adjuster": "string",
+        "reserve": "double",
+        "denialReason": "string"
+      }
+    }
+  ]
+}

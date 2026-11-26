@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "pc-claims.home.title",
+  "cards": [
+    {
+      "id": "open-claims",
+      "labelKey": "pc-claims.home.openClaims",
+      "kpi": { "pageProvider": "pc_open_claims", "aggregate": "pclaim_status_agg" },
+      "queue": "open-property-claims"
+    },
+    {
+      "id": "by-cause",
+      "labelKey": "pc-claims.home.byCause",
+      "kpi": { "pageProvider": "pc_open_claims", "aggregate": "pclaim_cause_agg" },
+      "queue": "open-property-claims"
+    },
+    {
+      "id": "high-reserve",
+      "labelKey": "pc-claims.home.highReserve",
+      "kpi": { "pageProvider": "pc_high_reserve_claims" },
+      "queue": "high-reserve",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["property-claims-managers"] }
+    },
+    {
+      "id": "reported",
+      "labelKey": "pc-claims.home.reported",
+      "kpi": {
+        "pageProvider": "pc_open_claims",
+        "aggregate": "pclaim_status_agg",
+        "bucket": "Reported"
+      },
+      "queue": "open-property-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["property-claims-adjusters"] }
+    }
+  ]
+}
