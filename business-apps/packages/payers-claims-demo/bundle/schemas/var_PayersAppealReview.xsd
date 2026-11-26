@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Since 0.7.0, the appeal review workflow's own variables, var_<workflow> as the platform's models
+     name them. A task form reads it beside its step's. Fictional, as the rest of the kit. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersAppealReview"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersAppealReview">
+
+  <!-- Who decided the appeal: the decision's last actor, set by the chain that decides it. -->
+  <xs:element name="decidedBy" type="xs:string" />
+</xs:schema>

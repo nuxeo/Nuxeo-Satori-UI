@@ -37,6 +37,25 @@ public class NumberSeriesTest {
         assertEquals("org.nuxeo.agentic.documents.series.DWG", dwg.sequenceKey());
     }
 
+    /** A series numbers documents unless it says it numbers transmittals; anything else is a mistake. */
+    @Test
+    public void aSeriesSaysWhatItNumbers() {
+        assertFalse(read("DWG", "5", null).series().transmittals());
+        NumberSeries tr = NumberSeries.of(new NumberSeriesDescriptor("TR", "5", null, true).forTransmittals())
+                                      .series();
+        assertTrue(tr.transmittals());
+        assertEquals("TR-00012", tr.format(12));
+        NumberSeriesDescriptor other = new NumberSeriesDescriptor("TR", "5", null, true) {
+            @Override
+            public String getFor() {
+                return "reviews";
+            }
+        };
+        NumberSeries.Result refused = NumberSeries.of(other);
+        assertNull(refused.series());
+        assertEquals(List.of("for is \"reviews\", not documents or transmittals"), refused.problems());
+    }
+
     /** Two series never write the same number, ids with hyphens and digits included. */
     @Test
     public void twoSeriesNeverWriteTheSameNumber() {

@@ -293,7 +293,8 @@ export const CLAIMS = [
 
 /**
  * The cases. An appeal (`category: 'appeal'`) is opened against a denied claim, and holds its
- * checklist: one entry per item done or under way, by the item's id in the Case page's checklist
+ * checklist, and once decided, since 0.7.0, its decision, `upheld` or `overturned`, as the appeal
+ * review workflow writes it (`case:decision`); none before. Its checklist: one entry per item done or under way, by the item's id in the Case page's checklist
  * card (`layouts/Case/view.layout.json`), which says what an appeal requires; `appeals.mjs` holds
  * the two to each other. An item the card lists and the appeal has no entry for is not done. Who
  * did an item is one of `USERS`, and when is a day. A grievance has no checklist.
@@ -359,6 +360,8 @@ export const CASES = [
     summary:
       'The member appealed the denial of claim CLAIM-000145 for physical therapy visits. A ' +
       'clinical review upheld the denial, and the decision letter was sent.',
+    // Since 0.7.0, the decision an appeal's review writes when it decides it: the denial upheld.
+    decision: 'upheld',
     // Decided: every item done.
     checklist: [
       { item: 'appealLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-08-04' },

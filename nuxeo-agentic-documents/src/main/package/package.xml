@@ -1,7 +1,9 @@
 <package type="addon" name="nuxeo-agentic-documents" version="@documents.package.version@">
-  <title>Nuxeo Satori document control: numbering, revisions and supersession</title>
+  <title>Nuxeo Satori document control: numbering, supersession, transmittals and review cycles</title>
   <description>
-    <p>The document control module's server add-on. A document whose type carries the ControlledDocument facet is numbered from the platform's sequencer, in a number series a package registers: unique in its series, and never reused. A new revision names the one it supersedes: it is given that revision's number and the next revision, and the old one is marked superseded and linked both ways in the same transaction, refused when the user may not write the old one. It numbers nothing until a package registers a series and a type carries the facet.</p>
+    <p>The document control module's server add-on. A document whose type carries the ControlledDocument facet is numbered from the platform's sequencer, in a number series a package registers: unique in its series, and never reused. A new revision names the one it supersedes: it is given that revision's number and the next revision, and the old one is marked superseded and linked both ways in the same transaction, refused when the user may not write the old one.</p>
+    <p>A transmittal lists current revisions, by number or id, and is sent to named users for review, for construction or for information, by a due day: each recipient gets a receipt, which they alone acknowledge, or return with a comment, once, and the server records when. A review cycle reviews one revision in Nuxeo's own comments: each thread stays open until the cycle's opener resolves it, the cycle closes only with none open, and a closed cycle is recorded on the revision.</p>
+    <p>It does nothing until a package registers a series and gives its types the add-on's facets. It adds no Automation operation.</p>
   </description>
   <vendor>Hyland Software</vendor>
   <installer restart="true" />

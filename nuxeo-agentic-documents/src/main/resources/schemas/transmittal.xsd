@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!-- The Transmittal facet's schema, prefix trm. The issuer writes the documents, the recipients,
+     the purpose and the due day, once, when they issue it; the add-on's listener gives the rest,
+     writes back each document as the id of the revision it named, and refuses any later change. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/transmittal"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/transmittal">
+
+  <!-- The transmittal's number, from the series registered for transmittals: TR-00012. -->
+  <xs:element name="number" type="xs:string" />
+  <!-- The controlled documents sent: the issuer names each by number (DWG-00042) or id; the server
+       writes back the id of each one's current revision. -->
+  <xs:element name="documents" type="nxs:stringList" />
+  <!-- Each document as it was when issued: its revision's id, number, revision and title. -->
+  <xs:element name="items" type="nxs:items" />
+  <!-- The user names it is sent to. -->
+  <xs:element name="recipients" type="nxs:stringList" />
+  <!-- review, construction or information. -->
+  <xs:element name="purpose" type="xs:string" />
+  <!-- The day the recipients are to answer by. -->
+  <xs:element name="dueDate" type="xs:date" />
+  <xs:element name="issuedBy" type="xs:string" />
+  <xs:element name="issuedAt" type="xs:dateTime" />
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <xs:complexType name="items">
+    <xs:sequence>
+      <xs:element name="item" type="nxs:item" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="item">
+    <xs:sequence>
+      <xs:element name="document" type="xs:string" />
+      <xs:element name="number" type="xs:string" />
+      <xs:element name="revision" type="xs:string" />
+      <xs:element name="title" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

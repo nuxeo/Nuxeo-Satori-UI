@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.documents.reviews" version="1.0">
+
+  <documentation>
+    The review cycle listener, synchronous, in the transaction of the change that fires it: opens
+    a review cycle on a current revision its opener may write, one at a time per revision; gives
+    each of Nuxeo's own comments written in it, by a reviewer or the opener, the ReviewComment
+    facet, its thread open; lets the opener resolve a thread, or open it again, while the cycle is
+    open; closes the cycle at its opener's asking only when no thread is open, and records it on
+    the revision, as the opener; refuses every other change, a closed cycle's comments included,
+    and a cycle's deletion and trash but by an administrator. A comment written and a close are
+    kept apart by a fence in the key/value store. No Automation operation. Every refusal marks the
+    transaction for rollback.
+  </documentation>
+
+  <require>org.nuxeo.agentic.documents</require>
+  <require>org.nuxeo.agentic.documents.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="reviewCycleListener" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.documents.ReviewCycleListener">
+      <event>aboutToCreate</event>
+      <event>documentCreated</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>documentTrashed</event>
+      <event>aboutToMove</event>
+    </listener>
+  </extension>
+
+</component>

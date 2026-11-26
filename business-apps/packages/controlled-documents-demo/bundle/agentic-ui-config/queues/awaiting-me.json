@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "controlled-documents.queue.awaiting-me",
+  "pageProvider": "controlled_documents_awaiting_me",
+  "parameters": ["$currentUser"],
+  "columns": [
+    { "field": "dc:title", "labelKey": "controlled-documents.field.transmittal" },
+    {
+      "field": "trr:purpose",
+      "labelKey": "controlled-documents.field.transmittalPurpose",
+      "widget": "vocabulary",
+      "parameters": { "directory": "ControlledDocumentsPurpose" }
+    },
+    { "field": "trr:dueDate", "labelKey": "controlled-documents.field.dueDate", "widget": "date" },
+    { "field": "trr:issuedBy", "labelKey": "controlled-documents.field.issuedBy", "widget": "user" }
+  ],
+  "sort": [{ "field": "trr:dueDate", "order": "asc" }],
+  "pageSize": 50
+}

@@ -41,14 +41,35 @@
   <extension target="org.nuxeo.agentic.documents" point="series">
     <series id="DWG" digits="5" />
     <series id="SPEC" digits="3" revisions="numbers" />
+    <series id="TR" digits="5" for="transmittals" />
   </extension>
 
+  <!-- A kit's types: two controlled ones, one not, and a transmittal, its receipt and a review
+       cycle, none a folder, as the controlled documents kit's are. -->
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
     <doctype name="ControlledDrawing" extends="File">
       <facet name="ControlledDocument" />
     </doctype>
     <doctype name="ControlledSpec" extends="File">
       <facet name="ControlledDocument" />
+    </doctype>
+    <doctype name="TestTransmittal" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="Transmittal" />
+    </doctype>
+    <!-- Versionable, so that a version of one can be restored over it. -->
+    <doctype name="TestReceipt" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="uid" />
+      <facet name="Versionable" />
+      <facet name="TransmittalReceipt" />
+    </doctype>
+    <doctype name="TestReviewCycle" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="ReviewCycle" />
     </doctype>
   </extension>
 

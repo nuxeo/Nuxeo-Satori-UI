@@ -62,8 +62,8 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { CASES, CLAIMS, MEMBERS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
-/** The route model's zip, relative to the bundle, as the kit's workflow component names it. */
-const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
+/** The route models' zips, relative to the bundle, as the kit's workflow component names them. */
+const { ZIP_PATHS: ROUTE_MODEL_ZIPS } = await import(join(KIT, 'workflow', 'route-model.mjs'));
 /** Version 0.6.0's open-appeals queue, which member services' home counts. */
 const { isOpenAppeal, readOpenAppeals } = await import(join(KIT, 'demo', 'appeals.mjs'));
 
@@ -857,10 +857,10 @@ export default async function run(page, h) {
     `drawn ${JSON.stringify(drawn)}, file ${JSON.stringify(fileFields)}`,
   );
   // Data only, by place: what counts is bundle-data.mjs's, and its selftest sees code refused.
-  const code = codeIn(join(KIT, 'bundle'), ROUTE_MODEL_ZIP, KIT);
+  const code = codeIn(join(KIT, 'bundle'), ROUTE_MODEL_ZIPS, KIT);
   h.check(
     "the kit's bundle holds no code: JSON, XML, XSD, its manifest, vocabularies' CSV and the " +
-      "route model's zip of XML documents only",
+      "route models' zips of XML documents only",
     code.length === 0,
     `code in the bundle: ${code.join(', ')}`,
   );

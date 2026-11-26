@@ -17,6 +17,12 @@
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
     <layout type="EngineeringDocument" mode="view" src="agentic-ui-config/layouts/EngineeringDocument/view.layout.json" />
+    <layout type="Transmittal" mode="view" src="agentic-ui-config/layouts/Transmittal/view.layout.json" />
+    <layout type="TransmittalReceipt" mode="view" src="agentic-ui-config/layouts/TransmittalReceipt/view.layout.json" />
+    <layout type="ReviewCycle" mode="view" src="agentic-ui-config/layouts/ReviewCycle/view.layout.json" />
+    <layout type="Transmittal" mode="create" src="agentic-ui-config/layouts/Transmittal/create.layout.json" />
+    <layout type="TransmittalReceipt" mode="edit" src="agentic-ui-config/layouts/TransmittalReceipt/edit.layout.json" />
+    <layout type="ReviewCycle" mode="edit" src="agentic-ui-config/layouts/ReviewCycle/edit.layout.json" />
   </extension>
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
@@ -25,6 +31,8 @@
       <file path="queues/current.json" />
       <file path="home.json" />
       <file path="navigation.json" />
+      <file path="queues/awaiting-me.json" />
+      <file path="queues/transmittals.json" />
     </app>
   </extension>
 </component>

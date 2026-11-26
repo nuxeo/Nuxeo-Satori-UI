@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Decide: the appeal's specialist, or anyone in member-services when it has none, upholds or
+     overturns the denial it is against. Its variables, schema var_PayersAppealReview_decide, are the
+     task form's var: fields (agentic-ui-config/tasks/PayersAppealReview.decide.layout.json), in the
+     variables facet this node names, as every node with a task must.
+
+     The first transition that holds is followed, so the order is the rule:
+       1. an appeal another review decided meanwhile is left as it is, and this review ends: two
+          reviews may run on one appeal, since its availability filter cannot know one runs, and
+          the first to decide decides it;
+       2. a decision with no rationale is refused: the decision opens again, the case unchanged;
+       3. upholding decides the appeal upheld, and leaves the claim denied;
+       4. overturning decides it overturned, and starts the claims review on the denied claim,
+          which reopens it for a new determination;
+       5. anything else, no decision, is refused.
+     Either decision writes the checklist's decision letter item, done, by the specialist, today.
+     So the server refuses what the form's field rules stop, for a client that skips the form. -->
+<document repository="default" id="decide">
+  <system>
+    <type>RouteNode</type>
+    <path>PayersAppealReview/decide</path>
+    <lifecycle-state>validated</lifecycle-state>
+    <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <facet>facet-var_PayersAppealReview_decide</facet>
+    <access-control/>
+  </system>
+  <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:var_PayersAppealReview_decide="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersAppealReview_decide" name="var_PayersAppealReview_decide"></schema>
+  <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
+    <dc:title><![CDATA[Decide the appeal]]></dc:title>
+  </schema>
+  <schema xmlns:rnode="http://www.nuxeo.org/ecm/schemas/route_node/" name="route_node">
+    <rnode:nodeId><![CDATA[decide]]></rnode:nodeId>
+    <rnode:start><![CDATA[false]]></rnode:start>
+    <rnode:stop><![CDATA[false]]></rnode:stop>
+    <rnode:hasTask><![CDATA[true]]></rnode:hasTask>
+    <rnode:hasMultipleTasks><![CDATA[false]]></rnode:hasMultipleTasks>
+    <rnode:taskDocType><![CDATA[TaskDoc]]></rnode:taskDocType>
+    <rnode:taskDirective><![CDATA[Decide the appeal]]></rnode:taskDirective>
+    <rnode:taskAssignees/>
+    <rnode:taskAssigneesExpr><![CDATA[(Document["case:assignee"] == null || Document["case:assignee"] == "") ? "group:member-services" : "user:" + Document["case:assignee"]]]></rnode:taskAssigneesExpr>
+    <rnode:taskDueDateExpr><![CDATA[CurrentDate.days(5)]]></rnode:taskDueDateExpr>
+    <rnode:allowTaskReassignment><![CDATA[true]]></rnode:allowTaskReassignment>
+    <rnode:variablesFacet><![CDATA[facet-var_PayersAppealReview_decide]]></rnode:variablesFacet>
+    <rnode:executeOnlyFirstTransition><![CDATA[true]]></rnode:executeOnlyFirstTransition>
+    <rnode:inputChain><![CDATA[]]></rnode:inputChain>
+    <rnode:outputChain><![CDATA[]]></rnode:outputChain>
+    <rnode:taskButtons>
+      <button>
+        <name><![CDATA[submit]]></name>
+        <label><![CDATA[Submit]]></label>
+        <filter><![CDATA[]]></filter>
+        <validate><![CDATA[true]]></validate>
+      </button>
+    </rnode:taskButtons>
+    <rnode:transitions>
+      <transition>
+        <name><![CDATA[alreadyDecided]]></name>
+        <label><![CDATA[Decided by another review: this one ends]]></label>
+        <condition><![CDATA[Document["case:state"] == "decided" || Document["case:state"] == "closed"]]></condition>
+        <chain><![CDATA[PayersAppealReview.RefuseDecided]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[decisionWithoutRationale]]></name>
+        <label><![CDATA[Refused: a decision needs its rationale]]></label>
+        <condition><![CDATA[(NodeVariables["decision"] == "uphold" || NodeVariables["decision"] == "overturn") && (NodeVariables["rationale"] == null || NodeVariables["rationale"].trim() == "")]]></condition>
+        <chain><![CDATA[PayersAppealReview.RefuseDecision]]></chain>
+        <targetId><![CDATA[decide]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[uphold]]></name>
+        <label><![CDATA[Uphold the denial]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "uphold"]]></condition>
+        <chain><![CDATA[PayersAppealReview.Uphold]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[overturn]]></name>
+        <label><![CDATA[Overturn the denial]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "overturn"]]></condition>
+        <chain><![CDATA[PayersAppealReview.Overturn]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[undecided]]></name>
+        <label><![CDATA[Refused: no decision]]></label>
+        <condition><![CDATA[true]]></condition>
+        <chain><![CDATA[PayersAppealReview.RefuseUndecided]]></chain>
+        <targetId><![CDATA[decide]]></targetId>
+      </transition>
+    </rnode:transitions>
+    <rnode:escalationRules/>
+    <rnode:taskX><![CDATA[0]]></rnode:taskX>
+    <rnode:taskY><![CDATA[200]]></rnode:taskY>
+  </schema>
+</document>

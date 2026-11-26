@@ -30,7 +30,11 @@ import org.nuxeo.ecm.core.schema.types.Schema;
  *   <li>XSDLoader loads the workflow's variable schemas, as the type service does;
  *   <li>LifeCycleImpl answers the payersClaim lifecycle's transitions from each state;
  *   <li>MVEL, the server's own version, evaluates each route node's transition conditions, in
- *       order, for the cases below, and its task assignees.
+ *       order, for the cases below, and its task assignees;
+ *   <li>since 0.7.0, the same for the appeal review's model, PayersAppealReview.zip, and MVEL runs
+ *       the expressions its chains compute with: where the checklist's decision letter entry is,
+ *       which chain writes it, the path a tick writes, the entry an addition writes, and the
+ *       comments; and the platform's DateType and BooleanType decode what the chains write as text.
  * </ul>
  *
  * Run by platform-check.mjs, which copies the jars out of the container first:
@@ -87,6 +91,27 @@ public class PlatformCheck {
     check("validated".equals(system(root, "lifecycle-state")),
         "the model is validated, which getRouteModelDocIdWithId looks for");
 
+    System.out.println("== NuxeoArchiveReader on bundle/data/PayersAppealReview.zip, since 0.7.0");
+    List<ExportedDocument> appeal = read(new File(bundle, "data/PayersAppealReview.zip"));
+    check(appeal.size() == 4, "4 documents: the model and its 3 nodes");
+    ExportedDocument appealRoot = appeal.get(0);
+    check("DocumentRoute".equals(appealRoot.getType()) && "PayersAppealReview".equals(appealRoot.getPath().lastSegment()),
+        "the first is a DocumentRoute, named PayersAppealReview by its folder");
+    Set<String> appealNodes = new TreeSet<>();
+    for (ExportedDocument d : appeal.subList(1, appeal.size())) {
+      Element rnode = schema(d, "route_node");
+      check("RouteNode".equals(d.getType()) && d.getPath().segmentCount() == 2
+          && d.getPath().segment(0).equals("PayersAppealReview") && rnode != null
+          && d.getPath().lastSegment().equals(rnode.elementText("nodeId")),
+          d.getPath() + " is a RouteNode of the model, its nodeId its folder's");
+      if (rnode != null) appealNodes.add(rnode.elementText("nodeId"));
+    }
+    check(appealNodes.equals(new TreeSet<>(List.of("start", "decide", "end"))), "the nodes are " + appealNodes);
+    check("facet-var_PayersAppealReview".equals(schema(appealRoot, "document_route_instance").elementText("variablesFacet"))
+        && "filter@PayersAppealReview".equals(schema(appealRoot, "document_route_instance").elementText("availabilityFilter")),
+        "docri:variablesFacet is facet-var_PayersAppealReview, its filter filter@PayersAppealReview");
+    check("validated".equals(system(appealRoot, "lifecycle-state")), "the model is validated");
+
     System.out.println("== XMap, with each extension point's descriptor class");
     Map<String, Class<?>> descriptors = new HashMap<>();
     descriptors.put("org.nuxeo.ecm.platform.routing.service#routeModelImporter",
@@ -118,6 +143,8 @@ public class PlatformCheck {
     };
     LifeCycleDescriptor payersClaim = null;
     Set<String> chains = new TreeSet<>();
+    Map<String, Object> chainDescriptors = new TreeMap<>();
+    Set<String> templateResources = new TreeSet<>();
     List<Object> handlers = new ArrayList<>();
     Map<String, String> lifeCycleOfType = new HashMap<>();
     Set<String> filterIds = new TreeSet<>();
@@ -144,14 +171,18 @@ public class PlatformCheck {
           if (o instanceof LifeCycleDescriptor d && "payersClaim".equals(d.getName())) payersClaim = d;
           if (type.getSimpleName().equals("RouteModelResourceType")) {
             URL url = (URL) type.getMethod("getURL").invoke(o);
-            check(url != null && new File(url.toURI()).isFile(),
-                "template-resource " + type.getMethod("getId").invoke(o) + " resolves to " + url);
+            String id = (String) type.getMethod("getId").invoke(o);
+            templateResources.add(id);
+            check(url != null && new File(url.toURI()).isFile()
+                && url.getPath().endsWith("/data/" + id + ".zip"),
+                "template-resource " + id + " resolves to its zip, " + url);
           }
           if (type.getSimpleName().equals("OperationChainContribution")) {
             String id = (String) type.getMethod("getId").invoke(o);
-            Object[] ops = (Object[]) type.getMethod("getOps").invoke(o);
+            List<?> ops = items(type.getMethod("getOps").invoke(o));
             chains.add(id);
-            check(ops.length > 0, "chain " + id + ": " + ops.length + " operations");
+            chainDescriptors.put(id, o);
+            check(!ops.isEmpty(), "chain " + id + ": " + ops.size() + " operations");
           }
           if (type.getSimpleName().equals("EventHandler")) handlers.add(o);
           if (type.getSimpleName().equals("LifeCycleTypesDescriptor"))
@@ -162,7 +193,8 @@ public class PlatformCheck {
           if (type.getSimpleName().equals("BaseDirectoryDescriptor")) {
             String name = (String) type.getField("name").get(o);
             String dataFile = (String) type.getField("dataFileName").get(o);
-            check("PayersClaimDecision".equals(name) && dataFile != null && new File(bundle, dataFile).isFile(),
+            check(List.of("PayersClaimDecision", "PayersAppealDecision").contains(name) && dataFile != null
+                && dataFile.equals("data/vocabularies/" + name + ".csv") && new File(bundle, dataFile).isFile(),
                 "directory " + name + " reads its entries from " + dataFile + ", a file of the bundle");
           }
           if (type.getSimpleName().equals("SchemaBindingDescriptor")) {
@@ -183,7 +215,10 @@ public class PlatformCheck {
 
     System.out.println("== What the descriptors say");
     check("payersClaim".equals(lifeCycleOfType.get("Claim")), "a Claim follows payersClaim: " + lifeCycleOfType);
-    check(filterIds.contains("filter@PayersClaimReview"), "the availability filter is contributed: " + filterIds);
+    check(filterIds.containsAll(List.of("filter@PayersClaimReview", "filter@PayersAppealReview")),
+        "the two availability filters are contributed: " + filterIds);
+    check(templateResources.equals(new TreeSet<>(List.of("PayersClaimReview", "PayersAppealReview"))),
+        "the two route models are contributed: " + templateResources);
     Class<?> eventHandler = Class.forName("org.nuxeo.ecm.automation.core.events.EventHandler");
     boolean keepsStatus = false;
     for (Object handler : handlers) {
@@ -215,15 +250,20 @@ public class PlatformCheck {
       check(lifeCycle.getAllowedStateTransitionsFrom("pended").containsAll(List.of("approve", "deny")),
           "pended -> approve, deny");
       check(lifeCycle.getAllowedStateTransitionsFrom("project").contains("submit"), "project -> submit");
+      check(lifeCycle.getAllowedStateTransitionsFrom("denied").contains("reopen")
+          && "inReview".equals(lifeCycle.getTransitionByName("reopen").getDestinationStateName()),
+          "denied -> reopen -> inReview, which an overturned appeal's claims review follows");
     }
 
     System.out.println("== Every chain the nodes name is contributed");
-    for (ExportedDocument d : mine.subList(1, mine.size())) {
+    List<ExportedDocument> allNodes = new ArrayList<>(mine.subList(1, mine.size()));
+    allNodes.addAll(appeal.subList(1, appeal.size()));
+    for (ExportedDocument d : allNodes) {
       Element rnode = schema(d, "route_node");
       for (Element t : rnode.element("transitions").elements("transition")) {
         String chain = t.elementText("chain");
         if (chain != null && !chain.isBlank())
-          check(chains.contains(chain), d.getPath().lastSegment() + "." + t.elementText("name") + " runs " + chain);
+          check(chains.contains(chain), d.getPath() + "." + t.elementText("name") + " runs " + chain);
       }
     }
 
@@ -235,6 +275,9 @@ public class PlatformCheck {
       {"start", vars(), claim(null, "submitted"), "review"},
       {"start", vars(), claim(null, "inReview"), "notSubmitted"},
       {"start", vars(), claim(null, "approved"), "notSubmitted"},
+      // Since 0.7.0: a denied claim, which an overturned appeal starts the review on, is reopened.
+      {"start", vars(), claim(null, "denied"), "reopen"},
+      {"start", vars(), claim(null, "paid"), "notSubmitted"},
       {"determine", vars("decision", "deny"), claim(2310.0, "inReview"), "denialWithoutReason"},
       {"determine", vars("decision", "deny", "denialReason", "   "), claim(2310.0, "inReview"), "denialWithoutReason"},
       {"determine", vars("decision", "deny", "denialReason", "Not covered"), claim(2310.0, "inReview"), "deny"},
@@ -252,6 +295,34 @@ public class PlatformCheck {
       {"supervisorApproval", vars("button", "reject"), claim(7250.0, "inReview"), "sendBack"},
       {"supervisorApproval", vars("button", "other"), claim(7250.0, "inReview"), "unknownAction"},
     };
+    followed(byNode, cases);
+    Element determine = schema(byNode.get("determine"), "route_node");
+    String assignees = determine.elementText("taskAssigneesExpr");
+    check("user:alex.rivera".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "alex.rivera")))),
+        "determine's task goes to the claim's adjuster");
+    Map<String, Object> unassigned = new HashMap<>();
+    unassigned.put("claim:adjuster", null);
+    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", unassigned))),
+        "and to any adjuster when the claim has none");
+    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "")))),
+        "or an empty one");
+    check("group:claims-supervisors".equals(org.mvel2.MVEL.eval(
+            schema(byNode.get("supervisorApproval"), "route_node").elementText("taskAssigneesExpr"), new HashMap<>())),
+        "supervisorApproval's task goes to claims-supervisors");
+
+    appealReview(appeal, chainDescriptors);
+    operationButtons(bundle, context);
+
+    System.out.println(failures == 0 ? "\nAll checks passed." : "\n" + failures + " check(s) failed.");
+    System.exit(failures == 0 ? 0 : 1);
+  }
+
+  /**
+   * Each case, `{node, NodeVariables, Document, the transition expected}`, evaluated as
+   * GraphNodeImpl.evaluateTransitions does: the node's conditions in order, with the server's MVEL,
+   * the first that holds followed when the node says so.
+   */
+  static void followed(Map<String, ExportedDocument> byNode, Object[][] cases) {
     for (Object[] c : cases) {
       String node = (String) c[0];
       Element rnode = schema(byNode.get(node), "route_node");
@@ -273,24 +344,167 @@ public class PlatformCheck {
       }
       check(taken.equals(List.of(c[3])), node + " with " + c[1] + " on " + c[2] + " follows " + taken);
     }
-    Element determine = schema(byNode.get("determine"), "route_node");
-    String assignees = determine.elementText("taskAssigneesExpr");
-    check("user:alex.rivera".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "alex.rivera")))),
-        "determine's task goes to the claim's adjuster");
-    Map<String, Object> unassigned = new HashMap<>();
-    unassigned.put("claim:adjuster", null);
-    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", unassigned))),
-        "and to any adjuster when the claim has none");
-    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "")))),
-        "or an empty one");
-    check("group:claims-supervisors".equals(org.mvel2.MVEL.eval(
-            schema(byNode.get("supervisorApproval"), "route_node").elementText("taskAssigneesExpr"), new HashMap<>())),
-        "supervisorApproval's task goes to claims-supervisors");
+  }
 
-    operationButtons(bundle, context);
+  /**
+   * Since 0.7.0, the appeal review: its nodes' conditions and its task's assignees, as for the claims
+   * review, then what its chains compute with the server's MVEL, as Automation's Scripting runs an
+   * {@code expr:} value, `Document` a stand-in for DocumentWrapper, a map of the same keys, and
+   * `CurrentDate` the platform's own DateWrapper. What it does not show: that the server runs the
+   * chains, writes the checklist or starts the claims review, which only an install does.
+   */
+  static void appealReview(List<ExportedDocument> appeal, Map<String, Object> chains) throws Exception {
+    System.out.println("== The appeal review's conditions and assignees, with the server's MVEL");
+    Map<String, ExportedDocument> byNode = new HashMap<>();
+    for (ExportedDocument d : appeal.subList(1, appeal.size())) byNode.put(d.getPath().lastSegment(), d);
+    Object[][] cases = {
+      {"start", vars(), kase("appeal", "open", "c1"), "review"},
+      {"start", vars(), kase("appeal", "inReview", "c1"), "underWay"},
+      {"start", vars(), kase("appeal", "decided", "c1"), "notAnAppealToDecide"},
+      {"start", vars(), kase("appeal", "closed", "c1"), "notAnAppealToDecide"},
+      {"start", vars(), kase("grievance", "open", "c1"), "notAnAppealToDecide"},
+      {"start", vars(), kase("appeal", "open", null), "notAnAppealToDecide"},
+      {"start", vars(), kase("appeal", "open", ""), "notAnAppealToDecide"},
+      {"decide", vars("decision", "uphold", "rationale", "Not covered"), kase("appeal", "decided", "c1"), "alreadyDecided"},
+      {"decide", vars("decision", "overturn", "rationale", "Covered"), kase("appeal", "closed", "c1"), "alreadyDecided"},
+      {"decide", vars("decision", "uphold"), kase("appeal", "inReview", "c1"), "decisionWithoutRationale"},
+      {"decide", vars("decision", "overturn", "rationale", "  "), kase("appeal", "inReview", "c1"), "decisionWithoutRationale"},
+      {"decide", vars("decision", "uphold", "rationale", "Not covered"), kase("appeal", "inReview", "c1"), "uphold"},
+      {"decide", vars("decision", "overturn", "rationale", "Covered"), kase("appeal", "inReview", "c1"), "overturn"},
+      {"decide", vars(), kase("appeal", "inReview", "c1"), "undecided"},
+      {"decide", vars("decision", "reverse", "rationale", "x"), kase("appeal", "inReview", "c1"), "undecided"},
+    };
+    followed(byNode, cases);
+    String assignees = schema(byNode.get("decide"), "route_node").elementText("taskAssigneesExpr");
+    check("user:sam.patel".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("case:assignee", "sam.patel")))),
+        "decide's task goes to the appeal's specialist");
+    Map<String, Object> nobody = new HashMap<>();
+    nobody.put("case:assignee", null);
+    check("group:member-services".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", nobody)))
+        && "group:member-services".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("case:assignee", "")))),
+        "and to member services when it has none, or an empty one");
 
-    System.out.println(failures == 0 ? "\nAll checks passed." : "\n" + failures + " check(s) failed.");
-    System.exit(failures == 0 ? 0 : 1);
+    System.out.println("== The appeal review's chains, as their expressions compute");
+    for (String id : List.of("PayersAppealReview.Uphold", "PayersAppealReview.Overturn")) {
+      // Overturn keeps the appeal's number first, in a variable of its own.
+      String find = param(chains, id, "Context.SetVar", "value", id.endsWith(".Overturn") ? 1 : 0);
+      String which = param(chains, id, "RunOperation", "id", 0);
+      List<Object> letter = new ArrayList<>();
+      letter.add(entry("appealLetter", true));
+      letter.add(entry("decisionLetter", false));
+      letter.add(entry("decisionLetter", true));
+      Object none = eval(find, Map.of("Document", new HashMap<>(Collections.singletonMap("case:checklist", null))));
+      Object empty = eval(find, Map.of("Document", Map.of("case:checklist", new ArrayList<>())));
+      Object without = eval(find, Map.of("Document", Map.of("case:checklist", List.of(entry("appealLetter", true)))));
+      Object first = eval(find, Map.of("Document", Map.of("case:checklist", letter)));
+      check(Integer.valueOf(-1).equals(none) && Integer.valueOf(-1).equals(empty) && Integer.valueOf(-1).equals(without)
+          && Integer.valueOf(1).equals(first),
+          id + " finds the decision letter's first entry: none " + none + ", empty " + empty + ", without " + without + ", with two " + first);
+      check("PayersAppealReview.AddDecisionLetter".equals(eval(which, Map.of("decisionLetterAt", -1)))
+          && "PayersAppealReview.TickDecisionLetter".equals(eval(which, Map.of("decisionLetterAt", 1))),
+          id + " adds an entry when there is none, and ticks the first when there is: " + which);
+    }
+    DateWrapperProbe today = new DateWrapperProbe();
+    String day = today.format("yyyy-MM-dd");
+    Map<String, Object> tick = new HashMap<>(Map.of("decisionLetterAt", 2, "nodeLastActor", "sam.patel", "CurrentDate", today.wrapper));
+    List<String> paths = new ArrayList<>();
+    for (int i = 0; i < 3; i++) paths.add(String.valueOf(eval(param(chains, "PayersAppealReview.TickDecisionLetter", "Document.SetProperty", "xpath", i), tick)));
+    check(paths.equals(List.of("case:checklist/2/done", "case:checklist/2/doneBy", "case:checklist/2/doneOn")),
+        "TickDecisionLetter writes the entry's three subfields, at its index: " + paths);
+    check("sam.patel".equals(eval(param(chains, "PayersAppealReview.TickDecisionLetter", "Document.SetProperty", "value", 1), tick))
+        && day.equals(eval(param(chains, "PayersAppealReview.TickDecisionLetter", "Document.SetProperty", "value", 2), tick)),
+        "with the specialist, and the server's day, " + day);
+    // BooleanType's decode reads a runtime property, which this check has no runtime for: done's
+    // value is held to the text it reads as true instead.
+    Object decodedDay = org.nuxeo.ecm.core.schema.types.primitives.DateType.INSTANCE.decode(day);
+    check(decodedDay instanceof Calendar c && new java.text.SimpleDateFormat("yyyy-MM-dd").format(c.getTime()).equals(day)
+        && "true".equals(param(chains, "PayersAppealReview.TickDecisionLetter", "Document.SetProperty", "value", 0)),
+        "the platform's DateType decodes the day as SetProperty decodes a text, and done is written true: " + decodedDay);
+    String added = run(param(chains, "PayersAppealReview.AddDecisionLetter", "Document.AddItemToListProperty", "complexJsonProperties", 0), tick);
+    check(("[{\"item\": \"decisionLetter\", \"done\": true, \"doneBy\": \"sam.patel\", \"doneOn\": \"" + day + "\"}]").equals(added),
+        "AddDecisionLetter adds the entry, done, by the specialist, on the server's day: " + added);
+
+    Map<String, Object> decided = new HashMap<>();
+    decided.put("nodeLastActor", "sam.patel");
+    decided.put("appeal", "CASE-9001");
+    decided.put("NodeVariables", new HashMap<>(Map.of("rationale", "The service was covered (fictional).")));
+    check("sam.patel upheld the denial: The service was covered (fictional).".equals(
+            run(param(chains, "PayersAppealReview.Uphold", "Audit.LogEvent", "comment", 0), decided)),
+        "Uphold records who and why in the case's history");
+    check("sam.patel overturned the denial: The service was covered (fictional).".equals(
+            run(param(chains, "PayersAppealReview.Overturn", "Audit.LogEvent", "comment", 0), decided)),
+        "Overturn records who and why in the case's history");
+    // Then, on the claim, by its lifecycle state: reopened when it is denied, and left otherwise.
+    String claimChoice = param(chains, "PayersAppealReview.Overturn", "RunOperation", "id", 1);
+    List<String> chosen = new ArrayList<>();
+    for (String state : List.of("denied", "approved", "paid", "submitted", "inReview", "pended"))
+      chosen.add(state + "=" + eval(claimChoice, Map.of("Document", Map.of("lifeCycle", state))));
+    check(chosen.equals(List.of("denied=PayersAppealReview.ReopenClaim", "approved=PayersAppealReview.LeaveClaim",
+            "paid=PayersAppealReview.LeaveClaim", "submitted=PayersAppealReview.LeaveClaim",
+            "inReview=PayersAppealReview.LeaveClaim", "pended=PayersAppealReview.LeaveClaim")),
+        "Overturn reopens a denied claim only, and leaves any other: " + chosen);
+    check("sam.patel overturned the denial on appeal CASE-9001. The claim is reopened for a new determination.".equals(
+            run(param(chains, "PayersAppealReview.ReopenClaim", "Audit.LogEvent", "comment", 0), decided))
+        && "PayersClaimReview".equals(param(chains, "PayersAppealReview.ReopenClaim", "Context.StartWorkflow", "id", 0)),
+        "ReopenClaim names the appeal in the claim's history, and starts the claims review on it");
+    check("sam.patel overturned a denial on appeal CASE-9001. The claim is not denied, so it is not reopened.".equals(
+            run(param(chains, "PayersAppealReview.LeaveClaim", "Audit.LogEvent", "comment", 0), decided)),
+        "LeaveClaim says in the claim's history why it is not reopened");
+    check("CASE-9001".equals(eval(param(chains, "PayersAppealReview.Overturn", "Context.SetVar", "value", 0),
+            Map.of("Document", Map.of("case:number", "CASE-9001")))),
+        "Overturn keeps the appeal's number before it reads the claim");
+  }
+
+  /** An {@code expr:} value, as Scripting runs one that is not a template: MVEL, the server's. */
+  static Object eval(String expression, Map<String, Object> variables) {
+    return org.mvel2.MVEL.eval(expression.substring("expr:".length()), new HashMap<>(variables));
+  }
+
+  /** The value of the parameter `name` of the `index`th operation `operation` of the chain `id`. */
+  static String param(Map<String, Object> chains, String id, String operation, String name, int index) throws Exception {
+    Object chain = chains.get(id);
+    if (chain == null) throw new IllegalStateException("no chain " + id);
+    int seen = 0;
+    for (Object op : items(chain.getClass().getMethod("getOps").invoke(chain))) {
+      if (!operation.equals(op.getClass().getMethod("getId").invoke(op))) continue;
+      if (seen++ != index) continue;
+      for (Object p : items(op.getClass().getMethod("getParams").invoke(op)))
+        if (name.equals(p.getClass().getMethod("getName").invoke(p)))
+          return ((String) p.getClass().getMethod("getValue").invoke(p)).strip();
+    }
+    throw new IllegalStateException(id + " has no operation " + operation + " #" + index + " with " + name);
+  }
+
+  /** The platform's CurrentDate, Automation's DateWrapper, and its day as it formats one. */
+  static final class DateWrapperProbe {
+    final Object wrapper;
+
+    DateWrapperProbe() throws Exception {
+      wrapper = Class.forName("org.nuxeo.ecm.automation.core.scripting.DateWrapper").getConstructor().newInstance();
+    }
+
+    String format(String pattern) throws Exception {
+      return (String) wrapper.getClass().getMethod("format", String.class).invoke(wrapper, pattern);
+    }
+  }
+
+  /** A checklist entry, as the server answers one: its item and whether it is done. */
+  static Map<String, Object> entry(String item, boolean done) {
+    Map<String, Object> m = new HashMap<>();
+    m.put("item", item);
+    m.put("done", done);
+    m.put("doneBy", null);
+    m.put("doneOn", null);
+    return m;
+  }
+
+  /** The case, as DocumentWrapper answers it: properties by xpath. */
+  static Map<String, Object> kase(String category, String state, String claim) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("case:category", category);
+    m.put("case:state", state);
+    m.put("case:claim", claim);
+    return m;
   }
 
   /**
@@ -410,6 +624,7 @@ public class PlatformCheck {
     m.put("allowedAmount", null);
     m.put("denialReason", null);
     m.put("button", null);
+    m.put("rationale", null);
     for (int i = 0; i < pairs.length; i += 2) m.put((String) pairs[i], pairs[i + 1]);
     return m;
   }

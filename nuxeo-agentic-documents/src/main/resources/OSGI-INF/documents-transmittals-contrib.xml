@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.documents.transmittals" version="1.0">
+
+  <documentation>
+    The transmittal listener, synchronous, in the transaction of the change that fires it: issues
+    a transmittal on creation, numbered from the series registered for transmittals, with each
+    document it lists checked as a current revision its issuer may read; creates, as the issuer, a
+    receipt beside it for each recipient; lets each receipt be answered once, acknowledged or
+    returned with a comment, by its recipient alone; refuses any other change to either, and their
+    deletion and trash but by an administrator. No Automation operation: a person reaches it by
+    creating a transmittal and by saving their receipt, as every client does. Every refusal marks
+    the transaction for rollback.
+  </documentation>
+
+  <require>org.nuxeo.agentic.documents</require>
+  <require>org.nuxeo.agentic.documents.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="transmittalListener" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.documents.TransmittalListener">
+      <event>aboutToCreate</event>
+      <event>documentCreated</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>documentTrashed</event>
+    </listener>
+  </extension>
+
+</component>

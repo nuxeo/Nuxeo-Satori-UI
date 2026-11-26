@@ -96,6 +96,92 @@ export const CHAINS = [
   },
 ];
 
+// ------------------------------------------------------------------ since 0.2.0: the people
+
+/**
+ * How the seed knows the users and groups it created again: a user's `company`, a group's
+ * `description`. It changes no user or group without it.
+ */
+export const MARKER = 'Controlled documents kit demo (fictional)';
+
+/** The kit's groups, which `app.json` serves the app to. */
+export const GROUPS = [
+  { name: 'document-controllers', label: 'Document controllers' },
+  { name: 'engineers', label: 'Engineers' },
+];
+
+/**
+ * The demo's people: the originators the register already names, now users the seed creates, each
+ * with the password `CONTROLLED_DOCUMENTS_DEMO_PASSWORD` gives. Fictional.
+ */
+export const USERS = [
+  {
+    username: 'avega',
+    firstName: 'Ana',
+    lastName: 'Vega',
+    groups: ['document-controllers', 'engineers'],
+  },
+  { username: 'kosei', firstName: 'Kofi', lastName: 'Osei', groups: ['engineers'] },
+  { username: 'mlind', firstName: 'Maja', lastName: 'Lind', groups: ['engineers'] },
+];
+
+/** Who issues the demo's transmittals, and receives one: demo steps 1 and 2. */
+export const ENGINEER = 'avega';
+export const RECIPIENT = 'kosei';
+
+/**
+ * The groups' permissions on the workspace, in its local ACL, which everything in it inherits: both
+ * may read and write the register, the transmittals and the review cycles. The server decides the
+ * rest: only a receipt's recipient answers it, only a cycle's opener resolves and closes it.
+ */
+export const GRANTS = [
+  { group: 'engineers', permission: 'ReadWrite' },
+  { group: 'document-controllers', permission: 'ReadWrite' },
+];
+
+// ------------------------------------------------------------------ since 0.2.0: transmittals and reviews
+
+/** The register of transmittals, whose Create menu offers a transmittal, and the review cycles' folder. */
+export const TRANSMITTALS = { name: 'transmittals', title: 'Transmittals', type: 'TransmittalRegister' };
+export const REVIEWS = { name: 'reviews', title: 'Review cycles', type: 'Folder' };
+
+/**
+ * The transmittal the seed issues, as `ENGINEER`: two documents by number, each at its current
+ * revision, to two recipients, for review. `acknowledgedBy` answer it; the others' receipts await.
+ */
+export const TRANSMITTAL = {
+  name: 'tr-pump-house',
+  title: 'Pump house drawings and pump specification, for review',
+  issuer: 'avega',
+  chains: ['pump-house-ga', 'pump-performance'],
+  recipients: ['kosei', 'mlind'],
+  purpose: 'review',
+  dueInDays: 14,
+  message: 'Please review the general arrangement and the duty points before the design freeze.',
+  acknowledgedBy: ['kosei'],
+};
+
+/**
+ * The review cycle the seed opens, on a chain's current revision, as its opener, who may write it.
+ * Each reviewer writes one thread in it; the opener resolves those with a `resolution`, and the
+ * others stay open, so that the cycle cannot close yet.
+ */
+export const REVIEW = {
+  name: 'review-intake-screen',
+  chain: 'intake-screen',
+  opener: 'kosei',
+  reviewers: ['avega', 'mlind'],
+  dueInDays: 10,
+  threads: [
+    {
+      by: 'avega',
+      text: 'The bar spacing on section B-B does not match the screen schedule.',
+      resolution: 'Schedule corrected to 25 mm spacing.',
+    },
+    { by: 'mlind', text: 'Show the cable route to the screen drive on the plan.' },
+  ],
+};
+
 /** Titles, by chain: the document's, with its revision. */
 export const TITLES = {
   'pump-house-ga': 'Pump house general arrangement',

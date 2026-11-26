@@ -765,7 +765,8 @@ async function theDemoListing() {
   check(
     "the repository's kit demos listed, with their people, seeds and environment",
     problems.length === 0 &&
-      of('payers-claims-demo').length === 4 &&
+      // The demo, the claims review, the appeals, the appeal review and the operation buttons.
+      of('payers-claims-demo').length === 5 &&
       // The demo, step 2's rights, step 4's review and the videos.
       of('brand-assets-demo').length === 4 &&
       of('brand-assets-demo').some((each) => each.file.endsWith('/brand-assets-video.mjs')) &&
@@ -792,6 +793,22 @@ async function theDemoListing() {
       operations?.needs.some((need) => need.includes('payers-claims-demo-operations-config.xml')) &&
       operations?.steps.at(-1) === 'Health',
     JSON.stringify(operations),
+    false,
+  );
+  // Since 0.7.0, the appeal review's demo: its specialist, and the adjuster it signs in through the
+  // REST API to write and determine its claims.
+  const appealReview = of('payers-claims-demo').find((each) =>
+    each.file.endsWith('/payers-appeal-workflow.mjs'),
+  );
+  check(
+    "the appeal review's demo listed, with its specialist and the adjuster it signs in",
+    JSON.stringify(appealReview?.runAs.users) === JSON.stringify(['sam.patel']) &&
+      JSON.stringify(appealReview?.signsInAs) === JSON.stringify(['alex.rivera']) &&
+      appealReview?.environment.includes('PAYERS_DEMO_PASSWORD') &&
+      appealReview?.needs.some((need) => need.includes('0.7.0')) &&
+      appealReview?.steps[0]?.startsWith('Preconditions') &&
+      appealReview?.steps.at(-1) === 'Health',
+    JSON.stringify(appealReview),
     false,
   );
 

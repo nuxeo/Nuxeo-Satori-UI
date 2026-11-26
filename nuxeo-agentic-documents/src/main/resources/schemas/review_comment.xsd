@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- The ReviewComment facet's schema, prefix rvwc: what a review cycle keeps on each of Nuxeo's own
+     comments written in it. The server gives a comment the facet when it is written in a cycle;
+     the cycle's opener writes status and resolution on a thread's first comment, while the cycle
+     is open, and the server writes who and when. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/review_comment"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/review_comment">
+
+  <!-- The cycle's id. -->
+  <xs:element name="cycle" type="xs:string" />
+  <!-- A thread's first comment: open or resolved. Empty on a reply. -->
+  <xs:element name="status" type="xs:string" />
+  <xs:element name="resolution" type="xs:string" />
+  <xs:element name="resolvedBy" type="xs:string" />
+  <xs:element name="resolvedAt" type="xs:dateTime" />
+
+</xs:schema>
