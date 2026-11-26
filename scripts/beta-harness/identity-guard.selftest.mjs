@@ -2340,6 +2340,87 @@ await silently(async () => {
       }
     }
   }
+  // A cross-user re-login on a live server (payers-claims-workflow's step 5, 26 November 2026):
+  // the boot that `h.login()` runs under the outgoing user leaves Nuxeo's session cookie for that
+  // user in the browser's jar, which `page.request` shares, so the API channel answers as them
+  // until the cookies are cleared. The after-boot check judges the app's traffic only; the next
+  // boundary checks the API channel again. The positive proves the clear is waited for; the
+  // negative, that a cookie surviving the clear is still refused.
+  for (const [kind, survives] of [
+    ['positive', false],
+    ['negative', true],
+  ]) {
+    const saved = {
+      NUXEO_USER: process.env['NUXEO_USER'],
+      NUXEO_PASS: process.env['NUXEO_PASS'],
+      APP_URL: process.env['APP_URL'],
+    };
+    process.env['NUXEO_USER'] = 'Administrator';
+    process.env['NUXEO_PASS'] = 'adminpw';
+    process.env['APP_URL'] = APP;
+    try {
+      const page = fakePage({ url: `${APP}/#/`, storage: { ...signedIn } });
+      const ALT_USER = 'AlternateUser';
+      const ALT_ME = { 'entity-type': 'user', id: ALT_USER, isAnonymous: false };
+      const ALT_AUTH = `Basic ${b64(`${ALT_USER}:altpw`)}`;
+      const LOGIN = `Basic ${b64('Administrator:adminpw')}`;
+      page.state.meFor = (/** @type {string | null} */ auth) =>
+        auth === H || auth === LOGIN ? ADMIN : auth === ALT_AUTH ? ALT_ME : GUEST;
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.signedInAs(ALT_USER, 'the supervisor approves');
+      page.state.storage = {
+        'sessionStorage:agentic_ui_nuxeo_session': basicSession(ALT_USER, b64(`${ALT_USER}:altpw`)),
+      };
+      page.send(`${APP}/nuxeo/api/v1/me`, { authorization: ALT_AUTH });
+      await h.step('two');
+      // The boot under the outgoing user: its session cookie is in the jar from here.
+      page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: ALT_AUTH }];
+      page.state.duringGoto = () => {
+        page.state.apiMe = ALT_ME;
+      };
+      // h.login() clears the cookies: the API channel is the run's user's again, unless it survives.
+      page.state.duringClear = () => {
+        if (!survives) page.state.apiMe = ADMIN;
+      };
+      const thrown = await thrownBy(async () => {
+        await h.login();
+        page.state.duringGoto = undefined;
+        page.state.duringClear = undefined;
+        await h.step('three');
+        await h.finish();
+      });
+      if (kind === 'positive')
+        control(
+          'positive',
+          "a cross-user re-login is not refused for the outgoing user's session cookie, which h.login() clears",
+          thrown === null && identity.checks.every((c) => c.ok),
+          { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+        );
+      else
+        control(
+          'negative',
+          "a cross-user re-login whose outgoing user's cookie survives h.login() is refused at the next boundary, on the API channel",
+          thrown instanceof PreconditionError &&
+            /\[api\]/.test(thrown.message) &&
+            new RegExp(ALT_USER).test(thrown.message) &&
+            identity.checks.some((c) => !c.ok && !/after its boot navigation/.test(c.at)),
+          { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+        );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
   {
     // The other side of the same stale `required`: a request the app starts *during* the probe.
     // It is beyond the promotion's mark, so `pendingAcrossSignIn` rightly leaves it in the
