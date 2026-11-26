@@ -51,12 +51,17 @@ This guide walks through setting up OpenSearch for full-text search in the Nuxeo
 
 ## Step 1: Start OpenSearch
 
-Create or add to your Nuxeo Docker Compose stack. A minimal OpenSearch service:
+Create or add to your Nuxeo Docker Compose stack. A minimal OpenSearch service, at 2.13.0, the
+version the local `nuxeo-opensearch` container runs (`docker inspect`, 25 November 2026) and the
+demo server pins. The demo server's [`compose.yml`](../business-apps/demo-server/compose.yml) is
+the version of record: `npm run demo-server:selftest` holds it to the stack
+[`scripts/demo-server-plan.mjs`](../scripts/demo-server-plan.mjs) declares, so a new version is
+made in both, and then here.
 
 ```yaml
 services:
   opensearch:
-    image: opensearchproject/opensearch:2.17.1
+    image: opensearchproject/opensearch:2.13.0
     container_name: opensearch
     environment:
       - discovery.type=single-node

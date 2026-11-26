@@ -15,7 +15,7 @@ its types, which no server has ([tutorial, step 10](../../../docs/business-apps/
 
 | File                                                          | What it is                                                                            | Written by                   |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------- |
-| `bundle/agentic-ui-config/app.json`                           | The app: id and address `facilities`, version 0.1.0, two groups                       | `app-package`                |
+| `bundle/agentic-ui-config/app.json`                           | The app: id and address `facilities`, version 0.1.1, two groups                       | `app-package`                |
 | `bundle/agentic-ui-config/layouts/Building/view.layout.json`  | The Building record page: two cards and a related list of its work orders             | `app-layout`, then by hand   |
 | `bundle/agentic-ui-config/layouts/WorkOrder/view.layout.json` | The WorkOrder record page: an overdue banner, three cards and the history             | `app-layout`, then by hand   |
 | `bundle/agentic-ui-config/layouts/WorkOrder/edit.layout.json` | The Edit form, with the field rule: a completed work order needs its date and how     | `app-form`, then by hand     |
@@ -50,6 +50,11 @@ its types, which no server has ([tutorial, step 10](../../../docs/business-apps/
 npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0 --model business-apps/packages/facilities-demo/content-model.json
 ```
 
-It writes `dist/facilities-demo-0.1.0.zip` and its checksum. Without `--model`, as CI runs it, the
+It writes `dist/facilities-demo-0.1.1.zip` and its checksum. Without `--model`, as CI runs it, the
 pipeline holds the kit to its own `content-model.json`, since the kit ships a stand-in model, and
 builds the same zip.
+
+**0.1.1** names its two schemas' sections in the Properties panel, which would otherwise be headed
+by the schema's name made readable, "Workorder" for `workorder`: `layout.schema.workorder` is
+"Work order" and `layout.schema.building` "Building" (app-definition-v2.md, section 7). Held to
+0.1.0 on the staging branch with `--previous`: two labels added, a patch.

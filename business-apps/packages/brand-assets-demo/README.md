@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.0 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.1 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
@@ -176,7 +176,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.0.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.1.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -218,11 +218,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.0.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -417,6 +417,13 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   0.1.1 on the staging branch with `--previous`: its three changes, the rights component, the
   manifest and `package.xml`'s new dependency, are "to judge", which the pipeline sees as a patch,
   and 0.2.0 raises the minor, as a package newly needing an add-on should.
+- **0.2.1 names its schemas' sections in the Properties panel:** a product's heading was
+  "Acmeproduct", its schema's name made readable, in a browser walkthrough of 0.2.0, since the
+  labels gave it none. The labels now name the three, `layout.schema.acmeasset`, `acmeproduct` and
+  `acmeshot`, "Asset", "Product" and "Shot" (app-definition-v2.md, section 7), and
+  `kit-schema-labels.spec.ts` in `libs/shared/document-layouts` fails a kit that leaves one out.
+  Held to 0.2.0 on the staging branch with `--previous`: three labels added, a patch. Not seen on a
+  server yet.
 - **The rights policy,** `brand-assets-demo-rights.xml`, is read by `nuxeo-agentic-assets`'s own
   tests, through XMap as the runtime reads a contribution, and decides the demo's uses as this
   README's table says; giving `OriginalJpeg` another channel turns them red.

@@ -21,6 +21,8 @@
     "facilities.card.workOrder.history": "History",
     "facilities.field.buildingName": "Name",
     "facilities.field.workOrderTitle": "Summary",
+    "layout.schema.workorder": "Work order",
+    "layout.schema.building": "Building",
     "layout.field.bldg:code": "Building code",
     "layout.field.bldg:manager": "Facilities manager",
     "layout.field.wo:number": "Work order",

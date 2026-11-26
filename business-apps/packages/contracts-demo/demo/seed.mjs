@@ -27,8 +27,8 @@
  *
  * **It checks what it seeded.** Last, the kit's three page providers are asked, from the
  * repository, and each must return every seeded contract that belongs in it and none that does
- * not, the renewals in the order of their end dates. Another contract on the server may be in
- * them: the seed checks its own.
+ * not, the renewals in the order of their end dates, the one already ended, CTR-1007, among them.
+ * Another contract on the server may be in them: the seed checks its own.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -38,7 +38,7 @@
  * written: no credentials, no server, or one that does not answer /me as Nuxeo does, credentials
  * refused, the package not installed, or no /default-domain/workspaces.
  */
-import { CONTRACTS, EXPECTED, FOLDER, WORKSPACE, dayFrom } from './data.mjs';
+import { CONTRACTS, EXPECTED, FOLDER, RENEWALS, WORKSPACE, dayFrom } from './data.mjs';
 
 const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
@@ -133,10 +133,9 @@ async function seed() {
       'The page providers return what was seeded.',
   );
   console.log(`The home: ${APP}/#/home`);
-  console.log(`The renewals queue: ${APP}/#/queues/up-for-renewal`);
-  console.log(
-    `A contract up for renewal: ${APP}/#/doc/${seeded.get(EXPECTED.contracts_up_for_renewal[1])}`,
-  );
+  console.log(`The queue, up for renewal or overdue: ${APP}/#/queues/up-for-renewal`);
+  console.log(`A contract up for renewal: ${APP}/#/doc/${seeded.get(RENEWALS.due[0])}`);
+  console.log(`A contract overdue for renewal: ${APP}/#/doc/${seeded.get(RENEWALS.overdue[0])}`);
   console.log(
     `A terminated contract: ${APP}/#/doc/${seeded.get(EXPECTED.contracts_terminated[0])}`,
   );

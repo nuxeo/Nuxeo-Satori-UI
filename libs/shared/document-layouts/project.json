@@ -9,6 +9,16 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the business-apps kit files kit-schema-labels.spec.ts holds to the generated Properties panel: each kit's app definition, content model, English labels and metadata layouts. Without them a kit's labels could change without this project counting as affected, and a cached pass would replay.",
+      "inputs": [
+        "default",
+        "^production",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/business-apps/packages/*/content-model.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/app.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/labels/en.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/layouts/*/metadata.layout.json"
+      ],
       "options": {
         "reportsDirectory": "coverage/libs/shared/document-layouts"
       }
