@@ -3,6 +3,7 @@
   "version": 2,
   "entries": [
     { "id": "awaiting-approval", "icon": "clock", "queue": "awaiting-approval" },
-    { "id": "certificates", "icon": "document", "queue": "certificates" }
+    { "id": "certificates", "icon": "document", "queue": "certificates" },
+    { "id": "audit-exports", "icon": "history", "queue": "audit-exports" }
   ]
 }

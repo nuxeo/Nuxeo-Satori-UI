@@ -24,10 +24,14 @@ export const RULE = {
   durationMillis: 60_000,
 };
 
-/** The kit's two groups, which the server's directory holds, and what each may do in the folder. */
+/**
+ * The kit's two groups, which the server's directory holds, and what each may do in the folder: a
+ * records manager starts runs and files audit exports, an approver approves runs.
+ */
 export const GRANTS = [
   { group: 'records-managers', permission: 'StartDisposition' },
   { group: 'records-approvers', permission: 'ApproveDisposition' },
+  { group: 'records-managers', permission: 'ExportRecordsAudit' },
 ];
 
 /** The records. One is put under a legal hold, so that a run leaves it out. */

@@ -1,0 +1,77 @@
+package org.nuxeo.agentic.records;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.nuxeo.agentic.records.Fixtures.daysAgo;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import org.junit.Test;
+import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.platform.audit.api.AuditReader;
+import org.nuxeo.runtime.test.runner.Deploy;
+import org.nuxeo.runtime.transaction.TransactionHelper;
+
+/** An export written once, and an export whose audit fails, which keeps nothing and says so. */
+@Deploy("org.nuxeo.agentic.records:OSGI-INF/test-no-export-writer.xml")
+public class AuditExportGenerationTest extends RecordsAuditTestCase {
+
+    private DocumentModel pending() {
+        DocumentModel export = Fixtures.export(session, "grace", Fixtures.RECORDS, at(daysAgo(1)),
+                at(Instant.now().plus(Duration.ofDays(1))));
+        audited();
+        DocumentModel stored = session.getDocument(export.getRef());
+        assertEquals(Disposition.EXPORT_PENDING, stored.getPropertyValue(Disposition.EXPORT_STATE));
+        return stored;
+    }
+
+    @Test
+    public void anExportIsWrittenOnce() {
+        retained("Claim 7001", Instant.now().plus(Duration.ofDays(3650)));
+        audited();
+        DocumentModel export = pending();
+        AuditExports exports = new AuditExports(Clock.systemUTC());
+
+        exports.generate(session.getRepositoryName(), export.getId(), Fixtures.person("grace"));
+        assertTrue(TransactionHelper.isTransactionActive());
+        DocumentModel written = session.getDocument(export.getRef());
+        assertEquals(Disposition.EXPORT_DONE, written.getPropertyValue(Disposition.EXPORT_STATE));
+        Object sha = written.getPropertyValue(Disposition.EXPORT_CSV_SHA256);
+        assertNotNull(sha);
+
+        exports.generate(session.getRepositoryName(), export.getId(), Fixtures.person("grace"));
+        DocumentModel again = session.getDocument(export.getRef());
+        assertEquals("an export no longer pending is left as it is", sha,
+                again.getPropertyValue(Disposition.EXPORT_CSV_SHA256));
+        audited();
+        assertEquals(1, entries(RecordsAudit.AUDIT_EXPORTED, export).size());
+    }
+
+    @Test
+    public void anExportWhoseAuditFailsKeepsNothingAndSaysSo() {
+        DocumentModel export = pending();
+        AuditReader failing = (AuditReader) java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] { AuditReader.class }, (proxy, method, args) -> {
+                    throw new IllegalStateException("The test's audit, failing");
+                });
+        AuditExports exports = new AuditExports(Clock.systemUTC(), () -> failing);
+
+        exports.generate(session.getRepositoryName(), export.getId(), Fixtures.person("grace"));
+        assertTrue(TransactionHelper.isTransactionActive());
+        DocumentModel failed = session.getDocument(export.getRef());
+        assertEquals(Disposition.EXPORT_FAILED, failed.getPropertyValue(Disposition.EXPORT_STATE));
+        assertNotNull(failed.getPropertyValue(Disposition.EXPORT_FAILURE));
+        assertNull(failed.getPropertyValue(Disposition.FILE_CONTENT));
+        assertEquals(List.of(), failed.getPropertyValue(Disposition.FILES));
+        assertNull(failed.getPropertyValue(Disposition.EXPORT_CSV_SHA256));
+        assertFalse(failed.isRecord());
+        audited();
+        assertEquals(List.of(), entries(RecordsAudit.AUDIT_EXPORTED, export));
+    }
+}

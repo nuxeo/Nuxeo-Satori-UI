@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "recordsfile",
+      "labelKey": "records.card.recordsFile.recordsfile",
+      "fields": [
+        "rfile:reference",
+        "rfile:series",
+        "rfile:office",
+        { "field": "rfile:closed", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "history",
+      "labelKey": "records.card.recordsFile.history",
+      "span": 2,
+      "timeline": {
+        "events": [
+          "afterMakeRecord",
+          "retentionRuleAttached",
+          "afterSetRetention",
+          "afterExtendRetention",
+          "afterUnsetRetention",
+          "retentionExpired",
+          "afterSetLegalHold",
+          "afterRemoveLegalHold",
+          "dispositionRunStarted",
+          "dispositionRunApproved",
+          "dispositionRunRejected",
+          "dispositionRunHalted",
+          "recordViewed",
+          "download",
+          "documentCreated",
+          "documentModified",
+          "documentMoved",
+          "documentSecurityUpdated",
+          "documentTrashed",
+          "documentUntrashed"
+        ],
+        "filter": true,
+        "pageSize": 20
+      }
+    }
+  ]
+}

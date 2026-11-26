@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- An audit export: what the platform's audit holds of the documents under a folder over a period,
+     as a CSV, file:content, and a JSON file, the first of files:files, written by the add-on in the
+     background and then made a record. The scope, the period and the comment are the filer's;
+     everything else is the add-on's. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/records-audit-export"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/records-audit-export">
+
+  <!-- The folder whose documents the export covers, by its path: the server writes it as the
+       repository has it. -->
+  <xs:element name="path" type="xs:string" />
+  <!-- The period: every entry whose event happened at or after from, and before to. -->
+  <xs:element name="from" type="xs:date" />
+  <xs:element name="to" type="xs:date" />
+  <xs:element name="comment" type="xs:string" />
+
+  <!-- Who filed it, and when. -->
+  <xs:element name="by" type="xs:string" />
+  <xs:element name="at" type="xs:date" />
+  <!-- pending, done or failed -->
+  <xs:element name="state" type="xs:string" />
+  <xs:element name="generatedAt" type="xs:date" />
+  <!-- The rows of each file, and the entries left out because the filer may not read their
+       document. -->
+  <xs:element name="entryCount" type="xs:long" />
+  <xs:element name="omittedCount" type="xs:long" />
+  <!-- The SHA-256 of each file, in lower-case hex. -->
+  <xs:element name="csvSha256" type="xs:string" />
+  <xs:element name="jsonSha256" type="xs:string" />
+  <!-- Why a failed export failed, in one sentence. -->
+  <xs:element name="failure" type="xs:string" />
+
+</xs:schema>

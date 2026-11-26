@@ -2,6 +2,9 @@ package org.nuxeo.agentic.records;
 
 import static org.nuxeo.agentic.records.Disposition.CERTIFICATE_SCHEMA;
 import static org.nuxeo.agentic.records.Disposition.CERTIFICATE_TYPE;
+import static org.nuxeo.agentic.records.Disposition.EXPORT_SCHEMA;
+import static org.nuxeo.agentic.records.Disposition.EXPORT_TYPE;
+import static org.nuxeo.agentic.records.Disposition.FILES;
 import static org.nuxeo.agentic.records.Disposition.FILE_CONTENT;
 import static org.nuxeo.agentic.records.Disposition.REQUEST_SCHEMA;
 import static org.nuxeo.agentic.records.Disposition.REQUEST_TYPE;
@@ -33,9 +36,12 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li><b>A {@code DispositionRequest} filed</b> in the {@code DispositionRuns} folder starts a run,
  * or approves or rejects one, and the second approval disposes of it ({@link Dispositions#file}).
  * Whatever the filer wrote but the action, the run and the comment is replaced by the server's.</li>
+ * <li><b>A {@code RecordsAuditExport} filed</b> there is checked, and kept for the add-on to write in
+ * the background ({@link AuditExports#request}); once created, only its filer may read it.</li>
  * <li><b>Everything else</b> on the add-on's documents is refused, but the add-on's own writes
  * ({@link ServiceWrites}): a run or a certificate made by anyone else; a change to a property of the
- * add-on's schemas or to a certificate's file; a move, a copy, a check-in, a restore or a trash;
+ * add-on's schemas, to a certificate's file or to an export's files; a move, a copy, a check-in, a
+ * restore or a trash;
  * and a deletion, but an administrator's. Other properties, such as a run's description, are
  * Nuxeo's to allow.</li>
  * </ul>
@@ -50,12 +56,15 @@ public class DispositionListener implements EventListener {
 
     private final Dispositions dispositions;
 
+    private final AuditExports exports;
+
     public DispositionListener() {
-        this(new Dispositions(Clock.systemUTC(), Dispositions.CLUSTER));
+        this(new Dispositions(Clock.systemUTC(), Dispositions.CLUSTER), new AuditExports(Clock.systemUTC()));
     }
 
-    DispositionListener(Dispositions dispositions) {
+    DispositionListener(Dispositions dispositions, AuditExports exports) {
         this.dispositions = dispositions;
+        this.exports = exports;
     }
 
     @Override
@@ -95,8 +104,14 @@ public class DispositionListener implements EventListener {
             switch (type) {
             case RUNS_TYPE -> dispositions.folderCreated(session, doc);
             case REQUEST_TYPE -> dispositions.file(session, doc);
+            case EXPORT_TYPE -> exports.request(session, doc);
             default -> throw new DispositionRefusal(403, "server-only",
                     "A disposition run or certificate is written by the server alone: file a request.");
+            }
+        }
+        case DocumentEventTypes.DOCUMENT_CREATED -> {
+            if (EXPORT_TYPE.equals(type)) {
+                AuditExports.restrict(session, doc);
             }
         }
         case "beforeDocumentModification" -> modified(doc);
@@ -118,16 +133,18 @@ public class DispositionListener implements EventListener {
         }
     }
 
-    /** A change to the add-on's properties, or to a certificate's file, is the add-on's alone. */
+    /** A change to the add-on's properties, or to a certificate's file or an export's, is the add-on's alone. */
     private static void modified(DocumentModel doc) {
         String schema = switch (doc.getType()) {
         case RUNS_TYPE -> RUNS_SCHEMA;
         case RUN_TYPE -> RUN_SCHEMA;
         case REQUEST_TYPE -> REQUEST_SCHEMA;
+        case EXPORT_TYPE -> EXPORT_SCHEMA;
         default -> CERTIFICATE_SCHEMA;
         };
         DataModel own = doc.getDataModel(schema);
-        boolean file = CERTIFICATE_TYPE.equals(doc.getType()) && dirty(doc, FILE_CONTENT);
+        boolean file = (CERTIFICATE_TYPE.equals(doc.getType()) || EXPORT_TYPE.equals(doc.getType()))
+                && dirty(doc, FILE_CONTENT) || EXPORT_TYPE.equals(doc.getType()) && dirty(doc, FILES);
         if (own != null && own.isDirty() || file) {
             throw new DispositionRefusal(403, "server-only",
                     "The disposition review's properties are written by the server alone.");

@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.records.audit" version="1.0">
+
+  <documentation>
+    Access logging and the audit export, on the platform's audit.
+
+    The platform's audit already records what retention, holds and deletions do to a record, and
+    every file its download service sends. The add-on adds a view of a record under retention or a
+    legal hold, a disposition run's decisions on each of its records, and each audit export: its
+    own events, which its writer below adds to the platform's audit once their transaction has
+    committed, so that it needs no entry in the audit's own configuration.
+
+    A view is logged by the platform's JSON writer for a document, which this component replaces
+    with a subclass that writes the same JSON and logs a view when the document is the answer
+    itself, not an entry of a list.
+
+    An audit export, filed in the disposition runs folder, is written in the background once the
+    filer's transaction has committed (README, "The audit export").
+  </documentation>
+
+  <require>org.nuxeo.agentic.records.listener</require>
+  <require>org.nuxeo.ecm.core.io.MarshallerRegistry.marshallers</require>
+
+  <extension target="org.nuxeo.ecm.core.io.MarshallerRegistry" point="marshallers">
+    <register class="org.nuxeo.agentic.records.RecordViewJsonWriter" enable="true" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <!-- The add-on's audit entries, written in the background, after the commit. -->
+    <listener name="agenticRecordsAuditWriter" async="true" postCommit="true"
+      class="org.nuxeo.agentic.records.RecordsAuditWriter">
+      <event>recordViewed</event>
+      <event>dispositionRunStarted</event>
+      <event>dispositionRunApproved</event>
+      <event>dispositionRunRejected</event>
+      <event>dispositionRunHalted</event>
+      <event>recordDisposed</event>
+      <event>recordsAuditExported</event>
+    </listener>
+    <!-- An audit export, written in the background once it is filed. -->
+    <listener name="agenticRecordsAuditExport" async="true" postCommit="true"
+      class="org.nuxeo.agentic.records.AuditExportListener">
+      <event>documentCreated</event>
+    </listener>
+  </extension>
+
+</component>

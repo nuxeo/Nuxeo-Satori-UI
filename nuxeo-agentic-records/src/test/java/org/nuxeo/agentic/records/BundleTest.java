@@ -44,7 +44,7 @@ public class BundleTest {
             assertTrue(name, Files.isRegularFile(Path.of("src/main/resources", name.trim())));
         }
         assertEquals(List.of("OSGI-INF/records-types.xml", "OSGI-INF/records-security.xml",
-                "OSGI-INF/records-listener.xml"), names);
+                "OSGI-INF/records-listener.xml", "OSGI-INF/records-audit.xml"), names);
     }
 
     /** No Automation operation and no endpoint: a person reaches the review by filing a document (decision 3). */

@@ -24,6 +24,11 @@
       "parent": "Document",
       "facets": [],
       "schemas": ["common", "dublincore", "file", "disposition_certificate"]
+    },
+    "RecordsAuditExport": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "file", "files", "records_audit_export"]
     }
   },
   "facets": [],
@@ -174,6 +179,36 @@
       "name": "file",
       "fields": {
         "content": "blob"
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "records_audit_export",
+      "prefix": "rexp",
+      "fields": {
+        "path": "string",
+        "from": "date",
+        "to": "date",
+        "comment": "string",
+        "by": "string",
+        "at": "date",
+        "state": "string",
+        "generatedAt": "date",
+        "entryCount": "long",
+        "omittedCount": "long",
+        "csvSha256": "string",
+        "jsonSha256": "string",
+        "failure": "string"
       }
     }
   ]

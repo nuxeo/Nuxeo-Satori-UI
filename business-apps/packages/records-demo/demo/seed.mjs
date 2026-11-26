@@ -15,8 +15,9 @@
  *     record with the rule attached, by the module's own Retention.AttachRule, and the one data.mjs
  *     marks put under a hold, by Document.Hold;
  *   - at the repository's root, /disposition-runs, the DispositionRuns folder, its inherited
- *     permissions blocked, with StartDisposition for records-managers and ApproveDisposition for
- *     records-approvers: the add-on takes requests in a folder at the root only;
+ *     permissions blocked, with StartDisposition and ExportRecordsAudit for records-managers and
+ *     ApproveDisposition for records-approvers: the add-on takes requests and audit exports in a
+ *     folder at the root only;
  *   - and in /RetentionRules, the module's folder, the rule: one minute from its attachment, with no
  *     end action, so that the module leaves the records to a review.
  *
@@ -232,7 +233,7 @@ async function ensureRunsFolder() {
   return ensure('/', RUNS.name, 'DispositionRuns', { 'dc:title': RUNS.title });
 }
 
-/** The two groups' permissions on the folder, and the block of every permission it would inherit. */
+/** The groups' permissions on the folder, and the block of every permission it would inherit. */
 async function ensureGrants(folder) {
   const acl = await call('GET', `/id/${folder.uid}/@acl`);
   const local = (acl?.acl ?? []).find((each) => each.name === 'local')?.aces ?? [];

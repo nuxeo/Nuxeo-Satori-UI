@@ -34,6 +34,18 @@
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>
 
+    <!-- The audit exports, the latest filed first. An export is readable by its filer alone, and the
+         server's administrators, so each person sees their own. -->
+    <coreQueryPageProvider name="records_audit_exports">
+      <pattern>
+        SELECT * FROM RecordsAuditExport
+        WHERE ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="rexp:at" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
     <!-- A run's requests, given the run's id: who started it, approved or rejected it, and what
          came of each, in the order they were filed. -->
     <coreQueryPageProvider name="records_run_requests">

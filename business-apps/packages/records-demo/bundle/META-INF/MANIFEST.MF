@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: records-demo
 Bundle-SymbolicName: nuxeo.config.records-demo;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.1.1
 Nuxeo-Component: OSGI-INF/records-demo-model.xml,OSGI-INF/records-demo-queues.xml,OSGI-INF/records-demo-config.xml

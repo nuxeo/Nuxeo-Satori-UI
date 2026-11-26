@@ -3,8 +3,9 @@
 
   <documentation>
     The disposition review's document types. A repository has one DispositionRuns folder, made by an
-    administrator, which holds every request a person files, every run and every certificate. A
-    person files a DispositionRequest; runs and certificates are written by the add-on alone.
+    administrator, which holds every request a person files, every run, every certificate and every
+    audit export. A person files a DispositionRequest or a RecordsAuditExport; runs and
+    certificates are written by the add-on alone, and an export's files and figures too.
 
     The records a run reviews are the platform's retention module's (nuxeo-retention): a run reads
     its Record facet, record:ruleIds and record:retainUntil, and the rule's retention_def:endActions.
@@ -20,6 +21,7 @@
     <schema name="disposition_run" prefix="drun" src="schemas/disposition_run.xsd" />
     <schema name="disposition_request" prefix="dreq" src="schemas/disposition_request.xsd" />
     <schema name="disposition_certificate" prefix="dcert" src="schemas/disposition_certificate.xsd" />
+    <schema name="records_audit_export" prefix="rexp" src="schemas/records_audit_export.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
@@ -31,6 +33,7 @@
         <type>DispositionRequest</type>
         <type>DispositionRun</type>
         <type>DispositionCertificate</type>
+        <type>RecordsAuditExport</type>
       </subtypes>
     </doctype>
 
@@ -51,6 +54,17 @@
       <schema name="dublincore" />
       <schema name="file" />
       <schema name="disposition_certificate" />
+    </doctype>
+
+    <!-- An audit export: filed by a person with ExportRecordsAudit, written by the add-on. Its CSV
+         is file:content, which the repository keeps once the export is made a record; its JSON the
+         first of files:files, which the add-on keeps. -->
+    <doctype name="RecordsAuditExport" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <schema name="files" />
+      <schema name="records_audit_export" />
     </doctype>
   </extension>
 
