@@ -516,17 +516,18 @@ numbers of the day, for the app and every kit, and names the keys each language 
 **What the app shows.** A deployment's language is its Layer 0 `defaultLanguage`, which
 `availableLanguages` must list, as Satori's own defaults do in
 [`bootstrap.defaults.json`](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json),
-and a configuration package's `bootstrap.json` may change. The app runs
-in a language only when this build ships its catalogue, `apps/nuxeo-ui/public/i18n/<language>.json`;
-given another, it says so in the console and runs in English (`resolveStringLanguage` in
+and a configuration package's `bootstrap.json` may change. The app runs in a language only when
+this build ships its catalogue, `apps/nuxeo-ui/public/i18n/<language>.json`; given another, it says
+so in the console and runs in English (`resolveStringLanguage` in
 [`provide-app-config.ts`](../../apps/nuxeo-ui/src/app/config/provide-app-config.ts)). Dates,
 numbers and amounts follow the same language, once it is offered.
 
-| Languages                                                                          | State                                                                                                           |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`)            | Ship. The four translations hold 2,013 of English's 3,344 keys                                                  |
-| Spanish, Swedish, Danish, Finnish, Norwegian Bokmål (`es`, `sv`, `da`, `fi`, `nb`) | Requested. Their dates, numbers and amounts are ready; their catalogues are not here, so none can be chosen yet |
-| Arabic, Hebrew, Italian (`ar`, `he`, `it`)                                         | Requested, as above                                                                                             |
+| Languages                                                               | State                                                                                                                             |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,344 keys                                                                    |
+| Spanish (`es`)                                                          | Requested from Crowdin. Its dates, numbers and amounts are ready; its catalogue is not on this branch, so it cannot be chosen yet |
+| Swedish, Arabic, Hebrew, Italian (`sv`, `ar`, `he`, `it`)               | Crowdin targets, not requested on this branch; dates, numbers and amounts ready; no catalogue here                                |
+| Danish, Finnish, Norwegian Bokmål (`da`, `fi`, `nb`)                    | Registered: dates, numbers and amounts ready. Not yet Crowdin targets, so not requested                                           |
 
 `main` is further along than this branch. Swedish, Italian, Arabic and Hebrew ship there already
 (NXSAT-754, #656 and #696), and Spanish, 99 % approved on Crowdin on 30 October
@@ -542,7 +543,11 @@ from the English, never by hand ([app-definition-v2.md](app-definition-v2.md), s
 registry serves a language over English, key by key, and a language a kit has no file for shows the
 kit's English. No kit has a file in any language but English yet. The pipeline accepts a language
 that gives a subset of English's keys and refuses one with a key English lacks
-([package-pipeline.md](package-pipeline.md), section 2).
+([package-pipeline.md](package-pipeline.md), section 2). The kits have a Crowdin config of their
+own, [`crowdin-kits.yml`](../../crowdin-kits.yml), and a pull of their own,
+[`crowdin-pull-kits.yaml`](../../.github/workflows/crowdin-pull-kits.yaml), because a kit's new file
+needs a person to name it and version the kit before the kit builds, and in the app's one pull
+request that would hold every app catalogue red with it.
 
 **The demos need approved translations first.** Phase 7's "the app in Spanish" and phase 8's "the
 app in French" each show the app only as far as Crowdin has approved it and the steps below have
@@ -553,37 +558,42 @@ labels the same as French. Translations are never written in this repository.
 **On Crowdin's side,** a Crowdin manager on project 160 of the Hyland tenant, with the Translation
 Team, does each of these:
 
-1. **Adds the target language,** before anyone requests it here: the pull fails as a whole on a
+1. **Adds the target language,** before anyone requests it here: a pull fails as a whole on a
    language the project does not have. Spanish `es`, Swedish `sv`, Danish `da`, Finnish `fi`. For
    Norwegian Bokmål, choose **one** of Crowdin's two: "Norwegian Bokmal" (`nb`) or "Norwegian"
-   (`no`). `crowdin-conf.yml` writes either as `nb.json`, the name the app reads; both would write
-   the same file.
+   (`no`). Both configs write either as `nb.json`, the name the app reads; both would write the
+   same file.
 2. **Hides the `$schema` string** in each kit's labels file, once the kits' sources are on the
-   project: Crowdin uploads them on the next change to a kit's `labels/en.json` on `main`, or on a
-   manual run of Crowdin Push. It is the address of a schema for editors, not a label; hidden, it
-   is not shown to a translator and exports as written.
+   project. Crowdin Push uploads them on its next run: a change on `main` to any source, the app's
+   catalogue or context, or a kit's `labels/en.json`, starts one, or it can be run by hand. The
+   string is the address of a schema for editors, not a label; hidden, it is not shown to a
+   translator and exports as written.
 3. **Has the strings translated and approved.** Only approved translations are exported. A string
    not yet approved arrives as its English source, and shows as English.
 4. **Confirms the project's own export settings keep approved-only export,** since they take
    precedence over the pipeline's. It is the open owner action in `D8-standard`
    ([i18n-localization-plan.md](../i18n-localization-plan.md)).
 
-**In the repository,** once approvals exist, a developer:
+**In the repository,** once approvals exist, a developer, on `main`:
 
-1. Adds the language's `--language` to `download_translations_args` in
-   [`crowdin-pull.yaml`](../../.github/workflows/crowdin-pull.yaml), on `main`, and waits for the
-   nightly pull. The id is Crowdin's: `no` if the project targets "Norwegian".
-2. Reviews the pull request it opens, which brings the app's catalogue and each kit's file in the
-   language.
-3. In that pull request, offers the language: `SHIPPED_CATALOGUE_LANGUAGES` in
+1. **For the app,** adds the language's `--language` to `download_translations_args` in
+   [`crowdin-pull.yaml`](../../.github/workflows/crowdin-pull.yaml) and waits for the nightly pull.
+   The id is Crowdin's: `no` if the project targets "Norwegian". In the pull request it opens, which
+   brings `apps/nuxeo-ui/public/i18n/<language>.json`, offers the language:
+   `SHIPPED_CATALOGUE_LANGUAGES` in
    [`shipped-catalogues.ts`](../../apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts),
    `availableLanguages` in `bootstrap.defaults.json` and in `DEFAULT_APP_BOOTSTRAP_CONFIG`
    (`libs/shared/app-config/src/lib/bootstrap-config.ts`), and `DATE_FNS_LOCALES` in
    `libs/shared/ui/src/lib/date-adapter/satori-date-adapter.ts`, where date-fns' `es`, `sv`, `da`,
-   `fi` and `nb` need no regional entry. For each kit with a new file, names it in the component
-   (`npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/<kit>`) and
-   raises the kit's version. Until then the pull request is red, on purpose: a catalogue nobody
-   offers, or a kit file nobody names, ships and is never shown.
+   `fi` and `nb` need no regional entry. Until then that pull request is red, on purpose: a
+   catalogue nobody offers ships and is never shown.
+2. **For the kits,** once a kit string is approved, sets the repository variable
+   `CROWDIN_KIT_LABELS_ENABLED` to `true`, which turns the kits' pull on, and keeps its
+   `download_translations_args` to the languages with approved kit strings. In each pull request it
+   opens, for each kit with a new file, names it in the component
+   (`npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/<kit>`), and
+   raises the kit's version: a minor for a new language, a patch for changed texts. Until then the
+   package pipeline refuses the kit and that pull request is red, holding only the kits.
 
 **On the server,** an administrator then sets `defaultLanguage` in the deployment's Layer 0
 configuration, and installs the kits' new versions.

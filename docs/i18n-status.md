@@ -50,7 +50,7 @@ Arabic and Hebrew.
 
 `npm run i18n:coverage` reports each language's coverage in the repository, for the app and for
 every business app's labels, which became Crowdin sources on 27 November 2026
-(`business-apps/packages/*/bundle/agentic-ui-config/labels/en.json`); the Crowdin Status workflow
+(`business-apps/packages/*/bundle/agentic-ui-config/labels/en.json`, in `crowdin-kits.yml`, pulled by `crowdin-pull-kits.yaml` into a pull request of its own, off until a kit string is approved); the Crowdin Status workflow
 prints it under Crowdin's own progress. What a Crowdin manager does to add a language is in the
 business apps' [administrator's guide](business-apps/administrator-guide.md#languages).
 

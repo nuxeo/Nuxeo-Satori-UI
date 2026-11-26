@@ -6610,13 +6610,35 @@ function stepWithBlock(stepText) {
   return null;
 }
 
+/** The business apps' labels: a config and a pull of their own, beside the app's. */
+const CROWDIN_KITS_CONFIG = 'crowdin-kits.yml';
+const CROWDIN_KITS_PULL = '.github/workflows/crowdin-pull-kits.yaml';
+
 function checkCrowdinConfig() {
-  const config = 'crowdin-conf.yml';
   // Two workflows, per D8: push on a source change, pull daily. Both must exist, and both
   // must name the config explicitly, or the action falls back to a default file that is not
   // this one.
-  const workflows = ['.github/workflows/crowdin-push.yaml', '.github/workflows/crowdin-pull.yaml'];
+  checkCrowdinConfigPair('crowdin-conf.yml', [
+    '.github/workflows/crowdin-push.yaml',
+    '.github/workflows/crowdin-pull.yaml',
+  ]);
+  // The kits' labels are held to every rule the app's catalogue is, through the same push and a
+  // pull of their own. Their own pull because the app's is ONE pull request: a kit's file needs a
+  // person to name it in the kit's component and raise the kit's version, so in the shared pull
+  // request every kit file would hold the app's catalogues red. `crowdin-sources.selftest.mjs`
+  // asserts the kits are a source here and never in `crowdin-conf.yml`.
+  if (fileExists(CROWDIN_KITS_CONFIG) || fileExists(CROWDIN_KITS_PULL))
+    checkCrowdinConfigPair(CROWDIN_KITS_CONFIG, [
+      '.github/workflows/crowdin-push.yaml',
+      CROWDIN_KITS_PULL,
+    ]);
+}
 
+/**
+ * One Crowdin config, with the push that uploads its sources and the pull that downloads its
+ * translations: `workflows` is `[push, pull]`.
+ */
+function checkCrowdinConfigPair(config, workflows) {
   if (!fileExists(config)) {
     fail(
       `${config} is missing. The Crowdin pipeline is NXSAT-227 slice S6; if it has been ` +

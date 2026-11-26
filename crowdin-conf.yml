@@ -34,10 +34,18 @@
 # sweeps `node_modules`, which holds upstream catalogues, including satori-ui's. That pushes
 # third-party strings into our project and bills the translation crew for work another team has already paid for.
 #
-# Scoped to `apps/` and `libs/`, as D8 requires, and to `business-apps/packages/`, where the
-# business apps' kits keep their labels. `node_modules` sits beside all three, so no pattern
-# can reach it. `checkCrowdinConfig` in `scripts/review-guardrails.mjs` fails any source path
-# that does not begin with one of those roots.
+# Scoped to `apps/` and `libs/`, as D8 requires. `node_modules` sits beside both, so neither
+# pattern can reach it. `checkCrowdinConfig` in `scripts/review-guardrails.mjs` fails any
+# source path that does not begin with one of those two roots, or with `business-apps/packages/`.
+#
+# ## The business apps' labels are NOT here, on purpose
+#
+# They are in `crowdin-kits.yml`, uploaded by the same push and downloaded by a pull of their own,
+# `crowdin-pull-kits.yaml`. This file's pull is ONE pull request for every language, and a kit's
+# file in a language needs a person in the pull request that brings it: to name it in the kit's
+# component and raise the kit's version, or the package pipeline refuses the kit. In this pull
+# request, every kit file would hold the app's catalogues red with it. `crowdin-sources.selftest.mjs`
+# fails a pattern here that matches a kit's labels.
 #
 # There is NO `libs/**` entry, and that is the correction to an earlier mistake rather than an
 # oversight.
@@ -112,31 +120,6 @@
       # which the app never asks for, while the pull reported success — so `no` is written as
       # `nb` here, and `nb` needs no mapping. Target ONE of the two on the project, never both:
       # both would write the same file. `crowdin-sources.selftest.mjs` holds every entry to this.
-      'languages_mapping': { 'two_letters_code': { 'no': 'nb' } },
-    },
-    # Every business app's labels (docs/business-apps/app-definition-v2.md, section 7): one
-    # `labels/en.json` per kit, its translations written beside it as `labels/<language>.json`,
-    # which is where the package pipeline and the app registry read a language's labels from.
-    #
-    # The same options as the app's catalogue, for the same reasons: approved translations only,
-    # a key whose meaning changes gets a new key, and Norwegian written as `nb`.
-    #
-    # Two things a Crowdin manager does once for these files, because nothing here can (see
-    # "Languages" in docs/business-apps/administrator-guide.md):
-    #   - HIDE the `$schema` string in each. It is the address of a JSON Schema for editors, a
-    #     string, so Crowdin imports it like a label; hidden, it is not shown to a translator and
-    #     exports as written. `version` is a number and is not imported at all.
-    #   - Nothing else is translated in a kit's file: `labels` holds every text it has.
-    #
-    # And one thing a person does in the pull request that delivers a kit's first file in a
-    # language: name it in the kit's component (`npx nx g ./tools/satori-generators:app-registry
-    # --package=business-apps/packages/<kit>`) and raise the kit's version. The pipeline refuses a
-    # file the component does not name, since the registry would never serve it.
-    {
-      'source': '/business-apps/packages/*/bundle/agentic-ui-config/labels/en.json',
-      'translation': '/%original_path%/%two_letters_code%.%file_extension%',
-      'export_only_approved': 'true',
-      'update_option': 'update_without_changes',
       'languages_mapping': { 'two_letters_code': { 'no': 'nb' } },
     },
   ]

@@ -144,9 +144,13 @@ describe('a language falls back to English, key by key', () => {
   });
 
   /**
-   * Spanish and the Nordic languages, which are requested from Crowdin and ship no catalogue yet,
-   * so the application does not yet boot into them: the same loader and the same fallback, as each
-   * will run once its catalogue lands.
+   * Spanish and the Nordic languages, which ship no catalogue yet, so the application does not boot
+   * into them and the production initializer cannot be used: `resolveStringLanguage` refuses each.
+   * So these give `TranslateService` the fallback language themselves, as the initializer does for
+   * French above, and hold the rest to the production `AppTranslateLoader` and the registry's
+   * labels under each language's own code: that the loader reads a language's catalogue, and a
+   * kit's labels in that language, by the names Crowdin writes them, and that each key they leave
+   * out resolves in English. The French case is what holds the application's own fallback setting.
    */
   const PHASE_7: ReadonlyArray<readonly [language: string, title: string, claims: string]> = [
     ['es', 'Hyland Nuxeo, en español', 'Reclamaciones'],

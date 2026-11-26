@@ -849,7 +849,10 @@ step 1, registered in `register-locale-data.ts`, and none is a Crowdin target ye
 is `nb` in the app whichever of Crowdin's two Norwegians the project targets: `crowdin-conf.yml`
 maps "Norwegian" (`no`) to `nb`, and "Norwegian Bokmal" is `nb` already. The same change makes
 each business app's `labels/en.json` a Crowdin source, written back as `labels/<language>.json`
-beside it, and adds the repository's coverage of every language to the Crowdin Status report
+beside it, through a config and a pull of their own (`crowdin-kits.yml`, `crowdin-pull-kits.yaml`):
+a kit's file needs a person to name it and version the kit, and in this pull's one pull request
+that would hold every app catalogue red. It also adds the repository's coverage of every language
+to the Crowdin Status report
 (`npm run i18n:coverage`). What a Crowdin manager and a developer each do to add a language is in
 the business apps' administrator's guide, section 4, "Languages".
 

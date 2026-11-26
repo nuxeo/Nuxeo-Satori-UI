@@ -27,7 +27,7 @@ on:
       # yet started nothing. Crowdin then held stale context until some later catalogue change or a
       # manual run — and stale context is worse than none, because a translator believes it.
       - 'libs/**/i18n/en.context.json'
-      # Each business app's English labels, the third source in `crowdin-conf.yml`. A kit's labels
+      # Each business app's English labels, the source in `crowdin-kits.yml`. A kit's labels
       # change in its own pull request, so without this a new or reworded label would wait for the
       # next change to the app's catalogue before translators saw it. `crowdin-sources.selftest.mjs`
       # holds every source in the config to a glob here.
@@ -109,3 +109,21 @@ jobs:
           CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
         run: node tools/i18n/crowdin-push-context.mjs
+
+      # The business apps' labels, from their own config, which `crowdin-pull-kits.yaml` downloads
+      # into a pull request of its own (see the head of `crowdin-kits.yml` for why). LAST, so that a
+      # failure here cannot skip the app's sources or their context: a failed step skips every step
+      # after it. `--delete-obsolete` is scoped to this config's own pattern by the CLI
+      # (`ObsoleteSourcesUtils.findObsoleteProjectFiles` filters on the entry's source pattern), so
+      # this upload never deletes the app's catalogue, and the one above never deletes a kit's.
+      - name: Upload the kits' labels to Crowdin
+        uses: crowdin/github-action@8868a33591d21088edfc398968173a3b98d51706 # v2.16.2
+        with:
+          config: crowdin-kits.yml
+          upload_sources: true
+          upload_sources_args: ${{ inputs.dry_run && '--delete-obsolete --dryrun' || '--delete-obsolete' }}
+          download_translations: false
+          create_pull_request: false
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}

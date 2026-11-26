@@ -1,16 +1,19 @@
 /**
- * What `crowdin-conf.yml` uploads, and where Crowdin writes each translation back: read from the
- * file, not restated, so that its controls (`crowdin-sources.selftest.mjs`) hold the real config.
+ * What `crowdin-conf.yml` and `crowdin-kits.yml` upload, and where Crowdin writes each translation
+ * back: read from the files, not restated, so that the controls (`crowdin-sources.selftest.mjs`)
+ * hold the real configs and workflows.
  *
  * ## Why this exists beside `checkCrowdinConfig`
  *
- * The guardrail holds the config to the Hyland standard: approved-only export, the enterprise
- * host, no skip options, a root that cannot reach `node_modules`. It does not ask the question a
- * new source raises — **does every file that should be translated reach Crowdin, and does its
- * translation land where the application reads it?** Both halves fail silently. A kit whose
- * `labels/en.json` no pattern matches is never offered to a translator, and a language written
- * under a name the app does not ask for (`no.json` for Norwegian Bokmål, which the app calls `nb`)
- * downloads, commits and is never read, while every job reports success.
+ * The guardrail holds each config to the Hyland standard: approved-only export, the enterprise
+ * host, no skip options, a root that cannot reach `node_modules`. It does not ask the questions a
+ * new source raises — **does every file that should be translated reach Crowdin, in the config
+ * whose pull it belongs in, and does its translation land where the application reads it?** Each
+ * fails silently. A kit whose `labels/en.json` no pattern matches is never offered to a
+ * translator; a kit in the app's config rides in the app's one pull request, which a kit's file
+ * holds red until a person names and versions the kit; and a language written under a name the
+ * app does not ask for (`no.json` for Norwegian Bokmål, which the app calls `nb`) downloads,
+ * commits and is never read, while every job reports success.
  *
  * ## No YAML parser, on purpose
  *
@@ -150,23 +153,36 @@ function pathsGlob(glob) {
 }
 
 /**
- * What is wrong with the sources `config` declares, for the repository whose files are `files`:
- * each finding a sentence. Empty when the app's catalogue and every kit's English labels are each
- * one source; when each language lands at the name the app reads, Norwegian as `nb`; when every
- * entry exports approved translations only; and when the push workflow watches every source.
+ * What is wrong with the sources the two configs declare, for the repository whose files are
+ * `files`: each finding a sentence. Empty when the app's catalogue is one source of
+ * `crowdin-conf.yml` and every kit's English labels one source of `crowdin-kits.yml`, and neither
+ * config reaches the other's files; when each language lands at the name the app reads, Norwegian
+ * as `nb`; when every entry exports approved translations only; when the push watches every source
+ * and uploads both configs; and when the kits' pull downloads theirs into a pull request of its
+ * own.
  *
- * @param {{ config: string, pushWorkflow: string, files: readonly string[],
- *   languages: readonly string[] }} input `languages` are Crowdin language ids, with the name the
- *   app reads each as in `APP_NAMES`
+ * @param {{ appConfig: string, kitsConfig: string, pushWorkflow: string, appPullWorkflow: string,
+ *   kitsPullWorkflow: string, files: readonly string[], languages: readonly string[] }} input
+ *   `languages` are Crowdin language ids, with the name the app reads each as in `APP_NAMES`
  */
-export function crowdinSourceFindings({ config, pushWorkflow, files, languages }) {
-  const read = readCrowdinFiles(config);
-  if ('invalid' in read) return [`crowdin-conf.yml cannot be read: ${read.invalid}.`];
-  const { entries } = read;
+export function crowdinSourceFindings({
+  appConfig,
+  kitsConfig,
+  pushWorkflow,
+  appPullWorkflow,
+  kitsPullWorkflow,
+  files,
+  languages,
+}) {
+  const configs = [
+    { name: APP_CONFIG, read: readCrowdinFiles(appConfig) },
+    { name: KITS_CONFIG, read: readCrowdinFiles(kitsConfig) },
+  ];
+  const unreadable = configs.filter(({ read }) => 'invalid' in read);
+  if (unreadable.length)
+    return unreadable.map(({ name, read }) => `${name} cannot be read: ${read.invalid}.`);
   const findings = [];
-  const sources = files.filter(
-    (file) => file === APP_CATALOGUE || KIT_LABELS.test(file),
-  );
+  const sources = files.filter((file) => file === APP_CATALOGUE || KIT_LABELS.test(file));
   const kits = sources.filter((file) => KIT_LABELS.test(file));
   if (!sources.includes(APP_CATALOGUE))
     findings.push(`${APP_CATALOGUE} is not in the repository, so the app's source was not checked.`);
@@ -175,22 +191,39 @@ export function crowdinSourceFindings({ config, pushWorkflow, files, languages }
   const watched = pushPaths(pushWorkflow).map(pathsGlob);
 
   for (const source of sources) {
-    const matching = entries.filter(
-      (entry) => typeof entry['source'] === 'string' && sourcePattern(entry['source']).test(source),
+    const home = source === APP_CATALOGUE ? APP_CONFIG : KITS_CONFIG;
+    const matching = configs.flatMap(({ name, read }) =>
+      read.entries
+        .filter(
+          (entry) =>
+            typeof entry['source'] === 'string' && sourcePattern(entry['source']).test(source),
+        )
+        .map((entry) => ({ name, entry })),
     );
+    const stray = matching.filter(({ name }) => name !== home);
+    if (stray.length > 0) {
+      findings.push(
+        source === APP_CATALOGUE
+          ? `${source} is matched by a source in ${KITS_CONFIG}, so the kits' pull would carry the app's catalogue.`
+          : `${source} is matched by a source in ${APP_CONFIG}, so the app's pull request would carry ` +
+              "it, and a kit's file needs its kit named and versioned by a person: every app catalogue " +
+              'in that pull request would be held red with it.',
+      );
+      continue;
+    }
     if (matching.length === 0) {
       findings.push(
-        `${source} is matched by no source in crowdin-conf.yml, so it is never offered to a translator.`,
+        `${source} is matched by no source in ${home}, so it is never offered to a translator.`,
       );
       continue;
     }
     if (matching.length > 1) {
       findings.push(
-        `${source} is matched by ${matching.length} sources in crowdin-conf.yml, so it is uploaded twice.`,
+        `${source} is matched by ${matching.length} sources in ${home}, so it is uploaded twice.`,
       );
       continue;
     }
-    const [entry] = matching;
+    const [{ entry }] = matching;
     if (entry['export_only_approved'] !== 'true' && entry['export_only_approved'] !== true)
       findings.push(
         `The source ${entry['source']} does not export approved translations only, which D8 requires.`,
@@ -211,8 +244,54 @@ export function crowdinSourceFindings({ config, pushWorkflow, files, languages }
           'starts no upload.',
       );
   }
+
+  for (const name of [APP_CONFIG, KITS_CONFIG])
+    if (
+      !crowdinStepsWith(pushWorkflow, name).some((step) =>
+        /^\s*upload_sources:\s*true\s*$/m.test(step),
+      )
+    )
+      findings.push(`.github/workflows/crowdin-push.yaml uploads no source from ${name}.`);
+  const pulls = [
+    { workflow: appPullWorkflow, name: APP_CONFIG, path: '.github/workflows/crowdin-pull.yaml' },
+    {
+      workflow: kitsPullWorkflow,
+      name: KITS_CONFIG,
+      path: '.github/workflows/crowdin-pull-kits.yaml',
+    },
+  ];
+  for (const { workflow, name, path } of pulls)
+    if (
+      !crowdinStepsWith(workflow, name).some((step) =>
+        /^\s*download_translations:\s*true\s*$/m.test(step),
+      )
+    )
+      findings.push(`${path} downloads no translation from ${name}.`);
+  const [appBranch, kitsBranch] = pulls.map(({ workflow }) => branchOf(workflow));
+  if (appBranch === undefined || appBranch === kitsBranch)
+    findings.push(
+      `The two pulls write ${appBranch === undefined ? 'no named branch' : `one branch, ${appBranch}`}, ` +
+        "so the kits' files would land in the app's pull request after all.",
+    );
   return findings;
 }
+
+/** The text of each step of `workflow` that runs the Crowdin action with `config: <name>`. */
+function crowdinStepsWith(workflow, name) {
+  const config = new RegExp(`^\\s*config:\\s*${name.replace(/\./g, '\\.')}\\s*$`, 'm');
+  return workflow
+    .split(/\n(?=\s*- (?:name|uses):)/)
+    .filter((step) => /uses:\s*crowdin\/github-action@/.test(step) && config.test(step));
+}
+
+/** The `localization_branch_name` a pull workflow writes, as written. */
+function branchOf(workflow) {
+  return /^\s*localization_branch_name:\s*['"]?([^'"\s#]+)/m.exec(workflow)?.[1];
+}
+
+/** The app's config, and the kits'. */
+export const APP_CONFIG = 'crowdin-conf.yml';
+export const KITS_CONFIG = 'crowdin-kits.yml';
 
 /** The app's English catalogue, the first source. */
 export const APP_CATALOGUE = 'apps/nuxeo-ui/public/i18n/en.json';

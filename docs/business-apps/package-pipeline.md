@@ -383,7 +383,11 @@ reaches only when the integration branch does, and a tag names exactly what is p
 - **Label keys in other languages.** A key with an English text passes; one missing from
   `labels/fr.json` falls back to English, and is not refused. A file whose every text is English's,
   which is what Crowdin's approved-only export writes before anything is approved, passes too:
-  `npm run i18n:coverage` counts such texts as "as English", and nothing refuses them.
+  `npm run i18n:coverage` counts such texts as "as English", and nothing refuses them. The app's
+  catalogues have guards against a destructive pull (`checkCataloguesAreTranslated`,
+  `checkTranslationCatalogues`); a kit's files have only the validator's, which refuses a blank
+  text. A pull that turns a kit's real translations back into English passes every check, and the
+  kits' pull request body asks its reviewer to look for exactly that.
 - **Removing a key from a language's labels** is still rated breaking (section 10), as removing it
   from English is, though the key then shows in English rather than as itself.
 - **A facet a record gains at run time.** A field whose property only such a facet brings is

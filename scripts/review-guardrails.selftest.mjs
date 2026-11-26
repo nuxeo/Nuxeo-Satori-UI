@@ -3923,6 +3923,89 @@ expectRed(
   /`\/business-apps\/\*\*\/labels\/en\.json`, which is not rooted at \/apps\/, \/libs\/ or \/business-apps\/packages\//,
 );
 
+// The kits' own config and pull (`crowdin-kits.yml`, `crowdin-pull-kits.yaml`) are held to every
+// rule the app's pair is: the push must upload from the config, the pull must sign on the action,
+// and neither may skip untranslated work. Checked only where either file exists, so a fixture of
+// the app's pair alone, as every control above is, is not read as missing the kits.
+const KITS_PULL = '.github/workflows/crowdin-pull-kits.yaml';
+const kitsWorkflow = (config, extra) =>
+  `name: crowdin\non: push\njobs:\n  sync:\n    if: \${{ vars.CROWDIN_SYNC_ENABLED == 'true' }}\n` +
+  `    runs-on: ubuntu-latest\n    steps:\n      - uses: crowdin/github-action@v2\n` +
+  `        with:\n          config: crowdin-conf.yml\n          upload_sources: true\n` +
+  `      - name: Push translator context\n        run: node tools/i18n/crowdin-push-context.mjs\n` +
+  `      - uses: crowdin/github-action@v2\n        with:\n          config: ${config}\n${extra}`;
+const CROWDIN_KITS = {
+  ...CROWDIN,
+  'crowdin-kits.yml': crowdinConf([withNorwegian(CROWDIN_ENTRY(KIT_LABELS))]),
+  'business-apps/packages/acme-demo/bundle/agentic-ui-config/labels/en.json':
+    '{ "version": 2, "labels": { "acme.app": "Acme" } }\n',
+  '.github/workflows/crowdin-push.yaml': kitsWorkflow(
+    'crowdin-kits.yml',
+    `          upload_sources: true\n          command_args: '--delete-obsolete'\n`,
+  ),
+  [KITS_PULL]: CROWDIN_WORKFLOW(PULL_OK).replace(
+    'config: crowdin-conf.yml',
+    'config: crowdin-kits.yml',
+  ),
+};
+expectGreen("the kits' config with a push and a pull of their own", 'checkCrowdinConfig', CROWDIN_KITS);
+expectRed(
+  "the kits' pull without its config",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+  (write, git) => git(['rm', '--quiet', 'crowdin-kits.yml']),
+  /crowdin-kits\.yml is missing/,
+);
+expectRed(
+  "a push that does not upload the kits' config",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+  (write) =>
+    write(
+      '.github/workflows/crowdin-push.yaml',
+      kitsWorkflow('crowdin-conf.yml', `          upload_sources: true\n          command_args: '--delete-obsolete'\n`),
+    ),
+  /crowdin-push\.yaml does not pass `config: crowdin-kits\.yml`/,
+);
+expectRed(
+  "the kits' pull not signing its commits",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+  (write) =>
+    write(KITS_PULL, CROWDIN_WORKFLOW(PULL_DOWNLOAD).replace('config: crowdin-conf.yml', 'config: crowdin-kits.yml')),
+  /crowdin-pull-kits\.yaml runs crowdin\/github-action without passing `gpg_private_key`/,
+);
+expectRed(
+  "the kits' pull skipping untranslated strings",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+  (write) =>
+    write(
+      KITS_PULL,
+      CROWDIN_WORKFLOW(PULL_OK + PULL_SKIP_UNTRANSLATED).replace(
+        'config: crowdin-conf.yml',
+        'config: crowdin-kits.yml',
+      ),
+    ),
+  /crowdin-pull-kits\.yaml declares `skip_untranslated_strings: true`/,
+);
+expectRed(
+  "the kits' config exporting unapproved work",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+  (write) =>
+    write(
+      'crowdin-kits.yml',
+      crowdinConf([
+        withNorwegian(CROWDIN_ENTRY(KIT_LABELS)).replace(
+          `'export_only_approved': 'true'`,
+          `'export_only_approved': 'false'`,
+        ),
+      ]),
+    ),
+  /crowdin-kits\.yml entry `\/business-apps\/packages\/\*\/bundle\/agentic-ui-config\/labels\/en\.json` sets `export_only_approved: false`/,
+);
+
 /* ---------------- checkNoReviewCorpusChurn ---------------- */
 
 /**

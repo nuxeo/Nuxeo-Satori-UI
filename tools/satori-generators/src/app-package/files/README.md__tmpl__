@@ -36,17 +36,19 @@ npx nx g ./tools/satori-generators:app-action --package=<%= projectRoot %> --id=
 ## Languages
 
 `labels/en.json` is the app's English, and the only labels file written here. Every other language
-comes from Crowdin: the repository's `crowdin-conf.yml` reads each kit's `labels/en.json` as a
-source and writes its approved translations beside it, as `labels/<language>.json`. Do not write
-one by hand; the next pull from Crowdin replaces it. Adding a language on Crowdin's side is the
+comes from Crowdin: the repository's `crowdin-kits.yml` reads each kit's `labels/en.json` as a
+source and writes its approved translations beside it, as `labels/<language>.json`, and the
+"Crowdin Pull, kit labels" workflow brings them in a pull request of its own. Do not write one by
+hand; the next pull from Crowdin replaces it. Adding a language on Crowdin's side is the
 administrator's guide's, [section 4, "Languages"](<%= docs %>/administrator-guide.md#languages).
 
 - **A language gives a subset of English's keys.** Each key it leaves out shows in English, key by
   key: the app registry serves the file over `labels/en.json`, and the app falls back to English
   besides. The pipeline refuses a key that `labels/en.json` has no text for.
-- **When Crowdin's pull request brings this kit's first file in a language,** name the file in the
-  component and raise the version, a minor at least, in the same pull request. Until then the
-  pipeline refuses the package, since the registry would never serve a file it does not name:
+- **When that pull request brings this kit's first file in a language,** name the file in the
+  component and raise the version, a minor, in the same pull request; when it changes a file's
+  texts, raise it a patch. Until then the pipeline refuses the package, since the registry would
+  never serve a file it does not name:
 
   ```bash
   npx nx g ./tools/satori-generators:app-registry --package=<%= projectRoot %>
