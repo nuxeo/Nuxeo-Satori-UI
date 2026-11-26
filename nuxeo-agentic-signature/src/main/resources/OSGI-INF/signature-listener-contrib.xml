@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.signature.listener" version="1.0">
+
+  <documentation>
+    The signature listener, synchronous, in the transaction of the change that fires it: sends a
+    signature request's file when the request is created, by someone who may write its record;
+    marks the record out for signature; lets the requester or an administrator cancel it while it
+    is out; and refuses every other change to a request, any change to a record's sgn: properties
+    but the server's, a change to the file out for signature, and the deletion or trash of a
+    request, or of a record while it is out. No Automation operation: a person reaches it by
+    creating a request, as every client does, through the REST API or a workflow's chain. Every
+    refusal marks the transaction for rollback.
+  </documentation>
+
+  <require>org.nuxeo.agentic.signature</require>
+  <require>org.nuxeo.agentic.signature.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="signatureRequestListener" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.signature.SignatureRequestListener">
+      <event>aboutToCreate</event>
+      <event>documentCreated</event>
+      <event>documentCreatedByCopy</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>documentTrashed</event>
+    </listener>
+  </extension>
+
+</component>

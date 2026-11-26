@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Signature
+Bundle-SymbolicName: org.nuxeo.agentic.signature;singleton:=true
+Bundle-Version: 0.1.0
+Bundle-Vendor: Hyland Software
+Nuxeo-Component: OSGI-INF/signature-schema-contrib.xml,
+ OSGI-INF/signature-service.xml,
+ OSGI-INF/signature-standin-contrib.xml,
+ OSGI-INF/signature-listener-contrib.xml
