@@ -64,6 +64,8 @@ const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { CASES, CLAIMS, MEMBERS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
 /** The route model's zip, relative to the bundle, as the kit's workflow component names it. */
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
+/** Version 0.6.0's open-appeals queue, which member services' home counts. */
+const { isOpenAppeal, readOpenAppeals } = await import(join(KIT, 'demo', 'appeals.mjs'));
 
 /** A demo adjuster and nothing else, as the run's own user must be: step 1 signs in as them. */
 const adjustersOnly = (user) =>
@@ -97,7 +99,7 @@ const SIGNED_OUT_KEY = 'agentic_ui_signed_out';
 
 /** The home's cards an adjuster sees, and member services see: the demo's two groups. */
 const ADJUSTER_CARDS = ['unassigned', 'unassigned-by-status', 'mine'];
-const SERVICES_CARDS = ['pending', 'pended'];
+const SERVICES_CARDS = ['pending', 'pended', 'appeals'];
 
 /** The member the demo opens: the one whose claims are the adjuster's, as in layout-v2.md. */
 const MEMBER = MEMBERS.find((member) => member.number === 'MEMBER-100048');
@@ -506,9 +508,10 @@ export default async function run(page, h) {
   );
   const menu = await readAppMenu(page);
   h.check(
-    "the menu adds the adjusters' queues and not pending determination",
+    "the menu adds the adjusters' queues and neither pending determination nor the open appeals",
     ['appMenu.home', 'appMenu.unassigned', 'appMenu.mine'].every((id) => menu.includes(id)) &&
-      !menu.includes('appMenu.pending'),
+      !menu.includes('appMenu.pending') &&
+      !menu.includes('appMenu.appeals'),
     `app entries drawn: ${JSON.stringify(menu)}`,
   );
   await h.screenshot('adjuster-home');
@@ -789,10 +792,17 @@ export default async function run(page, h) {
         String(pending.filter((c) => c.status === 'pended').length),
     JSON.stringify(servicesHome),
   );
+  const openAppeals = CASES.filter((kase) => isOpenAppeal(kase, readOpenAppeals()));
+  h.check(
+    `"Open appeals" counts the ${openAppeals.length} appeals not yet decided, since 0.6.0`,
+    servicesHome.find((c) => c.id === 'appeals')?.figure === String(openAppeals.length),
+    JSON.stringify(servicesHome.find((c) => c.id === 'appeals') ?? null),
+  );
   const servicesMenu = await readAppMenu(page);
   h.check(
-    "member services' menu has pending determination and not the adjusters' queues",
+    "member services' menu has pending determination and the open appeals, and not the adjusters' queues",
     servicesMenu.includes('appMenu.pending') &&
+      servicesMenu.includes('appMenu.appeals') &&
       !servicesMenu.includes('appMenu.unassigned') &&
       !servicesMenu.includes('appMenu.mine'),
     JSON.stringify(servicesMenu),

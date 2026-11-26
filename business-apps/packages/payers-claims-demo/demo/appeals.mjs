@@ -16,6 +16,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { child, childrenNamed, parseXml } from '../workflow/xml.mjs';
+import { MODEL_XML } from './lifecycle.mjs';
+
 export const CASE_LAYOUT = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -39,7 +42,7 @@ const isDay = (value) =>
   new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 
 /**
- * `{ card, field, items: [{ id, labelKey }] }`, the Case page's checklist card as written. Throws
+ * `{ card, field, tickable, items: [{ id, labelKey }] }`, the Case page's checklist card as written. Throws
  * when the file has no such card, or more than one: the seed and the demo hold every appeal to one
  * list.
  */
@@ -52,6 +55,8 @@ export function readAppealChecklist(text = readFileSync(CASE_LAYOUT, 'utf8')) {
   return {
     card: card.id,
     field: card.checklist.field,
+    // Since 0.6.0 the Case page lets someone who may change the case tick its items.
+    tickable: card.checklist.tickable === true,
     visibleWhen: card.visibleWhen ?? null,
     items: (card.checklist.items ?? []).map((item) => ({
       id: item.id,
@@ -76,6 +81,53 @@ export function checklistOnType(type, field) {
       Object.hasOwn(schema.fields, property),
   );
 }
+
+/** The open-appeals queue's page provider, version 0.6.0's, in the stand-in model. */
+export const OPEN_APPEALS = 'payers_open_appeals';
+
+/**
+ * `{ states, sort: { field, ascending }, aggregates: [{ id, property }] }`, the open-appeals queue's
+ * page provider as the stand-in model contributes it (`demo/lifecycle.mjs`'s `MODEL_XML`), read by
+ * the strict XML parser the lifecycle is read with: the case states its query holds, its sort and
+ * its facets' aggregates. So the seed, its controls and the appeals demo expect what the package
+ * gives a server. Throws when there is no such page provider, or one more, or its query is not of
+ * appeals, by their state.
+ */
+export function readOpenAppeals(xml = readFileSync(MODEL_XML, 'utf8')) {
+  const providers = childrenNamed(parseXml(xml), 'extension')
+    .filter(
+      (extension) =>
+        extension.attributes.target === 'org.nuxeo.ecm.platform.query.api.PageProviderService' &&
+        extension.attributes.point === 'providers',
+    )
+    .flatMap((extension) => childrenNamed(extension, 'genericPageProvider'))
+    .filter((provider) => provider.attributes.name === OPEN_APPEALS);
+  if (providers.length !== 1)
+    throw new Error(
+      `${providers.length === 0 ? 'no' : providers.length} page provider ${OPEN_APPEALS} in the stand-in model`,
+    );
+  const [provider] = providers;
+  const query = child(child(provider, 'whereClause'), 'fixedPart')?.text ?? '';
+  const states = /case:state IN \(([^)]*)\)/.exec(query);
+  if (!/case:category = 'appeal'/.test(query) || !states)
+    throw new Error(`${OPEN_APPEALS} does not hold appeals by their state: ${query.trim()}`);
+  const sort = child(provider, 'sort');
+  return {
+    states: [...states[1].matchAll(/'([^']+)'/g)].map((match) => match[1]),
+    sort: {
+      field: sort?.attributes.column ?? null,
+      ascending: sort?.attributes.ascending === 'true',
+    },
+    aggregates: childrenNamed(child(provider, 'aggregates'), 'aggregate').map((aggregate) => ({
+      id: aggregate.attributes.id,
+      property: aggregate.attributes.parameter,
+    })),
+  };
+}
+
+/** Whether the queue `open`, from `readOpenAppeals`, holds the case: an appeal in one of its states. */
+export const isOpenAppeal = (kase, open) =>
+  kase.category === 'appeal' && open.states.includes(kase.state);
 
 /** What an appeal's checklist is, item by item in the card's order: its entry, or none. */
 export function appealRows(kase, checklist) {

@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 25 November 2026.
+Updated 26 November 2026.
 
 ## Open: from the plan
 
@@ -63,6 +63,21 @@ way.
   the other way, the kit drops the Case page's two cards, their labels, `case:checklist` and the
   seed's second appeal, a minor version below 1.0.0, since a property and labels are removed.
   Decision 3 stays open: the checklist is read-only, and ticks no item through a button or a chain.
+
+- **2, the Payers kit's open appeals, and its checklist ticked (26 November 2026).** Built against
+  the same recommendation: the kit's version 0.6.0 adds an open-appeals queue, with its page
+  provider, `payers_open_appeals`, its two facets, a KPI card on member services' and supervisors'
+  home and an entry in their menu, a third appeal and its denied claim in the seed, and
+  `"tickable": true` on the Case page's checklist, with member services given `ReadWrite` on the
+  seeded cases so that the appeals' specialist ticks an item; demo step 6's steps file covers both
+  ([the kit's README](../../business-apps/packages/payers-claims-demo/README.md#the-appeals)). An
+  appeal is still a Case, and nothing in it is a workflow: the prototype's appeal review workflow
+  is not built. Ticking is the platform's, layout version 2's `tickable`
+  ([layout-v2.md](layout-v2.md), section 7), a document update through the path the Edit form uses,
+  and stays whichever way decision 2 goes. If it goes the other way, the kit drops the queue, its
+  page provider, its two search fields, its labels, its home card and menu entry, the third appeal
+  and member services' write on cases, a minor version below 1.0.0. Decision 3 is not touched: a
+  tick runs no chain and no button.
 
 - **3, operation buttons (25 November 2026).** Built against the recommendation, "Yes, through a
   per-deployment allow-list (parity decision 3)": configuration may bind a button to an Automation

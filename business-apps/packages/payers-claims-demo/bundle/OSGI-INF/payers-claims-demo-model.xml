@@ -51,8 +51,9 @@
     <doctype name="ClaimDocument" extends="File">
       <schema name="claimdoc" />
     </doctype>
-    <!-- The claim queues' search document, as DefaultSearch is default_search's: never saved, it
-         holds the facets a queue sends back (schemas/claimsearch.xsd). No folder lists it among
+    <!-- The kit's queues' search document, as DefaultSearch is default_search's: never saved, it
+         holds the facets a queue sends back (schemas/claimsearch.xsd), the open-appeals queue's
+         since 0.6.0 as well as the claim queues'. No folder lists it among
          its subtypes, so nothing offers to create one, and it is hidden from navigation. -->
     <doctype name="PayersClaimSearch" extends="Document">
       <facet name="HiddenInNavigation" />
@@ -314,6 +315,40 @@
         </aggregate>
       </aggregates>
       <sort column="claim:received" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+
+    <!-- Since 0.6.0, the open-appeals queue, and the list behind the home's "Open appeals" KPI:
+         appeals not yet decided, open or in review, whoever holds them, the nearest due first.
+         Its facets are a case's state and its assignee, read from the same search document as
+         the claim queues', whose schema holds a field for each (schemas/claimsearch.xsd). A
+         grievance, and an appeal decided or closed, is not in it. -->
+    <genericPageProvider name="payers_open_appeals"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>PayersClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'Case' AND case:category = 'appeal'
+          AND case:state IN ('open', 'inReview')
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="case_state_agg" type="terms" parameter="case:state">
+          <field schema="payers_claim_search" name="case_state_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="case_assignee_agg" type="terms" parameter="case:assignee">
+          <field schema="payers_claim_search" name="case_assignee_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="case:due" ascending="true" />
       <pageSize>50</pageSize>
       <maxPageSize>100</maxPageSize>
     </genericPageProvider>
