@@ -44,7 +44,7 @@ that review will read.
   to anyone else ([below](#the-audit-export)).
 - **Access logging:** every file of a record downloaded or shown is in the platform's audit already,
   its `download` event; the add-on adds a record's views, a record under retention or a legal hold
-  sent to a person as a document of its own, at under 0.1 ms a read, and each disposition run's
+  sent to a person as a document of its own, at about 0.1 ms a read, and each disposition run's
   decisions on each of its records ([below](#access-logging)).
 
 ## The platform's retention module: used, and how
@@ -127,15 +127,14 @@ the filer, so that a long period never holds anyone's request. It first waits un
 passed since the period's end, since the platform writes its entries a moment after their events
 and the add-on writes its own in the background (`nuxeo.agentic.records.audit.export.settleSeconds`,
 0 to 600; `AuditExportGenerationTest` holds that an entry written after the filing is in it). Then
-it reads the audit 500 entries at a
-time, by entry id, each page after the last, and writes each entry to two files on disk as it goes,
-so that **no period is held in memory**, whatever its length; then it keeps both files on the
-export, with their SHA-256 and their counts, makes the export a record, and writes the export's own
-entry to the audit, `recordsAuditExported`. Its state is then `done`. An export that cannot be
-written keeps no file and is `failed`, with one sentence, and the server's log says why; it is filed
-again, as is one whose filer the background work cannot tell. The writing has a transaction of its
-own, of up to four hours. An export still `pending` minutes after its period's end and settling was
-not written, should the server have stopped meanwhile: the server's log says why, and it is filed
+it reads the audit 500 entries at a time, by entry id, each page after the last, and writes each
+entry to two files on disk as it goes, so that **no period is held in memory**, whatever its length;
+then it keeps both files on the export, with their SHA-256 and their counts, makes the export a
+record, and writes the export's own entry to the audit, `recordsAuditExported`. Its state is then
+`done`. An export that cannot be written keeps no file and is `failed`, with one sentence, and the
+server's log says why; it is filed again, as is one whose filer the background work cannot tell.
+The writing has a transaction of its own, of up to four hours. An export still `pending` several
+minutes after its period's end was not written, as when the server stopped meanwhile: it is filed
 again.
 
 ### What it holds
@@ -289,14 +288,15 @@ not the same on every LTS 2025 server (`event` on 2025.10, `routes` on the build
 module's newest version needs).
 
 **What it costs a read** (`RecordAccessCostTest`, 26 November 2026, on a laptop): a person's request
-for a document that is no record, read, written as JSON and committed, 118 to 228 µs over four runs;
-the same request for a record under retention, 190 to 315 µs; so a logged view adds **71 to 89 µs a
-read**. Best of three rounds of 400 reads each; the test refuses more than 2 ms. For a document that
-is no record under retention, the check reads only what the document already holds.
+for a document that is no record, read, written as JSON and committed, 118 to 228 µs over five runs;
+the same request for a record under retention, 190 to 315 µs; so a logged view adds **71 to 114 µs a
+read**, the highest while the repository's gates ran beside it. Best of three rounds of 400 reads
+each; the test refuses more than 2 ms. For a document that is no record under retention, the check
+reads only what the document already holds.
 
 **What it costs afterwards,** off the reader's time: the add-on's writer builds the view's entry and
-adds it to the audit in the background, one work and one write per read transaction, **41 µs an
-entry** on the tests' audit, a JPA store in H2 (the same test, measured, not bounded). On a server
+adds it to the audit in the background, one work and one write per read transaction, **40 to 41 µs
+an entry** on the tests' audit, a JPA store in H2 (the same test, measured, not bounded). On a server
 the write goes to the audit's own store, on LTS 2025 OpenSearch, one request per transaction, where
 the platform batches its own entries through a stream; on a server whose work queues are streams,
 the event is serialised once per transaction for the work.
