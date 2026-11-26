@@ -2,7 +2,10 @@ name: Release candidate
 
 # Phase 10's release candidate across all kits (docs/business-apps/package-pipeline.md, section 11),
 # assembled offline by scripts/release-candidate.mjs: no Nuxeo server, no signature, no tag and no
-# publishing.
+# publishing. The command holds each kit to its signature when given `--signatures`; this workflow
+# gives none, since no kit has been signed yet: a kit is signed by its tag's run in app-packages.yml,
+# and no `app-package/*` tag has been pushed. Its controls see the refusals of an unsigned kit, a
+# wrong signer, other bytes and another version's signature.
 #
 # - `controls`, on a pull request that touches the candidate or what its controls read, and on
 #   every push to a `staging/**` branch: release-candidate.selftest.mjs, which breaks each of its
@@ -53,6 +56,8 @@ on:
       - 'business-apps/demo-server/**'
       - 'scripts/app-package.mjs'
       - 'scripts/verify-package-zip.mjs'
+      - 'scripts/package-signature.mjs'
+      - 'business-apps/trusted-signers.json'
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/helpers.mjs'
       - 'scripts/beta-harness/identity-guard.mjs'

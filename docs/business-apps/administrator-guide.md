@@ -77,7 +77,9 @@ on any server").
   ```
 
   It writes the server packages in `server/`, the kits in `kits/`, a `SHA256SUMS`, a
-  `manifest.json` and a `RELEASE-NOTES.md`.
+  `manifest.json` and a `RELEASE-NOTES.md`. No kit is signed yet either: a kit is signed by its
+  tag's run, and checked before it is installed
+  ([section 3](#checking-a-kit-before-you-install-it)).
 
 - **A stamped `nuxeo-agentic-ui`.** A plain `mvn package` leaves `@VERSION@` in the package's
   `package.xml`, which Nuxeo reads as 0.0.0, so it does not upgrade an installed one; and Nuxeo
@@ -96,6 +98,9 @@ on any server").
   ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#seeding-it)).
 
 ## 3. Installing, in order
+
+**Check each kit's signature before you install it**
+([below](#checking-a-kit-before-you-install-it)), and install nothing the check refuses.
 
 The order the [demo server](../../business-apps/demo-server/README.md) installs in, at one start,
 "What it does, in order", steps 2 to 8:
@@ -151,6 +156,45 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 
 On a first install there is nothing to remove: the README's first script runs `mp-install`
 alone. **Not run yet** for 0.5.0; the README's install of 0.3.0 was run, on 23 November 2026.
+
+### Checking a kit before you install it
+
+A kit released by its tag `app-package/<name>/<version>` is signed by the repository's
+`app-packages.yml` workflow, keyless, through Sigstore
+([package-pipeline.md](package-pipeline.md), section 9). Before `nuxeoctl mp-install`, check that
+the zip you hold is the one that workflow signed, for the version you mean to install. Either with
+the GitHub CLI, signed in to GitHub, which reads the signature from the repository's attestations:
+
+```bash
+gh attestation verify payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+  --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1 \
+  --cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/payers-claims-demo/0.7.0 \
+  --source-ref refs/tags/app-package/payers-claims-demo/0.7.0 --deny-self-hosted-runners
+```
+
+or from a clone of the repository, with the signature beside the zip,
+`payers-claims-demo-0.7.0.zip.sig.json` from the tag run's artifact `app-package-signature`. This
+also holds the zip to its own `package.xml`, and the signer to the repository's trusted signers,
+`business-apps/trusted-signers.json`, or yours with `--trusted-signers`:
+
+```bash
+npm run app-package:signature -- verify /tmp/payers-claims-demo-0.7.0.zip --version 0.7.0
+```
+
+- **Each says it verified the zip, or refuses it and says why.** Both name the tag of the version
+  you install, so a zip of another version, one changed by a byte, or a signature made by another
+  workflow, from another repository or for another tag, is refused.
+- **A server with no network:** export Sigstore's trusted root once where there is one,
+  `gh attestation trusted-root > trusted_root.jsonl`, and give it with `--trusted-root`. Not tried
+  yet.
+- **Not signed:** a kit built from source, as the release candidate builds one, which is as sound
+  as the clone it came from (the candidate given the kits' signatures, `--signatures`, holds each
+  kit it builds to its release's, [package-pipeline.md](package-pipeline.md), section 11); and the
+  server packages, `nuxeo-agentic-ui` and the add-ons, which this pipeline does not sign.
+- **No kit has been signed yet:** no tag has been pushed. And nothing on the server checks a
+  signature: the check is yours, before the install.
+- **A signature says which run built the zip, from which commit,** not that the kit is right or
+  approved.
 
 ### On an existing Docker container: `conf.d` is read at the first start only
 
@@ -654,8 +698,8 @@ outside a development or demonstration server.
 - **The upgrade check:** its offline half, and its server half, which reads a running server
   before an install; the server-side test that installs and upgrades is not built
   ([package-pipeline.md](package-pipeline.md), section 10).
-- **Publishing:** never run ([tutorial.md](tutorial.md), step 10). Signatures and promotion after
-  approval are a proposal, and nothing of them is built
+- **Publishing:** never run ([tutorial.md](tutorial.md), step 10). Signing is built and has
+  signed nothing, since no tag has been pushed, and promotion after approval is a proposal
   ([package-pipeline.md](package-pipeline.md), sections 7 and 9).
 - **No Marketplace package** for `nuxeo-agentic-connectors`.
 - **The Studio migration** reports "not ready" for every package, and installing a migrated app is

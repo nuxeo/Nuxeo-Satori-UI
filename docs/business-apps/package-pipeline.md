@@ -6,7 +6,9 @@ promotion after a person approves.
 
 Status: built on 22 November 2026, and not yet run in full. The checks run on every pull request;
 signing and publishing run only for a tag, and no tag has been pushed yet. Versions were added on
-23 November 2026 (section 8); signatures and promotion after approval are a proposal (section 9).
+23 November 2026 (section 8). Signatures were built on 26 November 2026, with their verification
+before a publish, in the release candidate and at install (section 9); the workflow has signed no
+package yet, and promotion after a person approves is still a proposal.
 The upgrade check, phase 10's offline half of "an upgrade that keeps every configuration", was
 added on 25 November 2026 (section 10); its server-side half is not built.
 
@@ -15,9 +17,13 @@ added on 25 November 2026 (section 10); its server-side half is not built.
 - **Checked on every pull request, with Node and `unzip` alone.** A package that names a widget
   the platform does not have fails, and the log names the file, the place and the widget.
 - **Signed and published only when someone tags it.** The tag goes on a merged commit, and the
-  package goes to Nuxeo Marketplace preprod, as the platform's own package does.
-- **A package's own code never runs where the secrets are.** The job that holds them only checks,
-  signs and publishes the zip the first job built.
+  package goes to Nuxeo Marketplace preprod, as the platform's own package does. It is signed
+  keyless, through Sigstore with the run's GitHub identity, and published only once its signature
+  verifies against the trusted signers, as the release candidate and an administrator verify it
+  (section 9).
+- **A package's own code never runs where the secrets are.** The jobs that sign and publish only
+  check, sign, verify and publish the zip the first job built; only the one that signs has an
+  identity, and only the one that publishes a secret.
 - **Held to a content model.** With `--model`, a model file exported from a server, a layout whose
   widget does not show its property's type is refused, and so is a field whose property the type
   does not have. Given none, a package that ships a stand-in model, as the kits do, is held to its
@@ -97,8 +103,8 @@ package, and runs steps 7 and 8 for a tag.
 | 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 7. Signed         | Keyless, through Sigstore: `actions/attest` signs a statement of the package, its version, the zip's SHA-256, the commit and the run, which `app-package-signature.mjs verify` checks against the trusted signers at once; and a build provenance attestation, as before. Skipped, with a warning, when the run has no identity or is no trusted signer (section 9)                                                                                                                                                                                                                                                                                                                                                                           |
+| 8. Published      | Only a signed zip, its signature verified again first: Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -312,11 +318,16 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
    request's check refuses less.
 2. Tag the merged commit `app-package/<name>/<version>`, and push the tag.
 3. The workflow checks and builds the package again at that commit, held to its last release,
-   signs the zip and publishes it, with what changed since in the run's summary.
-4. Anyone can check the signature:
+   signs the zip, verifies the signature and publishes it, with what changed since in the run's
+   summary.
+4. Anyone can check the signature before installing it, with the GitHub CLI signed in, which reads
+   the repository's attestations (section 9.1):
 
    ```bash
-   gh attestation verify payers-claims-demo-0.3.0.zip --repo nuxeo/Nuxeo-Satori-UI
+   gh attestation verify payers-claims-demo-0.3.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+     --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1 \
+     --cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/payers-claims-demo/0.3.0 \
+     --source-ref refs/tags/app-package/payers-claims-demo/0.3.0 --deny-self-hosted-runners
    ```
 
 A tag rather than a button: a manually dispatched workflow must be on `main`, which this one
@@ -331,12 +342,13 @@ reaches only when the integration branch does, and a tag names exactly what is p
 
 ## 7. Not settled here
 
-- **Signing** is a proposal for the security owners: an attestation is keyless, and anyone can
-  check it. Section 9 proposes how phase 3 completes it; nothing of it is built.
+- **Signing** is built, keyless, and waits for its security review with the others
+  ([security-reviews.md](security-reviews.md)): the workflow has signed no package yet, since no
+  tag has been pushed (section 9).
 - **The first publish of a new package name** may need it registered on Nuxeo Connect's staging
   environment first. Not checked.
 - **Who may publish:** anyone who can push a tag. A ruleset can restrict `app-package/*` tags, and
-  none does yet.
+  none does yet. A signature names the tag's run, not who pushed the tag.
 - **Promotion to production after a person approves:** proposed in section 9, a GitHub
   environment with required reviewers; not built. Versions are section 8's.
 - **The allow-list** is the deployment's (decision 3), never in a package's bundle. The workflow
@@ -464,69 +476,180 @@ based on. Its tag path has not run there, since no `app-package/*` tag has been 
 **Not yet:** `validate_package`, in the Builder MCP server, takes no previous package, so an agent
 learns that a version must move only from the pipeline.
 
-## 9. Signatures and promotion after approval: a proposal
+## 9. Signatures and promotion after approval
 
-Status: proposal, 23 November 2026, for the security owners and the user. **Nothing here is
-built**: no key, tag, secret, environment or ruleset was created, nothing was published, and the
-workflow's publishing job is as section 5 describes it.
-
-**Where it starts.** A tag `app-package/<name>/<version>` has `sign-and-publish` attest the zip,
-through GitHub's `actions/attest-build-provenance`, and publish it to Marketplace preprod. Nobody
-approves anything between the tag and preprod, nothing checks the attestation once it is made, and
-there is no production step.
+Status: signing and its verification built on 26 November 2026; promotion after a person approves
+(9.2) is still a proposal. **Not yet run on a tag:** no `app-package/*` tag has been pushed, so the
+workflow has signed no package, and the verification of a keyless signature has run only against a
+stand-in for `gh` in the controls, never on a bundle Sigstore issued. The first tag is its first
+real run. No key, tag, secret, environment or ruleset was created, and nothing was published.
 
 ### 9.1 Signing
 
-Proposed: **keep keyless signing, and check the signature where it matters,** rather than add a
-key.
+Built as proposed, keyless, with three departures, each said below.
 
-- **The tool:** GitHub's artifact attestations, which the workflow already makes: a build
-  provenance statement, signed through Sigstore, naming the zip's SHA-256, this repository, the
-  workflow file, the commit and the tag. `gh attestation verify` checks one; `cosign
-verify-blob-attestation` does too, for someone without the GitHub CLI.
-- **Where the keys live: nowhere this team keeps one.** Each run gets a certificate that lasts
-  minutes, issued by Sigstore to the workflow's OIDC identity, and the signature is recorded in
-  Sigstore's public transparency log. There is no private key to store, rotate, leak or revoke.
-  What must be protected instead is who can make the workflow run for a tag (9.2, "Who may start
-  it").
-- **What a check holds the zip to,** beyond "this repository built it": the workflow file and the
-  tag. With the GitHub CLI's flags for them, to be confirmed on the version CI uses:
+**What is signed.** An in-toto statement with one subject, the zip, by its file name and its
+SHA-256, and a predicate of the type `https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1`
+that records the package's name, its version, the same SHA-256, the commit it was built from, and
+who signed it: the repository, the workflow, the tag and the run, or an Ed25519 key's id. The
+signature is detached, `<name>-<version>.zip.sig.json` beside the zip, and the zip is not changed
+([`package-signature.mjs`](../../scripts/package-signature.mjs)).
 
-  ```bash
-  gh attestation verify payers-claims-demo-0.3.0.zip --repo nuxeo/Nuxeo-Satori-UI \
-    --signer-workflow nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml \
-    --source-ref refs/tags/app-package/payers-claims-demo/0.3.0
-  ```
+| Signer                                   | Where                                                                  | The signature                                                                                                                                                      | Checked with                                     |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| The `app-packages.yml` workflow, keyless | A tag build's `sign` job                                               | The Sigstore bundle `actions/attest` writes: its certificate, issued for minutes to the run's GitHub OIDC identity, and the signature are in Sigstore's public log | `gh attestation verify`, pinned as below         |
+| An Ed25519 key                           | A local run, the controls, or a deployment that signs with its own key | A DSSE envelope, signed with Node's crypto                                                                                                                         | Node's crypto, with the trusted key its id names |
 
+- **Where the keys live: nowhere this team keeps one.** CI has no key and no secret to sign with.
+  Locally, `sign --ephemeral-key` makes a key for the run and never writes it: its public half is
+  written as a trusted-signers file to verify with. `--key` takes a key from a file, and refuses
+  one inside the repository, where it would be a commit away from being published.
+- **Who may sign: the trusted signers,**
+  [`business-apps/trusted-signers.json`](../../business-apps/trusted-signers.json): today the
+  `app-packages.yml` workflow of `nuxeo/Nuxeo-Satori-UI`, and no key. A deployment may keep a copy
+  of its own, with its own keys, and give it with `--trusted-signers`. The file is read strictly: a
+  kind or a field it does not know, an id given twice, or a key that is not Ed25519 is an error.
+- **What a verification holds a zip to,** `app-package-signature.mjs verify`, each a refusal:
+  - a signature, one JSON document, beside the zip or where `--signature` says;
+  - a trusted signer. An Ed25519 envelope is checked with the trusted key its key id names, never
+    with a key the file carries. A Sigstore bundle is checked by the GitHub CLI,
+    `gh attestation verify`, with the certificate's identity pinned whole to the trusted workflow's
+    run for the package's own tag,
+    `--cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/<name>/<version>`,
+    with `--cert-oidc-issuer https://token.actions.githubusercontent.com`, `--source-ref` the tag,
+    `--source-digest` the commit the predicate names, `--predicate-type` the signature's, `--repo`,
+    and `--deny-self-hosted-runners`. What the predicate says of who signed is the run's own word,
+    so it must agree with what the certificate binds, and is never taken alone;
+  - the subject: the zip's file name, and the SHA-256 of its bytes, so one changed byte is refused;
+  - the package and version: the predicate's must be the zip's file name's, the `package.xml`'s
+    inside it, and `--name`'s and `--version`'s when given. So another version's signature is
+    refused beside this version's zip, on its own zip renamed to pass for this version, and held to
+    a version it is not; and a keyless one made by the run for another tag has another identity.
 - **Where it is checked:**
-  1. in `sign-and-publish`, just after the attestation and before publishing, so a wrong one is
-     found before anything is public;
-  2. in the promotion job (9.2), before production, so the zip promoted is the one attested;
-  3. at install, by the deployment's own install script, before `nuxeoctl mp-install`. Whether
-     Nuxeo's package manager, or the app registry, could check one itself is the platform team's
-     question; not checked here.
-- **A server that cannot reach Sigstore** can be checked offline, with the attestation downloaded
-  beside the zip and Sigstore's trusted root exported once (`gh attestation download`,
-  `gh attestation trusted-root`, then `--bundle` and `--custom-trusted-root`). To be tried on the
-  CLI version in use.
-- **If a key the team holds is required:** cosign with a key in a cloud KMS, reached from the
-  workflow through OIDC federation, so no long-lived secret sits in GitHub and the key never
-  leaves the KMS. The cost: a key to rotate and revoke, a public key every verifier needs, and an
-  account in a cloud. Proposed only if a customer's policy asks for a vendor-held key.
-- **What a signature does not prove:** that the package is right, or approved. That is review
-  and promotion.
+  1. in the `sign` job, just after signing, as any later reader checks it;
+  2. in the `publish` job, before publishing, so nothing unverified reaches preprod;
+  3. by the release candidate, given `--signatures` (section 11);
+  4. at install, before `nuxeoctl mp-install`, by the administrator
+     ([administrator-guide.md](administrator-guide.md), section 3). Whether Nuxeo's package
+     manager, or the app registry, could check one itself is still the platform team's question.
 
-### 9.2 Promotion after a person approves
+```bash
+# Locally: sign with a key made for the run, then verify with its public half.
+npm run app-package:signature -- sign business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.7.0.zip \
+  --ephemeral-key --signers-out /tmp/signers.json
+npm run app-package:signature -- verify business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.7.0.zip \
+  --trusted-signers /tmp/signers.json
+# A tag's signature, beside its zip, against the repository's trusted signers.
+npm run app-package:signature -- verify payers-claims-demo-0.7.0.zip --version 0.7.0
+```
+
+It exits 0 when the zip is verified, 1 when it is refused, with each reason, and 2 when the command
+or the trusted signers are wrong. `verify` needs Node, `unzip` and, for a keyless signature, the
+GitHub CLI, which reads Sigstore's trusted root over the network unless `--trusted-root` gives a
+file of it, for a server offline: `gh attestation trusted-root > trusted_root.jsonl`, once, where
+there is a network. Not tried yet.
+
+**In CI** ([`app-packages.yml`](../../.github/workflows/app-packages.yml)), for a tag
+`app-package/<name>/<version>` only:
+
+```text
+check    builds and verifies the zip, its checksum and its changelog, and uploads them
+sign     contents: read, id-token: write, attestations: write, and no secret: checks the
+         checksum; ci-plan decides; actions/attest signs the statement, and
+         attest-build-provenance attests the build as before; verifies the signature; uploads it
+publish  contents: read, and the Marketplace credentials; only when sign signed: checks the
+         checksum, verifies the signature, publishes to preprod
+```
+
+- **The skip logic, `ci-plan`.** It signs only a tag build of the package the tag names, on
+  GitHub's own runners, with an OIDC identity, by a workflow the trusted signers name. With no
+  identity, on a self-hosted runner, on another server, or by a workflow they do not name, such as
+  a fork's, nothing is signed: it writes `sign=false`, a warning, "Not signed, not published",
+  saying why, and the same in the job's summary, and `publish` does not run. On a branch, or on a
+  tag that names another package or version than the zip's, it refuses, exit 1.
+- **What changed in the permissions,** on 26 November 2026. Before, one job, `sign-and-publish`,
+  had `contents: read`, `id-token: write` and `attestations: write`, and read the Marketplace
+  credentials. Now `sign` has those three and no secret, and `publish` has `contents: read` alone,
+  and the credentials. The workflow's own stays `contents: read`. Nothing was added: the identity
+  left the job that holds the secrets.
+- **A value from the tag** reaches a shell only through an environment variable, since a tag's
+  name may hold `$(`.
+- **The signature is kept** with the repository's attestations, which `gh attestation verify
+--repo` reads, and for 30 days in the run's artifact `app-package-signature`.
+
+**Its controls,** `npm run app-package:signature-selftest`, in the `check` job on every pull request
+that touches a package or what checks one, with Node and `unzip` and no install. The packages are
+the contracts kit, built by the pipeline at its version and at the next. Each break is refused for
+its own reason, and the sound package passes:
+
+- **Ed25519,** with keys made at run time: a good signature verifies, with what it records, and no
+  private key is written. Refused: a changed byte; the statement changed after it was signed; a key
+  no trusted signer has; another key's signature under a trusted key's id; no signature; another
+  version's signature beside its zip, on its own zip renamed, and held to `--version`; a trusted
+  signer's statement naming a version the zip's `package.xml` does not declare; the repository's
+  trusted signers, which name no key; a `--key` inside the repository; and trusted signers that are
+  empty, of an unknown kind, with an id twice, a field not read, an RSA key, or a workflow outside
+  `.github/workflows/`.
+- **Keyless,** with `gh` stood in for by a script on the PATH that holds a bundle to a stand-in
+  certificate in it, as gh holds a real bundle to its certificate: the good one verifies, and gh
+  was given exactly the pinned arguments. Refused: a changed byte, and another version's signature
+  beside its zip, before gh is asked; a workflow that is not a trusted signer; a predicate whose run
+  was for another tag; a fork's certificate under a predicate claiming the trusted workflow; a
+  certificate of another version's tag; a self-hosted runner; and no gh on the PATH. These prove
+  this repository's side, what it pins and what it refuses, and not Sigstore's cryptography, which
+  is gh's. With the GitHub CLI installed, every flag passed to it is one it has: 2.83.1 here.
+- **`ci-plan`:** it signs with the identity, and its predicate, signed, verifies; it skips with no
+  identity, on a self-hosted runner, on a fork's run and on another server; it refuses a branch, and
+  a tag of another version.
+- **The workflow:** only `sign` has an identity, its signing steps run only when `ci-plan` said so,
+  and `publish` runs only when `sign` signed, verifying before it publishes. Each, broken in a copy
+  of the workflow's text, is refused.
+
+Each check was also seen failing from the other side, on 26 November 2026: the verifier broken in
+place one way at a time, the controls run, and the verifier put back. Not comparing the digest
+failed 4 controls; not comparing the subject's name, 1; trusting any key, 1; not checking the
+signature's bytes, 2; not holding the file name, 1, or the version expected, 1; not pinning the
+certificate's identity, 3; not holding the predicate's tag, 1; taking gh's refusal as a pass, 3;
+not refusing a missing signature, 1; not reading `package.xml`, 1; and in `ci-plan`, not checking
+the identity, the runner or the signer, 1 each. The release candidate's, in section 11.
+
+**Departures from the proposal:**
+
+- **A predicate of its own, beside the provenance.** The proposal checked the build provenance
+  attestation. Its statement names the zip and the tag, but not the package and the version as
+  fields, and an Ed25519 signer could not make one honestly. So the signature is a statement of its
+  own, the same for both signers; the provenance is still made, as before, and is what
+  `gh attestation verify --repo` checks by default.
+- **The certificate's identity, whole.** gh matches the proposal's `--signer-workflow` as the start
+  of the certificate's identity; `--cert-identity` is matched whole, the workflow and the tag, and
+  `--source-ref` and `--source-digest` hold the tag and the commit as well.
+- **Two jobs instead of one,** so that the identity and the secrets are never in the same job.
+
+**Not built, and still proposals:**
+
+- promotion after a person approves, and any publish to production (9.2);
+- a ruleset for who may create `app-package/*` tags (section 7). Until there is one, whoever can
+  push a tag starts a run the trusted signers accept, and a signature says that this workflow ran
+  for this tag on this commit, not that the commit was reviewed. A tag's run takes the workflow as
+  the tagged commit has it, so a tag on a commit that changed the workflow signs with that change;
+- a key the team holds, in a cloud KMS, if a customer's policy asks for one: the trusted signers
+  take an Ed25519 key already, and nothing else of it is built;
+- the release candidate's workflow giving `--signatures`, which waits for a kit to be signed;
+- Nuxeo's package manager, or the app registry, checking a signature on the server;
+- a verification offline with `--trusted-root`, which has not been tried.
+
+### 9.2 Promotion after a person approves: a proposal
 
 Proposed: **build once, publish to preprod on the tag, and promote the same bytes to production
-once a named person approves, in a GitHub environment.**
+once a named person approves, in a GitHub environment.** Not built.
 
 ```text
 tag app-package/<name>/<version>
-  check             builds and verifies the zip, its checksum and its changelog, and uploads them
-  sign-and-publish  checks the checksum, attests, checks the attestation, publishes to preprod
-  promote           environment app-packages-production: waits for an approval, then takes the
-                    same artifact, checks the checksum and the attestation, publishes to production
+  check    builds and verifies the zip, its checksum and its changelog, and uploads them
+  sign     signs the zip, and verifies the signature (9.1)
+  publish  verifies the signature, publishes to preprod (9.1)
+  promote  environment app-packages-production: waits for an approval, then takes the
+           same artifact, checks the checksum and verifies the signature, publishes to production
 ```
 
 - **The approval is a GitHub environment,** say `app-packages-production`, with required
@@ -537,13 +660,13 @@ tag app-package/<name>/<version>
   secrets of `app-packages-production`, which a job reads only once approved. Today's
   `CONNECT_PREPROD_*` would move to an `app-packages-preprod` environment the same way.
 - **What the approver sees,** in the run's summary: the changelog since the last release (section
-  8), the part the version needed and the part it raised, the zip's digest, the attestation, and
+  8), the part the version needed and the part it raised, the zip's digest, its signature, and
   the preprod install to try. Approving says that these bytes, tried in preprod, go to production.
 - **The same bytes.** The promotion job never builds: it takes the artifact of the same run, as
-  `sign-and-publish` does. GitHub expires a job waiting for approval after 30 days, and the
+  `publish` does. GitHub expires a job waiting for approval after 30 days, and the
   artifact is kept 30 days (`retention-days`), so the two must stay aligned.
 - **The record:** GitHub keeps each deployment, who approved it and when; the tag names the
-  commit, and the attestation the run.
+  commit, and the signature the package, its version, its digest, the commit and the run.
 - **Who may start it:** a ruleset restricting who may create `app-package/*` tags (section 7
   notes that none does). Without one, anyone who can push starts the chain, and the approval still
   stops it short of production.
@@ -554,7 +677,10 @@ tag app-package/<name>/<version>
 ### 9.3 What the user decides
 
 1. Keyless signing, or a key in a KMS, and the verification policy: which workflow and which refs.
-2. Whether installs check the signature, and where.
+   Acted on as recommended: keyless, by the `app-packages.yml` workflow, for the package's own tag
+   alone (9.1). Still theirs and the security owners' to confirm.
+2. Whether installs check the signature, and where. The administrator's guide says how, before
+   `mp-install`, and the release candidate does given `--signatures`; nothing on a server enforces it.
 3. The environments' names, their reviewers, and whether preprod also waits for an approval.
 4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
    preprod's (the name of its production environment is not checked here).
@@ -938,6 +1064,15 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
   released as, because Nuxeo counts neither `2026.0.2-SNAPSHOT` nor `2026.0.2-rc.1` as meeting a
   kit's dependency on `nuxeo-agentic-ui:2026.0.2` (below). A package that keeps a version of its
   own keeps it: `nuxeo-agentic-assets` is 0.1.0, its `assets.package.version`.
+- **`--signatures`** is a folder of the kits' signatures, as their tag builds made them,
+  `<name>-<version>.zip.sig.json`. Given it, stage 2 holds each kit's zip to its own, against
+  `business-apps/trusted-signers.json` or `--trusted-signers`: a kit with no signature, signed by
+  no trusted signer, or whose signature is over other bytes or for another version refuses the
+  candidate. The build is reproducible, so a kit unchanged since its tag has the digest its
+  signature names. A keyless signature is checked with `gh attestation verify`, which reads
+  Sigstore's trusted root over the network unless `--trusted-root` gives it. Without
+  `--signatures`, no kit is held to a signature, and the manifest and the release note say so. The
+  server packages are not signed by this pipeline (section 9).
 - It needs the Node `.nvmrc` pins, 24, and refuses another, since the client is built with the Node
   that runs it; Maven with a JDK, `unzip`, git, `tar`, which the upgrade check's export uses, and an
   installed workspace (`npm ci`). It took about
@@ -951,14 +1086,14 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
 
 Each stage stops the run when it refuses, with exit 1, the cheap ones first.
 
-| Stage                    | What is built, and what is refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2. Every kit             | Each folder under `business-apps/packages/`, through this pipeline's steps 1 to 6, with the platform version of `libs/platform` and, for a kit that names one, its deployment's allow-list, `deployment/build-allow-list.json`, as `app-packages.yml` passes it: without it every operation a kit's buttons run is refused. Held as `app-packages.yml` holds it: `--previous` the package of its name at `--since`, which the upgrade check's `--place-at` finds, and `--previous-platform` the platform there, which its `--export` writes. So a kit whose platform range leaves the candidate's platform out is refused at step 2, and at step 3 one whose version did not move as far as its changes need, or whose upgrade does not keep every customer configuration, on its side or the platform's (section 10) |
-| 3. The kits as a set     | Read from the zips: no two kits contribute the same package name, app id, address (the id, for an app with none), queue, action, component, document type, facet, schema, lifecycle, a type's lifecycle, page provider, automation chain or scripted operation, directory, action filter, workflow, event listener, rights policy (`nuxeo-agentic-assets`), or layout of a type and mode. A server keeps one of each: the later replaces the earlier, or is refused. An extension point the check does not know is printed and written to the manifest as not compared                                                                                                                                                                                                                                                |
-| 4. The demo steps        | Listed, not run (below). A steps file that names a kit and declares no `serverRun`, declares it for another kit, or needs a seed the kit does not have is refused: the listing would make the kit's demo look shorter than it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| 5. The client            | `nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/`, as `build-marketplace.yml` builds it, without Nx's cache. The Maven module `apps/nuxeo-ui` runs the same build with its own Node, v20.0.0, which Angular 22 refuses, so the candidate builds it with the Node that runs it, the pinned 24                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 6. The server packages   | `mvn package` at the root, tests included, every module but `apps/nuxeo-ui`, in a scratch copy of the working tree (every file git does not ignore, since a module's tests may read beyond it, as `nuxeo-agentic-assets`' read the brand kit's policy): its Maven version set with `versions:set` and `@VERSION@` stamped into `package.xml`, as `build-marketplace.yml` does, so the repository's poms are never edited. The package that deploys the client must carry stage 5's bundle file for file and byte for byte: the assembly leaves a missing bundle out without a word, and Maven says `BUILD SUCCESS`. Unstamped, as a plain `mvn package` leaves it, the `nuxeo-agentic-ui` package's `package.xml` says `@VERSION@`, which Nuxeo reads as 0.0.0                                                        |
-| 7. The packages as a set | Every package's dependencies, server packages' and kits', are in the candidate at a version Nuxeo counts as meeting them; no two conflict (`<conflicts>`); and each package's target platform lies within the target platform of each package it depends on. That last rule is this candidate's: Nuxeo holds a package to the running platform alone, so a package claiming platforms its dependency does not install on fails only once it is installed on one of them                                                                                                                                                                                                                                                                                                                                               |
+| Stage                    | What is built, and what is refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2. Every kit             | Each folder under `business-apps/packages/`, through this pipeline's steps 1 to 6, with the platform version of `libs/platform` and, for a kit that names one, its deployment's allow-list, `deployment/build-allow-list.json`, as `app-packages.yml` passes it: without it every operation a kit's buttons run is refused. Held as `app-packages.yml` holds it: `--previous` the package of its name at `--since`, which the upgrade check's `--place-at` finds, and `--previous-platform` the platform there, which its `--export` writes. So a kit whose platform range leaves the candidate's platform out is refused at step 2, and at step 3 one whose version did not move as far as its changes need, or whose upgrade does not keep every customer configuration, on its side or the platform's (section 10). Given `--signatures`, a kit not signed by a trusted signer over the zip built here |
+| 3. The kits as a set     | Read from the zips: no two kits contribute the same package name, app id, address (the id, for an app with none), queue, action, component, document type, facet, schema, lifecycle, a type's lifecycle, page provider, automation chain or scripted operation, directory, action filter, workflow, event listener, rights policy (`nuxeo-agentic-assets`), or layout of a type and mode. A server keeps one of each: the later replaces the earlier, or is refused. An extension point the check does not know is printed and written to the manifest as not compared                                                                                                                                                                                                                                                                                                                                    |
+| 4. The demo steps        | Listed, not run (below). A steps file that names a kit and declares no `serverRun`, declares it for another kit, or needs a seed the kit does not have is refused: the listing would make the kit's demo look shorter than it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 5. The client            | `nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/`, as `build-marketplace.yml` builds it, without Nx's cache. The Maven module `apps/nuxeo-ui` runs the same build with its own Node, v20.0.0, which Angular 22 refuses, so the candidate builds it with the Node that runs it, the pinned 24                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 6. The server packages   | `mvn package` at the root, tests included, every module but `apps/nuxeo-ui`, in a scratch copy of the working tree (every file git does not ignore, since a module's tests may read beyond it, as `nuxeo-agentic-assets`' read the brand kit's policy): its Maven version set with `versions:set` and `@VERSION@` stamped into `package.xml`, as `build-marketplace.yml` does, so the repository's poms are never edited. The package that deploys the client must carry stage 5's bundle file for file and byte for byte: the assembly leaves a missing bundle out without a word, and Maven says `BUILD SUCCESS`. Unstamped, as a plain `mvn package` leaves it, the `nuxeo-agentic-ui` package's `package.xml` says `@VERSION@`, which Nuxeo reads as 0.0.0                                                                                                                                            |
+| 7. The packages as a set | Every package's dependencies, server packages' and kits', are in the candidate at a version Nuxeo counts as meeting them; no two conflict (`<conflicts>`); and each package's target platform lies within the target platform of each package it depends on. That last rule is this candidate's: Nuxeo holds a package to the running platform alone, so a package claiming platforms its dependency does not install on fails only once it is installed on one of them                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 **Nuxeo's rules, not semver's.** A dependency `name:min` or `name:min:max` is met as Nuxeo Connect
 meets it: `release-candidate-set.mjs` ports nuxeo-connect-client 1.8.3's `Version`,
@@ -970,15 +1105,15 @@ any other classifier, such as `build-marketplace.yml`'s `2026.0.2-PR-12-BUILD-3`
 
 ### What it writes
 
-| File               | What it is                                                                                                                                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manifest.json`    | Every artifact with its kind, name, version and SHA-256; the commit and every uncommitted path; `--since` and its commit; each kit's app, address, platform range, dependencies and the version it was held to; what was not compared; the demo steps |
-| `SHA256SUMS`       | Every file of the candidate, in the form `sha256sum -c SHA256SUMS` reads from `--out`                                                                                                                                                                 |
-| `RELEASE-NOTES.md` | The server packages, with their target platforms and dependencies, and each kit with what changed in it since `--since`: the pipeline's changelog, or new                                                                                             |
-| `DEMO-STEPS.md`    | The demo steps a server run would execute                                                                                                                                                                                                             |
-| `client/`          | The production bundle, as the package deploys it, and its files' digests                                                                                                                                                                              |
-| `server/`          | Each module's jar, at the candidate's version, and each Nuxeo package Maven built                                                                                                                                                                     |
-| `kits/`            | Each kit's zip, checksum and changelog, as the pipeline wrote them                                                                                                                                                                                    |
+| File               | What it is                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manifest.json`    | Every artifact with its kind, name, version and SHA-256; the commit and every uncommitted path; `--since` and its commit; whether the kits were held to their signatures, and each kit's signature: who signed it, from which commit; each kit's app, address, platform range, dependencies and the version it was held to; what was not compared; the demo steps |
+| `SHA256SUMS`       | Every file of the candidate, in the form `sha256sum -c SHA256SUMS` reads from `--out`                                                                                                                                                                                                                                                                             |
+| `RELEASE-NOTES.md` | The server packages, with their target platforms and dependencies, and each kit with what changed in it since `--since`: the pipeline's changelog, or new                                                                                                                                                                                                         |
+| `DEMO-STEPS.md`    | The demo steps a server run would execute                                                                                                                                                                                                                                                                                                                         |
+| `client/`          | The production bundle, as the package deploys it, and its files' digests                                                                                                                                                                                                                                                                                          |
+| `server/`          | Each module's jar, at the candidate's version, and each Nuxeo package Maven built                                                                                                                                                                                                                                                                                 |
+| `kits/`            | Each kit's zip, checksum and changelog, as the pipeline wrote them                                                                                                                                                                                                                                                                                                |
 
 The working tree is built as it is. A candidate built with changes nobody committed says so, in the
 run's first line, in the manifest and in the release note.
@@ -1026,6 +1161,9 @@ push to a `staging/**` branch.
   jobs, as ci.yml's jobs do. The candidate's step runs with no token and checks so, and the script
   takes every token out of what it starts. No signing key, Marketplace credential or write
   permission is in the workflow.
+- **No signatures.** The workflow gives no `--signatures`: a kit is signed by its tag's run in
+  `app-packages.yml`, and no tag has been pushed. Once kits are signed, giving their signatures is
+  a change to the workflow's step, by hand, as moving `--since` to a release is.
 - **The record is uploaded, not the candidate.** The repository is public, so anyone signed in can
   download a run's artifacts, and the bundle carries the `@hylandsoftware` packages: uploading it
   would publish them. The run's artifact is the manifest, the checksums and the two notes, and the
@@ -1050,7 +1188,15 @@ push to a `staging/**` branch.
   `--since` that is no commit, `--out` given twice and a version a candidate cannot carry;
 - a rename in `git status`, whose two names the manifest lists whole;
 - a steps file with no declaration, one for another kit, and one needing a seed its kit does not
-  have.
+  have;
+- a kit the pipeline built and a run-time key signed is taken; refused are one with no signature,
+  one signed by a key no trusted signer has, one changed at the same version since it was signed,
+  and another version's signature under its name; and the command's `--signatures` that is no
+  folder, trusted signers that name no signer, and `--trusted-signers` without `--signatures`,
+  each exit 2. On the pinned Node with Maven, the command itself, given an empty `--signatures`, is
+  refused at stage 2 for every kit, and removes its folder. Each was seen failing from the other
+  side: the candidate's check broken to drop the version, to skip the folder's check, and to refuse
+  for another reason, each failed its control.
 
 It builds no client and runs no Maven. Stage 6's other refusals, a Maven run that fails, a module
 that builds nothing, a zip with no `package.xml`, and no package deploying the client, are reached
@@ -1094,8 +1240,9 @@ This run proves the set holds together on paper. It does not install anything, s
   and the demo people's passwords: the listing above is what such a run would execute;
 - an upgrade from the last release's packages that keeps every app's configuration, which is phase
   10's second demo;
-- that the candidate's signature and the Marketplace's own checks pass, which need the keys and
-  credentials section 9 proposes.
+- that the Marketplace's own checks pass, which need the credentials section 9.2 proposes. The
+  kits' signatures are checked here, given `--signatures`; the server packages are not signed by
+  this pipeline.
 
 The first two, and the seeds, are what the [demo server](../../business-apps/demo-server/README.md)
 would show once it runs: from a candidate's output directory, on a server it makes for the purpose,
