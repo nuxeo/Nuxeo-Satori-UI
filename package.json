@@ -40,6 +40,8 @@
     "app-package": "node scripts/app-package.mjs",
     "app-package:model": "node scripts/app-package-model.mjs",
     "app-package:selftest": "node scripts/app-package.selftest.mjs",
+    "app-package:signature": "node scripts/app-package-signature.mjs",
+    "app-package:signature-selftest": "node scripts/app-package-signature.selftest.mjs",
     "app-upgrade": "node scripts/app-upgrade-check.mjs",
     "app-upgrade:selftest": "node scripts/app-upgrade-check.selftest.mjs",
     "app-upgrade:server-selftest": "node scripts/app-upgrade-server.selftest.mjs",

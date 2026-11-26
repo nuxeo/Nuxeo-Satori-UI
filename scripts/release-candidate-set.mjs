@@ -4,7 +4,8 @@
  * candidate at a version Nuxeo counts as meeting them, that no two packages conflict, that each
  * package's target platform lies within those of the packages it depends on, that no two kits
  * contribute the same thing a server or the app registry keeps one of, and that the package that
- * deploys the client carries the bundle that was built.
+ * deploys the client carries the bundle that was built; and, given signatures, that each kit is
+ * signed by a trusted signer over the bytes the candidate built (`kitSignature`).
  *
  * Functions over what was read from the built zips and folders, so that
  * `release-candidate.selftest.mjs` can break each rule in a fixture without building anything.
@@ -32,8 +33,9 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
+import { signatureFileFor, verifySignature } from './package-signature.mjs';
 import {
   attributesOf,
   componentPathsOf,
@@ -667,4 +669,62 @@ export function readKit(zip, scratch) {
     contributes,
     unknown,
   };
+}
+
+/**
+ * The branch beyond `HEAD` a signed commit may be on, as this clone has it: `main`, which a ruleset
+ * protects, with a pull request for every change. No ruleset covers `staging/*`, nor every
+ * `integration/*`, so anyone who can push could make one, and a commit there is not merged.
+ */
+export const PROTECTED_BRANCHES = /^refs\/remotes\/origin\/main$/;
+
+/**
+ * Whether `commit` is in the history the candidate is built from, `HEAD`, or of `origin/main`: a
+ * commit tagged on `main` is not in a staging branch's history, and is merged.
+ * `commit` is a full commit id, as `verifySignature` takes one; one git does not have is in none.
+ */
+export function inProtectedHistory(commit, cwd) {
+  if (spawnSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], { cwd }).status === 0)
+    return true;
+  const refs = spawnSync(
+    'git',
+    ['for-each-ref', '--contains', commit, '--format=%(refname)', 'refs/remotes/origin/'],
+    { cwd, encoding: 'utf8' },
+  );
+  return refs.status === 0 && refs.stdout.split('\n').some((ref) => PROTECTED_BRANCHES.test(ref));
+}
+
+/**
+ * A kit's zip held to its signature, given `--signatures`: the file `<zip name>.sig.json` in
+ * `signatures`, checked against `trusted` as `app-package-signature.mjs verify` checks one, for the
+ * kit's own name and version (`verifySignature`). Returns `{ ok, record }` or `{ ok, problems }`, with
+ * the signature's path. So the candidate is refused for a kit that is unsigned, signed by no trusted
+ * signer, or signed over other bytes or for another version, and a kit it takes is the one signed:
+ * the candidate's build is reproducible, so a kit unchanged since it was signed has the same digest.
+ *
+ * `inHistory` answers whether a commit is merged (`inProtectedHistory`). A signature made from a
+ * commit that is not is refused too: a tag pushed on a commit that was never merged runs the
+ * workflow as that commit has it, and the trusted workflow's identity says nothing about review.
+ */
+export function kitSignature({
+  zip,
+  name,
+  version,
+  signatures,
+  trusted,
+  trustedRoot,
+  env,
+  inHistory,
+}) {
+  const signature = join(signatures, signatureFileFor(basename(zip)));
+  const verified = verifySignature({ zip, signature, trusted, name, version, trustedRoot, env });
+  if (verified.ok && !inHistory(verified.record.commit))
+    return {
+      signature,
+      ok: false,
+      problems: [
+        `${basename(zip)} was signed from ${verified.record.commit}, which is neither in this candidate's history nor on origin/main: a tag on a commit that was never merged.`,
+      ],
+    };
+  return { signature, ...verified };
 }

@@ -333,7 +333,7 @@ The candidate, held to its own commit, so that no upgrade is judged; then the pl
 Its own compose project, so that it never meets another one:
 
 ```bash
-npm run release-candidate -- --out ../release-candidate-acceptance --since HEAD
+npm run release-candidate -- --out ../release-candidate-acceptance --since HEAD --unsigned-kits
 ```
 
 ```bash
