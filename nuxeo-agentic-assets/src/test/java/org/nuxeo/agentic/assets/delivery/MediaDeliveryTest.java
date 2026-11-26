@@ -403,7 +403,7 @@ public class MediaDeliveryTest {
      * refuse, at the download endpoints and for a delivery.
      */
     @Test
-    public void aVersionsWindowsAreItsFilmsAlone() {
+    public void aVersionsWindowsAreAFilmsAlone() {
         DocumentModel poster = session.createDocumentModel("/films", "poster", "NotAFilm");
         poster.setPropertyValue("film:windows", session.getDocument(film.getRef()).getPropertyValue("film:windows"));
         poster = session.createDocument(poster);

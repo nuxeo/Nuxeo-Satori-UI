@@ -350,7 +350,8 @@ Automation operation and no button.
   its film's. A `document` with no `type` is broken, so that no document of another type can lend
   its windows. The film is read with a privileged session, as a version's live document is, since
   the version's reader may not read the film. A document that is not there, not live, in the trash
-  or of another type refuses, `policy-error`.
+  or of another type refuses, `policy-error`; the type must match exactly, so a subtype of `Film`
+  is refused too.
 - **A localised version is an asset of its own,** of its own type, with its own rights: its own
   territories, channels and rights end, and its own files. Its windows are its film's when its
   policy says so, the title's release schedule for each of its language versions.
@@ -950,7 +951,8 @@ every review is ([security-reviews.md](../docs/business-apps/security-reviews.md
     listener on `aboutToCreate`, in the filer's transaction, which it marks for rollback when it
     refuses, as the documents and records add-ons' listeners do; that an import, a copy, a folder
     copied whole, a check-in and a restore are each refused on the release the server runs; and
-    which server code or importers write documents without the events it hears.
+    which server code, importers or bulk actions, such as one that sets a document's trash flag
+    directly, write documents without the events it hears.
 29. **Who may file a delivery:** whoever may add a document to a folder and read the version, with
     their own session. Whether that is enough for a record that moves no byte, whether an
     integration acting on a delivery's record must check who filed it, and whether a permission of
@@ -958,8 +960,9 @@ every review is ([security-reviews.md](../docs/business-apps/security-reviews.md
 30. **The record kept:** that its `mdlv` properties, a copy, an import, a check-in and a restore
     are refused, a move, a trash and a deletion are an administrator's alone, and a folder holding
     a delivery is removed, moved, trashed or copied by an administrator alone, the folder's subtree
-    looked into with the system's rights at each such event; and what that query costs on the
-    repository the server runs.
+    looked into with the system's rights at each such event; whether that query sees a folder's
+    copy, not yet committed, on the database the server runs, as it does on H2; and what it costs
+    there, once for each folder a person removes, moves, trashes or copies.
 31. **The refusal's message:** that it names each refused file by its use and place, its reason
     and its channel, and the territory, and names the version only by the id the filer gave; and
     whether the REST API answers it as written, status and message, on the release the server runs.
