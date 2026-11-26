@@ -172,6 +172,9 @@ function canonical(value) {
 }
 const sameJson = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
+/** A text as an NXQL string literal's contents: its backslashes, then its quotes, escaped. */
+const nxqlText = (text) => String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
 /** `probe()` until it answers something truthy, or `timeout` ms pass: its last answer either way. */
 async function until(probe, timeout = 20_000) {
   const deadline = Date.now() + timeout;
@@ -546,7 +549,7 @@ export default async function run(page, h) {
     .catch(deferred);
 
   const issuedQuery =
-    `SELECT * FROM Transmittal WHERE dc:title = '${subject.replace(/'/g, "\\'")}' ` +
+    `SELECT * FROM Transmittal WHERE dc:title = '${nxqlText(subject)}' ` +
     'AND ecm:isVersion = 0 AND ecm:isProxy = 0';
   let transmittal = await until(async () => (await search(asEngineer, issuedQuery))?.[0], 30_000);
   h.check(
@@ -660,7 +663,7 @@ export default async function run(page, h) {
   });
   const madeAnyway = await search(
     asEngineer,
-    `SELECT * FROM Transmittal WHERE dc:title = '${refusedSubject.replace(/'/g, "\\'")}'`,
+    `SELECT * FROM Transmittal WHERE dc:title = '${nxqlText(refusedSubject)}'`,
   );
   h.check(
     `a transmittal naming ${listedNumber}'s superseded revision is refused, 409, and nothing is made`,
