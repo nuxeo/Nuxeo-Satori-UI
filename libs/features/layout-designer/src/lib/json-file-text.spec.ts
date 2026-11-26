@@ -78,6 +78,40 @@ describe('jsonFileText', () => {
     expect(jsonFileText(value)).toBe(await prettierOf(value));
   });
 
+  it('measures every pictograph, and each edge of a wide range, as Prettier does', async () => {
+    // 89 of a character on one line: 100 columns if it takes one, 189 if two, so the line breaks
+    // exactly when Prettier counts it two.
+    const characters: number[] = [];
+    for (let code = 0x80; code <= 0x10ffff; code++) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      if (/^\p{Extended_Pictographic}$/u.test(String.fromCodePoint(code))) characters.push(code);
+    }
+    // Each first and last of Unicode's wide and full-width ranges, and the characters beside them.
+    for (const [from, to] of [
+      [0x1100, 0x115f],
+      [0x2e80, 0x303e],
+      [0x3041, 0x3247],
+      [0x3250, 0x4dbf],
+      [0x4e00, 0xa48c],
+      [0xac00, 0xd7a3],
+      [0xf900, 0xfaff],
+      [0xfe10, 0xfe19],
+      [0xfe30, 0xfe6b],
+      [0xff01, 0xff60],
+      [0xffe0, 0xffe6],
+      [0x20000, 0x2fffd],
+      [0x30000, 0x3fffd],
+    ])
+      characters.push(from - 1, from, to, to + 1);
+    expect(characters.length).toBeGreaterThan(2500);
+    const differ: string[] = [];
+    for (const code of characters) {
+      const value = { a: String.fromCodePoint(code).repeat(89) };
+      if (jsonFileText(value) !== (await prettierOf(value))) differ.push(code.toString(16));
+    }
+    expect(differ).toEqual([]);
+  });
+
   it("writes 1500 generated values as the repository's Prettier does", async () => {
     const differ: string[] = [];
     for (const value of corpus(1500, 6)) {

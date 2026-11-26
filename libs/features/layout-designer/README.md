@@ -228,11 +228,11 @@ that means:
   the same way. A blank line between entries; a number written `1.50` or `1e3` rather than as
   Prettier prints it; a text written with an escape JSON does not need, such as `\u00e9` or `\/`; a
   key written twice; and the place of a key that is a whole number, such as `"2"`, which a JSON value
-  puts first. No kit's file has any of them. A width is measured as Prettier measures it: a wide or
-  full-width character two columns, from Unicode's own list of them as Prettier reads it, and an
-  emoji two, or one for an emoji drawn as text, such as ©. An emoji is told by Unicode's properties
-  here and by a list of emoji in Prettier, so a sequence the two read differently may be measured
-  apart.
+  puts first. No kit's file has any of them. Every single character is measured as Prettier
+  measures it: a wide or full-width character two columns, from Unicode's own
+  list of them as Prettier reads it, and a pictograph two, or one for those Prettier draws as text,
+  such as ©. A sequence of emoji is told here by Unicode's properties and in Prettier by its list of
+  emoji, so one that list does not have may be measured apart.
 - **The deployment layer** shows each version as the download writes it, and a version it opens is
   its JSON value, written by the same rule.
 
@@ -499,7 +499,7 @@ layer stays in `/agentic-ui-layers` until an administrator deletes it.
 - **A queue whose rule is not for the administrator** previews as the queue page shows it to them:
   "not shown". Every Payers queue has one: `unassigned-claims` and `my-claims` are for
   `claims-adjusters`, and `pending-determination` for `claims-supervisors` and `member-services`.
-- **Eight kits' files are not written back byte for byte,** by design: the
+- **Eight of the kits' files are not written back byte for byte,** by design: the
   [list and why](#byte-for-byte). The designer reads a file's JSON value, never its text.
 - **Rules on the document page's own state.** Where the document page is not open, nothing publishes
   its state about the record: locked, a favourite, followed, in the clipboard, versioned, an action in
@@ -534,7 +534,8 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
   a reading of the text of its own. `round-trip.pages.spec.ts` opens each file in its page, with the
   kit's own content model and `actions.json`, and downloads it unedited. `json-file-text.spec.ts`
   holds the writer to Prettier itself on every JSON file of every kit's app definition, on 1500
-  generated values, and on each case its layout turns on.
+  generated values, on every pictograph and each edge of a wide range, and on each case its layout
+  turns on.
 - `layer/layer-panel.spec.ts` holds the panel with a stand-in for its service: the three versions
   as text, a label that is markup drawn as text, each button following the server's permissions,
   the questions before approving, rolling back and discarding, and the server's refusals.
@@ -582,8 +583,9 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
     the width off by one; the comma after a value not counted; keys sorted; an unknown key, such as
     `$schema`, dropped; numbers as `JSON.stringify` writes them; text outside ASCII escaped; wide
     characters counted as one column, an ambiguous one, `㉈`, as two, an emoji as one, one drawn as
-    text, `©`, as two, and a combining mark as one; and no last newline. A kit
-    added for one run, with a sort written across lines, was walked and failed until taken out;
+    text, `©`, as two, a pictograph told narrow by Unicode's presentation property rather than as
+    Prettier tells it, and a combining mark as one; and no last newline. A kit added for one run,
+    with a sort written across lines, was walked and failed until taken out;
   - **the edits:** a card's heading, a field's rule, a queue's name and a list of actions each
     written last rather than where the format lists it, and a key the file has moved;
   - **a queue's actions:** an action added that is not offered, the app's own never offered, an

@@ -23,8 +23,9 @@
  * Its spec holds it to Prettier itself, on every kit's files and on a corpus of generated values.
  * A width is measured as Prettier measures one: a wide or full-width character is two columns, an
  * emoji two, or one for an emoji drawn as text, such as ©, and a combining mark, a variation
- * selector or a control character none. An emoji is told by Unicode's own properties here, and by
- * a list of emoji in Prettier, so a sequence the two read differently may be measured apart.
+ * selector or a control character none. Every single character is measured as Prettier measures
+ * it; a sequence of emoji is told here by Unicode's own properties, and in Prettier by its list of
+ * emoji, so one that list does not have may be measured apart.
  */
 
 const PRINT_WIDTH = 100;
@@ -36,8 +37,32 @@ const NOT_ASCII = /[^\x20-\x7F]/u;
 /** An emoji, a sequence joined by zero-width joiners or a flag included, as one character. */
 const EMOJI =
   /\p{RI}\p{RI}|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*/gu;
-/** An emoji drawn as text unless asked otherwise, such as ©, which takes one column. */
-const TEXT_EMOJI = /^\P{Emoji_Presentation}$/u;
+/**
+ * The pictographs that take one column alone, as ranges, first and last of each, in order: those
+ * Prettier 3's own list of emoji draws as text, such as ©, and those no emoji list names yet. Read
+ * from Prettier's `getStringWidth`, one code point at a time.
+ */
+const NARROW: readonly number[] = [
+  0xa9, 0xa9, 0xae, 0xae, 0x203c, 0x203c, 0x2049, 0x2049, 0x2122, 0x2122, 0x2139, 0x2139, 0x2194,
+  0x2199, 0x21a9, 0x21aa, 0x2328, 0x2328, 0x2388, 0x2388, 0x23cf, 0x23cf, 0x23ed, 0x23ef, 0x23f1,
+  0x23f2, 0x23f8, 0x23fa, 0x24c2, 0x24c2, 0x25aa, 0x25ab, 0x25b6, 0x25b6, 0x25c0, 0x25c0, 0x25fb,
+  0x25fc, 0x2600, 0x2605, 0x2607, 0x2612, 0x2616, 0x261c, 0x261e, 0x262f, 0x2638, 0x2647, 0x2654,
+  0x267e, 0x2680, 0x2685, 0x2690, 0x2692, 0x2694, 0x26a0, 0x26a2, 0x26a9, 0x26ac, 0x26bc, 0x26bf,
+  0x26c3, 0x26c6, 0x26cd, 0x26cf, 0x26d3, 0x26d5, 0x26e9, 0x26eb, 0x26f1, 0x26f4, 0x26f4, 0x26f6,
+  0x26f8, 0x26fb, 0x26fc, 0x26fe, 0x2704, 0x2708, 0x2709, 0x270e, 0x2712, 0x2714, 0x2714, 0x2716,
+  0x2716, 0x271d, 0x271d, 0x2721, 0x2721, 0x2733, 0x2734, 0x2744, 0x2744, 0x2747, 0x2747, 0x2763,
+  0x2767, 0x27a1, 0x27a1, 0x2934, 0x2935, 0x2b05, 0x2b07, 0x1f000, 0x1f003, 0x1f005, 0x1f0ce,
+  0x1f0d0, 0x1f0ff, 0x1f10d, 0x1f10f, 0x1f12f, 0x1f12f, 0x1f16c, 0x1f171, 0x1f17e, 0x1f17f, 0x1f1ad,
+  0x1f1e5, 0x1f203, 0x1f20f, 0x1f23c, 0x1f23f, 0x1f249, 0x1f24f, 0x1f252, 0x1f25f, 0x1f266, 0x1f2ff,
+  0x1f321, 0x1f32c, 0x1f336, 0x1f336, 0x1f37d, 0x1f37d, 0x1f394, 0x1f39f, 0x1f3cd, 0x1f3ce, 0x1f3d4,
+  0x1f3df, 0x1f3f1, 0x1f3f3, 0x1f3f5, 0x1f3f7, 0x1f43f, 0x1f43f, 0x1f441, 0x1f441, 0x1f4fd, 0x1f4fe,
+  0x1f546, 0x1f54a, 0x1f54f, 0x1f54f, 0x1f568, 0x1f573, 0x1f576, 0x1f579, 0x1f57b, 0x1f58f, 0x1f591,
+  0x1f594, 0x1f597, 0x1f5a3, 0x1f5a5, 0x1f5fa, 0x1f6c6, 0x1f6cb, 0x1f6cd, 0x1f6cf, 0x1f6d3, 0x1f6d4,
+  0x1f6d9, 0x1f6db, 0x1f6e0, 0x1f6ea, 0x1f6ed, 0x1f6f3, 0x1f6fd, 0x1f6ff, 0x1f774, 0x1f77f, 0x1f7d5,
+  0x1f7df, 0x1f7ec, 0x1f7ef, 0x1f7f1, 0x1f7ff, 0x1f80c, 0x1f80f, 0x1f848, 0x1f84f, 0x1f85a, 0x1f85f,
+  0x1f888, 0x1f88f, 0x1f8ae, 0x1f8ff, 0x1fa00, 0x1fa6f, 0x1fa7d, 0x1fa7f, 0x1fa8b, 0x1fa8d, 0x1fac7,
+  0x1fac7, 0x1fac9, 0x1facc, 0x1fadd, 0x1fade, 0x1faeb, 0x1faee, 0x1faf9, 0x1faff, 0x1fc00, 0x1fffd,
+];
 /**
  * The characters that take two columns, as ranges, first and last of each, in order: Unicode's
  * East Asian Wide and Fullwidth characters (EastAsianWidth.txt, `W` and `F`), as the
@@ -68,14 +93,14 @@ const WIDE: readonly number[] = [
   0x1faf8, 0x20000, 0x2fffd, 0x30000, 0x3fffd,
 ];
 
-/** Whether `code` takes two columns: a binary search of {@link WIDE}'s ranges. */
-function isWide(code: number): boolean {
+/** Whether `code` is in one of `ranges`, each its first and last, in order: a binary search. */
+function within(ranges: readonly number[], code: number): boolean {
   let low = 0;
-  let high = WIDE.length / 2 - 1;
+  let high = ranges.length / 2 - 1;
   while (low <= high) {
     const middle = (low + high) >> 1;
-    if (code < WIDE[middle * 2]) high = middle - 1;
-    else if (code > WIDE[middle * 2 + 1]) low = middle + 1;
+    if (code < ranges[middle * 2]) high = middle - 1;
+    else if (code > ranges[middle * 2 + 1]) low = middle + 1;
     else return true;
   }
   return false;
@@ -86,7 +111,9 @@ function width(text: string): number {
   if (!NOT_ASCII.test(text)) return text.length;
   let total = 0;
   const rest = text.replace(EMOJI, (emoji) => {
-    total += TEXT_EMOJI.test(emoji) ? 1 : 2;
+    // One pictograph alone may take one column; a sequence, or one asked to be drawn as an emoji, two.
+    const code = emoji.codePointAt(0) ?? 0;
+    total += emoji.length === String.fromCodePoint(code).length && within(NARROW, code) ? 1 : 2;
     return '';
   });
   for (const character of rest) {
@@ -95,7 +122,7 @@ function width(text: string): number {
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) continue;
     if (code >= 0x300 && code <= 0x36f) continue;
     if (code >= 0xfe00 && code <= 0xfe0f) continue;
-    total += isWide(code) ? 2 : 1;
+    total += within(WIDE, code) ? 2 : 1;
   }
   return total;
 }
