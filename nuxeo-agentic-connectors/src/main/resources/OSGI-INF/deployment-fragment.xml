@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<fragment version="1">
+
+  <!--
+    Change events from the systems of record: a system says a record changed, and the answers the
+    connector keeps for it are dropped. No authentication filter is mapped on
+    /agentic-connectors/*, on purpose: a system of record has no Nuxeo account, and the
+    connector's events secret, on the server, is what authenticates it (ChangeEvents). The
+    servlet opens no session and writes nothing. The servlet mapping is more specific than
+    Tomcat's default servlet, so the servlet alone answers for this path, and nothing on the
+    server's disk under it is served. The filters web.xml maps on every path, the CORS and CSRF
+    filter among them, apply to it too; the add-on's tests run the servlet without them.
+  -->
+  <extension target="web#SERVLET">
+    <servlet>
+      <servlet-name>Agentic Connector Change Events</servlet-name>
+      <servlet-class>org.nuxeo.agentic.connectors.ChangeEventServlet</servlet-class>
+    </servlet>
+  </extension>
+
+  <extension target="web#SERVLET-MAPPING">
+    <servlet-mapping>
+      <servlet-name>Agentic Connector Change Events</servlet-name>
+      <url-pattern>/agentic-connectors/events/*</url-pattern>
+    </servlet-mapping>
+  </extension>
+
+</fragment>

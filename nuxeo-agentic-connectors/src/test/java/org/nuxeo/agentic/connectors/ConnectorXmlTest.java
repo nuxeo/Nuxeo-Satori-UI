@@ -99,6 +99,49 @@ class ConnectorXmlTest {
         assertEquals("Connector.Read", ReadConnectorOperation.class.getAnnotation(Operation.class).id());
     }
 
+    /** The manifest's version is the add-on's, as the pom sets it: a bump in one and not the other fails. */
+    @Test
+    void theManifestsVersionIsTheAddOnsVersion() throws Exception {
+        String version = System.getProperty("connectors.version");
+        assertNotNull(version, "the build passes connectors.version to the tests");
+        java.util.Enumeration<java.net.URL> manifests = ConnectorXmlTest.class.getClassLoader()
+                                                                             .getResources("META-INF/MANIFEST.MF");
+        String found = null;
+        while (manifests.hasMoreElements()) {
+            try (InputStream in = manifests.nextElement().openStream()) {
+                java.util.jar.Attributes main = new Manifest(in).getMainAttributes();
+                String name = main.getValue("Bundle-SymbolicName");
+                if (name != null && name.startsWith("org.nuxeo.agentic.connectors;")) {
+                    found = main.getValue("Bundle-Version");
+                }
+            }
+        }
+        assertEquals(version, found);
+    }
+
+    /** The change events' servlet, on its one path, with no authentication filter mapped on it. */
+    @Test
+    void theDeploymentFragmentMapsTheChangeEventServletOnItsPathAlone() throws Exception {
+        String fragment = resource("OSGI-INF/deployment-fragment.xml");
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        org.w3c.dom.Document xml = factory.newDocumentBuilder()
+                                          .parse(new ByteArrayInputStream(fragment.getBytes(StandardCharsets.UTF_8)));
+        assertEquals(List.of(ChangeEventServlet.class.getName()), texts(xml, "servlet-class"));
+        assertEquals(List.of("/agentic-connectors/events/*"), texts(xml, "url-pattern"));
+        assertEquals(List.of(), texts(xml, "filter-mapping"));
+        assertEquals(2, xml.getElementsByTagName("extension").getLength());
+    }
+
+    private static List<String> texts(org.w3c.dom.Document xml, String tag) {
+        List<String> texts = new ArrayList<>();
+        org.w3c.dom.NodeList nodes = xml.getElementsByTagName(tag);
+        for (int i = 0; i < nodes.getLength(); i++) {
+            texts.add(nodes.item(i).getTextContent().trim());
+        }
+        return texts;
+    }
+
     @Test
     void theServicesDocumentedExampleIsAConnectorTheServerRegisters() throws Exception {
         Matcher code = CODE.matcher(resource("OSGI-INF/connectors-service.xml"));
