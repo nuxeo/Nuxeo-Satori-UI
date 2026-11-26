@@ -143,15 +143,30 @@ describe('CapturePhotos', () => {
     await photos.settled();
   });
 
+  it('remembers which record a request carried a photo to, through another preparation', async () => {
+    const photos = new CapturePhotos(codec, countedUrls());
+    photos.retarget(naming());
+    photos.add([photo()]);
+    await photos.settled();
+    const [one] = photos.items();
+    photos.update(one.id, { state: 'failed', failure: 'connection', sentTo: 'record-a' });
+    photos.retarget(naming());
+    await photos.settled();
+    expect(photos.items()[0]).toMatchObject({ state: 'ready', sentTo: 'record-a' });
+  });
+
   it('files again a photo not filed for a dropped connection, and not one the server refused', async () => {
     const photos = new CapturePhotos(codec, countedUrls());
     photos.retarget(naming());
     photos.add([photo(), photo(), photo()]);
     await photos.settled();
-    const [dropped, refused, large] = photos.items();
+    photos.add([photo()]);
+    await photos.settled();
+    const [dropped, refused, large, failed] = photos.items();
     photos.update(dropped.id, { state: 'failed', failure: 'connection' });
     photos.update(refused.id, { state: 'failed', failure: 'refused' });
     photos.update(large.id, { state: 'failed', failure: 'too-large' });
-    expect(photos.fileable().map((each) => each.id)).toEqual([dropped.id]);
+    photos.update(failed.id, { state: 'failed', failure: 'server' });
+    expect(photos.fileable().map((each) => each.id)).toEqual([dropped.id, failed.id]);
   });
 });

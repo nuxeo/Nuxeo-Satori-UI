@@ -3,7 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  type ElementRef,
+  ElementRef,
   afterNextRender,
   computed,
   inject,
@@ -34,11 +34,12 @@ import {
 import {
   EMPTY,
   type Observable,
+  type Subscription,
   catchError,
   concat,
   concatMap,
   defer,
-  distinctUntilChanged,
+  filter,
   from,
   map,
   of,
@@ -166,6 +167,7 @@ export class CapturePageComponent implements LeavableCapture {
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly photosMax = CAPTURE_PHOTOS_MAX;
   protected readonly photos = new CapturePhotos(inject(PHOTO_CODEC), inject(CAPTURE_OBJECT_URLS));
@@ -179,6 +181,10 @@ export class CapturePageComponent implements LeavableCapture {
   private readonly noteFiling = signal<NoteFiling | null>(null);
   /** A record is being chosen on the page, not named by the address it opened at. */
   private focusOnOpen = false;
+  /** The record open, or being opened: `undefined` before the first. */
+  private openUid: string | null | undefined = undefined;
+  /** The search for a number under way, cancelled by another or by a record chosen. */
+  private lookupRun: Subscription | null = null;
   /** The page is gone: a filing cut short by it says nothing, and moves no focus. */
   private left = false;
   /** What a screen reader is told as the page moves on, politely. */
@@ -221,6 +227,7 @@ export class CapturePageComponent implements LeavableCapture {
       this.target() !== null &&
       !this.filingNow() &&
       !this.photos.preparing() &&
+      !this.photos.busy() &&
       (this.toFile() > 0 || (this.noteToFile() && this.photos.done().length > 0)),
   );
   protected readonly noteState = computed(() => this.noteFiling()?.state ?? null);
@@ -237,7 +244,7 @@ export class CapturePageComponent implements LeavableCapture {
   constructor() {
     toObservable(this.recordId)
       .pipe(
-        distinctUntilChanged(),
+        filter((uid) => this.opens(uid)),
         switchMap((uid) => this.load(uid)),
         takeUntilDestroyed(),
       )
@@ -263,9 +270,32 @@ export class CapturePageComponent implements LeavableCapture {
       .pipe(map((agreed) => agreed === true));
   }
 
-  /** Asks the browser to confirm closing or reloading the tab while photos are not filed. */
+  /**
+   * Asks the browser to confirm closing or reloading the tab while photos are not filed, where it
+   * asks at all: Safari on iOS never does. `returnValue` as well, for the browsers that read it.
+   */
   protected holdUnload(event: BeforeUnloadEvent): void {
-    if (this.unfiled() > 0) event.preventDefault();
+    if (this.unfiled() === 0) return;
+    event.preventDefault();
+    Object.assign(event, { returnValue: '' });
+  }
+
+  /**
+   * Whether the address's record is one to open: not the one open already, and none while a filing
+   * is under way. Back or Forward during a filing changes the address without leaving the page;
+   * the address is put back, and the photos go on to the record they were being filed on.
+   */
+  private opens(uid: string | null): boolean {
+    if (uid === this.openUid) return false;
+    if (!this.filingNow()) return true;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { record: this.openUid ?? null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+    this.say('capture.filing.wait');
+    return false;
   }
 
   // ── The record ──
@@ -284,7 +314,8 @@ export class CapturePageComponent implements LeavableCapture {
       return;
     }
     this.lookup.set({ status: 'finding' });
-    this.records
+    this.lookupRun?.unsubscribe();
+    this.lookupRun = this.records
       .find(code.number)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -311,6 +342,7 @@ export class CapturePageComponent implements LeavableCapture {
   /** Opens a record: the address says which, so that Back returns to the one before. */
   protected choose(uid: string): void {
     if (this.filingNow()) return;
+    this.lookupRun?.unsubscribe();
     // Chosen here: once it opens, the focus goes to it, so that a screen reader goes on from there.
     // A record the address named as the page opened leaves the focus where the page put it.
     this.focusOnOpen = true;
@@ -325,6 +357,7 @@ export class CapturePageComponent implements LeavableCapture {
   /** Back to the find form. The photos stay, for the next record. */
   protected another(): void {
     if (this.filingNow()) return;
+    this.lookupRun?.unsubscribe();
     this.lookup.set({ status: 'idle' });
     void this.router.navigate([], {
       relativeTo: this.route,
@@ -339,6 +372,7 @@ export class CapturePageComponent implements LeavableCapture {
   }
 
   private load(uid: string | null): Observable<unknown> {
+    this.openUid = uid;
     if (!uid) {
       this.chosen.set({ status: 'none' });
       return EMPTY;
@@ -411,9 +445,28 @@ export class CapturePageComponent implements LeavableCapture {
     else this.say('capture.photos.added', { count: taken });
   }
 
+  /**
+   * Takes a photo out. The focus goes to the next photo's Remove, else the one before's, else Take a
+   * photo, since the button pressed goes with its photo.
+   */
   protected remove(photo: CapturePhoto, position: number): void {
+    const items = this.photos.items();
+    const at = items.findIndex((each) => each.id === photo.id);
+    const neighbour = items[at + 1] ?? items[at - 1] ?? null;
     this.photos.remove(photo.id);
     this.say('capture.photos.removed', { position });
+    afterNextRender(
+      () => {
+        const host = this.host.nativeElement;
+        const next = neighbour
+          ? host.querySelector<HTMLElement>(
+              `[data-capture-photo-id="${neighbour.id}"] .capture__remove button`,
+            )
+          : null;
+        (next ?? host.querySelector<HTMLElement>('[data-capture-take] button'))?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   // ── The filing ──
@@ -431,6 +484,8 @@ export class CapturePageComponent implements LeavableCapture {
     for (const id of queue) this.photos.update(id, { state: 'waiting', percent: 0, failure: null });
     this.filing.set({ status: 'filing' });
     this.say('capture.filing.started', { count: queue.length });
+    // File is disabled while the photos go: the focus goes to where the filing is said.
+    this.focusResult();
     concat(
       // One after another: a phone's connection carries one photo at a time best.
       from(queue).pipe(concatMap((id) => this.sendPhoto(record.uid, capture.property, id))),
@@ -446,8 +501,8 @@ export class CapturePageComponent implements LeavableCapture {
   private sendPhoto(uid: string, property: string, id: string): Observable<void> {
     const photo = this.photos.find(id);
     if (!photo?.prepared || photo.state !== 'waiting') return EMPTY;
-    const sentBefore = photo.sent;
-    this.photos.update(id, { state: 'uploading', percent: 0, sent: true });
+    const sentBefore = photo.sentTo === uid;
+    this.photos.update(id, { state: 'uploading', percent: 0, sentTo: uid });
     return this.filings
       .send(uid, property, photo.prepared.file, sentBefore, {
         onPercent: (percent) => this.photos.update(id, { state: 'uploading', percent }),
@@ -460,7 +515,8 @@ export class CapturePageComponent implements LeavableCapture {
           const failure = failureOf(error);
           this.photos.update(id, { state: 'failed', percent: 0, failure });
           // A file the server will not take: the next one may be fine.
-          if (failure === 'too-large' || failure === 'refused') return EMPTY;
+          if (failure === 'too-large' || failure === 'refused' || failure === 'server')
+            return EMPTY;
           return throwError(() => new StoppedFiling(failure));
         }),
       );
@@ -510,15 +566,15 @@ export class CapturePageComponent implements LeavableCapture {
     // Leaving the page completes the filing it cuts short: nothing was filed by that.
     if (this.left) return;
     const failed = this.photos.items().filter((photo) => photo.state === 'failed').length;
-    if (failed > 0) {
-      this.filing.set({ status: 'partly', failed });
-      this.say('capture.filing.partly', { count: failed });
-    } else {
-      const photos = this.photos.done().length;
-      const note = this.noteFiling()?.state === 'done';
-      this.filing.set({ status: 'done', photos, note });
-      this.say(note ? 'capture.filing.done-note' : 'capture.filing.done', { count: photos });
-    }
+    // Said once: by the result, which the focus moves to, and not the live region as well.
+    if (failed > 0) this.filing.set({ status: 'partly', failed });
+    else
+      this.filing.set({
+        status: 'done',
+        photos: this.photos.done().length,
+        note: this.noteFiling()?.state === 'done',
+      });
+    this.announcement.set('');
     this.focusResult();
   }
 
@@ -534,7 +590,7 @@ export class CapturePageComponent implements LeavableCapture {
     for (const photo of this.photos.items())
       if (photo.state === 'waiting') this.photos.update(photo.id, { state: 'ready' });
     this.filing.set({ status: 'stopped', failure });
-    this.say(`capture.filing.stopped.${failure}`);
+    this.announcement.set('');
     this.focusResult();
   }
 
@@ -558,8 +614,14 @@ export class CapturePageComponent implements LeavableCapture {
       .filter((photo) => photo.state !== 'done' && photo.state !== 'refused').length;
   }
 
+  /**
+   * Tells a screen reader, politely. The same words twice in a row, as two photos removed one after
+   * the other at the same place, end in a no-break space the second time, so that the region
+   * changes and is read again.
+   */
   private say(key: string, params?: Record<string, unknown>): void {
-    this.announcement.set(this.translate.instant(key, params));
+    const text = this.translate.instant(key, params) as string;
+    this.announcement.update((before) => (before === text ? `${text}\u00a0` : text));
   }
 
   // ── For the template ──

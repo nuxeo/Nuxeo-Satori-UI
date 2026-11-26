@@ -307,6 +307,21 @@ describe('CapturePageComponent', () => {
       expect(text('[role="status"]')).toBe('Photo 1 removed.');
     });
 
+    it("moves the focus to the next photo's Remove, else the one before's, else Take a photo", async () => {
+      await open();
+      await addPhotos('gallery', [photo(), photo(), photo()]);
+      button('Remove photo 2')?.click();
+      await settle();
+      // The third photo is the second now: its Remove has the focus.
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Remove photo 2');
+      button('Remove photo 2')?.click();
+      await settle();
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Remove photo 1');
+      button('Remove photo 1')?.click();
+      await settle();
+      expect(document.activeElement?.closest('[data-capture-take]')).not.toBeNull();
+    });
+
     it('revokes every object URL when the page is left', async () => {
       await open();
       await addPhotos('gallery', [photo(), photo()]);
@@ -427,6 +442,48 @@ describe('CapturePageComponent', () => {
       );
       // Refused for its size: not filed again by another press.
       expect(button('File the photos')?.disabled).toBe(true);
+    });
+
+    it('keeps filing on the record it started on when Back or Forward names another', async () => {
+      await ready(1);
+      button('File the photos')?.click();
+      await settle();
+      expect(sends).toHaveLength(1);
+      await harness.navigateByUrl(`/capture?record=${OTHER}`);
+      await settle();
+      // The address is put back, the other record is not read, and the photo goes on its way.
+      expect(TestBed.inject(Router).url).toBe(`/capture?record=${UID}`);
+      expect(records.load).not.toHaveBeenCalledWith(OTHER);
+      expect(text('[role="status"]')).toContain('being filed on this record');
+      expect(page().querySelector('[data-capture-photo]')?.getAttribute('data-state')).toBe(
+        'uploading',
+      );
+      sends[0].answer.next('sent');
+      sends[0].answer.complete();
+      await settle();
+      expect(sends[0].uid).toBe(UID);
+      expect(page().querySelector('[data-capture-done]')).not.toBeNull();
+    });
+
+    it('goes on past a photo the server failed to file, and offers it again', async () => {
+      await ready();
+      button('File the photos')?.click();
+      await settle();
+      sends[0].answer.error(new HttpErrorResponse({ status: 500 }));
+      await settle();
+      expect(sends).toHaveLength(2);
+      sends[1].answer.next('sent');
+      sends[1].answer.complete();
+      await settle();
+      expect(text('[data-capture-photo][data-state="failed"] [data-capture-photo-state]')).toBe(
+        'Not filed: the server could not file it. Try again later.',
+      );
+      expect(button('File the photos')?.disabled).toBe(false);
+      button('File the photos')?.click();
+      await settle();
+      expect(sends).toHaveLength(3);
+      // A request carried it to this record: the record is asked first.
+      expect(sends[2].sentBefore).toBe(true);
     });
 
     it('asks before leaving with photos not filed, and not otherwise', async () => {

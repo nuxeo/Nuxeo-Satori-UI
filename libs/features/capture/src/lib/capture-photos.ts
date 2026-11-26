@@ -18,6 +18,8 @@ export type CaptureFailure =
   | 'too-large'
   /** The server refused the file. */
   | 'refused'
+  /** The server failed to file it, a 500: another filing may do better. */
+  | 'server'
   /** The person may not add a file to the record. */
   | 'forbidden'
   /** The record is no longer there, or no longer theirs to read. */
@@ -43,8 +45,12 @@ export interface CapturePhoto {
   readonly refusal: PhotoRefusal | null;
   /** Why it was not filed. */
   readonly failure: CaptureFailure | null;
-  /** Whether a request has carried it: a retry asks the record first whether it already has it. */
-  readonly sent: boolean;
+  /**
+   * The record a request has carried it to, or `null`: filed on that record again, the page asks
+   * the record first whether it already has it. Kept when it is prepared again, since it is then
+   * named as before for the same record.
+   */
+  readonly sentTo: string | null;
 }
 
 /** How the photos are prepared for the record chosen: their names, and whether they keep a place. */
@@ -99,7 +105,8 @@ export class CapturePhotos {
     this.items().filter(
       (photo) =>
         photo.state === 'ready' ||
-        (photo.state === 'failed' && photo.failure !== 'too-large' && photo.failure !== 'refused'),
+        (photo.state === 'failed' &&
+          (photo.failure === 'connection' || photo.failure === 'server')),
     ),
   );
   readonly busy = computed(() =>
@@ -128,7 +135,9 @@ export class CapturePhotos {
   retarget(naming: CaptureNaming): void {
     this.naming = naming;
     for (const photo of this.items().filter((each) => each.state === 'done')) this.drop(photo.id);
-    for (const photo of this.items()) this.prepare(photo.id);
+    // A photo on its way is the filing's; the page does not change the record while one is.
+    for (const photo of this.items())
+      if (!['waiting', 'uploading', 'retrying'].includes(photo.state)) this.prepare(photo.id);
   }
 
   /** Adds photos, as many as there is room for, each prepared in turn. Returns how many it took. */
@@ -145,7 +154,7 @@ export class CapturePhotos {
       percent: 0,
       refusal: null,
       failure: null,
-      sent: false,
+      sentTo: null,
     }));
     this.list.update((items) => [...items, ...added]);
     for (const photo of added) this.prepare(photo.id);
@@ -213,7 +222,6 @@ export class CapturePhotos {
               percent: 0,
               refusal: null,
               failure: null,
-              sent: false,
             }
           : each,
       ),

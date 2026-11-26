@@ -2,29 +2,31 @@
  * A JPEG photo's own bytes, read and rewritten without decoding its picture: how it is laid out,
  * which way up it is seen (its EXIF orientation), and where it says it was taken.
  *
- * A phone's camera can write where a photo was taken in four places, and each is handled here:
+ * **What a photo keeps is listed, and nothing else is kept** ({@link stripJpegLocation}): the
+ * segments its picture needs to be decoded (frame, Huffman and quantisation tables, restart
+ * interval, arithmetic conditioning, the scans), its JFIF header, its colour profile, Adobe's colour
+ * transform, and its EXIF, with EXIF's GPS block and the camera maker's notes zeroed and unlinked.
+ * Everything else goes, wherever it is, between progressive scans too: XMP and IPTC, which can name
+ * the place; comments; the C2PA and JUMBF provenance segments recent phones write, which can repeat
+ * the GPS fields; any other application segment; and anything after the picture's end, such as a
+ * gain map or a depth map with metadata of its own, with the MPF index of it.
  *
- * - **EXIF's GPS block,** the IFD the `GPSInfo` tag (0x8825) points to: latitude, longitude,
- *   altitude, and the time and direction of the fix;
- * - **the camera maker's notes,** EXIF's `MakerNote` (0x927C), laid out as each maker likes and
- *   filled by some with a location too, so that it cannot be read for one;
- * - **XMP packets,** APP1 segments that can repeat the GPS fields or name the place;
- * - **IPTC,** in a Photoshop APP13 segment, which can name a city, a region and a country;
+ * **Read back by a stricter rule** ({@link locationCarriers}): any segment that is not on the list
+ * is a carrier, as is a GPS pointer in any IFD EXIF reaches, the maker's notes, EXIF that cannot be
+ * read, and data after the end. So a carrier the stripping missed is not let through by the check
+ * that follows it, which `prepare-photo.ts` makes on every photo before it is uploaded.
  *
- * and in a fifth a phone may put another picture with its own metadata: **after the picture's
- * end,** as a gain map or a depth map is, which a Multi-Picture Format (MPF) APP2 segment indexes.
- *
- * Nothing here decodes a picture: the canvas does that (`photo-codec.ts`). What `prepare-photo.ts`
- * makes of a photo is read back with {@link locationCarriers}, so that a photo is uploaded only
- * once it is seen to carry none. Every read is held to its segment's bounds: EXIF that points
- * outside itself is unreadable, and is never read past its end.
+ * Nothing here decodes a picture: the canvas does that (`photo-codec.ts`). Every read is held to its
+ * segment's bounds: EXIF that points outside itself is unreadable, and is never read past its end.
+ * A marker may be preceded by fill bytes (0xFF), as the standard allows; a segment's place is its
+ * marker's, so they are dropped when the photo is written again.
  */
 
 /** Where a photo can say where it was taken, as {@link locationCarriers} finds them. */
 export type LocationCarrier =
-  'gps' | 'maker-note' | 'xmp' | 'iptc' | 'trailing' | 'unreadable-exif';
+  'gps' | 'maker-note' | 'xmp' | 'iptc' | 'other-segment' | 'trailing' | 'unreadable-exif';
 
-/** One marker segment before the picture's data: its marker and where it is, `end` exclusive. */
+/** One marker segment: its marker, and where it is, from its 0xFF to `end`, exclusive. */
 export interface JpegSegment {
   readonly marker: number;
   readonly start: number;
@@ -37,6 +39,8 @@ export interface JpegLayout {
   readonly segments: readonly JpegSegment[];
   /** From the first scan's header to just past the end of image marker. */
   readonly scan: { readonly start: number; readonly end: number };
+  /** The marker segments between the scans, the scans' own headers among them. */
+  readonly interior: readonly JpegSegment[];
   /** Whether anything but zero padding follows the end of image. */
   readonly trailing: boolean;
   /** The picture's size as stored, before its orientation turns it. */
@@ -51,20 +55,28 @@ const APP0 = 0xe0;
 const APP1 = 0xe1;
 const APP2 = 0xe2;
 const APP13 = 0xed;
+const APP14 = 0xee;
 
 const EXIF_HEADER: readonly number[] = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]; // "Exif\0\0"
-const XMP_HEADERS: readonly string[] = [
-  'http://ns.adobe.com/xap/1.0/\u0000',
-  'http://ns.adobe.com/xmp/extension/\u0000',
+/** "Exif\0", and one byte: a writer may pad with another than NUL, as ExifTool accepts. */
+const EXIF_SIGNATURE: readonly number[] = EXIF_HEADER.slice(0, 5);
+const XMP_SIGNATURES: readonly string[] = [
+  'http://ns.adobe.com/xap/1.0/',
+  'http://ns.adobe.com/xmp/extension/',
 ];
-const MPF_HEADER: readonly number[] = [0x4d, 0x50, 0x46, 0x00]; // "MPF\0"
 
 const TAG_ORIENTATION = 0x0112;
 const TAG_EXIF_IFD = 0x8769;
 const TAG_GPS_IFD = 0x8825;
+const TAG_INTEROP_IFD = 0xa005;
 const TAG_MAKER_NOTE = 0x927c;
 const TAG_PIXEL_X = 0xa002;
 const TAG_PIXEL_Y = 0xa003;
+const TAG_THUMBNAIL = 0x0201;
+const TAG_THUMBNAIL_LENGTH = 0x0202;
+
+/** How many IFDs are followed in one EXIF segment: IFD0, IFD1, Exif and Interop, and a margin. */
+const MAX_IFDS = 8;
 
 /** The bytes one value of each TIFF type takes, by its number. A type not listed is unreadable. */
 const TYPE_SIZES: Readonly<Record<number, number>> = {
@@ -92,8 +104,32 @@ export function isJpeg(bytes: Uint8Array): boolean {
 }
 
 /**
+ * The marker segment whose 0xFF, or a fill byte before it, is at `at`: its marker and where it
+ * ends; a standalone marker (a restart, TEM) ends just past it. `null` when the bytes end first or
+ * a length lies.
+ */
+function markerAt(bytes: Uint8Array, at: number): JpegSegment | null {
+  if (bytes[at] !== 0xff) return null;
+  let m = at + 1;
+  // Any number of 0xFF fill bytes may come before a marker.
+  while (m < bytes.length && bytes[m] === 0xff) m += 1;
+  if (m >= bytes.length) return null;
+  const marker = bytes[m];
+  // The segment starts at the 0xFF just before its marker: the fill bytes are not part of it.
+  const start = m - 1;
+  if (marker === 0x01 || marker === SOI || marker === EOI || (marker >= 0xd0 && marker <= 0xd7))
+    return { marker, start, end: m + 1 };
+  if (m + 2 >= bytes.length) return null;
+  const length = (bytes[m + 1] << 8) | bytes[m + 2];
+  const end = m + 1 + length;
+  if (length < 2 || end > bytes.length) return null;
+  return { marker, start, end };
+}
+
+/**
  * How `bytes` are laid out as a JPEG: `null` for bytes that are not one, or one that ends before
- * its picture does. Every segment's length is held to the bytes there are.
+ * its picture does. Every segment's length is held to the bytes there are, and every step moves
+ * forward, so that a crafted file is read once, never in a loop.
  */
 export function readJpegLayout(bytes: Uint8Array): JpegLayout | null {
   if (!isJpeg(bytes)) return null;
@@ -102,32 +138,33 @@ export function readJpegLayout(bytes: Uint8Array): JpegLayout | null {
   let height = 0;
   let at = 2;
   while (at < bytes.length) {
-    if (bytes[at] !== 0xff) return null;
-    let m = at + 1;
-    // Any number of 0xFF fill bytes may come before a marker.
-    while (m < bytes.length && bytes[m] === 0xff) m += 1;
-    if (m >= bytes.length) return null;
-    const marker = bytes[m];
-    if (marker === EOI) return null;
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      at = m + 1;
+    const segment = markerAt(bytes, at);
+    if (!segment || segment.marker === EOI || segment.marker === SOI) return null;
+    const { marker, start, end } = segment;
+    if (end - start <= 2) {
+      // A standalone marker before the scan: nothing of it is kept or read.
+      at = end;
       continue;
     }
-    if (m + 2 >= bytes.length) return null;
-    const length = (bytes[m + 1] << 8) | bytes[m + 2];
-    const end = m + 1 + length;
-    if (length < 2 || end > bytes.length) return null;
-    if (isStartOfFrame(marker) && length >= 7) {
-      height = (bytes[m + 4] << 8) | bytes[m + 5];
-      width = (bytes[m + 6] << 8) | bytes[m + 7];
+    if (isStartOfFrame(marker) && end - start >= 9) {
+      height = (bytes[start + 5] << 8) | bytes[start + 6];
+      width = (bytes[start + 7] << 8) | bytes[start + 8];
     }
     if (marker === SOS) {
-      const close = endOfImage(bytes, end);
-      if (close === null || width === 0 || height === 0) return null;
-      const trailing = bytes.subarray(close).some((byte) => byte !== 0);
-      return { segments, scan: { start: at, end: close }, trailing, width, height };
+      if (width === 0 || height === 0) return null;
+      const read = readScans(bytes, segment);
+      if (!read) return null;
+      const trailing = bytes.subarray(read.end).some((byte) => byte !== 0);
+      return {
+        segments,
+        scan: { start, end: read.end },
+        interior: read.interior,
+        trailing,
+        width,
+        height,
+      };
     }
-    segments.push({ marker, start: at, end });
+    segments.push(segment);
     at = end;
   }
   return null;
@@ -139,27 +176,35 @@ function isStartOfFrame(marker: number): boolean {
 }
 
 /**
- * Where the picture ends, just past its end of image marker, read on from a scan's header: its
- * entropy-coded data, with its stuffed bytes and restart markers, and in a progressive JPEG the
- * tables and scans between. `null` when the bytes end first.
+ * The scans, read on from the first one's header: their entropy-coded data, with its stuffed bytes
+ * and restart markers, and every marker segment between them, as a progressive JPEG has its tables
+ * and further scans there, up to the end of image. `null` when the bytes end first.
  */
-function endOfImage(bytes: Uint8Array, from: number): number | null {
-  let i = from;
+function readScans(
+  bytes: Uint8Array,
+  first: JpegSegment,
+): { readonly end: number; readonly interior: readonly JpegSegment[] } | null {
+  const interior: JpegSegment[] = [first];
+  let i = first.end;
   while (i < bytes.length - 1) {
     if (bytes[i] !== 0xff) {
       i += 1;
       continue;
     }
     const next = bytes[i + 1];
-    if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) i += 2;
-    else if (next === 0xff) i += 1;
-    else if (next === EOI) return i + 2;
-    else {
-      if (i + 3 >= bytes.length) return null;
-      const length = (bytes[i + 2] << 8) | bytes[i + 3];
-      if (length < 2) return null;
-      i += 2 + length;
+    if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
+      i += 2;
+      continue;
     }
+    if (next === 0xff) {
+      i += 1;
+      continue;
+    }
+    if (next === EOI) return { end: i + 2, interior };
+    const segment = markerAt(bytes, i);
+    if (!segment || segment.end <= i) return null;
+    interior.push(segment);
+    i = segment.end;
   }
   return null;
 }
@@ -170,23 +215,50 @@ function startsWith(bytes: Uint8Array, at: number, prefix: readonly number[]): b
 }
 
 const codes = (text: string): number[] => [...text].map((char) => char.charCodeAt(0));
+const JFIF = codes('JFIF\0');
+const JFXX = codes('JFXX\0');
+const ICC = codes('ICC_PROFILE\0');
+const ADOBE = codes('Adobe');
 
 /** Where a segment's data starts: past its marker and its two length bytes. */
 const dataOf = (segment: JpegSegment): number => segment.start + 4;
 
 function isExif(bytes: Uint8Array, segment: JpegSegment): boolean {
-  return segment.marker === APP1 && startsWith(bytes, dataOf(segment), EXIF_HEADER);
+  return (
+    segment.marker === APP1 &&
+    segment.end - segment.start >= 4 + EXIF_HEADER.length &&
+    startsWith(bytes, dataOf(segment), EXIF_SIGNATURE)
+  );
 }
 
 function isXmp(bytes: Uint8Array, segment: JpegSegment): boolean {
   return (
     segment.marker === APP1 &&
-    XMP_HEADERS.some((header) => startsWith(bytes, dataOf(segment), codes(header)))
+    XMP_SIGNATURES.some((signature) => startsWith(bytes, dataOf(segment), codes(signature)))
   );
 }
 
-function isMpf(bytes: Uint8Array, segment: JpegSegment): boolean {
-  return segment.marker === APP2 && startsWith(bytes, dataOf(segment), MPF_HEADER);
+/** Whether the picture needs the segment to be decoded: a frame, a table, a restart interval. */
+function decodes(marker: number): boolean {
+  return (
+    isStartOfFrame(marker) ||
+    marker === 0xc4 || // DHT
+    marker === 0xcc || // DAC
+    marker === 0xdb || // DQT
+    marker === 0xdc || // DNL
+    marker === 0xdd || // DRI
+    marker === 0xde || // DHP
+    marker === 0xdf // EXP
+  );
+}
+
+/** The metadata kept beside EXIF, which says nothing of a place: JFIF, the colour profile, Adobe's. */
+function keptMetadata(bytes: Uint8Array, segment: JpegSegment): boolean {
+  const at = dataOf(segment);
+  if (segment.marker === APP0) return startsWith(bytes, at, JFIF) || startsWith(bytes, at, JFXX);
+  if (segment.marker === APP2) return startsWith(bytes, at, ICC);
+  if (segment.marker === APP14) return startsWith(bytes, at, ADOBE);
+  return false;
 }
 
 interface IfdEntry {
@@ -205,7 +277,7 @@ interface IfdEntry {
 class Tiff {
   private readonly view: DataView;
   private readonly little: boolean;
-  /** Where the TIFF header is: past the marker, the length and "Exif\0\0". */
+  /** Where the TIFF header is: past the marker, the length and "Exif\0" and its pad byte. */
   private readonly base = 4 + EXIF_HEADER.length;
   private readonly size: number;
 
@@ -282,6 +354,14 @@ class Tiff {
     return { offset, length };
   }
 
+  /** A one-number value, a SHORT or a LONG; `null` for another. */
+  number(entry: IfdEntry): number | null {
+    if (entry.count !== 1) return null;
+    if (entry.type === 3) return this.u16(entry.field);
+    if (entry.type === 4) return this.u32(entry.field);
+    return null;
+  }
+
   /** Takes `tag` out of the IFD at `offset`: the entries after it move up, and the count drops. */
   remove(offset: number, tag: number): void {
     const { entries, next } = this.ifd(offset);
@@ -315,11 +395,26 @@ class Tiff {
     return pointed === 0 ? null : pointed;
   }
 
-  /** IFD0, and IFD1 when there is one: where a GPS block's pointer may be. */
-  main(): number[] {
-    const first = this.first();
-    const second = this.u32(this.ifd(first).next);
-    return second === 0 ? [first] : [first, second];
+  /** IFD1's offset, the thumbnail's, when IFD0 links one; `null` otherwise. */
+  second(): number | null {
+    const next = this.u32(this.ifd(this.first()).next);
+    return next === 0 ? null : next;
+  }
+
+  /**
+   * Every IFD the segment reaches, each once: IFD0 and IFD1, and the Exif and Interop IFDs they
+   * point to. A GPS pointer may be in any of them, and is looked for in each.
+   */
+  reached(): number[] {
+    const found: number[] = [];
+    const queue = [this.first(), this.second()];
+    while (queue.length > 0 && found.length < MAX_IFDS) {
+      const offset = queue.shift();
+      if (offset === null || offset === undefined || found.includes(offset)) continue;
+      found.push(offset);
+      queue.push(this.pointer(offset, TAG_EXIF_IFD), this.pointer(offset, TAG_INTEROP_IFD));
+    }
+    return found;
   }
 }
 
@@ -331,58 +426,71 @@ function orientationIn(tiff: Tiff): number {
   return value >= 1 && value <= 8 ? value : 1;
 }
 
-/** Takes the GPS block and the maker's notes out of one EXIF segment. */
+/** Takes every GPS block, and the maker's notes, out of one EXIF segment. */
 function stripExif(tiff: Tiff): void {
-  for (const ifd of tiff.main()) {
+  for (const ifd of tiff.reached()) {
     const gps = tiff.pointer(ifd, TAG_GPS_IFD);
-    if (gps !== null) tiff.wipe(gps);
+    if (gps !== null) {
+      // An IFD chained after the GPS block is the block's too, and goes with it.
+      const chained = tiff.u32(tiff.ifd(gps).next);
+      tiff.wipe(gps);
+      if (chained !== 0 && chained !== gps) tiff.wipe(chained);
+    }
     tiff.remove(ifd, TAG_GPS_IFD);
+    const note = tiff.ifd(ifd).entries.find((entry) => entry.tag === TAG_MAKER_NOTE);
+    if (note) {
+      const { offset, length } = tiff.value(note);
+      tiff.zero(offset, length);
+      tiff.remove(ifd, TAG_MAKER_NOTE);
+    }
   }
-  const exif = tiff.pointer(tiff.first(), TAG_EXIF_IFD);
-  if (exif === null) return;
-  const note = tiff.ifd(exif).entries.find((entry) => entry.tag === TAG_MAKER_NOTE);
-  if (!note) return;
-  const { offset, length } = tiff.value(note);
-  tiff.zero(offset, length);
-  tiff.remove(exif, TAG_MAKER_NOTE);
 }
 
-/** What one EXIF segment carries of a location. */
+/** What one EXIF segment carries of a location: a GPS pointer, or the maker's notes, anywhere. */
 function exifCarriers(tiff: Tiff): LocationCarrier[] {
-  const found: LocationCarrier[] = [];
-  const gps = tiff
-    .main()
-    .some((ifd) => tiff.ifd(ifd).entries.some((entry) => entry.tag === TAG_GPS_IFD));
-  if (gps) found.push('gps');
-  const exif = tiff.pointer(tiff.first(), TAG_EXIF_IFD);
-  if (exif !== null && tiff.ifd(exif).entries.some((entry) => entry.tag === TAG_MAKER_NOTE))
-    found.push('maker-note');
-  return found;
+  const found = new Set<LocationCarrier>();
+  for (const ifd of tiff.reached()) {
+    const tags = tiff.ifd(ifd).entries.map((entry) => entry.tag);
+    if (tags.includes(TAG_GPS_IFD)) found.add('gps');
+    if (tags.includes(TAG_MAKER_NOTE)) found.add('maker-note');
+  }
+  return [...found];
 }
 
 function copyOf(bytes: Uint8Array, segment: JpegSegment): Uint8Array<ArrayBuffer> {
   return bytes.slice(segment.start, segment.end);
 }
 
+/** A carrier for a segment that is not EXIF: XMP, IPTC, or any other that is not on the list. */
+function segmentCarrier(bytes: Uint8Array, segment: JpegSegment): LocationCarrier | null {
+  if (decodes(segment.marker) || segment.marker === SOS || keptMetadata(bytes, segment))
+    return null;
+  if (isXmp(bytes, segment)) return 'xmp';
+  if (segment.marker === APP13) return 'iptc';
+  return 'other-segment';
+}
+
 /**
- * Every place a JPEG carries, or may carry, where it was taken: an EXIF GPS block, the maker's
- * notes, an XMP or an IPTC segment, or data after the picture's end. EXIF that cannot be read is
- * `unreadable-exif`, since what it holds cannot be told. Empty for a photo that says nowhere, and
- * `null` for bytes that are not a readable JPEG.
+ * Every place a JPEG carries, or may carry, where it was taken: a GPS pointer in any IFD its EXIF
+ * reaches, the maker's notes, EXIF that cannot be read, an XMP or an IPTC segment, any segment not
+ * on the list of those kept, before the scans or between them, and data after the picture's end.
+ * Empty for a photo that says nowhere, and `null` for bytes that are not a readable JPEG.
  */
 export function locationCarriers(bytes: Uint8Array): readonly LocationCarrier[] | null {
   const layout = readJpegLayout(bytes);
   if (!layout) return null;
   const found = new Set<LocationCarrier>();
-  for (const segment of layout.segments) {
+  for (const segment of [...layout.segments, ...layout.interior]) {
     if (isExif(bytes, segment)) {
       try {
         for (const carrier of exifCarriers(new Tiff(copyOf(bytes, segment)))) found.add(carrier);
       } catch {
         found.add('unreadable-exif');
       }
-    } else if (isXmp(bytes, segment)) found.add('xmp');
-    else if (segment.marker === APP13) found.add('iptc');
+      continue;
+    }
+    const carrier = segmentCarrier(bytes, segment);
+    if (carrier) found.add(carrier);
   }
   if (layout.trailing) found.add('trailing');
   return [...found];
@@ -405,52 +513,71 @@ export function swapsSides(orientation: number): boolean {
   return orientation >= 5 && orientation <= 8;
 }
 
-/** A JPEG of `head`'s segments and `layout`'s scan, after a start of image marker. */
+/**
+ * A JPEG of `head`'s segments and `layout`'s scans, after a start of image marker. Of what lies
+ * between the scans, only what decodes the picture is kept: a scan's header and data, a table.
+ */
 function assemble(
   bytes: Uint8Array,
   layout: JpegLayout,
   head: readonly Uint8Array[],
 ): Uint8Array<ArrayBuffer> {
-  const scan = bytes.subarray(layout.scan.start, layout.scan.end);
-  const parts = [...head, scan];
+  const parts: Uint8Array[] = [...head];
+  let at = layout.scan.start;
+  for (const segment of layout.interior) {
+    if (segment.marker === SOS || decodes(segment.marker)) continue;
+    parts.push(bytes.subarray(at, segment.start));
+    at = segment.end;
+  }
+  parts.push(bytes.subarray(at, layout.scan.end));
   const out = new Uint8Array(2 + parts.reduce((sum, part) => sum + part.length, 0));
   out[0] = 0xff;
   out[1] = SOI;
-  let at = 2;
+  let position = 2;
   for (const part of parts) {
-    out.set(part, at);
-    at += part.length;
+    out.set(part, position);
+    position += part.length;
   }
   return out;
 }
 
+/** An EXIF segment with its location taken out, its pad byte made NUL; `null` if unreadable. */
+function strippedExif(bytes: Uint8Array, segment: JpegSegment): Uint8Array<ArrayBuffer> | null {
+  const copy = copyOf(bytes, segment);
+  copy[4 + EXIF_HEADER.length - 1] = 0;
+  try {
+    stripExif(new Tiff(copy));
+    return copy;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The photo with nothing left of where it was taken: its EXIF GPS block and maker's notes zeroed
- * and unlinked, and every XMP and IPTC segment, anything after the picture's end and the MPF index
- * of it left out. The rest of its EXIF stays, its orientation and the time it was taken among it,
- * and so do its other segments, its colour profile among them, and its picture, byte for byte.
- * EXIF that cannot be read is left out whole. `null` for bytes that are not a readable JPEG.
+ * The photo with nothing left of where it was taken, by the list of what is kept (above): its
+ * picture byte for byte, the segments that decode it, JFIF, the colour profile, Adobe's colour
+ * transform, and its EXIF with every GPS block and the maker's notes zeroed and unlinked, its
+ * orientation and the time it was taken kept. Everything else is left out, anything after the
+ * picture's end included. EXIF that cannot be read is left out whole, its orientation kept in an
+ * EXIF segment of its own when that much of it can be read. `null` for bytes that are not a
+ * readable JPEG.
  */
 export function stripJpegLocation(bytes: Uint8Array): Uint8Array<ArrayBuffer> | null {
   const layout = readJpegLayout(bytes);
   if (!layout) return null;
   const head: Uint8Array[] = [];
   for (const segment of layout.segments) {
-    if (isXmp(bytes, segment) || segment.marker === APP13 || isMpf(bytes, segment)) continue;
-    if (!isExif(bytes, segment)) {
+    if (isExif(bytes, segment)) {
+      const stripped = strippedExif(bytes, segment);
+      if (stripped) head.push(stripped);
+      else {
+        // Left out: what EXIF that cannot be read holds cannot be told, so it is not sent. Its
+        // orientation, when that much of it can be read, goes on in an EXIF segment of its own.
+        const orientation = orientationOf(segment, bytes);
+        if (orientation !== 1) head.push(orientationExif(orientation));
+      }
+    } else if (decodes(segment.marker) || keptMetadata(bytes, segment))
       head.push(bytes.subarray(segment.start, segment.end));
-      continue;
-    }
-    const copy = copyOf(bytes, segment);
-    try {
-      stripExif(new Tiff(copy));
-      head.push(copy);
-    } catch {
-      // Left out: what EXIF that cannot be read holds cannot be told, so it is not sent. Its
-      // orientation, when that much of it can be read, goes on in an EXIF segment of its own.
-      const orientation = orientationOf(segment, bytes);
-      if (orientation !== 1) head.push(orientationExif(orientation));
-    }
   }
   return assemble(bytes, layout, head);
 }
@@ -495,9 +622,10 @@ export function withoutExif(bytes: Uint8Array): Uint8Array<ArrayBuffer> | null {
 
 /**
  * The first EXIF segment of `original`, made fit for its picture drawn upright at `width` by
- * `height`: orientation 1, the pixel dimensions given, and no thumbnail, whose picture would be
- * the old way up; and, unless `keepLocation`, no GPS block and no maker's notes. `null` when the
- * original has no EXIF, or EXIF that cannot be read.
+ * `height`: orientation 1, the pixel dimensions given, and no thumbnail, whose IFD and picture are
+ * zeroed and unlinked, since its picture would be the old way up; and, unless `keepLocation`, no
+ * GPS block and no maker's notes. `null` when the original has no EXIF, or EXIF that cannot be
+ * read.
  */
 export function uprightExif(
   original: Uint8Array,
@@ -509,6 +637,7 @@ export function uprightExif(
   const segment = layout?.segments.find((each) => isExif(original, each));
   if (!segment) return null;
   const copy = copyOf(original, segment);
+  copy[4 + EXIF_HEADER.length - 1] = 0;
   try {
     const tiff = new Tiff(copy);
     if (!keepLocation) stripExif(tiff);
@@ -516,7 +645,16 @@ export function uprightExif(
     const orientation = tiff.ifd(first).entries.find((entry) => entry.tag === TAG_ORIENTATION);
     if (orientation && orientation.type === 3 && orientation.count >= 1)
       tiff.set16(orientation.field, 1);
-    // The thumbnail is IFD1's: unlinked, so that no reader shows it the old way up.
+    const thumbnail = tiff.second();
+    if (thumbnail !== null) {
+      const entries = tiff.ifd(thumbnail).entries;
+      const at = entries.find((entry) => entry.tag === TAG_THUMBNAIL);
+      const length = entries.find((entry) => entry.tag === TAG_THUMBNAIL_LENGTH);
+      const start = at ? tiff.number(at) : null;
+      const size = length ? tiff.number(length) : null;
+      if (start !== null && size !== null && size > 0) tiff.zero(start, size);
+      tiff.wipe(thumbnail);
+    }
     tiff.set32(tiff.ifd(first).next, 0);
     const exif = tiff.pointer(first, TAG_EXIF_IFD);
     if (exif !== null) {

@@ -324,14 +324,18 @@ the document page's Attachments panel adds a file, and the record page links to 
   found by its id or its link only.
 - **The photos.** From the phone's camera, through the browser's file input with
   `capture="environment"`, or from its photos; at most 20 at a filing. Each one larger than 3,072
-  pixels on its longest side is drawn down to it, and each is turned upright as its EXIF
-  orientation says. A JPEG small enough goes as it came, its picture byte for byte.
-- **Where it was taken is taken out,** unless `keepLocation` says to keep it: from a JPEG, EXIF's
-  GPS block and the camera maker's notes, every XMP and IPTC segment, and anything after the
-  picture's end, as a gain map is; the rest of its EXIF stays, the time it was taken among it. A
-  picture in another format, whose metadata the page does not read, is drawn anew as a JPEG, which
-  carries none. What is sent is read back first, and a photo still seen to carry a location, or
-  that may, is not sent.
+  pixels on its longest side is drawn down to it, and turned upright on the canvas as its EXIF
+  orientation says; a JPEG small enough goes as it came, its picture byte for byte and its
+  orientation tag kept, which the viewer turns it by.
+- **Where it was taken is taken out,** unless `keepLocation` says to keep it. What a JPEG keeps is
+  listed, and nothing else is kept: the segments that decode its picture, its JFIF header, its
+  colour profile, Adobe's colour transform, and its EXIF with every GPS block and the camera maker's
+  notes zeroed and unlinked, the time it was taken kept. XMP, IPTC, comments, C2PA and every other
+  segment go, between progressive scans too, and so does anything after the picture's end, as a gain
+  map is. A picture in another format, whose metadata the page does not read, is drawn anew as a
+  JPEG, which carries none. What is sent is read back first by a stricter rule, any segment not on
+  the list counting, and a photo seen to carry a location, or that may, is not sent. Kept, a photo
+  drawn down keeps its EXIF, the GPS block among it, and not its XMP or IPTC.
 - **A note** typed beside the photos is filed after them, in the same property, as a text file
   that names the photos it goes with.
 - **What the page offers is not the control.** The record page links to the capture page for a

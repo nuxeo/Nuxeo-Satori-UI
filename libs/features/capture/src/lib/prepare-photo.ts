@@ -72,11 +72,13 @@ export interface PhotoPreparation {
  * side where it is larger, upright as its original's EXIF orientation says, and, unless the
  * layout keeps it, with nothing left of where it was taken.
  *
- * - **A JPEG** small enough is uploaded as it is, its location taken out of its own bytes
- *   (`stripJpegLocation`): its EXIF stays, orientation included, and its picture byte for byte.
- *   One larger is drawn anew from its picture as stored, turned upright by its orientation, and
- *   given its original's EXIF back with orientation 1, since its pixels are now upright, without
- *   the GPS block and the maker's notes, and with no thumbnail.
+ * - **A JPEG** small enough keeps its picture byte for byte, and only what `stripJpegLocation`
+ *   lists: the segments that decode it, its JFIF header, its colour profile, and its EXIF without
+ *   any GPS block or the maker's notes, its orientation tag kept, so that a viewer turns it. One
+ *   larger is drawn anew from its picture as stored, turned upright by its orientation on the
+ *   canvas, and given its original's EXIF back with orientation 1, since its pixels are now upright,
+ *   its new size, and no thumbnail; without the location unless the layout keeps it, and then only
+ *   EXIF's: an XMP or IPTC segment does not come across.
  * - **Any other picture** the browser reads, such as a PNG, a HEIC or a WebP, which this page
  *   cannot read the metadata of, is drawn anew as a JPEG, which carries none, turned as its format
  *   says; with `keepLocation`, it is uploaded as it came, at its size.
@@ -110,7 +112,7 @@ export async function preparePhoto(
     const out = preparation.keepLocation ? bytes : stripJpegLocation(bytes);
     if (!out) throw new PhotoRefused('unreadable');
     return {
-      file: jpegFile(out, preparation),
+      file: uploadFile(out, preparation),
       width,
       height,
       downscaled: false,
@@ -136,11 +138,13 @@ export async function preparePhoto(
   } catch {
     throw new PhotoRefused('unreadable');
   }
+  // A canvas writes little of its own, but what it writes is held to the same list as a photo's.
+  const cleaned = preparation.keepLocation ? drawn : stripJpegLocation(drawn);
   const exif = uprightExif(bytes, size.width, size.height, preparation.keepLocation);
-  const out = exif ? withExif(drawn, exif) : drawn;
+  const out = cleaned && exif ? withExif(cleaned, exif) : cleaned;
   if (!out) throw new PhotoRefused('unreadable');
   return {
-    file: jpegFile(out, preparation),
+    file: uploadFile(out, preparation),
     ...size,
     downscaled: true,
     location,
@@ -188,8 +192,10 @@ async function prepareOther(
   } catch {
     throw new PhotoRefused('unreadable');
   }
+  const cleaned = stripJpegLocation(drawn);
+  if (!cleaned) throw new PhotoRefused('unreadable');
   return {
-    file: jpegFile(drawn, preparation),
+    file: uploadFile(cleaned, preparation),
     ...size,
     downscaled: size.width !== measured.width || size.height !== measured.height,
     // What another format said of a place cannot be read here: drawn anew, it says nothing.
@@ -199,9 +205,10 @@ async function prepareOther(
 
 /**
  * The upload, as a JPEG named as the preparation says. Unless the layout keeps its location, the
- * bytes are read back first, and refused if they carry one, or may.
+ * bytes are read back first, by `locationCarriers`' stricter rule, and refused if they carry one,
+ * or may: a segment not on the list of those kept, a GPS pointer anywhere, data after the end.
  */
-function jpegFile(bytes: Uint8Array<ArrayBuffer>, preparation: PhotoPreparation): File {
+export function uploadFile(bytes: Uint8Array<ArrayBuffer>, preparation: PhotoPreparation): File {
   if (!preparation.keepLocation) {
     const carried = locationCarriers(bytes);
     if (carried === null) throw new PhotoRefused('unreadable');

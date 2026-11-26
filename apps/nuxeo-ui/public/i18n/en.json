@@ -3949,7 +3949,8 @@
         "too-large": "Not filed: the server does not take a file this large.",
         "refused": "Not filed: the server refused it.",
         "forbidden": "Not filed: you may not add files to this record.",
-        "gone": "Not filed: the record is no longer there."
+        "gone": "Not filed: the record is no longer there.",
+        "server": "Not filed: the server could not file it. Try again later."
       }
     },
     "note": {
@@ -3961,7 +3962,8 @@
         "too-large": "The note was not filed: the server does not take a file this large.",
         "refused": "The note was not filed: the server refused it.",
         "forbidden": "The note was not filed: you may not add files to this record.",
-        "gone": "The note was not filed: the record is no longer there."
+        "gone": "The note was not filed: the record is no longer there.",
+        "server": "The note was not filed: the server could not file it."
       }
     },
     "filing": {
@@ -3980,8 +3982,10 @@
         "forbidden": "You may not add files to this record, so the filing stopped.",
         "gone": "The record is no longer there, so the filing stopped.",
         "too-large": "The note was too large for the server, so it was not filed.",
-        "refused": "The server refused the note, so it was not filed."
-      }
+        "refused": "The server refused the note, so it was not filed.",
+        "server": "The server could not file the note, so it was not filed."
+      },
+      "wait": "The photos are being filed on this record: choose another once they are."
     },
     "leave": {
       "title": "Leave without filing?",

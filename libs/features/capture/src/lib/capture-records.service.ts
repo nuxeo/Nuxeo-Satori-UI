@@ -6,7 +6,7 @@ import {
   canWriteDocument,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { type Observable, map, of, switchMap } from 'rxjs';
+import { type Observable, map, of, switchMap, timeout } from 'rxjs';
 
 import { captureLookup, type CaptureTarget } from './capture-code';
 
@@ -34,6 +34,9 @@ export interface CaptureChoice {
   readonly number: string | null;
 }
 
+/** How long a read or a search may take before the page says it failed, and offers Retry. */
+export const CAPTURE_READ_TIMEOUT_MS = 30_000;
+
 /** How many records a number may name before the page asks for a longer one. */
 export const CAPTURE_CHOICES_MAX = 20;
 
@@ -59,6 +62,7 @@ export class CaptureRecordsService {
         'enrichers.document': 'permissions',
       })
       .pipe(
+        timeout({ first: CAPTURE_READ_TIMEOUT_MS }),
         switchMap((document) =>
           this.layouts.captureFor(document).pipe(
             map((capture): CaptureRecord => ({
@@ -94,7 +98,10 @@ export class CaptureRecordsService {
           .get<{ readonly entries?: readonly NuxeoDocument[] }>(SEARCH, params, {
             properties: '*',
           })
-          .pipe(map((list) => choicesOf(list.entries ?? [], targets)));
+          .pipe(
+            timeout({ first: CAPTURE_READ_TIMEOUT_MS }),
+            map((list) => choicesOf(list.entries ?? [], targets)),
+          );
       }),
     );
   }

@@ -7,6 +7,7 @@ import {
   jpeg,
   latitudeBytes,
   phoneExif,
+  segment,
   xmpSegment,
 } from './photo-fixtures.testing';
 import { locationCarriers, readJpegLayout, readOrientation } from './photo-metadata';
@@ -15,6 +16,7 @@ import {
   CAPTURE_MAX_EDGE,
   PhotoRefused,
   preparePhoto,
+  uploadFile,
   type PhotoRefusal,
 } from './prepare-photo';
 
@@ -27,7 +29,7 @@ const bytesOf = async (file: Blob): Promise<Uint8Array> => new Uint8Array(await 
 function standInCodec(
   options: {
     readonly measured?: { width: number; height: number };
-    readonly draws?: Uint8Array;
+    readonly draws?: Uint8Array<ArrayBuffer>;
   } = {},
 ) {
   const drawn: { source: Uint8Array; drawing: PhotoDrawing }[] = [];
@@ -166,20 +168,36 @@ describe('preparePhoto: a JPEG larger than the longest side', () => {
     expect(contains(out, latitudeBytes())).toBe(true);
   });
 
-  it('is refused, not sent, when what the canvas drew carries a location', async () => {
-    // The page's own check of what it uploads: a canvas that wrote XMP would be caught here.
+  it('holds what the canvas wrote to the same list: its own XMP does not go', async () => {
     const leaky = jpeg(2304, 3072, [jfifSegment(), xmpSegment()]);
     const { codec } = standInCodec({ draws: leaky });
-    expect(
-      await refusal(
-        preparePhoto(
-          photoFile(phonePhoto(4000, 3000, 6)),
-          { name: 'p', keepLocation: false },
-          codec,
-        ),
-      ),
-    ).toBe('location');
+    const prepared = await preparePhoto(
+      photoFile(phonePhoto(4000, 3000, 6)),
+      { name: 'p', keepLocation: false },
+      codec,
+    );
+    const out = await bytesOf(prepared.file);
+    expect(contains(out, 'GPSLatitude')).toBe(false);
+    expect(locationCarriers(out)).toEqual([]);
   });
+
+  for (const orientation of [2, 3, 4, 5, 7, 8]) {
+    it(`gives the canvas orientation ${orientation}, and the sides upright`, async () => {
+      const { codec, drawn } = standInCodec();
+      const prepared = await preparePhoto(
+        photoFile(phonePhoto(4000, 3000, orientation)),
+        { name: 'p', keepLocation: false },
+        codec,
+      );
+      const swapped = orientation >= 5;
+      expect(drawn[0].drawing).toMatchObject({
+        orientation,
+        width: swapped ? 2304 : 3072,
+        height: swapped ? 3072 : 2304,
+      });
+      expect(readOrientation(await bytesOf(prepared.file))).toBe(1);
+    });
+  }
 
   it('is refused as unreadable when the canvas cannot draw it', async () => {
     const codec: PhotoCodec = {
@@ -240,6 +258,30 @@ describe('preparePhoto: another format', () => {
         ),
       ),
     ).toBe('unreadable');
+  });
+});
+
+describe('uploadFile: what is uploaded, read back', () => {
+  it('refuses, unless the location is kept, a JPEG that carries one, or may, or is none', () => {
+    const named = { name: 'p', keepLocation: false };
+    const refused = (bytes: Uint8Array<ArrayBuffer>): PhotoRefusal | 'sent' => {
+      try {
+        uploadFile(bytes, named);
+        return 'sent';
+      } catch (error) {
+        return (error as PhotoRefused).reason;
+      }
+    };
+    expect(refused(jpeg(10, 10, [phoneExif(1)]))).toBe('location');
+    expect(refused(jpeg(10, 10, [xmpSegment()]))).toBe('location');
+    expect(refused(jpeg(10, 10, [segment(0xfe, [0x41, 0x42])]))).toBe('location');
+    expect(refused(jpeg(10, 10, [], [1, 2, 3]))).toBe('location');
+    expect(refused(new Uint8Array([1, 2, 3, 4]))).toBe('unreadable');
+    expect(refused(jpeg(10, 10, [jfifSegment(), iccSegment()]))).toBe('sent');
+    // Kept, it is not read back: the layout asks for the location.
+    expect(uploadFile(jpeg(10, 10, [phoneExif(1)]), { name: 'p', keepLocation: true }).name).toBe(
+      'p.jpg',
+    );
   });
 });
 

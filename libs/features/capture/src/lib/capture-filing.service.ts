@@ -3,13 +3,17 @@ import { Injectable, InjectionToken, inject } from '@angular/core';
 import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   type Observable,
+  Subject,
   TimeoutError,
   catchError,
   defer,
   map,
+  merge,
   of,
   retry,
+  startWith,
   switchMap,
+  take,
   throwError,
   timeout,
   timer,
@@ -28,8 +32,20 @@ export const CAPTURE_RETRY_DELAYS = new InjectionToken<readonly number[]>('CAPTU
   factory: () => [1_000, 4_000, 10_000],
 });
 
-/** How long one file may take to send before the try is given up as a dropped connection. */
-export const CAPTURE_SEND_TIMEOUT_MS = 180_000;
+/**
+ * How long a try may send nothing more before it is given up as a dropped connection: a stall,
+ * not a slow connection, which goes on as long as it moves.
+ */
+export const CAPTURE_STALL_MS = 60_000;
+
+/**
+ * How long the server may take to answer once the whole file is sent. Longer than a stall: it is
+ * saving the file, and a try given up too soon could leave it saved and sent again.
+ */
+export const CAPTURE_ANSWER_MS = 180_000;
+
+/** How long the read of the record before a try again may take. */
+export const CAPTURE_HELD_MS = 15_000;
 
 /** How a file went: sent now, or found on the record already, from a try whose answer was lost. */
 export type CaptureSent = 'sent' | 'found';
@@ -45,13 +61,15 @@ export interface CaptureProgress {
 const FOUND = Symbol('found');
 
 /**
- * A failure another try may mend: no answer (the connection dropped, status 0, or the try took too
- * long), a timeout or too many requests, or a server that did not manage it (5xx).
+ * A failure another try may mend: no answer (the connection dropped, status 0, or a try that
+ * stalled), a timeout or too many requests, or a gateway that could not reach the server or a
+ * server too busy to answer (502, 503, 504). A 500 is the server's own failure, which trying again
+ * does not mend.
  */
 export function transient(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
   if (!(error instanceof HttpErrorResponse)) return false;
-  return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500;
+  return [0, 408, 429, 502, 503, 504].includes(error.status);
 }
 
 /** What the page says of a failure. A failure no try could mend is never `connection`. */
@@ -61,6 +79,7 @@ export function failureOf(error: unknown): CaptureFailure {
   if (status === 403) return 'forbidden';
   if (status === 404) return 'gone';
   if (status === 413) return 'too-large';
+  if (status !== null && status >= 500) return 'server';
   return 'refused';
 }
 
@@ -69,11 +88,14 @@ export function failureOf(error: unknown): CaptureFailure {
  * through `DocumentDetailService.uploadAttachment`, into the property the capture names, with the
  * person's own permission, which the server checks.
  *
- * A dropped connection is tried again, after each of {@link CAPTURE_RETRY_DELAYS}. Before each try
- * again, and before the first try of a file a request has carried already, the record is read:
- * a file of the same name and size there is the earlier try's, whose answer was lost, and is not
- * sent twice. Each photo's name is the page's own and unique, so that this cannot mistake another
- * file for it. A refusal, such as a 403, is not tried again.
+ * A dropped connection is tried again, after each of {@link CAPTURE_RETRY_DELAYS}: no answer, a try
+ * that sent nothing for {@link CAPTURE_STALL_MS}, or one whose answer took longer than
+ * {@link CAPTURE_ANSWER_MS} once the file was sent. Before each try again, and before the first try
+ * of a file a request has carried already, the record is read: a file of the same name and size
+ * there is the earlier try's, whose answer was lost, and is not sent again. Each photo's name is
+ * the page's own and unique, so that this cannot mistake another file for it. A file the server is
+ * still saving when the record is read is not there yet, and can be sent twice. A refusal, such as
+ * a 403, is not tried again.
  */
 @Injectable({ providedIn: 'root' })
 export class CaptureFilingService {
@@ -88,13 +110,7 @@ export class CaptureFilingService {
     sentBefore: boolean,
     progress: CaptureProgress,
   ): Observable<CaptureSent> {
-    const upload = defer(() =>
-      this.details.uploadAttachment(uid, file, {
-        xpath: property,
-        onUploadPercent: progress.onPercent,
-      }),
-    ).pipe(
-      timeout({ first: CAPTURE_SEND_TIMEOUT_MS }),
+    const upload = defer(() => this.attempt(uid, property, file, progress)).pipe(
       map((): CaptureSent => 'sent'),
       retry({
         count: this.delays.length,
@@ -118,12 +134,41 @@ export class CaptureFilingService {
   }
 
   /**
-   * Whether the record holds the file already. A read that fails, as it does while the connection
-   * is still down, answers no: the file is sent again, and that try tells.
+   * One try: the upload, watched. Each piece the browser sends restarts the watch, which gives the
+   * try up as a {@link TimeoutError} after {@link CAPTURE_STALL_MS} with nothing sent, or after
+   * {@link CAPTURE_ANSWER_MS} once all of it is sent and the server is to answer.
+   */
+  private attempt(
+    uid: string,
+    property: string,
+    file: File,
+    progress: CaptureProgress,
+  ): Observable<unknown> {
+    const sent = new Subject<number>();
+    const request = this.details.uploadAttachment(uid, file, {
+      xpath: property,
+      onUploadPercent: (percent) => {
+        sent.next(percent);
+        progress.onPercent(percent);
+      },
+    });
+    const watch = sent.pipe(
+      startWith(0),
+      switchMap((percent) => timer(percent >= 100 ? CAPTURE_ANSWER_MS : CAPTURE_STALL_MS)),
+      switchMap(() => throwError(() => new TimeoutError())),
+    );
+    return merge(request, watch).pipe(take(1));
+  }
+
+  /**
+   * Whether the record holds the file already. A read that fails, or takes longer than
+   * {@link CAPTURE_HELD_MS}, as it does while the connection is still down, answers no: the file is
+   * sent again, and that try tells.
    */
   private held(uid: string, property: string, file: File): Observable<boolean> {
-    return this.records
-      .holds(uid, property, file.name, file.size)
-      .pipe(catchError(() => of(false)));
+    return this.records.holds(uid, property, file.name, file.size).pipe(
+      timeout({ first: CAPTURE_HELD_MS }),
+      catchError(() => of(false)),
+    );
   }
 }

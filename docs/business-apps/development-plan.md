@@ -582,7 +582,8 @@ through the browser's file input. The person chooses the record by its number or
 pasted or scanned by a scanner that types, by a link, or from the record page's link; takes photos
 with the camera or chooses them, looks them over, removes any, adds a note, and files them as the
 record's attachments, through the Attachments panel's upload, with its progress and a try again
-after a dropped connection that never files a photo twice. Each photo is drawn down to 3,072 pixels
+after a dropped connection, which looks for the photo on the record first so that one whose
+answer was lost is not filed again. Each photo is drawn down to 3,072 pixels
 where larger, upright as its EXIF orientation says, and with its location taken out unless the
 layout keeps it. A type's `view` layout turns it on, `capture` (layout-v2.md, section 2), and the
 moves kit's damage claim does, since 0.3.0, so that a driver files a photo on the claim of the move

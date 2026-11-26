@@ -26,6 +26,7 @@ import {
   of,
   shareReplay,
   switchMap,
+  tap,
   timeout,
 } from 'rxjs';
 
@@ -330,6 +331,7 @@ export class DocumentLayoutService {
   private index$: Observable<LayoutIndex> | null = null;
   private readonly files = new Map<string, Observable<ContributedFile | null>>();
   private readonly recordFiles = new Map<string, Observable<RecordLayoutFile | null>>();
+  private readonly typeCaptures = new Map<string, Observable<RecordCapture | null>>();
   private readonly taskFiles = new Map<string, Observable<FormLayoutFile | null>>();
   private readonly types = new Map<string, Observable<DocumentTypeDefinition | null>>();
   private readonly schemas = new Map<string, Observable<DocumentTypeSchema | null>>();
@@ -408,7 +410,7 @@ export class DocumentLayoutService {
           ),
         ];
         if (types.length === 0) return of([]);
-        return forkJoin(types.map((type) => this.typeCapture(type, []))).pipe(
+        return forkJoin(types.map((type) => this.typeOnlyCapture(type))).pipe(
           map((captures) =>
             types.flatMap((type, at) => {
               const capture = captures[at];
@@ -756,6 +758,25 @@ export class DocumentLayoutService {
         };
       }),
     );
+  }
+
+  /**
+   * A type's capture held to its own schemas, read once per session, as its file and its type are:
+   * a lookup of a number asks it of every type, and its console notes are told once.
+   */
+  private typeOnlyCapture(type: string): Observable<RecordCapture | null> {
+    let cached = this.typeCaptures.get(type);
+    if (!cached) {
+      cached = this.typeCapture(type, []).pipe(
+        // None, as when the type's schemas could not be read, is asked again next time.
+        tap((capture) => {
+          if (capture === null) this.typeCaptures.delete(type);
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      this.typeCaptures.set(type, cached);
+    }
+    return cached;
   }
 
   /** A type's capture, held to its schemas and those of `documentSchemas`: see `captureFor`. */

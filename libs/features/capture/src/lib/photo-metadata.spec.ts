@@ -114,6 +114,8 @@ describe('locationCarriers', () => {
       'gps',
       'iptc',
       'maker-note',
+      // The MPF index of the gain map: not on the list of what is kept.
+      'other-segment',
       'trailing',
       'xmp',
     ]);
@@ -187,6 +189,144 @@ describe('stripJpegLocation', () => {
   });
 });
 
+describe('what is kept is listed, and nothing else is', () => {
+  /** A segment, written with `fill` 0xFF fill bytes before its marker, as the standard allows. */
+  const filled = (fill: number, part: Uint8Array): Uint8Array =>
+    new Uint8Array([...new Array(fill).fill(0xff), ...part]);
+  const PLACE = 'Wharf Lane depot';
+  const comment = () => segment(0xfe, new Uint8Array([...PLACE].map((c) => c.charCodeAt(0))));
+  const jumbf = () =>
+    segment(
+      0xeb,
+      new Uint8Array([0x4a, 0x50, 0, 1, ...[...'c2pa GPS 51.5'].map((c) => c.charCodeAt(0))]),
+    );
+  const app3 = () => segment(0xe3, new Uint8Array([...PLACE].map((c) => c.charCodeAt(0))));
+  const adobe = () =>
+    segment(
+      0xee,
+      new Uint8Array(
+        [...'Adobe'].map((c) => c.charCodeAt(0)),
+        0,
+        100,
+        0,
+        0,
+        0,
+        0,
+        1,
+      ),
+    );
+
+  it('reads a segment after fill bytes at its marker, and finds and strips it there', () => {
+    const photo = jpeg(10, 10, [
+      filled(1, phoneExif(6)),
+      filled(3, xmpSegment()),
+      filled(2, mpfSegment()),
+      filled(1, iccSegment()),
+    ]);
+    expect(readOrientation(photo)).toBe(6);
+    expect([...(locationCarriers(photo) ?? [])].sort()).toEqual([
+      'gps',
+      'maker-note',
+      'other-segment',
+      'xmp',
+    ]);
+    const out = stripJpegLocation(photo);
+    expect(out && locationCarriers(out)).toEqual([]);
+    expect(out && contains(out, latitudeBytes())).toBe(false);
+    expect(out && contains(out, 'GPSLatitude')).toBe(false);
+    expect(out && readOrientation(out)).toBe(6);
+    expect(out && contains(out, 'ICC_PROFILE')).toBe(true);
+    // The fill bytes are not written again.
+    expect(out && contains(out, new Uint8Array([0xff, 0xff]))).toBe(false);
+  });
+
+  it("drops a comment, JUMBF and C2PA, and any other application segment, and keeps Adobe's", () => {
+    const photo = jpeg(10, 10, [jfifSegment(), comment(), jumbf(), app3(), adobe()]);
+    expect(locationCarriers(photo)).toEqual(['other-segment']);
+    const out = stripJpegLocation(photo);
+    expect(out && locationCarriers(out)).toEqual([]);
+    expect(out && contains(out, PLACE)).toBe(false);
+    expect(out && contains(out, 'c2pa')).toBe(false);
+    expect(out && contains(out, 'Adobe')).toBe(true);
+    expect(out && contains(out, 'JFIF')).toBe(true);
+  });
+
+  it('finds XMP written without its NUL, and drops it', () => {
+    const bare = segment(
+      0xe1,
+      new Uint8Array(
+        [...'http://ns.adobe.com/xap/1.0/<x:xmpmeta GPS/>'].map((c) => c.charCodeAt(0)),
+      ),
+    );
+    const photo = jpeg(10, 10, [bare]);
+    expect(locationCarriers(photo)).toEqual(['xmp']);
+    const out = stripJpegLocation(photo);
+    expect(out && contains(out, 'xmpmeta')).toBe(false);
+  });
+
+  it('reads EXIF padded with another byte than NUL, as ExifTool does, and strips it', () => {
+    const exif = phoneExif(6);
+    exif[9] = 0x20;
+    const photo = jpeg(10, 10, [exif]);
+    expect(readOrientation(photo)).toBe(6);
+    expect(locationCarriers(photo)).toContain('gps');
+    const out = stripJpegLocation(photo);
+    expect(out && locationCarriers(out)).toEqual([]);
+    expect(out && readOrientation(out)).toBe(6);
+  });
+
+  it('finds a GPS pointer in the Exif IFD, not only in IFD0 and IFD1, and strips it', () => {
+    const photo = jpeg(10, 10, [
+      exifSegment(
+        tiff({
+          ifd0: [{ tag: 0x8769, value: { ifd: 'exif' } }],
+          exif: [{ tag: 0x8825, value: { ifd: 'gps' } }],
+          gps: [{ tag: 0x0002, value: { rational: [51, 1, 30, 1, 264, 10] } }],
+        }),
+      ),
+    ]);
+    expect(locationCarriers(photo)).toEqual(['gps']);
+    const out = stripJpegLocation(photo);
+    expect(out && locationCarriers(out)).toEqual([]);
+    expect(out && contains(out, latitudeBytes())).toBe(false);
+    // And so in the EXIF a photo drawn anew is given back.
+    const exif = uprightExif(photo, 10, 10, false);
+    expect(exif && contains(exif, latitudeBytes())).toBe(false);
+  });
+
+  it('drops what lies between progressive scans but their tables, and keeps the scans', () => {
+    // SOI, frame, scan 1 header and data, XMP, a table, scan 2 header and data, end of image.
+    const frame = segment(0xc2, [8, 0, 10, 0, 10, 1, 1, 0x11, 0]);
+    const scanHeader = segment(0xda, [1, 1, 0, 0, 63, 0]);
+    const table = segment(0xc4, [0x00, 1, 2, 3]);
+    const photo = new Uint8Array([
+      0xff,
+      0xd8,
+      ...frame,
+      ...scanHeader,
+      0x11,
+      0x22,
+      ...xmpSegment(),
+      ...comment(),
+      ...table,
+      ...scanHeader,
+      0x33,
+      0xff,
+      0x00,
+      0x44,
+      0xff,
+      0xd9,
+    ]);
+    expect([...(locationCarriers(photo) ?? [])].sort()).toEqual(['other-segment', 'xmp']);
+    const out = stripJpegLocation(photo);
+    expect(out && locationCarriers(out)).toEqual([]);
+    expect(out && contains(out, 'GPSLatitude')).toBe(false);
+    expect(out && contains(out, PLACE)).toBe(false);
+    expect(out && contains(out, table)).toBe(true);
+    expect(out && contains(out, new Uint8Array([0x33, 0xff, 0x00, 0x44, 0xff, 0xd9]))).toBe(true);
+  });
+});
+
 describe('a photo drawn anew', () => {
   it('withoutExif leaves the canvas nothing to turn the picture by', () => {
     const out = withoutExif(phonePhoto(6));
@@ -218,6 +358,31 @@ describe('a photo drawn anew', () => {
         ?.segments.slice(0, 2)
         .map((each) => each.marker),
     ).toEqual([0xe0, 0xe1]);
+  });
+
+  it("uprightExif zeroes the thumbnail's IFD and picture, which would be the old way up", () => {
+    const thumbnail = new Uint8Array([0xff, 0xd8, 0x54, 0x48, 0x55, 0x4d, 0x42, 0xff, 0xd9]);
+    const structure = tiff({
+      ifd0: [{ tag: 0x0112, value: { short: [6] } }],
+      ifd1: [
+        { tag: 0x0201, value: { long: [0] } },
+        { tag: 0x0202, value: { long: [thumbnail.length] } },
+      ],
+    });
+    // The thumbnail's picture after the IFDs, and its offset written into IFD1's first entry.
+    const at = structure.length;
+    const whole = new Uint8Array([...structure, ...thumbnail]);
+    const view = new DataView(whole.buffer);
+    const ifd1 = view.getUint32(8 + 2 + 12, true);
+    view.setUint32(ifd1 + 2 + 8, at, true);
+    const photo = jpeg(10, 10, [exifSegment(whole)]);
+    expect(contains(photo, 'THUMB')).toBe(true);
+    const exif = uprightExif(photo, 10, 10, false);
+    expect(exif && contains(exif, 'THUMB')).toBe(false);
+    // Nor its IFD: the entries naming the thumbnail's place and length, little-endian, are gone.
+    expect(exif && contains(exif, new Uint8Array([0x01, 0x02, 0x04, 0x00]))).toBe(false);
+    expect(exif && contains(exif, new Uint8Array([0x02, 0x02, 0x04, 0x00]))).toBe(false);
+    expect(exif && readOrientation(withExif(jpeg(10, 10), exif) ?? new Uint8Array())).toBe(1);
   });
 
   it('uprightExif keeps the GPS block when the layout keeps the location', () => {

@@ -20,8 +20,9 @@
  *   2. **Photos:** one from the camera, through the button that opens the file input with
  *      `capture="environment"`, a large one stored on its side (EXIF orientation 6) with a GPS
  *      block, an XMP packet naming the place, and a second picture after its end; one from the
- *      gallery, small, with the same metadata; a file that is not a picture, left out; and a photo
- *      added and removed, its preview's object URL revoked.
+ *      gallery, small, with the same metadata, a comment and a C2PA segment naming the place, and
+ *      fill bytes before its markers; a file that is not a picture, left out; and a photo added and
+ *      removed, its preview's object URL revoked.
  *   3. **The filing,** with a note: the first photo's answer is lost after the server kept it, and
  *      the page finds it on the claim and does not send it again; the second photo's connection
  *      drops before the server has it, and the page sends it again. Read back from what the page
@@ -54,7 +55,10 @@ import { fileURLToPath } from 'node:url';
 import {
   LATITUDE,
   PLACE,
+  c2paSegment,
+  commentSegment,
   exifSegment,
+  filled,
   readPhoto,
   withMetadata,
   xmpSegment,
@@ -76,6 +80,12 @@ const PHONE = { width: 320, height: 720 };
 /** The longest side the page uploads a photo at (`CAPTURE_MAX_EDGE`). */
 const MAX_EDGE = 3072;
 const NOTE = 'Deep scratch across the top, left corner chipped. Customer present.';
+
+/**
+ * A wait that runs out is not the failure itself: the check after it reads the page and says what
+ * is there, with what it found. So a wait's timeout is let go, here, and nowhere else.
+ */
+const checkedAfter = () => undefined;
 
 /** The red the stored top left of the large photo is drawn in, and the green of the rest. */
 const RED = [198, 40, 40];
@@ -225,7 +235,7 @@ export default async function run(page, h) {
   await h.goTo('/#/capture');
   await page
     .waitForSelector('lib-capture-page form[role="search"]', { timeout: 30_000 })
-    .catch(() => undefined);
+    .catch(checkedAfter);
   h.check(
     'the capture page opens at 320 pixels, signed in, with its find form',
     page.url().includes('#/capture') &&
@@ -241,7 +251,7 @@ export default async function run(page, h) {
   await field.click();
   await page.keyboard.type('mv-2003');
   await page.keyboard.press('Enter');
-  await page.waitForSelector('[data-capture-record]', { timeout: 30_000 }).catch(() => undefined);
+  await page.waitForSelector('[data-capture-record]', { timeout: 30_000 }).catch(checkedAfter);
   const lookup = standIn.log.find((entry) => entry.lookup)?.lookup;
   h.check(
     'the number is looked up as query values, as typed and in capitals, never in the query text',
@@ -282,10 +292,23 @@ export default async function run(page, h) {
   );
   const small = withMetadata(
     await drawnJpeg(page, 1200, 900),
-    [exifSegment({ orientation: 1, width: 1200, height: 900 }), xmpSegment()],
+    [
+      filled(2, exifSegment({ orientation: 1, width: 1200, height: 900 })),
+      filled(1, xmpSegment()),
+      commentSegment(),
+      c2paSegment(),
+    ],
     Buffer.from('a depth map'),
   );
   const before = readPhoto(large);
+  const smallBefore = readPhoto(small);
+  h.check(
+    'the small one carries a comment and a C2PA segment naming the place, after fill bytes',
+    smallBefore.placeNamed &&
+      smallBefore.others.includes('fe') &&
+      smallBefore.others.includes('eb'),
+    JSON.stringify(smallBefore),
+  );
   h.check(
     'the photos given carry a location: a GPS block, XMP naming the place, data after the end',
     before.gps &&
@@ -329,7 +352,7 @@ export default async function run(page, h) {
         timeout: 60_000,
       },
     )
-    .catch(() => undefined);
+    .catch(checkedAfter);
   h.check(
     'the two photos are ready, and the file that is no picture is left out, and said to be',
     (await page.locator('[data-capture-photo][data-state="ready"]').count()) === 2 &&
@@ -360,7 +383,7 @@ export default async function run(page, h) {
         timeout: 60_000,
       },
     )
-    .catch(() => undefined);
+    .catch(checkedAfter);
   const third = await page.getByRole('img', { name: 'Photo 3' }).getAttribute('src');
   const aliveBefore = await page.evaluate(
     (url) =>
@@ -395,7 +418,7 @@ export default async function run(page, h) {
   await h.step('3. The filing, with a note, through a lost answer and a dropped connection');
   await page.getByRole('textbox', { name: 'Note (optional)' }).fill(NOTE);
   await page.getByRole('button', { name: 'File the photos' }).click();
-  await page.waitForSelector('[data-capture-done]', { timeout: 90_000 }).catch(() => undefined);
+  await page.waitForSelector('[data-capture-done]', { timeout: 90_000 }).catch(checkedAfter);
   const uploads = standIn.log.filter((entry) => entry.upload);
   const sent = (name) => uploads.filter((entry) => entry.upload.filename === name);
   h.check(
@@ -452,13 +475,14 @@ export default async function run(page, h) {
     JSON.stringify(seen),
   );
   h.check(
-    'neither photo carries a location: no GPS block, XMP, place name, latitude or data after the end',
+    'neither photo carries a location: no GPS block, XMP, comment, C2PA, place, latitude or trailing data',
     [largeFacts, smallFacts].every(
       (facts) =>
         facts.jpeg &&
         !facts.gps &&
         !facts.xmp &&
         !facts.iptc &&
+        facts.others.length === 0 &&
         !facts.placeNamed &&
         !facts.latitudeBytes &&
         !facts.trailing,
@@ -503,7 +527,7 @@ export default async function run(page, h) {
   await page.getByRole('button', { name: 'Find' }).click();
   await page
     .waitForSelector('[data-capture-refusal="read-only"]', { timeout: 30_000 })
-    .catch(() => undefined);
+    .catch(checkedAfter);
   h.check(
     'a claim the driver may only read says so, and offers no photo control',
     (await page.locator('[data-capture-refusal="read-only"]').count()) === 1 &&
@@ -516,7 +540,7 @@ export default async function run(page, h) {
   await page.getByRole('button', { name: 'Choose another record' }).click();
   await page.getByRole('textbox', { name: 'Number, barcode or link' }).fill(CLAIMS.refused.number);
   await page.getByRole('button', { name: 'Find' }).click();
-  await page.waitForSelector('[data-capture-record]', { timeout: 30_000 }).catch(() => undefined);
+  await page.waitForSelector('[data-capture-record]', { timeout: 30_000 }).catch(checkedAfter);
   const [again] = await Promise.all([
     page.waitForEvent('filechooser', { timeout: 15_000 }),
     page.getByRole('button', { name: 'Choose photos' }).click(),
@@ -524,11 +548,11 @@ export default async function run(page, h) {
   await again.setFiles({ name: 'IMG_0044.jpg', mimeType: 'image/jpeg', buffer: small });
   await page
     .waitForSelector('[data-capture-photo][data-state="ready"]', { timeout: 60_000 })
-    .catch(() => undefined);
+    .catch(checkedAfter);
   await page.getByRole('button', { name: 'File the photos' }).click();
   await page
     .waitForSelector('[data-capture-stopped="forbidden"]', { timeout: 30_000 })
-    .catch(() => undefined);
+    .catch(checkedAfter);
   const refusedTries = standIn.log.filter(
     (entry) => entry.upload?.params.document === CLAIMS.refused.uid,
   );

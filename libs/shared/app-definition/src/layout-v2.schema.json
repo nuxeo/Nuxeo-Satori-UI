@@ -94,6 +94,7 @@
       "properties": {
         "property": {
           "$ref": "#/$defs/xpath",
+          "not": { "pattern": "^(ecm|var):" },
           "description": "The property each photo is added to: a list of files, a complex list with a file subfield as files:files is, or a list of blobs. Never an ecm: or var: name."
         },
         "findBy": {
@@ -102,7 +103,8 @@
           "maxItems": 5,
           "uniqueItems": true,
           "items": {
-            "$ref": "#/$defs/xpath"
+            "$ref": "#/$defs/xpath",
+            "not": { "pattern": "^(ecm|var):" }
           },
           "description": "The text properties a number typed, pasted or scanned on the capture page is looked up in, such as the record's own number and its case's. Without it, the page finds a record of the type by its id or its link only."
         },

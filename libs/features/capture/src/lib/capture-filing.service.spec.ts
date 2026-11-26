@@ -1,10 +1,13 @@
-import { HttpEventType, provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, HttpEventType, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { TimeoutError } from 'rxjs';
 
 import {
+  CAPTURE_ANSWER_MS,
+  CAPTURE_HELD_MS,
   CAPTURE_RETRY_DELAYS,
+  CAPTURE_STALL_MS,
   CaptureFilingService,
   failureOf,
   transient,
@@ -124,8 +127,12 @@ describe('CaptureFilingService', () => {
 
   it('gives up after three tries again, with the connection error', () => {
     const { retries, outcome } = send();
-    for (const pause of [1_000, 4_000, 10_000]) {
-      http.expectOne(UPLOAD).error(new ProgressEvent('error'), { status: 503 });
+    for (const [pause, status] of [
+      [1_000, 503],
+      [4_000, 502],
+      [10_000, 504],
+    ] as const) {
+      http.expectOne(UPLOAD).error(new ProgressEvent('error'), { status });
       vi.advanceTimersByTime(pause);
       http.expectOne(RECORD).flush(record(false));
     }
@@ -135,12 +142,13 @@ describe('CaptureFilingService', () => {
     expect(failureOf(outcome.error)).toBe('connection');
   });
 
-  it('never tries again what the server refused: 403, 404, 413, 400', () => {
+  it('never tries again what the server refused, or its own failure: 403, 404, 413, 400, 500', () => {
     for (const [status, failure] of [
       [403, 'forbidden'],
       [404, 'gone'],
       [413, 'too-large'],
       [400, 'refused'],
+      [500, 'server'],
     ] as const) {
       const { retries, outcome } = send();
       http.expectOne(UPLOAD).flush(new Blob(['no']), { status, statusText: 'No' });
@@ -151,8 +159,51 @@ describe('CaptureFilingService', () => {
     }
   });
 
-  it('counts a try that took too long as a dropped connection', () => {
+  it('gives a try up as dropped when it sends nothing for a minute, and not while it moves', () => {
+    const { retries } = send();
+    const first = http.expectOne(UPLOAD);
+    // Slow, but moving: each piece sent restarts the watch.
+    for (let loaded = 1; loaded <= 4; loaded += 1) {
+      vi.advanceTimersByTime(CAPTURE_STALL_MS - 1_000);
+      first.event({ type: HttpEventType.UploadProgress, loaded, total: 5 });
+    }
+    expect(first.cancelled).toBe(false);
+    expect(retries).toEqual([]);
+    // Then nothing for a minute: a stall, given up and tried again.
+    vi.advanceTimersByTime(CAPTURE_STALL_MS);
+    expect(first.cancelled).toBe(true);
+    expect(retries).toEqual([1]);
+    vi.advanceTimersByTime(1_000);
+    http.expectOne(RECORD).flush(record(false));
+    http.expectOne(UPLOAD).flush(new Blob());
+  });
+
+  it('waits longer for the answer once the whole file is sent, the server saving it', () => {
+    const { retries, outcome } = send();
+    const first = http.expectOne(UPLOAD);
+    first.event({ type: HttpEventType.UploadProgress, loaded: 5, total: 5 });
+    vi.advanceTimersByTime(CAPTURE_ANSWER_MS - 1_000);
+    expect(first.cancelled).toBe(false);
+    first.flush(new Blob());
+    expect(retries).toEqual([]);
+    expect(outcome).toEqual({ sent: 'sent', done: true });
+  });
+
+  it('sends again when the read of the record does not answer in time', () => {
+    const { outcome } = send();
+    http.expectOne(UPLOAD).error(new ProgressEvent('error'), { status: 0 });
+    vi.advanceTimersByTime(1_000);
+    const read = http.expectOne(RECORD);
+    vi.advanceTimersByTime(CAPTURE_HELD_MS);
+    expect(read.cancelled).toBe(true);
+    http.expectOne(UPLOAD).flush(new Blob());
+    expect(outcome).toEqual({ sent: 'sent', done: true });
+  });
+
+  it("counts a try that stalled as a dropped connection, and a 500 as the server's", () => {
     expect(transient(new TimeoutError())).toBe(true);
     expect(transient(new Error('other'))).toBe(false);
+    expect(failureOf(new HttpErrorResponse({ status: 500 }))).toBe('server');
+    expect(failureOf(new HttpErrorResponse({ status: 503 }))).toBe('connection');
   });
 });

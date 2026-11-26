@@ -1,8 +1,10 @@
 /**
- * The capture steps' photos: EXIF, XMP and trailing data written into a JPEG the browser drew, and
- * a reader of what an uploaded JPEG carries, written apart from the app's own
- * (`libs/features/capture/src/lib/photo-metadata.ts`), so that a fault in the app's reader cannot
- * also hide from this one.
+ * The capture steps' photos: EXIF, XMP, a comment, a C2PA segment, fill bytes and trailing data
+ * written into a JPEG the browser drew, and a reader of what an uploaded JPEG carries, written apart
+ * from the app's own (`libs/features/capture/src/lib/photo-metadata.ts`). It reads a different way:
+ * every segment's marker is listed, and any that is not one a picture needs or the page keeps is
+ * counted, so a kind of segment the app forgot is seen here; and the place's name and the
+ * latitude's bytes are looked for anywhere in the file, in whatever segment they might be.
  *
  * Plain Node, no dependency: the runner imports it as it is.
  */
@@ -75,6 +77,21 @@ export function exifSegment({ orientation, width, height }) {
   return segment(0xe1, body);
 }
 
+/** A comment naming the place, which nothing must keep. */
+export function commentSegment() {
+  return segment(0xfe, Buffer.from(`Taken at ${PLACE}`, 'latin1'));
+}
+
+/** A C2PA manifest's JUMBF box in APP11, as recent phones write one, naming the place too. */
+export function c2paSegment() {
+  return segment(0xeb, Buffer.from(`JP\0\u0001jumb c2pa.assertions ${PLACE}`, 'latin1'));
+}
+
+/** A segment with `count` 0xFF fill bytes before its marker, as the standard allows. */
+export function filled(count, part) {
+  return Buffer.concat([Buffer.alloc(count, 0xff), part]);
+}
+
 /** An XMP APP1 segment naming the place, as a phone's editor writes one. */
 export function xmpSegment() {
   const packet =
@@ -132,6 +149,8 @@ export function readPhoto(jpeg) {
     iptc: false,
     trailing: false,
     exifSegments: 0,
+    /** Segments that neither decode the picture nor are JFIF, an ICC profile, Adobe's or EXIF. */
+    others: [],
     placeNamed: jpeg.includes(Buffer.from(PLACE, 'latin1')),
     latitudeBytes: jpeg.includes(latitudeBytes()),
   };
@@ -139,9 +158,20 @@ export function readPhoto(jpeg) {
   let at = 2;
   while (at + 4 <= jpeg.length) {
     if (jpeg[at] !== 0xff) break;
+    // Fill bytes before a marker.
+    while (at + 1 < jpeg.length && jpeg[at + 1] === 0xff) at += 1;
     const marker = jpeg[at + 1];
     const length = jpeg.readUInt16BE(at + 2);
     const body = jpeg.subarray(at + 4, at + 2 + length);
+    const label = body.subarray(0, 12).toString('latin1');
+    const kept =
+      (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc8) ||
+      [0xda, 0xdb, 0xdd].includes(marker) ||
+      (marker === 0xe0 && label.startsWith('JFIF')) ||
+      (marker === 0xe1 && label.startsWith('Exif')) ||
+      (marker === 0xe2 && label.startsWith('ICC_PROFILE')) ||
+      (marker === 0xee && label.startsWith('Adobe'));
+    if (!kept) facts.others.push(marker.toString(16));
     if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
       facts.height = body.readUInt16BE(1);
       facts.width = body.readUInt16BE(3);

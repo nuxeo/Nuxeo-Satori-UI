@@ -155,6 +155,7 @@
         <nxs-button
           appearance="filled"
           icon="camera"
+          data-capture-take
           [disabled]="filingNow() || photos.room() === 0"
           (press)="takePhoto()"
         >
@@ -208,7 +209,12 @@
         >
           @for (photo of photos.items(); track photo.id) {
             @let position = $index + 1;
-            <li class="capture__photo" [attr.data-state]="photo.state" data-capture-photo>
+            <li
+              class="capture__photo"
+              data-capture-photo
+              [attr.data-state]="photo.state"
+              [attr.data-capture-photo-id]="photo.id"
+            >
               <div class="capture__thumb">
                 @if (photo.preview) {
                   <img

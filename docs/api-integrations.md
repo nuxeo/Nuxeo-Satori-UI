@@ -2860,14 +2860,17 @@ The `xpath` is the capture's `property`. The file is the photo as the page prepa
 name of its own, `DC-3003-photo-20261126-140512-1.jpg`, and the note a `text/plain` file named
 `DC-3003-note-20261126-140700.txt`.
 
-**A dropped connection** (no answer, `408`, `429`, a `5xx`, or a try longer than three minutes) is
-tried again after 1, 4 and 10 seconds. Before each try again, and before a photo a request carried
-already, `GET /id/{uid}` reads the record's property: a file of the photo's name and size there is
-the earlier try's, whose answer was lost, and is not sent again.
+**A dropped connection** (no answer, `408`, `429`, `502`, `503` or `504`, a try that sends nothing
+for a minute, or one whose answer takes more than three minutes once the file is sent) is tried
+again after 1, 4 and 10 seconds. Before each try again, and before a photo a request carried
+already, `GET /id/{uid}` reads the record's property, for at most 15 seconds: a file of the photo's
+name and size there is the earlier try's, whose answer was lost, and is not sent again. A file the
+server is still saving when the record is read, or a read that fails, can still be filed twice.
 
 **Errors:** a `403` stops the filing, saying the person may not add files to the record; a `404`
 says the record is gone; a `413` or another refusal leaves the photo, with the reason, and the rest
-go on. Nuxeo checks the permission on every upload: what the page offers is no control. Run against
+go on, and a `500`, the server's own failure, is not tried again but may be filed again later.
+Nuxeo checks the permission on every upload: what the page offers is no control. Run against
 a stand-in of the server only (`scripts/beta-harness/steps/capture-phone.mjs`), no server having
 the moves kit.
 
