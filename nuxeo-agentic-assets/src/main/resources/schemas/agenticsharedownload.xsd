@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- One download through a share link, as the agenticShareDownloads directory keeps it: when,
+     through which link, of which document and item. Nothing about who downloaded it. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/schemas/sharedownload"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="id" type="xs:string" />
+  <xs:element name="time" type="xs:string" />
+  <xs:element name="link" type="xs:string" />
+  <xs:element name="document" type="xs:string" />
+  <xs:element name="item" type="xs:string" />
+
+</xs:schema>

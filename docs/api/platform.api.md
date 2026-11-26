@@ -4173,7 +4173,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-351 exported symbol(s).
+372 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4544,6 +4544,15 @@ interface CreateBlobHoldingDocumentOptions {
     onProgress?: (progress: ImportProgress) => void;
     }
 }
+type CreatedShareLink = {
+    readonly kind: 'created';
+    readonly link: ShareLink;
+    readonly token: string;
+    readonly path: string;
+    } | {
+    readonly kind: 'refused';
+    readonly refused: readonly ShareLinkRefusal[];
+};
 interface CsvImportResult {
     created: NuxeoDocument[];
     skipped: string[];
@@ -5341,6 +5350,15 @@ interface ResultWindow {
     readonly reach: number | null;
     }
 }
+const SHARE_LINK_ID: RegExp;
+const SHARE_LINK_OPERATIONS: {
+    readonly create: "ShareLink.Create";
+    readonly list: "ShareLink.List";
+    readonly revoke: "ShareLink.Revoke";
+    readonly downloads: "ShareLink.Downloads";
+};
+const SHARE_LINK_ORIGINAL: ShareLinkItem;
+const SHARE_LINK_REFUSAL_REASONS: readonly ["not-cleared", "rights-ended", "channel-not-covered", "policy-error", "no-such-rendition"];
 interface SavedSearch {
     uid: string;
     title: string;
@@ -5490,6 +5508,46 @@ class SettingsService {
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+interface ShareLink {
+    readonly id: string;
+    readonly document: string;
+    readonly renditions: readonly ShareLinkItem[];
+    readonly end: string;
+    readonly created: string;
+    readonly createdBy: string;
+    readonly revoked: string | null;
+    readonly revokedBy: string | null;
+    readonly state: ShareLinkState;
+    }
+}
+interface ShareLinkDownload {
+    readonly time: string;
+    readonly link: string;
+    readonly rendition: ShareLinkItem;
+    }
+}
+interface ShareLinkDownloads {
+    readonly downloads: readonly ShareLinkDownload[];
+    readonly truncated: boolean;
+    }
+}
+type ShareLinkItem = string;
+interface ShareLinkRefusal {
+    readonly rendition: ShareLinkItem;
+    readonly reason: string;
+    }
+}
+type ShareLinkRefusalReason = (typeof SHARE_LINK_REFUSAL_REASONS)[number];
+class ShareLinkService {
+    list(uid: string): Observable<ShareLink[]>;
+    create(uid: string, items: readonly ShareLinkItem[], end: string): Observable<CreatedShareLink>;
+    revoke(uid: string, link: string): Observable<ShareLink>;
+    downloads(uid: string): Observable<ShareLinkDownloads>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ShareLinkService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
+    }
+}
+type ShareLinkState = 'active' | 'expired' | 'revoked';
 interface StageFileInBatchOptions {
     onProgress?: (percent: number) => void;
     }
@@ -5703,6 +5761,7 @@ function canWriteDocument(doc: NuxeoDocument | null | undefined): boolean;
 function createExpiresErrorStateMatcher(isInvalid: () => boolean): {
     isErrorState: () => boolean;
 };
+function createdShareLinkOf(body: unknown): CreatedShareLink;
 function cumulativeNuxeoPathPrefixes(nuxeoPath: string): string[];
 function decodeNuxeoPathSegment(segment: string): string;
 function defaultNoteContent(mimeType: string): string;
@@ -5818,6 +5877,13 @@ function resolveParentSourceName(directoryName: string, metadata?: DirectoryMeta
 function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow;
 function sanitizeDocumentCreateName(name: string): string;
 function sanitizeDocumentName(name: string): string;
+function shareLinkDownloadsOf(body: unknown): ShareLinkDownloads;
+function shareLinkLabel(id: string): string;
+function shareLinkListOf(body: unknown): ShareLink[];
+function shareLinkOf(value: unknown): ShareLink | null;
+function shareLinkUrl(path: string, origin: string): string | null;
+function shareLinkViewItem(title: string): ShareLinkItem;
+function shareLinkViewTitle(item: ShareLinkItem): string | null;
 function shouldProbeContentLakeIngestStatus(doc: NuxeoDocument): boolean;
 function shouldShowExpiresFieldError(expiresRawText: string, expires: Date | null): boolean;
 function shouldShowUserWorkspaceBreadcrumbs(nuxeoPath: string, currentUsername: string | null, isAdministrator: boolean): boolean;

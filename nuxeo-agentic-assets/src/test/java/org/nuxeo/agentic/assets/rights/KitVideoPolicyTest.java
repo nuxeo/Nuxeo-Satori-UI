@@ -19,9 +19,8 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 
 /**
  * The brand kit's video policy, read from where the kit keeps it, deciding a video asset's
- * downloads as the platform names them to the download permission: what this add-on enforces of a
- * video, and what it does not tell apart. No code of the add-on is changed for video; these hold
- * what it does with the kit's policy as it is.
+ * downloads as the platform names them to the download permission. No code of the add-on is changed
+ * for video; these hold what it does with the kit's policy as it is.
  */
 class KitVideoPolicyTest {
 
@@ -87,18 +86,17 @@ class KitVideoPolicyTest {
     }
 
     /**
-     * What the add-on does not tell apart, and so refuses: a transcoded video's file at its place in
-     * vid:transcodedVideos is named by that place, not by its conversion's name, as a picture view is
-     * by its title, so the kit lists none, and every one is refused there, even to an asset cleared
-     * on every channel; and a storyboard frame past the nine the kit lists.
+     * What the kit's policy does not list is refused, even to an asset cleared on every channel: a
+     * transcoded video's file through @blob, a storyboard frame it does not list, a conversion it
+     * does not name.
      */
     @Test
-    void aTranscodedVideoByItsPlaceAndAFramePastTheNinthAreRefusedToEveryone() throws Exception {
+    void whatThePolicyDoesNotListIsRefusedToEveryone() throws Exception {
         DocumentModel cleared = video("2027-12-31", "E-commerce", "Wholesale", "Social", "Print").model();
 
-        DownloadDecision byPlace = download(cleared, "vid:transcodedVideos/0/content", null);
-        assertEquals(Use.blob("vid:transcodedVideos/0/content"), byPlace.use());
-        assertEquals(Decision.refuse(Reason.NOT_CLEARED), byPlace.decision());
+        DownloadDecision byBlob = download(cleared, "vid:transcodedVideos/0/content", null);
+        assertEquals(Use.blob("vid:transcodedVideos/0/content"), byBlob.use());
+        assertEquals(Decision.refuse(Reason.NOT_CLEARED), byBlob.decision());
 
         assertEquals(Decision.refuse(Reason.NOT_CLEARED), download(cleared, "vid:storyboard/9/content", null).decision());
         // A conversion no policy names, such as the platform's Ogg 480p when it is made, is refused too.

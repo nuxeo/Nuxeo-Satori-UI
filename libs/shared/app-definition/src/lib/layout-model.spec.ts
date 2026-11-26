@@ -338,6 +338,37 @@ describe('validateLayoutV2, given the content model', () => {
     expect(messages(reviewed, { type: 'Member', given: null })).toEqual([]);
   });
 
+  it('holds share links to a type whose record page shows a picture, as it does a review', () => {
+    const reading = readContentModel({
+      doctypes: {
+        Asset: { parent: 'Document', facets: ['Picture'], schemas: ['dublincore'] },
+        Clip: { parent: 'Document', facets: ['Picture', 'Video'], schemas: ['dublincore'] },
+        Member: { parent: 'Document', facets: [], schemas: ['dublincore'] },
+      },
+      facets: [
+        {
+          name: 'Picture',
+          schemas: [{ name: 'picture', '@prefix': 'picture', fields: { views: 'complex[]' } }],
+        },
+        {
+          name: 'Video',
+          schemas: [{ name: 'video', '@prefix': 'vid', fields: { duration: 'double' } }],
+        },
+      ],
+      schemas: [{ name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } }],
+    });
+    if (!reading.model) throw new Error(reading.problems.join('\n'));
+    const shared = { ...withFields('dc:title'), shareLinks: {} };
+    expect(messages(shared, { type: 'Asset', given: reading.model })).toEqual([]);
+    expect(messages(shared, { type: 'Member', given: reading.model })).toEqual([
+      `shareLinks: share links serve a picture's views, and the type "Member" has no "picture" schema: its record page shows no picture [unknown]`,
+    ]);
+    expect(messages(shared, { type: 'Clip', given: reading.model })).toEqual([
+      `shareLinks: share links serve a picture's views, and the type "Clip" has the "video" schema: its record page keeps its player, not its picture [unknown]`,
+    ]);
+    expect(messages(shared, { type: 'Member', given: null })).toEqual([]);
+  });
+
   it('refuses a type the model does not have, and a model given without a type', () => {
     expect(messages(withFields('member:firstName'), { type: 'Claim' })).toEqual([
       ': the document type "Claim" is not in the content model [unknown]',

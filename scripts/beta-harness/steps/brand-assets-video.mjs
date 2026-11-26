@@ -14,9 +14,9 @@
  *      is refused, and the page says the server's reason, asked after the 403, with no player and
  *      nothing tried instead.
  *   3. The REST API called directly, outside the app: the no-Print video's original refused,
- *      through `@blob` and `/nxfile/`; a transcoded video refused at its place in
- *      `vid:transcodedVideos` to everyone, the cleared video included, and served by its name
- *      through `@rendition`; the cleared video's original served.
+ *      through `@blob` and `/nxfile/`; a transcoded video served by its name through `@rendition`,
+ *      and refused through `@blob`, which the policy does not list, to everyone, the cleared video
+ *      included; the cleared video's original served.
  *   4. The library lists the videos with the pictures, its Type facet counts them from the
  *      aggregate, and choosing AcmeVideo narrows it to them on the server.
  *
@@ -29,7 +29,7 @@
  *
  * What it needs, and refuses to run without (exit 2):
  *
- * - `nuxeo-agentic-assets` and the kit, version 0.2.2 or later, installed on the Nuxeo the app
+ * - `nuxeo-agentic-assets` and the kit, version 0.2.3 or later, installed on the Nuxeo the app
  *   talks to, and the kit seeded with `demo/seed.mjs`, today: the videos' rights run.
  * - The dev server serving the kit's video layout through `npm run config:dev` (the kit's README,
  *   "Seeing it under nx serve"), and the library queue.
@@ -41,7 +41,7 @@
  * Load-bearing checks: the player's blob URL and the browser's reading of it as a video; the
  * facts and storyboard as the server holds them; the 403 on the no-Print original, in the app and
  * called directly, and the page's reason, the code the enricher gives after the 403; a transcoded
- * video refused at its place and served by its name; the library's Type facet and its narrowing.
+ * video served by its name and refused through `@blob`; the library's Type facet and its narrowing.
  * Negative ones: the cleared video's original served, its page with no refusal, and no Nuxeo
  * address on any `<video>` or `<img>`.
  *
@@ -69,7 +69,7 @@ export const serverRun = {
   runAs: { users: [], who: "anyone who may read the kit's workspace" },
   signsInAs: [],
   needs: [
-    'nuxeo-agentic-assets and the kit 0.2.2 or later installed, and the kit seeded on the day of the demo',
+    'nuxeo-agentic-assets and the kit 0.2.3 or later installed, and the kit seeded on the day of the demo',
     "the dev server with `npm run config:dev` serving the kit's video layout and library queue",
     'ffmpeg on the server for the transcoded web cut and the storyboard; without it the run checks the originals',
   ],
@@ -178,7 +178,7 @@ export default async function run(page, h) {
   h.requirePrecondition(
     "the kit's video type is installed",
     type?.status === 200,
-    `GET /api/v1/config/types/AcmeVideo answered ${type?.status ?? 'nothing'}: install the kit 0.2.2 or later (its README)`,
+    `GET /api/v1/config/types/AcmeVideo answered ${type?.status ?? 'nothing'}: install the kit 0.2.3 or later (its README)`,
   );
 
   const readVideo = async (video) =>
@@ -203,7 +203,7 @@ export default async function run(page, h) {
   h.requirePrecondition(
     "nuxeo-agentic-assets is installed and the kit's video policy is in force",
     VIDEOS.every((video) => rightsOf(video)?.type === 'AcmeVideo'),
-    'the assetRights enricher answered nothing for an AcmeVideo: install nuxeo-agentic-assets and the kit at 0.2.2 or later',
+    'the assetRights enricher answered nothing for an AcmeVideo: install nuxeo-agentic-assets and the kit at 0.2.3 or later',
   );
   h.requirePrecondition(
     `the seed's rights still hold on the server's day: ${NO_PRINT.id} running with no Print channel, ${CLEARED.id} running with Print`,
@@ -486,7 +486,7 @@ export default async function run(page, h) {
       const uid = seeded.get(video.id).uid;
       const byPlace = await direct(`/api/v1/id/${uid}/@blob/vid:transcodedVideos/0/content`);
       h.check(
-        `${video.id}, a transcoded video at its place in vid:transcodedVideos: 403, to everyone, as the kit lists none by place`,
+        `${video.id}, its transcoded video through @blob: 403, to everyone, as the kit's policy does not list it`,
         byPlace?.status === 403,
         String(byPlace?.status),
       );
@@ -500,7 +500,7 @@ export default async function run(page, h) {
     }
   } else {
     h.note(
-      'no transcoded video on this server: their refusal by place and service by name are not called',
+      'no transcoded video on this server: their service by name and refusal through @blob are not called',
     );
   }
   const me = json(await direct('/api/v1/me'));

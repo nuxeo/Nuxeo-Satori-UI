@@ -17,6 +17,7 @@ import {
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
+  ShareLinkService,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
@@ -273,6 +274,8 @@ describe('RecordPageComponent', () => {
     /** A video's transcoded files, which a page with the video's preview fetches by name. */
     fetchRendition: ReturnType<typeof vi.fn>;
   };
+  /** A picture's share links: what a page with `shareLinks` asks the server. */
+  let shareLinks: { list: ReturnType<typeof vi.fn>; downloads: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     execute = vi.fn(() => new Subject());
@@ -285,6 +288,7 @@ describe('RecordPageComponent', () => {
       getAnnotationDocuments: vi.fn(() => of([])),
       fetchRendition: vi.fn(() => new Subject()),
     };
+    shareLinks = { list: vi.fn(() => of([])), downloads: vi.fn(() => new Subject()) };
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
       of(
@@ -319,6 +323,7 @@ describe('RecordPageComponent', () => {
         { provide: PageProviderService, useValue: { execute } },
         { provide: ConnectorRecordService, useValue: { read: connectorRead } },
         { provide: DocumentDetailService, useValue: documents },
+        { provide: ShareLinkService, useValue: shareLinks },
         { provide: CURRENT_USERNAME, useValue: () => 'jdoe' },
         {
           provide: DocumentLayoutService,
@@ -1874,6 +1879,41 @@ describe('RecordPageComponent', () => {
       // Destroyed first, so that it revokes its URL with the stand-ins, which then go.
       fixture.destroy();
       Object.assign(URL, { createObjectURL: undefined, revokeObjectURL: undefined });
+    });
+
+    it('lists the share links under the picture when the layout has them, held back on a read-only page', async () => {
+      fixture.destroy();
+      const views = [{ title: 'Medium', width: 10, height: 10, content: { digest: 'd' } }];
+      // As the layout service resolves a file with share links for a record that shows its picture.
+      const shared = { ...layoutOf(RIGHTS), preview: 'picture' as const, shareLinks: true };
+      const draw = async (layout: ResolvedRecordLayout, readOnly = false): Promise<HTMLElement> => {
+        fixture = TestBed.createComponent(RecordPageComponent);
+        fixture.componentRef.setInput('document', member({ 'picture:views': views }));
+        fixture.componentRef.setInput('layout', layout);
+        fixture.componentRef.setInput('readOnly', readOnly);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        return fixture.nativeElement as HTMLElement;
+      };
+      const root = await draw(shared);
+      const links = root.querySelector('lib-record-share-links');
+      // After the picture, above the cards.
+      expect(links?.previousElementSibling?.getAttribute('data-preview')).toBe('picture');
+      expect(links?.nextElementSibling?.classList.contains('record-page__grid')).toBe(true);
+      expect(shareLinks.list).toHaveBeenCalledWith('m1');
+      expect(links?.querySelector('.record-share-links__form')).not.toBeNull();
+      fixture.destroy();
+
+      const readOnly = await draw(shared, true);
+      expect(readOnly.querySelector('lib-record-share-links')).not.toBeNull();
+      expect(readOnly.querySelector('.record-share-links__form')).toBeNull();
+      fixture.destroy();
+
+      shareLinks.list.mockClear();
+      const without = await draw({ ...shared, shareLinks: false });
+      expect(without.querySelector('lib-record-share-links')).toBeNull();
+      expect(shareLinks.list).not.toHaveBeenCalled();
     });
   });
 });

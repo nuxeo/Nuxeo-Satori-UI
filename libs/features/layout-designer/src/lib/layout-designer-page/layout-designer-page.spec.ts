@@ -475,7 +475,36 @@ describe('LayoutDesignerPageComponent', () => {
       expect(clicked).toEqual([{ download: 'view.layout.json' }]);
       expect(created).toHaveLength(1);
       const text = await blobText(created[0]);
-      expect(text).toBe(`${JSON.stringify(page.file(), null, 2)}\n`);
+      // As the repository's Prettier lays the file out: on one line what fits in 100 columns.
+      expect(text).toBe(
+        [
+          '{',
+          '  "version": 2,',
+          '  "columns": 2,',
+          '  "cards": [',
+          '    {',
+          '      "id": "member",',
+          '      "labelKey": "payers.member.card",',
+          '      "fields": [',
+          '        {',
+          '          "id": "age",',
+          '          "widget": "number",',
+          '          "computed": { "type": "core.age", "parameters": [{ "field": "member:birthDate" }] }',
+          '        },',
+          '        "member:status",',
+          '        { "field": "member:phone", "widget": "phone" }',
+          '      ]',
+          '    },',
+          '    {',
+          '      "id": "claims",',
+          '      "labelKey": "payers.member.claims",',
+          '      "related": { "pageProvider": "member_claims", "columns": ["claim:number"] }',
+          '    }',
+          '  ]',
+          '}',
+          '',
+        ].join('\n'),
+      );
       expect(JSON.parse(text).cards[0].fields[1]).toBe('member:status');
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:designer');
     });

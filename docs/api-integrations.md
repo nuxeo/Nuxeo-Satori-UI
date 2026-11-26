@@ -2731,6 +2731,80 @@ registry serves its live version:
 
 ---
 
+## 42. Record Page — a Picture's Share Links, through `nuxeo-agentic-assets`
+
+| Field           | Value                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `ShareLinkService` (`libs/shared/nuxeo-client/src/lib/services/share-link.service.ts`), called by `RecordShareLinksComponent`                |
+| **Methods**     | `list(uid)` and `downloads(uid)` when the record is opened and on Retry; `create(uid, items, end)` and `revoke(uid, link)` on the user's ask |
+| **HTTP Method** | `POST`                                                                                                                                       |
+| **Endpoints**   | `/nuxeo/api/v1/automation/ShareLink.List`, `ShareLink.Downloads`, `ShareLink.Create` and `ShareLink.Revoke`                                  |
+| **Server side** | `nuxeo-agentic-assets` 0.2.0 (its [README](../nuxeo-agentic-assets/README.md)), not installed by default                                     |
+| **Turned on**   | A record page's `shareLinks` (docs/business-apps/layout-v2.md, section 2, "Share links"), on a record that shows its picture                 |
+
+**Request payload:** the asset as the input, and each operation's own parameters: none for
+`ShareLink.List` and `ShareLink.Downloads`; `renditions`, the items, and `end`, the link's last day
+in UTC, for `ShareLink.Create`; `link`, a link's id, for `ShareLink.Revoke`. An item is `original`,
+the asset's `file:content`, or `view:<title>`, one of its picture views by its exact title.
+
+```json
+{
+  "params": { "renditions": ["view:FullHD", "original"], "end": "2026-12-14" },
+  "context": {},
+  "input": "doc:<uid>"
+}
+```
+
+**Responses (200 OK):** `ShareLink.List` answers `{ "links": [Link, …] }`, newest first;
+`ShareLink.Revoke` `{ "link": Link }`, revoked; `ShareLink.Downloads`
+`{ "downloads": [{ "time", "link", "rendition" }, …], "truncated": boolean }`, newest first, 200 at
+most, with no one's name or address. `ShareLink.Create` answers either the link, with its token and
+the server-relative path it opens at, given this once, or the items it refused, creating nothing:
+
+```json
+{
+  "link": {
+    "id": "<64 lowercase hex: the SHA-256 of the token>",
+    "document": "<uid>",
+    "renditions": ["view:FullHD"],
+    "end": "2026-12-14",
+    "created": "2026-11-25T10:00:00Z",
+    "createdBy": "jdoe",
+    "revoked": null,
+    "revokedBy": null,
+    "state": "active"
+  },
+  "token": "<the link's secret>",
+  "path": "/nuxeo/agentic-share/<token>/"
+}
+```
+
+```json
+{ "refused": [{ "rendition": "original", "reason": "channel-not-covered" }] }
+```
+
+A refusal's reason is one of the `assetRights` enricher's, `not-cleared`, `rights-ended`,
+`channel-not-covered` and `policy-error`, or `no-such-rendition` for an item the asset does not
+have; the page translates each, and says a code it does not know as refused.
+
+**What the client holds to:** every answer to its shape, an answer of another one failing as a
+`500`; a link's id to 64 lowercase hexadecimal characters; a created link's path to one on this
+server, beginning with a single `/`, holding its token, so that its address is this page's origin
+and that path, and never one on another origin. The token is shown once, with Copy, and stored,
+logged or announced nowhere.
+
+**Who may:** `WriteSecurity` on the asset lists, revokes and reads the downloads; creating needs it
+too, and an administrator or a member of a group the server's `nuxeo.agentic.share.groups` names,
+administrators only when it is unset.
+
+**Errors:** a `403` on `ShareLink.List`, the user lacking `WriteSecurity` on the asset, draws
+nothing of the share links; any other failure shows the error state, with Retry for a server error.
+A refused create or revoke (`403`), an invalid one (`400`) and any other failure are each said where
+they were asked. That Automation answers with these statuses, and the operations at all, is not
+checked on a server: the add-on's 0.2.0, which has them, is installed nowhere.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

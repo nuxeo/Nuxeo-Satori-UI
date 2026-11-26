@@ -555,9 +555,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
   /**
    * The packaged viewer asks a transcoded video by its rendition's name first, as the record
-   * page's player does: rights that list it by name decide it there, where nuxeo-agentic-assets
-   * names the same file at its place in `vid:transcodedVideos` by that place only. Seen red with
-   * the viewer asking the address alone.
+   * page's player does, so that rights that list it by name decide it. Seen red with the viewer
+   * asking the address alone.
    */
   describe('transcoded videos', () => {
     const transcoded = (): NuxeoDocument =>

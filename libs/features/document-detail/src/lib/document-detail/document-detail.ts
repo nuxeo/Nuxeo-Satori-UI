@@ -2091,10 +2091,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const byAddress = (): Observable<Blob> =>
       this.http.get(this.resolveNuxeoBlobRequestUrl(entry.dataUrl), { responseType: 'blob' });
     // By its rendition's name first, as the record page's player asks for it, so that rights that
-    // list a transcoded video by its name decide it: nuxeo-agentic-assets names the same file at
-    // its place in `vid:transcodedVideos` by that place only. By the address Nuxeo gives when the
-    // name is none the rendition adapter serves, and never after the server refused it by name:
-    // the same file is not asked for again another way.
+    // list a transcoded video by its name decide it. By the address Nuxeo gives when the name is
+    // none the rendition adapter serves, and never after the server refused it by name: the same
+    // file is not asked for again another way.
     (entry.label
       ? this.detailService
           .fetchRendition(doc.uid, entry.label)

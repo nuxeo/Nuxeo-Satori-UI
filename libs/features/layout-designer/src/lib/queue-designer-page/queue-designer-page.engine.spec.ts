@@ -20,7 +20,11 @@ import {
   PACKAGED_ROW_ACTIONS,
   provideSatoriExtensions,
 } from '@nuxeo/satori-platform/extensions';
-import { NUXEO_API_ORIGIN, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  NUXEO_API_ORIGIN,
+  SelectionService,
+  type NuxeoDocument,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { providePackagedRowActions } from '@nuxeo/satori-platform/ui';
 
 import { QueueDesignerPageComponent } from './queue-designer-page';
@@ -213,5 +217,42 @@ describe('QueueDesignerPageComponent, with the queue page', () => {
     expect(page.saveState()).toBe('saveable');
     // Read-only: the rows the queue's bulk actions would let be selected cannot be.
     expect(root().querySelector('lib-queue-page input[type="checkbox"]')).toBeNull();
+  });
+
+  it('offers and runs no action in the preview, whatever actions the queue is given', async () => {
+    await settleAndAnswer();
+    const page = fixture.componentInstance;
+    const selection = TestBed.inject(SelectionService);
+    const offeredBefore = selection.offeredBulkActions();
+    page.idChosen.set('up-for-renewal');
+    page.open('up-for-renewal');
+    await settleAndAnswer();
+    expect(root().querySelector('lib-queue-page')?.textContent).toContain('CTR-1');
+
+    // Chosen in the designer: a row action and a bulk action more, and one moved first.
+    page.choose('rowActions', 'app.rowActions.download');
+    page.add('rowActions');
+    page.choose('bulkActions', 'app.bulkActions.downloadZip');
+    page.add('bulkActions');
+    page.move('rowActions', 1, -1);
+    await settleAndAnswer();
+    expect(page.file()?.['rowActions']).toEqual([
+      'app.rowActions.download',
+      'app.rowActions.delete',
+    ]);
+    expect(page.file()?.['bulkActions']).toEqual([
+      'app.bulkActions.delete',
+      'app.bulkActions.downloadZip',
+    ]);
+    expect(page.saveState()).toBe('saveable');
+
+    // The rows are drawn, and none has a menu of actions, a box to choose it, or an action over
+    // the whole query; the app's selection bar is offered nothing new. Every request was a read:
+    // `answer()` refuses any other.
+    expect(root().querySelector('lib-queue-page')?.textContent).toContain('CTR-2');
+    expect(root().querySelector('lib-queue-page nxs-action-menu')).toBeNull();
+    expect(root().querySelector('lib-queue-page input[type="checkbox"]')).toBeNull();
+    expect(root().querySelector('lib-queue-page .queue-whole-query')).toBeNull();
+    expect(selection.offeredBulkActions()).toBe(offeredBefore);
   });
 });

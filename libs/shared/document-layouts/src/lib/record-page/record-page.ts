@@ -76,6 +76,7 @@ import {
 import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
 import { RecordPictureViewsComponent } from './record-picture-views';
+import { RecordShareLinksComponent } from './record-share-links';
 import { RECORD_VIDEO_ID, RecordVideoComponent } from './record-video';
 import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
@@ -223,12 +224,13 @@ function fieldShowing(
  * a checklist: the items the file requires, each done or not by the record's own property, with who
  * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
  * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
- * rounds (`lib-record-picture-review`), or, for a video, its player, its facts and its storyboard
- * (`lib-record-video`, through `nxs.components.recordVideo`), then the cards.
+ * rounds (`lib-record-picture-review`), and, when the file has `shareLinks`, the picture's share
+ * links (`lib-record-share-links`), drawn only for a user the server lets manage them; or, for a
+ * video, its player, its facts and its storyboard (`lib-record-video`, through
+ * `nxs.components.recordVideo`); then the cards.
  *
- * Its fields and checklists are read-only; the comments card and the review are where a user
- * writes, and the
- * server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
+ * Its fields and checklists are read-only; the comments card, the review and the share links are
+ * where a user writes, and the server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
  * anyone the server lets read it, so nothing here is a security control.
  */
 @Component({
@@ -245,6 +247,7 @@ function fieldShowing(
     RecordListComponent,
     RecordPictureReviewComponent,
     RecordPictureViewsComponent,
+    RecordShareLinksComponent,
     RecordTimelineComponent,
     RecordVideoComponent,
     RouterLink,
@@ -263,7 +266,8 @@ export class RecordPageComponent {
   /**
    * The page without the ways it offers to change a record: a comments card shows its thread
    * without the comment box, Reply, Edit or Delete, a review its pins without Add a pin or Close
-   * round, and a related list offers no row action. What
+   * round, share links their list without Create or Revoke, and a related list offers no row
+   * action. What
    * the layout designer previews with, so that drawing the page it is editing writes nothing. A
    * convenience, not a control: the server's permissions decide what anyone may change.
    */

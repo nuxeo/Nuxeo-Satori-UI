@@ -19,14 +19,11 @@
       <!-- The original file, as the prototype's "Original": print. -->
       <original channel="Print" />
       <!-- The transcoded videos, by their renditions' names: Nuxeo LTS 2025's automatic video
-           conversions, the web cut. The asset page asks for them so, through @rendition. Their
-           files at vid:transcodedVideos/<n>/content are not listed, so they are refused there to
-           everyone: a place names no conversion, since Nuxeo appends each one as it finishes, and
-           a channel listed by place would cover whichever conversion ended up there. -->
+           conversions, the web cut. The asset page asks for them so, through @rendition. -->
       <rendition name="MP4 480p" channel="E-commerce" />
       <rendition name="WebM 480p" channel="E-commerce" />
       <!-- The still frames: the poster views Nuxeo makes from the video, the thumbnail the lists
-           show, and the storyboard's frames, by place, as many as Nuxeo LTS 2025 makes: 9. -->
+           show, and the storyboard's frames, as many as Nuxeo LTS 2025 makes: 9. -->
       <view name="Small" preview="true" />
       <view name="StaticPlayerView" preview="true" />
       <rendition name="thumbnail" preview="true" />
