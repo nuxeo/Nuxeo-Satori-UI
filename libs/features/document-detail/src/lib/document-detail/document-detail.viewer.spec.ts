@@ -596,6 +596,15 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
       ]);
     });
 
+    it('never asks its address after the server refused it by name', async () => {
+      mockDetailService.fetchRendition.mockReturnValueOnce(throwError(() => ({ status: 403 })));
+      await buildVideo(transcoded());
+
+      expect(mockDetailService.fetchRendition).toHaveBeenCalledWith('doc-1', 'MP4 480p');
+      http.expectNone((request) => request.url.includes('v480.mp4'));
+      expect(component.videoSources()).toEqual([]);
+    });
+
     it('asks its address when the rendition adapter does not serve the name', async () => {
       await buildVideo(transcoded());
 

@@ -1007,7 +1007,8 @@ becomes. In version 2's terms:
     page may hold the View tab, as it holds back a picture's original: a record with a `vid:`
     property waits until its type's layout is read, and its files load for the Annotations tab or
     the packaged viewer of a type with no record page. That viewer asks for a transcoded video by
-    its rendition's name too, then by the address Nuxeo gives when the name is not served;
+    its rendition's name too, then by the address Nuxeo gives when the name is not served, never
+    after the server refused it by name;
   - **each file is downloaded whole, each time it is shown:** the page's tabs draw the active one
     only, so going back to the View tab fetches the video again, and the Annotations tab's viewer
     fetches its own copy.

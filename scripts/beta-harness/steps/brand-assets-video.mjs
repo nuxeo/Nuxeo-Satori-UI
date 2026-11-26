@@ -13,15 +13,15 @@
  *      storyboard, a frame of which seeks the player; where it did not, its original, the master,
  *      is refused, and the page says the server's reason, asked after the 403, with no player and
  *      nothing tried instead.
- *
- * A server that has transcoded one video and not yet the other is refused (exit 2): the run checks
- * one branch, and waits for Nuxeo to finish.
  *   3. The REST API called directly, outside the app: the no-Print video's original refused,
  *      through `@blob` and `/nxfile/`; a transcoded video refused at its place in
  *      `vid:transcodedVideos` to everyone, the cleared video included, and served by its name
  *      through `@rendition`; the cleared video's original served.
  *   4. The library lists the videos with the pictures, its Type facet counts them from the
  *      aggregate, and choosing AcmeVideo narrows it to them on the server.
+ *
+ * A server that has transcoded one video and not yet the other, or the 12-second one and not yet
+ * made its storyboard, is refused (exit 2): Nuxeo is still working, and the run checks one branch.
  *
  * **Whether the server transcodes** depends on ffmpeg in its container: the local Nuxeo has none
  * (its log: "ffmpeg is not available"), so it reads no facts, transcodes nothing and makes no
@@ -233,6 +233,13 @@ export default async function run(page, h) {
     transcodes || VIDEOS.every((video) => made.get(video.id).transcoded.length === 0),
     `transcoded so far: ${VIDEOS.map((video) => `${video.id} ${made.get(video.id).transcoded.join(', ') || 'nothing'}`).join('; ')}. Nuxeo is still converting: wait, then run this again`,
   );
+  // Nuxeo makes a storyboard for a video of 10 seconds or more, in a job of its own after the
+  // conversions: where it transcodes, the 12-second video has one, or soon will.
+  h.requirePrecondition(
+    `where the server transcodes, it has made ${NO_PRINT.id}'s storyboard, ${NO_PRINT.video.seconds} seconds long`,
+    !transcodes || made.get(NO_PRINT.id).frames > 0,
+    `${NO_PRINT.id} has no storyboard yet. Nuxeo makes it after the conversions: wait, then run this again`,
+  );
   h.note(
     transcodes
       ? `the server transcoded the videos: ${VIDEOS.map((video) => `${video.id} ${made.get(video.id).transcoded.join(', ')}`).join('; ')}`
@@ -388,24 +395,20 @@ export default async function run(page, h) {
         web.refusal === null,
       JSON.stringify(web),
     );
+    // The precondition above holds the server to a storyboard for it, so this is no branch.
     h.check(
-      noPrintMade.frames > 0
-        ? `its storyboard of ${noPrintMade.frames} frame(s), each a button that seeks it`
-        : 'the page says the server has made no storyboard for it',
-      noPrintMade.frames > 0
-        ? web?.frames.length === noPrintMade.frames &&
-            web.frames.every((name) => /^Seek to /.test(name ?? ''))
-        : web?.notes.includes('storyboard') && web.frames.length === 0,
+      `its storyboard of ${noPrintMade.frames} frame(s), each a button that seeks it`,
+      noPrintMade.frames > 0 &&
+        web?.frames.length === noPrintMade.frames &&
+        web.frames.every((name) => /^Seek to /.test(name ?? '')),
       JSON.stringify({ server: noPrintMade.frames, page: web?.frames }),
     );
-    if (noPrintMade.frames > 1) {
-      const position = await seekWithLastFrame();
-      h.check(
-        'pressing the last frame moves the player to its moment',
-        Number(position) > 0,
-        String(position),
-      );
-    }
+    const position = await seekWithLastFrame();
+    h.check(
+      'pressing the last frame moves the player to its moment',
+      Number(position) > 0,
+      String(position),
+    );
   } else {
     await h.step(
       `2. ${NO_PRINT.title}, with no Print channel: its original refused, with the server's reason`,

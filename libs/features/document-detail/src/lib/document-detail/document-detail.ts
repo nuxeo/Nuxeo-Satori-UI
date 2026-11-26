@@ -297,6 +297,12 @@ function mayShowVideoRecordPage(doc: NuxeoDocument): boolean {
   return Object.keys(doc.properties ?? {}).some((key) => key.startsWith('vid:'));
 }
 
+/** Whether the server refused a request, 401 or 403, rather than failing to serve it. */
+function isRefusal(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return status === 401 || status === 403;
+}
+
 /** A banner's text and the actions it offers, as a banner rendered by ID takes them. */
 interface DocumentBanner {
   readonly message: string;
@@ -2086,10 +2092,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.http.get(this.resolveNuxeoBlobRequestUrl(entry.dataUrl), { responseType: 'blob' });
     // By its rendition's name first, as the record page's player asks for it, so that rights that
     // list a transcoded video by its name decide it: nuxeo-agentic-assets names the same file at
-    // its place in `vid:transcodedVideos` by that place only. By the address Nuxeo gives, when the
-    // name is none the rendition adapter serves.
+    // its place in `vid:transcodedVideos` by that place only. By the address Nuxeo gives when the
+    // name is none the rendition adapter serves, and never after the server refused it by name:
+    // the same file is not asked for again another way.
     (entry.label
-      ? this.detailService.fetchRendition(doc.uid, entry.label).pipe(catchError(byAddress))
+      ? this.detailService
+          .fetchRendition(doc.uid, entry.label)
+          .pipe(
+            catchError((error: unknown) =>
+              isRefusal(error) ? throwError(() => error) : byAddress(),
+            ),
+          )
       : byAddress()
     )
       .pipe(
