@@ -600,10 +600,15 @@ export function problemsOf(kit) {
           break;
         case 'RunOperation': {
           const target = param('id') ?? '';
-          const run = target.startsWith('expr:')
-            ? [...target.matchAll(/"([^"]+)"/g)].map((match) => match[1])
-            : [target].filter(Boolean);
-          if (run.length === 0) problem(`the chain ${id} runs RunOperation and names no chain`);
+          // A name, or an expression choosing between two, `<condition> ? "<chain>" : "<chain>"`.
+          const choice = /\?\s*"([^"]+)"\s*:\s*"([^"]+)"\s*$/.exec(target);
+          const run = !target.startsWith('expr:')
+            ? [target].filter(Boolean)
+            : choice
+              ? [choice[1], choice[2]]
+              : [];
+          if (run.length === 0)
+            problem(`the chain ${id} runs RunOperation and names no chain this check can read`);
           for (const name of run)
             if (!chains.has(name))
               problem(`the chain ${id} runs the chain ${name}, which no component contributes`);
@@ -1261,7 +1266,17 @@ refuse(
       '<param type="string" name="id">PayersClaimReview</param>',
       '<param type="string" name="id">PayersClaimsReview</param>',
     ),
-  /the chain PayersAppealReview\.Overturn starts the workflow PayersClaimsReview, which is not a route model the kit contributes/,
+  /the chain PayersAppealReview\.ReopenClaim starts the workflow PayersClaimsReview, which is not a route model the kit contributes/,
+);
+refuse(
+  "an overturned appeal's claim left to a chain no component contributes",
+  ({ edit }) =>
+    edit(
+      WORKFLOW,
+      '"PayersAppealReview.ReopenClaim" : "PayersAppealReview.LeaveClaim"',
+      '"PayersAppealReview.ReopenClaim" : "PayersAppealReview.KeepClaim"',
+    ),
+  /the chain PayersAppealReview\.Overturn runs the chain PayersAppealReview\.KeepClaim, which no component contributes/,
 );
 refuse(
   'a chain writing a value an enumerated property does not take',

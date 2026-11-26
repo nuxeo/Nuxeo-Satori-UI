@@ -302,7 +302,9 @@ the builder after changing the source.
   administrator, and the system an overturned appeal's chain runs as, which `Context.StartWorkflow`
   checks the filter with (`StartWorkflowOperation`, `canCreateInstance`, read from the 2025.10.18
   jars). No demo group holds it, so no adjuster is offered a review that would reopen a denied
-  claim, and the REST API's start refuses them one.
+  claim, and the REST API's start refuses them one. That is not a control on reopening: an
+  adjuster may still follow `reopen` through the API, as "Not done yet" says of every transition,
+  and member services may reopen any denied claim through an appeal (below).
 - **What it writes:** the allowed amount, to `claim:allowedAmount` (0 on a denial); the claim's
   lifecycle, and so its status; who determined a claim sent to a supervisor, as the workflow
   variable `determinedBy`; and each decision in the claim's history, under "Claim review".
@@ -345,12 +347,12 @@ the builder after changing the source.
   misspelled and `Claim` mapped to `default`, on the two checks that read them. What it does not
   check: the chains' operations and parameters beyond their number, which only a server runs. Since
   0.7.0 it reads the appeal review's model too, and runs the expressions its chains compute
-  ([below](#how-the-appeal-review-was-verified-with-no-deploy)): run on 26 November 2026, 176
+  ([below](#how-the-appeal-review-was-verified-with-no-deploy)): run on 26 November 2026, 180
   checks passed, among them 5 start cases of the claims review, a denied claim reopened.
 - **Without a server, and in CI:** `node workflow/route-model.selftest.mjs`, which checks that the
   zip is its source's, byte for byte, then the documents, the graph and what they name across the
-  kit (its header lists them), then breaks a copy of the kit in 62 ways, 26 of them the claims
-  review's and 36 the appeal review's and its checks', and the lifecycle's XML in 5, among them a
+  kit (its header lists them), then breaks a copy of the kit in 63 ways, 26 of them the claims
+  review's and 37 the appeal review's and its checks', and the lifecycle's XML in 5, among them a
   `<!<!---->-->` that a pattern stripping comments would read past, each refused for its own reason.
   `ci.yml` runs it on every pull request, so a source changed without its zip, or a zip changed by
   hand, fails there.
@@ -372,11 +374,11 @@ when its own source changes.
 
 ### What the review does
 
-| Node     | Task                                                                     | Then                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `start`  | None                                                                     | An appeal against a claim goes to `decide`: an open one is put in review, "Appeal review started" in its history; one in review already is left as it is. Any other case is refused, a grievance, an appeal decided or closed, or one with no claim: the workflow ends, the case unchanged, with "Appeal review refused" in its history                                                                                                    |
-| `decide` | The appeal's specialist, or anyone in `member-services` when it has none | Its form sets `decision`, uphold or overturn, and `rationale`. In order: an appeal another review has decided meanwhile ends this one, unchanged; a decision with no rationale is refused; upholding decides it upheld; overturning decides it overturned, and starts the claims review on the denied claim; anything else is refused. A refusal leaves the case as it is, records "Appeal decision refused", and opens the decision again |
-| `end`    | None                                                                     | The appeal is upheld or overturned, by the chain that led here, or was not one to review                                                                                                                                                                                                                                                                                                                                                   |
+| Node     | Task                                                                     | Then                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`  | None                                                                     | An appeal against a claim goes to `decide`: an open one is put in review, "Appeal review started" in its history; one in review already is left as it is. Any other case is refused, a grievance, an appeal decided or closed, or one with no claim: the workflow ends, the case unchanged, with "Appeal review refused" in its history                                                                                                         |
+| `decide` | The appeal's specialist, or anyone in `member-services` when it has none | Its form sets `decision`, uphold or overturn, and `rationale`. In order: an appeal another review has decided meanwhile ends this one, unchanged; a decision with no rationale is refused; upholding decides it upheld; overturning decides it overturned, and starts the claims review on its claim when denied; anything else is refused. A refusal leaves the case as it is, records "Appeal decision refused", and opens the decision again |
+| `end`    | None                                                                     | The appeal is upheld or overturned, by the chain that led here, or was not one to review                                                                                                                                                                                                                                                                                                                                                        |
 
 - **Who may start it:** someone with `ReadWrite` on an appeal open or in review, by the action
   filter `filter@PayersAppealReview`, which the REST API's start checks: member services, by the
@@ -390,9 +392,13 @@ when its own source changes.
   first entry, the one the page reads, is ticked where it is, and an entry is added at the end when
   the checklist has none; in its history, under "Appeal review", "Appeal upheld" or "Appeal
   overturned", with who and the rationale; and who decided, as the workflow variable `decidedBy`.
-  Overturning also writes "Denial overturned" in the claim's history, naming the appeal, and starts
-  the claims review on the claim, whose start reopens it ([above](#what-it-does)), with "Claim
-  reopened", and opens its adjuster's determination. Upholding leaves the claim as it is.
+  Overturning an appeal whose claim is denied also writes "Denial overturned" in the claim's
+  history, naming the appeal, and starts the claims review on the claim, whose start reopens it
+  ([above](#what-it-does)), with "Claim reopened", and opens its adjuster's determination. A claim
+  that is not denied, never denied or since reopened or approved, is left as it is, with "Appeal
+  overturned, claim not reopened" in its history: no review is started on it, which on a submitted
+  claim would be an ordinary one, and on one in review a second. Upholding leaves the claim as it
+  is.
 - **The chains run as the system.** Nuxeo resumes a workflow from a task in an unrestricted session
   (`DocumentRoutingServiceImpl`'s `CompleteTaskRunner`), so the specialist, who may only read a
   claim, reopens one by overturning its appeal, and the claims review's filter lets the system
@@ -410,9 +416,20 @@ when its own source changes.
 - **Two reviews may run on one appeal.** The filter cannot know a review runs, and an appeal in
   review is one a review may start on. The first to decide decides it; the other's decision then
   follows `alreadyDecided`, writes nothing, records "Appeal review ended", and ends.
-- **An overturn whose claim is no longer denied fails, whole.** The claims review's filter refuses
-  to start on it, `Context.StartWorkflow` throws, and the task's completion, one transaction, is
-  answered with an error and writes nothing: the decision stays open. No demo path leads there.
+- **Member services may reopen any denied claim, through an appeal.** The review's authority is
+  the case's: member services may write any case, its claim, state and category among them, and the
+  chains, run as the system, reopen the claim an overturned appeal names. So a specialist may file
+  an appeal against any denied claim, or put an upheld one back to open, and overturn it. Nothing
+  ties an appeal's claim to its member, or asks a second person. The claims review's history names
+  the appeal and the specialist. Making it a control, an appeal's claim fixed when it is opened, or
+  an overturn approved by a supervisor, is for the security review phase 2 needs; hiding a button
+  is not one.
+- **The specialist may cancel the claims review an overturn started.** Nuxeo writes a review's
+  initiator as the session's acting user, which in the unrestricted session a chain runs in is the
+  person who completed the task (`DocumentRoutingTreePersister`, `SystemPrincipal`, read from the
+  jars, not seen on a server), and the REST API lets an initiator cancel. A claim whose review is
+  cancelled stays in review, with no determination open, until an adjuster or an administrator
+  decides it.
 
 ### How the appeal review was verified, with no deploy
 
@@ -424,18 +441,19 @@ when its own source changes.
   compute, as Automation's Scripting runs an `expr:` value: where the decision letter's first entry
   is, with no checklist, an empty one, one without it and one with it twice; which chain then
   writes it; the three subfields a tick writes, at that index; the entry an addition writes, JSON
-  with the specialist and the day, which the platform's `DateType` decodes; and each history entry.
-  Run on 26 November 2026: 176 checks passed, both models'. **Seen failing:** its first run
+  with the specialist and the day, which the platform's `DateType` decodes; which chain an overturn
+  runs on the claim, by its state, reopening a denied one only; and each history entry. Run on
+  26 November 2026: 180 checks passed, both models'. **Seen failing:** its first run
   refused the chain's choice of a sub-chain, then written `decisionLetterAt &lt; 0 ? …`: XMap gives
   a chain's parameter its content as markup, so the server's MVEL was given `&lt;`, which it cannot
   read. The expression is now `decisionLetterAt == -1 ? …`, and the route model's selftest refuses a
   `<`, `>` or `&` in any chain's parameter. What it does not show: that the server writes the
   checklist, or starts the claims review from the chain, which only an install does.
 - **Without a server, and in CI:** `node workflow/route-model.selftest.mjs` holds both models to
-  the same checks, and breaks a copy of the kit in 36 ways for the appeal review and the checks it
+  the same checks, and breaks a copy of the kit in 37 ways for the appeal review and the checks it
   brought: each of the claims review's kinds of break on this model, and a step's variables facet
   another's, or not holding its own schema; a chain running, through `RunOperation`, a chain no
-  component contributes; one starting a workflow that is not one of the kit's; one writing a
+  component contributes, for the decision letter and for the claim; one starting a workflow that is not one of the kit's; one writing a
   property the stand-in model does not have, a value an enumerated one does not take, or a
   checklist entry's subfield it does not have; one writing or looking for a checklist item the Case
   page does not list, or the Case page dropping the one the chains write; a task form's field that
@@ -875,12 +893,16 @@ from the trash: do the same before replacing the stand-in model. A document whos
 cannot be read, and would break the folder and the searches that hold it.
 
 **From 0.4.0, cancel the claims review workflows first,** and delete the route model: every running
-`PayersClaimReview` instance (`DELETE /nuxeo/api/v1/workflow/<id>`, as an administrator, for each
-`GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists), then the model
-`PayersClaimReview` under the route models' folder. Its instances, their tasks and its nodes carry
-the `facet-var_PayersClaimReview…` facets, whose schemas leave with the package, as the claims'
-types do. **From 0.7.0, the same for `PayersAppealReview`,** whose facets are
-`facet-var_PayersAppealReview…`. **Not run yet.**
+`PayersClaimReview` instance, then the model `PayersClaimReview` under the route models' folder.
+`GET /nuxeo/api/v1/workflow?workflowModelName=…` lists only the workflows the person asking
+started (`docri:initiator`), which an administrator did not, so find them by the model, as an
+administrator: the model's id is the `id` `GET /nuxeo/api/v1/workflowModel/PayersClaimReview`
+answers; `SELECT * FROM DocumentRoute WHERE docri:modelId = '<that id>' AND
+ecm:currentLifeCycleState = 'running'`, through `GET /nuxeo/api/v1/search/lang/NXQL/execute`,
+lists its running instances; and `DELETE /nuxeo/api/v1/workflow/<id>` cancels each, which an
+administrator may. Its instances, their tasks and its nodes carry the `facet-var_PayersClaimReview…`
+facets, whose schemas leave with the package, as the claims' types do. **From 0.7.0, the same for
+`PayersAppealReview`,** whose facets are `facet-var_PayersAppealReview…`. **Not run yet.**
 
 Then remove the package the way it was installed. `nuxeoctl mp-remove`, like `mp-install`,
 refuses while the server runs, and stopping the server stops the container, so a one-off script
@@ -1223,26 +1245,31 @@ adjuster, `alex.rivera`, through the REST API:
    reopened, in review, state and status, with the claims review running on it and its
    determination open for `alex.rivera`; the appeal in the open-appeals queue while in review, and
    gone once decided; its Case page showing the decision and the letter sent, by Sam Patel. Then
-   the adjuster's new determination approves the claim;
+   the adjuster's new determination approves the claim. And, through the REST API, an appeal
+   against a claim the run leaves submitted, never denied, overturned: the appeal decided, and the
+   claim left submitted, with no determination opened on it and "Appeal overturned, claim not
+   reopened" in its history;
 3. **upheld,** on a second: the server refuses a decision with no rationale, sent past the form,
    leaving the appeal in review and the decision open again; the form's field rule stops one, and
    nothing is sent; then upheld, the appeal decided, `upheld`, its decision letter entry, which it
    had not done between two others, ticked where it is, the others unchanged and none added; its
-   claim still denied, with no review on it and no "Denial overturned"; and gone from the queue.
+   claim still denied, with no determination opened on it and no "Denial overturned"; and gone from
+   the queue.
 
 ```bash
 NUXEO_USER=sam.patel NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-appeal-workflow
 ```
 
-**What it leaves.** Each run writes two claims and two appeals, numbered for it (`CLAIM-AW-<run>-1`
-and `-2`, `CASE-AW-<run>-1` and `-2`) and marked in their description: no member, no provider,
-and the claims the workflow's adjuster's. It ends with the appeals decided and the claims approved
-or denied, so neither phase 1's demo, which counts claims in review and a member's records, nor
-the appeals', which counts the open-appeals queue exactly, holds any of them. A run stopped part way
+**What it leaves.** Each run writes three claims and three appeals, numbered for it
+(`CLAIM-AW-<run>-1` to `-3`, `CASE-AW-<run>-1` to `-3`) and marked in their description: no
+member, no provider, and the claims the workflow's adjuster's. It ends with the appeals decided
+and the claims approved, denied, or submitted with their adjuster, so neither phase 1's demo, which
+counts claims in review, claims submitted with no adjuster and a member's records, nor the
+appeals', which counts the open-appeals queue exactly, holds any of them. A run stopped part way
 may leave an appeal open or in review, a claim reopened, or a review running on CASE-2041, which
 those demos would refuse: the next run of this one cancels its reviews, as the specialist who
-started them, denies a reopened claim's determination, as its adjuster, since no one but an
-administrator may cancel a review an appeal's chain started, and trashes its records, first.
+started them, denies a reopened claim's determination, as its adjuster, which leaves the claim
+decided where cancelling its review would leave it in review, and trashes its records, first.
 
 **What it needs:** the package 0.7.0 installed and seeded with its seed, the dev server serving the
 kit's files with the appeal's task form (above), `PAYERS_DEMO_PASSWORD` for the adjuster, and
@@ -1387,8 +1414,11 @@ included, is shown no app. The demo itself still runs on a development server, a
 - **A claims review may be started on a denied claim by an administrator,** outside any appeal,
   and reopens it: the filter's second rule is `Everything`'s, which an administrator holds. No demo
   group may.
-- **Two reviews may run on one appeal,** and an overturn whose claim is no longer denied fails whole
-  ([above](#what-the-review-does)). Neither is run by the steps file.
+- **Two reviews may run on one appeal** ([above](#what-the-review-does)), which the steps file does
+  not run; nor an overturn whose claim was reopened or approved since, which the chain leaves as it
+  leaves the never-denied claim the file does run.
+- **Member services may reopen any denied claim, through an appeal,** and cancel the claims review
+  an overturn started ([above](#what-the-review-does)): for the security review.
 - **The open appeals' deadlines are not flagged.** The queue lists the due day, the nearest first;
   the prototype's warning on an appeal near or past its deadline is not built.
 - **A platform built before `tickable` leaves the Case page's checklist out,** and the console says

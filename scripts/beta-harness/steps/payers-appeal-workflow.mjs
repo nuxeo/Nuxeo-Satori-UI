@@ -16,7 +16,8 @@
  *      its decision letter item added; its claim reopened, in review, with a determination open
  *      for its adjuster; both histories saying so; the appeal gone from the open-appeals queue;
  *      the Case page showing the decision. Then the adjuster determines the claim again, and
- *      approves it.
+ *      approves it. And an appeal against a claim never denied, overturned through the REST API:
+ *      decided, and its claim left submitted, with no determination opened, its history saying why.
  *   3. Upheld, in the task form, on a second appeal the run writes: first the server refuses a
  *      decision with no rationale, sent past the form, and opens the decision again; then the
  *      form's field rule stops one; then upheld, the appeal decided with its decision letter
@@ -27,18 +28,20 @@
  * the Case layout's checklist and the stand-in model's open-appeals queue through
  * `demo/appeals.mjs`, as the seed reads them.
  *
- * **It leaves nothing the other Payers steps files count.** Each run writes two denied claims, as
- * the workflow's adjuster, `WORKFLOW_ADJUSTER`, and two appeals against them, as the specialist,
+ * **It leaves nothing the other Payers steps files count.** Each run writes three claims, as the
+ * workflow's adjuster, `WORKFLOW_ADJUSTER`, two denied and one submitted, and three appeals against
+ * them, as the specialist,
  * numbered for the run and marked `MARKER` in their description, in the seeded folders: no member
  * and no provider, so neither the Member page's lists nor phase 1's figures hold them, and the
  * claims are the workflow's adjuster's, whom phase 1's demo does not count. By its end each appeal
- * is decided, so the open-appeals queue the appeals demo counts holds neither, and each claim is
- * approved or denied, so no queue of claims in review holds one. On the seeded appeal it starts
+ * is decided, so the open-appeals queue the appeals demo counts holds none, and each claim is
+ * approved, denied or submitted with an adjuster, none of which phase 1's demo counts. On the seeded appeal it starts
  * one review, which writes nothing on the case, and cancels it. A run that stopped part way may
  * leave an appeal open or in review, a claim reopened, or a review running on the seeded appeal,
  * which the appeals demo and phase 1's would then refuse: the next run of this one puts them away
  * first, before it writes its own. Its reviews are cancelled, a reopened claim's determination is
- * denied as the adjuster's, and its records are trashed.
+ * denied as the adjuster's, which leaves the claim decided where cancelling its review would leave
+ * it in review, and its records are trashed.
  *
  * What it needs, and refuses to run without (exit 2):
  *
@@ -65,13 +68,13 @@
  * showing the decision. Negative ones: a decided appeal and a grievance refused a review; nothing
  * written on the seeded appeal; the decision with no rationale deciding nothing, in the form and on
  * the server; the upheld appeal's other checklist entries unchanged and none added; the upheld
- * appeal's claim still denied, with no review running on it and no "Denial overturned" in its
- * history.
+ * appeal's claim still denied, and the never-denied one still submitted, each with no
+ * determination opened and no "Denial overturned" in its history.
  *
  * Not covered, and said in notes: two reviews running on one appeal, which the filter cannot stop
- * and the decision step's first transition ends; an overturn whose claim is no longer denied, which
- * the claims review's filter refuses, failing the decision; the server's own install of the task
- * form (the dev server serves it from `config:dev`).
+ * and the decision step's first transition ends; an overturn whose claim was reopened or approved
+ * since, which the chain leaves as it does the never-denied one; the server's own install of the
+ * task form (the dev server serves it from `config:dev`).
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -369,7 +372,9 @@ export default async function run(page, h) {
   );
 
   // ── Set up: an earlier run put away, then the run's claims and appeals ─────────────────────
-  await h.step('Set up: two denied claims and two open appeals against them, of the run');
+  await h.step(
+    'Set up: three claims, two of them denied, and three open appeals against them, of the run',
+  );
   const query = (as, type) =>
     as('POST', '/automation/Repository.Query', {
       params: {
@@ -421,7 +426,8 @@ export default async function run(page, h) {
     if (trashed.status !== 200) putAway.push(`${doc.path} (${trashed.status})`);
   }
   // An earlier run's claims: a reopened one's new determination denied, as the adjuster's own,
-  // since its review was started by the appeal's chain and no one else may cancel it; then trashed.
+  // which leaves it decided, where cancelling its review would leave it in review, which phase 1's
+  // demo counts; then trashed.
   const oldClaims = await query(asAdjuster, 'Claim');
   for (const doc of oldClaims.body?.entries ?? []) {
     for (const task of (await tasksOn(asAdjuster, doc.uid)) ?? []) {
@@ -482,6 +488,13 @@ export default async function run(page, h) {
       checklist: [{ item: 'appealLetter', done: true, doneBy: specialist, doneOn: today }],
       rationale: 'The records show the service was medically necessary (fictional).',
     },
+    // Against a claim the adjuster submitted and never denied: overturned, it is left as it is.
+    leftAlone: {
+      number: `CASE-AW-${runId}-3`,
+      claim: { number: `CLAIM-AW-${runId}-3`, billedAmount: 980, keep: 'submitted' },
+      checklist: [{ item: 'appealLetter', done: true, doneBy: specialist, doneOn: today }],
+      rationale: 'Filed against a claim that was not denied (fictional).',
+    },
     upheld: {
       number: `CASE-AW-${runId}-2`,
       claim: { number: `CLAIM-AW-${runId}-2`, billedAmount: 2650 },
@@ -520,8 +533,10 @@ export default async function run(page, h) {
       },
     });
     claim.uid = created.body?.uid ?? null;
-    // Denied by the lifecycle, as the adjuster: what an appeal is against.
-    for (const transition of ['review', 'deny'])
+    // Denied by the lifecycle, as the adjuster: what an appeal is against. The one left alone stays
+    // submitted.
+    const wanted = claim.keep ?? 'denied';
+    for (const transition of wanted === 'denied' ? ['review', 'deny'] : [])
       if (claim.uid)
         await asAdjuster('POST', '/automation/Document.FollowLifecycleTransition', {
           input: `doc:${claim.uid}`,
@@ -529,8 +544,8 @@ export default async function run(page, h) {
         });
     const denied = claim.uid ? await readClaim(claim) : {};
     h.check(
-      `${name}: claim ${claim.number}, billed $${claim.billedAmount}, is created and denied, state and status`,
-      created.status === 201 && denied.state === 'denied' && denied.status === 'denied',
+      `${name}: claim ${claim.number}, billed $${claim.billedAmount}, is created ${wanted}, state and status`,
+      created.status === 201 && denied.state === wanted && denied.status === wanted,
       `POST answered ${created.status}; ${JSON.stringify(denied)}`,
     );
     const filed = await asSpecialist('POST', `/path${CASES_FOLDER}`, {
@@ -571,6 +586,11 @@ export default async function run(page, h) {
   };
   const taskOn = async (as, uid, step) =>
     ((await tasksOn(as, uid)) ?? []).find((task) => task.nodeName === step) ?? null;
+  /** Whether the tasks on a record were read, and none of `step` is open: never a refused read. */
+  const noTaskOf = async (as, uid, step) => {
+    const tasks = await tasksOn(as, uid);
+    return Array.isArray(tasks) && !tasks.some((task) => task.nodeName === step);
+  };
   const actorsOf = (task) => (task?.actors ?? []).map((actor) => actor?.id ?? actor);
   /** The case numbers the open-appeals queue holds, as the server answers them, or `null`. */
   const openAppeals = async () => {
@@ -582,10 +602,17 @@ export default async function run(page, h) {
       ? answer.body.entries.map((entry) => entry.properties?.['case:number'])
       : null;
   };
-  /** A record's audit entries, newest first, as `as` reads them. */
-  const historyOf = async (as, uid) =>
-    (await as('GET', `/id/${uid}/@audit?pageSize=100&sortBy=eventDate&sortOrder=desc`)).body
-      ?.entries ?? [];
+  /** A record's audit entries, newest first, as `as` reads them, or `null` when not read. */
+  const historyRead = async (as, uid) => {
+    const answer = await as(
+      'GET',
+      `/id/${uid}/@audit?pageSize=100&sortBy=eventDate&sortOrder=desc`,
+    );
+    return answer.status === 200 && Array.isArray(answer.body?.entries)
+      ? answer.body.entries
+      : null;
+  };
+  const historyOf = async (as, uid) => (await historyRead(as, uid)) ?? [];
   /** Start the review on an appeal, as the specialist, through the REST API. */
   const startReview = (uid) =>
     asSpecialist('POST', `/id/${uid}/@workflow`, {
@@ -661,7 +688,7 @@ export default async function run(page, h) {
     typeof cancelled.status === 'number' &&
       cancelled.status < 300 &&
       afterCancel.body?.state === 'canceled' &&
-      (await taskOn(asSpecialist, seededUid, DECIDE)) === null,
+      (await noTaskOf(asSpecialist, seededUid, DECIDE)),
     `DELETE answered ${cancelled.status}; the workflow is ${afterCancel.body?.state}`,
   );
   h.check(
@@ -737,7 +764,7 @@ export default async function run(page, h) {
   const overWorkflow = await asSpecialist('GET', `/workflow/${over.workflow}`);
   h.check(
     'the review is done, and no decision is left open on the appeal',
-    overWorkflow.body?.state === 'done' && (await taskOn(asSpecialist, over.uid, DECIDE)) === null,
+    overWorkflow.body?.state === 'done' && (await noTaskOf(asSpecialist, over.uid, DECIDE)),
     `the workflow is ${overWorkflow.body?.state}`,
   );
   const overHistory = await until(async () => {
@@ -762,18 +789,18 @@ export default async function run(page, h) {
     reopened?.status === 'inReview',
     JSON.stringify(reopened ?? (await readClaim(over.claim))),
   );
+  // Read as its adjuster, the task's actor: the claims review the chain started, as the system, is
+  // the one whose determination this is.
   const newDetermination = await until(() => taskOn(asAdjuster, over.claim.uid, DETERMINE));
-  const claimReviews = await runningOn(asAdjuster, over.claim.uid, CLAIM_MODEL);
   h.check(
-    `for a new determination: the ${CLAIM_MODEL} workflow runs on it, its determination open for its adjuster, user:${adjuster}`,
+    `for a new determination: the ${CLAIM_MODEL} workflow's determination is open on it, for its adjuster, user:${adjuster}`,
     newDetermination !== null &&
-      actorsOf(newDetermination).includes(`user:${adjuster}`) &&
-      Array.isArray(claimReviews) &&
-      claimReviews.length === 1,
+      newDetermination.workflowModelName === CLAIM_MODEL &&
+      actorsOf(newDetermination).includes(`user:${adjuster}`),
     JSON.stringify({
       task: newDetermination?.id ?? null,
+      model: newDetermination?.workflowModelName ?? null,
       actors: actorsOf(newDetermination),
-      running: claimReviews?.length ?? null,
     }),
   );
   const claimHistory = await until(async () => {
@@ -781,7 +808,7 @@ export default async function run(page, h) {
     return entries.some((entry) => entry.eventId === 'Claim reopened') ? entries : null;
   });
   h.check(
-    `the claim's history says so: "Denial overturned" on appeal ${over.number}, by ${specialist}, then "Claim reopened"`,
+    `the claim's history says so: "Denial overturned" on appeal ${over.number}, by ${specialist}, and "Claim reopened"`,
     (claimHistory ?? []).some(
       (entry) =>
         entry.eventId === 'Denial overturned' &&
@@ -812,7 +839,7 @@ export default async function run(page, h) {
       { timeout: 30_000 },
     )
     .catch(deferred);
-  const page2 = await page
+  const casePage = await page
     .evaluate(() => {
       const row = document.querySelector(
         '.record-page__card[data-card-id="checklist"] .record-page__checklist-item[data-item="decisionLetter"]',
@@ -834,11 +861,11 @@ export default async function run(page, h) {
     .catch(unread);
   h.check(
     `the Case page shows the decision, overturned, and the decision letter sent, by ${nameOf(specialist)}, on ${overLetter?.doneOn ? longDay(overLetter.doneOn) : '?'}`,
-    /overturned/i.test(page2?.decision ?? '') &&
-      page2?.letter?.done === 'true' &&
-      page2?.letter?.by === nameOf(specialist) &&
-      page2?.letter?.on === (overLetter?.doneOn ? longDay(overLetter.doneOn) : null),
-    JSON.stringify(page2),
+    /overturned/i.test(casePage?.decision ?? '') &&
+      casePage?.letter?.done === 'true' &&
+      casePage?.letter?.by === nameOf(specialist) &&
+      casePage?.letter?.on === (overLetter?.doneOn ? longDay(overLetter.doneOn) : null),
+    JSON.stringify(casePage),
   );
   await h.screenshot('appeal-overturned', page.locator('.record-page__card').first());
   // The new determination, the adjuster's, through the REST API: approved, so that no claim of
@@ -858,6 +885,54 @@ export default async function run(page, h) {
       approvedClaim?.status === 'approved' &&
       Number(approvedClaim?.allowedAmount) === over.claim.allowedAmount,
     JSON.stringify({ answered: approved.status, claim: approvedClaim }),
+  );
+  // An appeal against a claim that is not denied, overturned through the REST API: decided, and
+  // the claim left as it is, with no review started on it, which on a submitted claim would be an
+  // ordinary one, and its history saying why.
+  const alone = appeals.leftAlone;
+  const aloneStart = await startReview(alone.uid);
+  const aloneTask = await until(() => taskOn(asSpecialist, alone.uid, DECIDE));
+  const aloneAnswer = await asSpecialist('PUT', `/task/${aloneTask?.id}/submit`, {
+    'entity-type': 'task',
+    id: aloneTask?.id,
+    variables: { decision: 'overturn', rationale: alone.rationale },
+  });
+  const aloneCase = await until(async () => {
+    const now = await heldCase(alone.uid);
+    return now.state === 'decided' ? now : null;
+  });
+  const aloneHistory = await until(async () => {
+    const entries = await historyRead(asAdjuster, alone.claim.uid);
+    return entries?.some((entry) => entry.eventId === 'Appeal overturned, claim not reopened')
+      ? entries
+      : null;
+  });
+  const aloneClaim = await readClaim(alone.claim);
+  h.check(
+    `an appeal against ${alone.claim.number}, never denied, overturned through the REST API: decided, overturned, and the claim left submitted, with no determination opened on it`,
+    aloneStart.status === 201 &&
+      aloneAnswer.status === 200 &&
+      aloneCase?.decision === 'overturned' &&
+      aloneClaim.state === 'submitted' &&
+      aloneClaim.status === 'submitted' &&
+      (await noTaskOf(asAdjuster, alone.claim.uid, DETERMINE)),
+    JSON.stringify({
+      answered: [aloneStart.status, aloneAnswer.status],
+      case: aloneCase,
+      claim: aloneClaim,
+    }),
+  );
+  h.check(
+    `its history says why: "Appeal overturned, claim not reopened", and no "Denial overturned"`,
+    Array.isArray(aloneHistory) &&
+      aloneHistory.some(
+        (entry) =>
+          entry.eventId === 'Appeal overturned, claim not reopened' &&
+          entry.comment ===
+            `${specialist} overturned a denial on appeal ${alone.number}. The claim is not denied, so it is not reopened.`,
+      ) &&
+      !aloneHistory.some((entry) => entry.eventId === 'Denial overturned'),
+    JSON.stringify((aloneHistory ?? []).map((entry) => [entry.eventId, entry.comment ?? null])),
   );
 
   // ── 3. Upheld ──────────────────────────────────────────────────────────────────────────────
@@ -968,16 +1043,16 @@ export default async function run(page, h) {
     JSON.stringify((keptHistory ?? []).map((entry) => [entry.eventId, entry.comment ?? null])),
   );
   const keptClaim = await readClaim(kept.claim);
-  const keptClaimReviews = await runningOn(asAdjuster, kept.claim.uid, CLAIM_MODEL);
-  const keptClaimHistory = await historyOf(asAdjuster, kept.claim.uid);
+  const keptClaimUntouched = await noTaskOf(asAdjuster, kept.claim.uid, DETERMINE);
+  const keptClaimHistory = await historyRead(asAdjuster, kept.claim.uid);
   h.check(
-    `its claim, ${kept.claim.number}, is left denied, with no review started on it and no "Denial overturned" in its history`,
+    `its claim, ${kept.claim.number}, is left denied, with no determination opened on it and no "Denial overturned" in its history`,
     keptClaim.state === 'denied' &&
       keptClaim.status === 'denied' &&
-      Array.isArray(keptClaimReviews) &&
-      keptClaimReviews.length === 0 &&
+      keptClaimUntouched &&
+      Array.isArray(keptClaimHistory) &&
       !keptClaimHistory.some((entry) => entry.eventId === 'Denial overturned'),
-    JSON.stringify({ claim: keptClaim, running: keptClaimReviews?.length ?? null }),
+    JSON.stringify({ claim: keptClaim, noDetermination: keptClaimUntouched }),
   );
   const keptWorkflow = await asSpecialist('GET', `/workflow/${kept.workflow}`);
   const keptGone = await until(async () => {
@@ -1013,8 +1088,8 @@ export default async function run(page, h) {
       "to decide decides it, and the other's decision ends it with nothing written",
   );
   h.note(
-    "not run: an overturn whose claim is no longer denied, which the claims review's filter " +
-      "refuses, so that the decision's completion fails and nothing is written",
+    'not run: an overturned appeal whose claim was reopened since, or approved, which is left as ' +
+      'it is, as the one never denied is here: the platform check holds the chain to that',
   );
   h.note(
     "the server's own install is not what the app read: under the dev server the task form and " +

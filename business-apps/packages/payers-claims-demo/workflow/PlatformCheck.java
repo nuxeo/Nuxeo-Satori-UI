@@ -432,12 +432,24 @@ public class PlatformCheck {
             run(param(chains, "PayersAppealReview.Uphold", "Audit.LogEvent", "comment", 0), decided)),
         "Uphold records who and why in the case's history");
     check("sam.patel overturned the denial: The service was covered (fictional).".equals(
-            run(param(chains, "PayersAppealReview.Overturn", "Audit.LogEvent", "comment", 0), decided))
-        && "sam.patel overturned the denial on appeal CASE-9001. The claim is reopened for a new determination.".equals(
-            run(param(chains, "PayersAppealReview.Overturn", "Audit.LogEvent", "comment", 1), decided)),
-        "Overturn records who and why in the case's history, and the appeal in the claim's");
-    check("PayersClaimReview".equals(param(chains, "PayersAppealReview.Overturn", "Context.StartWorkflow", "id", 0)),
-        "Overturn starts the claims review on the claim");
+            run(param(chains, "PayersAppealReview.Overturn", "Audit.LogEvent", "comment", 0), decided)),
+        "Overturn records who and why in the case's history");
+    // Then, on the claim, by its lifecycle state: reopened when it is denied, and left otherwise.
+    String claimChoice = param(chains, "PayersAppealReview.Overturn", "RunOperation", "id", 1);
+    List<String> chosen = new ArrayList<>();
+    for (String state : List.of("denied", "approved", "paid", "submitted", "inReview", "pended"))
+      chosen.add(state + "=" + eval(claimChoice, Map.of("Document", Map.of("lifeCycle", state))));
+    check(chosen.equals(List.of("denied=PayersAppealReview.ReopenClaim", "approved=PayersAppealReview.LeaveClaim",
+            "paid=PayersAppealReview.LeaveClaim", "submitted=PayersAppealReview.LeaveClaim",
+            "inReview=PayersAppealReview.LeaveClaim", "pended=PayersAppealReview.LeaveClaim")),
+        "Overturn reopens a denied claim only, and leaves any other: " + chosen);
+    check("sam.patel overturned the denial on appeal CASE-9001. The claim is reopened for a new determination.".equals(
+            run(param(chains, "PayersAppealReview.ReopenClaim", "Audit.LogEvent", "comment", 0), decided))
+        && "PayersClaimReview".equals(param(chains, "PayersAppealReview.ReopenClaim", "Context.StartWorkflow", "id", 0)),
+        "ReopenClaim names the appeal in the claim's history, and starts the claims review on it");
+    check("sam.patel overturned a denial on appeal CASE-9001. The claim is not denied, so it is not reopened.".equals(
+            run(param(chains, "PayersAppealReview.LeaveClaim", "Audit.LogEvent", "comment", 0), decided)),
+        "LeaveClaim says in the claim's history why it is not reopened");
     check("CASE-9001".equals(eval(param(chains, "PayersAppealReview.Overturn", "Context.SetVar", "value", 0),
             Map.of("Document", Map.of("case:number", "CASE-9001")))),
         "Overturn keeps the appeal's number before it reads the claim");

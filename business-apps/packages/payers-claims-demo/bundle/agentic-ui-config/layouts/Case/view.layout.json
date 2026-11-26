@@ -27,7 +27,7 @@
           "parameters": { "tones": { "upheld": "neutral", "overturned": "positive" } },
           "visibleWhen": {
             "type": "app.rules.fieldIn",
-            "parameters": [{ "field": "case:state" }, "decided"]
+            "parameters": [{ "field": "case:state" }, "decided", "closed"]
           }
         },
         {

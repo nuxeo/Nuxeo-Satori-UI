@@ -325,11 +325,11 @@
       </operation>
     </chain>
 
-    <!-- Overturned: the appeal is decided, and the denied claim's review starts again, whose start
-         reopens it for its adjuster's new determination (PayersClaimReview's start node). A claim
-         no longer denied is refused by that review's availability filter, which fails this chain,
-         and with it the task's completion, in one transaction: nothing is written, and the
-         decision stays open. -->
+    <!-- Overturned: the appeal is decided, and, when its claim is denied, the claim's review starts
+         again, whose start reopens it for its adjuster's new determination (PayersClaimReview's
+         start node). A claim that is not denied, never denied or since reopened, is left as it is,
+         and its history says so: no review is started on it, which on a submitted claim would
+         be an ordinary one, and on one in review a second. -->
     <chain id="PayersAppealReview.Overturn">
       <operation id="Context.FetchDocument" />
       <operation id="Context.SetVar">
@@ -367,6 +367,14 @@
       <operation id="Repository.GetDocument">
         <param type="document" name="value">expr:Document["case:claim"]</param>
       </operation>
+      <operation id="RunOperation">
+        <param type="string" name="id">expr:Document.lifeCycle == "denied" ? "PayersAppealReview.ReopenClaim" : "PayersAppealReview.LeaveClaim"</param>
+      </operation>
+    </chain>
+
+    <!-- An overturned appeal's denied claim: its review starts again, as the system this chain runs
+         as, which the claims review's filter lets start it on a denied claim. -->
+    <chain id="PayersAppealReview.ReopenClaim">
       <operation id="Audit.LogEvent">
         <param type="string" name="event">Denial overturned</param>
         <param type="string" name="category">Claim review</param>
@@ -375,6 +383,15 @@
       <operation id="Context.StartWorkflow">
         <param type="string" name="id">PayersClaimReview</param>
         <param type="boolean" name="start">true</param>
+      </operation>
+    </chain>
+
+    <!-- An overturned appeal's claim that is not denied: left as it is, and said so. -->
+    <chain id="PayersAppealReview.LeaveClaim">
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal overturned, claim not reopened</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} overturned a denial on appeal @{appeal}. The claim is not denied, so it is not reopened.</param>
       </operation>
     </chain>
 

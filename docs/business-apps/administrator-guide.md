@@ -477,10 +477,11 @@ kit's install, which was run; the contracts, facilities and moves kits were neve
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.
 2. **For the Payers kit from 0.4.0, cancel its workflows and delete its route models:** as an
-   administrator, `DELETE /nuxeo/api/v1/workflow/<id>` for each instance
-   `GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists, and from 0.7.0
-   `?workflowModelName=PayersAppealReview`, then the models `PayersClaimReview` and
-   `PayersAppealReview` under the route models' folder
+   administrator, `DELETE /nuxeo/api/v1/workflow/<id>` for each running instance of
+   `PayersClaimReview`, and from 0.7.0 of `PayersAppealReview`, found by the model's id with
+   `SELECT * FROM DocumentRoute WHERE docri:modelId = '<id>' AND ecm:currentLifeCycleState = 'running'`,
+   since `GET /nuxeo/api/v1/workflow?workflowModelName=` lists only the workflows the person asking
+   started; then the models under the route models' folder
    ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#removing-it)).
 3. **Remove what depends on a package before the package:** the brand assets kit before
    `nuxeo-agentic-assets`, the records kit before `nuxeo-agentic-records`, and every kit before
