@@ -189,8 +189,11 @@ What each writes, and what it leaves to you:
   `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
   them. A widget only where the model says more than the type: `vocabulary` for a property bound to
   a directory, `document-link` for a document's id, `table` for a list of complex values,
-  `address` for a complex value with a street and a city. Files are left out, and it says so. It
-  has the component contribute the layout, from the one path the pipeline accepts.
+  `address` for a complex value with a street and a city. Files are left out. Its "Left out" names
+  every property it did not write and why, Nuxeo's own schemas' included, such as `files:files`,
+  a record's attachments, which the document page's Attachments panel shows. It has the component
+  contribute the layout, from the one path the pipeline accepts. `app-form` says what it left out
+  the same way.
 - **`app-form`:** the Edit or Create form, as `app-layout` chooses its cards, `dc:title` first,
   and `"required": true` on the fields `--required` names. A widget only where it changes the
   input: `vocabulary`, a picker. A file, or a value holding one, is left out: files are changed in

@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import type { Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import appPackageGenerator from '../app-package/generator';
 import { CONTRACTS_MODEL } from '../app-package/testing/scaffold';
@@ -283,6 +285,66 @@ describe('app-layout generator', () => {
       'review',
       'contract',
     ]);
+  });
+
+  describe('says what it left out, every property and why', () => {
+    /** What the generator prints once it has written the layout. */
+    const said = async (options: Partial<AppLayoutSchema> = {}): Promise<string> => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        (await generate(options))();
+        return log.mock.calls.map((call) => call.join(' ')).join('\n');
+      } finally {
+        log.mockRestore();
+      }
+    };
+
+    it("names the properties of Nuxeo's own schemas, as well as a file of the type's own", async () => {
+      const output = await said();
+      expect(output).not.toContain('Left out: nothing');
+      expect(output).toContain('contract:scan: a file;');
+      expect(output).toContain(
+        "common:icon, common:size: in Nuxeo's own schema common, left out unless --schemas names it",
+      );
+      expect(output).toContain('dc:title, dc:description, dc:created, dc:modified: in Nuxeo');
+      expect(output).toContain('uid:major_version, uid:minor_version: in Nuxeo');
+    });
+
+    it("names a record's attachments, files:files, with where they are shown", async () => {
+      // A type with Nuxeo's files schema and one of its own, as app-model --attachments writes.
+      const scratch = mkdtempSync(join(tmpdir(), 'app-layout-files-'));
+      try {
+        const model = join(scratch, 'content-model.json');
+        writeFileSync(
+          model,
+          JSON.stringify({
+            doctypes: {
+              Claim: { parent: 'Document', facets: [], schemas: ['files', 'claim'] },
+            },
+            facets: [],
+            schemas: [
+              { name: 'files', fields: { files: { type: 'complex[]', fields: { file: 'blob' } } } },
+              { name: 'claim', prefix: 'claim', fields: { number: 'string' } },
+            ],
+          }),
+        );
+        const output = await said({ type: 'Claim', model });
+        expect(output).not.toContain('Left out: nothing');
+        expect(output).toContain(
+          "files:files: in Nuxeo's own schema files, a record's attachments, which the document page's Attachments panel shows and adds",
+        );
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it('says it left out nothing when --schemas names every schema', async () => {
+      const output = await said({
+        type: 'Counterparty',
+        schemas: 'common,dublincore,counterparty',
+      });
+      expect(output).toContain('Left out: nothing');
+    });
   });
 
   describe('refuses', () => {
