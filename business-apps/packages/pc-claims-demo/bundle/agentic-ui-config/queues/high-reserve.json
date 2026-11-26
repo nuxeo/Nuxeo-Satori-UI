@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "pc-claims.queue.high-reserve",
+  "pageProvider": "pc_high_reserve_claims",
+  "columns": [
+    "pclaim:number",
+    { "field": "dc:title", "labelKey": "pc-claims.field.claimTitle" },
+    {
+      "id": "holder",
+      "field": "pclaim:policy",
+      "widget": "document-link",
+      "parameters": { "types": ["PropertyPolicy"], "show": "ppolicy:holder" }
+    },
+    {
+      "field": "pclaim:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Reported": "info",
+          "Investigating": "warning",
+          "Approved": "positive",
+          "Denied": "negative",
+          "Closed": "neutral"
+        }
+      }
+    },
+    { "field": "pclaim:reserve", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "pclaim:lossDate", "widget": "date" },
+    { "field": "pclaim:adjuster", "widget": "user" }
+  ],
+  "sort": [{ "field": "pclaim:reserve", "order": "desc" }],
+  "pageSize": 50,
+  "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["property-claims-managers"] }
+}

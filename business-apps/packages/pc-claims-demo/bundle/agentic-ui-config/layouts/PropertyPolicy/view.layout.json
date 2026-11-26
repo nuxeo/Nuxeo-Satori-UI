@@ -1,0 +1,111 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "not-in-force",
+      "tone": "negative",
+      "labelKey": "pc-claims.banner.policy.notInForce",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "ppolicy:status" }, "Lapsed", "Cancelled"]
+      }
+    },
+    {
+      "id": "ending",
+      "tone": "warning",
+      "labelKey": "pc-claims.banner.policy.ending",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "ppolicy:status" }, "In force"]
+          },
+          { "type": "app.rules.dateWithin", "parameters": [{ "field": "ppolicy:expiry" }, 30] }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "policy",
+      "labelKey": "pc-claims.card.propertyPolicy.policy",
+      "fields": [
+        "ppolicy:number",
+        { "field": "dc:title", "labelKey": "pc-claims.field.policyTitle" },
+        "ppolicy:product",
+        {
+          "field": "ppolicy:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": { "In force": "positive", "Lapsed": "negative", "Cancelled": "neutral" }
+          }
+        },
+        { "field": "ppolicy:effective", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "ppolicy:expiry", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "holder",
+      "labelKey": "pc-claims.card.propertyPolicy.holder",
+      "fields": [
+        "ppolicy:holder",
+        { "field": "ppolicy:holderPhone", "widget": "phone" },
+        { "field": "ppolicy:holderEmail", "widget": "email" },
+        "ppolicy:propertyAddress"
+      ]
+    },
+    {
+      "id": "coverage",
+      "labelKey": "pc-claims.card.propertyPolicy.coverage",
+      "fields": [
+        {
+          "field": "ppolicy:coverageLimit",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "ppolicy:deductible", "widget": "currency", "parameters": { "currency": "USD" } }
+      ]
+    },
+    {
+      "id": "claims",
+      "labelKey": "pc-claims.card.propertyPolicy.claims",
+      "span": 2,
+      "related": {
+        "pageProvider": "pc_policy_claims",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "pclaim:number",
+          { "field": "dc:title", "labelKey": "pc-claims.field.claimTitle" },
+          { "field": "pclaim:lossDate", "widget": "date" },
+          "pclaim:cause",
+          {
+            "field": "pclaim:status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Reported": "info",
+                "Investigating": "warning",
+                "Approved": "positive",
+                "Denied": "negative",
+                "Closed": "neutral"
+              }
+            }
+          },
+          { "field": "pclaim:reserve", "widget": "currency", "parameters": { "currency": "USD" } },
+          { "field": "pclaim:adjuster", "widget": "user" }
+        ],
+        "sort": [{ "field": "pclaim:lossDate", "order": "desc" }],
+        "pageSize": 10
+      }
+    },
+    {
+      "id": "history",
+      "labelKey": "pc-claims.card.propertyPolicy.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

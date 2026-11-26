@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, written by the app-model generator: the search document of the PropertyClaim type's
+     page providers of the search index. It is never saved. Each field holds the buckets a
+     person chose in a facet, and is named exactly as its aggregate is, in the page provider's
+     aggregates. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertyclaim_search"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertyclaim_search">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <xs:element name="pclaim_status_agg" type="nxs:stringList" />
+  <xs:element name="pclaim_cause_agg" type="nxs:stringList" />
+  <xs:element name="pclaim_adjuster_agg" type="nxs:stringList" />
+  <xs:element name="pclaim_policy_agg" type="nxs:stringList" />
+</xs:schema>
