@@ -8,7 +8,7 @@
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
  *     [--model <file> | --model-server <address>] [--previous <package directory>]
- *     [--previous-platform <repository>]
+ *     [--previous-platform <repository>] [--kits <folder>]
  *
  * First it removes the zip, checksum and changelog an earlier run left for the package's name and version, so
  * that a refused package leaves nothing installable behind; a package.xml that is a symbolic link is
@@ -31,7 +31,11 @@
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
- *      definition the registry serves and nothing else. No component contributes to the server's
+ *      definition the registry serves and nothing else. And no name it gives is another kit's:
+ *      compared with every kit folder in `--kits`, or, for a kit in the repository's
+ *      `business-apps/packages/`, the other kits there, as the release candidate's stage 3 compares
+ *      them (`readKitFolder`), its name, its app's id and address, its queues, its actions, what its
+ *      components register, its own label keys and its connectors. No component contributes to the server's
  *      allow-list of the operations an app's buttons may run, `org.nuxeo.agentic.ui.operations`,
  *      which is the deployment's, never a package's. A manifest that is not a file, and a
  *      component path that leaves
@@ -90,6 +94,7 @@ import {
   readNuxeoCredentials,
 } from './beta-harness/nuxeo-credentials.mjs';
 import { readServerModel, serverBase, withoutCredentials } from './nuxeo-content-model.mjs';
+import { readKitFolder } from './release-candidate-set.mjs';
 import {
   attribute,
   attributesOf,
@@ -123,11 +128,13 @@ const UPGRADE = join(REPO, 'scripts', 'app-upgrade-check.mjs');
 const CATALOGUE = join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json');
 /** The file `app-model` writes beside `bundle/`: the package's stand-in model, described. */
 const OWN_MODEL = 'content-model.json';
+/** The repository's kits, which a kit among them is compared with by default (`--kits`). */
+const KITS = join(REPO, 'business-apps', 'packages');
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
   ' [--model <file> | --model-server <address>] [--previous <package directory>]' +
-  ' [--previous-platform <repository>]';
+  ' [--previous-platform <repository>] [--kits <folder>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
@@ -165,6 +172,7 @@ const VALUED = [
   '--model-server',
   '--previous',
   '--previous-platform',
+  '--kits',
 ];
 
 function parse(argv) {
@@ -244,6 +252,7 @@ function run({
   unread,
   previous,
   'previous-platform': previousPlatform,
+  kits,
 }) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
@@ -398,6 +407,26 @@ function run({
     allowListContributions(directory) ??
     appContributions(directory, root);
   if (contributed) return refuse(2, contributed);
+  const others =
+    kits === undefined
+      ? resolve(dirname(resolve(directory))) === KITS
+        ? KITS
+        : null
+      : resolve(kits);
+  if (others !== null) {
+    const compared = kitClashes(directory, others);
+    for (const note of compared.notes) process.stdout.write(`note: ${note}\n`);
+    if (compared.findings.length > 0) {
+      for (const finding of compared.findings) process.stdout.write(`${finding}\n`);
+      return refuse(
+        2,
+        `the package names what another kit in ${shownFolder(others)} names too, listed above. Give each a name of its own: installed on one server, one kit's would replace the other's, or be refused.`,
+      );
+    }
+    process.stdout.write(
+      `Compared with the ${compared.kits === 1 ? 'other kit' : `${compared.kits} other kits`} in ${shownFolder(others)}: no name of the package's is another's.\n`,
+    );
+  }
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
   if (unreadable !== null) return refuse(3, `package/package.xml cannot be read (${unreadable}).`);
@@ -920,6 +949,86 @@ function pageProvidersOf(directory) {
 }
 
 /** A JSON file of the app definition, or `null` when it cannot be read: the validator says why. */
+/** A folder as the pipeline's messages name it: from the working directory when inside it. */
+function shownFolder(folder) {
+  const near = relative(process.cwd(), folder);
+  return near === '' ? '.' : near.startsWith('..') || isAbsolute(near) ? folder : near;
+}
+
+/** The platform's own label keys, every key of its English catalogue, nested as the app reads it. */
+function catalogueKeys() {
+  const keys = new Set();
+  const walk = (value, prefix) => {
+    for (const [key, inner] of Object.entries(value)) {
+      const named = prefix === '' ? key : `${prefix}.${key}`;
+      if (inner !== null && typeof inner === 'object' && !Array.isArray(inner)) walk(inner, named);
+      else keys.add(named);
+    }
+  };
+  walk(JSON.parse(readFileSync(CATALOGUE, 'utf8')), '');
+  return keys;
+}
+
+/**
+ * What the package names that another kit in `folder` names too, each a finding the way the
+ * validator writes one, `<file>: <what>: <why> [clash]`: what the release candidate's stage 3
+ * compares, the package's name, its app's id and address, its queues, its actions and what its
+ * components register, read as `readKitFolder` reads a kit's folder, with the kit's own label keys
+ * and its connectors. Every folder of `folder` with an app definition is a kit, but the one named
+ * as this package's folder is, which is this package as it was, or this package. A kit that
+ * cannot be read is not compared, and a note says so.
+ */
+function kitClashes(directory, folder) {
+  const platformKeys = catalogueKeys();
+  const notes = [];
+  let own;
+  try {
+    own = readKitFolder(directory, { platformKeys });
+  } catch (error) {
+    return {
+      kits: 0,
+      findings: [],
+      notes: [`the package's names were not compared with other kits: ${error.message}`],
+    };
+  }
+  const name = basename(resolve(directory));
+  const others = [];
+  const entries = existsSync(folder)
+    ? readdirSync(folder, { withFileTypes: true }).sort((a, b) =>
+        a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+      )
+    : [];
+  for (const entry of entries) {
+    // A link is not followed, and the package's own folder is the package.
+    if (!entry.isDirectory() || entry.name === name) continue;
+    const kit = join(folder, entry.name);
+    if (!existsSync(join(kit, 'bundle', 'agentic-ui-config', 'app.json'))) continue;
+    try {
+      others.push({ folder: entry.name, read: readKitFolder(kit, { platformKeys }) });
+    } catch (error) {
+      notes.push(`${entry.name} was not compared: ${error.message}`);
+    }
+  }
+  const findings = [];
+  const seen = new Set();
+  for (const { kind, key, file } of own.contributes) {
+    const id = `${kind}\u0000${key}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const owners = others.filter((other) =>
+      other.read.contributes.some((entry) => entry.kind === kind && entry.key === key),
+    );
+    if (owners.length === 0) continue;
+    const named = owners.map((owner) => owner.folder).join(' and ');
+    findings.push(
+      kind === 'label key'
+        ? `${file}: labels[${JSON.stringify(key)}]: the label key is ${named}'s too: a kit's own key is begun with its app's name (app-definition-v2.md, section 7) [clash]`
+        : `${file}: ${kind} ${JSON.stringify(key)}: ${named} ${owners.length === 1 ? 'contributes' : 'contribute'} it too [clash]`,
+    );
+  }
+  return { kits: others.length, findings, notes };
+}
+
 function definitionFile(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));

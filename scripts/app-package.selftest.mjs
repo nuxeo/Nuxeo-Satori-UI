@@ -1696,6 +1696,100 @@ expectBuilt('BETWEEN with literal bounds, and a comparison written in CDATA', ({
   }
 }
 
+// What a rule, a computation or a check reads of the open record is a property of its type, held
+// to the content model as a field is: a banner whose rule names a property the type lacks would
+// never show, as the P&C kit's late-report banner on pclaim:reportedDate would not have.
+const CASE = 'bundle/agentic-ui-config/layouts/Case/view.layout.json';
+expectRefused(
+  "a banner's rule naming a property its type does not have",
+  ({ edit }) =>
+    edit(
+      CASE,
+      '"parameters": [{ "field": "case:state" }, "decided", "closed"]',
+      '"parameters": [{ "field": "case:status" }, "decided", "closed"]',
+    ),
+  2,
+  '"case:status" is not a property of the type "Case" or of its facets, so the rule naming it reads nothing [unknown]',
+);
+expectRefused(
+  'a computation naming a property its type does not have',
+  ({ edit }) =>
+    edit(
+      MEMBER,
+      '"parameters": [{ "field": "member:birthDate" }]',
+      '"parameters": [{ "field": "member:birthdate" }]',
+    ),
+  2,
+  'layouts/Member/view.layout.json: cards[0].fields[1].computed.parameters[0].field: "member:birthdate" is not a property of the type "Member" or of its facets, so the computation naming it reads nothing [unknown]',
+);
+
+// A kit's names are compared with the other kits' when it is built, as the release candidate's
+// stage 3 compares them, so that a queue id another kit has is found at the write, not at the
+// candidate (the P&C kit's open-claims, the moves kit's too). The repository's kits by default,
+// for a kit among them; the folder --kits names otherwise.
+const KITS = join(REPO, 'business-apps', 'packages');
+expectBuilt(
+  "the kit compared with the repository's other kits, none of whose names it has",
+  unchanged,
+  ['--kits', KITS],
+  'other kits in ',
+);
+expectRefused(
+  'a kit beside a copy of itself, which has every name it has',
+  ({ directory }) => {
+    const kits = join(dirname(directory), 'kits');
+    cpSync(directory, join(kits, 'payers-copy'), { recursive: true });
+  },
+  2,
+  'bundle/agentic-ui-config/app.json: app id "payers-claims": payers-copy contributes it too [clash]',
+  (scratch) => ['--kits', join(scratch, 'kits')],
+);
+expectRefused(
+  "a queue id another kit's queue has",
+  ({ directory }) => {
+    const other = join(dirname(directory), 'kits', 'other-kit');
+    mkdirSync(join(other, 'bundle', 'agentic-ui-config', 'queues'), { recursive: true });
+    mkdirSync(join(other, 'bundle', 'META-INF'), { recursive: true });
+    mkdirSync(join(other, 'package'), { recursive: true });
+    writeFileSync(
+      join(other, 'package', 'package.xml'),
+      '<package type="addon" name="other-kit" version="1.0.0"></package>\n',
+    );
+    writeFileSync(join(other, 'bundle', 'META-INF', 'MANIFEST.MF'), 'Manifest-Version: 1.0\n');
+    writeFileSync(
+      join(other, 'bundle', 'agentic-ui-config', 'app.json'),
+      '{ "version": 2, "id": "other", "label": "Other" }\n',
+    );
+    writeFileSync(
+      join(other, 'bundle', 'agentic-ui-config', 'queues', 'unassigned-claims.json'),
+      '{ "version": 2 }\n',
+    );
+  },
+  2,
+  'bundle/agentic-ui-config/queues/unassigned-claims.json: queue "unassigned-claims": other-kit contributes it too [clash]',
+  (scratch) => ['--kits', join(scratch, 'kits')],
+  { never: 'app id "payers-claims"' },
+);
+expectRefused(
+  "a label key of another kit's own",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['moves.app'] = 'Moves';
+    }),
+  2,
+  'bundle/agentic-ui-config/labels/en.json: labels["moves.app"]: the label key is moves-demo\'s too',
+  ['--kits', KITS],
+);
+expectBuilt(
+  "a platform's label key another kit gives a text too: a layout.field key, and one of the catalogue's",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['layout.field.files:files'] = 'Attachments';
+    }),
+  ['--kits', KITS],
+  'other kits in ',
+);
+
 // A `document-link`'s `show` names a property of the types it links to (layout-v2.md, section 12):
 // the claim's move's customer, misspelt, is refused against the kit's own model, naming the type.
 {
