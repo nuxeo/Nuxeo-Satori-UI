@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- For AuditAccessTest: a stand-in for LTS 2025's audit service, by another name. -->
+<component name="org.nuxeo.agentic.records.test.audit-service">
+  <implementation class="org.nuxeo.agentic.records.TestAuditServiceComponent" />
+  <service>
+    <provide interface="org.nuxeo.agentic.records.TestAuditService" />
+  </service>
+</component>

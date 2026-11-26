@@ -215,7 +215,7 @@ final class Dispositions {
                             DocumentModel folder = folderOf(privileged, folderRef);
                             Instant now = clock.instant();
                             return START.equals(action) ? start(as, privileged, folder, person, now)
-                                    : decide(as, privileged, folder, person.getName(), action, runId, now);
+                                    : decide(as, privileged, folder, person, action, runId, now);
                         }));
             } catch (RuntimeException e) {
                 failed[0] = e;
@@ -271,6 +271,8 @@ final class Dispositions {
         run.setPropertyValue(RUN_RECORD_COUNT, (long) records.size());
         run.setPropertyValue(RUN_RECORDS, (Serializable) records);
         DocumentModel created = ServiceWrites.run(() -> privileged.createDocument(run));
+        RecordsAudit.run(RecordsAudit.RUN_STARTED, privileged, starter, subjects(records),
+                runInfo(created.getId(), number), "Held in disposition run " + number + ", started by " + starter.getName());
         log.info("Disposition run {} started by {}, holding {} record(s){}", number, printable(starter.getName()),
                 records.size(), due.size() >= max ? ", the most a run holds" : "");
         return new Outcome(STARTED, created.getId(), number);
@@ -292,8 +294,9 @@ final class Dispositions {
 
     // --- A run approved or rejected -----------------------------------------------------------------
 
-    private Outcome decide(CoreSession as, CoreSession privileged, DocumentModel folder, String name, String action,
-            String runId, Instant now) {
+    private Outcome decide(CoreSession as, CoreSession privileged, DocumentModel folder, NuxeoPrincipal person,
+            String action, String runId, Instant now) {
+        String name = person.getName();
         IdRef ref = new IdRef(runId);
         DocumentModel run = privileged.exists(ref) ? privileged.getDocument(ref) : null;
         if (run == null || !RUN_TYPE.equals(run.getType()) || run.isProxy() || run.isVersion()
@@ -331,7 +334,12 @@ final class Dispositions {
             approval.put("at", calendar(now));
             approvals.add(approval);
             run.setPropertyValue(RUN_APPROVALS, (Serializable) approvals);
-            outcome = approvals.size() >= APPROVALS_REQUIRED ? dispose(privileged, folder, run, name, now) : APPROVED;
+            Map<String, Serializable> approved = runInfo(run.getId(), number);
+            approved.put(RecordsAudit.APPROVAL, (long) approvals.size());
+            RecordsAudit.run(RecordsAudit.RUN_APPROVED, privileged, person, subjects(records(run)), approved,
+                    "Disposition run " + number + " approved by " + name + ", approval " + approvals.size() + " of "
+                            + APPROVALS_REQUIRED);
+            outcome = approvals.size() >= APPROVALS_REQUIRED ? dispose(privileged, folder, run, person, now) : APPROVED;
         } else {
             List<Map<String, Serializable>> records = records(run);
             for (Map<String, Serializable> record : records) {
@@ -339,6 +347,10 @@ final class Dispositions {
             }
             run.setPropertyValue(RUN_RECORDS, (Serializable) records);
             close(run, REJECTED, name, now);
+            boolean withdrawn = name.equalsIgnoreCase(String.valueOf(run.getPropertyValue(RUN_STARTED_BY)));
+            RecordsAudit.run(RecordsAudit.RUN_REJECTED, privileged, person, subjects(records), runInfo(run.getId(), number),
+                    "Disposition run " + number + (withdrawn ? " withdrawn by its starter, " : " rejected by ") + name
+                            + ": the record is kept");
             outcome = REJECTED;
         }
         ServiceWrites.run(() -> privileged.saveDocument(run));
@@ -353,7 +365,10 @@ final class Dispositions {
      * may no longer be disposed of, the run is halted and nothing is deleted. Then each is deleted,
      * and the certificate written. A failure on the way throws, and the transaction is rolled back.
      */
-    private String dispose(CoreSession privileged, DocumentModel folder, DocumentModel run, String by, Instant now) {
+    private String dispose(CoreSession privileged, DocumentModel folder, DocumentModel run, NuxeoPrincipal person,
+            Instant now) {
+        String by = person.getName();
+        long number = longValue(run.getPropertyValue(RUN_NUMBER));
         List<Map<String, Serializable>> records = records(run);
         List<DueRecords.Due> current = new ArrayList<>();
         Map<String, String> refused = new LinkedHashMap<>();
@@ -387,6 +402,16 @@ final class Dispositions {
             run.setPropertyValue(RUN_HALT_REASON, refused.size() + " of the run's " + records.size()
                     + " records may no longer be disposed of, so nothing was disposed of.");
             close(run, HALTED, by, now);
+            for (Map<String, Serializable> record : records) {
+                Map<String, Serializable> halted = runInfo(run.getId(), number);
+                halted.put(RecordsAudit.STATUS, String.valueOf(record.get("status")));
+                if (record.get("reason") != null) {
+                    halted.put(RecordsAudit.REASON, String.valueOf(record.get("reason")));
+                }
+                RecordsAudit.run(RecordsAudit.RUN_HALTED, privileged, person, subjects(List.of(record)), halted,
+                        "Disposition run " + number + " halted at its second approval, by " + by
+                                + (record.get("reason") == null ? ": nothing was disposed of" : ": " + record.get("reason")));
+            }
             log.warn("Disposition run {} halted at its second approval: {} record(s) may no longer be disposed of",
                     longValue(run.getPropertyValue(RUN_NUMBER)), refused.size());
             return HALTED;
@@ -397,6 +422,8 @@ final class Dispositions {
         for (DueRecords.Due record : current) {
             privileged.removeDocument(new IdRef(record.uid()));
         }
+        // Each record's own entry, by its path and id as the run kept them: the platform logs the
+        // deletion itself as the add-on's system session's.
         Calendar disposedAt = calendar(now);
         Map<String, DueRecords.Due> byUid = new HashMap<>();
         current.forEach(record -> byUid.put(record.uid(), record));
@@ -409,6 +436,22 @@ final class Dispositions {
         run.setPropertyValue(RUN_CERTIFICATE, certificate.getId());
         run.setPropertyValue(RUN_CERTIFICATE_SHA256, certificate.getPropertyValue(CERT_SHA256));
         close(run, DISPOSED, by, now);
+        Map<String, Serializable> disposed = runInfo(run.getId(), number);
+        disposed.put(RecordsAudit.CERTIFICATE_UID, certificate.getId());
+        disposed.put(RecordsAudit.CERTIFICATE_SHA256, String.valueOf(certificate.getPropertyValue(CERT_SHA256)));
+        disposed.put(RecordsAudit.STARTED_BY, String.valueOf(run.getPropertyValue(RUN_STARTED_BY)));
+        List<String> approvers = new ArrayList<>();
+        for (Map<String, Serializable> approval : approvals(run)) {
+            approvers.add(String.valueOf(approval.get("by")));
+        }
+        disposed.put(RecordsAudit.APPROVED_BY, String.join(", ", approvers));
+        List<RecordsAudit.Subject> gone = new ArrayList<>();
+        for (DueRecords.Due record : current) {
+            gone.add(new RecordsAudit.Subject(record.uid(), record.path(), record.type()));
+        }
+        RecordsAudit.run(RecordsAudit.RECORD_DISPOSED, privileged, person, gone, disposed,
+                "Disposed of in disposition run " + number + ", deleted permanently; approved by "
+                        + String.join(" and ", approvers) + "; certificate " + certificate.getId());
         log.info("Disposition run {} disposed of {} record(s); certificate {}", longValue(run.getPropertyValue(RUN_NUMBER)),
                 current.size(), certificate.getId());
         return DISPOSED;
@@ -465,7 +508,7 @@ final class Dispositions {
      * it and nowhere else, and it blocks every permission it would inherit, so that only its own
      * grants count.
      */
-    private static DocumentModel folderOf(CoreSession privileged, DocumentRef parent) {
+    static DocumentModel folderOf(CoreSession privileged, DocumentRef parent) {
         DocumentModel folder = parent == null || !privileged.exists(parent) ? null : privileged.getDocument(parent);
         if (folder == null || !RUNS_TYPE.equals(folder.getType()) || folder.isProxy() || folder.isVersion()) {
             throw new DispositionRefusal(400, "not-in-runs-folder",
@@ -503,7 +546,7 @@ final class Dispositions {
     }
 
     /** The person filing: never the system or an anonymous user. */
-    private static NuxeoPrincipal person(CoreSession session) {
+    static NuxeoPrincipal person(CoreSession session) {
         NuxeoPrincipal principal = session.getPrincipal();
         if (principal == null || principal.isAnonymous()
                 || SecurityConstants.SYSTEM_USERNAME.equals(principal.getName())) {
@@ -520,6 +563,24 @@ final class Dispositions {
         run.setPropertyValue(RUN_STATE, state);
         run.setPropertyValue(RUN_CLOSED_BY, by);
         run.setPropertyValue(RUN_CLOSED_AT, calendar(now));
+    }
+
+    /** What every entry of a run's says: the run's number and id. */
+    private static Map<String, Serializable> runInfo(String runId, long number) {
+        Map<String, Serializable> info = new HashMap<>();
+        info.put(RecordsAudit.RUN_NUMBER, number);
+        info.put(RecordsAudit.RUN_UID, runId);
+        return info;
+    }
+
+    /** The records a run keeps, as its entries name them. */
+    private static List<RecordsAudit.Subject> subjects(List<Map<String, Serializable>> records) {
+        List<RecordsAudit.Subject> subjects = new ArrayList<>();
+        for (Map<String, Serializable> record : records) {
+            subjects.add(new RecordsAudit.Subject(String.valueOf(record.get("uid")), (String) record.get("path"),
+                    (String) record.get("type")));
+        }
+        return subjects;
     }
 
     private static Map<String, Serializable> row(DueRecords.Due record, String status, String reason) {

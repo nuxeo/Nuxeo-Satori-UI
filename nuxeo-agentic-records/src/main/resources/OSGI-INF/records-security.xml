@@ -2,12 +2,15 @@
 <component name="org.nuxeo.agentic.records.security" version="1.0">
 
   <documentation>
-    The disposition review's two permissions, granted on the repository's DispositionRuns folder:
+    The records add-on's three permissions, granted on the repository's DispositionRuns folder:
 
     StartDisposition: starting a run, which finds the records due and holds them in it, and
     rejecting a run, which withdraws it.
     ApproveDisposition: approving or rejecting a run. A run is disposed of after two people with it
     have approved it, neither of them the person who started it.
+    ExportRecordsAudit: filing an audit export, what the platform's audit holds of the documents
+    under a folder the person may read, over a period: a strong permission, for the few records
+    specialists a records schedule names (README, "The audit export").
 
     Each includes Read and AddChildren, so that one grant on the folder is enough: a request is a
     document filed in it. Nuxeo counts Everything as holding every permission, and
@@ -26,12 +29,17 @@
       <include>Read</include>
       <include>AddChildren</include>
     </permission>
+    <permission name="ExportRecordsAudit">
+      <include>Read</include>
+      <include>AddChildren</include>
+    </permission>
   </extension>
 
   <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissionsVisibility">
     <visibility>
       <item show="true" order="80">StartDisposition</item>
       <item show="true" order="81">ApproveDisposition</item>
+      <item show="true" order="82">ExportRecordsAudit</item>
     </visibility>
   </extension>
 

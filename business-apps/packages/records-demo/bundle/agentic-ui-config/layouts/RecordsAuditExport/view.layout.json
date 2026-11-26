@@ -1,0 +1,87 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "pending",
+      "tone": "info",
+      "labelKey": "records.banner.export.pending",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "rexp:state" }, "pending"]
+      }
+    },
+    {
+      "id": "failed",
+      "tone": "negative",
+      "labelKey": "records.banner.export.failed",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "rexp:state" }, "failed"]
+      }
+    },
+    {
+      "id": "done",
+      "tone": "info",
+      "labelKey": "records.banner.export.done",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "rexp:state" }, "done"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "request",
+      "labelKey": "records.card.export.request",
+      "fields": [
+        "rexp:path",
+        { "field": "rexp:from", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "rexp:to", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "rexp:by", "widget": "user" },
+        { "field": "rexp:at", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "rexp:comment", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "result",
+      "labelKey": "records.card.export.result",
+      "fields": [
+        {
+          "field": "rexp:state",
+          "widget": "status-badge",
+          "parameters": { "tones": { "pending": "info", "done": "positive", "failed": "negative" } }
+        },
+        { "field": "rexp:generatedAt", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "rexp:entryCount", "widget": "number" },
+        { "field": "rexp:omittedCount", "widget": "number" },
+        "rexp:csvSha256",
+        "rexp:jsonSha256",
+        {
+          "field": "rexp:failure",
+          "widget": "long-text",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "rexp:state" }, "failed"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "files",
+      "labelKey": "records.card.export.files",
+      "span": 2,
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "records.card.export.history",
+      "span": 2,
+      "timeline": {
+        "events": ["documentCreated", "recordsAuditExported", "afterMakeRecord"],
+        "pageSize": 10
+      }
+    }
+  ]
+}

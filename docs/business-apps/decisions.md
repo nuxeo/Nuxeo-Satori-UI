@@ -252,8 +252,10 @@ way.
   records, rules and holds rather than keeping its own. Decision 3 is not touched: the add-on
   registers no operation and no endpoint, and a person reaches it by filing a document, which a
   listener checks. Decision G, tenancy, is not built. Its security review is deferred until the app
-  is finished, as every security review is; it is installed nowhere. What changes if B goes another
-  way:
+  is finished, as every security review is; it is installed nowhere. Its 0.2.0 adds the audit export
+  and access logging in the same add-on, still with no operation and no endpoint: an export is a
+  document filed in the same folder, and a view is logged by the REST API's own JSON writer for a
+  document, which the add-on extends. What changes if B goes another way:
   - **One large add-on:** the bundle moves into that add-on's package as it is, with its dependency
     on `nuxeo-retention`, and the kit's `package.xml` depends on that package in place of
     `nuxeo-agentic-records`. The type, schema and permission names do not change.

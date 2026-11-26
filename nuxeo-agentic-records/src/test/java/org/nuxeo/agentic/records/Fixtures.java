@@ -32,6 +32,7 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li><b>alice</b> starts runs: StartDisposition.</li>
  * <li><b>bob</b>, <b>carol</b> and <b>erin</b> approve them: ApproveDisposition.</li>
  * <li><b>dave</b> may read the folder and file in it, and holds neither permission.</li>
+ * <li><b>grace</b> files audit exports: ExportRecordsAudit.</li>
  * </ul>
  * Everyone named reads the records folder, but the record {@code unreadable}, which alice cannot.
  */
@@ -41,7 +42,7 @@ final class Fixtures {
 
     static final String RECORDS = "/records";
 
-    static final List<String> PEOPLE = List.of("alice", "bob", "carol", "dave", "erin");
+    static final List<String> PEOPLE = List.of("alice", "bob", "carol", "dave", "erin", "grace");
 
     private Fixtures() {
     }
@@ -65,6 +66,7 @@ final class Fixtures {
         acl.add(new ACE("bob", Disposition.APPROVE_PERMISSION, true));
         acl.add(new ACE("carol", Disposition.APPROVE_PERMISSION, true));
         acl.add(new ACE("erin", Disposition.APPROVE_PERMISSION, true));
+        acl.add(new ACE("grace", Disposition.EXPORT_PERMISSION, true));
         acl.add(new ACE("dave", SecurityConstants.READ, true));
         acl.add(new ACE("dave", SecurityConstants.ADD_CHILDREN, true));
         acl.add(ACE.BLOCK);
@@ -144,6 +146,58 @@ final class Fixtures {
         request = session.createDocument(request);
         commit(session);
         return admin.getDocument(request.getRef());
+    }
+
+    /** Files an audit export as {@code name}, of the folder at {@code path} over the period, as a REST client would, and commits it. */
+    static DocumentModel export(CoreSession admin, String name, String path, Calendar from, Calendar to) {
+        CoreSession session = as(admin, name);
+        DocumentModel export = session.createDocumentModel(RUNS, "export", Disposition.EXPORT_TYPE);
+        export.setPropertyValue(Disposition.EXPORT_PATH, path);
+        export.setPropertyValue(Disposition.EXPORT_FROM, from);
+        export.setPropertyValue(Disposition.EXPORT_TO, to);
+        export = session.createDocument(export);
+        commit(session);
+        return admin.getDocument(export.getRef());
+    }
+
+    /** An RFC 4180 CSV, every field quoted, as rows of fields: its byte order mark taken off. */
+    static List<List<String>> csvRows(String csv) {
+        String text = !csv.isEmpty() && csv.charAt(0) == 0xFEFF ? csv.substring(1) : csv;
+        List<List<String>> rows = new java.util.ArrayList<>();
+        List<String> row = new java.util.ArrayList<>();
+        StringBuilder field = new StringBuilder();
+        boolean quoted = false;
+        for (int index = 0; index < text.length(); index++) {
+            char c = text.charAt(index);
+            if (quoted) {
+                if (c == '"' && index + 1 < text.length() && text.charAt(index + 1) == '"') {
+                    field.append('"');
+                    index++;
+                } else if (c == '"') {
+                    quoted = false;
+                } else {
+                    field.append(c);
+                }
+            } else if (c == '"') {
+                quoted = true;
+            } else if (c == ',') {
+                row.add(field.toString());
+                field.setLength(0);
+            } else if (c == '\r' && index + 1 < text.length() && text.charAt(index + 1) == '\n') {
+                row.add(field.toString());
+                field.setLength(0);
+                rows.add(row);
+                row = new java.util.ArrayList<>();
+                index++;
+            } else {
+                field.append(c);
+            }
+        }
+        if (field.length() > 0 || !row.isEmpty()) {
+            row.add(field.toString());
+            rows.add(row);
+        }
+        return rows;
     }
 
     /** Starts a run as {@code name}: the run. */

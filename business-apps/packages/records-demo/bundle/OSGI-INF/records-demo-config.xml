@@ -18,6 +18,8 @@
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
     <layout type="DispositionRun" mode="view" src="agentic-ui-config/layouts/DispositionRun/view.layout.json" />
     <layout type="DispositionCertificate" mode="view" src="agentic-ui-config/layouts/DispositionCertificate/view.layout.json" />
+    <layout type="RecordsAuditExport" mode="view" src="agentic-ui-config/layouts/RecordsAuditExport/view.layout.json" />
+    <layout type="RecordsFile" mode="view" src="agentic-ui-config/layouts/RecordsFile/view.layout.json" />
   </extension>
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
@@ -26,6 +28,7 @@
       <file path="queues/awaiting-approval.json" />
       <file path="queues/certificates.json" />
       <file path="navigation.json" />
+      <file path="queues/audit-exports.json" />
     </app>
   </extension>
 </component>

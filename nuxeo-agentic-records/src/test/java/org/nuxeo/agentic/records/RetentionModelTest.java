@@ -132,6 +132,30 @@ public class RetentionModelTest {
         assertTrue(csv, csv.contains("Document.Trash,"));
     }
 
+    /** The events of the module's the audit records, as the tests register them for the 11.5 audit. */
+    private static Set<String> auditedEvents(Document component) {
+        Set<String> names = new TreeSet<>();
+        NodeList events = component.getElementsByTagName("event");
+        for (int index = 0; index < events.getLength(); index++) {
+            names.add(((Element) events.item(index)).getAttribute("name"));
+        }
+        return names;
+    }
+
+    /**
+     * The module's audited events are the tests': an export that lists the rules applied reads the
+     * module's own entry, retentionRuleAttached, as the module names it.
+     */
+    @Test
+    public void theTestsAuditTheModulesEventsAsTheModuleDoes() throws Exception {
+        Set<String> module = auditedEvents(xml("nuxeo-retention/OSGI-INF/retention-audit.xml"));
+        assertTrue(module.toString(), module.contains("retentionRuleAttached"));
+        assertEquals(module, auditedEvents(xml("OSGI-INF/test-audit-module.xml")));
+        for (String event : module) {
+            assertEquals(event, RecordsAudit.KIND_RETENTION, RecordsAudit.kind(event));
+        }
+    }
+
     @Test
     public void theAddOnsTypesWaitForTheModules() throws Exception {
         NodeList requires = xml("OSGI-INF/records-types.xml").getElementsByTagName("require");
