@@ -273,6 +273,20 @@ public class CallbackTest {
         assertEquals(CallbackEndpoint.RECEIVED, signed("evt_1"));
     }
 
+    /** A redelivery while the first delivery is under way: 409, retried, since that delivery may yet fail. */
+    @Test
+    public void aRedeliveryWhileTheFirstIsUnderWayIsRetriedNotAcknowledged() {
+        SignatureService service = org.nuxeo.runtime.api.Framework.getService(SignatureService.class);
+        String key = "callback.standin.evt_1";
+        assertEquals(true, service.claim(key, CallbackEndpoint.CLAIM_IN_HAND, 60, false));
+        unchanged(signed("evt_1"), CallbackEndpoint.BUSY);
+        // The first delivery failed, and released its claim: the retry is taken.
+        service.release(key);
+        assertEquals(CallbackEndpoint.RECEIVED, signed("evt_1"));
+        assertEquals(CallbackEndpoint.CLAIM_DONE, service.claimed(key));
+        assertEquals(CallbackEndpoint.ALREADY, signed("evt_1"));
+    }
+
     /** A signed result the server does not keep: 422, which retrying cannot change, and nothing filed. */
     @Test
     public void aSignedResultTheServerDoesNotKeepIsUnprocessable() {

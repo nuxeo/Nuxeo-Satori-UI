@@ -57,7 +57,7 @@ the service's selftest. The install and the demo below are for the reviewer.
 | `src/main/resources/OSGI-INF/signature-listener-contrib.xml` | The listener: sending, cancelling, and the guards                                                    |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`        | The callback's servlet, at `/nuxeo/agentic-signature/*`, with no authentication filter               |
 | `src/main/package/`                                          | The Marketplace package, `nuxeo-agentic-signature` 0.1.0                                             |
-| `src/test/java/`                                             | 69 tests: 55 in Nuxeo's test framework, 12 with no runtime, 2 against the stand-in service           |
+| `src/test/java/`                                             | 73 tests: 59 in Nuxeo's test framework, 12 with no runtime, 2 against the stand-in service           |
 | `demo/esign-stand-in.mjs`                                    | The stand-in e-signature service: takes envelopes, a demo signer signs or declines, it calls back    |
 | `demo/esign-stand-in.selftest.mjs`                           | Its controls, 16 of them                                                                             |
 
@@ -138,9 +138,10 @@ callback, the request or the record.
 3. **Fresh:** `t` within the window of the server's clock, either way, 5 minutes by default. A stale
    or future callback is 401.
 4. **Taken once:** its id is claimed in the key/value store for twice the window and a minute, past
-   which its time is stale anyway. A callback whose id was acted on already is a replay, or a
+   which its time is stale anyway. A callback whose id ended a request already is a replay, or a
    redelivery whose first answer the provider lost: nothing is done, and it is answered 200,
-   "already received", so that a provider stops redelivering it. A claim is released when its
+   "already received", so that a provider stops redelivering it. One whose first delivery is still
+   under way is 409, retried, since that delivery may yet fail. A claim is released when its
    callback ended nothing, so that the provider's retry of it can.
 5. **Its request:** by the provider and the envelope, both one segment of letters, digits, `.`,
    `_` and `-`, so nothing in the query is quoted from outside. None is 404, which a provider
@@ -172,13 +173,16 @@ that requests to an address that needs no sign-in cannot fill the log with warni
 | Change, move or remove the file out for signature             | No one, while it is out                                                           |
 | Copy a request, or a folder holding one                       | No one. A copied record, or one in a copied folder, is not out: `sgn:` is emptied |
 | Trash a request out, a record out, or a folder holding either | No one: trash is undone, and a voided envelope is not                             |
-| Delete a request, or a folder holding one                     | An administrator; a request out has its envelope voided once the deletion commits |
+| Delete a request, or a folder holding one                     | An administrator; a request out has its envelope voided, and its record released  |
 | Delete a record out, or a folder holding one                  | An administrator                                                                  |
 | Delete the version that holds a signed file                   | An administrator                                                                  |
-| Restore a record out to a version                             | No one. Restored otherwise, its `sgn:` says what its latest request says again    |
+| Restore a record out to a version                             | No one. Restored otherwise, its `sgn:` is its latest request's again              |
 
 Nuxeo tells a folder's copy, removal and trash at its root only, so the folder answers for what it
-holds, by a query of its descendants as the system; no child of a bulk trash is refused part way.
+holds, by a query of its descendants as the system, and a record in a trashed folder, which the
+bulk trash reaches later, is not sent; so no child of a bulk trash is refused part way. A restored
+signed record names its signed file only where the signed bytes are, which a version from before
+the signing has not.
 
 ## The provider interface
 
@@ -251,7 +255,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-signature/pom.xml verify
-# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 69 tests
+# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 73 tests
 ```
 
 The root `pom.xml` lists the module, and the Marketplace workflow (`build-marketplace.yml`) builds
@@ -262,41 +266,36 @@ are skipped, and say so.
 | Test                     | What it holds                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SendTest`, 19           | The file sent and the record marked; each refusal, with nothing sent and nothing saved; a record being sent at this moment; a service that fails, redirects or is not configured; an envelope voided when its request is not saved; a file changed while it is sent, not written over                                                                                                                         |
-| `CallbackTest`, 15       | Signed: the file filed, a major version with the evidence; declined, and a decline the service does not confirm; another event; a forged, altered, stale, future, malformed, replayed or unknown callback refused; a duplicate and a late one acknowledged; a request ending at this moment; the service not saying signed, a tampered result, an unprocessable one; paths, methods, an unconfigured provider |
-| `GuardTest`, 14          | A request not changed once sent; cancelling, by its requester or an administrator only, and not while a callback ends it; a request kept, deleted by an administrator, its envelope voided; not copied; `sgn:` the server's, a copy's too; the file out held; a record out not trashed or deleted; a folder's copy, removal and trash; a restore; the signed version kept                                     |
+| `CallbackTest`, 16       | Signed: the file filed, a major version with the evidence; declined, and a decline the service does not confirm; another event; a forged, altered, stale, future, malformed, replayed or unknown callback refused; a duplicate and a late one acknowledged; a request ending at this moment; the service not saying signed, a tampered result, an unprocessable one; paths, methods, an unconfigured provider |
+| `GuardTest`, 17          | A request not changed once sent; cancelling, by its requester or an administrator only, and not while a callback ends it; a request kept, deleted by an administrator, its envelope voided; not copied; `sgn:` the server's, a copy's too; the file out held; a record out not trashed or deleted; a folder's copy, removal and trash; a restore; the signed version kept                                     |
 | `StandInProviderTest`, 8 | Settings and addresses; the OpenSSL vector; authentication, each refusal by its reason; the secret before, while it is rotated; nothing loggable holds a secret                                                                                                                                                                                                                                               |
 | `CallbackServletTest`, 4 | The body's bound, declared and as it arrives; headers by lower-case name, bounded; the one refusal on a failure                                                                                                                                                                                                                                                                                               |
 | `StandInServiceTest`, 2  | The provider against the stand-in service itself                                                                                                                                                                                                                                                                                                                                                              |
 | `LogTest`, 1             | Every line the add-on logs, at every level, through sends, refusals and callbacks: no key, secret, signature, address or file                                                                                                                                                                                                                                                                                 |
 | `BundleTest`, 6          | The components, the facets and schemas, the stand-in inert until configured, no Automation operation, the window, the version                                                                                                                                                                                                                                                                                 |
 
-**Each guard was seen failing.** Thirty mutations of the code, one at a time, each turned at least
+**Each guard was seen failing.** Thirty-five mutations of the code, one at a time, each turned at least
 one of these tests red ([below](#how-the-guards-were-seen-failing)).
 
 ## How the guards were seen failing
 
 Each mutation below was made to the code, one at a time, the named tests run, and the code put
-back. On the final code, 29 of the 30 went red at once; the one that stayed green, 17, had no test,
-which was then written, and went red too:
+back. One of them, the cancelling claim, stayed green at first, for want of a test: the test was written,
+and it went red too.
 
-1. The signature comparison always matching. 2. No freshness window. 3. No replay claim. 4. An
-   unknown envelope taken as found. 5. Filing without the service saying signed. 6. A decline the
-   service does not confirm. 7. The signed file's digest not checked. 8. No ending claim. 9. An
-   unacceptable result answered as retryable. 10. A changed file written over. 11. No `Write` check
-   on the record. 12. No claim on a record being sent. 13. Server properties given by the requester.
-2. An envelope never saved not voided. 15. The file out not held. 16. Anyone cancelling. 17. No
-   cancelling claim. 18. `sgn:` writable by anyone. 19. The server's mark left on the model after its
-   write. 20. A folder holding requests copied. 21. A folder's copy keeping its records out. 22. A
-   folder holding a request out deleted. 23. A request out trashed by an administrator. 24. An
-   administrator's deletion leaving the envelope. 25. A record out restored. 26. A restored record
-   keeping its version's `sgn:`. 27. The signed version deletable. 28. The API key logged. 29. The
-   secret before not taken. 30. The servlet reading past its bound.
+| #     | The guard broken                                                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1-4   | The signature comparison always matching; no freshness window; no replay claim; an unknown envelope taken as found                                                             |
+| 5-9   | Filing without the service saying signed; a decline it does not confirm; the signed file's digest not checked; no ending claim; an unacceptable result retried                 |
+| 10-14 | A changed file written over; no `Write` check; no claim on a record being sent; server properties given by the requester; an envelope never saved not voided                   |
+| 15-19 | The file out not held; anyone cancelling; no cancelling claim; `sgn:` writable by anyone; the server's mark left on the model after its write                                  |
+| 20-24 | A folder holding requests copied; a folder's copy keeping its records out; a folder holding a request out deleted; a request out trashed; the envelope left on deletion        |
+| 25-30 | A record out restored; a restored record keeping its version's `sgn:`; the signed version deletable; the API key logged; the secret before not taken; the servlet's bound      |
+| 31-35 | A redelivery in hand acknowledged; a deleted request's record left held, alone or in a folder; a restored record naming a signed file it lacks; a trashed folder's record sent |
 
-The first run, before the independent review, found two tests that were wrong (the stub could not
-say "not signed yet", and a version's test removed one Nuxeo itself refuses to remove) and one real
-fault: the signed version's guard listened to `aboutToRemove`, and a version's removal fires
-`aboutToRemoveVersion`. The review then found what the folder, copy, restore, race and retry rows
-above now hold; each came with its test, which went red with its guard taken out.
+What was found and fixed while building, the independent review's two passes among it, is kept
+outside this public repository, with the review pack
+([security-reviews.md](../docs/business-apps/security-reviews.md)).
 
 ## Installing it on the local Docker Nuxeo, for the demo
 

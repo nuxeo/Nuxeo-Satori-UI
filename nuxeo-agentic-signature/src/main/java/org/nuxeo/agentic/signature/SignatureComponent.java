@@ -143,6 +143,16 @@ public class SignatureComponent extends DefaultComponent implements SignatureSer
         store().put(key, (String) null);
     }
 
+    @Override
+    public String claimed(String key) {
+        return store().getString(key);
+    }
+
+    @Override
+    public void reclaim(String key, String value, long ttlSeconds) {
+        store().put(key, value, ttlSeconds);
+    }
+
     private static KeyValueStore store() {
         return Framework.getService(KeyValueService.class).getKeyValueStore(STORE);
     }

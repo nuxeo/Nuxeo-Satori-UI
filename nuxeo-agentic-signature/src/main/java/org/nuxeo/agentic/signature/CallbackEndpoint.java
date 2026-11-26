@@ -65,8 +65,9 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li><strong>Fresh:</strong> its signed time within the window of the server's, either way
  * ({@link SignatureService#callbackWindow}); a stale one is 401.</li>
  * <li><strong>Taken once:</strong> its id claimed across the cluster for twice the window, past
- * which it is stale; a callback whose id is claimed already is a replay, refused: nothing is done,
- * and it is answered 200, "already received", so that a provider's redelivery stops. A claim is
+ * which it is stale. One whose id ended a request already is a replay, refused: nothing is done,
+ * and it is answered 200, "already received", so that a provider's redelivery stops; one whose
+ * first delivery is still under way is 409, retried, since that delivery may yet fail. A claim is
  * released when its callback did not end a request, so that the provider's retry of it can.</li>
  * <li><strong>Its request,</strong> by the provider and the envelope: none is 404, retried, since
  * its send may not have committed yet; one no longer out is 200, "no longer out", and nothing done;
@@ -133,6 +134,11 @@ final class CallbackEndpoint {
     static final Response PROVIDER_FAILED = new Response(502, "{\"error\":\"the provider's service failed\"}");
 
     static final Response UNAVAILABLE = new Response(503, "{\"error\":\"unavailable\"}");
+
+    /** What a callback's claim holds while its first delivery is under way, and once it has ended a request. */
+    static final String CLAIM_IN_HAND = "in hand";
+
+    static final String CLAIM_DONE = "done";
 
     /** What ending a request came to. */
     enum Ending {
@@ -202,9 +208,16 @@ final class CallbackEndpoint {
             return REFUSED;
         }
         String taken = "callback." + providerId + "." + event.id();
-        if (!service.claim(taken, event.envelope(), window.toSeconds() * 2 + 60, false)) {
-            log.info("E-signature: callback {} to {} is refused: it was received already", event.id(), providerId);
-            return ALREADY;
+        long kept = window.toSeconds() * 2 + 60;
+        if (!service.claim(taken, CLAIM_IN_HAND, kept, false)) {
+            if (CLAIM_DONE.equals(service.claimed(taken))) {
+                log.info("E-signature: callback {} to {} is refused: it was acted on already", event.id(), providerId);
+                return ALREADY;
+            }
+            // Its first delivery is under way, and may yet fail: retried, not acknowledged.
+            log.info("E-signature: callback {} to {} is refused: its first delivery is under way", event.id(),
+                    providerId);
+            return BUSY;
         }
         boolean keep = false;
         try {
@@ -212,6 +225,10 @@ final class CallbackEndpoint {
                     () -> CoreInstance.doPrivileged(repository, (CoreSession system) -> end(system, providerId,
                             provider, event)));
             keep = ending == Ending.DONE;
+            if (keep) {
+                // Acted on: a redelivery from now on is acknowledged, with nothing done.
+                service.reclaim(taken, CLAIM_DONE, kept);
+            }
             return switch (ending) {
                 case DONE, IGNORED -> RECEIVED;
                 case UNKNOWN -> NOT_FOUND;

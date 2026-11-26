@@ -274,6 +274,70 @@ public class GuardTest {
         // Its callback, later, names an envelope no request has.
         assertEquals(CallbackEndpoint.NOT_FOUND, Desk.callback(repository, "evt_1", "envelope.signed", envelope,
                 null));
+        // And its record is no longer held: it says cancelled, its file may change, and it may be sent again.
+        assertEquals(Signatures.CANCELLED, text(Desk.stored(repository, caseId), Signatures.SGN_STATUS));
+        Desk.inTransactionAs(repository, ALICE, s -> {
+            DocumentModel record = s.getDocument(new IdRef(caseId));
+            record.setPropertyValue("files:files/1/file", (Serializable) Desk.pdf("id-scan-2.pdf", PDF));
+            return s.saveDocument(record);
+        });
+        Desk.send(repository, ALICE, caseId, "agreement.pdf");
+    }
+
+    /** An administrator deleting a folder that holds a request out: each record it held is no longer held. */
+    @Test
+    public void anAdministratorDeletingAFolderOfRequestsReleasesTheirRecords() {
+        Desk.inTransactionAs(repository, ADMINISTRATOR, s -> {
+            s.removeDocument(new org.nuxeo.ecm.core.api.PathRef(Desk.REQUESTS));
+            return null;
+        });
+        assertEquals(1, stub.voided.size());
+        assertEquals(Signatures.CANCELLED, text(Desk.stored(repository, caseId), Signatures.SGN_STATUS));
+    }
+
+    /** A record in a folder being trashed, whose children the trash reaches later: not sent. */
+    @Test
+    public void aRecordInATrashedFolderIsNotSent() {
+        Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository, (CoreSession s) -> {
+            s.createDocument(s.createDocumentModel("/desk", "archive", "Folder"));
+            return null;
+        }));
+        String archived = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> {
+                    DocumentModel doc = s.createDocumentModel("/desk/archive", "onb-old", "TestCase");
+                    doc.setPropertyValue("files:files", (Serializable) List.of(Map.of("file",
+                            (Serializable) Desk.pdf("agreement.pdf", PDF))));
+                    return s.createDocument(doc).getId();
+                }));
+        Desk.inTransactionAs(repository, ALICE, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new org.nuxeo.ecm.core.api.PathRef(
+                    "/desk/archive")));
+            return null;
+        });
+        refused(409, ALICE, s -> s.createDocument(Desk.requestModel(s, archived, "agreement.pdf", Desk.ONE_SIGNER)));
+    }
+
+    /** Restored to a version from before its signing: still signed by its request, and its signed file not named. */
+    @Test
+    public void aSignedRecordRestoredToAnEarlierVersionNamesNoSignedFile() {
+        String early = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> {
+                    DocumentModel record = s.getDocument(new IdRef(caseId));
+                    record.setPropertyValue("dc:description", "Before the signing");
+                    record.putContextData(org.nuxeo.ecm.core.api.versioning.VersioningService.VERSIONING_OPTION,
+                            org.nuxeo.ecm.core.api.VersioningOption.MINOR);
+                    s.saveDocument(record);
+                    return s.getLastDocumentVersionRef(new IdRef(caseId)).reference().toString();
+                }));
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.signed",
+                text(Desk.stored(repository, requestId), Signatures.ENVELOPE), null));
+        assertEquals("files:files/0/file", text(Desk.stored(repository, caseId), Signatures.SGN_FILE));
+        Desk.inTransactionAs(repository, ALICE, s -> s.restoreToVersion(new IdRef(caseId), new IdRef(early)));
+        DocumentModel restored = Desk.stored(repository, caseId);
+        assertEquals(Signatures.SIGNED, text(restored, Signatures.SGN_STATUS));
+        assertNull(text(restored, Signatures.SGN_FILE));
+        assertArrayEquals(PDF, Desk.bytes((Blob) restored.getPropertyValue("files:files/0/file")));
+        assertTrue(restored.getPropertyValue(Signatures.SGN_EVIDENCE) != null);
     }
 
     @Test

@@ -32,4 +32,10 @@ public interface SignatureService {
 
     /** Release a claim, whoever holds it. */
     void release(String key);
+
+    /** What a claim holds now; {@code null} when none does. */
+    String claimed(String key);
+
+    /** Write over a claim, for {@code ttlSeconds}: to say what became of what it claimed. */
+    void reclaim(String key, String value, long ttlSeconds);
 }

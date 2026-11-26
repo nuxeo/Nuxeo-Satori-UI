@@ -133,7 +133,7 @@ public class LogTest {
         // The capture works: it holds the refusals.
         assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("refused: MISMATCH")));
         assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("outside the 300 s window")));
-        assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("received already")));
+        assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("acted on already")));
         assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("NOT_SIGNED")));
         assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("did not take a file")));
 

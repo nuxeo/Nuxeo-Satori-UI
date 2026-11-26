@@ -230,7 +230,7 @@ public class SignatureRequestListener implements EventListener {
         if (record.isProxy() || record.isVersion()) {
             throw invalid("A signature request names a live record, not a proxy or a version");
         }
-        if (record.isTrashed()) {
+        if (record.isTrashed() || session.getParentDocuments(record.getRef()).stream().anyMatch(DocumentModel::isTrashed)) {
             throw conflict("The record " + recordId + " is in the trash");
         }
         if (!record.isVersionable()) {
@@ -455,7 +455,13 @@ public class SignatureRequestListener implements EventListener {
     static DocumentModel saveRecord(CoreSession session, DocumentModel record) {
         ServerWrite.RECORD.mark(record);
         record.putContextData(VersioningService.VERSIONING_OPTION, VersioningOption.NONE);
-        return session.saveDocument(record);
+        DocumentModel saved = session.saveDocument(record);
+        // Neither the mark nor the option outlives this write, on the model given or the one returned.
+        for (DocumentModel model : List.of(record, saved)) {
+            model.getContextData().remove(VersioningService.VERSIONING_OPTION);
+            model.getContextData().remove(ServerWrite.KEY);
+        }
+        return saved;
     }
 
     // ------------------------------------------------------------------ copies
@@ -659,6 +665,9 @@ public class SignatureRequestListener implements EventListener {
             }
             if (out) {
                 voidOnCommit(doc);
+                CoreInstance.doPrivileged(session, (CoreSession system) -> {
+                    unhold(system, doc);
+                });
             }
         }
         if (isLive(doc, SIGNABLE_FACET) && SENT.equals(text(doc, SGN_STATUS)) && (trash || !administrator)) {
@@ -683,6 +692,7 @@ public class SignatureRequestListener implements EventListener {
                 CoreInstance.doPrivileged(session, (CoreSession system) -> {
                     for (DocumentModel request : system.query(below(doc) + " AND " + sentRequests)) {
                         voidOnCommit(request);
+                        unhold(system, request);
                     }
                 });
             }
@@ -699,6 +709,18 @@ public class SignatureRequestListener implements EventListener {
             if (holdsSigned) {
                 throw forbidden("The version that holds a signed file is kept: only an administrator deletes it");
             }
+        }
+    }
+
+    /** A request deleted while out: its record no longer held, as if it had been cancelled. */
+    private static void unhold(CoreSession system, DocumentModel request) {
+        String recordId = text(request, DOCUMENT);
+        if (recordId == null || !DOCUMENT_ID.matcher(recordId).matches()) {
+            return;
+        }
+        DocumentModel record = endRecord(system, recordId, request.getId(), CANCELLED, null);
+        if (record != null) {
+            saveRecord(system, record);
         }
     }
 
@@ -760,8 +782,14 @@ public class SignatureRequestListener implements EventListener {
                 record.setPropertyValue(SGN_SENT_AT, request.getPropertyValue(REQUESTED_AT));
                 record.setPropertyValue(SGN_COMPLETED_AT, request.getPropertyValue(COMPLETED_AT));
                 if (SIGNED.equals(status)) {
-                    record.setPropertyValue(SGN_FILE, text(request, FILE));
+                    // The evidence is the request's, whatever the version holds; the signed file is named
+                    // only where it is, by its SHA-256, which a version from before the signing has not.
                     record.setPropertyValue(SGN_EVIDENCE, request.getPropertyValue(Signatures.EVIDENCE));
+                    String xpath = text(request, FILE);
+                    if (CallbackEndpoint.isTheFileSent(record, xpath, text(request, Signatures.SIGNED_DIGEST),
+                            64L * 1024 * 1024)) {
+                        record.setPropertyValue(SGN_FILE, xpath);
+                    }
                 }
             }
             saveRecord(system, record);
