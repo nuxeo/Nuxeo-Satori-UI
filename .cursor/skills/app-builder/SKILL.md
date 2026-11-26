@@ -46,6 +46,11 @@ step as done that this table says is not built.
   claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node","args":["tools/builder-mcp/src/main.ts"],"env":{"NUXEO_URL":"${NUXEO_URL:-http://localhost:8080}","NUXEO_USER":"${NUXEO_USER}","NUXEO_PASS":"${NUXEO_PASS}"}}'
   ```
 
+  Registering changes the person's own Claude configuration: ask first. Not registered, call each
+  tool through `tools/builder-mcp/src/call.ts`, which starts the same server over stdio for one
+  call: `node tools/builder-mcp/src/call.ts <tool> '<arguments as JSON>'`, or `-` to read them
+  from standard input. Every rule below holds as it does for the registered server.
+
 ## 1. Read the server
 
 Find out what is there before writing anything. Every name a package writes must exist on the

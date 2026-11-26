@@ -387,6 +387,18 @@ Then `claude mcp list` shows `nuxeo-builder`, and `/mcp` inside Claude Code show
 - **The single quotes matter.** They keep the shell from expanding `${NUXEO_PASS}`, so the
   configuration holds the name of the variable, not the password.
 
+**Without registering it,** as an agent that may not change the person's Claude configuration:
+`src/call.ts` starts the server over stdio, as a client does, makes one call and prints the answer.
+The server reads its settings from the shell's environment, as when registered; `call.ts` reads
+none. It exits 0 when the tool answered, 1 when it answered with an error, printed to stderr, and 2
+when the command was wrong.
+
+```bash
+node tools/builder-mcp/src/call.ts --list
+node tools/builder-mcp/src/call.ts validate_package '{ "package": "business-apps/packages/facilities-demo" }'
+node tools/builder-mcp/src/call.ts apply_package_changes - < changes.json   # long arguments, from a file
+```
+
 ## Running and testing it
 
 ```bash
