@@ -561,6 +561,9 @@ async function buildKits() {
         trusted,
         trustedRoot: options['trusted-root'],
         env: childEnv(),
+        // The commit it was signed from, in the history the candidate is built from.
+        inHistory: (commit) =>
+          run('git', ['merge-base', '--is-ancestor', commit, 'HEAD']).status === 0,
       });
       await checkpoint();
       if (!held.ok) {

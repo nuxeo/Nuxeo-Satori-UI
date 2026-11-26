@@ -27,8 +27,9 @@
  *   carry. Each exits 2 having written nothing.
  * - **The kits' signatures.** Given `--signatures`, a kit the pipeline built and a run-time key
  *   signed is taken, with what its signature records; refused are a kit with no signature, one
- *   signed by a key no trusted signer has, one changed at the same version since it was signed, and
- *   another version's signature under this version's name. The command refuses a `--signatures`
+ *   signed by a key no trusted signer has, one signed from a commit not in the candidate's history,
+ *   one changed at the same version since it was signed, and another version's signature under
+ *   this version's name. The command refuses a `--signatures`
  *   that is no folder, trusted signers that name no signer, and `--trusted-signers` without
  *   `--signatures`, each with exit 2 having written nothing; and, on the pinned Node with Maven on
  *   the PATH, it refuses at stage 2 a candidate whose kits are unsigned, and removes its folder.
@@ -794,18 +795,24 @@ function runTimeSigner(id) {
 }
 
 function theSignatures() {
-  const commit = '0123456789abcdef0123456789abcdef01234567';
+  // Signed from this commit, which is in the candidate's history, as a tag on a merged one is.
+  const commit = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: REPO,
+    encoding: 'utf8',
+  }).stdout.trim();
+  const inHistory = (sha) =>
+    spawnSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: REPO }).status === 0;
   const { name, version } = descriptorOf(
     readFileSync(join(CONTRACTS, 'package', 'package.xml'), 'utf8'),
   );
   const zip = kitZip(CONTRACTS, 'contracts');
   const signer = runTimeSigner('release-signer');
   /** `target` signed by `key`, written into `folder` under the name the candidate looks for. */
-  const sign = (target, key, folder, as = basename(target)) => {
+  const sign = (target, key, folder, as = basename(target), from = commit) => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(
       join(folder, `${as}.sig.json`),
-      JSON.stringify(signWithKey({ zip: target, privateKey: key.privateKey, commit })),
+      JSON.stringify(signWithKey({ zip: target, privateKey: key.privateKey, commit: from })),
     );
     return folder;
   };
@@ -817,6 +824,7 @@ function theSignatures() {
       version,
       signatures: folder,
       trusted: readTrustedSigners(signer.file),
+      inHistory,
     });
 
   const taken = hold(sign(zip, signer, join(scratch, 'signatures')));
@@ -830,6 +838,23 @@ function theSignatures() {
       taken.record.keyId === signer.keyId,
     JSON.stringify(taken),
     false,
+  );
+
+  // A trusted signer's signature from a commit the candidate's history does not have: a tag on a
+  // commit that was never merged.
+  const unmerged = hold(
+    sign(
+      zip,
+      signer,
+      join(scratch, 'signed-from-an-unmerged-commit'),
+      basename(zip),
+      '0123456789abcdef0123456789abcdef01234567',
+    ),
+  );
+  check(
+    "refused: a kit signed from a commit that is not in the candidate's history",
+    !unmerged.ok && /which is not in this candidate's history/.test(unmerged.problems.join(' ')),
+    JSON.stringify(unmerged),
   );
 
   const empty = join(scratch, 'no-signatures');

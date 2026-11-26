@@ -678,11 +678,30 @@ export function readKit(zip, scratch) {
  * the signature's path. So the candidate is refused for a kit that is unsigned, signed by no trusted
  * signer, or signed over other bytes or for another version, and a kit it takes is the one signed:
  * the candidate's build is reproducible, so a kit unchanged since it was signed has the same digest.
+ *
+ * `inHistory` answers whether a commit is in the candidate's history. A signature made from a
+ * commit that is not is refused too: a tag pushed on a commit that was never merged runs the
+ * workflow as that commit has it, and the trusted workflow's identity says nothing about review.
  */
-export function kitSignature({ zip, name, version, signatures, trusted, trustedRoot, env }) {
+export function kitSignature({
+  zip,
+  name,
+  version,
+  signatures,
+  trusted,
+  trustedRoot,
+  env,
+  inHistory,
+}) {
   const signature = join(signatures, signatureFileFor(basename(zip)));
-  return {
-    signature,
-    ...verifySignature({ zip, signature, trusted, name, version, trustedRoot, env }),
-  };
+  const verified = verifySignature({ zip, signature, trusted, name, version, trustedRoot, env });
+  if (verified.ok && !inHistory(verified.record.commit))
+    return {
+      signature,
+      ok: false,
+      problems: [
+        `${basename(zip)} was signed from ${verified.record.commit}, which is not in this candidate's history: a tag on a commit that was never merged.`,
+      ],
+    };
+  return { signature, ...verified };
 }

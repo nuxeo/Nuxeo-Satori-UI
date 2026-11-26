@@ -631,7 +631,9 @@ the identity, the runner or the signer, 1 each. The release candidate's, in sect
 - a ruleset for who may create `app-package/*` tags (section 7). Until there is one, whoever can
   push a tag starts a run the trusted signers accept, and a signature says that this workflow ran
   for this tag on this commit, not that the commit was reviewed. A tag's run takes the workflow as
-  the tagged commit has it, so a tag on a commit that changed the workflow signs with that change;
+  the tagged commit has it, so a tag on a commit that changed the workflow signs with that change.
+  The release candidate refuses a signature from a commit its history does not have (section 11);
+  a publish and an administrator's check do not;
 - a key the team holds, in a cloud KMS, if a customer's policy asks for one: the trusted signers
   take an Ed25519 key already, and nothing else of it is built;
 - the release candidate's workflow giving `--signatures`, which waits for a kit to be signed;
@@ -1067,7 +1069,8 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
 - **`--signatures`** is a folder of the kits' signatures, as their tag builds made them,
   `<name>-<version>.zip.sig.json`. Given it, stage 2 holds each kit's zip to its own, against
   `business-apps/trusted-signers.json` or `--trusted-signers`: a kit with no signature, signed by
-  no trusted signer, or whose signature is over other bytes or for another version refuses the
+  no trusted signer, whose signature is over other bytes or for another version, or was made from
+  a commit the candidate's history does not have, a tag on a commit never merged, refuses the
   candidate. The build is reproducible, so a kit unchanged since its tag has the digest its
   signature names. A keyless signature is checked with `gh attestation verify`, which reads
   Sigstore's trusted root over the network unless `--trusted-root` gives it. Without
@@ -1190,13 +1193,14 @@ push to a `staging/**` branch.
 - a steps file with no declaration, one for another kit, and one needing a seed its kit does not
   have;
 - a kit the pipeline built and a run-time key signed is taken; refused are one with no signature,
-  one signed by a key no trusted signer has, one changed at the same version since it was signed,
-  and another version's signature under its name; and the command's `--signatures` that is no
+  one signed by a key no trusted signer has, one signed from a commit not in the candidate's
+  history, one changed at the same version since it was signed, and another version's signature
+  under its name; and the command's `--signatures` that is no
   folder, trusted signers that name no signer, and `--trusted-signers` without `--signatures`,
   each exit 2. On the pinned Node with Maven, the command itself, given an empty `--signatures`, is
   refused at stage 2 for every kit, and removes its folder. Each was seen failing from the other
-  side: the candidate's check broken to drop the version, to skip the folder's check, and to refuse
-  for another reason, each failed its control.
+  side: the candidate's check broken to drop the version, to skip the folder's check, to take any
+  commit, and to refuse for another reason, each failed its control.
 
 It builds no client and runs no Maven. Stage 6's other refusals, a Maven run that fails, a module
 that builds nothing, a zip with no `package.xml`, and no package deploying the client, are reached

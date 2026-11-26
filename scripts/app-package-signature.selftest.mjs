@@ -268,7 +268,7 @@ function keySignatures(current, next) {
   // the public half, and nothing written carries a private key.
   const written = readdirSync(dirname(current.zip)).sort();
   check(
-    'the run-time key is not written: only the zip, its checksum, its signature and the public half are',
+    'the run-time key: its private half is in neither file written, and nothing but the signature and the public half is',
     JSON.stringify(written) ===
       JSON.stringify(
         [basename(current.zip), `${basename(current.zip)}.sha256`, basename(signature)].sort(),
@@ -641,7 +641,7 @@ function keylessSignatures(current, next) {
   });
   const [call] = good.calls;
   check(
-    'verified: a keyless signature by the trusted workflow, for its own tag, by gh pinned to that identity',
+    'verified: a keyless signature by the trusted workflow, for its own tag, with the stand-in gh given exactly the pinned identity',
     good.status === 0 &&
       / Verified\.$/m.test(good.out) &&
       good.calls.length === 1 &&
@@ -708,7 +708,7 @@ function keylessSignatures(current, next) {
     ),
   );
   check(
-    "refused: another repository's certificate under a predicate claiming the trusted workflow, by gh",
+    "refused: another repository's certificate under a predicate claiming the trusted workflow, by the stand-in gh",
     claims.status === 1 &&
       /gh attestation verify refused the signature/.test(claims.err) &&
       /--cert-identity/.test(claims.err),
@@ -723,7 +723,7 @@ function keylessSignatures(current, next) {
     bundleFor(next.zip, workflowPredicate(next), certificateFor(tag)),
   );
   check(
-    "refused: a signature from another version's tag run, by gh",
+    "refused: a signature from another version's tag run, by the stand-in gh",
     replay.status === 1 && /gh attestation verify refused the signature/.test(replay.err),
     replay.all,
   );
@@ -767,7 +767,7 @@ function keylessSignatures(current, next) {
     bundleFor(current.zip, workflowPredicate(current), certificateFor(tag, { selfHosted: true })),
   );
   check(
-    'refused: a signature made on a self-hosted runner, by gh',
+    'refused: a signature made on a self-hosted runner, by the stand-in gh',
     selfHosted.status === 1 && /self-hosted/.test(selfHosted.err),
     selfHosted.all,
   );
