@@ -360,6 +360,17 @@ describe('the configured language at startup', () => {
     expect((await boot('en')).lang).toBe('en');
   });
 
+  for (const language of ['it', 'sv']) {
+    it(`boots ${language}, loads its catalogue and announces its language`, async () => {
+      const { lang, urls, messages } = await boot(language);
+      expect(lang).toBe(language);
+      expect(urls.some((url) => url.endsWith(`/i18n/${language}.json`))).toBeTrue();
+      expect(document.documentElement.lang).toBe(language);
+      expect(document.documentElement.dir).toBe('ltr');
+      expect(messages.filter((message) => message.includes('defaultLanguage'))).toEqual([]);
+    });
+  }
+
   for (const language of ['ar', 'he']) {
     it(`boots ${language}, loads its catalogue and applies RTL to document, CDK and overlays`, async () => {
       const { lang, urls, messages } = await boot(language);
@@ -589,7 +600,7 @@ describe('LOCALE_ID provider', () => {
    * These assert from configuration, not from the constant: `injectLocaleFor` goes through the
    * real provider from `provideAppConfig()`.
    */
-  const REGISTERED_BUT_NOT_SHIPPED = ['es', 'it', 'sv'] as const;
+  const REGISTERED_BUT_NOT_SHIPPED = ['es'] as const;
 
   it('does not admit a locale registered ahead of its catalogue', () => {
     // Guards the premise: if these ever stop being registered-but-unadvertised the test below

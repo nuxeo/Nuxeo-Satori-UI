@@ -21,24 +21,27 @@ import {
   frCA,
   frCH,
   he,
+  it,
+  itCH,
   ja,
   nl,
   nlBE,
+  sv,
 } from 'date-fns/locale';
 
 /**
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The nine bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
  * that are both registered and in `availableLanguages` — and a test asserts they match
  * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
  * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
  * catalogue was enough to admit a locale this map has no entry for (#522).
  *
- * This branch enables Arabic and Hebrew with their catalogues. Spanish, Italian and Swedish
- * remain pending their separate integrations. Arabic regional variants are explicit because
+ * Arabic, Hebrew, Italian and Swedish ship with their catalogues. Spanish remains pending
+ * its separate integration. Arabic regional variants are explicit because
  * ar-DZ, ar-MA and ar-SA are month-first while bare ar is day-first; ar-EG differs in padding.
  *
  * The regional entries are here for the **published** provider rather than for us. These
@@ -58,6 +61,7 @@ import {
  * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
+ * | `it-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `ar-DZ` `ar-MA` `ar-SA` | `MM/dd/yyyy` | `dd/MM/yyyy` |
  * | `ar-EG` | `d/MM/y` | `dd/MM/yyyy` |
  *
@@ -98,6 +102,9 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   'ar-ma': arMA,
   'ar-sa': arSA,
   he,
+  it,
+  'it-ch': itCH,
+  sv,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */

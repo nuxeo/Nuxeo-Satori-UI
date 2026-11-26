@@ -36,6 +36,15 @@ import {
 const PARSE_CASES = [
   { locale: 'en', input: '03/04/2026', year: 2026, month: 2, date: 4, why: 'US order, unchanged' },
   { locale: 'fr', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'French is day-first' },
+  { locale: 'it', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Italian is day-first' },
+  {
+    locale: 'sv',
+    input: '2026-04-03',
+    year: 2026,
+    month: 3,
+    date: 3,
+    why: 'Swedish is year-first',
+  },
   { locale: 'ar', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Arabic is day-first' },
   {
     locale: 'he',
@@ -175,6 +184,7 @@ describe('provideSatoriDateAdapter', () => {
     { locale: 'fr-CA', input: '26-04-03', month: 3, date: 3 },
     { locale: 'fr-CH', input: '03.04.2026', month: 3, date: 3 },
     { locale: 'nl-BE', input: '03.04.2026', month: 3, date: 3 },
+    { locale: 'it-CH', input: '03.04.2026', month: 3, date: 3 },
     { locale: 'ar-DZ', input: '03/04/2026', month: 2, date: 4 },
     { locale: 'ar-MA', input: '03/04/2026', month: 2, date: 4 },
     { locale: 'ar-SA', input: '03/04/2026', month: 2, date: 4 },

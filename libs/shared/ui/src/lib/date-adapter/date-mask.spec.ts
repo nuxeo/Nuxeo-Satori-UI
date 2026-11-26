@@ -20,6 +20,8 @@ const CATALOGUE_MASKS = {
   nl: 'dd-mm-jjjj',
   ar: 'يوم/شهر/سنة',
   he: 'יי/חח/שששש',
+  it: 'gg/mm/aaaa',
+  sv: 'åååå-mm-dd',
 } as const;
 
 describe('dateMaskFor', () => {
@@ -61,6 +63,7 @@ describe('dateMaskFor', () => {
       why: 'order, separators, 2-digit year',
     },
     { locale: 'nl-BE', language: 'nl', expected: 'dd.mm.jjjj', why: 'separators only' },
+    { locale: 'it-CH', language: 'it', expected: 'gg.mm.aaaa', why: 'separators only' },
   ] as const;
 
   describe.each(REGIONAL_CASES)('$locale ($why)', ({ locale, language, expected }) => {
