@@ -156,6 +156,46 @@ describe('RecordExternalComponent', () => {
     );
   });
 
+  describe('how old the answer is', () => {
+    const age = (element: HTMLElement): string | null =>
+      element.querySelector('.record-external__age')?.textContent?.trim() ?? null;
+
+    it('says so under the fields, from the age the server gives', async () => {
+      for (const [seconds, said] of [
+        [0, 'Read from the other system just now'],
+        [59, 'Read from the other system just now'],
+        [60, 'Read from the other system 1 minute ago'],
+        [300, 'Read from the other system 5 minutes ago'],
+        [7200, 'Read from the other system 2 hours ago'],
+      ] as const) {
+        read.mockReturnValue(of({ ...found({ policyNumber: 'POL-FICT-0048' }), age: seconds }));
+        const element = await render();
+        expect(shown(element)).toEqual([['Policy', 'POL-FICT-0048']]);
+        expect(age(element)).toBe(said);
+      }
+    });
+
+    it('says so under nothing found too, which the server keeps as well', async () => {
+      read.mockReturnValue(
+        of({ connector: 'payers.claimPayments', status: 'not-found', fields: {}, age: 120 }),
+      );
+      const element = await render();
+      expect(element.querySelector('nxs-empty-state')).not.toBeNull();
+      expect(age(element)).toBe('Read from the other system 2 minutes ago');
+    });
+
+    it('says nothing of it for an answer with no age, nor while loading or after an error', async () => {
+      read.mockReturnValue(of(found({ policyNumber: 'POL-FICT-0048' })));
+      expect(age(await render())).toBeNull();
+      read.mockReturnValue(of({ connector: 'payers.claimPayments', status: 'no-key', fields: {} }));
+      expect(age(await render())).toBeNull();
+      read.mockReturnValue(new Subject<ConnectorAnswer>());
+      expect(age(await render())).toBeNull();
+      read.mockReturnValue(throwError(() => ({ status: 504 })));
+      expect(age(await render())).toBeNull();
+    });
+  });
+
   it('shows the loading state until the server answers', async () => {
     const answer = new Subject<ConnectorAnswer>();
     read.mockReturnValue(answer);
