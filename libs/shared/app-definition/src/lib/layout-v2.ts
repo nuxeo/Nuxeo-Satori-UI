@@ -55,7 +55,9 @@ export interface ValidationOptions {
 }
 
 const FILE_KEYS = ['$schema', 'version', 'columns', 'banners', 'review', 'cards', 'tabs'];
-const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen'];
+const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen', 'link'];
+/** A banner's link: the record one of the open record's properties names, as a `document-link`. */
+const BANNER_LINK_KEYS = ['field'];
 /** A banner's tones, in layout version 2's words for them: a status badge's, less two. */
 export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
@@ -96,6 +98,7 @@ const ADDRESS =
 export const LAYOUT_V2_KEYS = {
   file: FILE_KEYS,
   banner: BANNER_KEYS,
+  bannerLink: BANNER_LINK_KEYS,
   review: REVIEW_KEYS,
   tab: TAB_KEYS,
   card: CARD_KEYS,
@@ -270,8 +273,10 @@ function layout(
 
 /**
  * The record page's banners, above its cards: each a message in a tone, shown while its rule
- * passes (layout-v2.md, section 2). A banner says something about the record; it holds no field,
- * so the content model has nothing to check in it.
+ * passes (layout-v2.md, section 2). A banner says something about the record; it holds no field.
+ * It may link to one record, the one a property of the open record names, as a `document-link`
+ * shows it: given the content model, the property is held to the type, and to one text
+ * (`layout-model.ts`).
  */
 function banners(c: Checker, list: unknown): void {
   if (!Array.isArray(list)) {
@@ -290,7 +295,34 @@ function banners(c: Checker, list: unknown): void {
     if ('tone' in item && !(BANNER_TONES as readonly unknown[]).includes(item['tone']))
       c.add(join(path, 'tone'), 'structure', `tone is one of ${BANNER_TONES.join(', ')}`);
     if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
+    if ('link' in item) bannerLink(c, item['link'], join(path, 'link'));
   });
+}
+
+/**
+ * A banner's link: `{ "field": "<prefix>:<name>" }`, a property of the open record that holds a
+ * record's id, never an `ecm:` or `var:` name. The page shows that record by its title, as a
+ * `document-link` does, and opens it.
+ */
+function bannerLink(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'a link is { "field": "<prefix>:<name>" }');
+    return;
+  }
+  c.unknownKeys(item, BANNER_LINK_KEYS, path);
+  const field = item['field'];
+  if (
+    typeof field !== 'string' ||
+    !XPATH.test(field) ||
+    field.startsWith('ecm:') ||
+    field.startsWith('var:')
+  ) {
+    c.add(
+      join(path, 'field'),
+      'structure',
+      "needs the record's property that holds the linked record's id, <prefix>:<name>, never an ecm: or var: name",
+    );
+  }
 }
 
 /**

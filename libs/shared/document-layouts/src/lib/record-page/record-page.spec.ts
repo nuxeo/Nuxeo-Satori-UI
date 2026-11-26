@@ -26,7 +26,12 @@ import { ConnectorRecordService } from './connector-record.service';
 import type { LinkedRecord } from './linked-record';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
-import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
+import {
+  BANNER_LINK_CLASS,
+  RECORD_PAGE_TIME_ZONE,
+  RECORD_PAGE_TODAY,
+  RecordPageComponent,
+} from './record-page';
 import { RECORD_TIMELINE_AUDIT_DELAY } from './record-clock';
 import { RecordTimelineComponent } from './record-timeline';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
@@ -1582,6 +1587,105 @@ describe('RecordPageComponent', () => {
         ],
       });
       expect(root.querySelector('[data-card-id="todo"]')).toBeNull();
+    });
+  });
+
+  describe("a banner's link", () => {
+    /** A banner that links to the record `member:referrer` names, as a superseded revision does. */
+    const REFERRED = {
+      version: 2,
+      banners: [
+        {
+          id: 'referral',
+          tone: 'warning',
+          label: 'Referred by:',
+          link: { field: 'member:referrer' },
+        },
+        { id: 'plain', label: 'No link here.' },
+      ],
+      cards: [{ id: 'member', label: 'Member', fields: ['member:phone'] }],
+    };
+
+    const linkOf = (root: HTMLElement, id: string) => {
+      const button = root.querySelector<HTMLButtonElement>(
+        `[data-banner-id="${id}"] .${BANNER_LINK_CLASS}`,
+      );
+      return button ? { text: button.textContent?.trim(), disabled: button.disabled } : null;
+    };
+
+    it("shows the linked record's title as the banner's action, which opens it through the router", async () => {
+      const root = await render(member({ 'member:referrer': WEI }), REFERRED);
+      // The icon is a ligature, aria-hidden, which `textContent` reads too.
+      expect(linkOf(root, 'referral')).toEqual({ text: 'arrow_forward Wei Chen', disabled: false });
+      expect(linkOf(root, 'plain')).toBeNull();
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      root.querySelector<HTMLButtonElement>(`.${BANNER_LINK_CLASS}`)?.click();
+      expect(navigate).toHaveBeenCalledWith(`/doc/${WEI}`);
+    });
+
+    it("reads the linked record with the fields' records, in the one request", async () => {
+      await render(member({ 'member:referrer': WEI, 'member:household': [JOHN] }), {
+        ...REFERRED,
+        cards: [...REFERRED.cards, ...LINKS_PAGE.cards],
+      });
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0][0]).toEqual([JOHN, WEI].sort());
+    });
+
+    it('offers no way to a record the reader may not read, and asks for no value that is not an id', async () => {
+      const gone = await render(member({ 'member:referrer': GONE }), REFERRED);
+      expect(linkOf(gone, 'referral')).toEqual({
+        text: 'arrow_forward Unavailable',
+        disabled: true,
+      });
+      fixture.destroy();
+      const injected = "x' OR 1=1";
+      const odd = await render(member({ 'member:referrer': injected }), REFERRED);
+      expect(linkOf(odd, 'referral')).toEqual({
+        text: 'arrow_forward Unavailable',
+        disabled: true,
+      });
+      expect(linkedRecords.mock.calls.flatMap(([ids]) => ids)).not.toContain(injected);
+      fixture.destroy();
+      // No value at all: the message alone.
+      expect(
+        linkOf(await render(member({ 'member:referrer': '' }), REFERRED), 'referral'),
+      ).toBeNull();
+    });
+
+    it('shows nothing while the record is read, then its title', async () => {
+      const answer = new Subject<ReadonlyMap<string, LinkedRecord>>();
+      linkedRecords.mockReturnValueOnce(answer);
+      const root = await render(member({ 'member:referrer': WEI }), REFERRED);
+      expect(linkOf(root, 'referral')).toBeNull();
+      answer.next(linked([WEI]));
+      answer.complete();
+      fixture.detectChanges();
+      expect(linkOf(root, 'referral')?.text).toBe('arrow_forward Wei Chen');
+    });
+
+    it('is shown but goes nowhere on a page drawn read-only, as the designer previews it', async () => {
+      const root = await render(member({ 'member:referrer': WEI }), REFERRED, true);
+      expect(linkOf(root, 'referral')).toEqual({ text: 'arrow_forward Wei Chen', disabled: true });
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      root.querySelector<HTMLButtonElement>(`.${BANNER_LINK_CLASS}`)?.click();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('is left out, with the banner kept, for a property the type lacks or holds a list in', async () => {
+      const lacking = await render(member({ 'member:referrer': WEI }), {
+        ...REFERRED,
+        banners: [{ ...REFERRED.banners[0], link: { field: 'member:nowhere' } }],
+      });
+      expect(lacking.querySelector('[data-banner-id="referral"]')).not.toBeNull();
+      expect(linkOf(lacking, 'referral')).toBeNull();
+      fixture.destroy();
+      const list = await render(member({ 'member:household': [WEI] }), {
+        ...REFERRED,
+        banners: [{ ...REFERRED.banners[0], link: { field: 'member:household' } }],
+      });
+      expect(linkOf(list, 'referral')).toBeNull();
     });
   });
 

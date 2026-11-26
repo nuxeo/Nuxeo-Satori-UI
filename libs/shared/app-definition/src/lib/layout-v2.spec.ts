@@ -550,6 +550,38 @@ describe('banners', () => {
       'banners[0].visibleWhen: the rule "acme.rules.licensed" is not registered [unknown]',
     ]);
   });
+
+  describe('a link', () => {
+    const superseded = {
+      id: 'superseded',
+      labelKey: 'acme.document.superseded',
+      tone: 'warning',
+      visibleWhen: {
+        type: 'app.rules.fieldIn',
+        parameters: [{ field: 'docctl:status' }, 'superseded'],
+      },
+      link: { field: 'docctl:supersededBy' },
+    };
+
+    it('names the property that holds the linked record, and nothing else', () => {
+      expect(messages(page(superseded))).toEqual([]);
+      expect(
+        messages(page({ ...superseded, link: { field: 'docctl:supersededBy', label: 'Go' } })),
+      ).toEqual(['banners[0].link.label: "label" is not a key version 2 has [unknown]']);
+    });
+
+    it('is refused as anything but an object naming a property, never an ecm: or var: name', () => {
+      const refused =
+        "needs the record's property that holds the linked record's id, <prefix>:<name>, never an ecm: or var: name [structure]";
+      for (const field of [undefined, 'supersededBy', 'ecm:uuid', 'var:next', 42])
+        expect(messages(page({ ...superseded, link: { field } }))).toEqual([
+          `banners[0].link.field: ${refused}`,
+        ]);
+      expect(messages(page({ ...superseded, link: 'docctl:supersededBy' }))).toEqual([
+        'banners[0].link: a link is { "field": "<prefix>:<name>" } [structure]',
+      ]);
+    });
+  });
 });
 
 describe('a review', () => {

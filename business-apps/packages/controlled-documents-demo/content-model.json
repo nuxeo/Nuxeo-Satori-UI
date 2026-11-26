@@ -1,0 +1,89 @@
+{
+  "doctypes": {
+    "EngineeringDocument": {
+      "parent": "Document",
+      "facets": ["ControlledDocument"],
+      "schemas": ["common", "dublincore", "engdoc", "controlled_document"]
+    }
+  },
+  "facets": [
+    {
+      "name": "ControlledDocument",
+      "schemas": [
+        {
+          "name": "controlled_document",
+          "prefix": "docctl",
+          "@prefix": "docctl",
+          "fields": {
+            "series": "string",
+            "number": "string",
+            "revision": "string",
+            "status": "string",
+            "supersedes": "string",
+            "supersededBy": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "engdoc",
+      "prefix": "engdoc",
+      "@prefix": "engdoc",
+      "fields": {
+        "discipline": "string",
+        "category": "string",
+        "project": "string",
+        "originator": "string",
+        "purpose": "string",
+        "issuedOn": "date"
+      }
+    },
+    {
+      "name": "controlled_document",
+      "prefix": "docctl",
+      "@prefix": "docctl",
+      "fields": {
+        "series": "string",
+        "number": "string",
+        "revision": "string",
+        "status": "string",
+        "supersedes": "string",
+        "supersededBy": "string"
+      }
+    }
+  ]
+}

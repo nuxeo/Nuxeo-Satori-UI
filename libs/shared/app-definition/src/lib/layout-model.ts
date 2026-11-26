@@ -9,6 +9,7 @@
  *   subfield's type, as a field's does. An address's `parts` name subfields of its property too.
  * - **A checklist's property** is on the type, a list of complex values, with the subfields
  *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
+ * - **A banner's link** names a string property of the type, which holds the linked record's id.
  * - **A review** is for a type with the `picture` schema and without the `video` one, the records
  *   whose page shows a picture.
  *
@@ -201,6 +202,27 @@ export function againstModel(
       card['fields'].forEach((entry, inner) => field(entry, join(fields, inner), ofType));
     });
   };
+  // A banner's link names one record, by a text property of the type: a list would name several.
+  if (Array.isArray(file['banners'])) {
+    file['banners'].forEach((banner, index) => {
+      const name = isRecord(banner) && isRecord(banner['link']) ? banner['link']['field'] : null;
+      // A malformed name has its finding already.
+      if (typeof name !== 'string' || !XPATH.test(name)) return;
+      const at = join(join(join('banners', index), 'link'), 'field');
+      const property = properties.get(name);
+      if (!property) {
+        add(at, 'unknown', whyMissing(model, type, name));
+        return;
+      }
+      const shown = propertyTypeOf(property);
+      if (shown !== 'string')
+        add(
+          at,
+          'parameter',
+          `a banner links one record, by a string property holding its id, and "${name}" is a ${shown} property`,
+        );
+    });
+  }
   cards(file['cards'], 'cards');
   if (Array.isArray(file['tabs'])) {
     file['tabs'].forEach((tab, index) => {

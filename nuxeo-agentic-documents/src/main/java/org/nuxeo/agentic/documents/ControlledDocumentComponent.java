@@ -1,0 +1,197 @@
+/*
+ * Licensed under the Apache License, Version 2.0
+ */
+package org.nuxeo.agentic.documents;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.nuxeo.ecm.core.api.ConcurrentUpdateException;
+import org.nuxeo.ecm.core.api.NuxeoException;
+import org.nuxeo.ecm.core.uidgen.UIDGeneratorService;
+import org.nuxeo.ecm.core.uidgen.UIDSequencer;
+import org.nuxeo.runtime.api.Framework;
+import org.nuxeo.runtime.kv.KeyValueService;
+import org.nuxeo.runtime.kv.KeyValueStore;
+import org.nuxeo.runtime.model.ComponentInstance;
+import org.nuxeo.runtime.model.DefaultComponent;
+import org.nuxeo.runtime.services.config.ConfigurationService;
+
+/**
+ * The number series packages contribute, and the sequencer their numbers come from.
+ *
+ * <p>Contributions are kept in the order Nuxeo registers them, which is dependency order, and the
+ * last enabled one for an id is in force: a later package replaces an earlier one's series whole,
+ * and {@code enabled="false"} removes it. A series with a mistake is left out, and logged as an
+ * error when it registers, so a document in it is refused rather than numbered by a guess.
+ */
+public class ControlledDocumentComponent extends DefaultComponent implements ControlledDocumentService {
+
+    private static final Logger log = LogManager.getLogger(ControlledDocumentComponent.class);
+
+    static final String XP_SERIES = "series";
+
+    /**
+     * The configuration property naming the sequencer numbers come from. Unset, the platform's
+     * default sequencer: on Nuxeo LTS 2025, {@code KeyValueStoreUIDSequencer} in the server's
+     * key/value store.
+     */
+    public static final String SEQUENCER_PROPERTY = "nuxeo.agentic.documents.sequencer";
+
+    private final List<NumberSeriesDescriptor> contributions = new ArrayList<>();
+
+    private volatile Map<String, NumberSeries> series = Map.of();
+
+    @Override
+    public void registerContribution(Object contribution, String extensionPoint, ComponentInstance contributor) {
+        if (!XP_SERIES.equals(extensionPoint) || !(contribution instanceof NumberSeriesDescriptor descriptor)) {
+            log.warn("Unknown contribution to {}: {}", extensionPoint, contribution);
+            return;
+        }
+        register(descriptor, contributor == null ? "?" : contributor.getName().getName());
+    }
+
+    @Override
+    public void unregisterContribution(Object contribution, String extensionPoint, ComponentInstance contributor) {
+        synchronized (contributions) {
+            if (contributions.remove(contribution)) {
+                rebuild();
+            }
+        }
+    }
+
+    /** Register one series, as {@link #registerContribution} does, naming who contributed it. */
+    void register(NumberSeriesDescriptor descriptor, String contributor) {
+        if (descriptor.isEnabled()) {
+            for (String problem : NumberSeries.of(descriptor).problems()) {
+                log.error("Controlled documents: a series from {} is left out: {}", contributor, problem);
+            }
+        }
+        synchronized (contributions) {
+            contributions.add(descriptor);
+            rebuild();
+        }
+    }
+
+    private void rebuild() {
+        Map<String, NumberSeries> built = new HashMap<>();
+        for (NumberSeriesDescriptor descriptor : contributions) {
+            String id = descriptor.getId();
+            if (id == null) {
+                continue;
+            }
+            NumberSeries read = descriptor.isEnabled() ? NumberSeries.of(descriptor).series() : null;
+            if (read == null) {
+                // Disabled, or broken: either way no series of this id is in force, so its
+                // documents are refused rather than numbered by an earlier contribution.
+                built.remove(id);
+            } else {
+                built.put(id, read);
+            }
+        }
+        series = Map.copyOf(built);
+    }
+
+    @Override
+    public NumberSeries series(String id) {
+        return id == null ? null : series.get(id);
+    }
+
+    /**
+     * The platform's SQL key/value store counts with a compare-and-set where the database has no
+     * atomic increment, H2 among them, and gives up after five tries under contention, with a
+     * {@link ConcurrentUpdateException}. A try that gives up has taken no value, so asking again
+     * is safe: up to this many times, after a short random wait.
+     */
+    static final int SEQUENCER_ATTEMPTS = 20;
+
+    @Override
+    public String nextNumber(NumberSeries of) {
+        UIDSequencer sequencer = sequencer();
+        for (int attempt = 1;; attempt++) {
+            try {
+                return of.format(sequencer.getNextLong(of.sequenceKey()));
+            } catch (ConcurrentUpdateException e) {
+                if (attempt >= SEQUENCER_ATTEMPTS) {
+                    throw e;
+                }
+                pause(attempt);
+            }
+        }
+    }
+
+    private static void pause(int attempt) {
+        try {
+            Thread.sleep(1 + ThreadLocalRandom.current().nextInt(5 * attempt));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new NuxeoException("Controlled documents: interrupted while waiting for the sequencer", e);
+        }
+    }
+
+    // ------------------------------------------------------------------ supersession claims
+
+    /** The key/value store claims are kept in: the server's default one, unless one of this name is set. */
+    static final String CLAIMS_STORE = "agentic-documents";
+
+    /**
+     * The configuration property for how long a committed claim is kept, in seconds. It must be
+     * longer than twice the longest transaction the server runs, so that a transaction that read
+     * the old revision as current before the claim's transaction committed has ended before the
+     * claim expires: a day by default. A claim whose transaction does not commit is released at
+     * once; one whose server stopped mid-transaction holds until it expires.
+     */
+    public static final String CLAIM_TTL_PROPERTY = "nuxeo.agentic.documents.claim.ttl";
+
+    static final long CLAIM_TTL_SECONDS = 86_400;
+
+    private static long claimTtl() {
+        ConfigurationService configuration = Framework.getService(ConfigurationService.class);
+        long ttl = configuration == null ? CLAIM_TTL_SECONDS : configuration.getLong(CLAIM_TTL_PROPERTY, CLAIM_TTL_SECONDS);
+        return ttl > 0 ? ttl : CLAIM_TTL_SECONDS;
+    }
+
+    static String claimKey(String previousId) {
+        return "supersedes." + previousId;
+    }
+
+    @Override
+    public boolean claimSupersession(String previousId, String revisionId) {
+        KeyValueService kv = Framework.getService(KeyValueService.class);
+        if (kv == null) {
+            throw new NuxeoException("Controlled documents: the key/value service is not running");
+        }
+        KeyValueStore store = kv.getKeyValueStore(CLAIMS_STORE);
+        String key = claimKey(previousId);
+        long ttl = claimTtl();
+        if (!store.compareAndSet(key, null, revisionId, ttl)) {
+            return false;
+        }
+        if (!TransactionSynchronizations.unlessCommitted(() -> store.compareAndSet(key, revisionId, null))) {
+            log.warn("Controlled documents: the claim on {} cannot be released if its transaction rolls back, "
+                    + "and expires in {} s", previousId, ttl);
+        }
+        return true;
+    }
+
+    private static UIDSequencer sequencer() {
+        UIDGeneratorService generators = Framework.getService(UIDGeneratorService.class);
+        if (generators == null) {
+            throw new NuxeoException("Controlled documents: the platform's sequencer is not running");
+        }
+        ConfigurationService configuration = Framework.getService(ConfigurationService.class);
+        String name = configuration == null ? null
+                : configuration.getString(SEQUENCER_PROPERTY).filter(s -> !s.isBlank()).orElse(null);
+        UIDSequencer sequencer = name == null ? generators.getSequencer() : generators.getSequencer(name.trim());
+        if (sequencer == null) {
+            throw new NuxeoException("Controlled documents: no sequencer "
+                    + (name == null ? "is the platform's default" : "is named " + name.trim()));
+        }
+        return sequencer;
+    }
+}

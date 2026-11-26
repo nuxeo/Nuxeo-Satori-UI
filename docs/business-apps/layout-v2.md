@@ -113,15 +113,44 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
 }
 ```
 
-| Key                 | Meaning                                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------------------- |
-| `id`                | Required, unique in the file, as a card's: banners and cards share the file's ids              |
-| `label`, `labelKey` | The message, as a literal or a translation key. One of them is required                        |
-| `tone`              | `info`, `warning` or `negative`: the words a `status-badge` uses for its tones. Default `info` |
-| `visibleWhen`       | A rule (section 5). The banner shows only while it passes; without one, it always shows        |
+| Key                 | Meaning                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | Required, unique in the file, as a card's: banners and cards share the file's ids                                                         |
+| `label`, `labelKey` | The message, as a literal or a translation key. One of them is required                                                                   |
+| `tone`              | `info`, `warning` or `negative`: the words a `status-badge` uses for its tones. Default `info`                                            |
+| `visibleWhen`       | A rule (section 5). The banner shows only while it passes; without one, it always shows                                                   |
+| `link`              | Optional: `{ "field": "<prefix>:<name>" }`, a property of the record holding another record's id. The banner links to that record (below) |
 
 - **The message is text,** as a card's heading is. It names no property, so a date the reader needs
   is shown by a field: the `rights` card above shows the day the rights end.
+- **A banner may link to one record,** the one its `link` property names, such as the revision that
+  superseded the one open. **Added on 26 November 2026, for phase 8's demo step 3**
+  ([development plan](development-plan.md)), as the smallest addition that lets a banner say where
+  to go: until then a banner held text only. The page shows the linked record by its title, as a
+  `document-link` field does, read in the page's one request for linked records, as the banner's
+  one action, which opens it through the app's router. A record the reader may not read, or that no
+  longer exists, and a value that is not a document's id, show "Unavailable", disabled, and are never
+  asked for by anything but an id; an empty property shows the message alone. On a page drawn
+  read-only, as the layout designer previews it, the link shows disabled.
+  - **What is checked:** the property is `<prefix>:<name>`, never an `ecm:` or `var:` name, and
+    `field` is the link's one key: anything else is structural. Given the content model, the
+    property is the type's or a facet's, and one text, a `string`: a list would name several. When
+    the app loads the file, a link the type cannot hold is left out, and the banner is shown without
+    it.
+
+  ```json
+  {
+    "id": "superseded",
+    "tone": "warning",
+    "labelKey": "acme.document.superseded",
+    "visibleWhen": {
+      "type": "app.rules.fieldIn",
+      "parameters": [{ "field": "docctl:status" }, "superseded"]
+    },
+    "link": { "field": "docctl:supersededBy" }
+  }
+  ```
+
 - **Each banner is decided alone.** The two above never show together, because their rules never
   pass together: a date that has passed is not within the next 30 days.
 - **A banner is not a security control,** any more than a hidden field is. Refusing a download
@@ -608,7 +637,8 @@ What counts as structural:
 - a checklist with no property, a property that is not one or is an `ecm:` or `var:` name, no
   item, or an item that is not an object, has no `label` or `labelKey`, or whose `id` is missing,
   malformed or listed twice;
-- a banner with no `label` or `labelKey`, or a `tone` other than its three;
+- a banner with no `label` or `labelKey`, a `tone` other than its three, or a `link` that is not
+  `{ "field" }` naming a property, or names an `ecm:` or `var:` one;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
 - form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments`,

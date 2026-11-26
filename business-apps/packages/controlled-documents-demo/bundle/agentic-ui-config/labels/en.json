@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/labels.schema.json",
+  "version": 2,
+  "labels": {
+    "controlled-documents.app": "Controlled documents",
+    "controlled-documents.home.title": "Document control",
+    "controlled-documents.home.current": "Current documents",
+    "controlled-documents.home.superseded": "Superseded revisions",
+    "controlled-documents.nav.home": "Home",
+    "controlled-documents.queue.current": "Current documents",
+    "controlled-documents.banner.superseded": "This revision is superseded. Work from the current revision:",
+    "controlled-documents.card.control": "Control",
+    "controlled-documents.card.document": "Document",
+    "controlled-documents.card.revisions": "Revisions of this number",
+    "controlled-documents.card.history": "History",
+    "controlled-documents.field.number": "Number",
+    "controlled-documents.field.revision": "Revision",
+    "controlled-documents.field.status": "Status",
+    "controlled-documents.field.series": "Series",
+    "controlled-documents.field.supersedes": "Supersedes",
+    "controlled-documents.field.supersededBy": "Superseded by",
+    "controlled-documents.field.title": "Title",
+    "controlled-documents.field.category": "Category",
+    "controlled-documents.field.discipline": "Discipline",
+    "controlled-documents.field.project": "Project",
+    "controlled-documents.field.purpose": "Issued for",
+    "controlled-documents.field.originator": "Originator",
+    "controlled-documents.field.issuedOn": "Issued on",
+    "controlled-documents.field.description": "Description"
+  }
+}

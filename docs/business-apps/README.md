@@ -66,6 +66,18 @@ Designer, the development plan and its decisions. Start here when you pick this 
 14. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
     assets, proposed, and the check that holds it without a server.
 
+The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
+recommendation, and waiting for its security review:
+
+- [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md): an asset's rights, refused at the
+  platform's download permission (phase 5).
+- [`nuxeo-agentic-connectors`](../../nuxeo-agentic-connectors/README.md): a record of another
+  system, read for the record page by `Connector.Read` (phase 7).
+- [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md): controlled documents,
+  numbered from the platform's sequencer, and a new revision superseding the one before it in the
+  same transaction (phase 8), with its kit,
+  [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md).
+
 ## Facts that hold
 
 Checked first-hand; build on them rather than re-checking.

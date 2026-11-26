@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: controlled-documents-demo
+Bundle-SymbolicName: nuxeo.config.controlled-documents-demo;singleton:=true
+Bundle-Version: 0.1.0
+Nuxeo-Component: OSGI-INF/controlled-documents-demo-model.xml,OSGI-INF/controlled-documents-demo-config.xml,OSGI-INF/controlled-documents-demo-series.xml

@@ -219,7 +219,13 @@ export const PARITY = join(
 );
 
 const KITS = join(REPO, 'business-apps', 'packages');
-const KIT_NAMES = ['brand-assets-demo', 'contracts-demo', 'facilities-demo', 'payers-claims-demo'];
+const KIT_NAMES = [
+  'brand-assets-demo',
+  'contracts-demo',
+  'controlled-documents-demo',
+  'facilities-demo',
+  'payers-claims-demo',
+];
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const optionalJson = (path) => (existsSync(path) ? readJson(path) : null);
@@ -305,7 +311,10 @@ function brokenCases(root, layout, queue, add) {
     });
     add(`${layout}, not an object`, { path: layout, content: [] });
     add(`${layout}, null`, { path: layout, content: null });
-    const minimal = { version: 2, cards: [{ id: 'added', visibleWhen: 'acme.rules.custom', fields: ['dc:title'] }] };
+    const minimal = {
+      version: 2,
+      cards: [{ id: 'added', visibleWhen: 'acme.rules.custom', fields: ['dc:title'] }],
+    };
     add(`${layout}, a rule the deployment registers`, {
       path: layout,
       content: minimal,
@@ -354,14 +363,19 @@ function parityCases() {
     };
     const add = (label, request) => cases.push({ name: `${name}: ${label}`, kit: name, request });
     const { layouts, queues } = kitFiles(root);
-    for (const path of [...layouts, ...queues]) add(path, { path, content: readJson(join(root, path)) });
+    for (const path of [...layouts, ...queues])
+      add(path, { path, content: readJson(join(root, path)) });
     brokenCases(root, layouts[0], queues[0], add);
   }
   const kit = KIT_NAMES[0];
   const empty = { version: 2, cards: [] };
   cases.push(
     { name: 'home.json, a file no layer holds', kit, request: { path: 'home.json', content: {} } },
-    { name: 'labels/en.json, a file no layer holds', kit, request: { path: 'labels/en.json', content: {} } },
+    {
+      name: 'labels/en.json, a file no layer holds',
+      kit,
+      request: { path: 'labels/en.json', content: {} },
+    },
     { name: 'app.json, a file no layer holds', kit, request: { path: 'app.json', content: {} } },
     {
       name: 'a layout below another folder',
@@ -407,7 +421,9 @@ export function buildParityCorpus(validate) {
   const lines = (entries) => entries.join(',\n');
   return (
     `{\n"$comment": ${JSON.stringify(comment)},\n"kits": {\n` +
-    lines(Object.entries(kits).map(([name, kit]) => `${JSON.stringify(name)}: ${JSON.stringify(kit)}`)) +
+    lines(
+      Object.entries(kits).map(([name, kit]) => `${JSON.stringify(name)}: ${JSON.stringify(kit)}`),
+    ) +
     `\n},\n"cases": [\n${lines(written.map((each) => JSON.stringify(each)))}\n]\n}\n`
   );
 }

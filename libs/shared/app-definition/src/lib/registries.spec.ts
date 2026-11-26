@@ -124,6 +124,7 @@ describe('the JSON Schema, held to the registries and the validator', () => {
     expect(Object.keys(schema.properties).sort()).toEqual([...LAYOUT_V2_KEYS.file].sort());
     for (const [part, keys] of [
       ['banner', LAYOUT_V2_KEYS.banner],
+      ['bannerLink', LAYOUT_V2_KEYS.bannerLink],
       ['review', LAYOUT_V2_KEYS.review],
       ['tab', LAYOUT_V2_KEYS.tab],
       ['card', LAYOUT_V2_KEYS.card],

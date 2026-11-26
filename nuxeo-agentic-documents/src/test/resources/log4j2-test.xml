@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The tests refuse on purpose, and the add-on logs each refusal: keep those out of the build
+     output. A test asserts the refusal, never the log. -->
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="console" target="SYSTEM_OUT">
+      <PatternLayout pattern="%-5p [%c{1}] %m%n" />
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Logger name="org.nuxeo.agentic.documents" level="off" />
+    <!-- A sync listener's refusal is logged by the event service before it bubbles. -->
+    <Logger name="org.nuxeo.ecm.core.event.impl.EventServiceImpl" level="off" />
+    <Root level="warn">
+      <AppenderRef ref="console" />
+    </Root>
+  </Loggers>
+</Configuration>

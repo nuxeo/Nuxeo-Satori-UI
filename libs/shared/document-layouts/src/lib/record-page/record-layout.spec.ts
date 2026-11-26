@@ -1314,6 +1314,33 @@ describe('banners, as the app reads them', () => {
     cards: [{ id: 'c', fields: ['dc:title'] }],
   });
 
+  it('reads the property a link names, and refuses the file for a link that names none', () => {
+    const superseded = {
+      id: 'superseded',
+      label: 'Superseded',
+      link: { field: 'docctl:supersededBy' },
+    };
+    expect(read(page([superseded])).banners.map((banner) => banner.link)).toEqual([
+      'docctl:supersededBy',
+    ]);
+    expect(
+      readRecordLayout(page([{ ...superseded, link: { field: 'ecm:uuid' } }]), { rules: known }),
+    ).toEqual({
+      invalid:
+        "banners[0].link.field: needs the record's property that holds the linked record's id, <prefix>:<name>, never an ecm: or var: name",
+    });
+  });
+
+  it('leaves out a banner whose link has a key this build lacks, and keeps the others', () => {
+    const file = read(
+      page([
+        { id: 'next', label: 'Next', link: { field: 'docctl:supersededBy', target: '_blank' } },
+        { id: 'note', label: 'A note' },
+      ]),
+    );
+    expect(file.banners.map((banner) => banner.id)).toEqual(['note']);
+  });
+
   it('reads each with its place, its message, its tone, info by default, and its rule', () => {
     const file = read(
       page([
@@ -1328,6 +1355,7 @@ describe('banners, as the app reads them', () => {
         label: { literal: 'VIP customer', keys: [], fallback: 'Vip' },
         tone: 'negative',
         visibleWhen: 'acme.rules.isVip',
+        link: null,
       },
       {
         id: 'new-asset',
@@ -1335,6 +1363,7 @@ describe('banners, as the app reads them', () => {
         label: { keys: ['acme.asset.new'], fallback: 'New asset' },
         tone: 'info',
         visibleWhen: null,
+        link: null,
       },
     ]);
     expect(file.problems).toEqual([]);

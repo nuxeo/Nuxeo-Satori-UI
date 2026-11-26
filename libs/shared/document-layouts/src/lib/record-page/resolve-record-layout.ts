@@ -275,6 +275,19 @@ export function resolveRecordLayout(
         .map((tab) => ({ ...tab, cards: cards(tab.cards) }))
         .filter((tab) => tab.cards.length > 0)
     : null;
+  // A banner links one record by a text property of the type holding its id. A link the type
+  // cannot hold is left out, with the banner still shown: its message stands without it.
+  const banners = file.banners.map((banner): RecordBannerEntry => {
+    if (banner.link === null) return banner;
+    const definition = properties.get(banner.link);
+    if (definition && definition.type === 'string') return banner;
+    notes.push(
+      definition
+        ? `${banner.place}.link: "${banner.link}" is a ${definition.type} property, and a banner links one record; the banner shows without its link`
+        : `${banner.place}.link: "${banner.link}" is not a property of ${type.name}; the banner shows without its link`,
+    );
+    return { ...banner, link: null };
+  });
   // A review is drawn on the picture, so a record that shows none has nothing to review.
   const review = file.review && preview === 'picture';
   if (file.review && !review) {
@@ -284,7 +297,7 @@ export function resolveRecordLayout(
     layout: {
       type: type.name,
       columns: file.columns,
-      banners: file.banners,
+      banners,
       preview,
       review,
       tabs,

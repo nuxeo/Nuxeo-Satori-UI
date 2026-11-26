@@ -16,6 +16,8 @@
     <!-- The assets module's server add-on, with its own Marketplace package (decision B). -->
     <module>nuxeo-agentic-assets</module>
     <module>nuxeo-agentic-connectors</module>
+    <!-- The document control module's server add-on, with its own Marketplace package (decision B). -->
+    <module>nuxeo-agentic-documents</module>
     <module>nuxeo-agentic-ui-package</module>
   </modules>
 
