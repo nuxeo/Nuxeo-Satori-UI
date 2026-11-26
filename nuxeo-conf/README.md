@@ -1,8 +1,26 @@
 # Nuxeo server configuration fragments
 
 Files in this folder are **Nuxeo server** configuration, not Angular config.
-They are meant to be copied into the `nuxeo` docker container at
-`/etc/nuxeo/conf.d/` where Nuxeo merges them into the effective `nuxeo.conf`.
+They are meant for the `nuxeo` Docker container's `/etc/nuxeo/conf.d/`, which the
+image merges into `/etc/nuxeo/nuxeo.conf` only at a container's first start; on a
+container that has started before, their properties go into `nuxeo.conf` itself
+(below).
+
+## `conf.d` is read at the first start only
+
+The Nuxeo image merges the files of `/etc/nuxeo/conf.d/` into `/etc/nuxeo/nuxeo.conf`
+only at a container's first start. Its `/docker-entrypoint.sh` appends them inside
+`if [ ! -f $NUXEO_HOME/configured ]` and `if [ ! -f $NUXEO_CONF ]`, then writes the
+`configured` marker; read from the 2025.10.18 image of the local container. **A file
+added to `conf.d` later is never read, and nothing says so.** A restart leaves the
+property unset.
+
+- **A new container:** put the file in `conf.d` before its first start.
+- **An existing container:** write the property into `/etc/nuxeo/nuxeo.conf` itself,
+  then restart, as the mail setup below does. A value that is a secret goes in through
+  standard input, never on a command line:
+  `docker exec -i nuxeo sh -c 'cat >> /etc/nuxeo/nuxeo.conf' < <file>`. To change or
+  remove a property later, edit `nuxeo.conf`: deleting the `conf.d` file does nothing.
 
 ## Layout
 
@@ -106,20 +124,21 @@ separately via `mailpit-docker-compose.yml`.
 ## Applying the config to the running container
 
 ```bash
-# 1. Copy your edited (untracked) file into the running container.
-docker cp nuxeo-conf/50-hyland-cic.conf nuxeo:/etc/nuxeo/conf.d/50-hyland-cic.conf
-
-# 2. Restart Nuxeo so it re-reads conf.d/*.conf.
-docker restart nuxeo
-
-# 3. On this local Docker image, CIC properties must also be present in
-#    /etc/nuxeo/nuxeo.conf (conf.d alone is not always picked up by the JVM).
-#    After adding nuxeo.hyland.cic.ingest.default.sourceId to 50-hyland-cic.conf,
-#    inline it next to the other nuxeo.hyland.cic.ingest.* entries in nuxeo.conf:
+# 1. Your edited (untracked) file holds, beside the other nuxeo.hyland.cic.ingest.*
+#    entries, the ingest source id:
 #
 #    nuxeo.hyland.cic.ingest.default.sourceId=<same-as-hxai.ingest.source.id>
 #
-#    Then restart again. Verify CheckDigest accepts an empty sourceId param:
+#    Append it to nuxeo.conf itself, through standard input, so no secret is on a
+#    command line. On a container that has started before, a copy in conf.d is
+#    never read (above). Run it once: a second run appends the lines again. This
+#    follows the mail setup's method, and was not run for these properties.
+docker exec -i nuxeo sh -c 'cat >> /etc/nuxeo/nuxeo.conf' < nuxeo-conf/50-hyland-cic.conf
+
+# 2. Restart Nuxeo so it reads nuxeo.conf again.
+docker restart nuxeo
+
+# 3. Verify CheckDigest accepts an empty sourceId param:
 #
 #    curl -sS -u Administrator:Administrator -X POST \
 #      -H "Content-Type: application/json" \
@@ -292,5 +311,8 @@ services:
       - ./nuxeo-conf:/etc/nuxeo/conf.d:ro
 ```
 
-Nuxeo already loads `/etc/nuxeo/conf.d/*.conf` on startup, so any `*.conf`
-file dropped here (sample excluded via ordering) gets merged automatically.
+A recreated container merges the mounted folder at its first start, and only then
+(above): a file added to it later is not read. The entrypoint appends every file of
+the folder, in name order (`find /etc/nuxeo/conf.d/ -type f | sort`), so the
+`*.sample.conf` files, the `.xml` template and this README are appended too: nothing
+leaves a file out by its name.

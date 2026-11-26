@@ -17,7 +17,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 - **A stand-in model,** until the presales Payers model arrives: the types, schemas and page
   providers those files name, and since 0.4.0 a claim lifecycle. It is fictional, and replaced
   whole when theirs comes.
-- **A seed script** writes a few members, with their claims and cases, and the four people who
+- **A seed script** writes a few members, with their claims and cases, and the six people who
   work them, in the groups the files' rules name. Run it twice and nothing is added the second
   time.
 - **The demo script,** phase 1's five steps, as a steps file of the beta harness:
@@ -112,6 +112,11 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   a `nuxeo-agentic-core` that run them. An older platform offers none; an older core serves the
   file whole and has no `AgenticUi.RunAction`, so a newer platform offers both and the server runs
   neither, answering 404, which the dialog says. The minor says the kit does something new.
+  **0.5.1** is a patch raise: four labels added, the Properties panel's headings for the claim,
+  case, provider and claim document schemas, `layout.schema.claim`, `case`, `provider` and
+  `claimdoc` (app-definition-v2.md, section 7). Without one, the last is headed "Claimdoc", its
+  schema's name made readable. The member's panel has a layout file of its own, which names its
+  heading.
 - **Migration notes:** `upgrade-notes.json`, outside the zip. The upgrade check refuses a removal
   that a customer's configuration may rely on without one
   ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 10), and found
@@ -368,7 +373,7 @@ and on no server; the demo server's own allow-list is narrower ([below](#the-ope
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/payers-claims-demo-0.5.0.zip`.
+It writes `dist/payers-claims-demo-0.5.1.zip`.
 
 After changing the route model's source, write its zip again first, and commit it:
 
@@ -378,8 +383,9 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.5.0.changes.md`. Run on 25 November 2026 against the staging branch's
-0.4.1: 13 changes, which need a patch version, and 0.5.0 raises the minor.
+`dist/payers-claims-demo-0.5.1.changes.md`. Run on 25 November 2026 against the staging branch's
+0.5.0: 4 changes, which need a patch version, and 0.5.1 raises the patch. 0.5.0's run, against
+0.4.1: 13 changes, which needed a patch, and 0.5.0 raised the minor.
 
 ```bash
 mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
@@ -611,6 +617,14 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 With no contribution in `nxserver/config/`, the registry serves neither button, and the server log
 says so: an allow-list nobody installed allows nothing.
 
+### Over version 0.5.0: version 0.5.1, with the schema headings
+
+**Not run yet.** 0.5.1 adds four labels and nothing else, so it needs no new `nuxeo-agentic-ui`
+and no change to the allow-list. Build the kit as in step 1 above, then in step 3 copy and name
+`payers-claims-demo-0.5.1.zip` in place of 0.5.0's, and leave out `nuxeo-agentic-ui.zip` when the
+server already has the one 0.5.0 needs. The Properties panel then heads a claim's, a case's, a
+provider's and a claim document's schema section with the kit's label.
+
 ### Removing it
 
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
@@ -666,7 +680,7 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   | User           | Groups                                   | Works                                     |
   | -------------- | ---------------------------------------- | ----------------------------------------- |
   | `dana.lee`     | `claims-adjusters`                       | Most of the claims                        |
-  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | One pended claim                          |
+  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | Two claims, one pended and one denied     |
   | `riley.brooks` | `member-services`                        | Two cases                                 |
   | `sam.patel`    | `member-services`                        | The two appeals, and the appeals demo     |
   | `alex.rivera`  | `claims-adjusters`                       | The workflow demo's claims, as adjuster   |

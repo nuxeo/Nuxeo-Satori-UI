@@ -244,8 +244,13 @@ Below the Save section of either page, for the file open:
   at most 1 MiB and 64 KiB, nested at most 512 deep, with no repeated key. Every answer is
   `no-store`.
 - **The switch:** `nuxeo.agentic.ui.layer.enabled`, off unless it is `true`, as new work is
-  (decision J). Off, every address of the layer is 404 and the registry serves the packages' files,
-  though the stored layer is kept. So turning it off also takes every customer change out at once.
+  (decision J). Off, every address of the layer answers an administrator 404, _The deployment layer
+  is switched off on this server._, and anyone else 403, as when it is on, so no one else learns
+  that it is off (`LayerService.refusal`). Before either, on or off, a request that does not
+  authenticate is 401, and a method an address does not take is 405: GET and HEAD everywhere, POST
+  to a file's address only (`AgenticUiAppsServlet`, `LayerEndpoint`). The registry serves the
+  packages' files, though the stored layer is kept. So turning it off also takes every customer
+  change out at once.
 - **In the repository:** one `File` document per app under `/agentic-ui-layers`, a folder hidden in
   navigation whose ACL blocks every permission and grants none, so only administrators, whom Nuxeo
   lets past every ACL, and the system read it. The ACL is checked each time the layer is read or

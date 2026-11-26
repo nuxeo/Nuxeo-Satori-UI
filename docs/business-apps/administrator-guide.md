@@ -12,15 +12,16 @@ wait for a security review, and some are built on open decisions
 
 ## 1. What there is to install
 
-| Package                    | What it is                                                                                                                                  | Depends on                                                | On staging            | Installed so far                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------- | -------------------------------------------------- |
-| `nuxeo-agentic-ui`         | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                   | 2026.0.2 once stamped | Earlier builds, on the local server only           |
-| `nuxeo-agentic-assets`     | An asset's rights, enforced on the server at the platform's download endpoints                                                              | Nothing                                                   | 0.1.0                 | Nowhere                                            |
-| `nuxeo-agentic-connectors` | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                | 2026.0.2-SNAPSHOT     | Nowhere                                            |
-| `payers-claims-demo`       | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                               | 0.5.0                 | 0.3.0 on the local server; 0.4.0 to 0.5.0 nowhere  |
-| `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.1.0` | 0.2.0                 | 0.1.0 on the local server; 0.1.1 and 0.2.0 nowhere |
-| `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                               | 0.2.0                 | Nowhere                                            |
-| `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.0                 | Nowhere                                            |
+| Package                    | What it is                                                                                                                                  | Depends on                                                | On staging            | Installed so far                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| `nuxeo-agentic-ui`         | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                   | 2026.0.2 once stamped | Earlier builds, on the local server only          |
+| `nuxeo-agentic-assets`     | An asset's rights, enforced on the server at the platform's download endpoints                                                              | Nothing                                                   | 0.1.0                 | Nowhere                                           |
+| `nuxeo-agentic-connectors` | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                | 2026.0.2-SNAPSHOT     | Nowhere                                           |
+| `payers-claims-demo`       | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                               | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
+| `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.1.0` | 0.2.1                 | 0.1.0 on the local server; 0.1.1 to 0.2.1 nowhere |
+| `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                               | 0.2.1                 | Nowhere                                           |
+| `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.1                 | Nowhere                                           |
+| `moves-demo`               | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.0                 | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -31,8 +32,9 @@ anywhere"), the [connectors README](../../nuxeo-agentic-connectors/README.md) ("
 installed on any server yet"), and the kits' READMEs:
 [Payers](../../business-apps/packages/payers-claims-demo/README.md),
 [brand assets](../../business-apps/packages/brand-assets-demo/README.md),
-[contracts](../../business-apps/packages/contracts-demo/README.md) and
-[facilities](../../business-apps/packages/facilities-demo/README.md).
+[contracts](../../business-apps/packages/contracts-demo/README.md),
+[facilities](../../business-apps/packages/facilities-demo/README.md) and
+[moves](../../business-apps/packages/moves-demo/README.md).
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.
@@ -426,13 +428,14 @@ made before still open. Nor has the Admin Center's install path been rehearsed
 ## 6. Removing a kit safely
 
 **Not run yet,** for any kit (each kit's README, "Removing it"). The steps follow the Payers
-kit's install, which was run; the contracts and facilities kits were never installed.
+kit's install, which was run; the contracts, facilities and moves kits were never installed.
 
 1. **Delete the kit's documents first, and empty them from the trash.** A document whose type is
    gone cannot be read, and breaks the folder and the searches that hold it. Do the same before you
    replace a kit's stand-in model. The seeded workspaces:
-   `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets` and
-   `/default-domain/workspaces/contracts-demo`. The facilities kit has no seed.
+   `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
+   `/default-domain/workspaces/contracts-demo` and `/default-domain/workspaces/moves-demo`. The
+   facilities kit has no seed.
 2. **For the Payers kit from 0.4.0, cancel its workflows and delete its route model:** as an
    administrator, `DELETE /nuxeo/api/v1/workflow/<id>` for each instance
    `GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists, then the model
@@ -547,7 +550,7 @@ decision G, are not built: the registry knows groups only
   Payers kit 0.3.0; the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs).
 - **On no server:** `nuxeo-agentic-assets`; the connectors; the deployment layer; the operation
-  buttons; Payers 0.4.0 to 0.5.0; brand assets 0.1.1 and 0.2.0; the contracts, facilities and
+  buttons; Payers 0.4.0 to 0.5.1; brand assets 0.1.1 to 0.2.1; the contracts, facilities and
   moves kits; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).

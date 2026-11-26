@@ -267,6 +267,11 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **Every `labelKey` needs a text,** in the package's `labels/en.json` or the platform's catalogue:
   the pipeline refuses one with neither, naming the key and the file. Write the text in the same
   call as the key: `apply_package_changes`, the labels first.
+- **Name each of the kit's own schemas for the Properties panel:** `layout.schema.<schema>`, by the
+  schema's name, not its prefix, in `labels/en.json`. For a type with no `metadata` layout the panel
+  heads each schema's section with it, else with the name made readable, `acmeproduct` as
+  "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
+  `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
 - **The allow-list is the deployment's.** A package with an operation passes only against the
   allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
   which CI gives the pipeline. A package with none is refused at write time for every operation:
