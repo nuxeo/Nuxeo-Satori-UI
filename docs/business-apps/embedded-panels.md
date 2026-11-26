@@ -142,7 +142,7 @@ set its secrets, and let its pages reach the server with the platform's own CORS
 - **Satori's icons,** from beside the script, registered without the marks Satori's icon provider
   puts on a document's root element, which in the host's page is the page's.
 - **One application per element,** started when it is added to the page and destroyed, with its token,
-  when it is removed. About 2.2 MB of script, 550 KB compressed, in one file.
+  when it is removed. About 2.3 MB of script, 580 KB compressed, in one file.
 
 ## The demo
 
@@ -185,7 +185,7 @@ the panel must check:
 
 - **On a server: nothing,** nor in another system's real page. The steps file runs the panel in a
   browser against the stand-in.
-- **The panel's size:** one file of about 2.2 MB; nothing is split or loaded later yet.
+- **The panel's size:** one file of about 2.3 MB; nothing is split or loaded later yet.
 - **Other panels** the architecture names, a record's documents and actions, a drop zone and a task
   list.
 - **A page framed by its host's shell,** beyond the parent check: no demo frames the panel's page.

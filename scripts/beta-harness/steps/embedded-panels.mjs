@@ -110,6 +110,8 @@ async function waitForState(page, states, timeout = 20_000) {
       states,
       { timeout },
     )
+    // A wait that times out is not the verdict: each step's checks read the panel's state after it,
+    // and fail with the state the panel is in, which says more than a timeout would.
     .catch(() => undefined);
 }
 
