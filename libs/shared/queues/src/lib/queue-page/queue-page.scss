@@ -98,3 +98,22 @@
   height: 8px;
   accent-color: var(--mat-sys-primary);
 }
+
+// A queue's search: its field and its button on one line, the field taking the room; the button
+// beside the field's box, not its hint.
+.queue-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: flex-start;
+}
+
+.queue-search__field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.queue-search__button {
+  flex: none;
+  margin-top: 8px;
+}

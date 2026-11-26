@@ -13,6 +13,7 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   DocumentLayoutService,
@@ -26,7 +27,9 @@ import {
 } from '@agentic-ui/shared/document-layouts';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsConfirmDialogComponent,
+  NxsTextFieldComponent,
   type NxsBannerAction,
   type NxsBannerAnnounce,
   type NxsBannerTone,
@@ -53,6 +56,7 @@ import {
   type BulkCommandStatus,
   type NuxeoDocument,
   type PageProviderResults,
+  documentNavigationUrl,
   resultWindow,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
@@ -165,11 +169,23 @@ function warn(message: string): void {
  * - **The queue shows** while its rule holds for the person signed in, with their groups and no
  *   record. Hiding a queue is not a security control: the address still answers, and the page
  *   provider returns only what the person may read.
+ * - **A queue with a search** draws a text field and a Search button above its list, and the list
+ *   once something is searched for: the text, trimmed, is the page provider's last parameter, after
+ *   the queue's own. Enter in the field searches, as a barcode scanner presses it. With
+ *   `"open": "single"`, a search whose results are one record alone opens that record's page; one
+ *   that finds none or several lists them. A preview never opens one.
  */
 @Component({
   selector: 'lib-queue-page',
   standalone: true,
-  imports: [MatCheckboxModule, NxsBannerComponent, RecordListComponent, TranslatePipe],
+  imports: [
+    MatCheckboxModule,
+    NxsBannerComponent,
+    NxsButtonComponent,
+    NxsTextFieldComponent,
+    RecordListComponent,
+    TranslatePipe,
+  ],
   templateUrl: './queue-page.html',
   styleUrl: './queue-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -210,6 +226,7 @@ export class QueuePageComponent {
   private readonly documentChanges = inject(DocumentChangesService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly timing = inject(QUEUE_WHOLE_QUERY_TIMING);
+  private readonly router = inject(Router);
 
   /** What the console has been told, so that a page drawn again does not repeat it. */
   private readonly told = new Set<string>();
@@ -297,6 +314,43 @@ export class QueuePageComponent {
     this.translations();
     const shown = this.shown();
     return shown && (this.text(shown.queue.label, shown.queue.labelKey) || shown.id);
+  });
+
+  /** The search field's text, as typed. Another queue starts with none. */
+  protected readonly searchDraft = linkedSignal<QueueFile | null, string>({
+    source: this.queue,
+    computation: () => '',
+  });
+
+  /** What was searched for, trimmed: `''` until a search. Another queue starts with none. */
+  protected readonly searched = linkedSignal<QueueFile | null, string>({
+    source: this.queue,
+    computation: () => '',
+  });
+
+  /** Whether the next results are a search's first, which open their one record when the queue says so. */
+  private openNext = false;
+
+  /**
+   * The page provider's parameters: the queue's, and with a search what was searched for, last.
+   * `null` while a queue with a search has had none, and the list is not asked for.
+   */
+  protected readonly listParameters = computed<readonly string[] | null>(() => {
+    const queue = this.queue();
+    if (queue === null) return null;
+    if (queue.search === null) return queue.parameters;
+    const searched = this.searched();
+    return searched === '' ? null : [...queue.parameters, searched];
+  });
+
+  /** The search field's name: the queue's, or the page's own. */
+  protected readonly searchLabel = computed(() => {
+    this.translations();
+    const search = this.queue()?.search ?? null;
+    return (
+      (search && this.text(search.label, search.labelKey)) ||
+      this.translate.instant('queues.search.label')
+    );
   });
 
   /** The buckets chosen, by aggregate. Another queue starts with none. */
@@ -689,6 +743,14 @@ export class QueuePageComponent {
    * on the server rather than page by page, so the page does not hold it to the window.
    */
   protected onLoaded(results: PageProviderResults): void {
+    if (this.openNext) {
+      this.openNext = false;
+      const entries = results.entries ?? [];
+      // One record alone, and the server counts no other: a scanned barcode's item.
+      if (entries.length === 1 && (resultWindow(results, 1).total ?? 1) === 1) {
+        void this.router.navigateByUrl(documentNavigationUrl(entries[0]));
+      }
+    }
     this.aggregations.set(results.aggregations ?? null);
     this.rows.set(results.entries ?? []);
     // The page size bears on the reach only, which this does not read.
@@ -700,6 +762,17 @@ export class QueuePageComponent {
         'every result cannot be selected: the page provider does not say how many records it holds, and a confirmation must name the number',
       );
     }
+  }
+
+  /** The search form sent, by its button or by Enter in its field. */
+  protected onSearch(event: Event): void {
+    event.preventDefault();
+    const queue = this.queue();
+    if (!queue?.search) return;
+    const text = this.searchDraft().trim();
+    if (text === '' || text === this.searched()) return;
+    this.openNext = queue.search.openSingle && !this.readOnly();
+    this.searched.set(text);
   }
 
   /** Selects every result of the query in place of rows: the app's selection of rows is cleared. */
@@ -751,7 +824,7 @@ export class QueuePageComponent {
       this.bulk,
       {
         pageProvider: queue.list.pageProvider,
-        parameters: queue.parameters,
+        parameters: this.listParameters() ?? queue.parameters,
         action: action.mapped,
         confirmed,
       },

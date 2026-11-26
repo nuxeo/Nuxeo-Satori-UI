@@ -16,6 +16,7 @@ export {
   type QueueFacet,
   type QueueFile,
   type QueueRegistered,
+  type QueueSearch,
   type ReadQueue,
 } from './lib/queue-file';
 export {

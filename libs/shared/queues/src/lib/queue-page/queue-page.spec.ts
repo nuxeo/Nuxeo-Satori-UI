@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { DocumentLayoutService, RECORD_PAGE_TODAY } from '@agentic-ui/shared/document-layouts';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NxsDocumentListComponent, provideNxsComponents } from '@nuxeo/satori-platform/components';
@@ -17,6 +17,7 @@ import {
 import {
   PageProviderService,
   SelectionService,
+  documentNavigationUrl,
   type NuxeoDocument,
   type PageProviderRequest,
   type PageProviderResults,
@@ -637,5 +638,112 @@ describe('QueuePageComponent', () => {
       expect.not.objectContaining({ aggregates: expect.anything() }),
     ]);
     expect(facets()).toEqual([]);
+  });
+
+  describe('a queue with a search, as a barcode lookup is', () => {
+    /** A lookup: what is searched for is the page provider's last parameter, after the queue's own. */
+    const LOOKUP = {
+      version: 2,
+      label: 'Barcode lookup',
+      pageProvider: 'records_physical_by_barcode',
+      parameters: ['$currentRepository'],
+      search: { label: 'Barcode', open: 'single' },
+      columns: ['claim:number'],
+      pageSize: 10,
+    };
+
+    const search = async (typed: string): Promise<void> => {
+      const field = page().querySelector('.queue-search input') as HTMLInputElement;
+      field.value = typed;
+      field.dispatchEvent(new Event('input'));
+      await settle();
+      (page().querySelector('form.queue-search') as HTMLFormElement).dispatchEvent(
+        new Event('submit', { cancelable: true }),
+      );
+      await settle();
+    };
+
+    beforeEach(() => {
+      files['barcode-lookup'] = { kind: 'file', content: LOOKUP };
+      files['barcode-list'] = {
+        kind: 'file',
+        content: { ...LOOKUP, label: 'Barcodes', search: { label: 'Barcode' } },
+      };
+    });
+
+    it('draws its field, and asks for nothing until something is searched for', async () => {
+      create();
+      await open('barcode-lookup');
+      expect(text('h1')).toBe('Barcode lookup');
+      expect(page().querySelector('form.queue-search[role="search"]')).not.toBeNull();
+      expect(text('.queue-search mat-label, .queue-search label')).toContain('Barcode');
+      expect(execute).not.toHaveBeenCalled();
+      expect(list()).toBeNull();
+      expect(text('.queue-page__message')).toBe(
+        'Type or scan what you are looking for, then search.',
+      );
+      // Nothing but spaces is no search.
+      await search('   ');
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('opens the one record a search finds alone, the text trimmed and sent last', async () => {
+      create();
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      await open('barcode-lookup');
+      await search('  PR000000422\n');
+      expect(lastRequest()).toEqual([
+        'records_physical_by_barcode',
+        expect.objectContaining({ parameters: ['$currentRepository', 'PR000000422'] }),
+      ]);
+      await answer([claim(1)], undefined);
+      expect(navigate).toHaveBeenCalledWith(documentNavigationUrl(claim(1)));
+      expect(navigate).toHaveBeenCalledTimes(1);
+    });
+
+    it('lists what a search finds when it is not one record alone, and opens none', async () => {
+      create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      await open('barcode-lookup');
+      await search('PR0000');
+      await answer([claim(1), claim(2)], undefined);
+      expect(
+        list()
+          ?.documents()
+          .map((row) => row.uid),
+      ).toEqual(['c1', 'c2']);
+      await search('PR9999');
+      await answer([], undefined);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(text('.queue-page')).toContain('Nothing matches this search');
+    });
+
+    it('opens nothing unless the queue says so, nor when the same text is searched again', async () => {
+      create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      await open('barcode-list');
+      await search('PR000000422');
+      await answer([claim(1)], undefined);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(list()?.documents()).toHaveLength(1);
+      const asked = execute.mock.calls.length;
+      await search('PR000000422');
+      expect(execute.mock.calls.length).toBe(asked);
+    });
+
+    it('opens nothing in a preview, which draws the search for reading only', async () => {
+      create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture = TestBed.createComponent(QueuePageComponent);
+      fixture.componentRef.setInput('id', 'barcode-lookup');
+      fixture.componentRef.setInput('content', LOOKUP);
+      fixture.componentRef.setInput('readOnly', true);
+      await settle();
+      await search('PR000000422');
+      await answer([claim(1)], undefined);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(list()?.documents()).toHaveLength(1);
+    });
   });
 });

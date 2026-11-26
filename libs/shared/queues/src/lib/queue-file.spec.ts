@@ -108,6 +108,33 @@ describe('readQueue', () => {
     ]);
   });
 
+  describe('a search', () => {
+    it('reads its name and whether it opens a record found alone; none without one', () => {
+      expect(queueOf(read(queue())).search).toBeNull();
+      expect(
+        queueOf(read(queue({ search: { labelKey: 'records.lookup.barcode', open: 'single' } })))
+          .search,
+      ).toEqual({ label: null, labelKey: 'records.lookup.barcode', openSingle: true });
+      expect(queueOf(read(queue({ search: { label: 'Barcode' } }))).search).toEqual({
+        label: 'Barcode',
+        labelKey: null,
+        openSingle: false,
+      });
+    });
+
+    it('refuses the queue rather than drawing it without a search it cannot read', () => {
+      // Without its search the queue would ask its page provider with a parameter too few.
+      expect(problems(read(queue({ search: { label: 'Barcode', scan: 'camera' } })))).toEqual([
+        'search.scan: "scan" is not a key version 2 has [unknown]',
+      ]);
+      expect('refused' in read(queue({ search: { label: 'Barcode', open: 'several' } }))).toBe(
+        true,
+      );
+      expect('refused' in read(queue({ search: {} }))).toBe(true);
+      expect('refused' in read(queue({ search: 'barcode' }))).toBe(true);
+    });
+  });
+
   it('sends each literal parameter as it is written', () => {
     expect(queueOf(read(queue({ parameters: ['$currentUser', 3, true] }))).parameters).toEqual([
       '$currentUser',
