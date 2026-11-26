@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- A stand-in for the brand assets kit's model, as much of it as the kit's video policy reads: an
+     AcmeVideo that extends the platform's Video, and the acmeasset schema's channels. Its rights
+     end is dc:expired, which Video has. The kit's own model is held to its policy by
+     KitVideoPolicyTest and the kit's pipeline. -->
+<component name="org.nuxeo.agentic.assets.test.video-model">
+
+  <require>org.nuxeo.nuxeo.ecm.platform.video.doctype</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="acmeasset" src="schemas/test-acmeasset.xsd" prefix="acmeasset" />
+    <schema name="testattachment" src="schemas/test-attachment.xsd" prefix="tatt" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- A facet a document may be given on its own, whatever its type, with a file of its own. -->
+    <facet name="TestAttachment">
+      <schema name="testattachment" />
+    </facet>
+    <doctype name="AcmeVideo" extends="Video">
+      <schema name="acmeasset" />
+    </doctype>
+  </extension>
+
+</component>

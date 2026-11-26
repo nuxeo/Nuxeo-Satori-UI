@@ -789,18 +789,22 @@ export default async function run(page, h) {
     reopened?.status === 'inReview',
     JSON.stringify(reopened ?? (await readClaim(over.claim))),
   );
-  // Read as its adjuster, the task's actor: the claims review the chain started, as the system, is
-  // the one whose determination this is.
+  // Read as its adjuster, the task's actor, whom the routing service lets read the review its task
+  // is of (RoutingTaskSecurityUpdaterListener): one claims review, the one the overturn started.
   const newDetermination = await until(() => taskOn(asAdjuster, over.claim.uid, DETERMINE));
+  const claimReviews = await runningOn(asAdjuster, over.claim.uid, CLAIM_MODEL);
   h.check(
-    `for a new determination: the ${CLAIM_MODEL} workflow's determination is open on it, for its adjuster, user:${adjuster}`,
+    `for a new determination: one ${CLAIM_MODEL} workflow runs on it, its determination open for its adjuster, user:${adjuster}`,
     newDetermination !== null &&
       newDetermination.workflowModelName === CLAIM_MODEL &&
-      actorsOf(newDetermination).includes(`user:${adjuster}`),
+      actorsOf(newDetermination).includes(`user:${adjuster}`) &&
+      Array.isArray(claimReviews) &&
+      claimReviews.length === 1,
     JSON.stringify({
       task: newDetermination?.id ?? null,
       model: newDetermination?.workflowModelName ?? null,
       actors: actorsOf(newDetermination),
+      running: claimReviews?.length ?? null,
     }),
   );
   const claimHistory = await until(async () => {
