@@ -65,6 +65,41 @@ describe('app-package generator', () => {
     );
   });
 
+  describe('describes only what it wrote', () => {
+    const readme = () => tree.read(`${ROOT}/README.md`, 'utf-8') ?? '';
+    const descriptor = () => tree.read(`${ROOT}/package/package.xml`, 'utf-8') ?? '';
+    /** The rows of the README's table of files, by the file each names. */
+    const rows = () =>
+      [...readme().matchAll(/^\| `([^`]+)` +\|/gm)].map(([, file]) => file).filter(Boolean);
+
+    it('names no queue, action or record page in a package that has none', async () => {
+      await generate({ title: 'Acme Contracts' });
+      expect(descriptor()).not.toMatch(/queues|actions|record pages/);
+      expect(descriptor()).toContain(
+        '<p>The Acme Contracts app definition, a Nuxeo Satori business app.</p>',
+      );
+      expect(rows()).toEqual([
+        'bundle/agentic-ui-config/app.json',
+        'bundle/agentic-ui-config/labels/en.json',
+        'bundle/OSGI-INF/acme-contracts-config.xml',
+        'bundle/META-INF/MANIFEST.MF',
+        'package/package.xml',
+        'package/install.xml',
+        'build.mjs',
+      ]);
+      // Each row is a file the generator wrote.
+      for (const file of rows()) expect(tree.exists(`${ROOT}/${file}`), file).toBe(true);
+      expect(readme()).not.toMatch(/\| `[^`]*(queues|actions\.json)/);
+    });
+
+    it('names the record page it wrote, given --type', async () => {
+      await generate({ type: 'Contract', model: CONTRACTS_MODEL });
+      expect(rows()).toContain('bundle/agentic-ui-config/layouts/Contract/view.layout.json');
+      for (const file of rows()) expect(tree.exists(`${ROOT}/${file}`), file).toBe(true);
+      expect(descriptor()).not.toMatch(/queues|actions/);
+    });
+  });
+
   it('writes a component ordered after Satori, with no bootstrap fragment', async () => {
     await generate();
     const component = tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8') ?? '';

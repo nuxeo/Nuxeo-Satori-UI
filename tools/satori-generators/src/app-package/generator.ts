@@ -155,6 +155,9 @@ function defaultPlatform(tree: Tree): string | null {
  * - `package/`, `bundle/META-INF/MANIFEST.MF` and `build.mjs`: version 1's configuration package.
  *   `build.mjs` is the `config-package` generator's, byte for byte, which the pipeline's step 1
  *   requires.
+ * - `README.md`, whose table lists the files written here and nothing else, and `package.xml`,
+ *   whose description names no part the package may never have: no queue or action is described
+ *   for a package that has none.
  *
  * - **The first record page, given `--type`** and the content model (`--model` or
  *   `--modelServer`): written by `app-layout`, as that generator writes one. A package that
@@ -271,6 +274,8 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     version,
     projectRoot,
     docs: posix.relative(projectRoot, 'docs/business-apps'),
+    // The README names the record page only when one is written: it lists what is there.
+    type: options.type ?? '',
     tmpl: '',
   });
 
