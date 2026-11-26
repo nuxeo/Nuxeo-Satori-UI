@@ -52,6 +52,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 
 import org.apache.logging.log4j.LogManager;
@@ -111,6 +112,9 @@ public class ReviewCycleListener implements EventListener {
 
     static final int MAX_RESOLUTION = 2000;
 
+    /** Nuxeo's properties of a comment that say who wrote it and what it answers. */
+    static final List<String> COMMENT_WRITTEN = List.of("comment:author", "comment:parentId", "comment:ancestorIds");
+
     private static final long DAY = 24L * 60 * 60 * 1000;
 
     static String openKey(String revisionId) {
@@ -132,8 +136,9 @@ public class ReviewCycleListener implements EventListener {
                 case DocumentEventTypes.DOCUMENT_CREATED -> documentCreated(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
                 case DocumentEventTypes.ABOUT_TO_REMOVE, "documentTrashed" -> kept(context, doc);
+                case DocumentEventTypes.ABOUT_TO_MOVE -> aboutToMove(context, doc);
                 default -> {
-                    // Not one of ours: the contribution lists the five above.
+                    // Not one of ours: the contribution lists the six above.
                 }
             }
         } catch (NuxeoException e) {
@@ -250,13 +255,21 @@ public class ReviewCycleListener implements EventListener {
      */
     private void commentWritten(DocumentEventContext context, DocumentModel comment) {
         CoreSession session = context.getCoreSession();
-        String cycleId = cycleOfNew(session, comment);
-        if (cycleId == null) {
+        Place place = placeOf(session, comment.getParentRef());
+        if (place == null) {
             if (comment.hasFacet(COMMENT_FACET)) {
                 throw invalid("The " + COMMENT_FACET + " facet is the server's, on a review cycle's comments");
             }
+            // Written outside every cycle, it may not say it is in one: a cycle's comments are
+            // the comments below it, whatever a comment's own properties say.
+            String parentId = ControlledDocuments.text(comment, "comment:parentId");
+            DocumentModel parent = isDocumentId(parentId) ? privileged(session, parentId) : null;
+            if (parent != null && (parent.hasFacet(CYCLE_FACET) || parent.hasFacet(COMMENT_FACET))) {
+                throw invalid("A comment in a review cycle is written below the cycle, where its comments are");
+            }
             return;
         }
+        String cycleId = place.cycle();
         if (!service().enterCycle(cycleId)) {
             throw conflict("This review cycle is closed, or being closed: it takes no more comments");
         }
@@ -271,36 +284,56 @@ public class ReviewCycleListener implements EventListener {
         if (!comment.hasFacet(COMMENT_FACET)) {
             comment.addFacet(COMMENT_FACET);
         }
-        boolean thread = cycleId.equals(ControlledDocuments.text(comment, "comment:parentId"));
+        // Where it is says what it answers, and who acts says who wrote it, whatever was sent.
+        comment.setPropertyValue("comment:author", user);
+        comment.setPropertyValue("comment:parentId", place.parent());
+        comment.setPropertyValue("comment:ancestorIds", (Serializable) place.ancestors());
         comment.setPropertyValue(RVWC_CYCLE, cycleId);
-        comment.setPropertyValue(RVWC_STATUS, thread ? OPEN : null);
+        comment.setPropertyValue(RVWC_STATUS, place.thread() ? OPEN : null);
         comment.setPropertyValue(RVWC_RESOLUTION, null);
         comment.setPropertyValue(RVWC_RESOLVED_BY, null);
         comment.setPropertyValue(RVWC_RESOLVED_AT, null);
     }
 
     /**
-     * The cycle a new comment is written in: the document it comments on, its parent or one of
-     * its ancestors, when that is a cycle, or a comment already in one. {@code null} for any other.
+     * Where a comment is written in a cycle: the cycle, what it answers, the cycle itself or a
+     * comment, its ancestors as Nuxeo lists them, nearest first, and whether it opens a thread.
      */
-    private static String cycleOfNew(CoreSession session, DocumentModel comment) {
-        List<String> ids = new ArrayList<>();
-        String parent = ControlledDocuments.text(comment, "comment:parentId");
-        if (parent != null) {
-            ids.add(parent);
+    private record Place(String cycle, String parent, List<String> ancestors, boolean thread) {
+    }
+
+    /**
+     * The cycle a document below {@code parentRef} is in, read from where it is, with a privileged
+     * session, never from what the document says: the nearest of its folders that is a live cycle,
+     * or a comment in one. {@code null} outside every cycle. A comment below a cycle's proxy or
+     * version is refused: a cycle's comments are on the cycle.
+     */
+    private static Place placeOf(CoreSession session, org.nuxeo.ecm.core.api.DocumentRef parentRef) {
+        if (parentRef == null) {
+            return null;
         }
-        ids.addAll(Stored.texts(comment, NUXEO_COMMENT_SCHEMA, "comment:ancestorIds"));
-        for (String id : new LinkedHashSet<>(ids)) {
-            DocumentModel doc = isDocumentId(id) ? privileged(session, id) : null;
-            if (doc == null) {
+        List<DocumentModel> chain = CoreInstance.doPrivileged(session,
+                (CoreSession s) -> s.exists(parentRef) ? s.getParentDocuments(parentRef) : List.<DocumentModel> of());
+        // The chain runs from the root down to the parent: the nearest cycle is the last one in it.
+        for (int i = chain.size() - 1; i >= 0; i--) {
+            DocumentModel doc = chain.get(i);
+            if (!doc.hasFacet(CYCLE_FACET)) {
                 continue;
             }
-            if (isLive(doc, CYCLE_FACET)) {
-                return doc.getId();
+            if (!isLive(doc, CYCLE_FACET)) {
+                throw invalid("A review cycle's comments are written on the cycle, not on a proxy or a version");
             }
-            if (doc.hasFacet(COMMENT_FACET)) {
-                return Stored.text(doc, COMMENT_SCHEMA, RVWC_CYCLE);
+            // What it answers is its nearest comment below the cycle, or the cycle; its ancestors,
+            // each comment it answers up to the cycle, nearest first, then the cycle, as Nuxeo's
+            // comment manager writes them.
+            List<String> ancestors = new ArrayList<>();
+            for (int j = chain.size() - 1; j > i; j--) {
+                if (chain.get(j).hasSchema(NUXEO_COMMENT_SCHEMA)) {
+                    ancestors.add(chain.get(j).getId());
+                }
             }
+            ancestors.add(doc.getId());
+            return new Place(doc.getId(), ancestors.get(0), List.copyOf(ancestors), ancestors.size() == 1);
         }
         return null;
     }
@@ -341,6 +374,19 @@ public class ReviewCycleListener implements EventListener {
         if (cycle == null || !OPEN.equals(Stored.text(cycle, CYCLE_SCHEMA, RVW_STATUS))) {
             throw conflict("This review cycle is closed: its comments are kept as they were");
         }
+        // Who wrote it and what it answers are where and by whom it was written: never changed.
+        List<String> written = Stored.changes(previous, doc, NUXEO_COMMENT_SCHEMA, COMMENT_WRITTEN);
+        if (!written.isEmpty()) {
+            throw invalid(String.join(", ", written) + (written.size() == 1 ? " is" : " are")
+                    + " where and by whom the comment was written, and not changed");
+        }
+        String user = Refusal.actingUser(context.getPrincipal(), null);
+        // Its words are its author's, as Nuxeo's comment endpoint holds them: not anyone's who
+        // may write the comment as a document.
+        if (!Stored.changes(previous, doc, NUXEO_COMMENT_SCHEMA, List.of("comment:text")).isEmpty()
+                && !Objects.equals(user, Stored.text(previous, NUXEO_COMMENT_SCHEMA, "comment:author"))) {
+            throw forbidden("Only its author changes what a review cycle's comment says");
+        }
         if (ours.isEmpty()) {
             return;
         }
@@ -355,7 +401,6 @@ public class ReviewCycleListener implements EventListener {
         if (Stored.text(previous, COMMENT_SCHEMA, RVWC_STATUS) == null) {
             throw invalid("A reply is not resolved: its thread's first comment is");
         }
-        String user = Refusal.actingUser(context.getPrincipal(), null);
         String opener = Stored.text(cycle, CYCLE_SCHEMA, RVW_OPENED_BY);
         if (opener == null || !opener.equals(user)) {
             throw forbidden("Only whoever opened this review cycle, " + opener + ", resolves its comments");
@@ -458,20 +503,33 @@ public class ReviewCycleListener implements EventListener {
     /** How many threads of the cycle hold to {@code where}, counted with a privileged session. */
     private static long count(CoreSession session, String cycleId, String where) {
         String query = "SELECT ecm:uuid FROM Document WHERE ecm:mixinType = '" + COMMENT_FACET + "' AND " + RVWC_CYCLE
-                + " = '" + cycleId + "' " + where + " AND ecm:isVersion = 0 AND ecm:isProxy = 0";
+                + " = '" + cycleId + "' " + where + " AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0";
         return CoreInstance.doPrivileged(session,
                 (CoreSession privileged) -> (long) privileged.queryProjection(query, 0, 0).size());
     }
 
     // ------------------------------------------------------------------ keeping
 
+    /**
+     * A cycle is kept, and so are its comments: an administrator deletes or trashes one; while the
+     * cycle is open, a comment's author may too, a thread no one has answered yet, since its
+     * replies would go with it. Proxies and versions are not the record.
+     */
     private void kept(DocumentEventContext context, DocumentModel doc) {
+        if (doc.isProxy() || doc.isVersion()) {
+            return;
+        }
         NuxeoPrincipal principal = context.getPrincipal();
         if (doc.hasFacet(CYCLE_FACET)) {
             if (!Refusal.isAdministrator(principal)) {
                 throw forbidden("A review cycle is kept: only an administrator deletes or trashes one");
             }
             log.warn("Review cycles: {} deletes or trashes the review cycle {}", principal.getName(), doc.getId());
+            // An open cycle deleted leaves its revision free for another, once this commits.
+            String revision = Stored.text(doc, CYCLE_SCHEMA, RVW_DOCUMENT);
+            if (revision != null) {
+                service().releaseOnCommit(openKey(revision), doc.getId());
+            }
             return;
         }
         if (!doc.hasFacet(COMMENT_FACET) || Refusal.isAdministrator(principal)) {
@@ -484,6 +542,29 @@ public class ReviewCycleListener implements EventListener {
         DocumentModel cycle = privileged(context.getCoreSession(), cycleId);
         if (cycle != null && !OPEN.equals(Stored.text(cycle, CYCLE_SCHEMA, RVW_STATUS))) {
             throw conflict("This review cycle is closed: its comments are kept");
+        }
+        // Not the opener's, deleting a thread rather than resolving it: the author's own alone.
+        if (!Objects.equals(Refusal.actingUser(principal, null), Stored.text(doc, NUXEO_COMMENT_SCHEMA,
+                "comment:author"))) {
+            throw forbidden("Only its author deletes a comment of an open review cycle");
+        }
+    }
+
+    /**
+     * Nothing is moved into a cycle, where it would be one of its comments without having been
+     * written in it, nor a cycle's comment out of it, but by an administrator.
+     */
+    private void aboutToMove(DocumentEventContext context, DocumentModel doc) {
+        NuxeoPrincipal principal = context.getPrincipal();
+        if (Refusal.isAdministrator(principal)) {
+            return;
+        }
+        if (doc.hasFacet(COMMENT_FACET)) {
+            throw forbidden("A review cycle's comment stays in its cycle");
+        }
+        if (context.getProperty(CoreEventConstants.DESTINATION_REF) instanceof org.nuxeo.ecm.core.api.DocumentRef
+                destination && placeOf(context.getCoreSession(), destination) != null) {
+            throw forbidden("Nothing is moved into a review cycle: its comments are written in it");
         }
     }
 

@@ -259,9 +259,12 @@ public final class ControlledDocuments {
         return value != null && DOCUMENT_ID.matcher(value).matches();
     }
 
-    /** Whether {@code value} has a user name's form. */
+    /**
+     * Whether {@code value} has a user name's form, and is not {@code system}, the name Nuxeo gives
+     * server code that acts for no one, which no person may be named as.
+     */
     public static boolean isUserName(String value) {
-        return value != null && USER_NAME.matcher(value).matches();
+        return value != null && USER_NAME.matcher(value).matches() && !"system".equalsIgnoreCase(value);
     }
 
     /** Whether the add-on writes and guards this document under {@code facet}: a live one with it. */

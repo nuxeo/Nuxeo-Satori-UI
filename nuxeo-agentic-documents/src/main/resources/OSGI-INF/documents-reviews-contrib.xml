@@ -24,6 +24,7 @@
       <event>beforeDocumentModification</event>
       <event>aboutToRemove</event>
       <event>documentTrashed</event>
+      <event>aboutToMove</event>
     </listener>
   </extension>
 

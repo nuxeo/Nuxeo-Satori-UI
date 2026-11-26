@@ -58,6 +58,7 @@ import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.kv.KeyValueService;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
+import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
  * A revision is reviewed in a cycle, in Nuxeo's own comments: each thread open until the cycle's
@@ -357,6 +358,133 @@ public class ReviewCycleTest {
             doc.addFacet(COMMENT_FACET);
             return s.saveDocument(doc);
         }));
+    }
+
+    /**
+     * A comment written as a plain document, past Nuxeo's comment manager, in the cycle's
+     * Comments folder: its place says it is the cycle's, whatever it says of itself.
+     */
+    @Test
+    public void aCommentWrittenAsADocumentIsTheCyclesByWhereItIs() {
+        String cycle = open();
+        String folder = Library.stored(repository, comment(BOB, cycle, "Through the endpoint")).getPath()
+                                                                                                .removeLastSegments(1)
+                                                                                                .toString();
+        Function<CoreSession, DocumentModel> forged = s -> {
+            DocumentModel doc = s.createDocumentModel(folder, "forged", "Comment");
+            doc.setPropertyValue("comment:author", ALICE);
+            doc.setPropertyValue("comment:text", "Said to be alice's, and of no cycle");
+            doc.setPropertyValue("comment:parentId", a);
+            doc.setPropertyValue("comment:ancestorIds", (Serializable) List.of(a));
+            return s.createDocument(doc);
+        };
+        // dave may add to the folder, and is not a reviewer.
+        assertRefused(403, "Only the review cycle's reviewers", DAVE, forged);
+        // bob is: his comment is the cycle's, by him, answering the cycle, an open thread.
+        DocumentModel written = Library.stored(repository,
+                Library.inTransactionAs(repository, BOB, s -> forged.apply(s).getId()));
+        assertEquals(cycle, text(written, RVWC_CYCLE));
+        assertEquals(OPEN, text(written, RVWC_STATUS));
+        assertEquals(BOB, text(written, "comment:author"));
+        assertEquals(cycle, text(written, "comment:parentId"));
+        // And one elsewhere that names the cycle as its parent is refused.
+        assertRefused(400, "written below the cycle", BOB, s -> {
+            DocumentModel doc = s.createDocumentModel(REVIEWS, "stray", "Comment");
+            doc.setPropertyValue("comment:text", "Not in it");
+            doc.setPropertyValue("comment:parentId", cycle);
+            return s.createDocument(doc);
+        });
+        resolveAllAndClose(cycle);
+        assertRefused(409, "closed", BOB, forged);
+    }
+
+    /** Who wrote a comment, and what it answers, are kept; its words are its author's to change. */
+    @Test
+    public void aCommentsAuthorAndPlaceAreKeptAndItsWordsAreItsAuthors() {
+        String cycle = open();
+        String thread = comment(BOB, cycle, "Bob's words");
+        assertRefused(403, "Only its author changes what", ALICE, s -> {
+            DocumentModel doc = s.getDocument(new IdRef(thread));
+            doc.setPropertyValue("comment:text", "Alice's words in bob's mouth");
+            return s.saveDocument(doc);
+        });
+        assertRefused(400, "comment:author is where and by whom", BOB, s -> {
+            DocumentModel doc = s.getDocument(new IdRef(thread));
+            doc.setPropertyValue("comment:author", ALICE);
+            return s.saveDocument(doc);
+        });
+        Library.inTransactionAs(repository, BOB, s -> {
+            DocumentModel doc = s.getDocument(new IdRef(thread));
+            doc.setPropertyValue("comment:text", "Bob's words, clearer");
+            return s.saveDocument(doc);
+        });
+        assertEquals("Bob's words, clearer", text(Library.stored(repository, thread), "comment:text"));
+    }
+
+    /**
+     * A thread is resolved, not deleted, by the opener: only its author deletes an open cycle's
+     * comment, and not one with replies, which would go with it; nor its Comments folder, which
+     * holds them all.
+     */
+    @Test
+    public void anOpenThreadIsDeletedByItsAuthorAloneAndNotWithItsReplies() {
+        String cycle = open();
+        String alone = comment(BOB, cycle, "Bob's, alone");
+        String answered = comment(BOB, cycle, "Bob's, answered");
+        comment(ALICE, answered, "Alice's reply");
+        assertRefused(403, "Only its author deletes", ALICE, s -> {
+            s.removeDocument(new IdRef(alone));
+            return null;
+        });
+        assertRefused(403, "which are kept", BOB, s -> {
+            s.removeDocument(new IdRef(answered));
+            return null;
+        });
+        String folder = Library.stored(repository, alone).getPath().removeLastSegments(1).toString();
+        assertRefused(403, "which are kept", ALICE, s -> {
+            s.removeDocument(new PathRef(folder));
+            return null;
+        });
+        Library.inTransactionAs(repository, BOB, s -> {
+            s.removeDocument(new IdRef(alone));
+            return null;
+        });
+        assertNull(Library.stored(repository, alone));
+    }
+
+    /** Nothing moves into a cycle, where it would be a comment never written in it, nor out of it. */
+    @Test
+    public void nothingMovesIntoOrOutOfACycle() {
+        String cycle = open();
+        String thread = comment(BOB, cycle, "One");
+        String elsewhere = comment(BOB, a, "On the drawing");
+        String folder = Library.stored(repository, thread).getPath().removeLastSegments(1).toString();
+        assertRefused(403, "Nothing is moved into a review cycle", ALICE,
+                s -> s.move(new IdRef(elsewhere), new PathRef(folder), null));
+        assertRefused(403, "stays in its cycle", ALICE, s -> s.move(new IdRef(thread), new PathRef(REVIEWS), null));
+    }
+
+    /** A caller that catches a refusal cannot commit what was written before it. */
+    @Test
+    public void aCallerThatCatchesTheRefusalCannotCommitASecondOpenCycle() {
+        open();
+        Library.nextTransaction();
+        CoreSession alice = Library.as(repository, ALICE);
+        try {
+            Library.openCycle(alice, "again", a, List.of(BOB));
+        } catch (NuxeoException refused) {
+            // Caught, and the transaction committed as if nothing had happened.
+        }
+        TransactionHelper.commitOrRollbackTransaction();
+        TransactionHelper.startTransaction();
+        long cycles = Library.inTransaction(() -> CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> (long) s.query("SELECT * FROM Document WHERE ecm:mixinType = 'ReviewCycle'").size()));
+        assertEquals(1L, cycles);
+    }
+
+    @Test
+    public void systemIsNoOnesName() {
+        assertRefused(400, "a user name", ALICE, s -> Library.openCycle(s, "review", a, List.of("system")));
     }
 
     /**

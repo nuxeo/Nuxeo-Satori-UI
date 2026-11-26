@@ -399,15 +399,45 @@ public class TransmittalListener implements EventListener {
         return changed;
     }
 
+    /**
+     * A transmittal and its receipts are kept, and so is anything holding what the add-on keeps:
+     * the repository deletes and trashes a folder's contents with no event of their own, so a
+     * folder, or a comment with replies, holding a transmittal, a receipt, a review cycle or one of
+     * its comments is kept too. Only an administrator deletes or trashes one. Proxies and versions
+     * are not the record.
+     */
     private void kept(DocumentEventContext context, DocumentModel doc) {
-        if (!doc.hasFacet(TRANSMITTAL_FACET) && !doc.hasFacet(RECEIPT_FACET)) {
+        if (doc.isProxy() || doc.isVersion()) {
             return;
         }
         NuxeoPrincipal principal = context.getPrincipal();
+        boolean own = doc.hasFacet(TRANSMITTAL_FACET) || doc.hasFacet(RECEIPT_FACET);
+        boolean holds = !own && (doc.isFolder() || doc.hasSchema(ControlledDocuments.NUXEO_COMMENT_SCHEMA))
+                && holdsKept(context.getCoreSession(), doc);
+        if (!own && !holds) {
+            return;
+        }
         if (!Refusal.isAdministrator(principal)) {
-            throw forbidden("A transmittal and its receipts are kept: only an administrator deletes or trashes one");
+            throw forbidden(own ? "A transmittal and its receipts are kept: only an administrator deletes or trashes one"
+                    : "This holds transmittals, receipts, review cycles or their comments, which are kept: only an "
+                            + "administrator deletes or trashes it");
         }
         log.warn("Transmittals: {} deletes or trashes the {} {}", principal.getName(), doc.getType(), doc.getId());
+    }
+
+    /** What the add-on keeps, below a document, read with a privileged session: all of it goes with it. */
+    private static final List<String> KEPT = List.of(TRANSMITTAL_FACET, RECEIPT_FACET, ControlledDocuments.CYCLE_FACET,
+            ControlledDocuments.COMMENT_FACET);
+
+    private static boolean holdsKept(CoreSession session, DocumentModel doc) {
+        String id = doc.getId();
+        if (!isDocumentId(id)) {
+            return true;
+        }
+        String query = "SELECT ecm:uuid FROM Document WHERE ecm:ancestorId = '" + id + "' AND ecm:mixinType IN ('"
+                + String.join("', '", KEPT) + "') AND ecm:isProxy = 0";
+        return org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(session,
+                (CoreSession privileged) -> !privileged.queryProjection(query, 1, 0).isEmpty());
     }
 
     // ------------------------------------------------------------------ helpers

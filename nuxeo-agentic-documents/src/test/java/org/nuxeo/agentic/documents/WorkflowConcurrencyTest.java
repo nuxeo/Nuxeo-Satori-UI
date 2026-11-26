@@ -234,6 +234,82 @@ public class WorkflowConcurrencyTest {
     }
 
     /**
+     * The fence, held open on purpose: while a comment's transaction is in it, the close is refused;
+     * while a close's transaction holds it, the comment is; and once either ends, the other goes
+     * through. Each held transaction waits on a latch, on a thread of its own.
+     */
+    @Test
+    public void whileACommentIsInTheFenceTheCloseIsRefusedAndTheOtherWayRound() throws Exception {
+        String revision = Library.inTransactionAs(repository, ALICE,
+                s -> Library.first(s, DRAWINGS, DRAWING, "fenced", "DWG").getId());
+        String cycle = Library.inTransactionAs(repository, ALICE,
+                s -> Library.openCycle(s, "fenced", revision, List.of(BOB)).getId());
+        TransactionHelper.commitOrRollbackTransaction();
+        ControlledDocumentService service = org.nuxeo.runtime.api.Framework.getService(ControlledDocumentService.class);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            // A comment's transaction in the fence, held: the close is refused, and nothing closed.
+            CountDownLatch in = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            Future<Boolean> writer = pool.submit(() -> TransactionHelper.runInTransaction(() -> {
+                boolean entered = service.enterCycle(cycle);
+                in.countDown();
+                await(release);
+                return entered;
+            }));
+            assertTrue(in.await(1, TimeUnit.MINUTES));
+            NuxeoException refused = Library.refusedAs(repository, ALICE, s -> Library.close(s, cycle));
+            assertEquals(409, refused.getStatusCode());
+            assertTrue(refused.getMessage(), refused.getMessage().contains("A comment is being written"));
+            release.countDown();
+            assertTrue(writer.get(1, TimeUnit.MINUTES));
+            assertEquals("open", text(Library.stored(repository, cycle), RVW_STATUS));
+
+            // A close's transaction holding the fence: the comment is refused, and nothing written.
+            CountDownLatch taken = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(1);
+            Future<Boolean> closer = pool.submit(() -> {
+                try {
+                    return TransactionHelper.runInTransaction(() -> {
+                        boolean held = service.closeCycle(cycle);
+                        taken.countDown();
+                        await(done);
+                        // Not committed: the fence is open again when it ends.
+                        TransactionHelper.setTransactionRollbackOnly();
+                        return held;
+                    });
+                } finally {
+                    taken.countDown();
+                }
+            });
+            assertTrue(taken.await(1, TimeUnit.MINUTES));
+            NuxeoException late = Library.refusedAs(repository, BOB, s -> Comments.write(s, cycle, "While closing"));
+            assertEquals(409, late.getStatusCode());
+            assertTrue(late.getMessage(), late.getMessage().contains("closed, or being closed"));
+            done.countDown();
+            assertTrue(closer.get(1, TimeUnit.MINUTES));
+
+            // Both ended: a comment goes through, and then a close with it open is refused for it.
+            Library.inTransactionAs(repository, BOB, s -> Comments.write(s, cycle, "After"));
+            NuxeoException open = Library.refusedAs(repository, ALICE, s -> Library.close(s, cycle));
+            assertTrue(open.getMessage(), open.getMessage().contains("1 comment of this review cycle is open"));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(1, TimeUnit.MINUTES)) {
+                throw new IllegalStateException("the test never let it go");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
      * Reviewers comment while the opener closes the cycle, every comment before resolved. Whoever
      * wins, a closed cycle holds no open comment: a comment written in it is refused, or the
      * close is. Round after round, each on a revision and a cycle of its own.

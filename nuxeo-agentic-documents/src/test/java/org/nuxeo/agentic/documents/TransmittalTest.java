@@ -350,6 +350,15 @@ public class TransmittalTest {
         assertRefused(400, "is not copied", BOB, s -> s.copy(new IdRef(receipt), new PathRef(TRANSMITTALS), "copy"));
         assertRefused(400, "This folder holds", ADMINISTRATOR,
                 s -> s.copy(new PathRef(TRANSMITTALS), new PathRef("/library"), "copy"));
+        // Nor the folder holding them, whose contents the repository deletes with no event of their own.
+        assertRefused(403, "which are kept", ALICE, s -> {
+            s.removeDocument(new PathRef(TRANSMITTALS));
+            return null;
+        });
+        assertRefused(403, "which are kept", ALICE, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new PathRef(TRANSMITTALS)));
+            return null;
+        });
         assertNotNull(Library.stored(repository, receipt));
         assertNotNull(Library.stored(repository, id));
         // An administrator may.
