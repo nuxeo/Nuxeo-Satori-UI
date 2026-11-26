@@ -2,8 +2,10 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: Nuxeo Agentic Documents
 Bundle-SymbolicName: org.nuxeo.agentic.documents;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.2.0
 Bundle-Vendor: Hyland Software
 Nuxeo-Component: OSGI-INF/documents-schema-contrib.xml,
  OSGI-INF/documents-service.xml,
- OSGI-INF/documents-listener-contrib.xml
+ OSGI-INF/documents-listener-contrib.xml,
+ OSGI-INF/documents-transmittals-contrib.xml,
+ OSGI-INF/documents-reviews-contrib.xml

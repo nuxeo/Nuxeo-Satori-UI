@@ -17,7 +17,12 @@ import java.util.regex.Pattern;
  * the sequencer never gives a value twice, and leading zeros to a width change no value, so a wider
  * number than {@link #digits()} allows is written whole rather than cut.
  */
-public record NumberSeries(String id, int digits, RevisionScheme revisions) {
+public record NumberSeries(String id, int digits, RevisionScheme revisions, boolean transmittals) {
+
+    /** A series that numbers controlled documents. */
+    public NumberSeries(String id, int digits, RevisionScheme revisions) {
+        this(id, digits, revisions, false);
+    }
 
     /** A series id: capitals and digits, in parts joined by single hyphens, 32 characters at most. */
     static final Pattern ID = Pattern.compile("(?=.{1,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*");
@@ -43,7 +48,7 @@ public record NumberSeries(String id, int digits, RevisionScheme revisions) {
     /**
      * The series a contribution describes, or the problems that keep it out: an id that is not
      * one, digits that are not 1 to 12, a revision scheme other than {@code letters} or
-     * {@code numbers}.
+     * {@code numbers}, a {@code for} other than {@code documents} or {@code transmittals}.
      */
     public static Result of(NumberSeriesDescriptor descriptor) {
         List<String> problems = new ArrayList<>();
@@ -68,7 +73,12 @@ public record NumberSeries(String id, int digits, RevisionScheme revisions) {
         if (scheme == null) {
             problems.add("revisions is \"" + descriptor.getRevisions().trim() + "\", not letters or numbers");
         }
-        return problems.isEmpty() ? new Result(new NumberSeries(id, digits, scheme), List.of())
+        String use = descriptor.getFor();
+        boolean transmittals = "transmittals".equals(use);
+        if (use != null && !transmittals && !"documents".equals(use)) {
+            problems.add("for is \"" + use + "\", not documents or transmittals");
+        }
+        return problems.isEmpty() ? new Result(new NumberSeries(id, digits, scheme, transmittals), List.of())
                 : new Result(null, List.copyOf(problems));
     }
 

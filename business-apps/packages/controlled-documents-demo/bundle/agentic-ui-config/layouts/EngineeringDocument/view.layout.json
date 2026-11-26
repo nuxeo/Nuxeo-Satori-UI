@@ -37,6 +37,30 @@
           "field": "docctl:supersededBy",
           "labelKey": "controlled-documents.field.supersededBy",
           "widget": "document-link"
+        },
+        {
+          "field": "docrev:cycles",
+          "labelKey": "controlled-documents.field.reviewsClosed",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              {
+                "field": "docrev:closedAt",
+                "labelKey": "controlled-documents.field.closedAt",
+                "widget": "date"
+              },
+              {
+                "field": "docrev:closedBy",
+                "labelKey": "controlled-documents.field.closedBy",
+                "widget": "user"
+              },
+              {
+                "field": "docrev:comments",
+                "labelKey": "controlled-documents.field.threadsResolved",
+                "widget": "number"
+              }
+            ]
+          }
         }
       ]
     },
@@ -89,6 +113,46 @@
           }
         ],
         "sort": [{ "field": "dc:created", "order": "desc" }],
+        "pageSize": 20
+      }
+    },
+    {
+      "id": "reviews",
+      "labelKey": "controlled-documents.card.reviews",
+      "span": 2,
+      "related": {
+        "pageProvider": "controlled_documents_review_cycles",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          { "field": "dc:title", "labelKey": "controlled-documents.field.title" },
+          {
+            "field": "rvw:status",
+            "labelKey": "controlled-documents.field.cycleStatus",
+            "widget": "status-badge",
+            "parameters": { "tones": { "open": "info", "closed": "positive" } }
+          },
+          {
+            "field": "rvw:openedBy",
+            "labelKey": "controlled-documents.field.openedBy",
+            "widget": "user"
+          },
+          {
+            "field": "rvw:openedAt",
+            "labelKey": "controlled-documents.field.openedAt",
+            "widget": "date"
+          },
+          {
+            "field": "rvw:closedAt",
+            "labelKey": "controlled-documents.field.closedAt",
+            "widget": "date"
+          },
+          {
+            "field": "rvw:comments",
+            "labelKey": "controlled-documents.field.threadsResolved",
+            "widget": "number"
+          }
+        ],
+        "sort": [{ "field": "rvw:openedAt", "order": "desc" }],
         "pageSize": 20
       }
     },

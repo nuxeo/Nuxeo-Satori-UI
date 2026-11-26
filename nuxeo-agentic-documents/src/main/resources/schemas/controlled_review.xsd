@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- The ControlledDocument facet's second schema, prefix docrev: the review cycles closed on the
+     revision, which the add-on adds when each closes, and refuses any other change to. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/controlled_review"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/controlled_review">
+
+  <xs:element name="cycles" type="nxs:cycles" />
+
+  <xs:complexType name="cycles">
+    <xs:sequence>
+      <xs:element name="cycle" type="nxs:cycle" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- One closed cycle: its id, who closed it and when, and how many threads it resolved. -->
+  <xs:complexType name="cycle">
+    <xs:sequence>
+      <xs:element name="cycle" type="xs:string" />
+      <xs:element name="closedBy" type="xs:string" />
+      <xs:element name="closedAt" type="xs:dateTime" />
+      <xs:element name="comments" type="xs:long" />
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

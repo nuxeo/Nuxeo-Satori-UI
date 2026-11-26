@@ -22,6 +22,15 @@
           }
         },
         {
+          "field": "case:decision",
+          "widget": "status-badge",
+          "parameters": { "tones": { "upheld": "neutral", "overturned": "positive" } },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "case:state" }, "decided", "closed"]
+          }
+        },
+        {
           "field": "case:member",
           "widget": "document-link",
           "parameters": { "types": ["Member"] }

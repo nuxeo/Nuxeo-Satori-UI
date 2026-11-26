@@ -7,13 +7,14 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
- * Something to run when the current transaction ends without committing.
+ * Something to run when the current transaction ends: without committing, or either way.
  *
  * <p>{@code TransactionHelper.registerSynchronization} takes a {@code javax.transaction.Synchronization}
  * on Nuxeo 11.5, which this bundle compiles against, and a {@code jakarta.transaction.Synchronization}
@@ -39,6 +40,19 @@ final class TransactionSynchronizations {
      * {@code false}, running nothing, when there is no active transaction or no way to register.
      */
     static boolean unlessCommitted(Runnable action) {
+        return whenEnded(committed -> {
+            if (!committed) {
+                action.run();
+            }
+        });
+    }
+
+    /**
+     * Run {@code action} once the current transaction has ended, told whether it committed.
+     * Returns {@code false}, running nothing, when there is no active transaction or no way to
+     * register.
+     */
+    static boolean whenEnded(Consumer<Boolean> action) {
         if (!TransactionHelper.isTransactionActive()) {
             return false;
         }
@@ -54,14 +68,12 @@ final class TransactionSynchronizations {
             Object synchronization = Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type },
                     (proxy, method, args) -> switch (method.getName()) {
                         case "afterCompletion" -> {
-                            if (!(args[0] instanceof Integer status) || status != STATUS_COMMITTED) {
-                                run(action);
-                            }
+                            run(() -> action.accept(args[0] instanceof Integer status && status == STATUS_COMMITTED));
                             yield null;
                         }
                         case "hashCode" -> System.identityHashCode(proxy);
                         case "equals" -> proxy == args[0];
-                        case "toString" -> "controlled documents: release unless committed";
+                        case "toString" -> "controlled documents: after the transaction";
                         default -> null;
                     });
             try {
@@ -79,7 +91,7 @@ final class TransactionSynchronizations {
         try {
             action.run();
         } catch (RuntimeException e) {
-            log.warn("Controlled documents: could not release a supersession claim after a rollback; it expires "
+            log.warn("Controlled documents: could not release a claim after its transaction ended; it expires "
                     + "on its own", e);
         }
     }

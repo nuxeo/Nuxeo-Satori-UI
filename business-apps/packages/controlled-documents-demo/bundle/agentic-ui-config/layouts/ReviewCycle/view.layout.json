@@ -1,0 +1,115 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "open",
+      "tone": "info",
+      "labelKey": "controlled-documents.banner.cycleOpen",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "rvw:status" }, "open"]
+      },
+      "link": { "field": "rvw:document" }
+    }
+  ],
+  "cards": [
+    {
+      "id": "review",
+      "labelKey": "controlled-documents.card.review",
+      "fields": [
+        {
+          "field": "rvw:document",
+          "labelKey": "controlled-documents.field.revisionReviewed",
+          "widget": "document-link"
+        },
+        { "field": "rvw:number", "labelKey": "controlled-documents.field.number" },
+        { "field": "rvw:revision", "labelKey": "controlled-documents.field.revision" },
+        {
+          "field": "rvw:status",
+          "labelKey": "controlled-documents.field.cycleStatus",
+          "widget": "status-badge",
+          "parameters": { "tones": { "open": "info", "closed": "positive" } }
+        },
+        {
+          "field": "rvw:reviewers",
+          "labelKey": "controlled-documents.field.reviewers",
+          "widget": "user"
+        },
+        {
+          "field": "rvw:dueDate",
+          "labelKey": "controlled-documents.field.dueDate",
+          "widget": "date"
+        },
+        {
+          "field": "rvw:openedBy",
+          "labelKey": "controlled-documents.field.openedBy",
+          "widget": "user"
+        },
+        {
+          "field": "rvw:openedAt",
+          "labelKey": "controlled-documents.field.openedAt",
+          "widget": "date"
+        },
+        {
+          "field": "rvw:closedBy",
+          "labelKey": "controlled-documents.field.closedBy",
+          "widget": "user"
+        },
+        {
+          "field": "rvw:closedAt",
+          "labelKey": "controlled-documents.field.closedAt",
+          "widget": "date"
+        },
+        {
+          "field": "rvw:comments",
+          "labelKey": "controlled-documents.field.threadsResolved",
+          "widget": "number"
+        }
+      ]
+    },
+    {
+      "id": "threads",
+      "labelKey": "controlled-documents.card.threads",
+      "related": {
+        "pageProvider": "controlled_documents_cycle_threads",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          {
+            "field": "comment:author",
+            "labelKey": "controlled-documents.field.commentAuthor",
+            "widget": "user"
+          },
+          { "field": "comment:text", "labelKey": "controlled-documents.field.comment" },
+          {
+            "field": "rvwc:status",
+            "labelKey": "controlled-documents.field.threadStatus",
+            "widget": "status-badge",
+            "parameters": { "tones": { "open": "warning", "resolved": "positive" } }
+          },
+          { "field": "rvwc:resolution", "labelKey": "controlled-documents.field.resolution" },
+          {
+            "field": "rvwc:resolvedBy",
+            "labelKey": "controlled-documents.field.resolvedBy",
+            "widget": "user"
+          }
+        ],
+        "sort": [{ "field": "dc:created", "order": "asc" }],
+        "pageSize": 50
+      }
+    },
+    {
+      "id": "comments",
+      "labelKey": "controlled-documents.card.reviewComments",
+      "span": 2,
+      "comments": { "pageSize": 20 }
+    },
+    {
+      "id": "history",
+      "labelKey": "controlled-documents.card.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

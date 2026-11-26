@@ -38,10 +38,12 @@
       <file path="queues/open-appeals.json" />
       <file path="labels/en.json" />
       <file path="actions.json" />
-      <!-- The claims review workflow's task forms, one per step with a task
-           (payers-claims-demo-workflow.xml): tasks/<workflow>.<step>.layout.json. -->
+      <!-- The workflows' task forms, one per step with a task (payers-claims-demo-workflow.xml):
+           tasks/<workflow>.<step>.layout.json. The claims review's two, and since 0.7.0 the
+           appeal review's one. -->
       <file path="tasks/PayersClaimReview.determine.layout.json" />
       <file path="tasks/PayersClaimReview.supervisorApproval.layout.json" />
+      <file path="tasks/PayersAppealReview.decide.layout.json" />
     </app>
   </extension>
 </component>

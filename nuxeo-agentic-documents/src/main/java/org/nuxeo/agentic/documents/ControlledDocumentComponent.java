@@ -4,9 +4,11 @@
 package org.nuxeo.agentic.documents;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -163,30 +165,167 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
 
     @Override
     public boolean claimSupersession(String previousId, String revisionId) {
-        KeyValueService kv = Framework.getService(KeyValueService.class);
-        if (kv == null) {
-            throw new NuxeoException("Controlled documents: the key/value service is not running");
-        }
-        KeyValueStore store = kv.getKeyValueStore(CLAIMS_STORE);
-        String key = claimKey(previousId);
+        return claim(claimKey(previousId), revisionId);
+    }
+
+    @Override
+    public boolean claim(String key, String value) {
+        KeyValueStore store = claims();
         long ttl = claimTtl();
         // The release first, then the claim: a claim made where its release could not be
         // registered, in a transaction already marked for rollback for one, would outlive the
-        // transaction and block the revision until it expired. So no release, no claim.
+        // transaction and block what it claims until it expired. So no release, no claim.
         AtomicBoolean claimed = new AtomicBoolean();
         if (!TransactionSynchronizations.unlessCommitted(() -> {
             if (claimed.get()) {
-                store.compareAndSet(key, revisionId, null);
+                store.compareAndSet(key, value, null);
             }
         })) {
-            throw new NuxeoException("Controlled documents: a supersession needs an active transaction to commit "
-                    + "it, and has none", 409);
+            throw noTransaction();
         }
-        if (!store.compareAndSet(key, null, revisionId, ttl)) {
+        if (!store.compareAndSet(key, null, value, ttl)) {
             return false;
         }
         claimed.set(true);
         return true;
+    }
+
+    @Override
+    public void releaseOnCommit(String key, String value) {
+        KeyValueStore store = claims();
+        if (!TransactionSynchronizations.whenEnded(committed -> {
+            if (committed) {
+                store.compareAndSet(key, value, null);
+            }
+        })) {
+            throw noTransaction();
+        }
+    }
+
+    // ------------------------------------------------------------------ a review cycle's fence
+
+    /**
+     * How many times entering or leaving a cycle's fence is tried under contention before it
+     * gives up: each try that fails lost to another writer, which moved on.
+     */
+    static final int FENCE_ATTEMPTS = 50;
+
+    /** The fence's value once a cycle's close has committed, kept for the claims' time to live. */
+    static final String FENCE_CLOSED = "closed";
+
+    static final String FENCE_CLOSING = "closing:";
+
+    static String fenceKey(String cycleId) {
+        return "cycle." + cycleId;
+    }
+
+    @Override
+    public boolean enterCycle(String cycleId) {
+        KeyValueStore store = claims();
+        String key = fenceKey(cycleId);
+        long ttl = claimTtl();
+        AtomicBoolean entered = new AtomicBoolean();
+        // As for a claim: the way out is registered before the way in.
+        if (!TransactionSynchronizations.whenEnded(committed -> {
+            if (entered.get()) {
+                leave(store, key, ttl);
+            }
+        })) {
+            throw noTransaction();
+        }
+        for (int attempt = 1; attempt <= FENCE_ATTEMPTS; attempt++) {
+            String value = store.getString(key);
+            Long writers = writers(value);
+            if (writers == null) {
+                // Being closed, or closed: no comment is written in it any more.
+                return false;
+            }
+            if (store.compareAndSet(key, value, Long.toString(writers + 1), ttl)) {
+                entered.set(true);
+                return true;
+            }
+            pause(attempt);
+        }
+        throw new NuxeoException("Controlled documents: too many comments are being written in this review cycle "
+                + "at once; try again", 409);
+    }
+
+    @Override
+    public boolean closeCycle(String cycleId) {
+        KeyValueStore store = claims();
+        String key = fenceKey(cycleId);
+        long ttl = claimTtl();
+        String closing = FENCE_CLOSING + UUID.randomUUID();
+        AtomicBoolean taken = new AtomicBoolean();
+        if (!TransactionSynchronizations.whenEnded(committed -> {
+            if (taken.get()) {
+                // Committed, it stays closed for as long as a transaction that read the cycle open
+                // before the close committed could still be running; after that, the cycle's own
+                // status refuses. Not committed, it is open again at once.
+                store.compareAndSet(key, closing, committed ? FENCE_CLOSED : null, committed ? ttl : 0);
+            }
+        })) {
+            throw noTransaction();
+        }
+        // Only from nothing: a comment being written holds a count, and a close its token.
+        if (!store.compareAndSet(key, null, closing, ttl)) {
+            return false;
+        }
+        taken.set(true);
+        return true;
+    }
+
+    /** The number of comments being written, or {@code null} when the cycle is closing or closed. */
+    private static Long writers(String value) {
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            long writers = Long.parseLong(value);
+            return writers >= 0 ? writers : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static void leave(KeyValueStore store, String key, long ttl) {
+        for (int attempt = 1; attempt <= FENCE_ATTEMPTS; attempt++) {
+            String value = store.getString(key);
+            Long writers = writers(value);
+            if (writers == null || writers < 1) {
+                // Gone with its time to live, or not a count: nothing to leave.
+                return;
+            }
+            if (store.compareAndSet(key, value, writers == 1 ? null : Long.toString(writers - 1), ttl)) {
+                return;
+            }
+            pause(attempt);
+        }
+        log.warn("Controlled documents: could not leave the fence {}; it expires on its own", key);
+    }
+
+    private static KeyValueStore claims() {
+        KeyValueService kv = Framework.getService(KeyValueService.class);
+        if (kv == null) {
+            throw new NuxeoException("Controlled documents: the key/value service is not running");
+        }
+        return kv.getKeyValueStore(CLAIMS_STORE);
+    }
+
+    private static NuxeoException noTransaction() {
+        return new NuxeoException("Controlled documents: this change needs an active transaction to commit it, "
+                + "and has none", 409);
+    }
+
+    // ------------------------------------------------------------------ transmittals' series
+
+    @Override
+    public List<NumberSeries> transmittalSeries() {
+        return series.values()
+                     .stream()
+                     .filter(NumberSeries::transmittals)
+                     .sorted(Comparator.comparing(NumberSeries::id))
+                     .toList();
     }
 
     private static UIDSequencer sequencer() {

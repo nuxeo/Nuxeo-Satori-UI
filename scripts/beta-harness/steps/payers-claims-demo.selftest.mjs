@@ -19,9 +19,10 @@ import { codeIn, zipEntryNames } from './payers-claims-demo/bundle-data.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
-const { ZIP_PATH, ZIP, archiveEntries, storedZip } = await import(
-  join(KIT, 'workflow', 'route-model.mjs')
-);
+const { MODELS, ZIP_PATH, ZIP, ZIP_PATHS, archiveEntries, sourceOf, storedZip, zipOf, zipPathOf } =
+  await import(join(KIT, 'workflow', 'route-model.mjs'));
+/** Since 0.7.0, the appeal review's zip, the bundle's second route model. */
+const APPEAL = MODELS[1];
 
 const failures = [];
 let controls = 0;
@@ -41,28 +42,35 @@ function codeAfter(change) {
       writeFileSync(join(bundle, path), data);
     };
     change({ bundle, write });
-    return codeIn(bundle, ZIP_PATH);
+    return codeIn(bundle, ZIP_PATHS);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
 
-/** The route model's zip, with `extra` entries added, as the kit's builder writes one. */
+/** A route model's zip, with `extra` entries added, as the kit's builder writes one. */
 const routeModelWith = (...extra) =>
   storedZip([...archiveEntries(), ...extra.map((name) => ({ name, data: Buffer.from('x') }))]);
+const appealModelWith = (...extra) =>
+  storedZip([
+    ...archiveEntries(sourceOf(APPEAL)),
+    ...extra.map((name) => ({ name, data: Buffer.from('x') })),
+  ]);
 
-// The reader: the route model's zip, listed as unzip lists it.
-const listed = spawnSync('unzip', ['-Z1', ZIP], { encoding: 'utf8' });
-expect(
-  listed.status === 0 &&
-    JSON.stringify(zipEntryNames(readFileSync(ZIP))) ===
-      JSON.stringify(listed.stdout.split('\n').filter(Boolean)),
-  "the zip's entries are read as unzip lists them",
-  listed.stderr,
-);
+// The reader: each route model's zip, listed as unzip lists it.
+for (const zip of [ZIP, zipOf(APPEAL)]) {
+  const listed = spawnSync('unzip', ['-Z1', zip], { encoding: 'utf8' });
+  expect(
+    listed.status === 0 &&
+      JSON.stringify(zipEntryNames(readFileSync(zip))) ===
+        JSON.stringify(listed.stdout.split('\n').filter(Boolean)),
+    `${zip.slice(zip.lastIndexOf('/') + 1)}'s entries are read as unzip lists them`,
+    listed.stderr,
+  );
+}
 
 // The kit as it is: data only.
-const own = codeIn(join(KIT, 'bundle'), ZIP_PATH);
+const own = codeIn(join(KIT, 'bundle'), ZIP_PATHS);
 expect(own.length === 0, "the kit's own bundle holds no code", JSON.stringify(own));
 
 // Each refused, naming what is code.
@@ -106,7 +114,12 @@ refused(
   `${ZIP_PATH}!PayersClaimReview/inner.zip`,
 );
 refused(
-  'a zip of XML documents anywhere but the route model',
+  "the appeal review's route model zip holding a JavaScript file",
+  ({ write }) => write(zipPathOf(APPEAL), appealModelWith(`${APPEAL}/run.js`)),
+  `${zipPathOf(APPEAL)}!${APPEAL}/run.js`,
+);
+refused(
+  'a zip of XML documents anywhere but the route models',
   ({ write }) => write('data/Other.zip', readFileSync(ZIP)),
   'data/Other.zip',
 );

@@ -32,12 +32,65 @@
       <schema name="engdoc" />
       <facet name="ControlledDocument" />
     </doctype>
+    <!-- By hand, since 0.2.0: the add-on's transmittals and review cycles, each a type with one of
+         its facets and no schema of the kit's. None is a folder, so each opens as a record page.
+         A transmittal is created in a TransmittalRegister, whose Create menu offers it; its
+         receipts are the server's, beside it, and a review cycle is opened on a revision through
+         the REST API. -->
+    <doctype name="Transmittal" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="Transmittal" />
+    </doctype>
+    <doctype name="TransmittalReceipt" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="TransmittalReceipt" />
+      <facet name="HiddenInCreation" />
+    </doctype>
+    <doctype name="ReviewCycle" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="ReviewCycle" />
+    </doctype>
+    <doctype name="TransmittalRegister" extends="Folder">
+      <subtypes>
+        <type>Transmittal</type>
+      </subtypes>
+    </doctype>
   </extension>
 
   <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
     <types>
       <type name="EngineeringDocument">default</type>
+      <type name="Transmittal">default</type>
+      <type name="TransmittalReceipt">default</type>
+      <type name="ReviewCycle">default</type>
+      <type name="TransmittalRegister">default</type>
     </types>
+  </extension>
+
+  <!-- By hand, since 0.2.0: the words a transmittal's purpose and a receipt's answer are picked
+       from, with the ids the add-on checks: it refuses any other, whatever a form offers. -->
+  <extension target="org.nuxeo.ecm.directory.GenericDirectory" point="directories">
+    <directory name="ControlledDocumentsPurpose" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>controlled_documents_vocabulary_purpose</table>
+      <dataFile>data/vocabularies/ControlledDocumentsPurpose.csv</dataFile>
+    </directory>
+    <directory name="ControlledDocumentsAnswer" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>controlled_documents_vocabulary_answer</table>
+      <dataFile>data/vocabularies/ControlledDocumentsAnswer.csv</dataFile>
+    </directory>
+    <directory name="ControlledDocumentsCycleStatus" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>controlled_documents_vocabulary_cycle_status</table>
+      <dataFile>data/vocabularies/ControlledDocumentsCycleStatus.csv</dataFile>
+    </directory>
   </extension>
 
   <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
@@ -66,6 +119,62 @@
         AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
       </pattern>
       <sort column="dc:modified" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_awaiting_me">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'TransmittalReceipt' AND (trr:recipient = ? AND trr:status = 'awaiting')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="trr:dueDate" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_transmittal_receipts">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'TransmittalReceipt' AND (trr:transmittal = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="trr:recipient" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_transmittals">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Transmittal'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="trm:issuedAt" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_returned">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'TransmittalReceipt' AND (trr:status = 'returned')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="trr:respondedAt" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_review_cycles">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'ReviewCycle' AND (rvw:document = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="rvw:openedAt" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <!-- By hand: a review cycle's threads, Nuxeo's own comments the add-on gave the ReviewComment
+         facet, each a thread's first comment, open or resolved. A reply has no status. -->
+    <coreQueryPageProvider name="controlled_documents_cycle_threads">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:mixinType = 'ReviewComment' AND (rvwc:cycle = ?)
+        AND rvwc:status IS NOT NULL AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:created" ascending="true" />
       <pageSize>50</pageSize>
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>

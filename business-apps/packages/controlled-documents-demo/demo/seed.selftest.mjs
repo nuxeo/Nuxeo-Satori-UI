@@ -18,8 +18,19 @@
  * nothing about whether a real server answers as the stand-in does: the add-on's own tests, on a
  * Nuxeo runtime, are what show its numbering, and no seed has run on a server yet.
  *
- * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user and a
- * password made up for the run. Node 24 and nothing else. CI does not run it.
+ * Since the kit's version 0.2.0 it stands in for the people, the permissions, the transmittals and
+ * the review cycles too, as `nuxeo-agentic-documents` 0.2.0 answers them, in miniature: users and
+ * groups the seed creates, signed in with the demo password; a transmittal numbered in TR, its
+ * documents named by number resolved to their current revision, a receipt beside it per recipient,
+ * answered by its recipient alone; a review cycle opened by its opener, a comment in it by a
+ * reviewer alone, an open thread resolved by the opener alone; and their page providers. So a pass
+ * proves, besides, that the seed creates its people only where none of theirs is someone else's,
+ * that each person acts as themselves, that it writes none of the server's properties, that a
+ * second run answers, writes and resolves nothing again, and that its check fails when a receipt,
+ * a queue or a thread is missing.
+ *
+ * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user, a password
+ * and a demo password made up for the run. Node 24 and nothing else. CI does not run it.
  *
  * Exit 0 when every control behaves as required, 1 otherwise.
  */
@@ -29,14 +40,50 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CHAINS, FOLDER, WORKSPACE, revisionsOf } from './data.mjs';
+import {
+  CHAINS,
+  ENGINEER,
+  FOLDER,
+  GROUPS,
+  RECIPIENT,
+  REVIEW,
+  REVIEWS,
+  TRANSMITTAL,
+  TRANSMITTALS,
+  USERS,
+  WORKSPACE,
+  revisionsOf,
+} from './data.mjs';
 
 const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 const HOLDER = `${ROOT}/${FOLDER.name}`;
+const SENT = `${ROOT}/${TRANSMITTALS.name}`;
+const REVIEWED = `${ROOT}/${REVIEWS.name}`;
 const REVISIONS = CHAINS.reduce((count, chain) => count + chain.revisions.length, 0);
 /** What the server gives: a creation may name a series or a predecessor, and nothing else of these. */
 const SERVER_GIVEN = ['docctl:number', 'docctl:revision', 'docctl:status', 'docctl:supersededBy'];
+/** What the server gives a transmittal and a review cycle: the seed names none of it. */
+const SERVER_GIVEN_TOO = [
+  'trm:number',
+  'trm:items',
+  'trm:issuedBy',
+  'trm:issuedAt',
+  'rvw:number',
+  'rvw:revision',
+  'rvw:status',
+  'rvw:openedBy',
+  'rvw:openedAt',
+];
+const ALL_TYPES = [
+  'Workspace',
+  'Folder',
+  'EngineeringDocument',
+  'Transmittal',
+  'TransmittalReceipt',
+  'ReviewCycle',
+  'TransmittalRegister',
+];
 
 const failures = [];
 let controls = 0;
@@ -50,23 +97,34 @@ function expect(condition, what, output = '') {
  * The stand-in server. `types` are the document types it has; `meStatus` answers `/me` with that
  * status; `noWorkspaces` leaves out /default-domain/workspaces; `oneNumber` gives every new
  * document the same number, as a broken sequencer would; `brokenProvider` makes one page provider
- * return nothing; `widenedProvider` makes one return every engineering document.
+ * return nothing; `widenedProvider` makes one return every engineering document; `noReceiptFor`
+ * leaves that recipient without a receipt, as a broken listener would; `demoPassword` is the
+ * password the users the seed creates sign in with; `foreignUser` is a user of the demo's names
+ * that the seed did not create.
  */
 function standIn({
   user,
   password,
-  types = ['Workspace', 'Folder', 'EngineeringDocument'],
+  demoPassword = randomUUID(),
+  types = ALL_TYPES,
   meStatus = 200,
   noWorkspaces = false,
   oneNumber = false,
   brokenProvider = null,
   widenedProvider = null,
   segmentMax = Infinity,
+  noReceiptFor = null,
+  foreignUser = null,
 }) {
   const byPath = new Map();
   const byId = new Map();
-  const counters = { DWG: 0, SPEC: 0 };
+  const counters = { DWG: 0, SPEC: 0, TR: 0 };
   const writes = [];
+  /** Users and groups, by name: a user signs in with their password. */
+  const users = new Map();
+  const groups = new Map();
+  if (foreignUser) users.set(foreignUser, { properties: { username: foreignUser, company: 'Elsewhere' } });
+  const acls = new Map();
   const add = (path, type, properties = {}) => {
     const document = {
       'entity-type': 'document',
@@ -125,6 +183,7 @@ function standIn({
   };
 
   const live = () => [...byId.values()].filter((d) => d.type === 'EngineeringDocument');
+  const ofType = (type) => [...byId.values()].filter((d) => d.type === type);
   const providers = {
     controlled_documents_current: () =>
       live().filter((d) => d.properties['docctl:status'] === 'current'),
@@ -132,9 +191,78 @@ function standIn({
       live().filter((d) => d.properties['docctl:status'] === 'superseded'),
     controlled_documents_revisions: (number) =>
       live().filter((d) => d.properties['docctl:number'] === number),
+    controlled_documents_transmittal_receipts: (id) =>
+      ofType('TransmittalReceipt').filter((d) => d.properties['trr:transmittal'] === id),
+    controlled_documents_awaiting_me: (who) =>
+      ofType('TransmittalReceipt').filter(
+        (d) => d.properties['trr:recipient'] === who && d.properties['trr:status'] === 'awaiting',
+      ),
+    controlled_documents_transmittals: () => ofType('Transmittal'),
+    controlled_documents_review_cycles: (id) =>
+      ofType('ReviewCycle').filter((d) => d.properties['rvw:document'] === id),
+    controlled_documents_cycle_threads: (id) =>
+      ofType('Comment').filter(
+        (d) => d.properties['rvwc:cycle'] === id && d.properties['rvwc:status'] != null,
+      ),
   };
 
+  /** As the add-on issues a transmittal: numbered, its documents resolved, receipts beside it. */
+  const issue = (at, own, by) => {
+    const ids = [];
+    const items = [];
+    for (const number of own['trm:documents'] ?? []) {
+      const revision = live().find(
+        (d) => d.properties['docctl:number'] === number && d.properties['docctl:status'] === 'current',
+      );
+      if (!revision) return { status: 400, message: `No current revision of ${number}` };
+      ids.push(revision.uid);
+      items.push({
+        document: revision.uid,
+        number,
+        revision: revision.properties['docctl:revision'],
+        title: revision.properties['dc:title'],
+      });
+    }
+    counters.TR++;
+    return {
+      properties: {
+        ...own,
+        'trm:number': `TR-${String(counters.TR).padStart(5, '0')}`,
+        'trm:documents': ids,
+        'trm:items': items,
+        'trm:issuedBy': by,
+        'trm:issuedAt': new Date().toISOString(),
+      },
+    };
+  };
+  const receipts = (transmittal, at) =>
+    (transmittal.properties['trm:recipients'] ?? []).forEach((recipient, index) => {
+      if (recipient === noReceiptFor) return;
+      const p = transmittal.properties;
+      add(`${at}/${p['trm:number'].toLowerCase()}-${index + 1}`, 'TransmittalReceipt', {
+        'dc:title': `${p['trm:number']} ${p['dc:title']}`,
+        'trr:transmittal': transmittal.uid,
+        'trr:number': p['trm:number'],
+        'trr:recipient': recipient,
+        'trr:purpose': p['trm:purpose'],
+        'trr:dueDate': p['trm:dueDate'],
+        'trr:issuedBy': p['trm:issuedBy'],
+        'trr:status': 'awaiting',
+      });
+    });
+
   const authorization = `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
+  /** Who signs a request: the administrator, a user the seed created, or nobody. */
+  const signer = (header) => {
+    if (header === authorization) return user;
+    for (const [name, entry] of users)
+      if (
+        entry.password !== undefined &&
+        header === `Basic ${Buffer.from(`${name}:${entry.password}`).toString('base64')}`
+      )
+        return name;
+    return null;
+  };
   const server = createServer(async (request, response) => {
     let body = '';
     for await (const chunk of request) body += chunk;
@@ -142,15 +270,41 @@ function standIn({
       response.writeHead(status, { 'Content-Type': 'application/json' });
       response.end(json === undefined ? '' : JSON.stringify(json));
     };
-    if (request.headers.authorization !== authorization)
-      return answer(401, { message: 'Unauthorized' });
+    const who = signer(request.headers.authorization);
+    if (who === null) return answer(401, { message: 'Unauthorized' });
     const url = new URL(request.url, 'http://127.0.0.1');
     const path = decodeURIComponent(url.pathname.replace(/^\/nuxeo\/api\/v1/, ''));
-    if (request.method === 'GET' && path === '/me') return answer(meStatus, { id: user });
+    if (request.method === 'GET' && path === '/me') return answer(meStatus, { id: who });
     if (request.method === 'GET' && path.startsWith('/config/types/'))
       return types.includes(path.slice('/config/types/'.length))
         ? answer(200, {})
         : answer(404, {});
+    // The people: users and groups, which only the administrator writes.
+    const person = /^\/(user|group)(?:\/([^/]+))?$/.exec(path);
+    if (person) {
+      const [, kind, name] = person;
+      const store = kind === 'user' ? users : groups;
+      if (request.method === 'GET')
+        return name && store.has(name)
+          ? answer(200, { id: name, properties: store.get(name).properties })
+          : answer(404, {});
+      if (who !== user) return answer(403, { message: 'administrators only' });
+      const sent = JSON.parse(body);
+      const id = kind === 'user' ? sent.id : sent.groupname;
+      store.set(id, { properties: sent.properties, password: sent.properties?.password });
+      writes.push({ method: request.method, path, sent: sent.properties ?? {}, as: who });
+      return answer(request.method === 'POST' ? 201 : 200, { id, properties: sent.properties });
+    }
+    if (request.method === 'POST' && path === '/automation/Document.AddPermission') {
+      const { input, params } = JSON.parse(body);
+      const uid = String(input).replace(/^doc:/, '');
+      const list = acls.get(uid) ?? [];
+      for (const group of params.users)
+        list.push({ username: group, permission: params.permission, granted: true });
+      acls.set(uid, list);
+      writes.push({ method: 'POST', path, sent: params, as: who });
+      return answer(200, {});
+    }
     if (path.startsWith('/path/')) {
       const at = path.slice('/path'.length);
       if (request.method === 'GET')
@@ -167,28 +321,90 @@ function standIn({
           own = { ...own, ...given.properties };
           previous = given.previous ?? null;
         }
+        if (type === 'Transmittal') {
+          const given = issue(at, own, who);
+          if (given.status) return answer(given.status, { message: given.message });
+          own = given.properties;
+        }
+        if (type === 'TransmittalReceipt')
+          return answer(403, { message: "A transmittal's receipt is written by the server" });
+        if (type === 'ReviewCycle') {
+          const revision = byId.get(own['rvw:document']);
+          if (!revision || revision.properties['docctl:status'] !== 'current')
+            return answer(409, { message: 'a review cycle reviews a current revision' });
+          own = {
+            ...own,
+            'rvw:number': revision.properties['docctl:number'],
+            'rvw:revision': revision.properties['docctl:revision'],
+            'rvw:status': 'open',
+            'rvw:openedBy': who,
+          };
+        }
         // Nuxeo cuts a name to nuxeo.path.segment.maxsize, 24 by default, without a word.
         const created = add(`${at}/${String(name).slice(0, segmentMax)}`, type, own);
         if (previous) {
           previous.properties['docctl:status'] = 'superseded';
           previous.properties['docctl:supersededBy'] = created.uid;
         }
-        writes.push({ method: 'POST', path: created.path, sent: properties ?? {} });
+        if (type === 'Transmittal') receipts(created, at);
+        writes.push({ method: 'POST', path: created.path, sent: properties ?? {}, as: who });
         return answer(201, created);
       }
+    }
+    const comment = /^\/id\/([^/]+)\/@comment$/.exec(path);
+    if (comment && request.method === 'POST') {
+      // As the add-on takes a comment in a review cycle: the cycle open, by a reviewer or its opener.
+      const cycle = byId.get(comment[1]);
+      if (!cycle) return answer(404, {});
+      const { text } = JSON.parse(body);
+      const p = cycle.properties;
+      if (p['rvw:status'] !== 'open') return answer(409, { message: 'the cycle is closed' });
+      if (who !== p['rvw:openedBy'] && !(p['rvw:reviewers'] ?? []).includes(who))
+        return answer(403, { message: "Only the review cycle's reviewers comment in it" });
+      const created = add(`${cycle.path}/Comments/${randomUUID()}`, 'Comment', {
+        'comment:author': who,
+        'comment:text': text,
+        'comment:parentId': cycle.uid,
+        'rvwc:cycle': cycle.uid,
+        'rvwc:status': 'open',
+      });
+      writes.push({ method: 'POST', path, sent: { text }, as: who });
+      return answer(201, { 'entity-type': 'comment', id: created.uid, text, author: who });
     }
     if (path.startsWith('/id/')) {
       const document = byId.get(path.slice('/id/'.length));
       if (!document) return answer(404, {});
-      if (request.method === 'GET') return answer(200, document);
+      if (request.method === 'GET') {
+        if (request.headers['enrichers-document'] === 'acls')
+          return answer(200, {
+            ...document,
+            contextParameters: { acls: [{ name: 'local', aces: acls.get(document.uid) ?? [] }] },
+          });
+        return answer(200, document);
+      }
       if (request.method === 'PUT') {
         const { properties } = JSON.parse(body);
-        const forged = Object.keys(properties ?? {}).filter(
-          (key) => key.startsWith('docctl:') && properties[key] !== document.properties[key],
+        const given = Object.keys(properties ?? {}).filter(
+          (key) =>
+            (key.startsWith('docctl:') || SERVER_GIVEN_TOO.includes(key)) &&
+            properties[key] !== document.properties[key],
         );
-        writes.push({ method: 'PUT', path: document.path, sent: properties ?? {} });
-        if (forged.length > 0)
-          return answer(400, { message: `${forged.join(', ')} are given by the server` });
+        writes.push({ method: 'PUT', path: document.path, sent: properties ?? {}, as: who });
+        if (given.length > 0)
+          return answer(400, { message: `${given.join(', ')} are given by the server` });
+        // As the add-on: a receipt answered once, by its recipient; a thread resolved by the opener.
+        if (document.type === 'TransmittalReceipt' && 'trr:status' in (properties ?? {})) {
+          if (who !== document.properties['trr:recipient'])
+            return answer(403, { message: 'Only the recipient answers it' });
+          if (document.properties['trr:status'] !== 'awaiting')
+            return answer(409, { message: 'This receipt has been answered' });
+        }
+        if (document.type === 'Comment' && 'rvwc:status' in (properties ?? {})) {
+          const cycle = byId.get(document.properties['rvwc:cycle']);
+          if (who !== cycle?.properties['rvw:openedBy'])
+            return answer(403, { message: 'Only whoever opened this review cycle resolves' });
+          properties['rvwc:resolvedBy'] = who;
+        }
         Object.assign(document.properties, properties);
         return answer(200, document);
       }
@@ -203,7 +419,7 @@ function standIn({
     }
     return answer(404, { message: `no ${request.method} ${path}` });
   });
-  return { server, byPath, byId, writes, credentials: { user, password } };
+  return { server, byPath, byId, writes, users, credentials: { user, password, demoPassword } };
 }
 
 /**
@@ -211,9 +427,9 @@ function standIn({
  * run, its credentials the stand-in's own unless `password` gives the seed another: its exit code
  * and its output.
  */
-async function run({ stand: given, password: sent, ...options } = {}) {
+async function run({ stand: given, password: sent, noDemoPassword = false, ...options } = {}) {
   const stand = given ?? standIn({ user: 'seed-selftest', password: randomUUID(), ...options });
-  const { user, password } = stand.credentials;
+  const { user, password, demoPassword } = stand.credentials;
   if (!stand.server.listening)
     await new Promise((done) => stand.server.listen(0, '127.0.0.1', done));
   const { port } = stand.server.address();
@@ -223,13 +439,14 @@ async function run({ stand: given, password: sent, ...options } = {}) {
       NUXEO_URL: `http://127.0.0.1:${port}`,
       NUXEO_USER: user,
       NUXEO_PASS: sent ?? password,
+      ...(noDemoPassword ? {} : { CONTROLLED_DOCUMENTS_DEMO_PASSWORD: demoPassword }),
     },
   });
   let output = '';
   child.stdout.on('data', (chunk) => (output += chunk));
   child.stderr.on('data', (chunk) => (output += chunk));
   const code = await new Promise((done) => child.on('close', done));
-  return { code, output, stand, password };
+  return { code, output, stand, password, demoPassword };
 }
 
 const close = (stand) => new Promise((done) => stand.server.close(done));
@@ -411,11 +628,162 @@ for (const [options, what, says] of [
   await close(cut.stand);
 }
 
+// 20 to 22. Since 0.2.0, preconditions before anything is written: the demo password, the kit's
+// 0.2.0 types, and a user of the demo's names someone else made.
+{
+  const unset = await run({ noDemoPassword: true });
+  expect(
+    unset.code === 2 && unset.output.includes('CONTROLLED_DOCUMENTS_DEMO_PASSWORD must be set'),
+    'no demo password exits 2',
+    unset.output,
+  );
+  expect(unset.stand.writes.length === 0, 'nothing written without a demo password');
+  await close(unset.stand);
+  const older = await run({ types: ['Workspace', 'Folder', 'EngineeringDocument'] });
+  expect(
+    older.code === 2 && older.output.includes('version 0.1.0'),
+    'the kit 0.1.0 exits 2, asking for 0.2.0',
+    older.output,
+  );
+  expect(older.stand.writes.length === 0, 'nothing written on the kit 0.1.0');
+  await close(older.stand);
+  const foreign = await run({ foreignUser: RECIPIENT });
+  expect(
+    foreign.code === 2 && foreign.output.includes(`a user ${RECIPIENT} that the seed did not create`),
+    "a user of the demo's names someone else made exits 2",
+    foreign.output,
+  );
+  expect(foreign.stand.writes.length === 0, "and nothing is written, that user's included");
+  await close(foreign.stand);
+}
+
+// 23 to 33. A first run creates the people and their permissions, issues the transmittal as its
+// issuer, answers as its recipient, opens the review as its opener, writes each thread as its
+// reviewer and resolves as the opener, naming none of the server's properties; a second run
+// writes, answers and resolves nothing again; the demo password is never printed.
+{
+  const first = await run();
+  const { stand, demoPassword } = first;
+  expect(first.code === 0, 'the first run seeds the transmittal and the review', first.output);
+  const posts = (prefix) =>
+    stand.writes.filter((write) => write.method === 'POST' && write.path.startsWith(prefix));
+  expect(
+    USERS.every((person) => stand.users.has(person.username)) &&
+      posts('/group').length === GROUPS.length,
+    "the demo's people and groups are created",
+    first.output,
+  );
+  expect(
+    posts('/automation/Document.AddPermission').length === 2,
+    'both groups are given ReadWrite on the workspace',
+  );
+  const issued = posts(`${SENT}/`);
+  expect(
+    issued.length === 1 && issued[0].as === TRANSMITTAL.issuer,
+    `the transmittal is issued by ${TRANSMITTAL.issuer}, as themselves`,
+    JSON.stringify(issued),
+  );
+  const opened = posts(`${REVIEWED}/`);
+  expect(
+    opened.length === 1 && opened[0].as === REVIEW.opener,
+    `the review cycle is opened by ${REVIEW.opener}, as themselves`,
+    JSON.stringify(opened),
+  );
+  const named = [...issued, ...opened].filter((write) =>
+    Object.keys(write.sent).some((key) => SERVER_GIVEN_TOO.includes(key)),
+  );
+  expect(named.length === 0, "the seed names none of the server's properties", JSON.stringify(named));
+  const comments = stand.writes.filter((write) => write.path.endsWith('/@comment'));
+  expect(
+    comments.length === REVIEW.threads.length &&
+      REVIEW.threads.every((thread) => comments.some((write) => write.as === thread.by)),
+    'each thread is written by its reviewer, as themselves',
+    JSON.stringify(comments),
+  );
+  const answers = stand.writes.filter(
+    (write) => write.method === 'PUT' && 'trr:status' in write.sent,
+  );
+  expect(
+    answers.length === TRANSMITTAL.acknowledgedBy.length &&
+      answers.every((write) => TRANSMITTAL.acknowledgedBy.includes(write.as)),
+    'each acknowledgement is its recipient’s own',
+    JSON.stringify(answers),
+  );
+  const resolutions = stand.writes.filter(
+    (write) => write.method === 'PUT' && 'rvwc:status' in write.sent,
+  );
+  expect(
+    resolutions.length === REVIEW.threads.filter((thread) => thread.resolution).length &&
+      resolutions.every((write) => write.as === REVIEW.opener),
+    'each resolution is the opener’s own',
+    JSON.stringify(resolutions),
+  );
+  const awaiting = [...stand.byId.values()].filter(
+    (d) => d.type === 'TransmittalReceipt' && d.properties['trr:status'] === 'awaiting',
+  );
+  expect(
+    awaiting.length === TRANSMITTAL.recipients.length - TRANSMITTAL.acknowledgedBy.length &&
+      !awaiting.some((d) => d.properties['trr:recipient'] === RECIPIENT),
+    `${RECIPIENT} acknowledged, and the other recipient still awaits`,
+  );
+
+  stand.writes.length = 0;
+  const second = await run({ stand });
+  expect(second.code === 0, 'a second run passes', second.output);
+  expect(
+    !stand.writes.some(
+      (write) =>
+        write.method === 'POST' ||
+        'trr:status' in (write.sent ?? {}) ||
+        'rvwc:status' in (write.sent ?? {}),
+    ),
+    'a second run issues, opens, comments, answers and resolves nothing',
+    JSON.stringify(stand.writes.filter((write) => write.method !== 'PUT' || write.path.startsWith('/user'))),
+  );
+  expect(
+    !first.output.includes(demoPassword) && !second.output.includes(demoPassword),
+    'the demo password is never printed',
+  );
+  expect(
+    ENGINEER === TRANSMITTAL.issuer && TRANSMITTAL.recipients.includes(RECIPIENT),
+    "data.mjs's engineer issues the seeded transmittal, and its recipient receives it",
+  );
+  await close(stand);
+}
+
+// 34 to 36. The check fails when a recipient has no receipt, when the awaiting queue leaves an
+// awaiting receipt out, or when the threads' page provider leaves a thread out.
+for (const [options, what, says] of [
+  [{ noReceiptFor: 'mlind' }, 'a recipient with no receipt', 'has receipts for'],
+  [
+    { brokenProvider: 'controlled_documents_awaiting_me' },
+    'the awaiting queue leaving a receipt out',
+    'controlled_documents_awaiting_me does not return',
+  ],
+  [
+    { brokenProvider: 'controlled_documents_cycle_threads' },
+    'the threads leaving one out',
+    'has no thread by',
+  ],
+]) {
+  const broken = await run(options);
+  expect(
+    broken.code === 1 && broken.output.includes(says),
+    `the check fails on ${what}`,
+    broken.output,
+  );
+  await close(broken.stand);
+}
+
 // And every name data.mjs gives is short enough for Nuxeo's default.
 {
   const names = [
     WORKSPACE.name,
     FOLDER.name,
+    TRANSMITTALS.name,
+    REVIEWS.name,
+    TRANSMITTAL.name,
+    REVIEW.name,
     ...CHAINS.flatMap((chain) => revisionsOf(chain).map((revision) => revision.name)),
   ];
   const long = names.filter((name) => name.length > 24);

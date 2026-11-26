@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "close",
+      "labelKey": "controlled-documents.card.closeCycle",
+      "fields": [
+        {
+          "field": "rvw:status",
+          "labelKey": "controlled-documents.field.cycleStatus",
+          "widget": "vocabulary",
+          "parameters": { "directory": "ControlledDocumentsCycleStatus" },
+          "required": true
+        }
+      ]
+    }
+  ]
+}

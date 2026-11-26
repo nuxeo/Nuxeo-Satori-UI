@@ -2,19 +2,42 @@
 <component name="org.nuxeo.agentic.documents.schema" version="1.0">
 
   <documentation>
-    The controlled document's schema and facet. A kit's document type is controlled by carrying
-    the ControlledDocument facet, which brings the controlled_document schema, prefix docctl.
+    The add-on's schemas and facets. A kit's document type is controlled by carrying the
+    ControlledDocument facet, which brings the controlled_document schema, prefix docctl, and the
+    controlled_review schema, prefix docrev, the review cycles closed on the revision. A kit's
+    transmittal type carries Transmittal (transmittal, trm), its receipt type TransmittalReceipt
+    (transmittal_receipt, trr), and its review cycle type ReviewCycle (review_cycle, rvw).
+    ReviewComment (review_comment, rvwc) is given by the server to each of Nuxeo's own comments
+    written in a review cycle, on the comment itself, so Nuxeo's Comment type is not changed.
   </documentation>
 
   <require>org.nuxeo.ecm.core.CoreExtensions</require>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
     <schema name="controlled_document" prefix="docctl" src="schemas/controlled_document.xsd" />
+    <schema name="controlled_review" prefix="docrev" src="schemas/controlled_review.xsd" />
+    <schema name="transmittal" prefix="trm" src="schemas/transmittal.xsd" />
+    <schema name="transmittal_receipt" prefix="trr" src="schemas/transmittal_receipt.xsd" />
+    <schema name="review_cycle" prefix="rvw" src="schemas/review_cycle.xsd" />
+    <schema name="review_comment" prefix="rvwc" src="schemas/review_comment.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
     <facet name="ControlledDocument">
       <schema name="controlled_document" />
+      <schema name="controlled_review" />
+    </facet>
+    <facet name="Transmittal">
+      <schema name="transmittal" />
+    </facet>
+    <facet name="TransmittalReceipt">
+      <schema name="transmittal_receipt" />
+    </facet>
+    <facet name="ReviewCycle">
+      <schema name="review_cycle" />
+    </facet>
+    <facet name="ReviewComment">
+      <schema name="review_comment" />
     </facet>
   </extension>
 

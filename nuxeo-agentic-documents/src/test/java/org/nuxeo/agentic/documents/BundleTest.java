@@ -57,13 +57,47 @@ public class BundleTest {
     }
 
     @Test
-    public void theManifestNamesTheThreeComponents() throws Exception {
+    public void theManifestNamesTheFiveComponents() throws Exception {
         List<String> components = Arrays.stream(manifest().getValue("Nuxeo-Component").split(","))
                                         .map(String::trim)
                                         .filter(c -> !c.isEmpty())
                                         .toList();
         assertEquals(List.of("OSGI-INF/documents-schema-contrib.xml", "OSGI-INF/documents-service.xml",
-                "OSGI-INF/documents-listener-contrib.xml"), components);
+                "OSGI-INF/documents-listener-contrib.xml", "OSGI-INF/documents-transmittals-contrib.xml",
+                "OSGI-INF/documents-reviews-contrib.xml"), components);
+    }
+
+    /** Each facet of the add-on, with its schema, its prefix and every property the add-on names. */
+    @Test
+    public void theRuntimeRegistersEveryFacetWithItsSchema() {
+        record Expected(String facet, String schema, String prefix, List<String> properties) {
+        }
+        for (Expected expected : List.of(
+                new Expected(ControlledDocuments.FACET, ControlledDocuments.REVIEW_SCHEMA,
+                        ControlledDocuments.REVIEW_PREFIX, List.of(ControlledDocuments.REVIEW_CYCLES)),
+                new Expected(ControlledDocuments.TRANSMITTAL_FACET, ControlledDocuments.TRANSMITTAL_SCHEMA,
+                        ControlledDocuments.TRANSMITTAL_PREFIX, ControlledDocuments.TRANSMITTAL_PROPERTIES),
+                new Expected(ControlledDocuments.RECEIPT_FACET, ControlledDocuments.RECEIPT_SCHEMA,
+                        ControlledDocuments.RECEIPT_PREFIX, ControlledDocuments.RECEIPT_PROPERTIES),
+                new Expected(ControlledDocuments.CYCLE_FACET, ControlledDocuments.CYCLE_SCHEMA,
+                        ControlledDocuments.CYCLE_PREFIX, ControlledDocuments.CYCLE_PROPERTIES),
+                new Expected(ControlledDocuments.COMMENT_FACET, ControlledDocuments.COMMENT_SCHEMA,
+                        ControlledDocuments.COMMENT_PREFIX, ControlledDocuments.COMMENT_PROPERTIES))) {
+            CompositeType facet = schemas.getFacet(expected.facet());
+            assertNotNull(expected.facet(), facet);
+            assertTrue(expected.facet(), facet.hasSchema(expected.schema()));
+            Schema schema = schemas.getSchema(expected.schema());
+            assertEquals(expected.prefix(), schema.getNamespace().prefix);
+            for (String property : expected.properties()) {
+                assertNotNull(property, schema.getField(property.substring(expected.prefix().length() + 1)));
+            }
+            assertEquals(expected.schema(), expected.properties().size(), schema.getFieldsCount());
+        }
+        assertEquals(List.of("TR"), Framework.getService(ControlledDocumentService.class)
+                                             .transmittalSeries()
+                                             .stream()
+                                             .map(NumberSeries::id)
+                                             .toList());
     }
 
     /** The runtime started what the components declare: the service, the facet and its schema. */

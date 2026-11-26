@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Start: an appeal not yet decided, against a claim, goes to its specialist. An open one is put in
+     review; one already in review, as an appeal worked before 0.7.0 may be, is left in its state,
+     so starting on it changes nothing on the case. Anything else is refused: a grievance, an appeal
+     decided or closed, or one with no claim. The workflow then ends, the case unchanged, with the
+     refusal in its history. The first transition that holds is the one followed. -->
+<document repository="default" id="start">
+  <system>
+    <type>RouteNode</type>
+    <path>PayersAppealReview/start</path>
+    <lifecycle-state>validated</lifecycle-state>
+    <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <access-control/>
+  </system>
+  <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
+    <dc:title><![CDATA[Start]]></dc:title>
+  </schema>
+  <schema xmlns:rnode="http://www.nuxeo.org/ecm/schemas/route_node/" name="route_node">
+    <rnode:nodeId><![CDATA[start]]></rnode:nodeId>
+    <rnode:start><![CDATA[true]]></rnode:start>
+    <rnode:stop><![CDATA[false]]></rnode:stop>
+    <rnode:hasTask><![CDATA[false]]></rnode:hasTask>
+    <rnode:executeOnlyFirstTransition><![CDATA[true]]></rnode:executeOnlyFirstTransition>
+    <rnode:inputChain><![CDATA[]]></rnode:inputChain>
+    <rnode:outputChain><![CDATA[]]></rnode:outputChain>
+    <rnode:transitions>
+      <transition>
+        <name><![CDATA[review]]></name>
+        <label><![CDATA[Put in review]]></label>
+        <condition><![CDATA[Document["case:category"] == "appeal" && Document["case:claim"] != null && Document["case:claim"] != "" && Document["case:state"] == "open"]]></condition>
+        <chain><![CDATA[PayersAppealReview.Review]]></chain>
+        <targetId><![CDATA[decide]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[underWay]]></name>
+        <label><![CDATA[Already in review]]></label>
+        <condition><![CDATA[Document["case:category"] == "appeal" && Document["case:claim"] != null && Document["case:claim"] != "" && Document["case:state"] == "inReview"]]></condition>
+        <chain><![CDATA[PayersAppealReview.ReviewUnderWay]]></chain>
+        <targetId><![CDATA[decide]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[notAnAppealToDecide]]></name>
+        <label><![CDATA[Refused: not an appeal still to decide, against a claim]]></label>
+        <condition><![CDATA[true]]></condition>
+        <chain><![CDATA[PayersAppealReview.RefuseStart]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+    </rnode:transitions>
+    <rnode:escalationRules/>
+    <rnode:taskX><![CDATA[0]]></rnode:taskX>
+    <rnode:taskY><![CDATA[0]]></rnode:taskY>
+  </schema>
+</document>

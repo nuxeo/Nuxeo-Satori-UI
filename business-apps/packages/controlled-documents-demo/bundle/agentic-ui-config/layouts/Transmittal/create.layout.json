@@ -1,0 +1,43 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "transmittal",
+      "labelKey": "controlled-documents.card.transmittal",
+      "fields": [
+        { "field": "dc:title", "labelKey": "controlled-documents.field.subject", "required": true },
+        {
+          "field": "trm:purpose",
+          "labelKey": "controlled-documents.field.transmittalPurpose",
+          "widget": "vocabulary",
+          "parameters": { "directory": "ControlledDocumentsPurpose" },
+          "required": true
+        },
+        {
+          "field": "trm:dueDate",
+          "labelKey": "controlled-documents.field.dueDate",
+          "widget": "date",
+          "required": true
+        },
+        {
+          "field": "trm:documents",
+          "labelKey": "controlled-documents.field.documentsToSend",
+          "widget": "chips",
+          "required": true
+        },
+        {
+          "field": "trm:recipients",
+          "labelKey": "controlled-documents.field.recipients",
+          "widget": "chips",
+          "required": true
+        },
+        {
+          "field": "dc:description",
+          "labelKey": "controlled-documents.field.message",
+          "widget": "long-text"
+        }
+      ]
+    }
+  ]
+}

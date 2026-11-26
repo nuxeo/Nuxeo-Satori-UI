@@ -85,13 +85,17 @@ function expect(condition, what, output = '') {
  * for the open-appeals queue's facets, and `openAppealsDrift` answers that page provider wrongly:
  * `'decided'` with every appeal, the decided one among them, and `'grievance'` with every case
  * not decided, grievances among them; `checklistDrift` answers the case of that number, read back by its id, with its first
- * checklist entry not done, as a server that had dropped what was written would.
+ * checklist entry not done, as a server that had dropped what was written would. Since 0.7.0,
+ * `appealWorkflow: false` answers as version 0.6.1, which has no appeal review workflow, and
+ * `decisionDrift` answers the case of that number, read back by its id, with no decision.
  */
 function standIn({
   user,
   password,
   administrator = true,
   workflowModel = true,
+  appealWorkflow = true,
+  decisionDrift = null,
   caseChecklist = true,
   openAppeals = true,
   openAppealsDrift = null,
@@ -436,6 +440,9 @@ function standIn({
             : {};
         // The one case `checklistDrift` names, read back with its first entry not done.
         const shown = view(document);
+        // The one case `decisionDrift` names, read back with no decision.
+        if (decisionDrift !== null && document.properties['case:number'] === decisionDrift)
+          shown.properties['case:decision'] = null;
         if (checklistDrift !== null && document.properties['case:number'] === checklistDrift) {
           const [first, ...rest] = shown.properties['case:checklist'] ?? [];
           if (first)
@@ -493,10 +500,15 @@ function standIn({
         document.properties['claim:status'] = document.state;
         return send(200, view(document));
       }
-      if (method === 'GET' && path.startsWith('/workflowModel/'))
-        return workflowModel && path === '/workflowModel/PayersClaimReview'
-          ? send(200, { 'entity-type': 'workflow', name: 'PayersClaimReview' })
+      if (method === 'GET' && path.startsWith('/workflowModel/')) {
+        const model = path.slice('/workflowModel/'.length);
+        const known =
+          (workflowModel && model === 'PayersClaimReview') ||
+          (appealWorkflow && model === 'PayersAppealReview');
+        return known
+          ? send(200, { 'entity-type': 'workflow', name: model })
           : send(404, { message: 'no such workflow model' });
+      }
       if (method === 'POST' && path === '/automation/Document.Untrash') {
         const document = byId.get(JSON.parse(raw).input.replace(/^doc:/, ''));
         untrash(document);
@@ -673,7 +685,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /version 0.2.0 or older .* upgrade it to 0.6.0/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.7.0/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,
@@ -829,7 +841,7 @@ await against({ caseChecklist: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.6.0/.test(output) &&
+      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.7.0/.test(output) &&
       server.calls.every((call) => call.startsWith('GET ')),
     'version 0.4.0 of the package, whose case schema has no checklist, is exit 2, with nothing written',
     output,
@@ -887,7 +899,7 @@ await against({ openAppeals: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.5.1 or older .* no open-appeals queue: upgrade it to 0.6.0/.test(output) &&
+      /version 0.5.1 or older .* no open-appeals queue: upgrade it to 0.7.0/.test(output) &&
       server.calls.every((call) => call.startsWith('GET ')),
     'version 0.5.1 of the package, with no open-appeals queue, is exit 2, with nothing written',
     output,
@@ -933,9 +945,44 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
   const { status, output } = await run();
   expect(
     status === 1 &&
-      /The cases' checklists are not as seeded/.test(output) &&
+      /The cases' checklists or decisions are not as seeded/.test(output) &&
       /CASE-2043 holds /.test(output),
     "a case read back with another checklist than it was given fails the seed's check",
+    output,
+  );
+});
+// Since 0.7.0: the decided appeal's decision, written and read back.
+await against({}, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 0 &&
+      at(server, 'cases/case-2043').properties['case:decision'] === 'upheld' &&
+      ['case-2030', 'case-2041', 'case-2042', 'case-2044'].every(
+        (name) => at(server, `cases/${name}`).properties['case:decision'] === null,
+      ),
+    'the decided appeal is written with its decision, upheld, and every other case with none',
+    output,
+  );
+});
+await against({ decisionDrift: 'CASE-2043' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /The cases' checklists or decisions are not as seeded/.test(output) &&
+      /CASE-2043's decision is null, not "upheld"/.test(output),
+    "a case read back with no decision when it was given one fails the seed's check",
+    output,
+  );
+});
+await against({ appealWorkflow: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /version 0.6.1 or older .* no PayersAppealReview workflow .* upgrade it to 0.7.0/.test(
+        output,
+      ) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'version 0.6.1 of the package, with no appeal review workflow, is exit 2, with nothing written',
     output,
   );
 });
@@ -1035,6 +1082,27 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
       ]),
       /CASE-2042 is a grievance, and holds a checklist/,
     ],
+    // Since 0.7.0: an appeal's decision, which its review writes when it decides it.
+    [
+      'a decided appeal with no decision',
+      problems([{ ...CASES.find((kase) => kase.number === 'CASE-2043'), decision: undefined }]),
+      /CASE-2043 is decided, and its decision is null, not upheld or overturned/,
+    ],
+    [
+      'a decided appeal with a decision its review never writes',
+      problems([{ ...CASES.find((kase) => kase.number === 'CASE-2043'), decision: 'upheld!' }]),
+      /CASE-2043 is decided, and its decision is upheld!, not upheld or overturned/,
+    ],
+    [
+      'an appeal in review with a decision',
+      problems([{ ...appeal, decision: 'overturned' }]),
+      /CASE-2041 is inReview, not decided, and holds a decision/,
+    ],
+    [
+      'a grievance with a decision',
+      problems([{ ...CASES.find((kase) => kase.number === 'CASE-2042'), decision: 'upheld' }]),
+      /CASE-2042 is a grievance, and holds a decision/,
+    ],
   ];
   for (const [what, found, pattern] of cases)
     expect(
@@ -1087,7 +1155,7 @@ await against({ workflowModel: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.6.0/.test(
+      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.7.0/.test(
         output,
       ) &&
       server.calls.every((call) => call.startsWith('GET ')),
