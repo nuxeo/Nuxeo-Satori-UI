@@ -184,6 +184,26 @@ way.
     uses, is the platform's ([layout-v2.md](layout-v2.md), section 2), and links any record a
     property names.
 
+- **B, the records module's server add-on (26 November 2026).** Built against the recommendation,
+  "one add-on per domain module": the disposition review is
+  [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the records kit,
+  [`records-demo`](../../business-apps/packages/records-demo/README.md), depends on; nothing of it
+  went into `nuxeo-agentic-core`. It builds on the platform's retention module, `nuxeo-retention`,
+  which its package depends on: Nuxeo publishes the module for LTS 2025, and the add-on reads its
+  records, rules and holds rather than keeping its own. Decision 3 is not touched: the add-on
+  registers no operation and no endpoint, and a person reaches it by filing a document, which a
+  listener checks. Decision G, tenancy, is not built. Its security review is deferred until the app
+  is finished, as every security review is; it is installed nowhere. What changes if B goes another
+  way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, with its dependency
+    on `nuxeo-retention`, and the kit's `package.xml` depends on that package in place of
+    `nuxeo-agentic-records`. The type, schema and permission names do not change.
+  - **Into `nuxeo-agentic-core`:** every customer would then get the records components, which
+    stay unresolved on a server without the retention module; so the records types would stop
+    requiring the module's, and the review would be switched on by a setting instead, off by
+    default.
+
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
   serves some of an asset's picture views, and its original where its rights allow, watermarked on

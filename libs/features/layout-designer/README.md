@@ -190,8 +190,8 @@ that means:
   very bytes. The designer opens the file's JSON value, as the server serves it inside its answer,
   never its text: whatever of the text is not in the value cannot come back, and the rule above is
   what is written instead.
-- **18 of the 27 files round-trip,** the record pages, edit forms and queues of the six kits (no
-  kit has a create form yet). The other nine are each Prettier's own, with an object their author
+- **20 of the 31 files round-trip,** the record pages, edit forms and queues of the seven kits (no
+  kit has a create form yet). The other eleven are each Prettier's own, with an object their author
   wrote across lines though it fits on one: Prettier keeps that as written (`objectWrap: "preserve"`,
   its default, which `.prettierrc` keeps), and the value does not say it. The designer writes those
   objects on one line, and nothing else differs, as Prettier with `objectWrap: "collapse"` shows.
@@ -206,11 +206,15 @@ that means:
   - `moves-demo/…/layouts/DamageClaim/edit.layout.json`: one field, across five lines;
   - `moves-demo/…/queues/moves-this-week.json` and `…/queues/open-claims.json`: each its one sort,
     across four lines;
-  - `payers-claims-demo/…/layouts/Case/view.layout.json`: its history card, across five lines.
+  - `payers-claims-demo/…/layouts/Case/view.layout.json`: its history card, across five lines;
+  - `records-demo/…/queues/awaiting-approval.json` and `…/queues/certificates.json`: each its one
+    sort, across four lines.
 
   The moves kit came into the branch while this was built: the walk found its four, and nothing was
   changed but the list. The controlled documents kit came in after: the walk found its queue, as the
-  `app-queue` generator writes a sort, and again only the list changed.
+  `app-queue` generator writes a sort, and again only the list changed. The records kit came in after
+  that: the walk found its two record pages, which round-trip, and its two queues, and again only
+  the list changed.
 
 - **A single edit changes only the edited place,** for each edit the spec makes on each kit's
   file: moving, hiding and adding a field or a column; a card's id and heading; a field's rule; a

@@ -107,4 +107,8 @@ export const NOT_BYTE_FOR_BYTE: Readonly<Record<string, string>> = {
     'its one sort, { "field": "dmg:filedOn", "order": "asc" }, is written across four lines',
   'business-apps/packages/payers-claims-demo/bundle/agentic-ui-config/layouts/Case/view.layout.json':
     'its history card, { "id": "history", "labelKey": …, "timeline": { "pageSize": 10 } }, is written across five lines',
+  'business-apps/packages/records-demo/bundle/agentic-ui-config/queues/awaiting-approval.json':
+    'its one sort, { "field": "drun:startedAt", "order": "asc" }, is written across four lines',
+  'business-apps/packages/records-demo/bundle/agentic-ui-config/queues/certificates.json':
+    'its one sort, { "field": "dcert:disposedAt", "order": "desc" }, is written across four lines',
 };

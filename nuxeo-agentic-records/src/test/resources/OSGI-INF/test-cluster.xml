@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- A server in a cluster, for DispositionClusterTest: the cluster service enabled, so that the
+     add-on takes its lock in the cluster's key-value store. -->
+<component name="org.nuxeo.agentic.records.test.cluster">
+  <require>org.nuxeo.runtime.cluster.ClusterService</require>
+  <extension target="org.nuxeo.runtime.cluster.ClusterService" point="configuration">
+    <clusterNode id="1" enabled="true" />
+  </extension>
+</component>

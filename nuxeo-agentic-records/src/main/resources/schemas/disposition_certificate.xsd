@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!-- A disposition certificate: what a run disposed of, and who decided it. Its CSV, file:content,
+     says the same, a row per record. Written once, by the add-on, and made a record. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/disposition-certificate"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/disposition-certificate">
+
+  <xs:element name="run" type="xs:string" />
+  <xs:element name="runNumber" type="xs:long" />
+  <xs:element name="startedBy" type="xs:string" />
+  <xs:element name="startedAt" type="xs:date" />
+
+  <xs:element name="approvals" type="nxs:approvals" />
+  <xs:complexType name="approvals">
+    <xs:sequence>
+      <xs:element name="approval" type="nxs:approval" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="approval">
+    <xs:sequence>
+      <xs:element name="by" type="xs:string" />
+      <xs:element name="at" type="xs:date" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="disposedAt" type="xs:date" />
+  <!-- deleted: permanently, through CoreSession.removeDocument -->
+  <xs:element name="method" type="xs:string" />
+  <xs:element name="recordCount" type="xs:long" />
+  <xs:element name="records" type="nxs:records" />
+  <xs:complexType name="records">
+    <xs:sequence>
+      <xs:element name="record" type="nxs:record" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="record">
+    <xs:sequence>
+      <xs:element name="uid" type="xs:string" />
+      <xs:element name="path" type="xs:string" />
+      <xs:element name="title" type="xs:string" />
+      <xs:element name="type" type="xs:string" />
+      <xs:element name="ruleId" type="xs:string" />
+      <xs:element name="ruleTitle" type="xs:string" />
+      <xs:element name="retentionEnded" type="xs:date" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- The SHA-256 of file:content, in lower-case hex. -->
+  <xs:element name="sha256" type="xs:string" />
+
+</xs:schema>

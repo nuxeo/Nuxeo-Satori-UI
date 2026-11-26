@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  The platform's retention module's model, for the tests: its own schemas, read from its published
+  jar (nuxeo-retention 2025.4.66, unpacked into nuxeo-retention/ by the pom), under its own
+  component name, which the add-on's types require. This is the module's
+  OSGI-INF/retention-core-types.xml, less what the repository the tests run cannot hold: its
+  RetentionSearch type, which extends the platform's SavedSearch, its Web UI types, and the
+  NXTag and NotCollectionMember facets of other modules. RetentionModelTest holds this file to the
+  module's.
+-->
+<component name="org.nuxeo.retention.types">
+
+  <require>org.nuxeo.ecm.core.CoreExtensions</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="retention_rule" src="nuxeo-retention/schemas/retention_rule.xsd" prefix="retention_rule" />
+    <schema name="retention_definition" src="nuxeo-retention/schemas/retention_definition.xsd" prefix="retention_def" />
+    <schema name="record" src="nuxeo-retention/schemas/record.xsd" prefix="record" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <facet name="RetentionRule" perDocumentQuery="false">
+      <schema name="retention_rule" />
+      <schema name="retention_definition" />
+    </facet>
+
+    <facet name="Record">
+      <schema name="record" />
+    </facet>
+
+    <doctype name="RetentionRule" extends="Document">
+      <schema name="uid" />
+      <facet name="Versionable" />
+      <facet name="RetentionRule" />
+      <schema name="dublincore" />
+      <schema name="common" />
+    </doctype>
+
+    <doctype name="RetentionRules" extends="OrderedFolder">
+      <subtypes>
+        <type>RetentionRule</type>
+      </subtypes>
+    </doctype>
+  </extension>
+
+</component>

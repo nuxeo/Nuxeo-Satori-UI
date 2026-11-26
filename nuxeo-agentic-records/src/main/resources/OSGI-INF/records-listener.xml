@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.records.listener" version="1.0">
+
+  <documentation>
+    The disposition review, reached the way the platform's retention module reaches its records:
+    through the repository's own document events, with no Automation operation and no endpoint of
+    its own. A person files a DispositionRequest in the DispositionRuns folder, to start a run or to
+    approve or reject one; this listener, synchronous, checks it with the person's permissions and
+    does the work, in a transaction of its own inside the add-on's lock, or refuses it, and then
+    nothing is written. It refuses, too, every other change to the add-on's documents but its own.
+  </documentation>
+
+  <require>org.nuxeo.agentic.records.types</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticRecordsDisposition" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.records.DispositionListener">
+      <event>aboutToCreate</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>aboutToMove</event>
+      <event>aboutToCopy</event>
+      <event>aboutToCheckIn</event>
+      <event>beforeRestoringDocument</event>
+      <event>documentTrashed</event>
+    </listener>
+  </extension>
+
+</component>
