@@ -52,6 +52,12 @@
       "description": "Write a version 2 form, a document type's Edit or Create form, from the type's schemas in the server's content model (a file, or read live), with the fields --required names required, and have the package's component contribute it as app-layout does a record page. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
       "x-satori-internal": true
     },
+    "app-connector": {
+      "factory": "./src/app-connector/generator",
+      "schema": "./src/app-connector/schema.json",
+      "description": "Write a connector of a business app's own, beside its bundle: the fields one record's key reads from another system, for a layout's external card, which the package pipeline holds to them. No address and no credential is written. Internal: it writes a package this repository's pipeline checks (scripts/app-package.mjs), so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
     "app-queue": {
       "factory": "./src/app-queue/generator",
       "schema": "./src/app-queue/schema.json",

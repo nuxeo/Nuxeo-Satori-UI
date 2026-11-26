@@ -80,6 +80,7 @@ export const APP_GENERATORS = [
   'app-action',
   'app-registry',
   'app-model',
+  'app-connector',
 ] as const;
 export type AppGenerator = (typeof APP_GENERATORS)[number];
 export const MAX_CHANGES = 32;
@@ -201,6 +202,8 @@ const GENERATED = [
   /^bundle\/META-INF\/MANIFEST\.MF$/,
   /^bundle\/OSGI-INF\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xml$/,
   /^bundle\/schemas\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xsd$/,
+  // A kit's connectors, beside its bundle and not in it: app-connector's.
+  /^connectors\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}-connectors-config\.xml$/,
 ];
 /** The names Windows keeps for devices, which no file there may have. */
 const DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
@@ -257,8 +260,8 @@ export function fileKind(path: string): FileKind | { readonly problem: string } 
     return refuse('is code. A package is configuration only, and these tools write no code.');
   return refuse(
     `is not a file these tools write. write_package_file writes ${WRITABLE}; the generators` +
-      ' also write the component, the manifest, package/, build.mjs, the schemas and' +
-      ' content-model.json.',
+      ' also write the component, the manifest, package/, build.mjs, the schemas,' +
+      ' content-model.json and the connectors, connectors/<package>-connectors-config.xml.',
   );
 }
 
@@ -266,6 +269,7 @@ export function fileKind(path: string): FileKind | { readonly problem: string } 
 function writtenBy(path: string): string {
   if (path === 'content-model.json' || path.startsWith('bundle/schemas/'))
     return 'app-model writes it, for a demo kit';
+  if (path.startsWith('connectors/')) return 'app-connector writes it, and takes a connector out';
   if (path.startsWith('bundle/OSGI-INF/'))
     return 'the generator of what it contributes writes it: app-layout, app-form, app-queue, app-action, app-registry or app-model';
   return 'app-package writes it. A version is raised by a person, in package.xml, app.json and the manifest together';

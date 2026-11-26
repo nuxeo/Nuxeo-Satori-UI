@@ -1790,6 +1790,103 @@ expectBuilt(
   'other kits in ',
 );
 
+// A kit's own connector, in connectors/ beside its bundle, as app-connector writes it: the pipeline
+// reads it, holds it to the add-on's rules and the kit's own model, and holds each external card
+// that names it to its fields and its types, as --registered holds a card to a server's
+// connectors. The P&C kit's card and contribution agreed only because its own controls held them
+// to each other (P&C kit feedback, item 3).
+{
+  const PC = join(REPO, 'business-apps', 'packages', 'pc-claims-demo');
+  const SETTING = 'nuxeo.agentic.connectors.pcclaims.policyPayments';
+  const FIELDS = [
+    'policyStatus',
+    'policyNumber',
+    'deductibleMet',
+    'paymentStatus',
+    'paidAmount',
+    'paidOn',
+    'paymentReference',
+  ];
+  const contribution = ({
+    type = 'PropertyClaim',
+    key = 'pclaim:number',
+    fields = FIELDS,
+    address = `<address property="${SETTING}.address" />`,
+  } = {}) => `<?xml version="1.0"?>
+<!-- The P&C kit's connector, as app-connector writes it, for these controls. -->
+<component name="nuxeo.config.pc-claims-demo.connectors" version="1.0">
+  <require>org.nuxeo.agentic.connectors</require>
+  <extension target="org.nuxeo.agentic.connectors" point="connectors">
+    <connector id="pcclaims.policyPayments">
+      <type>${type}</type>
+      ${address}
+      <path>/claims/{key}</path>
+      <key xpath="${key}" />
+      <permission>Read</permission>
+      <credential header="Authorization" prefix="Bearer " property="${SETTING}.token"
+                  env="NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN" />
+${fields.map((field) => `      <field name="${field}" pointer="/${field}" />`).join('\n')}
+    </connector>
+  </extension>
+</component>
+`;
+  const withConnector = (what, xml, expected) => {
+    expected === null ? positive++ : negative++;
+    const scratch = mkdtempSync(join(tmpdir(), 'app-package-pc-'));
+    const directory = join(scratch, 'pc-claims-demo');
+    cpSync(PC, directory, { recursive: true, filter: (path) => basename(path) !== 'dist' });
+    try {
+      mkdirSync(join(directory, 'connectors'));
+      writeFileSync(join(directory, 'connectors', 'pc-claims-demo-connectors-config.xml'), xml);
+      const { status, output } = run(directory, join(scratch, 'out'));
+      const problems = [];
+      if (expected === null) {
+        if (status !== 0) problems.push(`exit ${status}, not 0`);
+      } else {
+        if (status !== 1) problems.push(`exit ${status}, not 1`);
+        if (!output.includes('step 2 refused it')) problems.push('not refused at step 2');
+        if (!output.includes(expected)) problems.push(`no "${expected}"`);
+      }
+      if (problems.length > 0)
+        failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  };
+  withConnector(
+    'the P&C kit with its connector beside its bundle, which its card reads',
+    contribution(),
+    null,
+  );
+  withConnector(
+    "an external card naming a field its kit's connector does not return",
+    contribution({ fields: FIELDS.filter((field) => field !== 'paymentReference') }),
+    'layouts/PropertyClaim/view.layout.json: cards[3].external.fields[6].name: the connector "pcclaims.policyPayments" (connectors/pc-claims-demo-connectors-config.xml) does not return the field "paymentReference"',
+  );
+  withConnector(
+    'an external card on a type its connector does not read',
+    contribution({ type: 'PropertyPolicy' }),
+    'cards[3].external.connector: the connector "pcclaims.policyPayments" (connectors/pc-claims-demo-connectors-config.xml) reads PropertyPolicy, not "PropertyClaim", so the card shows nothing',
+  );
+  withConnector(
+    'a connector keyed on a property its type does not have',
+    contribution({ key: 'pclaim:numero' }),
+    'connectors.pcclaims.policyPayments.key: "pclaim:numero" is not a property of the type "PropertyClaim" or of its facets, so the connector has no key to read [unknown]',
+  );
+  withConnector(
+    'a connector holding its address',
+    contribution({ address: '<address>https://core.example.test</address>' }),
+    'connectors.pcclaims.policyPayments: holds an address: a connector names the server property its address is in, never the address [structure]',
+  );
+  withConnector(
+    "a connector whose address is another connector's setting",
+    contribution({
+      address: '<address property="nuxeo.agentic.connectors.payers.claimPayments.address" />',
+    }),
+    `connectors.pcclaims.policyPayments.address: its property is one of the connector's own, ${SETTING}.<name> [structure]`,
+  );
+}
+
 // A `document-link`'s `show` names a property of the types it links to (layout-v2.md, section 12):
 // the claim's move's customer, misspelt, is refused against the kit's own model, naming the type.
 {

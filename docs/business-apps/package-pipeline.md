@@ -198,6 +198,24 @@ A finding names the place and what reads it. Not looked for: the server's own `e
 a task form's `var:` variables, and what a table's or a related list's column computes or gives a
 widget, which may be the row's; a column's `visibleWhen`, which is the open record's, is.
 
+Step 2 reads the connectors the kit contributes itself: each `<connector>` of a component in
+`connectors/`, beside the bundle, which `app-connector` writes as
+`connectors/<package>-connectors-config.xml`. No zip carries it: it requires
+`org.nuxeo.agentic.connectors`, which has no Marketplace package yet, so a bundle carrying it would
+leave it pending on a server without the add-on, and a server with the add-on takes it in
+`nxserver/config/`. Each connector is held to the add-on's rules (`nuxeo-agentic-connectors`'s
+README, "The contribution"): an id of its form, once; its address only as a server property of its
+own, `nuxeo.agentic.connectors.<id>.<name>`, and no address anywhere in it; a credential, if any,
+named by a property of its own or an environment variable `NUXEO_CONNECTOR_<ID>_<NAME>`, never
+written; 1 to 20 types and 1 to 50 fields of the add-on's form; and a key, `<prefix>:<name>`. Given
+a content model, each type is in it and the key is a property of each, one value. Then each
+`external` card of a layout that names one of these connectors is held to it, as `--registered`
+holds a card to a server's: the layout's type is one the connector reads, and each field is one it
+returns. One that is not is a finding naming the card's place, the connector and its file. A card
+naming a connector the kit does not contribute is the server's, and is held to its form only, or to
+`--registered`. The add-on's own checks on the server, its permission and its limits among them,
+are not repeated here.
+
 Step 2 compares the kit's names with the other kits', as the release candidate's stage 3 does for
 the zips (section 11), so that a clash is found when the kit is built or written, not at the
 candidate: the P&C kit's queue `open-claims`, the moves kit's too, passed every write. The kits

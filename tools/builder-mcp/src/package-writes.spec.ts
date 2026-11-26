@@ -149,8 +149,12 @@ describe('fileKind', () => {
       'bundle/META-INF/MANIFEST.MF',
       'bundle/OSGI-INF/contracts-demo-config.xml',
       'bundle/schemas/contract.xsd',
+      'connectors/contracts-demo-connectors-config.xml',
     ])
       expect(fileKind(path), path).toBe('generated');
+    // A connector component is app-connector's, at its one place: no other file there.
+    expect(fileKind('connectors/notes.xml')).toHaveProperty('problem');
+    expect(fileKind('connectors/deep/x-connectors-config.xml')).toHaveProperty('problem');
   });
 
   it('refuses every other path, naming why', () => {
@@ -1236,6 +1240,55 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(wrong.validation?.findings.map((finding) => finding.message).join('\n')).toContain(
         'a checklist reads a list of complex values',
       );
+    });
+
+    it("writes a kit's connector, and holds its external card to the fields it returns", async () => {
+      const root = kit('pc-claims-demo', 'connector');
+      const connector = 'connectors/pc-claims-demo-connectors-config.xml';
+      const options = (fields: string) => ({
+        id: 'pcclaims.policyPayments',
+        type: 'PropertyClaim',
+        key: 'pclaim:number',
+        path: '/claims/{key}',
+        fields,
+      });
+      const all =
+        'policyStatus=/policy/status,policyNumber=/policy/number,deductibleMet=/policy/deductibleMet,' +
+        'paymentStatus=/payment/status,paidAmount=/payment/amount,paidOn=/payment/paidOn,paymentReference=/payment/reference';
+      const before = fingerprint(root);
+      // Without the reference the card shows, refused, and nothing written.
+      const short = await writePackage(
+        {
+          package: root,
+          changes: [
+            {
+              kind: 'generator',
+              generator: 'app-connector',
+              options: options(all.replace(',paymentReference=/payment/reference', '')),
+            },
+          ],
+        },
+        OPTIONS,
+      );
+      expectRefused(short, root, before);
+      expect(short.validation?.findings).toContainEqual(
+        expect.objectContaining({
+          file: `${CONFIG}/layouts/PropertyClaim/view.layout.json`,
+          place: 'cards[3].external.fields[6].name',
+          kind: 'unknown',
+        }),
+      );
+      const written = await writePackage(
+        {
+          package: root,
+          changes: [{ kind: 'generator', generator: 'app-connector', options: options(all) }],
+        },
+        OPTIONS,
+      );
+      expect(written.written, JSON.stringify(written.validation?.stdout)).toBe(true);
+      expect(written.changes).toEqual([{ path: connector, change: 'created' }]);
+      expect(read(root, connector)).toContain('<key xpath="pclaim:number" />');
+      expect(read(root, connector)).not.toMatch(/https?:/);
     });
 
     it("makes a new package on a server's model in one generator, the model a file in the repository", async () => {

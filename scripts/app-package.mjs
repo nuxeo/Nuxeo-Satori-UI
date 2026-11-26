@@ -112,7 +112,9 @@ const LIBRARY = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'lib');
 const { listedColumnFindings, listedType, nxqlProblems } = await import(
   pathToFileURL(join(LIBRARY, 'page-providers.ts')).href
 );
-const { readContentModel } = await import(pathToFileURL(join(LIBRARY, 'content-model.ts')).href);
+const { propertiesOf, readContentModel } = await import(
+  pathToFileURL(join(LIBRARY, 'content-model.ts')).href
+);
 const TEMPLATE = join(
   REPO,
   'tools',
@@ -130,6 +132,10 @@ const CATALOGUE = join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json');
 const OWN_MODEL = 'content-model.json';
 /** The repository's kits, which a kit among them is compared with by default (`--kits`). */
 const KITS = join(REPO, 'business-apps', 'packages');
+/** The connectors add-on's rules for what a contribution names (nuxeo-agentic-connectors/README.md). */
+const CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+const CONNECTOR_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const PROPERTY = /^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$/;
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
@@ -400,6 +406,14 @@ function run({
     return refuse(
       2,
       "a queue's or a related list's column or sort names a property the records its page provider lists do not have, or a widget that does not show one, listed above.",
+    );
+  }
+  const connected = connectorFindings(directory, root, heldTo);
+  if (connected.length > 0) {
+    for (const finding of connected) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a connector of the package's own, in connectors/, or an external card that reads one, is not what the connectors add-on would register or answer, listed above.",
     );
   }
   const contributed =
@@ -949,6 +963,263 @@ function pageProvidersOf(directory) {
 }
 
 /** A JSON file of the app definition, or `null` when it cannot be read: the validator says why. */
+/**
+ * The connectors the package contributes itself, each `<connector>` of a component in
+ * `connectors/`, beside its bundle, as `app-connector` writes them: `[{ id, file, types, key,
+ * fields, address, credential, text }]`, read as the builder reads a component, its comments left
+ * out. Disabled ones register nothing, and are not read.
+ */
+function ownConnectors(directory) {
+  const folder = join(directory, 'connectors');
+  if (!existsSync(folder) || !lstatSync(folder).isDirectory()) return [];
+  const found = [];
+  for (const name of readdirSync(folder).sort()) {
+    const path = join(folder, name);
+    if (!name.endsWith('.xml') || !lstatSync(path).isFile()) continue;
+    const xml = componentXmlOf(readFileSync(path, 'utf8'));
+    for (const [start, end] of extensionsOf(xml, 'org.nuxeo.agentic.connectors', 'connectors'))
+      for (const match of xml
+        .slice(start, end)
+        .matchAll(
+          /<connector(?=[ \t\r\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/connector[ \t\r\n]*>/g,
+        )) {
+        const attributes = attributesOf(match[1]);
+        if (attributes.enabled !== undefined && attributes.enabled.toLowerCase() !== 'true')
+          continue;
+        const body = match[2];
+        const tags = (element) =>
+          [
+            ...body.matchAll(
+              new RegExp(`<${element}(?=[ \\t\\r\\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>`, 'g'),
+            ),
+          ].map(([, inner]) => attributesOf(inner.replace(/\/$/, '')));
+        const texts = (element) =>
+          [...body.matchAll(new RegExp(`<${element}>([^<]*)</${element}>`, 'g'))].map(([, text]) =>
+            text.trim(),
+          );
+        found.push({
+          id: attributes.id ?? '',
+          file: path,
+          types: texts('type'),
+          key: tags('key')[0]?.xpath,
+          fields: tags('field').map((field) => field.name ?? ''),
+          address: tags('address'),
+          addressText: texts('address'),
+          credential: tags('credential')[0],
+          text: match[0],
+        });
+      }
+  }
+  return found;
+}
+
+/**
+ * What the package's own connectors are not, and each `external` card that reads one wrongly, as
+ * findings in the validator's form (package-pipeline.md, section 2). The connectors add-on would
+ * leave out a connector that breaks its rules, and the card would show its error state; a card's
+ * field its connector does not return shows nothing, and a card on a type the connector does not
+ * read shows nothing either. So:
+ *
+ * - **each connector** has an id of the add-on's form, once in the package; an address only as
+ *   the server property `nuxeo.agentic.connectors.<id>.<name>`, and no text anywhere that is an
+ *   address; a credential, if any, from a property under the same prefix or an environment
+ *   variable `NUXEO_CONNECTOR_<ID>_<NAME>`, never written; 1 to 20 types and 1 to 50 fields of the
+ *   add-on's form, each once; and a key, `<prefix>:<name>`;
+ * - **given a content model,** each type is in it, and the key is a property of each, one value;
+ * - **each `external` card** of a layout that names one of these connectors is on a type the
+ *   connector reads, and names only fields it returns.
+ *
+ * A card naming a connector the package does not contribute is the server's, as `--registered`
+ * says, and is not read here.
+ */
+function connectorFindings(directory, root, model) {
+  const connectors = ownConnectors(directory);
+  if (connectors.length === 0) return [];
+  let read = null;
+  if (model !== undefined && model !== null) {
+    try {
+      read =
+        readContentModel(JSON.parse(readFileSync(model, 'utf8').replace(/^\uFEFF/, ''))).model ??
+        null;
+    } catch {
+      // The validator has read it already, and said what was wrong.
+    }
+  }
+  const findings = [];
+  const say = (file, place, message, kind) =>
+    findings.push(`${file}: ${place}: ${message} [${kind}]`);
+  const seen = new Set();
+  for (const connector of connectors) {
+    const at = `connectors.${connector.id || '?'}`;
+    const { id, file } = connector;
+    if (!CONNECTOR_ID.test(id) || /\.(?:http|cache|events)$/.test(id))
+      say(
+        file,
+        at,
+        `"${id}" is not a connector's id: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter, and not ending in .http, .cache or .events`,
+        'structure',
+      );
+    else if (seen.has(id))
+      say(
+        file,
+        at,
+        `the connector "${id}" is contributed twice: the later replaces the earlier`,
+        'structure',
+      );
+    seen.add(id);
+    const prefix = `nuxeo.agentic.connectors.${id}.`;
+    const env = `NUXEO_CONNECTOR_${id.toUpperCase().replace(/[.-]/g, '_')}_`;
+    if (/\/\/|\b(?:https?|ldaps?|ftps?|wss?):/i.test(connector.text))
+      say(
+        file,
+        at,
+        'holds an address: a connector names the server property its address is in, never the address',
+        'structure',
+      );
+    if (connector.address.length !== 1 || connector.addressText.some((text) => text !== ''))
+      say(
+        file,
+        `${at}.address`,
+        'a connector has one <address property="..." />, the server property its address is in, and nothing in it',
+        'structure',
+      );
+    else if (
+      !(connector.address[0].property ?? '').startsWith(prefix) ||
+      connector.address[0].property === prefix
+    )
+      say(
+        file,
+        `${at}.address`,
+        `its property is one of the connector's own, ${prefix}<name>`,
+        'structure',
+      );
+    if (connector.credential) {
+      const { property, env: variable } = connector.credential;
+      if (property === undefined && variable === undefined)
+        say(
+          file,
+          `${at}.credential`,
+          'a credential names the server property or the environment variable it is in, never the credential',
+          'structure',
+        );
+      if (property !== undefined && (!property.startsWith(prefix) || property === prefix))
+        say(
+          file,
+          `${at}.credential`,
+          `its property is one of the connector's own, ${prefix}<name>`,
+          'structure',
+        );
+      if (variable !== undefined && (!variable.startsWith(env) || variable === env))
+        say(
+          file,
+          `${at}.credential`,
+          `its environment variable is one of the connector's own, ${env}<NAME>`,
+          'structure',
+        );
+    }
+    if (connector.types.length === 0 || connector.types.length > 20)
+      say(file, `${at}.type`, 'a connector reads 1 to 20 document types', 'structure');
+    if (connector.fields.length === 0 || connector.fields.length > 50)
+      say(file, `${at}.field`, 'a connector returns 1 to 50 fields', 'structure');
+    connector.fields.forEach((name, index) => {
+      if (!CONNECTOR_FIELD.test(name))
+        say(
+          file,
+          `${at}.field[${index}]`,
+          `"${name}" is not a field's name: letters, digits and "_", starting with a letter`,
+          'structure',
+        );
+      else if (connector.fields.indexOf(name) !== index)
+        say(file, `${at}.field[${index}]`, `the field "${name}" is listed twice`, 'structure');
+    });
+    if (
+      typeof connector.key !== 'string' ||
+      !PROPERTY.test(connector.key) ||
+      /^(?:ecm|var):/.test(connector.key)
+    )
+      say(
+        file,
+        `${at}.key`,
+        'a connector reads its key from a property of the record, <key xpath="<prefix>:<name>" />',
+        'structure',
+      );
+    else if (read !== null)
+      for (const type of connector.types) {
+        if (!read.types.has(type)) {
+          say(
+            file,
+            `${at}.type`,
+            `the document type "${type}" is not in the content model`,
+            'unknown',
+          );
+          continue;
+        }
+        const property = propertiesOf(read, type)?.get(connector.key);
+        if (!property)
+          say(
+            file,
+            `${at}.key`,
+            `"${connector.key}" is not a property of the type "${type}" or of its facets, so the connector has no key to read`,
+            'unknown',
+          );
+        else if (property.list || property.type === 'complex' || property.type === 'blob')
+          say(
+            file,
+            `${at}.key`,
+            `"${connector.key}" holds ${property.list ? 'a list' : `a ${property.type} value`} on "${type}", and a key is one value`,
+            'parameter',
+          );
+      }
+  }
+  // Each external card on one of these connectors, in each layout.
+  const byId = new Map(connectors.map((connector) => [connector.id, connector]));
+  const layouts = join(root, 'layouts');
+  if (existsSync(layouts) && lstatSync(layouts).isDirectory())
+    for (const path of filesUnder(layouts)
+      .filter((file) => file.endsWith('.layout.json'))
+      .sort()) {
+      const type = path.split('/')[0];
+      const file = join(layouts, ...path.split('/'));
+      const content = definitionFile(file);
+      if (!isObject(content)) continue;
+      const cards = (list, at) => {
+        if (!Array.isArray(list)) return;
+        list.forEach((card, index) => {
+          const external = isObject(card) ? card.external : undefined;
+          if (!isObject(external) || typeof external.connector !== 'string') return;
+          const connector = byId.get(external.connector);
+          if (!connector) return;
+          const place = `${at}[${index}].external`;
+          if (connector.types.length > 0 && !connector.types.includes(type))
+            say(
+              file,
+              `${place}.connector`,
+              `the connector "${connector.id}" (connectors/${basename(connector.file)}) reads ${connector.types.join(', ')}, not "${type}", so the card shows nothing`,
+              'unknown',
+            );
+          if (!Array.isArray(external.fields)) return;
+          external.fields.forEach((entry, inner) => {
+            const name =
+              typeof entry === 'string' ? entry : isObject(entry) ? entry.name : undefined;
+            if (typeof name === 'string' && !connector.fields.includes(name))
+              say(
+                file,
+                `${place}.fields[${inner}]${typeof entry === 'string' ? '' : '.name'}`,
+                `the connector "${connector.id}" (connectors/${basename(connector.file)}) does not return the field "${name}": it returns ${connector.fields.join(', ')}`,
+                'unknown',
+              );
+          });
+        });
+      };
+      cards(content.cards, 'cards');
+      if (Array.isArray(content.tabs))
+        content.tabs.forEach((tab, index) => {
+          if (isObject(tab)) cards(tab.cards, `tabs[${index}].cards`);
+        });
+    }
+  return findings;
+}
+
 /** A folder as the pipeline's messages name it: from the working directory when inside it. */
 function shownFolder(folder) {
   const near = relative(process.cwd(), folder);
@@ -1020,10 +1291,11 @@ function kitClashes(directory, folder) {
     );
     if (owners.length === 0) continue;
     const named = owners.map((owner) => owner.folder).join(' and ');
+    const at = join(directory, ...file.split('/'));
     findings.push(
       kind === 'label key'
-        ? `${file}: labels[${JSON.stringify(key)}]: the label key is ${named}'s too: a kit's own key is begun with its app's name (app-definition-v2.md, section 7) [clash]`
-        : `${file}: ${kind} ${JSON.stringify(key)}: ${named} ${owners.length === 1 ? 'contributes' : 'contribute'} it too [clash]`,
+        ? `${at}: labels[${JSON.stringify(key)}]: the label key is ${named}'s too: a kit's own key is begun with its app's name (app-definition-v2.md, section 7) [clash]`
+        : `${at}: ${kind} ${JSON.stringify(key)}: ${named} ${owners.length === 1 ? 'contributes' : 'contribute'} it too [clash]`,
     );
   }
   return { kits: others.length, findings, notes };

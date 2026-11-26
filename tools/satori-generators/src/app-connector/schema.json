@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppConnector",
+  "title": "Satori business app connector",
+  "description": "Writes a connector of the kit's own into connectors/<package>-connectors-config.xml, beside the bundle: the fields one record's key reads from another system, for an external card. No address and no credential is written: each is a server setting.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "id": {
+      "type": "string",
+      "description": "The connector's id, which an external card names: 1 to 64 letters, digits, '.', '_' or '-', starting with a letter, such as acme.policyPayments. Its settings are named after it.",
+      "x-prompt": "Which connector id (e.g. acme.policyPayments)?",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"
+    },
+    "type": {
+      "type": "string",
+      "description": "The document types it reads a key from, separated by commas, 1 to 20, and the only ones its card shows anything on."
+    },
+    "key": {
+      "type": "string",
+      "description": "The property of each type that holds the key, <prefix>:<name>, such as claim:number: one value, put into the path."
+    },
+    "path": {
+      "type": "string",
+      "description": "Where on the other system, from /, with {key} once, such as /claims/{key}: letters, digits, '/', '.', '_', '~' and '-' besides, and no query."
+    },
+    "fields": {
+      "type": "string",
+      "description": "What it returns, separated by commas, 1 to 50, each <name> or <name>=<JSON pointer into the answer>, such as paidAmount=/payment/amount. The pointer is /<name> by default."
+    },
+    "permission": {
+      "type": "string",
+      "description": "The Nuxeo permission a person needs on the record for the card to read it. Defaults to Read.",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+    },
+    "credential": {
+      "type": "boolean",
+      "description": "Send a token, from the server property nuxeo.agentic.connectors.<id>.token, else the environment variable NUXEO_CONNECTOR_<ID>_TOKEN, in header. The token itself is never written here.",
+      "default": true
+    },
+    "header": {
+      "type": "string",
+      "description": "With credential: the header the token goes in. Defaults to Authorization. Not Host, Cookie or Proxy-*."
+    },
+    "prefix": {
+      "type": "string",
+      "description": "With credential: what goes before the token, at most 32 printable characters. Defaults to 'Bearer '."
+    },
+    "connectTimeout": {
+      "type": "number",
+      "description": "The connection's limit, 100 to 10000 ms. The add-on's default, 2000, otherwise."
+    },
+    "timeout": {
+      "type": "number",
+      "description": "The whole call's limit, 100 to 30000 ms. The add-on's default, 5000, otherwise."
+    },
+    "maxBytes": {
+      "type": "number",
+      "description": "The largest answer it reads, 1024 to 1048576. The add-on's default, 262144, otherwise."
+    },
+    "maxConcurrent": {
+      "type": "number",
+      "description": "The calls running at once, 1 to 64. The add-on's default, 8, otherwise."
+    },
+    "model": {
+      "type": "string",
+      "description": "The content model the types and the key are held to. Defaults to the package's own content-model.json, when it has one; with neither, they are not checked."
+    },
+    "remove": {
+      "type": "boolean",
+      "description": "Take the connector out, and the file with it when it is the last. Given alone.",
+      "default": false
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Write the connector again when the file has it already.",
+      "default": false
+    }
+  },
+  "required": ["package", "id"]
+}
