@@ -12,6 +12,24 @@
         "parameters": [{ "field": "docctl:status" }, "superseded"]
       },
       "link": { "field": "docctl:supersededBy" }
+    },
+    {
+      "id": "export-mark-ec1",
+      "tone": "warning",
+      "labelKey": "controlled-documents.banner.exportMarkEc1",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "docmark:classification" }, "EC-1"]
+      }
+    },
+    {
+      "id": "export-mark-ec2",
+      "tone": "negative",
+      "labelKey": "controlled-documents.banner.exportMarkEc2",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "docmark:classification" }, "EC-2"]
+      }
     }
   ],
   "cards": [
@@ -37,6 +55,27 @@
           "field": "docctl:supersededBy",
           "labelKey": "controlled-documents.field.supersededBy",
           "widget": "document-link"
+        },
+        {
+          "field": "docmark:classification",
+          "labelKey": "controlled-documents.field.exportMark",
+          "widget": "status-badge",
+          "parameters": { "tones": { "EC-1": "warning", "EC-2": "negative" } }
+        },
+        {
+          "field": "docmark:groups",
+          "labelKey": "controlled-documents.field.exportGroups",
+          "widget": "group"
+        },
+        {
+          "field": "docmark:markedBy",
+          "labelKey": "controlled-documents.field.markedBy",
+          "widget": "user"
+        },
+        {
+          "field": "docmark:markedAt",
+          "labelKey": "controlled-documents.field.markedAt",
+          "widget": "date"
         },
         {
           "field": "docrev:cycles",

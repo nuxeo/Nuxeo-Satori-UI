@@ -6,7 +6,10 @@
     numbers a first revision on creation; gives a new revision its predecessor's number and the
     next revision, and marks the predecessor superseded, linked both ways; refuses any other change
     to the docctl properties, a copy of a controlled document, and a restore that would change
-    them. Every refusal marks the transaction for rollback.
+    them; and, since 0.3.0, keeps each export-control mark: carried to the next revision, changed
+    only by a holder of ChangeExportMark, audited, and a marked revision placed, by a new revision
+    in another folder or a move, only where its mover holds ChangeExportMark. Every refusal marks
+    the transaction for rollback.
   </documentation>
 
   <require>org.nuxeo.agentic.documents</require>
@@ -20,6 +23,7 @@
       <event>beforeDocumentModification</event>
       <event>aboutToCopy</event>
       <event>beforeRestoringDocument</event>
+      <event>aboutToMove</event>
     </listener>
   </extension>
 

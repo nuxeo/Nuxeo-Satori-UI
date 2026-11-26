@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- The ControlledDocument facet's third schema, prefix docmark: a revision's export-control mark.
+     A holder of the add-on's ChangeExportMark permission writes the classification and the groups;
+     the server writes who marked it and when, carries the mark to the revision that supersedes it,
+     and refuses a download, a rendition and a transmittal of the revision to anyone in none of the
+     groups. Empty, the revision is not marked. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/export_mark"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/export_mark">
+
+  <!-- The classification: capitals and digits in parts joined by hyphens, such as EC-2. -->
+  <xs:element name="classification" type="xs:string" />
+  <!-- The groups that may receive the revision: a member of any one of them may. -->
+  <xs:element name="groups" type="nxs:stringList" />
+  <!-- Who last set, changed or removed the mark, and when: the server's. -->
+  <xs:element name="markedBy" type="xs:string" />
+  <xs:element name="markedAt" type="xs:dateTime" />
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+</xs:schema>

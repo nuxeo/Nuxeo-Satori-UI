@@ -57,14 +57,14 @@ public class BundleTest {
     }
 
     @Test
-    public void theManifestNamesTheFiveComponents() throws Exception {
+    public void theManifestNamesTheSixComponents() throws Exception {
         List<String> components = Arrays.stream(manifest().getValue("Nuxeo-Component").split(","))
                                         .map(String::trim)
                                         .filter(c -> !c.isEmpty())
                                         .toList();
         assertEquals(List.of("OSGI-INF/documents-schema-contrib.xml", "OSGI-INF/documents-service.xml",
                 "OSGI-INF/documents-listener-contrib.xml", "OSGI-INF/documents-transmittals-contrib.xml",
-                "OSGI-INF/documents-reviews-contrib.xml"), components);
+                "OSGI-INF/documents-reviews-contrib.xml", "OSGI-INF/documents-export-marks-contrib.xml"), components);
     }
 
     /** Each facet of the add-on, with its schema, its prefix and every property the add-on names. */
@@ -75,6 +75,8 @@ public class BundleTest {
         for (Expected expected : List.of(
                 new Expected(ControlledDocuments.FACET, ControlledDocuments.REVIEW_SCHEMA,
                         ControlledDocuments.REVIEW_PREFIX, List.of(ControlledDocuments.REVIEW_CYCLES)),
+                new Expected(ControlledDocuments.FACET, ControlledDocuments.MARK_SCHEMA,
+                        ControlledDocuments.MARK_PREFIX, ControlledDocuments.MARK_PROPERTIES),
                 new Expected(ControlledDocuments.TRANSMITTAL_FACET, ControlledDocuments.TRANSMITTAL_SCHEMA,
                         ControlledDocuments.TRANSMITTAL_PREFIX, ControlledDocuments.TRANSMITTAL_PROPERTIES),
                 new Expected(ControlledDocuments.RECEIPT_FACET, ControlledDocuments.RECEIPT_SCHEMA,

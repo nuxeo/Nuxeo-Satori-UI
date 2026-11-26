@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server with the controlled documents kit's fictional register, so that its record
- * pages, queues and home have something to show: five engineering documents, from `data.mjs`, nine
- * revisions in all, under /default-domain/workspaces/controlled-documents/register; and, since the
+ * pages, queues and home have something to show: five engineering documents, from `data.mjs`, ten
+ * revisions in all, under /default-domain/workspaces/controlled-documents/register; since the
  * kit's version 0.2.0, the demo's three people, a transmittal issued to two of them, and a review
- * cycle with two threads, one resolved.
+ * cycle with two threads, one resolved; and, since 0.3.0, two fictional export-control marks, on
+ * the single-line diagram and the commissioning procedure, with the groups that may receive them.
  *
  *   node business-apps/packages/controlled-documents-demo/demo/seed.mjs
  *
- * The kit's package, version 0.2.0 or later, and `nuxeo-agentic-documents` 0.2.0 must be installed
- * first: the records are of the stand-in model's types, which the add-on numbers and guards.
+ * The kit's package, version 0.3.0 or later, and `nuxeo-agentic-documents` 0.3.0 must be installed
+ * first: the records are of the stand-in model's types, which the add-on numbers and guards, and
+ * the marks are the add-on's 0.3.0 schema.
  *
  * Environment:
  *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. An
@@ -35,9 +37,16 @@
  * anyone else, an administrator included.
  *
  * **The people are the seed's.** It creates the kit's groups, `document-controllers` and
- * `engineers`, and `data.mjs`'s users in them, each marked as the seed's, and gives the groups
- * `ReadWrite` on the workspace. A user or a group of those names that the seed did not create stops
- * the run before anything is written.
+ * `engineers`, and, since 0.3.0, `ec1-cleared` and `ec2-cleared`, the marks' groups, and
+ * `data.mjs`'s users in them, each marked as the seed's, and gives the first two `ReadWrite` on the
+ * workspace, and document controllers the add-on's `ChangeExportMark`. A user or a group of those
+ * names that the seed did not create stops the run before anything is written.
+ *
+ * **The marks, since 0.3.0.** A marked chain's first revision is created with its mark, as the
+ * administrator, who holds every permission; the server carries it to each revision after, and the
+ * seed sends it with each one, which the server ignores. A revision seeded before 0.3.0 is given
+ * its chain's mark by an update. Who marked it, and when, are the server's: the seed writes
+ * neither.
  *
  * **Safe to run twice.** Every revision has a fixed place. One already there has `data.mjs`'s
  * other values written over its own; one missing is created, superseding the revision before it,
@@ -54,7 +63,9 @@
  * the others, and the revisions' each chain whole. The transmittal is read back with its receipts,
  * one per recipient, those `data.mjs` acknowledges acknowledged; and the review cycle with its
  * threads, those it resolves resolved; each through the page providers the kit's pages and queues
- * read. Another document on the server may be in them: the seed checks its own.
+ * read. Another document on the server may be in them: the seed checks its own. Since 0.3.0, each
+ * marked chain's every revision is read back with its mark, who marked it written by the server,
+ * and each other revision with none.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -63,7 +74,8 @@
  * place held another type, a chain could not be continued, or a check failed; 2, a precondition,
  * found before anything is written: no credentials or no demo password, no server, or one that does
  * not answer /me as Nuxeo does, credentials refused, the package not installed or older than 0.2.0,
- * no /default-domain/workspaces, or a user or group of the demo's names not the seed's.
+ * the add-on older than 0.3.0, with no export_mark schema, no /default-domain/workspaces, or a user
+ * or group of the demo's names not the seed's.
  */
 import {
   CHAINS,
@@ -78,6 +90,7 @@ import {
   USERS,
   WORKSPACE,
   dayFrom,
+  markOf,
   revisionsOf,
 } from './data.mjs';
 
@@ -91,6 +104,8 @@ const MAX_PAGES = 100;
 const TYPE = 'EngineeringDocument';
 /** The types version 0.2.0 of the package adds, which the transmittal and the review need. */
 const TYPES_0_2 = ['Transmittal', 'TransmittalReceipt', 'ReviewCycle', 'TransmittalRegister'];
+/** The schema `nuxeo-agentic-documents` 0.3.0 adds, which the marks are written in. */
+const MARK_SCHEMA = 'export_mark';
 
 const WORKSPACES = '/default-domain/workspaces';
 const ROOT = `${WORKSPACES}/${WORKSPACE.name}`;
@@ -161,7 +176,9 @@ async function seed() {
   });
   await grant(await call('GET', `/path${pathOf(ROOT)}`));
   await ensureFolder(ROOT, FOLDER.name, 'Folder', { 'dc:title': FOLDER.title });
-  await ensureFolder(ROOT, TRANSMITTALS.name, TRANSMITTALS.type, { 'dc:title': TRANSMITTALS.title });
+  await ensureFolder(ROOT, TRANSMITTALS.name, TRANSMITTALS.type, {
+    'dc:title': TRANSMITTALS.title,
+  });
   await ensureFolder(ROOT, REVIEWS.name, REVIEWS.type, { 'dc:title': REVIEWS.title });
 
   const today = new Date();
@@ -182,6 +199,10 @@ async function seed() {
       `What the server holds is not the register seeded:\n  ${problems.join('\n  ')}`,
     );
   console.log('  checked  numbers, revisions, supersession, and the three page providers');
+  const unmarked = markDisagreements(seeded);
+  if (unmarked.length > 0)
+    throw new Error(`What the server holds is not the marks seeded:\n  ${unmarked.join('\n  ')}`);
+  console.log('  checked  the export-control marks, carried to every revision of their chains');
 
   const transmittal = await ensureTransmittal(seeded, today);
   const cycle = await ensureReview(seeded, today);
@@ -206,7 +227,11 @@ async function seed() {
   const pumpHouse = seeded.get('pump-house-ga');
   console.log(`A superseded revision, with its banner: ${APP}/#/doc/${pumpHouse[0].uid}`);
   console.log(`The current revision of it: ${APP}/#/doc/${pumpHouse.at(-1).uid}`);
-  console.log(`The transmittal ${transmittal.properties['trm:number']}: ${APP}/#/doc/${transmittal.uid}`);
+  const marked = seeded.get(CHAINS.find((chain) => chain.mark).key).at(-1);
+  console.log(`A marked revision, with its banner: ${APP}/#/doc/${marked.uid}`);
+  console.log(
+    `The transmittal ${transmittal.properties['trm:number']}: ${APP}/#/doc/${transmittal.uid}`,
+  );
   console.log(`The review cycle: ${APP}/#/doc/${cycle.uid}`);
 }
 
@@ -237,6 +262,12 @@ async function preflight() {
           'upgrade it and nuxeo-agentic-documents to 0.2.0 ' +
           '(business-apps/packages/controlled-documents-demo/README.md), then run this again.',
       );
+  if ((await find(`/config/schemas/${MARK_SCHEMA}`)) === null)
+    throw new Precondition(
+      `${SERVER} has nuxeo-agentic-documents older than 0.3.0, with no ${MARK_SCHEMA} schema for the ` +
+        'export-control marks: upgrade it and the controlled-documents-demo package to 0.3.0 ' +
+        '(business-apps/packages/controlled-documents-demo/README.md), then run this again.',
+    );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
   // Before anything is written: a user or a group of the demo's names that is not the seed's.
@@ -540,6 +571,42 @@ async function disagreementsOf(seeded) {
   return problems;
 }
 
+/**
+ * Where the stored marks disagree with `data.mjs`, read back by `disagreementsOf`: a marked chain's
+ * every revision with its classification and groups, and who marked it, which the server writes;
+ * an unmarked chain's revisions with none.
+ */
+function markDisagreements(seeded) {
+  const problems = [];
+  for (const chain of CHAINS) {
+    const expected = markOf(chain);
+    seeded.get(chain.key).forEach((doc, index) => {
+      const at = `${chain.key}, revision ${chain.revisions[index]}`;
+      const p = doc.properties;
+      if (!chain.mark) {
+        if (p['docmark:classification'])
+          problems.push(
+            `${at}: marked ${p['docmark:classification']}, which data.mjs does not mark`,
+          );
+        return;
+      }
+      if (p['docmark:classification'] !== expected['docmark:classification'])
+        problems.push(
+          `${at}: marked ${p['docmark:classification'] || 'nothing'}, not ` +
+            expected['docmark:classification'],
+        );
+      if (JSON.stringify(p['docmark:groups'] ?? []) !== JSON.stringify(expected['docmark:groups']))
+        problems.push(
+          `${at}: for ${JSON.stringify(p['docmark:groups'] ?? [])}, not ` +
+            JSON.stringify(expected['docmark:groups']),
+        );
+      if (!p['docmark:markedBy'])
+        problems.push(`${at}: the server wrote no one as having marked it`);
+    });
+  }
+  return problems;
+}
+
 /** Where the kit's page providers disagree with the register, for the revisions the seed wrote. */
 async function providerDisagreements(seeded) {
   const problems = [];
@@ -624,7 +691,9 @@ async function reviewDisagreements(cycle, seeded) {
   const p = cycle.properties;
   const revisions = seeded.get(REVIEW.chain).map((doc) => doc.uid);
   if (!revisions.includes(p['rvw:document']))
-    problems.push(`the review cycle reviews ${p['rvw:document']}, not a revision of ${REVIEW.chain}`);
+    problems.push(
+      `the review cycle reviews ${p['rvw:document']}, not a revision of ${REVIEW.chain}`,
+    );
   if (p['rvw:openedBy'] !== REVIEW.opener)
     problems.push(`the review cycle was opened by ${p['rvw:openedBy']}, not ${REVIEW.opener}`);
   const threads = await threadsOf(cycle.uid);
