@@ -1,6 +1,6 @@
 import type { Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import appPackageGenerator from '../app-package/generator';
 import appQueueGenerator, { type AppQueueSchema } from './generator';
@@ -27,6 +27,20 @@ describe('app-queue generator', () => {
       owner: 'acme',
       platform: '>=0.2.0 <1.0.0',
     });
+  });
+
+  it("says to read the page provider with the package, which answers for a demo kit's own", async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    let output = '';
+    try {
+      (await generate())();
+      output = log.mock.calls.map((call) => call.join(' ')).join('\n');
+    } finally {
+      log.mockRestore();
+    }
+    expect(output).toContain(
+      `describe_page_provider, { "name": "acme_open_contracts", "package": "${ROOT}" }`,
+    );
   });
 
   it('writes queues/<id>.json version 2, named by a label key in labels/en.json', async () => {

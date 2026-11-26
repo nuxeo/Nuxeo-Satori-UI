@@ -63,6 +63,13 @@ shows nothing.
 | the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow` `{ "name" }` |
 | an operation's parameters                         | `list_operations`, `describe_operation` `{ "id" }` |
 
+- **A demo kit's own model is the package's, not the server's,** until the kit is installed. Give
+  `get_content_model`, `describe_document_type`, `describe_schema`, `list_page_providers` and
+  `describe_page_provider` the kit's folder as `package`, such as
+  `{ "name": "moves_open_claims", "package": "business-apps/packages/moves-demo" }`: when the
+  package ships a stand-in model, they answer from its `content-model.json` and its components,
+  with `source: "package"`; what it does not have, the server answers, with `source: "server"` and
+  a `packageNote` saying why.
 - **The type the person names must exist.** If it does not, stop: creating it is Studio's, not
   yours. Say which types are there. Only when the person asks for a demo kit with a stand-in model
   of its own, write one with `app-model` (step 2), never on a server that holds a customer's model.
@@ -97,7 +104,7 @@ are given, and the write tools write only what passes the pipeline.
 Each makes the change to a staging copy, runs the pipeline's steps 1 to 6 on it as CI does, and
 writes to the package only when there is no finding. Read the answer every time:
 
-- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed).
+- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed). Read its `warnings`, when there are any, and fix what they name: no check refuses it, but the package is not done.
 - **`written: false`:** nothing was written. `validation.findings` and `validation.refusedAt` say
   why. Fix what they name and write again. An id the platform or the package does not register (a
   widget, a rule, an operation the allow-list does not name) is refused here, at write time: never
@@ -189,15 +196,21 @@ What each writes, and what it leaves to you:
   `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
   them. A widget only where the model says more than the type: `vocabulary` for a property bound to
   a directory, `document-link` for a document's id, `table` for a list of complex values,
-  `address` for a complex value with a street and a city. Files are left out, and it says so. It
-  has the component contribute the layout, from the one path the pipeline accepts.
+  `address` for a complex value with a street and a city. Files are left out. Its "Left out" names
+  every property it did not write and why, Nuxeo's own schemas' included, such as `files:files`,
+  a record's attachments, which the document page's Attachments panel shows. It has the component
+  contribute the layout, from the one path the pipeline accepts. `app-form` says what it left out
+  the same way.
 - **`app-form`:** the Edit or Create form, as `app-layout` chooses its cards, `dc:title` first,
   and `"required": true` on the fields `--required` names. A widget only where it changes the
   input: `vocabulary`, a picker. A file, or a value holding one, is left out: files are changed in
   Attachments. The component contributes it, as it does the record page. A field rule in plain
   words is the next edit (below).
-- **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
-  against the model yet. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
+- **`app-queue`:** the page provider, columns, sort and page size. The pipeline holds the columns
+  and the sort, and a related list's, to the type a page provider of the package's own lists, as
+  its NXQL says (`ecm:primaryType = '<Type>'`, as `app-model` writes it), given a content model,
+  as a demo kit's own always is; on the server's, or with no model, nothing checks them. Facets
+  are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
 "labelKey": "<key>" }]`, each an aggregate the page provider defines, which
   `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
   page provider in the package's own model does not define.
@@ -270,8 +283,16 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **Name each of the kit's own schemas for the Properties panel:** `layout.schema.<schema>`, by the
   schema's name, not its prefix, in `labels/en.json`. For a type with no `metadata` layout the panel
   heads each schema's section with it, else with the name made readable, `acmeproduct` as
-  "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
+  "Acmeproduct". `app-model` writes it for each type it writes, from the type's name, "Damage
+  claim"; change the text with `write_package_file` if the person names the schema otherwise. The
+  pipeline does not ask for it, but a write that leaves one of a kit's schemas without it answers
+  `written: true` with `warnings` naming the key; `kit-schema-labels.spec.ts`, in
   `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
+- **A new kit under `business-apps/packages/` joins two lists outside its folder.** Run
+  `npm run app-definition:server-validator`, which rebuilds the server validator's parity corpus
+  from every kit folder, and give the kit its rows in `docs/business-apps/administrator-guide.md`:
+  section 1's table of packages, the table of the app registry's groups, and a link to its README.
+  `kit-lists.spec.ts`, in `libs/shared/app-definition`, fails a kit missing from either.
 - **The allow-list is the deployment's.** A package with an operation passes only against the
   allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
   which CI gives the pipeline. A package with none is refused at write time for every operation:
@@ -280,10 +301,17 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   `cards[0].fields[1].widget: the widget "calendar" is not registered [unknown]`. Never weaken a
   check, rename an id to something unregistered, write the file some other way, or run the
   pipeline without the model to get a pass.
+- **A page provider's NXQL is checked for what Nuxeo refuses, not validated.** For a page
+  provider the package defines, such as one `app-model --where` wrote, the write is refused for a
+  construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)`, for which compare with `>=` and
+  `<=`, a string or a parenthesis left open, `==`, `&&`. A query it passes may still be refused
+  on install: run it read-only on the development server first, as a search.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
-  a facet's aggregate on a page provider of the server's, a queue's or a related list's columns,
-  the properties a rule or a computation names, and a vocabulary widget's directory against its
-  property's. Check those by reading the server.
+  a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
+  and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
+  `app-model` writes it, they are held to that type, given a model), the properties a rule or a
+  computation names, and a vocabulary widget's directory against its property's. Check those by
+  reading the server.
 
 ## 4. Preview in dev mode, as far as it goes
 
@@ -300,7 +328,8 @@ Then call `preview_package` with the package folder, as `validate_package`. Read
 
 - **`served`**: false when the pipeline refused the package; its findings are in `validation`.
 - **`open` and `pages`**: the home, each queue, the tasks page, under `http://localhost:4200/#/`. A
-  record page opens on a record of its type: from a queue, a search, or `#/doc/<id>`.
+  record page opens on a record of its type: from a queue, a search, or `#/doc/<id>`. Each layout
+  is named by its mode: the record page, its Properties panel, the Edit form, the Create form.
 - **`notServed`**: what the dev server cannot show, and why: `app.json`, `actions.json`, `modules/`,
   `assets/`.
 - **`devServer`**: whether it answers every file as written. Tell the person when it is not

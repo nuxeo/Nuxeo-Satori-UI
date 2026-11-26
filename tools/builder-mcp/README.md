@@ -44,6 +44,17 @@ The plan gives the server four jobs. Three are here:
 
 Some things about them are worth knowing before relying on them:
 
+- **A demo kit's own model is read from its package.** The first five take `package`, a package
+  folder as the write tools take one. When the package ships a stand-in model, a
+  `content-model.json` beside `bundle/` as `app-model` writes, they answer from it, and from the
+  page providers its manifest's components define, read as the server would register them,
+  with `source: "package"` (`src/package-model.ts`). What the package does not have, such as a
+  stock type or the server's `default_search`, the server answers, with `source: "server"` and a
+  `packageNote` saying why; so does every read of a package with no stand-in model. A stand-in
+  model is what the pipeline takes for one: the `content-model.json` and a component that registers
+  a document type of its own; a server's export there with no type behind it is not read.
+  `list_page_providers` given such a package lists its own page providers only, never the
+  server's. A package answer needs no server and no credential.
 - **Prefixes are the ones an app definition writes.** Nuxeo reports `file`, `uid` and `files` with
   an empty prefix and addresses them by name, as `file:content`
   ([AGENTS/11-beta-program.md](../../AGENTS/11-beta-program.md), section 3). So does every tool here.
@@ -199,7 +210,10 @@ What each does:
 
 The answer holds `written`; `changes`, each file `created`, `updated` or `removed`; `validation`,
 the pipeline's answer, naming the package rather than its copy; `generatorOutput`, what each
-generator printed, such as what to run next; and a `note`. One write runs at a time in a server,
+generator printed, such as what to run next; once written, `warnings`, when there is one, for
+what no check refuses and the package still lacks: each of a demo kit's own schemas with no
+Properties heading, `layout.schema.<schema>`, in `labels/en.json`, which
+`kit-schema-labels.spec.ts` asks of every kit (`src/schema-headings.ts`); and a `note`. One write runs at a time in a server,
 and one commit at a time in a package. "As CI does" is on the files the package holds here: a
 local file git ignores is checked here too, and CI, which checks out only what is committed, is
 the stricter.
@@ -255,7 +269,9 @@ as dev mode would on a server:
    to do. Nothing answering means it is not running.
 5. **It answers with the addresses:** the home, each queue and the tasks page, under
    `<DEV_SERVER_URL>/#/`. A record page opens on a record of its type, which the tool does not look
-   up, since it reads no record: open one from a queue or a search.
+   up, since it reads no record: open one from a queue or a search. Each layout is named by what it
+   draws, by its mode: the record page (`view`), its Properties panel (`metadata`), the Edit form
+   (`edit`) or the Create form (`create`).
 
 The app still signs in to the Nuxeo server the dev server proxies to
 (`apps/nuxeo-ui/proxy.conf.json`), and draws what that server holds: the types, page providers,

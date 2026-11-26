@@ -491,7 +491,7 @@ function reason(error: unknown): string {
 }
 
 /** The addresses the app draws the package at. The app routes with a hash: `/#/home`. */
-function pagesOf(origin: string, files: readonly ServedFile[]): Page[] {
+export function pagesOf(origin: string, files: readonly ServedFile[]): Page[] {
   const pages: Page[] = [];
   const at = (path: string) => `${origin}/#/${path}`;
   if (files.some((file) => file.file === 'home.json'))
@@ -522,14 +522,38 @@ function pagesOf(origin: string, files: readonly ServedFile[]): Page[] {
     });
   for (const file of files) {
     const layout = /^layouts\/([^/]+)\/([^/]+)\.layout\.json$/.exec(file.file);
-    if (layout)
-      pages.push({
-        what: `the ${layout[1]} record page (${layout[2]})`,
-        url: null,
-        how: `Open a ${layout[1]} record, from a queue, a search or ${at('doc/')}<its id>.`,
-      });
+    if (layout) pages.push(layoutPage(layout[1], layout[2], at('doc/')));
   }
   return pages;
+}
+
+/**
+ * Where a layout is drawn, by its mode (layout-v2.md, section 1): `view` is the record page,
+ * `metadata` the Properties panel beside it, `edit` and `create` the Edit and Create forms. Each
+ * opens from a record of its type, which `doc` and its id reach.
+ */
+function layoutPage(type: string, mode: string, doc: string): Page {
+  const open = `a ${type} record, from a queue, a search or ${doc}<its id>`;
+  switch (mode) {
+    case 'view':
+      return { what: `the ${type} record page`, url: null, how: `Open ${open}.` };
+    case 'metadata':
+      return {
+        what: `the ${type} record page's Properties panel`,
+        url: null,
+        how: `Open ${open}: the panel is beside its page.`,
+      };
+    case 'edit':
+      return { what: `the ${type} Edit form`, url: null, how: `Open ${open}, and choose Edit.` };
+    case 'create':
+      return {
+        what: `the ${type} Create form`,
+        url: null,
+        how: `Create a new ${type} record, in a folder whose type may hold one.`,
+      };
+    default:
+      return { what: `the ${type} layout in ${mode} mode`, url: null, how: `Open ${open}.` };
+  }
 }
 
 function shownFromRepository(path: string): string {
