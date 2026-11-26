@@ -1,0 +1,84 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as SelectStories from './select.stories';
+
+<Meta of={SelectStories} name="Overview" />
+
+# Select
+
+The select is a labelled choice of one value from a list: Angular Material's form field round a
+native `<select>`, in your theme's colours. Use it where the choices are known and a person picks
+one — a file to open, a record to preview, an order.
+
+## Key features
+
+- **Native.** The list opens as the platform's own, a sheet on a phone, and the keyboard moves
+  through it as it does through every select.
+- **Labelled.** `label` is required, and the form field links it to the select, so it is the
+  select's accessible name.
+- **Flat or grouped.** `options` are the choices, each `{ value, label }`, or a group of them under a
+  heading, `{ label, options }`, drawn as a native `<optgroup>`.
+- **A choice that chooses nothing.** `placeholder`, when set, is a first choice whose value is `''`,
+  such as "Choose a file".
+- **Two-way.** `value` is the value chosen, and changes when the user chooses.
+- **Outline or fill.** `appearance` is `outline`, as the library's own forms draw their fields, or
+  `fill`.
+
+## Demo showcase
+
+<Canvas of={SelectStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsSelectComponent, type NxsSelectOption } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-select
+  [label]="'acme.designer.record' | translate"
+  [options]="recordOptions()"
+  [(value)]="recordUid"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input. Labels, the placeholder and the group headings take text you
+have already translated. The select needs no providers, and has no registered ID: place it in a
+template by its selector.
+
+## Examples
+
+### Flat choices
+
+<Canvas of={SelectStories.Flat} />
+
+### Fill
+
+<Canvas of={SelectStories.Fill} />
+
+### Disabled
+
+<Canvas of={SelectStories.Disabled} />
+
+### Choosing
+
+<Canvas of={SelectStories.Choosing} />
+
+## Accessibility
+
+- **Role and name.** It is a native `select`, a combobox to assistive technology, named by `label`
+  through the form field's `<label for>`. Group headings are read with their choices.
+- **Keyboard.** Tab reaches it. The arrow keys, and typing the first letters of a choice, move
+  through the choices, and the platform opens the list on Space, Enter or Alt and the down arrow,
+  as in any select. Disabled, it is a native disabled select that Tab skips.
+- **Choosing is not acting.** In some browsers the arrow keys change a closed select's value
+  directly, so `value` changes as the user moves through the choices. Where a choice opens or
+  loads something, act on a button beside the select rather than on every change.
+- **Focus.** A host that moves the focus to the select finds the native `select` inside the element
+  and focuses that.
