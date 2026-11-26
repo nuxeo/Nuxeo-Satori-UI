@@ -462,6 +462,53 @@ public class ReviewCycleTest {
         assertRefused(403, "Nothing is moved into a review cycle", ALICE,
                 s -> s.move(new IdRef(elsewhere), new PathRef(folder), null));
         assertRefused(403, "stays in its cycle", ALICE, s -> s.move(new IdRef(thread), new PathRef(REVIEWS), null));
+        // Nor its whole Comments folder, which has no facet of its own.
+        assertRefused(403, "stays in its cycle", ALICE, s -> s.move(new PathRef(folder), new PathRef(REVIEWS), null));
+        // A rename in place is no move: the trash renames a comment so, and its author may trash it.
+        Library.inTransactionAs(repository, BOB, s -> {
+            Framework.getService(org.nuxeo.ecm.core.api.trash.TrashService.class)
+                     .trashDocument(s.getDocument(new IdRef(thread)));
+            return null;
+        });
+        assertTrue(Library.stored(repository, thread).isTrashed());
+    }
+
+    /** A comment outside every cycle says it is in one no more after it is written than when. */
+    @Test
+    public void aCommentElsewhereNeverNamesACycle() {
+        String cycle = open();
+        assertRefused(400, "written below the cycle", BOB, s -> {
+            DocumentModel doc = s.createDocumentModel(REVIEWS, "stray", "Comment");
+            doc.setPropertyValue("comment:text", "Not in it");
+            doc.setPropertyValue("comment:parentId", a);
+            doc.setPropertyValue("comment:ancestorIds", (Serializable) List.of(a, cycle));
+            return s.createDocument(doc);
+        });
+        // alice may write a comment on her drawing, which is in no cycle.
+        String elsewhere = comment(BOB, a, "On the drawing");
+        assertRefused(400, "written below the cycle", ALICE, s -> {
+            DocumentModel doc = s.getDocument(new IdRef(elsewhere));
+            doc.setPropertyValue("comment:parentId", cycle);
+            return s.saveDocument(doc);
+        });
+    }
+
+    /** An administrator's trash of an open cycle keeps its revision's claim: it may come back. */
+    @Test
+    public void anOpenCycleTrashedStillHoldsItsRevision() {
+        String first = open();
+        Library.inTransactionAs(repository, ADMINISTRATOR, s -> {
+            Framework.getService(org.nuxeo.ecm.core.api.trash.TrashService.class)
+                     .trashDocument(s.getDocument(new IdRef(first)));
+            return null;
+        });
+        assertRefused(409, "A review cycle is open on this revision", ALICE,
+                s -> Library.openCycle(s, "again", a, List.of(BOB)));
+        Library.inTransactionAs(repository, ADMINISTRATOR, s -> {
+            s.removeDocument(new IdRef(first));
+            return null;
+        });
+        assertNotNull(Library.inTransactionAs(repository, ALICE, s -> Library.openCycle(s, "again", a, List.of(BOB))));
     }
 
     /** A caller that catches a refusal cannot commit what was written before it. */

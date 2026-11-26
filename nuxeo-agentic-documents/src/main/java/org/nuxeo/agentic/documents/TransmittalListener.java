@@ -412,8 +412,9 @@ public class TransmittalListener implements EventListener {
         }
         NuxeoPrincipal principal = context.getPrincipal();
         boolean own = doc.hasFacet(TRANSMITTAL_FACET) || doc.hasFacet(RECEIPT_FACET);
-        boolean holds = !own && (doc.isFolder() || doc.hasSchema(ControlledDocuments.NUXEO_COMMENT_SCHEMA))
-                && holdsKept(context.getCoreSession(), doc);
+        // Any document may hold others, a folder or not: the repository does not check, when one
+        // is created below it. So whatever has children is looked below.
+        boolean holds = !own && hasChildren(context.getCoreSession(), doc) && holdsKept(context.getCoreSession(), doc);
         if (!own && !holds) {
             return;
         }
@@ -428,6 +429,11 @@ public class TransmittalListener implements EventListener {
     /** What the add-on keeps, below a document, read with a privileged session: all of it goes with it. */
     private static final List<String> KEPT = List.of(TRANSMITTAL_FACET, RECEIPT_FACET, ControlledDocuments.CYCLE_FACET,
             ControlledDocuments.COMMENT_FACET);
+
+    private static boolean hasChildren(CoreSession session, DocumentModel doc) {
+        return org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(session,
+                (CoreSession privileged) -> privileged.hasChildren(doc.getRef()));
+    }
 
     private static boolean holdsKept(CoreSession session, DocumentModel doc) {
         String id = doc.getId();

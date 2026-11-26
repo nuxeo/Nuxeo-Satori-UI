@@ -369,6 +369,27 @@ public class TransmittalTest {
         assertNull(Library.stored(repository, receipt));
     }
 
+    /**
+     * Any document may hold others, a folder or not: one whose children include a transmittal is
+     * kept as the transmittal is.
+     */
+    @Test
+    public void aDocumentHoldingATransmittalIsKeptFolderOrNot() {
+        String holder = Library.inTransactionAs(repository, ALICE,
+                s -> s.createDocument(s.createDocumentModel(TRANSMITTALS, "holder", "File")).getId());
+        String below = Library.stored(repository, holder).getPathAsString();
+        Library.inTransactionAs(repository, ALICE, s -> {
+            DocumentModel doc = Library.issueModel(s, List.of(valve), List.of(BOB), FOR_REVIEW, 3);
+            doc.setPathInfo(below, "tr");
+            return s.createDocument(doc);
+        });
+        assertRefused(403, "which are kept", ALICE, s -> {
+            s.removeDocument(new IdRef(holder));
+            return null;
+        });
+        assertNotNull(Library.stored(repository, holder));
+    }
+
     /** A version taken while it awaited is not restored over an answered receipt. */
     @Test
     public void anAnsweredReceiptIsNotMadeToAwaitAgainByARestore() {

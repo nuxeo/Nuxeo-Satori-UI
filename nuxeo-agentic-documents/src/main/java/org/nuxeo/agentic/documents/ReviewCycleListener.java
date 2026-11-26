@@ -135,7 +135,7 @@ public class ReviewCycleListener implements EventListener {
                 case DocumentEventTypes.ABOUT_TO_CREATE -> aboutToCreate(context, doc);
                 case DocumentEventTypes.DOCUMENT_CREATED -> documentCreated(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
-                case DocumentEventTypes.ABOUT_TO_REMOVE, "documentTrashed" -> kept(context, doc);
+                case DocumentEventTypes.ABOUT_TO_REMOVE, "documentTrashed" -> kept(context, doc, event.getName());
                 case DocumentEventTypes.ABOUT_TO_MOVE -> aboutToMove(context, doc);
                 default -> {
                     // Not one of ours: the contribution lists the six above.
@@ -262,11 +262,7 @@ public class ReviewCycleListener implements EventListener {
             }
             // Written outside every cycle, it may not say it is in one: a cycle's comments are
             // the comments below it, whatever a comment's own properties say.
-            String parentId = ControlledDocuments.text(comment, "comment:parentId");
-            DocumentModel parent = isDocumentId(parentId) ? privileged(session, parentId) : null;
-            if (parent != null && (parent.hasFacet(CYCLE_FACET) || parent.hasFacet(COMMENT_FACET))) {
-                throw invalid("A comment in a review cycle is written below the cycle, where its comments are");
-            }
+            refuseNamingACycle(session, comment);
             return;
         }
         String cycleId = place.cycle();
@@ -293,6 +289,31 @@ public class ReviewCycleListener implements EventListener {
         comment.setPropertyValue(RVWC_RESOLUTION, null);
         comment.setPropertyValue(RVWC_RESOLVED_BY, null);
         comment.setPropertyValue(RVWC_RESOLVED_AT, null);
+    }
+
+    /** The most ancestors a comment outside every cycle may name, each read to check it. */
+    static final int MAX_ANCESTORS = 16;
+
+    /**
+     * A comment outside every cycle that names a cycle, or one of its comments, as what it answers
+     * or among its ancestors, as Nuxeo's comment queries read them, is refused.
+     */
+    private static void refuseNamingACycle(CoreSession session, DocumentModel comment) {
+        List<String> named = new ArrayList<>();
+        String parentId = ControlledDocuments.text(comment, "comment:parentId");
+        if (parentId != null) {
+            named.add(parentId);
+        }
+        named.addAll(Stored.texts(comment, NUXEO_COMMENT_SCHEMA, "comment:ancestorIds"));
+        if (named.size() > MAX_ANCESTORS + 1) {
+            throw invalid("A comment names " + MAX_ANCESTORS + " ancestors at most");
+        }
+        for (String id : new LinkedHashSet<>(named)) {
+            DocumentModel doc = isDocumentId(id) ? privileged(session, id) : null;
+            if (doc != null && (doc.hasFacet(CYCLE_FACET) || doc.hasFacet(COMMENT_FACET))) {
+                throw invalid("A comment in a review cycle is written below the cycle, where its comments are");
+            }
+        }
     }
 
     /**
@@ -353,6 +374,10 @@ public class ReviewCycleListener implements EventListener {
             cycleChanged(context, previous, doc);
         } else if (doc.hasFacet(COMMENT_FACET)) {
             commentChanged(context, previous, doc);
+        } else if (doc.hasSchema(NUXEO_COMMENT_SCHEMA)
+                && !Stored.changes(previous, doc, NUXEO_COMMENT_SCHEMA, COMMENT_WRITTEN).isEmpty()) {
+            // A comment outside every cycle comes to say it is in one no more than when written.
+            refuseNamingACycle(context.getCoreSession(), doc);
         }
     }
 
@@ -515,7 +540,7 @@ public class ReviewCycleListener implements EventListener {
      * cycle is open, a comment's author may too, a thread no one has answered yet, since its
      * replies would go with it. Proxies and versions are not the record.
      */
-    private void kept(DocumentEventContext context, DocumentModel doc) {
+    private void kept(DocumentEventContext context, DocumentModel doc, String event) {
         if (doc.isProxy() || doc.isVersion()) {
             return;
         }
@@ -525,9 +550,10 @@ public class ReviewCycleListener implements EventListener {
                 throw forbidden("A review cycle is kept: only an administrator deletes or trashes one");
             }
             log.warn("Review cycles: {} deletes or trashes the review cycle {}", principal.getName(), doc.getId());
-            // An open cycle deleted leaves its revision free for another, once this commits.
+            // An open cycle deleted leaves its revision free for another, once this commits. Not
+            // one trashed, which may come back open: the trash is not the end of a cycle.
             String revision = Stored.text(doc, CYCLE_SCHEMA, RVW_DOCUMENT);
-            if (revision != null) {
+            if (revision != null && DocumentEventTypes.ABOUT_TO_REMOVE.equals(event)) {
                 service().releaseOnCommit(openKey(revision), doc.getId());
             }
             return;
@@ -552,20 +578,33 @@ public class ReviewCycleListener implements EventListener {
 
     /**
      * Nothing is moved into a cycle, where it would be one of its comments without having been
-     * written in it, nor a cycle's comment out of it, but by an administrator.
+     * written in it, nor anything out of one, a comment or its Comments folder, but by an
+     * administrator. A rename in place moves nothing: the trash renames a document so before it
+     * trashes it, and the trash's own rules then apply.
      */
     private void aboutToMove(DocumentEventContext context, DocumentModel doc) {
         NuxeoPrincipal principal = context.getPrincipal();
         if (Refusal.isAdministrator(principal)) {
             return;
         }
-        if (doc.hasFacet(COMMENT_FACET)) {
-            throw forbidden("A review cycle's comment stays in its cycle");
+        CoreSession session = context.getCoreSession();
+        org.nuxeo.ecm.core.api.DocumentRef destination = context.getProperty(
+                CoreEventConstants.DESTINATION_REF) instanceof org.nuxeo.ecm.core.api.DocumentRef ref ? ref : null;
+        if (destination != null && doc.getParentRef() != null && Objects.equals(idOf(session, destination),
+                idOf(session, doc.getParentRef()))) {
+            return;
         }
-        if (context.getProperty(CoreEventConstants.DESTINATION_REF) instanceof org.nuxeo.ecm.core.api.DocumentRef
-                destination && placeOf(context.getCoreSession(), destination) != null) {
+        if (doc.hasFacet(COMMENT_FACET) || placeOf(session, doc.getParentRef()) != null) {
+            throw forbidden("What a review cycle holds stays in its cycle");
+        }
+        if (destination != null && placeOf(session, destination) != null) {
             throw forbidden("Nothing is moved into a review cycle: its comments are written in it");
         }
+    }
+
+    /** The id of the document a reference names, read with a privileged session; {@code null} for none. */
+    private static String idOf(CoreSession session, org.nuxeo.ecm.core.api.DocumentRef ref) {
+        return CoreInstance.doPrivileged(session, (CoreSession s) -> s.exists(ref) ? s.getDocument(ref).getId() : null);
     }
 
     // ------------------------------------------------------------------ helpers
