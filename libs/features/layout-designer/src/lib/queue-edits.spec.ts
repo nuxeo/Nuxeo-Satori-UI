@@ -1,5 +1,7 @@
 import type { LayoutJson } from './layout-edits';
 import {
+  actionsOf,
+  addAction,
   addColumn,
   addFacet,
   addSort,
@@ -117,5 +119,79 @@ describe('the queue edits', () => {
     expect(setQueueText(RENEWALS, 'label', 'Renewals')['label']).toBe('Renewals');
     expect('labelKey' in setQueueText(RENEWALS, 'labelKey', '')).toBe(false);
     expect(queueFileName('up-for-renewal')).toBe('up-for-renewal.json');
+  });
+
+  it('lists, adds, moves and removes row and bulk actions, and takes out a list left empty', () => {
+    const mine: LayoutJson = { ...RENEWALS, rowActions: ['app.rowActions.download', 7] };
+    expect(actionsOf(mine, 'rowActions')).toEqual([
+      { index: 0, id: 'app.rowActions.download' },
+      { index: 1, id: null },
+    ]);
+    expect(actionsOf(mine, 'bulkActions')).toEqual([]);
+    const added = addAction(mine, 'bulkActions', 'app.bulkActions.compare');
+    expect(added['bulkActions']).toEqual(['app.bulkActions.compare']);
+    const moved = moveEntry(added, 'rowActions', 1, 0);
+    expect(moved['rowActions']).toEqual([7, 'app.rowActions.download']);
+    expect('bulkActions' in removeEntry(added, 'bulkActions', 0).file).toBe(false);
+    // The file given is left as it was.
+    expect(mine['rowActions']).toEqual(['app.rowActions.download', 7]);
+    expect('bulkActions' in mine).toBe(false);
+  });
+
+  it('writes a key it adds where the queue format lists it, every other key in its place', () => {
+    const queue: LayoutJson = {
+      version: 2,
+      labelKey: 'k',
+      pageProvider: 'p',
+      columns: ['dc:title'],
+      pageSize: 50,
+      visibleWhen: 'app.rules.canWrite',
+    };
+    expect(Object.keys(setQueueText(queue, 'label', 'L'))).toEqual([
+      'version',
+      'label',
+      'labelKey',
+      'pageProvider',
+      'columns',
+      'pageSize',
+      'visibleWhen',
+    ]);
+    const sorted = addSort(queue, 'dc:title');
+    expect(Object.keys(sorted)).toEqual([
+      'version',
+      'labelKey',
+      'pageProvider',
+      'columns',
+      'sort',
+      'pageSize',
+      'visibleWhen',
+    ]);
+    const acted = addAction(addAction(addFacet(queue, 'a'), 'bulkActions', 'b'), 'rowActions', 'r');
+    expect(Object.keys(acted)).toEqual([
+      'version',
+      'labelKey',
+      'pageProvider',
+      'columns',
+      'pageSize',
+      'facets',
+      'rowActions',
+      'bulkActions',
+      'visibleWhen',
+    ]);
+    // A key of its own, which the format does not list, keeps its place, and one added goes before
+    // the first the format puts after it.
+    expect(Object.keys(addAction({ ...queue, later: true }, 'rowActions', 'r')).slice(-3)).toEqual([
+      'rowActions',
+      'visibleWhen',
+      'later',
+    ]);
+    // A facet's name text goes before its key, as the format lists them.
+    const keyed = setFacetText(addFacet(queue, 'a'), 0, 'labelKey', 'k');
+    const named = setFacetText(keyed, 0, 'label', 'A');
+    expect(Object.keys((named['facets'] as LayoutJson[])[0])).toEqual([
+      'aggregate',
+      'label',
+      'labelKey',
+    ]);
   });
 });

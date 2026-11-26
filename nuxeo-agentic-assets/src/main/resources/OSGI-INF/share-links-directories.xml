@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.share.directories">
+
+  <documentation>
+    Where share links and their downloads are kept: two directories on the server's default
+    directory template, as Nuxeo keeps its authentication tokens (authTokens) and its permissions'
+    notes (aceinfo). Of the system type, which the REST API's directory listing leaves out, and
+    readable by the group __Nobody__ only, so by nobody but an administrator and server code run
+    with the system's rights. No cache: every read is of the database, so a revocation holds from
+    the next request on. No field holds a token: a link's id is its token's SHA-256.
+  </documentation>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="agenticsharelink" src="schemas/agenticsharelink.xsd" />
+    <schema name="agenticsharedownload" src="schemas/agenticsharedownload.xsd" />
+
+    <property schema="agenticsharelink" name="document" indexOrder="ascending" />
+    <property schema="agenticsharedownload" name="document" indexOrder="ascending" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.directory.GenericDirectory" point="directories">
+
+    <directory name="agenticShareLinks" extends="template-directory">
+      <schema>agenticsharelink</schema>
+      <idField>id</idField>
+      <table>agentic_share_links</table>
+      <types>
+        <type>system</type>
+      </types>
+      <permissions>
+        <permission name="Read">
+          <group>__Nobody__</group>
+        </permission>
+      </permissions>
+    </directory>
+
+    <directory name="agenticShareDownloads" extends="template-directory">
+      <schema>agenticsharedownload</schema>
+      <idField>id</idField>
+      <table>agentic_share_downloads</table>
+      <types>
+        <type>system</type>
+      </types>
+      <permissions>
+        <permission name="Read">
+          <group>__Nobody__</group>
+        </permission>
+      </permissions>
+    </directory>
+
+  </extension>
+
+</component>

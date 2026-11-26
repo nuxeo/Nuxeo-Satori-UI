@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<fragment version="1">
+
+  <!--
+    The share links' servlet, for visitors who are not signed in. No authentication filter is
+    mapped on /agentic-share/*, on purpose: the token is the only thing a request carries, and the
+    servlet decides by it alone (ShareLinkService). The servlet mapping is more specific than
+    Tomcat's default servlet, so the servlet alone answers for this path, and nothing on the
+    server's disk under it is served. The server's filters on every path, such as its CORS and CSRF
+    filter, still run.
+  -->
+  <extension target="web#SERVLET">
+    <servlet>
+      <servlet-name>Agentic Share Links</servlet-name>
+      <servlet-class>org.nuxeo.agentic.assets.share.ShareLinkServlet</servlet-class>
+    </servlet>
+  </extension>
+
+  <extension target="web#SERVLET-MAPPING">
+    <servlet-mapping>
+      <servlet-name>Agentic Share Links</servlet-name>
+      <url-pattern>/agentic-share/*</url-pattern>
+    </servlet-mapping>
+  </extension>
+
+</fragment>
