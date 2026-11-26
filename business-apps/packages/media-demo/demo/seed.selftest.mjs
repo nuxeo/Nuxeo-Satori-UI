@@ -235,6 +235,43 @@ const today = todayUtc();
     'the demo: one delivery made, the one inside its windows',
     made.length === 1 && made[0].properties['mdlv:territory'] === DEMO.inside.territory,
   );
+
+  // The stand-in refuses as the add-on does what the add-on refuses: a window it cannot read, a
+  // film of another type, and a distributor's name with a control character in it.
+  const seededFilm = stub.docs.get(`${ROOT}/${FILMS.name}/${FILM.name}`);
+  const windows = seededFilm.properties['film:windows'];
+  seededFilm.properties['film:windows'] = [
+    ...windows,
+    { territory: 'FR', channel: 'SVOD', from: null, until: null },
+  ];
+  const unreadable = await file(stub, 'coordinator', DEMO.inside);
+  check(
+    'the stand-in: a window with no first day refuses, policy-error',
+    unreadable.status === 403 && String(unreadable.body.message).includes('policy-error'),
+    JSON.stringify(unreadable.body),
+  );
+  seededFilm.properties['film:windows'] = windows;
+  seededFilm.type = 'Folder';
+  const notAFilm = await file(stub, 'coordinator', DEMO.inside);
+  check(
+    'the stand-in: a film of another type refuses, policy-error',
+    notAFilm.status === 403 && String(notAFilm.body.message).includes('policy-error'),
+    JSON.stringify(notAFilm.body),
+  );
+  seededFilm.type = 'Film';
+  const control = await file(stub, 'coordinator', {
+    ...DEMO.inside,
+    distributor: 'Acme\u0007Distribution',
+  });
+  check(
+    'the stand-in: a control character in the distributor refuses, 400',
+    control.status === 400,
+    JSON.stringify(control.body),
+  );
+  check(
+    'the stand-in: no delivery made by any of the three',
+    [...stub.docs.values()].filter((doc) => doc.type === 'MediaDelivery').length === 1,
+  );
   await stub.close();
 }
 

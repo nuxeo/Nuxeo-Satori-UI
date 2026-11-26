@@ -63,6 +63,7 @@ export function kitPolicy(xml = readFileSync(POLICY_FILE, 'utf8')) {
     territories: elements(outside, 'territories')[0]?.xpath,
     windows: elements(outside, 'windows')[0]?.xpath,
     windowsDocument: elements(outside, 'windows')[0]?.document,
+    windowsDocumentType: elements(outside, 'windows')[0]?.type,
     originalXpath: original?.xpath ?? 'file:content',
     rules,
     delivery: files,
@@ -88,12 +89,31 @@ const dayOf = (value) => (typeof value === 'string' ? value.slice(0, 10) : null)
 export function decideDelivery(policy, version, film, territory, today) {
   if (!policy.delivery.length) return { refused: 'not-cleared' };
   const properties = version.properties;
-  let windows;
+  let held;
   if (policy.windowsDocument) {
-    if (!film || film.trashed || film.type !== 'Film') return { refused: 'policy-error' };
-    windows = asList(film.properties[policy.windows]);
+    // As AssetRightsComponent.windowsOf: of the policy's type, there, live and not in the trash.
+    if (
+      !policy.windowsDocumentType ||
+      !film ||
+      film.trashed ||
+      film.type !== policy.windowsDocumentType
+    )
+      return { refused: 'policy-error' };
+    held = asList(film.properties[policy.windows]);
   } else {
-    windows = asList(properties[policy.windows]);
+    held = asList(properties[policy.windows]);
+  }
+  // As AssetFacts.windows: a window with no territory, channel or first day, or one that ends
+  // before it opens, cannot be read, and the rights refuse.
+  const windows = [];
+  for (const window of held) {
+    const territoryOf = typeof window?.territory === 'string' ? window.territory.trim() : '';
+    const channelOf = typeof window?.channel === 'string' ? window.channel.trim() : '';
+    const from = dayOf(window?.from);
+    const until = window?.until == null ? null : dayOf(window.until);
+    if (!territoryOf || !channelOf || !from || (window?.until != null && (!until || until < from)))
+      return { refused: 'policy-error' };
+    windows.push({ territory: territoryOf, channel: channelOf, from, until });
   }
   const end = dayOf(properties[policy.rightsEnd]);
   const channels = asList(properties[policy.channels]).map((each) => String(each).trim());
@@ -109,8 +129,8 @@ export function decideDelivery(policy, version, film, territory, today) {
       (window) =>
         window.territory === territory &&
         window.channel === channel &&
-        dayOf(window.from) <= today &&
-        (window.until == null || today <= dayOf(window.until)),
+        window.from <= today &&
+        (window.until === null || today <= window.until),
     );
     if (!open) return decided('outside-window');
     const blob = blobAt(properties, use === 'original' ? policy.originalXpath : name);
@@ -200,9 +220,12 @@ export async function startStandIn({
     const territory = text('mdlv:territory');
     if (!/^[A-Za-z0-9-]{1,64}$/.test(versionId))
       return fail(400, 'A delivery names its localised version by its id.');
-    if (distributor === '' || distributor.length > 200)
+    // As Deliveries.printable: no control or format character.
+    const printable = (value, max) =>
+      value !== '' && value.length <= max && !/[\p{Cc}\p{Cf}]/u.test(value);
+    if (!printable(distributor, 200))
       return fail(400, 'A delivery names its distributor, in 1 to 200 characters.');
-    if (territory === '' || territory.length > 64)
+    if (!printable(territory, 64))
       return fail(400, 'A delivery names its territory, in 1 to 64 characters.');
     const version = byUid(versionId);
     if (!version || !holds(user, version, 'Read'))

@@ -69,7 +69,7 @@
       territories names a text or list property: where the asset may be delivered. windows names a
       complex list of release windows, each a territory, a channel, a from day and an until day, in
       UTC, both included; with document, it is read from the document whose id that property
-      holds, such as a localised version's film. Then a use with a channel is cleared only while a
+      holds, which must be of the type type names, such as a localised version's film. Then a use with a channel is cleared only while a
       window for its channel is open: in a delivery's territory, which the asset must hold, or, for
       a download, which names none, in any territory it holds. Codes territory-not-covered and
       outside-window. One of territories and windows without the other refuses every use.

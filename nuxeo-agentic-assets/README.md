@@ -346,9 +346,11 @@ Automation operation and no button.
   no territory, channel or first day, or one that ends before it opens, is a mistake: the rights
   cannot be read, and every use that needs them is refused, `policy-error`.
 - **`windows document`** names a property of the asset holding the id of the document its windows
-  are read from: a localised version reads its film's. The film is read with a privileged session,
-  as a version's live document is, since the version's reader may not read the film. A film that is
-  not there, not live or in the trash refuses, `policy-error`.
+  are read from, and **`windows type`** the type that document must be: a localised version reads
+  its film's. A `document` with no `type` is broken, so that no document of another type can lend
+  its windows. The film is read with a privileged session, as a version's live document is, since
+  the version's reader may not read the film. A document that is not there, not live, in the trash
+  or of another type refuses, `policy-error`.
 - **A localised version is an asset of its own,** of its own type, with its own rights: its own
   territories, channels and rights end, and its own files. Its windows are its film's when its
   policy says so, the title's release schedule for each of its language versions.
@@ -409,23 +411,32 @@ outside-window for Marketing.`, and nothing is made;
    distributor and the territory, trimmed; each file, its use, name, channel, file name, type,
    length and digest; when, in UTC, and by whom. A blank title becomes `<distributor>, <territory>`.
 
-**Kept:** a change to the record's `mdlv` properties is refused, 403 `kept`, its title and
-description are Nuxeo's to allow; so are a copy, a move, a trash, an import, a check-in and a
-restore; and a deletion, but an administrator's. `MediaDelivery` has no Versionable facet.
+**Kept:** a change to the record's `mdlv` properties is refused, 403 `kept`, whoever asks; its
+title and description are Nuxeo's to allow. So are a copy, an import, a check-in and a restore; and
+a move, a trash and a deletion, but an administrator's. A folder holding a delivery is not removed,
+moved, trashed or copied but by an administrator either: the platform does those to a folder's
+documents with no event of their own, so the listener asks, with the system's rights, whether a
+delivery is below the folder. `MediaDelivery` has no Versionable facet, so a check-in and a
+restore, which the listener refuses, are not reached in the tests.
 
 ### What deliveries do not do
 
 - **Hand the files over.** A delivery is the record of what was delivered: which files, by their
   digests, to whom, where and when. It moves no byte and serves none: it holds no file, so it opens
   no new path to an asset's bytes.
+- **Refuse the files to whoever filed a refused delivery.** A delivery is decided for its
+  territory; a download names none, and is served while a window for its channel is open in any
+  territory the version may go to. So a delivery to Germany refused before SVOD opens there leaves
+  the version's master downloadable, at the download endpoints, by anyone who may read the version,
+  while its SVOD window is open in Switzerland. Who may read a version is its permissions' business.
 - **Make a share link.** Share links (below) serve watermarked pictures only, JPEG or PNG, and a
   film's master and subtitles are neither. A link bound to a delivery's territory and window, and
   serving a video watermarked, is not built; the download log, revocation and end date would be the
   links' own if it were.
 - **Bound a version by its film's own rights end or channels.** A version's rights are its own; its
   film gives its windows only.
-- **Refuse a folder copied whole.** A copy of a delivery is refused; a folder copied with its
-  deliveries in it copies them, each saying what its original says.
+- **Hear what writes documents without events,** such as server code or an importer that bypasses
+  them: what the listener does not hear, it does not decide.
 - **Translate the new codes in the client** (above, "The `assetRights` enricher").
 
 ## Share links
@@ -698,22 +709,24 @@ request. **What the tests cannot reach:** the directories, the repository, the u
 servlet container and Automation are fakes here, so the operations' statuses, the directories'
 tables and the servlet's mapping have not run on a server.
 
-**The media rights' guards were seen failing too,** on 26 November 2026: each of 25 breakages, one
+**The media rights' guards were seen failing too,** on 26 November 2026: each of 31 breakages, one
 at a time, turned the tests red, and the build unbroken was green. A delivery's territory or window
 not checked; a download's window not checked, or a download held to no territory; a window's last
 day left out, or one with no first day skipped; a package delivered in part, or with a file missing;
-a version's windows read from itself and not its film; a film in the trash still read, or read with
-the reader's own session; a proxy delivered, or the version read with the system's rights; the
-filer's own `deliveredBy` kept; a delivery's record changed, deleted by its filer, or copied; a
-territory with no window, a preview, or a rendition in a package taken for sound; a film's windows
-written by the enricher; the listener deaf to imports; the test model drifted from the kit's; the
-kit's key art cleared by SVOD; and a share link's item served once its window closed. Three of the
-first run's breakages did not count, two that did not compile and one that no test caught, a
-preview in a package; the test was added, and the three made again went red. The script that broke
-them is not in the repository; the list is in the pull request. **What the tests cannot reach:**
-the listener and the privileged read of a film run on H2 in `MediaDeliveryTest`, not on the
-server's database, and the REST API's answer to a refused delivery, its status and message, has not
-run on a server.
+a version's windows read from itself and not its film; a film in the trash still read, read with
+the reader's own session, or of another type; a proxy delivered, or the version read with the
+system's rights; the filer's own `deliveredBy` kept; a delivery's record changed, deleted, moved or
+copied by its filer; a folder holding one not looked into; a refusal not marked for rollback; an
+import let through; a territory with no window, windows from a document of no type, a preview, or
+a rendition in a package taken for sound; a film's windows written by the enricher; the listener
+deaf to imports; the test model drifted from the kit's; the kit's key art cleared by SVOD; and a
+share link's item served once its window closed. Three of the first run's breakages did not count,
+two that did not compile and one that no test caught, a preview in a package; the test was added,
+and the three made again went red; so did three of the review's fixes' that first did not compile.
+The script that broke them is not in the repository; the list is in the pull request. **What the
+tests cannot reach:** the listener and the privileged reads run on H2 in `MediaDeliveryTest`, not
+on the server's database; a check-in and a restore, since `MediaDelivery` is not versionable; and
+the REST API's answer to a refused delivery, its status and message, which has not run on a server.
 
 The version is `assets.package.version` in `pom.xml`, which `package.xml` takes, and the manifest's
 `Bundle-Version` repeats; `BundleTest` refuses a build where they differ.
@@ -919,34 +932,36 @@ condition for phase 5 being done:
 **Media rights,** since 0.4.0, add these. The review is deferred until the app is finished, as
 every review is ([security-reviews.md](../docs/business-apps/security-reviews.md)):
 
-25. **The decision's order and its two codes:** a territory and a window are decided after the
-    rights end and the channel, and only under a policy that names both territories and windows; a
-    policy naming one of them refuses every use. That a download, which names no territory, is
-    served while a window for its channel is open in any territory the asset may be delivered to,
-    and whether a staff download before every window opens should be refused, as it is.
-26. **A film's windows read with the system's rights:** a localised version names its film by an
-    id it holds, and anyone who may write the version may name another film. The windows are read
-    with a privileged session from the document that id names, which must be there, live and not
-    in the trash; nothing of it is written to the enricher. Whether a version must also be bound
-    by its film's own rights end or channels, which it is not.
-27. **Who may write the territories and the windows:** the trust model of item 4. Whoever may write
-    a version may write its territories and channels, and whoever may write its film its windows,
-    and so widen where and when it may be delivered.
-28. **The delivery's way in:** a `MediaDelivery` is decided by a synchronous listener on
-    `aboutToCreate`, in the filer's transaction, which it marks for rollback when it refuses, as the
-    documents and records add-ons' listeners do. That nothing else makes one without the listener
-    deciding it: an import, a copy, a check-in and a restore are refused, a folder copied whole is
-    not (item 30), and server code or an importer that writes documents without events is not
-    heard.
+25. **The decision's order and its two codes:** that a territory and a window are decided after
+    the rights end and the channel, and only under a policy that names both territories and
+    windows, a policy naming one of them refusing every use. Whether a download, which names no
+    territory, should be served while a window for its channel is open in any territory the asset
+    may be delivered to, as it is, and refused before every window opens, as it is; and whether a
+    delivery refused for one territory should leave the files downloadable while another
+    territory's window is open, as it does.
+26. **A film's windows read with the system's rights:** that the document a version names for its
+    windows is held to the policy's `type`, there, live and not in the trash; that what the
+    enricher writes of the version, its decisions, which depend on that document's windows, tells
+    a reader of the version nothing they should not know of a film they may not read; and whether
+    a version must also be bound by its film's own rights end or channels, which it is not.
+27. **Who may write the territories and the windows:** the trust model of item 4, for versions,
+    their film reference, and films: who may widen where and when a version may be delivered.
+28. **The delivery's way in:** that a `MediaDelivery` is only ever made through the synchronous
+    listener on `aboutToCreate`, in the filer's transaction, which it marks for rollback when it
+    refuses, as the documents and records add-ons' listeners do; that an import, a copy, a folder
+    copied whole, a check-in and a restore are each refused on the release the server runs; and
+    which server code or importers write documents without the events it hears.
 29. **Who may file a delivery:** whoever may add a document to a folder and read the version, with
-    their own session; nothing more. A delivery moves no byte, so filing one gives nobody a file;
-    whether an integration that acts on a delivery's record, to send the files, must check who
-    filed it, and whether a permission of its own is wanted.
-30. **The record kept:** its `mdlv` properties refused after creation, a copy, a move, a trash, an
-    import, a check-in and a restore refused, and a deletion an administrator's alone. A folder
-    copied with its deliveries copies them without the listener deciding them again.
-31. **The refusal's message:** it names each refused file by its use and place, its reason and its
-    channel, and the territory; the version is named only by the id the filer gave. Whether the
-    REST API answers it as written, status and message, on the release the server runs.
+    their own session. Whether that is enough for a record that moves no byte, whether an
+    integration acting on a delivery's record must check who filed it, and whether a permission of
+    its own is wanted.
+30. **The record kept:** that its `mdlv` properties, a copy, an import, a check-in and a restore
+    are refused, a move, a trash and a deletion are an administrator's alone, and a folder holding
+    a delivery is removed, moved, trashed or copied by an administrator alone, the folder's subtree
+    looked into with the system's rights at each such event; and what that query costs on the
+    repository the server runs.
+31. **The refusal's message:** that it names each refused file by its use and place, its reason
+    and its channel, and the territory, and names the version only by the id the filer gave; and
+    whether the REST API answers it as written, status and message, on the release the server runs.
 32. **The clock:** windows are days in UTC, decided by the server's clock, as rights ends and share
     links' last days are (item 19).

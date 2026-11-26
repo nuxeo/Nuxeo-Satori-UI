@@ -154,6 +154,17 @@ async function demo(h, base, filer) {
       body: await response.json().catch(() => null),
     }));
   const today = todayUtc();
+  // The deliveries are filed as a distribution coordinator: a member of the group, and no
+  // administrator, whom the server would let move or delete a delivery.
+  const me = await api('GET', '/me');
+  const groups = me.body?.properties?.groups ?? [];
+  h.requirePrecondition(
+    'the deliveries are filed by a distribution coordinator',
+    me.status === 200 &&
+      me.body?.isAdministrator === false &&
+      groups.includes('media-distribution'),
+    `GET /me: HTTP ${me.status}, administrator ${me.body?.isAdministrator}, groups ${JSON.stringify(groups)}`,
+  );
   const film = await api('GET', `/path${ROOT}/${FILMS.name}/${FILM.name}`);
   h.requirePrecondition(
     'the film is seeded',

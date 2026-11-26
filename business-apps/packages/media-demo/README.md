@@ -9,11 +9,12 @@ of the media rights of the assets add-on,
 0.4.0. All its data is fictional: no real studio, distributor, person or film, for the fictional
 Acme Pictures.
 
-**Installed nowhere.** The package passes the pipeline, and the add-on's behaviour is proven by its
-Java tests in Nuxeo's own test framework. No server has the add-on 0.4.0 or this kit: the local
-Nuxeo has the add-on's 0.1.0, and is not written to here. So its pages have not been drawn on a
-server's records, and its seed and its demo's steps file have run only on the kit's stand-in
-server, `demo/stand-in.mjs`.
+**Installed nowhere.** The package passes the pipeline, and the add-on's decisions are held by its
+Java tests in Nuxeo's own test framework, on H2; not held there: the REST API's answer to a refused
+delivery, and a check-in or a restore of a delivery, which is not versionable. No server has the
+add-on 0.4.0 or this kit: the local Nuxeo has the add-on's 0.1.0, and is not written to here. So its
+pages have not been drawn on a server's records, and its seed and its demo's steps file have run
+only on the kit's stand-in server, `demo/stand-in.mjs`.
 
 ## The short version
 
@@ -63,7 +64,13 @@ server, `demo/stand-in.mjs`.
   window of its film for that channel is open there today, in UTC. One file refused refuses the
   package whole: nothing is delivered.
 - **A download** at the platform's endpoints names no territory: a file is served while a window for
-  its channel is open in any territory the version may be delivered to.
+  its channel is open in any territory the version may be delivered to. So the German version's
+  master, refused for a delivery to Germany before SVOD opens there, is still downloadable by a
+  reader of the version while SVOD is open in Switzerland: the seed gives `media-distribution` Read
+  on the versions.
+- **The film is named by its id, and must be a `Film`:** the policy's `<windows type="Film">`. A
+  version naming a document of another type, a proxy, one in the trash or none is refused every use
+  that needs its windows.
 - **The files are the attachments, by place.** The stand-in model has no file field of its own for
   each, so the master must be the first attachment, as the seed writes it. A real model gives each
   its own field, and the policy names those.
@@ -168,7 +175,7 @@ The steps file runs these four, on the kit's stand-in, or with `MEDIA_DEMO_SERVE
 npm run beta:evidence -- media-delivery
 ```
 
-On 26 November 2026, on the stand-in: 25 of 25 checks passed. It proves the demo's script and its
+On 26 November 2026, on the stand-in: 26 of 26 checks passed. It proves the demo's script and its
 data, not the server: the server's decision is the add-on's `MediaDeliveryTest`'s.
 
 ## What it does not do
