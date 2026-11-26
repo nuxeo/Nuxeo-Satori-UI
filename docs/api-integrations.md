@@ -1679,7 +1679,8 @@ layout generated from the type, with the reason in the console under `[agentic-u
 `fetch-schema: fields` it returns each of the type's schemas nested, with `@prefix` when it has
 one, and per-field `constraints` — a `directoryResolver` names the vocabulary a value is bound to
 (`itemConstraints` for a list). The `/config/types` and `/config/schemas` lists ignore that header;
-the per-schema read below honours it. A failed read is not cached, so the next document of the
+the per-schema read below honours it. A failed read, or one with no answer within 10 s
+(`LAYOUT_LOAD_TIMEOUT_MS`, which is then cancelled), is not cached, so the next document of the
 type asks again.
 
 A dynamic facet adds schemas to one document, not to its type, so no type read has them. The
@@ -1715,11 +1716,21 @@ the record it names, read by `linkedRecords(ids)`: `GET /nuxeo/api/v1/search/lan
 authenticated through `NuxeoApiBase`, with `query` set to
 `SELECT * FROM Document WHERE ecm:uuid IN (?, …)`, one `?` per id, each id sent as a `queryParams`
 value of its own, which Nuxeo quotes before the query runs, and `pageSize` the number of ids. No
-`properties` header: the title, type, path and facets come with every record. Only a value that is
-an `ecm:uuid`, a lower-case UUID, is ever sent; one search asks for 100 at most. It is not cached
-by the service: `LinkedRecordLookup` asks once per page or list for the ids each new set adds, and
-keeps what it read for that page's life. The record page provides one, which its lists share, and
-so do the form and the Properties panel; a queue's list has its own. So a document page showing
+`properties` header for a title alone: the title, type, path and facets come with every record. For
+a `document-link` with `show` (`layout-v2.md`, section 12), `linkedRecords(ids, schemas)` sends
+`properties: <schema>,…`, the names of the schemas holding the shown properties, sorted, each a
+schema's name only (`[A-Za-z_][A-Za-z0-9_-]*`): the header names schemas, not prefixes, and
+`properties: dc` returns no property where `properties: dublincore` returns Dublin Core's (measured
+on 26 November 2026). Those names come from `linkedProperty(types, show)`, which reads the linked
+types' `/config/types/<type>`, cached for the session and waited for 10 s at most. Only a value
+that is an `ecm:uuid`, a lower-case UUID, is ever sent; one search asks for 100 at most. It is not
+cached by the service: `LinkedRecordLookup` asks once per page or list for the ids each new set
+adds, with the schemas asked for, and keeps what it read for that page's life; an id read without
+a schema a later set asks for is read again with both. The record page provides one, which its
+lists share, and asks with every schema its fields and its lists' columns show; so do the form
+and the Properties panel; a queue's page provides one that its list and its facets share, the
+facets reading the titles of a `document-link` facet's buckets (`app-definition-v2.md`,
+section 4). So a document page showing
 both a record page and the panel, as a Case's does, sends one search for each. A record the reader may not read, or that no longer exists, is not returned, and shows
 "Unavailable". A failed search is logged and asked again by the next set that names its ids.
 

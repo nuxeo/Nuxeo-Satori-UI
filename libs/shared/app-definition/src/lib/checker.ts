@@ -350,6 +350,18 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
           add(path, 'parameter', `${owner} takes "days", "months" or "years" here`);
         }
         return;
+      case 'dateOrToday':
+        if (item === 'today') return;
+        if (!isFieldReference(item) && !isDateText(item)) {
+          add(
+            path,
+            'parameter',
+            `${owner} takes a property, a date, as "2026-12-01" or an ISO 8601 date and time with its zone, or "today" here`,
+          );
+          return;
+        }
+        parameter('date', item, path, owner);
+        return;
       case 'date':
         if (isFieldReference(item)) {
           value(item, path);
@@ -474,7 +486,45 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       signed(registries.checks[type], parameters, join(path, 'parameters'), `the check "${type}"`);
   };
 
-  const widget = (entry: Record<string, unknown>, path: string, form: boolean): void => {
+  /**
+   * A `document-link`'s `show`, once its form is right (layout-v2.md, section 12): on a page, in a
+   * list's column or a card's field, with the types whose schemas hold it. Never in a form, whose
+   * picker chooses a record by its title, nor in a table's column, a reference inside a complex
+   * value. Each is a `parameter` finding, so the app leaves the field out and shows the rest.
+   */
+  const linkedShow = (
+    given: Record<string, unknown>,
+    path: string,
+    form: boolean,
+    inTable: boolean,
+  ): void => {
+    const at = join(join(path, 'parameters'), 'show');
+    if (form)
+      add(
+        at,
+        'parameter',
+        '"show" shows a property of the linked record on a page only: a form\'s picker chooses a record by its title',
+      );
+    else if (inTable)
+      add(
+        at,
+        'parameter',
+        '"show" is not for a table\'s column: a reference inside a complex value',
+      );
+    else if (!Object.hasOwn(given, 'types'))
+      add(
+        at,
+        'parameter',
+        '"show" needs "types", the types of the records it links to, whose schemas hold the property it shows',
+      );
+  };
+
+  const widget = (
+    entry: Record<string, unknown>,
+    path: string,
+    form: boolean,
+    inTable = false,
+  ): void => {
     const id = entry['widget'];
     const parameters = entry['parameters'];
     if (parameters !== undefined && !isRecord(parameters)) {
@@ -509,6 +559,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       if (problem) add(join(join(path, 'parameters'), name), 'parameter', `${name} ${problem}`);
       else if (isFieldReference(setting))
         variable(setting.field, join(join(join(path, 'parameters'), name), 'field'));
+      else if (id === 'document-link' && name === 'show') linkedShow(given, path, form, inTable);
     }
     for (const name of definition.required ?? []) {
       if (!Object.hasOwn(given, name))
@@ -517,7 +568,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     // A table's columns are field entries, held to the same rules as a card's.
     if (id === 'table' && Array.isArray(given['columns'])) {
       given['columns'].forEach((column, index) =>
-        field(column, join(join(join(path, 'parameters'), 'columns'), index), form, false),
+        field(column, join(join(join(path, 'parameters'), 'columns'), index), form, false, true),
       );
     }
   };
@@ -526,10 +577,21 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
    * A field entry: a property as `<prefix>:<name>`, or an object. `form` is a form's field, where
    * `inForm` says whether the form keys may be used: a table's columns in a form may not.
    */
-  const field = (entry: unknown, path: string, form: boolean, inForm = form): void =>
-    nested(path, () => fieldAt(entry, path, form, inForm));
+  const field = (
+    entry: unknown,
+    path: string,
+    form: boolean,
+    inForm = form,
+    inTable = false,
+  ): void => nested(path, () => fieldAt(entry, path, form, inForm, inTable));
 
-  const fieldAt = (entry: unknown, path: string, form: boolean, inForm: boolean): void => {
+  const fieldAt = (
+    entry: unknown,
+    path: string,
+    form: boolean,
+    inForm: boolean,
+    inTable: boolean,
+  ): void => {
     if (typeof entry === 'string') {
       if (!XPATH.test(entry))
         add(path, 'structure', `"${entry}" is not a property, <prefix>:<name>`);
@@ -573,7 +635,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       }
     }
     if ('id' in entry) claim(entry['id'], join(path, 'id'));
-    widget(entry, path, form);
+    widget(entry, path, form, inTable);
     if ('visibleWhen' in entry) rule(entry['visibleWhen'], join(path, 'visibleWhen'));
     const editable =
       typeof entry['field'] === 'string' && (entry['field'] as string).startsWith(VARIABLE);
@@ -663,6 +725,19 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       add(join(path, 'columns'), 'structure', 'needs a list of columns');
     else
       columns.forEach((column, index) => field(column, join(join(path, 'columns'), index), false));
+    // A column showing a linked record's property through `show` holds only that record's id:
+    // the page provider would order the records by it (layout-v2.md, section 12).
+    const shownThrough = new Set(
+      (Array.isArray(columns) ? columns : []).flatMap((column: unknown) =>
+        isRecord(column) &&
+        typeof column['field'] === 'string' &&
+        column['widget'] === 'document-link' &&
+        isRecord(column['parameters']) &&
+        'show' in column['parameters']
+          ? [column['field']]
+          : [],
+      ),
+    );
     if ('sort' in item) {
       const sort = item['sort'];
       if (!Array.isArray(sort)) add(join(path, 'sort'), 'structure', 'sort must be a list');
@@ -682,6 +757,12 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
             );
           } else if ('order' in entry && entry['order'] !== 'asc' && entry['order'] !== 'desc') {
             add(join(at, 'order'), 'structure', 'order is "asc" or "desc"');
+          } else if (shownThrough.has(entry['field'])) {
+            add(
+              join(at, 'field'),
+              'parameter',
+              `a column shows ${entry['field']} through "show", so the records cannot be sorted by it: they would be ordered by the linked record's stored id`,
+            );
           } else variable(entry['field'], join(at, 'field'));
         });
     }

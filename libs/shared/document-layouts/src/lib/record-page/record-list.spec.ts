@@ -144,7 +144,21 @@ describe('RecordListComponent', () => {
   let vocabulary: Subject<string | null>;
   /** The linked records' search: each call is one request, with the ids it was given. */
   let linkedRecords: ReturnType<
-    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+    typeof vi.fn<
+      (
+        ids: readonly string[],
+        schemas?: readonly string[],
+      ) => Observable<ReadonlyMap<string, LinkedRecord> | null>
+    >
+  >;
+  /** What a column's `show` reads of the types it links to, as the layout service reads them. */
+  let linkedProperty: ReturnType<
+    typeof vi.fn<
+      (
+        types: readonly string[],
+        show: string,
+      ) => Observable<{ schema: string; definition: LayoutFieldType } | null>
+    >
   >;
   let flagged: ExtensionRuleContext[];
   let warnings: string[];
@@ -159,6 +173,7 @@ describe('RecordListComponent', () => {
     rowProperties = () => of(CLAIM_PROPERTIES);
     vocabulary = new Subject<string | null>();
     linkedRecords = vi.fn((ids: readonly string[]) => of(linked(ids)));
+    linkedProperty = vi.fn(() => of(null));
     flagged = [];
     warnings = [];
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
@@ -185,7 +200,9 @@ describe('RecordListComponent', () => {
             vocabularyLabel: (directory: string, id: string) =>
               directory === 'claim_status' && id === 'open' ? vocabulary : of(null),
             principalLabel: () => of(null),
-            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
+            linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
+              schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
+            linkedProperty: (types: readonly string[], show: string) => linkedProperty(types, show),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
@@ -963,6 +980,89 @@ describe('RecordListComponent', () => {
       await answer(first, { numberOfPages: 2, isNextPageAvailable: true });
       expect(linkedRecords.mock.calls.map(([ids]) => ids)).toEqual([[JOHN, WEI].sort(), [MARIA]]);
       expect(memberColumn().text?.(first[0])).toBe('Wei Chen');
+    });
+  });
+
+  describe('a document-link column with show', () => {
+    const plan = (place: string, show = 'plan:name'): RecordPropertyField => ({
+      ...column('claim:member', 'document-link', { types: ['Member'], show }),
+      place,
+      label: { keys: [], fallback: show.slice(show.indexOf(':') + 1) },
+    });
+    const PLANS: RecordListEntry = {
+      ...CLAIMS,
+      columns: [
+        column('claim:number'),
+        column('claim:member', 'document-link', { types: ['Member'] }),
+        plan('cards[1].related.columns[2]'),
+      ],
+    };
+    const PROPERTIES: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+      [WEI]: { 'plan:name': 'Gold' },
+      [JOHN]: { 'plan:name': 'Silver' },
+      [GONE]: { 'plan:name': 'Platinum' },
+    };
+    const withMember = (n: number, member: unknown) => claim(n, { 'claim:member': member });
+
+    beforeEach(() => {
+      linkedProperty = vi.fn((_types: readonly string[], show: string) =>
+        of(show === 'plan:name' ? { schema: 'plans', definition: { type: 'string' } } : null),
+      );
+      linkedRecords.mockImplementation((ids, schemas: readonly string[] = []) =>
+        of(
+          new Map(
+            [...linked(ids)].map(([id, record]): [string, LinkedRecord] => [
+              id,
+              { ...record, properties: schemas.includes('plans') ? (PROPERTIES[id] ?? {}) : {} },
+            ]),
+          ),
+        ),
+      );
+    });
+
+    it("shows the member's property beside its title, a link to the member, and does not sort by it", async () => {
+      await render(['m1'], PLANS);
+      const rows = [withMember(1, WEI), withMember(2, JOHN)];
+      await answer(rows);
+      const [, title, shown] = list().columns();
+      expect([title.key, shown.key]).toEqual(['claim:member', 'claim:member/plan:name']);
+      expect(shown.label).toBe('name');
+      expect(title.text?.(rows[0])).toBe('Wei Chen');
+      expect(shown.text?.(rows[0])).toBe('Gold');
+      expect(shown.links?.(rows[1])).toEqual([{ text: 'Silver', routerLink: `/doc/${JOHN}` }]);
+      expect(shown.sortable).toBe(false);
+      expect(title.sortable).toBe(true);
+    });
+
+    it('reads the members of the page in one request, with the schema its show reads', async () => {
+      await render(['m1'], PLANS);
+      await answer([withMember(1, WEI), withMember(2, JOHN), withMember(3, WEI)]);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0]).toEqual([[JOHN, WEI].sort(), ['plans']]);
+    });
+
+    it('shows a member the reader may not read as unavailable, never one of its values', async () => {
+      const root = await render(['m1'], PLANS);
+      const rows = [withMember(1, GONE)];
+      await answer(rows);
+      expect(list().columns()[2].text?.(rows[0])).toBe('Unavailable');
+      expect(root.querySelector('table')?.textContent).not.toContain('Platinum');
+    });
+
+    it('leaves the column out, and says why, where no linked type has the property', async () => {
+      await render(['m1'], {
+        ...PLANS,
+        columns: [...PLANS.columns, plan('cards[1].related.columns[3]', 'plan:nothing')],
+      });
+      await answer([withMember(1, WEI)]);
+      expect(
+        list()
+          .columns()
+          .map((each) => each.key),
+      ).toEqual(['claim:number', 'claim:member', 'claim:member/plan:name']);
+      expect(warnings).toContain(
+        '[agentic-ui-layouts] Member/view layout: cards[1]: cards[1].related.columns[3]: none of the types it links to has plan:nothing, or their schemas could not be read; that column left out',
+      );
     });
   });
 

@@ -88,6 +88,29 @@ final class Fakes {
             return this;
         }
 
+        /** A video's transcoded videos, by these names, at indexes 0, 1, 2 and on, as Nuxeo keeps them. */
+        Doc transcoded(String... names) {
+            ArrayList<Map<String, Serializable>> entries = new ArrayList<>();
+            for (int i = 0; i < names.length; i++) {
+                HashMap<String, Serializable> entry = new HashMap<>();
+                entry.put("name", names[i]);
+                entry.put("content", (Serializable) blob("transcoded-" + i));
+                entries.add(entry);
+                properties.put("vid:transcodedVideos/" + i + "/name", names[i]);
+                properties.put("vid:transcodedVideos/" + i + "/content", (Serializable) blob("transcoded-" + i));
+            }
+            properties.put("vid:transcodedVideos", entries);
+            return this;
+        }
+
+        /** A video's storyboard of this many frames, at indexes 0 to {@code frames - 1}. */
+        Doc storyboard(int frames) {
+            for (int i = 0; i < frames; i++) {
+                properties.put("vid:storyboard/" + i + "/content", (Serializable) blob("frame-" + i));
+            }
+            return this;
+        }
+
         DocumentModel model() {
             return (DocumentModel) Proxy.newProxyInstance(Fakes.class.getClassLoader(),
                     new Class<?>[] { DocumentModel.class }, (proxy, method, args) -> switch (method.getName()) {

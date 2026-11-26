@@ -33,6 +33,6 @@
   "pageSize": 50,
   "facets": [
     { "aggregate": "dmg_state_agg", "labelKey": "moves.facet.state" },
-    { "aggregate": "dmg_moveNumber_agg", "labelKey": "moves.facet.move" }
+    { "aggregate": "dmg_move_agg", "labelKey": "moves.facet.move", "widget": "document-link" }
   ]
 }

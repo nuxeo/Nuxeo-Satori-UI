@@ -184,8 +184,8 @@ const registersUrgent = (root) =>
   edit(
     root,
     REGISTRIES,
-    "    'app.rules.dateWithin',\n  ].map(",
-    "    'app.rules.dateWithin',\n    'app.rules.isUrgent',\n  ].map(",
+    "    'app.rules.dateAfter',\n  ].map(",
+    "    'app.rules.dateAfter',\n    'app.rules.isUrgent',\n  ].map(",
   );
 /** A home card shown by `app.rules.isUrgent`. */
 const namesUrgent = (directory) =>

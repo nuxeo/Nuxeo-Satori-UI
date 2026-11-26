@@ -106,6 +106,10 @@
         },
         "labelKey": {
           "type": "string"
+        },
+        "widget": {
+          "enum": ["document-link"],
+          "description": "For an aggregate on a reference: each bucket, a record's id, shown by that record's title (app-definition-v2.md, section 4)."
         }
       }
     },

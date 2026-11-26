@@ -4,6 +4,15 @@
   "columns": 2,
   "banners": [
     {
+      "id": "filed-late",
+      "tone": "warning",
+      "labelKey": "moves.banner.claim.filedLate",
+      "visibleWhen": {
+        "type": "app.rules.dateAfter",
+        "parameters": [{ "field": "dmg:filedOn" }, { "field": "dmg:deliveredOn" }, 30]
+      }
+    },
+    {
       "id": "denied",
       "tone": "negative",
       "labelKey": "moves.banner.claim.denied",
@@ -24,6 +33,13 @@
           "field": "dmg:move",
           "widget": "document-link",
           "parameters": { "types": ["Move"] }
+        },
+        {
+          "id": "moveCustomer",
+          "field": "dmg:move",
+          "widget": "document-link",
+          "labelKey": "moves.field.moveCustomer",
+          "parameters": { "types": ["Move"], "show": "move:customer" }
         },
         {
           "field": "dmg:state",

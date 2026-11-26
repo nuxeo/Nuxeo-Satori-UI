@@ -142,10 +142,13 @@ install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline
 - **`layout-model.ts`** holds a layout to the model, when `validateLayoutV2` is given one and the
   type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. A
   checklist's property is held to it too: on the type, a list of complex values, with the four
-  subfields `CHECKLIST_SUBFIELDS` names, each of its type. Not
-  held to it: a related list's columns, which are other records'; the properties a computation, a
-  rule or a widget parameter names; a task form's fields; a vocabulary's `directory` against the
-  property's own.
+  subfields `CHECKLIST_SUBFIELDS` names, each of its type. A `document-link`'s `show`, in a card's
+  field or a related list's column, is held to every type its `types` lists
+  (`linkedShowFindings`, which `page-providers.ts` runs on a queue's columns too). Not held to it:
+  a related list's columns, which are other records', but for their `show`; the properties a
+  computation, a rule or another widget parameter names; a task form's fields; a vocabulary's
+  `directory` against the property's own; whether a property is a document reference, since the
+  model reader reads no resolver.
 - **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
   copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
 - **`page-providers.ts`** is what the package pipeline checks of the page providers a package

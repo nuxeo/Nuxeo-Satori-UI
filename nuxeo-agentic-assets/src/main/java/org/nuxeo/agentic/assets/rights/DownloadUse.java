@@ -29,6 +29,16 @@ import org.nuxeo.ecm.core.api.DocumentModel;
  * policy names as its original: each is the original only when the blob it returns has the
  * original's digest, and otherwise a use no policy lists.
  *
+ * <p>A video's files, read from {@code nuxeo-platform-video} 2025.10.18 the same way:
+ * <ul>
+ * <li>a transcoded video at its place, {@code vid:transcodedVideos/<n>/content}, is the rendition
+ * of its conversion's name, {@code vid:transcodedVideos/<n>/name}, which is the name the platform's
+ * video rendition provider serves it under through {@code @rendition}: so one rule decides a
+ * conversion however it is asked for, by its name or at its place, and whichever place it has;</li>
+ * <li>every frame of the storyboard, {@code vid:storyboard/<n>/content}, is the one use
+ * {@link Use#STORYBOARD}, however many frames the server makes.</li>
+ * </ul>
+ *
  * <p>Only canonical forms are named. Anything else, such as a view addressed another way or an
  * index the document does not have, is a use no policy lists, so it is refused.
  */
@@ -41,6 +51,12 @@ public final class DownloadUse {
 
     /** {@code picture:views/<index>/content}, with an index in its canonical form. */
     private static final Pattern VIEW = Pattern.compile("picture:views/(0|[1-9][0-9]{0,4})/content");
+
+    /** {@code vid:transcodedVideos/<index>/content}, with an index in its canonical form. */
+    private static final Pattern TRANSCODED_VIDEO = Pattern.compile("vid:transcodedVideos/(0|[1-9][0-9]{0,4})/content");
+
+    /** {@code vid:storyboard/<index>/content}, with an index in its canonical form. */
+    private static final Pattern STORYBOARD_FRAME = Pattern.compile("vid:storyboard/(0|[1-9][0-9]{0,4})/content");
 
     private DownloadUse() {
     }
@@ -75,6 +91,16 @@ public final class DownloadUse {
             String title = viewTitle(document, view.group(1));
             return title == null ? Use.unknown(path) : Use.view(title);
         }
+        Matcher transcoded = TRANSCODED_VIDEO.matcher(path);
+        if (transcoded.matches()) {
+            // Decided as the rendition of its conversion's name, as @rendition/<name> is.
+            String name = transcodedVideoName(document, transcoded.group(1));
+            return name == null ? Use.unknown(path) : Use.rendition(name);
+        }
+        if (STORYBOARD_FRAME.matcher(path).matches()) {
+            // Every frame is the storyboard: a place the document has no file at is not named.
+            return hasBlob(document, path) ? Use.STORYBOARD : Use.unknown(path);
+        }
         return Use.blob(path);
     }
 
@@ -92,11 +118,32 @@ public final class DownloadUse {
 
     /** The view's title, or {@code null} when it has none or the document has no such view. */
     static String viewTitle(DocumentModel document, String index) {
+        return text(document, "picture:views/" + index + "/title");
+    }
+
+    /**
+     * The name of the conversion at that place of {@code vid:transcodedVideos}, or {@code null} when
+     * it has none or the document has no such place.
+     */
+    static String transcodedVideoName(DocumentModel document, String index) {
+        return text(document, "vid:transcodedVideos/" + index + "/name");
+    }
+
+    private static String text(DocumentModel document, String xpath) {
         try {
-            Serializable title = document.getPropertyValue("picture:views/" + index + "/title");
-            return title instanceof String text && !text.isBlank() ? text : null;
+            Serializable value = document.getPropertyValue(xpath);
+            return value instanceof String text && !text.isBlank() ? text : null;
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /** Whether the document has a file at {@code xpath}: a place it does not have is not. */
+    private static boolean hasBlob(DocumentModel document, String xpath) {
+        try {
+            return document.getPropertyValue(xpath) instanceof Blob;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 }

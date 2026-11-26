@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.rights.video.operations">
+
+  <documentation>
+    The platform's Video.* operations (nuxeo-platform-video's video tools), each replaced by one of
+    the same id, parameters, inputs and answers that asks the asset's rights first: an input
+    document's video, and Video.AddWatermark's watermark picture, are decided as a download of the
+    same file would be (org.nuxeo.agentic.assets.rights), and refused with 403 when the rights do
+    not cover it. Then the platform's own operation runs. A document no policy covers, and a blob
+    given as the input, are not refused here.
+
+    It requires the platform's own contribution, so that it registers after it and replaces it.
+    On a server without nuxeo-platform-video, it waits for it and replaces nothing.
+  </documentation>
+
+  <require>org.nuxeo.ecm.video.tools.operations</require>
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.assets.rights.video.RightsCheckedAddWatermarkToVideo" replace="true" />
+    <operation class="org.nuxeo.agentic.assets.rights.video.RightsCheckedConcatVideos" replace="true" />
+    <operation class="org.nuxeo.agentic.assets.rights.video.RightsCheckedExtractClosedCaptions" replace="true" />
+    <operation class="org.nuxeo.agentic.assets.rights.video.RightsCheckedSliceVideo" replace="true" />
+    <operation class="org.nuxeo.agentic.assets.rights.video.RightsCheckedSliceVideoInParts" replace="true" />
+  </extension>
+
+</component>

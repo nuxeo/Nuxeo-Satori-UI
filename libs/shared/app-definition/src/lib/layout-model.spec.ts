@@ -237,6 +237,83 @@ describe('validateLayoutV2, given the content model', () => {
     });
   });
 
+  describe("a document-link's show", () => {
+    /** Claims linking to providers and clinics, which have an NPI and a name only. */
+    const linkedModel = (): ContentModel => {
+      const reading = readContentModel({
+        doctypes: {
+          Claim: { parent: 'Document', facets: [], schemas: ['dublincore', 'claim'] },
+          Provider: {
+            parent: 'Document',
+            facets: ['Audited'],
+            schemas: ['dublincore', 'provider'],
+          },
+          Clinic: { parent: 'Document', facets: [], schemas: ['dublincore', 'clinic'] },
+        },
+        facets: [
+          {
+            name: 'Audited',
+            schemas: [{ name: 'audit', '@prefix': 'aud', fields: { auditedOn: 'date' } }],
+          },
+        ],
+        schemas: [
+          { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+          { name: 'claim', '@prefix': 'claim', fields: { number: 'string', provider: 'string' } },
+          { name: 'provider', '@prefix': 'provider', fields: { npi: 'string' } },
+          { name: 'clinic', '@prefix': 'clinic', fields: { name: 'string' } },
+        ],
+      });
+      if (!reading.model) throw new Error(reading.problems.join('\n'));
+      return reading.model;
+    };
+    const claims = linkedModel();
+    const shown = (types: unknown, show: string) => ({
+      field: 'claim:provider',
+      widget: 'document-link',
+      parameters: { types, show },
+    });
+    const onClaim = (content: unknown) => messages(content, { type: 'Claim', given: claims });
+
+    it('passes a property of every type it links to, a facet it declares included', () => {
+      expect(onClaim(withFields(shown(['Provider'], 'provider:npi')))).toEqual([]);
+      expect(onClaim(withFields(shown(['Provider'], 'aud:auditedOn')))).toEqual([]);
+      expect(onClaim(withFields(shown(['Provider', 'Clinic'], 'dc:title')))).toEqual([]);
+    });
+
+    it('refuses one a linked type lacks, naming the type, and a type the model does not have', () => {
+      expect(onClaim(withFields(shown(['Provider', 'Clinic'], 'provider:npi')))).toEqual([
+        'cards[0].fields[0].parameters.show: "provider:npi" is not a property of the type "Clinic" or of its facets, one of the types the field links to [unknown]',
+      ]);
+      expect(onClaim(withFields(shown(['Surgeon'], 'provider:npi')))).toEqual([
+        'cards[0].fields[0].parameters.show: the type "Surgeon" that "types" lists is not in the content model, so "provider:npi" cannot be found on it [unknown]',
+      ]);
+    });
+
+    it("checks a related list's column too, though not the listed records' own properties", () => {
+      const list = {
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            label: 'Claims',
+            related: {
+              pageProvider: 'provider_claims',
+              parameters: [{ field: 'ecm:uuid' }],
+              columns: ['claim:nothing', shown(['Clinic'], 'provider:npi')],
+            },
+          },
+        ],
+      };
+      expect(onClaim(list)).toEqual([
+        'cards[0].related.columns[1].parameters.show: "provider:npi" is not a property of the type "Clinic" or of its facets, one of the types the field links to [unknown]',
+      ]);
+    });
+
+    it('checks nothing against the model when none is given', () => {
+      expect(messages(withFields(shown(['Clinic'], 'provider:npi')), { given: null })).toEqual([]);
+    });
+  });
+
   describe("a checklist's property", () => {
     const checklist = (field: string, where: 'cards' | 'tabs' = 'cards') => {
       const card = {
