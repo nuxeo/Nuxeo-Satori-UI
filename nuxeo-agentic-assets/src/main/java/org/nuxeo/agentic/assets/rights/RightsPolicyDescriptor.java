@@ -22,8 +22,11 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *   &lt;view name="Medium" preview="true" /&gt;
  *   &lt;view name="OriginalJpeg" channel="Print" /&gt;
  *   &lt;rendition name="thumbnail" preview="true" /&gt;
+ *   &lt;storyboard preview="true" /&gt;
  * &lt;/policy&gt;
  * </pre>
+ *
+ * {@code <storyboard>}, for a video type, decides every frame of its storyboard.
  *
  * {@link RightsPolicy#of} reads it, and decides what a mistake in it means: always a refusal.
  */
@@ -53,6 +56,10 @@ public class RightsPolicyDescriptor {
 
     @XNodeList(value = "blob", type = ArrayList.class, componentType = UseDescriptor.class)
     protected List<UseDescriptor> blobs = new ArrayList<>();
+
+    /** Every frame of a video's storyboard, {@code vid:storyboard/<n>/content}, as one use. */
+    @XNode("storyboard")
+    protected UseDescriptor storyboard;
 
     public String getType() {
         return type;
@@ -84,5 +91,9 @@ public class RightsPolicyDescriptor {
 
     public List<UseDescriptor> getBlobs() {
         return blobs;
+    }
+
+    public UseDescriptor getStoryboard() {
+        return storyboard;
     }
 }

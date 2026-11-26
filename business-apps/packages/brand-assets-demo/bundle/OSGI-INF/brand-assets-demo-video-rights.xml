@@ -18,24 +18,18 @@
       <channels xpath="acmeasset:channels" />
       <!-- The original file, as the prototype's "Original": print. -->
       <original channel="Print" />
-      <!-- The transcoded videos, by their renditions' names: Nuxeo LTS 2025's automatic video
-           conversions, the web cut. The asset page asks for them so, through @rendition. -->
+      <!-- The transcoded videos, by their conversions' names: Nuxeo LTS 2025's automatic video
+           conversions, the web cut. The server's download endpoints and video operations
+           decide one by its name whether they are given its name, through @rendition, as the
+           asset page asks, or its place in vid:transcodedVideos. -->
       <rendition name="MP4 480p" channel="E-commerce" />
       <rendition name="WebM 480p" channel="E-commerce" />
       <!-- The still frames: the poster views Nuxeo makes from the video, the thumbnail the lists
-           show, and the storyboard's frames, as many as Nuxeo LTS 2025 makes: 9. -->
+           show, and every frame of the storyboard, however many the server makes. -->
       <view name="Small" preview="true" />
       <view name="StaticPlayerView" preview="true" />
       <rendition name="thumbnail" preview="true" />
-      <blob xpath="vid:storyboard/0/content" preview="true" />
-      <blob xpath="vid:storyboard/1/content" preview="true" />
-      <blob xpath="vid:storyboard/2/content" preview="true" />
-      <blob xpath="vid:storyboard/3/content" preview="true" />
-      <blob xpath="vid:storyboard/4/content" preview="true" />
-      <blob xpath="vid:storyboard/5/content" preview="true" />
-      <blob xpath="vid:storyboard/6/content" preview="true" />
-      <blob xpath="vid:storyboard/7/content" preview="true" />
-      <blob xpath="vid:storyboard/8/content" preview="true" />
+      <storyboard preview="true" />
     </policy>
   </extension>
 

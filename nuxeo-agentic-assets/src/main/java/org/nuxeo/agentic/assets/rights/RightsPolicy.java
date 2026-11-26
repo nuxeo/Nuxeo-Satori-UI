@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A rights policy as the server applies it: read once from its descriptor, then never changed.
@@ -22,7 +23,10 @@ import java.util.Set;
  * <li>a use with both a channel and {@code preview="true"}, or with neither, is refused as one the
  * policy does not list, whatever other declaration of the same use comes before or after it;</li>
  * <li>a use listed twice keeps the stricter of the two: a channel over a preview, and the first
- * channel over a later one.</li>
+ * channel over a later one;</li>
+ * <li>a {@code <blob>} at a video's transcoded video or storyboard frame is left out: those places
+ * are decided by their conversion's {@code <rendition>} and by {@code <storyboard>}, so a rule by
+ * place would never be read.</li>
  * </ul>
  * {@link #problems()} lists each one, for the server log.
  */
@@ -30,6 +34,15 @@ public final class RightsPolicy {
 
     /** The original's xpath when the policy names none: the main blob of a Picture or a File. */
     public static final String DEFAULT_ORIGINAL_XPATH = "file:content";
+
+    /**
+     * A video's places that {@link DownloadUse} names otherwise than by xpath: a transcoded video's
+     * file, and a storyboard frame's, with the schema's prefix or its name or neither, a leading
+     * slash or not, so that no {@code <blob>} rule stands for one in any of the forms the platform
+     * reads.
+     */
+    private static final Pattern VIDEO_PLACE = Pattern.compile(
+            "/?(?:(?:vid|video)[:;])?(?:transcodedVideos|storyboard)(?:/.*)?");
 
     /** What clears one use: the channel that covers it, or {@code null} for a preview. */
     public record Rule(String channel) {
@@ -112,9 +125,16 @@ public final class RightsPolicy {
             String xpath = trimmed(blob.getXpath());
             if (xpath == null) {
                 problems.add("a <blob> with no xpath is left out");
+            } else if (VIDEO_PLACE.matcher(xpath).matches()) {
+                problems.add("<blob xpath=\"" + xpath + "\"> is left out: a transcoded video is decided by its"
+                        + " conversion's <rendition name>, and a storyboard frame by <storyboard>");
             } else {
                 put(rules, malformed, problems, Use.blob(xpath), blob);
             }
+        }
+        UseDescriptor storyboard = descriptor.getStoryboard();
+        if (storyboard != null) {
+            put(rules, malformed, problems, Use.STORYBOARD, storyboard);
         }
         // A use declared wrongly once is refused, whatever else declares it, before or after.
         rules.keySet().removeAll(malformed);

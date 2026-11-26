@@ -27,8 +27,44 @@
       nuxeo-agentic-ui, and a package depends on it by this version. The manifest's Bundle-Version
       repeats it, and AddonPackageTest refuses a build where the two differ.
     -->
-    <assets.package.version>0.2.0</assets.package.version>
+    <assets.package.version>0.3.0</assets.package.version>
   </properties>
+
+  <!--
+    The Nuxeo test framework's runtime starts Nuxeo Stream on Chronicle Queue, and 11.5's Chronicle,
+    core 2.20.21, looks for a JDK method Java 21 no longer has (FileChannelImpl.unmap0), so the
+    runtime does not start. The last releases of the same 2.20 line find it where Java 21 keeps it,
+    as nuxeo-agentic-documents does. Only the tests load Chronicle: the bundle uses none of it.
+  -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>net.openhft</groupId>
+        <artifactId>chronicle-core</artifactId>
+        <version>2.25ea15</version>
+      </dependency>
+      <dependency>
+        <groupId>net.openhft</groupId>
+        <artifactId>chronicle-bytes</artifactId>
+        <version>2.25ea11</version>
+      </dependency>
+      <dependency>
+        <groupId>net.openhft</groupId>
+        <artifactId>chronicle-wire</artifactId>
+        <version>2.25ea16</version>
+      </dependency>
+      <dependency>
+        <groupId>net.openhft</groupId>
+        <artifactId>chronicle-threads</artifactId>
+        <version>2.25ea7</version>
+      </dependency>
+      <dependency>
+        <groupId>net.openhft</groupId>
+        <artifactId>chronicle-queue</artifactId>
+        <version>5.25ea17</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -90,11 +126,77 @@
       <artifactId>log4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!--
+      The platform's Video.* operations, which the add-on replaces by operations of the same ids
+      that ask the rights first, then run the platform's own. Every class named is in the same
+      jar, with the same fields and methods, on the local Nuxeo LTS 2025.10.18 server.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-video</artifactId>
+      <scope>provided</scope>
+    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      The Nuxeo test framework, for what needs a real runtime and repository: VCS on H2, the
+      platform's download service evaluating the contributed permission, its Automation service,
+      and its Video type and operations (VideoRightsTest). Its runner is JUnit 4's, which the
+      vintage engine runs beside the Jupiter tests.
+    -->
+    <dependency>
+      <groupId>org.junit.vintage</groupId>
+      <artifactId>junit-vintage-engine</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-storage-sql-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The tags' facet, which the platform's Video type has. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-tag</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      FeaturesRunner orders a test's methods by reading its class with ASM, and 11.5 brings ASM 9.0,
+      which reads class files up to Java 16's. The tests are Java 21's, so a later ASM, for the
+      tests only.
+    -->
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.7</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Chronicle Threads 2.25 needs it, and 11.5's dependency management leaves it out. -->
+    <dependency>
+      <groupId>net.openhft</groupId>
+      <artifactId>affinity</artifactId>
+      <version>3.23.3</version>
       <scope>test</scope>
     </dependency>
     <!--
@@ -137,6 +239,25 @@
             <!-- As the server runs: the watermark draws with no display. -->
             <java.awt.headless>true</java.awt.headless>
           </systemPropertyVariables>
+          <!--
+            The test runtime starts Nuxeo Stream on Chronicle, which reaches into the JDK's internals:
+            on Java 17 and later they must be opened to it, as Nuxeo LTS 2023 and 2025 do in their
+            own launcher.
+          -->
+          <argLine>
+            --add-opens=java.base/java.lang=ALL-UNNAMED
+            --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+            --add-opens=java.base/java.io=ALL-UNNAMED
+            --add-opens=java.base/java.nio=ALL-UNNAMED
+            --add-opens=java.base/java.util=ALL-UNNAMED
+            --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED
+            --add-exports=java.base/jdk.internal.ref=ALL-UNNAMED
+            --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED
+            --add-exports=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED
+          </argLine>
         </configuration>
       </plugin>
 
@@ -146,6 +267,26 @@
         <artifactId>maven-resources-plugin</artifactId>
         <version>3.3.1</version>
         <executions>
+          <!--
+            The brand assets kit's own video policy, into the test bundle, so that VideoRightsTest
+            deploys the file the kit ships, as it is, rather than a copy that could drift from it.
+          -->
+          <execution>
+            <id>kit-video-policy</id>
+            <phase>process-test-resources</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.testOutputDirectory}/OSGI-INF/kit</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../business-apps/packages/brand-assets-demo/bundle/OSGI-INF</directory>
+                  <includes>
+                    <include>brand-assets-demo-video-rights.xml</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
           <execution>
             <id>filter-package-descriptor</id>
             <phase>prepare-package</phase>

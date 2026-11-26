@@ -51,8 +51,10 @@ import com.fasterxml.jackson.core.JsonGenerator;
  * }
  * </pre>
  *
- * <p>{@code uses} holds the original, each picture view the document has, by its title, then each
- * rendition and blob the policy lists; {@code otherwise} is the answer for any use not among them.
+ * <p>{@code uses} holds the original, each picture view the document has, by its title, then, for a
+ * video, each transcoded video it has, as the rendition of its conversion's name, then each
+ * rendition and blob the policy lists, and last a video's storyboard, {@code "use": "storyboard"},
+ * for every frame; {@code otherwise} is the answer for any use not among them.
  * Every reason is a code from {@link Reason}, for the client to translate. Days are the server's,
  * in UTC. Rights that cannot be read refuse with {@code policy-error} the uses that need them, and
  * a broken policy every use, as the download permission refuses them; a preview stays served. For
@@ -69,6 +71,9 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
     private static final Logger log = LogManager.getLogger(AssetRightsJsonEnricher.class);
 
     public static final String NAME = "assetRights";
+
+    /** The schema of a video's transcoded videos and storyboard, {@code vid}. */
+    static final String VIDEO_SCHEMA = "video";
 
     private final Supplier<AssetRightsService> service;
 
@@ -176,17 +181,57 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         }
     }
 
-    /** The original, each view the document has, then each rendition and blob the policy lists. */
+    /**
+     * The original, each view the document has, each transcoded video a video has, then each
+     * rendition and blob the policy lists, and a video's storyboard.
+     */
     static List<Use> uses(DocumentModel document, RightsPolicy policy) {
         Set<Use> uses = new LinkedHashSet<>();
         uses.add(Use.ORIGINAL);
         uses.addAll(views(document));
+        boolean video = isVideo(document);
+        if (video) {
+            uses.addAll(transcodedVideos(document));
+        }
         for (Use listed : policy.rules().keySet()) {
             if (listed.kind() == Use.Kind.RENDITION || listed.kind() == Use.Kind.BLOB) {
                 uses.add(listed);
             }
         }
+        if (video || policy.rule(Use.STORYBOARD) != null) {
+            uses.add(Use.STORYBOARD);
+        }
         return new ArrayList<>(uses);
+    }
+
+    private static boolean isVideo(DocumentModel document) {
+        try {
+            return document.hasSchema(VIDEO_SCHEMA);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * A video's transcoded videos, each as the rendition of its conversion's name, in its order, as a
+     * download of one at its place or by its name is decided.
+     */
+    static List<Use> transcodedVideos(DocumentModel document) {
+        List<Use> transcoded = new ArrayList<>();
+        try {
+            Serializable value = document.getPropertyValue("vid:transcodedVideos");
+            if (value instanceof List<?> list) {
+                for (Object entry : list) {
+                    if (entry instanceof Map<?, ?> map && map.get("name") instanceof String name && !name.isBlank()) {
+                        transcoded.add(Use.rendition(name));
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("Asset rights: the transcoded videos of {} could not be listed", AssetRightsComponent.id(document),
+                    e);
+        }
+        return transcoded;
     }
 
     /** The document's picture views, by title, in its order; none when it is not a picture. */
