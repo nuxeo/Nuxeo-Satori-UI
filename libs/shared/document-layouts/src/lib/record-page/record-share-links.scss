@@ -1,0 +1,151 @@
+:host {
+  display: block;
+}
+
+/* A card of the record page's, drawn by the section, so that a user who may not manage the links
+   sees no empty frame: on a 403 nothing at all is drawn. */
+.record-share-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+}
+
+.record-share-links__heading {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.record-share-links__subheading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.record-share-links__note,
+.record-share-links__empty,
+.record-share-links__truncated {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-share-links__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A link's parts on one line where they fit, its Revoke at the end. */
+.record-share-links__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.record-share-links__name {
+  font-weight: 600;
+}
+
+.record-share-links__link[data-state='revoked'] .record-share-links__state,
+.record-share-links__link[data-state='expired'] .record-share-links__state {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-share-links__revoke {
+  margin-inline-start: auto;
+}
+
+.record-share-links__created-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--mat-sys-primary);
+  border-radius: 8px;
+}
+
+.record-share-links__created-link p {
+  margin: 0;
+}
+
+.record-share-links__created-heading {
+  font-weight: 600;
+}
+
+.record-share-links__address {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The address wraps anywhere: a token is one long word. */
+.record-share-links__url {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.record-share-links__created-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.record-share-links__refused p,
+.record-share-links__refused ul {
+  margin: 0;
+}
+
+.record-share-links__error {
+  margin: 0;
+  color: var(--mat-sys-error);
+}
+
+.record-share-links__form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.record-share-links__items-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.record-share-links__items-field legend {
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.record-share-links__downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.record-share-links__table {
+  border-collapse: collapse;
+  text-align: start;
+}
+
+.record-share-links__table th,
+.record-share-links__table td {
+  padding: 4px 12px 4px 0;
+  text-align: start;
+}

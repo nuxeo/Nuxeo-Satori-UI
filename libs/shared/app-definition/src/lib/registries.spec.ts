@@ -125,6 +125,7 @@ describe('the JSON Schema, held to the registries and the validator', () => {
     for (const [part, keys] of [
       ['banner', LAYOUT_V2_KEYS.banner],
       ['review', LAYOUT_V2_KEYS.review],
+      ['shareLinks', LAYOUT_V2_KEYS.shareLinks],
       ['tab', LAYOUT_V2_KEYS.tab],
       ['card', LAYOUT_V2_KEYS.card],
       ['field', LAYOUT_V2_KEYS.field],

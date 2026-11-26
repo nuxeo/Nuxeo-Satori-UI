@@ -1,0 +1,86 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "moves.card.damageClaim.claim",
+      "fields": [
+        { "field": "dc:title", "labelKey": "moves.field.claimTitle", "required": true },
+        { "field": "dmg:number", "required": true },
+        { "field": "dmg:move", "readOnlyWhen": "core.true" },
+        { "field": "dmg:moveNumber", "readOnlyWhen": "core.true" },
+        { "field": "dmg:state", "required": true },
+        "dmg:adjuster"
+      ]
+    },
+    {
+      "id": "dates",
+      "labelKey": "moves.card.damageClaim.dates",
+      "fields": [
+        { "field": "dmg:deliveredOn", "readOnlyWhen": "core.true" },
+        {
+          "field": "dmg:filedOn",
+          "required": true,
+          "checks": [
+            {
+              "type": "core.notBefore",
+              "parameters": [{ "field": "dmg:deliveredOn" }],
+              "labelKey": "moves.check.filedBeforeDelivery"
+            }
+          ]
+        },
+        {
+          "field": "dmg:decidedOn",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dmg:state" }, "Approved", "Denied", "Paid"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "items",
+      "labelKey": "moves.card.damageClaim.items",
+      "fields": [
+        "dmg:items",
+        {
+          "field": "dmg:amountClaimed",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "dmg:amountApproved",
+          "widget": "currency",
+          "parameters": { "currency": "USD" },
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dmg:state" }, "Approved", "Paid"]
+          },
+          "checks": [
+            {
+              "type": "core.atMost",
+              "parameters": [{ "field": "dmg:amountClaimed" }],
+              "labelKey": "moves.check.approvedOverClaimed"
+            }
+          ]
+        },
+        { "field": "dmg:details", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "denial",
+      "labelKey": "moves.card.damageClaim.denial",
+      "fields": [
+        {
+          "field": "dmg:denialReason",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dmg:state" }, "Denied"]
+          }
+        }
+      ]
+    }
+  ]
+}
