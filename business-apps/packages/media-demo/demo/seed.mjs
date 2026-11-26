@@ -102,7 +102,8 @@ async function seed() {
 
   await ensure(WORKSPACES, WORKSPACE.name, 'Workspace', {
     'dc:title': WORKSPACE.title,
-    'dc:description': 'Fictional films for the media kit. No real studio, distributor, person or film.',
+    'dc:description':
+      'Fictional films for the media kit. No real studio, distributor, person or film.',
   });
   const folders = {};
   for (const folder of [FILMS, VERSIONS, DELIVERIES]) {
@@ -121,7 +122,9 @@ async function seed() {
     'film:windows': windows,
   });
   if (!film.created) {
-    const held = (await call('GET', `/id/${film.uid}`, { schemas: 'film' }))?.properties?.['film:windows'];
+    const held = (await call('GET', `/id/${film.uid}`, { schemas: 'film' }))?.properties?.[
+      'film:windows'
+    ];
     if (JSON.stringify(days(held)) !== JSON.stringify(windows))
       console.log(
         `  kept     ${film.path}: its release windows are an earlier seed's, so the demo's cases hold for 30 days after it`,
@@ -149,9 +152,15 @@ async function seed() {
   }
 
   const { created, uploaded, granted } = tally;
-  console.log(`\nDone: ${created} created, ${uploaded} file(s) uploaded, ${granted} permission(s) granted.`);
-  console.log(`The film: ${film.path} (${film.uid}). Deliveries are filed in ${ROOT}/${DELIVERIES.name}.`);
-  console.log("The demo itself, deliveries filed by a distribution coordinator, is the kit's README's.");
+  console.log(
+    `\nDone: ${created} created, ${uploaded} file(s) uploaded, ${granted} permission(s) granted.`,
+  );
+  console.log(
+    `The film: ${film.path} (${film.uid}). Deliveries are filed in ${ROOT}/${DELIVERIES.name}.`,
+  );
+  console.log(
+    "The demo itself, deliveries filed by a distribution coordinator, is the kit's README's.",
+  );
 }
 
 async function preflight() {
@@ -168,14 +177,18 @@ async function preflight() {
     throw error;
   }
   if (me?.isAdministrator !== true)
-    throw new Precondition(`${username} is not an administrator: only an administrator grants the kit's permissions.`);
+    throw new Precondition(
+      `${username} is not an administrator: only an administrator grants the kit's permissions.`,
+    );
   for (const [type, from] of [
     ['MediaDelivery', 'the assets add-on, nuxeo-agentic-assets 0.4.0'],
     ['Film', 'this kit, media-demo'],
     ['FilmVersion', 'this kit, media-demo'],
   ]) {
     if ((await find(`/config/types/${type}`)) === null)
-      throw new Precondition(`${SERVER} has no ${type} type: install ${from} first, then run this again.`);
+      throw new Precondition(
+        `${SERVER} has no ${type} type: install ${from} first, then run this again.`,
+      );
   }
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the kit's workspace goes.`);
@@ -207,7 +220,9 @@ async function ensure(parent, name, type, properties) {
     return { ...created, created: true };
   }
   if (existing.type !== type)
-    throw new Error(`${path} is a ${existing.type}, not a ${type}. It is not the seed's, so it is left alone.`);
+    throw new Error(
+      `${path} is a ${existing.type}, not a ${type}. It is not the seed's, so it is left alone.`,
+    );
   return existing;
 }
 
@@ -215,7 +230,12 @@ async function ensure(parent, name, type, properties) {
 async function ensureGrant(folder, { group, permission }) {
   const acl = await call('GET', `/id/${folder.uid}/@acl`);
   const local = (acl?.acl ?? []).find((each) => each.name === 'local')?.aces ?? [];
-  if (local.some((ace) => ace.username === group && ace.permission === permission && ace.granted === true)) return;
+  if (
+    local.some(
+      (ace) => ace.username === group && ace.permission === permission && ace.granted === true,
+    )
+  )
+    return;
   await call('POST', '/automation/Document.AddPermission', {
     json: { input: `doc:${folder.uid}`, params: { users: [group], permission, notify: false } },
   });
@@ -268,8 +288,12 @@ async function call(method, path, { json, body, headers = {}, schemas } = {}) {
     });
   } catch (error) {
     if (preflighting)
-      throw new Precondition(`${SERVER} did not answer: ${error?.cause?.code ?? error?.name ?? error}.`);
-    throw new Error(`${method} ${path}: no answer from ${SERVER}, ${error?.cause?.code ?? error?.name ?? error}.`);
+      throw new Precondition(
+        `${SERVER} did not answer: ${error?.cause?.code ?? error?.name ?? error}.`,
+      );
+    throw new Error(
+      `${method} ${path}: no answer from ${SERVER}, ${error?.cause?.code ?? error?.name ?? error}.`,
+    );
   }
   const text = await response.text();
   if (!response.ok) {

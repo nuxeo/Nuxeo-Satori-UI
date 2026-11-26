@@ -102,7 +102,9 @@ export function filesOf(version) {
     {
       fileName: `${versionName(version)}-master.txt`,
       mimeType: 'text/plain',
-      bytes: Buffer.from(`Placeholder for the master of ${title}. A fictional film: no picture, no sound.\n`),
+      bytes: Buffer.from(
+        `Placeholder for the master of ${title}. A fictional film: no picture, no sound.\n`,
+      ),
     },
     {
       fileName: `${versionName(version)}-subtitles.vtt`,

@@ -53,9 +53,8 @@ import { requireStepCredentials } from '../helpers.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'media-demo');
-const { DEMO, DELIVERIES, FILM, FILMS, LOCALISED, VERSIONS, WORKSPACE, todayUtc, versionName } = await import(
-  join(KIT, 'demo', 'data.mjs')
-);
+const { DEMO, DELIVERIES, FILM, FILMS, LOCALISED, VERSIONS, WORKSPACE, todayUtc, versionName } =
+  await import(join(KIT, 'demo', 'data.mjs'));
 const { basic, startStandIn } = await import(join(KIT, 'demo', 'stand-in.mjs'));
 
 /**
@@ -96,9 +95,14 @@ export default async function run(page, h) {
   let base;
   let filer;
   if (server) {
-    const credentials = requireStepCredentials('file the demo deliveries as a distribution coordinator');
+    const credentials = requireStepCredentials(
+      'file the demo deliveries as a distribution coordinator',
+    );
     base = server.replace(/\/+$/, '');
-    filer = { username: credentials.username, authorization: basic(credentials.username, credentials.password) };
+    filer = {
+      username: credentials.username,
+      authorization: basic(credentials.username, credentials.password),
+    };
     h.note(`on ${base}, as ${credentials.username}`);
   } else {
     const password = randomBytes(18).toString('base64url');
@@ -110,10 +114,19 @@ export default async function run(page, h) {
       },
     });
     base = standIn.url;
-    filer = { username: 'stand-in-coordinator', authorization: basic('stand-in-coordinator', password) };
+    filer = {
+      username: 'stand-in-coordinator',
+      authorization: basic('stand-in-coordinator', password),
+    };
     const seeded = await seed(base, 'stand-in-admin', password);
-    h.check('the kit seeded on the stand-in by its own seed', seeded.status === 0, seeded.output.slice(-400));
-    h.note(`on the kit's stand-in, ${base}: the add-on's own decision is held by its tests, not here`);
+    h.check(
+      'the kit seeded on the stand-in by its own seed',
+      seeded.status === 0,
+      seeded.output.slice(-400),
+    );
+    h.note(
+      `on the kit's stand-in, ${base}: the add-on's own decision is held by its tests, not here`,
+    );
   }
   try {
     await demo(h, base, filer);
@@ -136,10 +149,17 @@ async function demo(h, base, filer) {
       body: json ? JSON.stringify(json) : undefined,
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
-    }).then(async (response) => ({ status: response.status, body: await response.json().catch(() => null) }));
+    }).then(async (response) => ({
+      status: response.status,
+      body: await response.json().catch(() => null),
+    }));
   const today = todayUtc();
   const film = await api('GET', `/path${ROOT}/${FILMS.name}/${FILM.name}`);
-  h.requirePrecondition('the film is seeded', film.status === 200, `GET the film: HTTP ${film.status}`);
+  h.requirePrecondition(
+    'the film is seeded',
+    film.status === 200,
+    `GET the film: HTTP ${film.status}`,
+  );
   const versions = Object.fromEntries(
     await Promise.all(
       LOCALISED.map(async (version) => [
@@ -151,7 +171,9 @@ async function demo(h, base, filer) {
   h.requirePrecondition(
     'its localised versions are seeded',
     LOCALISED.every((version) => versions[version.key]?.uid),
-    LOCALISED.filter((version) => !versions[version.key]?.uid).map((version) => version.language).join(', '),
+    LOCALISED.filter((version) => !versions[version.key]?.uid)
+      .map((version) => version.language)
+      .join(', '),
   );
   const windows = film.body.properties?.['film:windows'] ?? [];
   const open = (territory, channel) =>
@@ -164,7 +186,11 @@ async function demo(h, base, filer) {
     );
   h.requirePrecondition(
     "the film's windows are a recent seed's: France open, SVOD in Germany not yet",
-    open('FR', 'SVOD') && open('FR', 'Marketing') && !open('DE', 'SVOD') && open('BE', 'SVOD') && !open('BE', 'Marketing'),
+    open('FR', 'SVOD') &&
+      open('FR', 'Marketing') &&
+      !open('DE', 'SVOD') &&
+      open('BE', 'SVOD') &&
+      !open('BE', 'Marketing'),
     'the seeded windows no longer put the demo inside and outside them today: seed the kit again',
   );
   const deliveries = async () => {
@@ -187,7 +213,11 @@ async function demo(h, base, filer) {
   await h.step('1. Inside its window: the French version delivered to a distributor in France');
   const french = versions[DEMO.inside.version];
   const inside = await file(DEMO.inside);
-  h.check('delivered: 201', inside.status === 201, `HTTP ${inside.status}: ${inside.body?.message ?? ''}`);
+  h.check(
+    'delivered: 201',
+    inside.status === 201,
+    `HTTP ${inside.status}: ${inside.body?.message ?? ''}`,
+  );
   const record = inside.body?.properties ?? {};
   h.check(
     'the record names the distributor, the territory and the version',
@@ -209,13 +239,15 @@ async function demo(h, base, filer) {
     JSON.stringify(delivered.map((each) => [each.use, each.name, each.channel])),
   );
   h.check(
-    "each delivered file by the digest the version holds",
-    delivered.length === 3 && delivered.every((each, index) => each.digest && each.digest === held[index]),
+    'each delivered file by the digest the version holds',
+    delivered.length === 3 &&
+      delivered.every((each, index) => each.digest && each.digest === held[index]),
     JSON.stringify({ delivered: delivered.map((each) => each.digest), held }),
   );
   h.check(
     'who delivered it, and when: the coordinator, today',
-    record['mdlv:deliveredBy'] === filer.username && String(record['mdlv:deliveredAt']).slice(0, 10) === today,
+    record['mdlv:deliveredBy'] === filer.username &&
+      String(record['mdlv:deliveredAt']).slice(0, 10) === today,
     `${record['mdlv:deliveredBy']} on ${record['mdlv:deliveredAt']}`,
   );
   const queued = (await deliveries()) ?? [];
@@ -230,7 +262,8 @@ async function demo(h, base, filer) {
   );
   h.check(
     "the version's deliveries list it",
-    ofVersion.status === 200 && ofVersion.body.entries.some((entry) => entry.uid === inside.body?.uid),
+    ofVersion.status === 200 &&
+      ofVersion.body.entries.some((entry) => entry.uid === inside.body?.uid),
     `HTTP ${ofVersion.status}`,
   );
 
@@ -239,14 +272,22 @@ async function demo(h, base, filer) {
     const count = ((await deliveries()) ?? []).length;
     const answer = await file(filed);
     const message = String(answer.body?.message ?? '');
-    h.check(`${name}: refused, 403, ${filed.reason}`, answer.status === 403 && message.includes(filed.reason), `HTTP ${answer.status}: ${message}`);
-    for (const named of names) h.check(`${name}: the refusal names ${named}`, message.includes(named), message);
-    for (const omitted of omits) h.check(`${name}: the refusal does not name ${omitted}`, !message.includes(omitted), message);
+    h.check(
+      `${name}: refused, 403, ${filed.reason}`,
+      answer.status === 403 && message.includes(filed.reason),
+      `HTTP ${answer.status}: ${message}`,
+    );
+    for (const named of names)
+      h.check(`${name}: the refusal names ${named}`, message.includes(named), message);
+    for (const omitted of omits)
+      h.check(`${name}: the refusal does not name ${omitted}`, !message.includes(omitted), message);
     const after = ((await deliveries()) ?? []).length;
     h.check(`${name}: nothing made`, after === count, `${count} deliveries before, ${after} after`);
   };
 
-  await h.step('1. Outside its window: the German version refused in Germany, before SVOD opens there');
+  await h.step(
+    '1. Outside its window: the German version refused in Germany, before SVOD opens there',
+  );
   await refused('outside', DEMO.outside, {
     names: ['original outside-window for SVOD', 'files:files/1/file outside-window for SVOD'],
     omits: ['files:files/2/file'],
@@ -272,7 +313,13 @@ async function demo(h, base, filer) {
 function seed(base, user, password) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [join(KIT, 'demo', 'seed.mjs')], {
-      env: { PATH: process.env.PATH, NUXEO_URL: base, NUXEO_USER: user, NUXEO_PASS: password, NUXEO_TIMEOUT_MS: '10000' },
+      env: {
+        PATH: process.env.PATH,
+        NUXEO_URL: base,
+        NUXEO_USER: user,
+        NUXEO_PASS: password,
+        NUXEO_TIMEOUT_MS: '10000',
+      },
     });
     let output = '';
     child.stdout.on('data', (chunk) => (output += chunk));

@@ -126,6 +126,7 @@ class TerritoriesPolicyTest {
                 // A use the policy does not list, or lists as a preview.
                 "<delivery><blob xpath=\"files:files/3/file\" /></delivery>",
                 "<delivery><view name=\"FullHD\" /></delivery>",
+                "<view name=\"Medium\" preview=\"true\" /><delivery><view name=\"Medium\" /></delivery>",
                 "<delivery><original /><blob xpath=\"files:files/1/file\" channel=\"SVOD\" /></delivery>",
                 "<delivery><original preview=\"true\" /></delivery>",
                 "<delivery><original xpath=\"files:files/1/file\" /></delivery>",

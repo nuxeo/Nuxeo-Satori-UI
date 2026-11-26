@@ -32,7 +32,11 @@ const POLICY_FILE = join(KIT, 'bundle', 'OSGI-INF', 'media-demo-rights.xml');
 function elements(xml, name) {
   const found = [];
   for (const [, attributes] of xml.matchAll(new RegExp(`<${name}\\b([^>]*?)/?>`, 'g'))) {
-    found.push(Object.fromEntries([...attributes.matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, value])));
+    found.push(
+      Object.fromEntries(
+        [...attributes.matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, value]),
+      ),
+    );
   }
   return found;
 }
@@ -45,8 +49,10 @@ export function kitPolicy(xml = readFileSync(POLICY_FILE, 'utf8')) {
   const original = elements(outside, 'original')[0];
   const rules = new Map();
   if (original) rules.set('original', original.channel ?? null);
-  for (const blob of elements(outside, 'blob')) rules.set(`blob ${blob.xpath}`, blob.channel ?? null);
-  for (const rendition of elements(outside, 'rendition')) rules.set(`rendition ${rendition.name}`, rendition.channel ?? null);
+  for (const blob of elements(outside, 'blob'))
+    rules.set(`blob ${blob.xpath}`, blob.channel ?? null);
+  for (const rendition of elements(outside, 'rendition'))
+    rules.set(`rendition ${rendition.name}`, rendition.channel ?? null);
   const files = [
     ...elements(delivery, 'original').map(() => ({ use: 'original', name: null })),
     ...elements(delivery, 'blob').map((blob) => ({ use: 'blob', name: blob.xpath })),
@@ -70,7 +76,8 @@ function blobAt(properties, xpath) {
   return properties[xpath] ?? null;
 }
 
-const asList = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]);
+const asList = (value) =>
+  Array.isArray(value) ? value : value == null || value === '' ? [] : [value];
 const dayOf = (value) => (typeof value === 'string' ? value.slice(0, 10) : null);
 
 /**
@@ -114,7 +121,8 @@ export function decideDelivery(policy, version, film, territory, today) {
 }
 
 /** Basic credentials for `user`, as a client sends them. */
-export const basic = (user, password) => `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
+export const basic = (user, password) =>
+  `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
 
 /**
  * Starts the stand-in. `users` maps each user name to `{ password, administrator, groups }`;
@@ -132,7 +140,15 @@ export async function startStandIn({
   let next = 1;
   const uid = () => `00000000-0000-4000-8000-${String(next++).padStart(12, '0')}`;
   const add = (path, type, properties = {}) => {
-    const doc = { 'entity-type': 'document', uid: uid(), path, type, properties, acl: [], trashed: false };
+    const doc = {
+      'entity-type': 'document',
+      uid: uid(),
+      path,
+      type,
+      properties,
+      acl: [],
+      trashed: false,
+    };
     docs.set(path, doc);
     return doc;
   };
@@ -156,15 +172,25 @@ export async function startStandIn({
     if (users[user]?.administrator) return true;
     const principals = [user, ...(users[user]?.groups ?? [])];
     const covers = (granted) =>
-      granted === 'Everything' || granted === 'ReadWrite' || (permission === 'Read' && granted === 'Read');
+      granted === 'Everything' ||
+      granted === 'ReadWrite' ||
+      (permission === 'Read' && granted === 'Read');
     for (let path = doc.path; ; path = parentOf(path)) {
       const at = docs.get(path);
-      if (at?.acl.some((ace) => ace.granted && principals.includes(ace.username) && covers(ace.permission))) return true;
+      if (
+        at?.acl.some(
+          (ace) => ace.granted && principals.includes(ace.username) && covers(ace.permission),
+        )
+      )
+        return true;
       if (path === '/') return false;
     }
   };
 
-  const fail = (status, message) => ({ status, body: { 'entity-type': 'exception', status, message } });
+  const fail = (status, message) => ({
+    status,
+    body: { 'entity-type': 'exception', status, message },
+  });
 
   /** A delivery filed: decided, and written by the server, or refused whole and not made. */
   const deliver = (user, path, properties) => {
@@ -182,15 +208,23 @@ export async function startStandIn({
     if (!version || !holds(user, version, 'Read'))
       return fail(403, 'The delivery names no localised version you may read.');
     if (version.trashed)
-      return fail(409, 'A delivery is of a live localised version: not a version of it, a proxy or one in the trash.');
-    if (version.type !== 'FilmVersion') return fail(403, 'The delivery to ' + territory + ' is refused: not-cleared.');
+      return fail(
+        409,
+        'A delivery is of a live localised version: not a version of it, a proxy or one in the trash.',
+      );
+    if (version.type !== 'FilmVersion')
+      return fail(403, 'The delivery to ' + territory + ' is refused: not-cleared.');
     const film = policy.windowsDocument ? byUid(version.properties[policy.windowsDocument]) : null;
     const decided = decideDelivery(policy, version, film, territory, today);
-    if (decided.refused) return fail(403, `The delivery to ${territory} is refused: ${decided.refused}.`);
+    if (decided.refused)
+      return fail(403, `The delivery to ${territory} is refused: ${decided.refused}.`);
     const refused = decided.files.filter((file) => file.reason !== null);
     if (refused.length > 0) {
       const named = refused
-        .map((file) => `${file.name === null ? file.use : `${file.use} ${file.name}`} ${file.reason}${file.channel ? ` for ${file.channel}` : ''}`)
+        .map(
+          (file) =>
+            `${file.name === null ? file.use : `${file.use} ${file.name}`} ${file.reason}${file.channel ? ` for ${file.channel}` : ''}`,
+        )
         .join('; ');
       return fail(403, `The delivery to ${territory} is refused whole: ${named}.`);
     }
@@ -236,13 +270,24 @@ export async function startStandIn({
 
   const pageProvider = (name, parameters) => {
     const live = [...docs.values()].filter((doc) => !doc.trashed);
-    const byDelivered = (a, b) => String(b.properties['mdlv:deliveredAt']).localeCompare(String(a.properties['mdlv:deliveredAt']));
+    const byDelivered = (a, b) =>
+      String(b.properties['mdlv:deliveredAt']).localeCompare(
+        String(a.properties['mdlv:deliveredAt']),
+      );
     const entries = {
       media_films: () => live.filter((doc) => doc.type === 'Film'),
-      media_film_versions: () => live.filter((doc) => doc.type === 'FilmVersion' && doc.properties['fver:film'] === parameters[0]),
+      media_film_versions: () =>
+        live.filter(
+          (doc) => doc.type === 'FilmVersion' && doc.properties['fver:film'] === parameters[0],
+        ),
       media_deliveries: () => live.filter((doc) => doc.type === 'MediaDelivery').sort(byDelivered),
       media_version_deliveries: () =>
-        live.filter((doc) => doc.type === 'MediaDelivery' && doc.properties['mdlv:version'] === parameters[0]).sort(byDelivered),
+        live
+          .filter(
+            (doc) =>
+              doc.type === 'MediaDelivery' && doc.properties['mdlv:version'] === parameters[0],
+          )
+          .sort(byDelivered),
     }[name];
     return entries ? entries() : null;
   };
@@ -250,13 +295,29 @@ export async function startStandIn({
   const handle = (request, body) => {
     const url = new URL(request.url, 'http://stand-in');
     const api = url.pathname.replace(/^\/nuxeo\/api\/v1/, '');
-    const user = Object.keys(users).find((name) => request.headers.authorization === basic(name, users[name].password));
-    if (!user) return { status: 401, body: { 'entity-type': 'exception', status: 401, message: 'Unauthorized' } };
+    const user = Object.keys(users).find(
+      (name) => request.headers.authorization === basic(name, users[name].password),
+    );
+    if (!user)
+      return {
+        status: 401,
+        body: { 'entity-type': 'exception', status: 401, message: 'Unauthorized' },
+      };
     const method = request.method;
     if (method === 'GET' && api === '/me')
-      return { status: 200, body: { 'entity-type': 'user', id: user, isAdministrator: users[user].administrator === true, properties: { groups: users[user].groups ?? [] } } };
+      return {
+        status: 200,
+        body: {
+          'entity-type': 'user',
+          id: user,
+          isAdministrator: users[user].administrator === true,
+          properties: { groups: users[user].groups ?? [] },
+        },
+      };
     if (method === 'GET' && api.startsWith('/config/types/'))
-      return types.includes(api.slice(14)) ? { status: 200, body: { name: api.slice(14) } } : fail(404, 'no such type');
+      return types.includes(api.slice(14))
+        ? { status: 200, body: { name: api.slice(14) } }
+        : fail(404, 'no such type');
     if (api === '/upload/' && method === 'POST') {
       const id = `batch-${next++}`;
       batches.set(id, new Map());
@@ -276,9 +337,13 @@ export async function startStandIn({
     if (api.startsWith('/path')) {
       const path = decodeURIComponent(api.slice(5)) || '/';
       const doc = docs.get(path);
-      if (method === 'GET') return doc && !doc.trashed && holds(user, doc, 'Read') ? { status: 200, body: view(doc) } : fail(404, path);
+      if (method === 'GET')
+        return doc && !doc.trashed && holds(user, doc, 'Read')
+          ? { status: 200, body: view(doc) }
+          : fail(404, path);
       if (method !== 'POST') return fail(405, method);
-      if (!doc || !holds(user, doc, 'ReadWrite')) return fail(403, 'Privilege AddChildren is not granted');
+      if (!doc || !holds(user, doc, 'ReadWrite'))
+        return fail(403, 'Privilege AddChildren is not granted');
       const json = JSON.parse(body.toString('utf8') || '{}');
       const child = `${path === '/' ? '' : path}/${json.name}`;
       if (docs.has(child)) return fail(409, `${child} exists`);
@@ -290,12 +355,16 @@ export async function startStandIn({
     const acl = /^\/id\/([^/]+)\/@acl$/.exec(api);
     if (acl && method === 'GET') {
       const doc = byUid(acl[1]);
-      return doc ? { status: 200, body: { acl: [{ name: 'local', aces: doc.acl }] } } : fail(404, acl[1]);
+      return doc
+        ? { status: 200, body: { acl: [{ name: 'local', aces: doc.acl }] } }
+        : fail(404, acl[1]);
     }
     const id = /^\/id\/([^/]+)$/.exec(api);
     if (id && method === 'GET') {
       const doc = byUid(id[1]);
-      return doc && !doc.trashed && holds(user, doc, 'Read') ? { status: 200, body: view(doc) } : fail(404, id[1]);
+      return doc && !doc.trashed && holds(user, doc, 'Read')
+        ? { status: 200, body: view(doc) }
+        : fail(404, id[1]);
     }
     const search = /^\/search\/pp\/([^/]+)\/execute$/.exec(api);
     if (search && method === 'GET') {
@@ -303,14 +372,22 @@ export async function startStandIn({
       const found = pageProvider(search[1], parameters);
       if (found === null) return fail(404, `no page provider ${search[1]}`);
       const readable = found.filter((doc) => holds(user, doc, 'Read'));
-      return { status: 200, body: { 'entity-type': 'documents', resultsCount: readable.length, entries: readable.map(view) } };
+      return {
+        status: 200,
+        body: {
+          'entity-type': 'documents',
+          resultsCount: readable.length,
+          entries: readable.map(view),
+        },
+      };
     }
     if (method === 'POST' && api === '/automation/Document.AddPermission') {
       if (!users[user].administrator) return fail(403, 'Privilege WriteSecurity is not granted');
       const json = JSON.parse(body.toString('utf8'));
       const doc = byUid(String(json.input ?? '').replace(/^doc:/, ''));
       if (!doc) return fail(404, 'no such document');
-      for (const name of json.params.users) doc.acl.push({ username: name, permission: json.params.permission, granted: true });
+      for (const name of json.params.users)
+        doc.acl.push({ username: name, permission: json.params.permission, granted: true });
       return { status: 200, body: view(doc) };
     }
     return fail(404, `the stand-in has no ${method} ${api}`);
