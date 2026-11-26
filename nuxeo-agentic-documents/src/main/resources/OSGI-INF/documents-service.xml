@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.documents" version="1.0">
+
+  <documentation>
+    Controlled documents: the number series packages contribute, and the numbers given from them
+    by the platform's sequencer, the one the configuration property
+    nuxeo.agentic.documents.sequencer names, or the platform's default. Each value is taken once
+    and never given back, so a number is never reused, and a creation that rolls back leaves a gap.
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.documents.ControlledDocumentComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.documents.ControlledDocumentService" />
+  </service>
+
+  <extension-point name="series">
+    <documentation>
+      One number series.
+
+      <code>
+        <series id="DWG" digits="5" revisions="letters" />
+      </code>
+
+      id is capitals and digits, in parts joined by single hyphens, 32 characters at most. A number
+      is the id, a hyphen, and the sequencer's value with leading zeros to digits, 1 to 12, 5 when
+      not given: DWG-00042. revisions is letters (A, B ... Z, AA ...), the default, or numbers
+      (1, 2, 3 ...). A series with a mistake is left out, and logged as an error, so a document in
+      it is refused. A later series with the same id replaces it whole, and enabled="false" removes
+      it.
+    </documentation>
+    <object class="org.nuxeo.agentic.documents.NumberSeriesDescriptor" />
+  </extension-point>
+
+</component>

@@ -14,7 +14,11 @@
             [componentInputs]="banner.inputs"
           />
           @if (bannerOutlet.unresolved()) {
-            <nxs-banner [message]="banner.inputs.message" [tone]="banner.inputs.tone" />
+            <nxs-banner
+              [message]="banner.inputs.message"
+              [tone]="banner.inputs.tone"
+              [actions]="banner.inputs.actions"
+            />
           }
         </div>
       }

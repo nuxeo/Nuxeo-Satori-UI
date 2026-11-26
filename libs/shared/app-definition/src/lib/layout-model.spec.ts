@@ -208,6 +208,35 @@ describe('validateLayoutV2, given the content model', () => {
     ]);
   });
 
+  describe("a banner's link", () => {
+    const linked = (field: string) => ({
+      version: 2,
+      banners: [{ id: 'next', label: 'Superseded', link: { field } }],
+      cards: [{ id: 'c', fields: ['dc:title'] }],
+    });
+
+    it("passes a text property of the type or a facet, which holds the linked record's id", () => {
+      expect(messages(linked('member:firstName'))).toEqual([]);
+      expect(messages(linked('prot:ssn'))).toEqual([]);
+    });
+
+    it('refuses one the type lacks, and one that is not one text', () => {
+      expect(messages(linked('member:next'))).toEqual([
+        'banners[0].link.field: "member:next" is not a property of the type "Member" or of its facets [unknown]',
+      ]);
+      expect(messages(linked('member:plans'))).toEqual([
+        'banners[0].link.field: a banner links one record, by a string property holding its id, and "member:plans" is a string[] property [parameter]',
+      ]);
+      expect(messages(linked('member:birthDate'))).toEqual([
+        'banners[0].link.field: a banner links one record, by a string property holding its id, and "member:birthDate" is a date property [parameter]',
+      ]);
+    });
+
+    it('checks nothing against the model when none is given', () => {
+      expect(messages(linked('member:next'), { given: null })).toEqual([]);
+    });
+  });
+
   describe("a checklist's property", () => {
     const checklist = (field: string, where: 'cards' | 'tabs' = 'cards') => {
       const card = {

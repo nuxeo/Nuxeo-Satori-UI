@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "controlled-documents.queue.current",
+  "pageProvider": "controlled_documents_current",
+  "columns": [
+    "docctl:number",
+    "dc:title",
+    "docctl:revision",
+    "engdoc:discipline",
+    "engdoc:category",
+    "engdoc:issuedOn"
+  ],
+  "sort": [
+    {
+      "field": "docctl:number",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50
+}

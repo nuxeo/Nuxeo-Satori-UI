@@ -1,0 +1,102 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "superseded",
+      "tone": "warning",
+      "labelKey": "controlled-documents.banner.superseded",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "docctl:status" }, "superseded"]
+      },
+      "link": { "field": "docctl:supersededBy" }
+    }
+  ],
+  "cards": [
+    {
+      "id": "control",
+      "labelKey": "controlled-documents.card.control",
+      "fields": [
+        { "field": "docctl:number", "labelKey": "controlled-documents.field.number" },
+        { "field": "docctl:revision", "labelKey": "controlled-documents.field.revision" },
+        {
+          "field": "docctl:status",
+          "labelKey": "controlled-documents.field.status",
+          "widget": "status-badge",
+          "parameters": { "tones": { "current": "positive", "superseded": "warning" } }
+        },
+        { "field": "docctl:series", "labelKey": "controlled-documents.field.series" },
+        {
+          "field": "docctl:supersedes",
+          "labelKey": "controlled-documents.field.supersedes",
+          "widget": "document-link"
+        },
+        {
+          "field": "docctl:supersededBy",
+          "labelKey": "controlled-documents.field.supersededBy",
+          "widget": "document-link"
+        }
+      ]
+    },
+    {
+      "id": "document",
+      "labelKey": "controlled-documents.card.document",
+      "fields": [
+        { "field": "dc:title", "labelKey": "controlled-documents.field.title" },
+        { "field": "engdoc:category", "labelKey": "controlled-documents.field.category" },
+        { "field": "engdoc:discipline", "labelKey": "controlled-documents.field.discipline" },
+        { "field": "engdoc:project", "labelKey": "controlled-documents.field.project" },
+        { "field": "engdoc:purpose", "labelKey": "controlled-documents.field.purpose" },
+        {
+          "field": "engdoc:originator",
+          "labelKey": "controlled-documents.field.originator",
+          "widget": "user"
+        },
+        {
+          "field": "engdoc:issuedOn",
+          "labelKey": "controlled-documents.field.issuedOn",
+          "widget": "date"
+        },
+        {
+          "field": "dc:description",
+          "labelKey": "controlled-documents.field.description",
+          "widget": "long-text"
+        }
+      ]
+    },
+    {
+      "id": "revisions",
+      "labelKey": "controlled-documents.card.revisions",
+      "span": 2,
+      "related": {
+        "pageProvider": "controlled_documents_revisions",
+        "parameters": [{ "field": "docctl:number" }],
+        "columns": [
+          { "field": "docctl:revision", "labelKey": "controlled-documents.field.revision" },
+          { "field": "dc:title", "labelKey": "controlled-documents.field.title" },
+          {
+            "field": "docctl:status",
+            "labelKey": "controlled-documents.field.status",
+            "widget": "status-badge",
+            "parameters": { "tones": { "current": "positive", "superseded": "warning" } }
+          },
+          {
+            "field": "engdoc:issuedOn",
+            "labelKey": "controlled-documents.field.issuedOn",
+            "widget": "date"
+          }
+        ],
+        "sort": [{ "field": "dc:created", "order": "desc" }],
+        "pageSize": 20
+      }
+    },
+    {
+      "id": "history",
+      "labelKey": "controlled-documents.card.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}
