@@ -145,6 +145,16 @@ export class RecordPanelComponent {
         if (origins === null || page === null || !origins.has(page)) {
           return of({ status: 'refused', reason: 'origin' });
         }
+        // Whether the token in hand is one the page gave after a refusal: a second refusal in a row
+        // is not asked again, or a token the server will never take would be exchanged without end.
+        let refreshed = false;
+        const unauthorized = (): PanelState => {
+          this.token.clear();
+          if (refreshed) return { status: 'failed', error: 401 };
+          refreshed = true;
+          this.messages.expired(host, recordId, origins);
+          return { status: 'signing-in' };
+        };
         return concat(
           of<PanelState>({ status: 'signing-in' }),
           this.messages.tokens(host, recordId, origins).pipe(
@@ -154,8 +164,11 @@ export class RecordPanelComponent {
                 switchMap(() =>
                   concat(
                     of<PanelState>({ status: 'loading' }),
-                    this.load(recordId, cards, () =>
-                      this.messages.expired(host, recordId, origins),
+                    this.load(recordId, cards, unauthorized).pipe(
+                      map((state) => {
+                        if (state.status === 'ready') refreshed = false;
+                        return state;
+                      }),
                     ),
                   ),
                 ),
@@ -170,7 +183,7 @@ export class RecordPanelComponent {
   private load(
     recordId: string,
     cards: readonly string[] | null,
-    expired: () => void,
+    unauthorized: () => PanelState,
   ): Observable<PanelState> {
     return this.api
       .get<NuxeoDocument>(`/nuxeo/api/v1/id/${recordId}`, undefined, {
@@ -191,12 +204,8 @@ export class RecordPanelComponent {
         ),
         catchError((error: unknown): Observable<PanelState> => {
           const status = (error as { status?: unknown } | null)?.status;
-          if (status === 401) {
-            // Expired, or no longer the host's: the page is asked for a fresh one.
-            this.token.clear();
-            expired();
-            return of({ status: 'signing-in' });
-          }
+          // Expired, or no longer the host's: the page is asked for a fresh one, once.
+          if (status === 401) return of(unauthorized());
           if (status === 403) return of({ status: 'forbidden' });
           if (status === 404) return of({ status: 'not-found' });
           return of({ status: 'failed', error: nxsErrorStatus(error) });

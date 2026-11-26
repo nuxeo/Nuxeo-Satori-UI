@@ -93,8 +93,8 @@ class EmbeddedPanelComponentTest {
 
     @Test
     void notStartedItRefusesAPanelsTokenAndPassesAnythingElse() {
-        Fixtures.PlatformLikeCodec tokens = new Fixtures.PlatformLikeCodec(Fixtures.clock(Fixtures.NOW));
-        String token = tokens.issue(new TokenCodec.Grant("crm", "jsmith", "read", "site/api/v1", "t-1", Fixtures.NOW,
+        Fixtures.RecordingCodec tokens = new Fixtures.RecordingCodec(Fixtures.properties(Fixtures.host()), Fixtures.clock(Fixtures.NOW));
+        String token = tokens.issue(new TokenCodec.Grant("crm", "jsmith", "read", "t-1", Fixtures.NOW,
                 300));
         PanelTokenGuard.Request panel = new PanelTokenGuard.Request("GET", "api/v1/id/x", "/nuxeo/api/v1/id/x",
                 "Bearer " + token, null, null, null, false);

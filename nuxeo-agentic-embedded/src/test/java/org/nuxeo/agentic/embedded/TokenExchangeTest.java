@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.SignatureVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 
 /**
@@ -32,7 +34,7 @@ class TokenExchangeTest {
 
     private Fixtures.Users users;
 
-    private Fixtures.PlatformLikeCodec tokens;
+    private Fixtures.RecordingCodec tokens;
 
     private Fixtures.RecordingAudit audit;
 
@@ -45,7 +47,7 @@ class TokenExchangeTest {
         replays = new Fixtures.MemoryReplayGuard();
         users = Fixtures.Users.standard();
         clock = Fixtures.clock(Fixtures.NOW);
-        tokens = new Fixtures.PlatformLikeCodec(clock);
+        tokens = new Fixtures.RecordingCodec(properties, clock);
         audit = new Fixtures.RecordingAudit();
     }
 
@@ -81,16 +83,22 @@ class TokenExchangeTest {
         String token = (String) result.body().get("access_token");
         assertNotNull(token);
 
-        // What the platform's JWT authenticator reads: the user, and the path it is valid on.
+        // What the panel's authenticator reads: the user, this server, the host and the scope.
         DecodedJWT jwt = JWT.decode(token);
         assertEquals("jsmith", jwt.getSubject());
-        assertEquals("site/api/v1", jwt.getClaim("aud").asString());
+        assertEquals(PanelTokenCodec.ISSUER, jwt.getIssuer());
+        assertEquals(List.of(Fixtures.AUDIENCE), jwt.getAudience());
         assertEquals("crm", jwt.getClaim(TokenCodec.HOST).asString());
         assertEquals("read", jwt.getClaim(TokenCodec.SCOPE).asString());
         assertEquals(Fixtures.NOW.getEpochSecond() + 300, jwt.getClaim("exp").asLong());
         assertEquals(Fixtures.NOW.getEpochSecond(), jwt.getClaim("iat").asLong());
-        // The server's signature, not the host's: the host's key cannot verify it.
-        Algorithm.HMAC512(Fixtures.PLATFORM_SECRET).verify(jwt);
+        // The add-on's own key signs it: not the host's, and not the platform's nuxeo.jwt.secret, so that
+        // neither the platform's JWT authenticator nor its OAuth 2.0 JWT bearer grant can verify it.
+        Algorithm.HMAC256(Fixtures.TOKEN_SECRET).verify(jwt);
+        assertEquals("HS256", jwt.getAlgorithm());
+        assertThrows(SignatureVerificationException.class,
+                () -> Algorithm.HMAC256(Fixtures.PLATFORM_SECRET).verify(jwt));
+        assertThrows(SignatureVerificationException.class, () -> Algorithm.HMAC256(Fixtures.HMAC_KEY).verify(jwt));
 
         assertEquals(List.of(ExchangeAudit.ISSUED + " host=crm user=jsmith subject=crm-user-17 scope=read "
                 + "token=token-1 expires=2026-11-26T10:05:00Z"), audit.entries);
@@ -356,6 +364,15 @@ class TokenExchangeTest {
         TokenExchange.Result result = exchange(valid("crm-user-17", "a-1"));
         assertRefused(result, 503, "server_error");
         assertEquals(List.of(ExchangeAudit.REFUSED + " host=crm reason=not-configured"), audit.entries);
+    }
+
+    @Test
+    void aServerWithNoTokenKeyOrAShortOneIssuesNothing() {
+        properties.remove(EmbeddedSettings.TOKEN_SECRET);
+        assertRefused(exchange(valid("crm-user-17", "a-1")), 503, "server_error");
+        properties.put(EmbeddedSettings.TOKEN_SECRET, "thirty-one-bytes-is-not-enough");
+        assertRefused(exchange(valid("crm-user-17", "a-2")), 503, "server_error");
+        assertTrue(tokens.issued.isEmpty());
     }
 
     @Test

@@ -24,8 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTCreator;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.interfaces.Claim;
-import com.auth0.jwt.interfaces.DecodedJWT;
 
 /**
  * What the tests share: a host as a server registers it, its secrets, assertions signed as a host
@@ -46,8 +44,11 @@ final class Fixtures {
     /** Made up for the tests: the HS256 key the host and the server share. */
     static final String HMAC_KEY = "test-assertion-key-0123456789-abcdefghijklmnop";
 
-    /** The platform's JWT secret, as the stand-in signer uses it. */
-    static final String PLATFORM_SECRET = "test-platform-jwt-secret-0123456789";
+    /** Made up for the tests: the add-on's own key, which a panel's token is signed with. */
+    static final String TOKEN_SECRET = "test-panel-token-key-0123456789-abcdefghij";
+
+    /** Made up for the tests: the platform's nuxeo.jwt.secret, which a panel's token is never signed with. */
+    static final String PLATFORM_SECRET = "test-platform-jwt-secret-0123456789-klmnop";
 
     static final KeyPair RSA = keyPair("RSA", 2048);
 
@@ -118,6 +119,7 @@ final class Fixtures {
         properties.put(host.clientSecretProperty(), CLIENT_SECRET);
         properties.put(host.assertionKeyProperty(), HMAC_KEY);
         properties.put(EmbeddedSettings.AUDIENCE, AUDIENCE);
+        properties.put(EmbeddedSettings.TOKEN_SECRET, TOKEN_SECRET);
         return properties;
     }
 
@@ -199,74 +201,77 @@ final class Fixtures {
         }
     }
 
+
     /**
-     * The platform's JWT service, as the add-on uses it: HMAC-SHA512 with the server's secret, as
-     * {@code JWTServiceImpl} signs, and its claims read back as it reads them, numbers as longs. Its
-     * expiry is checked against the clock it is given.
+     * The add-on's own codec, as the server runs it, with the test's key and audience and a clock the
+     * test may move; it records each grant issued, and can be made to sign nothing, as a server with
+     * no key.
      */
-    static final class PlatformLikeCodec implements TokenCodec {
+    static final class RecordingCodec implements TokenCodec {
 
         final List<Grant> issued = new ArrayList<>();
+
+        final Map<String, String> properties;
 
         Clock clock;
 
         boolean broken;
 
-        PlatformLikeCodec(Clock clock) {
+        RecordingCodec(Map<String, String> properties, Clock clock) {
+            this.properties = properties;
             this.clock = clock;
+        }
+
+        private PanelTokenCodec codec() {
+            return new PanelTokenCodec(settings(properties), clock);
         }
 
         @Override
         public String issue(Grant grant) {
             if (broken) {
-                throw new TokenException("no secret", null);
+                throw new TokenException("no key", null);
             }
+            String token = codec().issue(grant);
             issued.add(grant);
-            return JWT.create()
-                      .withIssuer("nuxeo")
-                      .withClaim("sub", grant.username())
-                      .withClaim("aud", grant.audiencePath())
-                      .withClaim("iat", grant.issuedAt().getEpochSecond())
-                      .withClaim("exp", grant.expiresAt().getEpochSecond())
-                      .withClaim("jti", grant.id())
-                      .withClaim(HOST, grant.host())
-                      .withClaim(SCOPE, grant.scope())
-                      .sign(Algorithm.HMAC512(PLATFORM_SECRET));
+            return token;
         }
 
         @Override
         public Map<String, Object> verify(String token) {
-            DecodedJWT jwt;
-            try {
-                jwt = JWT.decode(token);
-                Algorithm.HMAC512(PLATFORM_SECRET).verify(jwt);
-            } catch (RuntimeException e) {
-                return null;
-            }
-            Map<String, Object> claims = new HashMap<>();
-            for (Map.Entry<String, Claim> each : jwt.getClaims().entrySet()) {
-                String text = each.getValue().asString();
-                claims.put(each.getKey(), text != null ? text : each.getValue().asLong());
-            }
-            Object exp = claims.get("exp");
-            if (!(exp instanceof Long end) || end <= clock.instant().getEpochSecond()) {
-                return null;
-            }
-            return claims;
+            return codec().verify(token);
         }
 
-        /** A token this server signed, with the claims the test gives. */
+        /** A token signed with the add-on's key, with the claims the test gives, numbers as numeric dates. */
         String sign(Map<String, Object> claims) {
-            JWTCreator.Builder builder = JWT.create();
-            for (Map.Entry<String, Object> each : claims.entrySet()) {
-                if (each.getValue() instanceof Long number) {
-                    builder.withClaim(each.getKey(), number);
-                } else {
-                    builder.withClaim(each.getKey(), String.valueOf(each.getValue()));
-                }
-            }
-            return builder.sign(Algorithm.HMAC512(PLATFORM_SECRET));
+            return signWith(claims, Algorithm.HMAC256(TOKEN_SECRET));
         }
+    }
+
+    /** A token with the claims given, signed by `algorithm`: a numeric claim is written as a number. */
+    static String signWith(Map<String, Object> claims, Algorithm algorithm) {
+        JWTCreator.Builder builder = JWT.create();
+        for (Map.Entry<String, Object> each : claims.entrySet()) {
+            if (each.getValue() instanceof Long number) {
+                builder.withClaim(each.getKey(), number);
+            } else {
+                builder.withClaim(each.getKey(), String.valueOf(each.getValue()));
+            }
+        }
+        return builder.sign(algorithm);
+    }
+
+    /** The claims of a panel's token as the add-on signs one, for the tests to change. */
+    static Map<String, Object> panelClaims(String username, Instant issuedAt, int lifetime) {
+        Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("iss", PanelTokenCodec.ISSUER);
+        claims.put("sub", username);
+        claims.put("aud", AUDIENCE);
+        claims.put("iat", issuedAt.getEpochSecond());
+        claims.put("exp", issuedAt.getEpochSecond() + lifetime);
+        claims.put("jti", "t-1");
+        claims.put(TokenCodec.HOST, "crm");
+        claims.put(TokenCodec.SCOPE, "read");
+        return claims;
     }
 
     /** The audit, as the exchange writes to it. */

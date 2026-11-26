@@ -8,12 +8,11 @@
     A host is registered by the server's administrators, in a file of nxserver/config/ only: a
     contribution from a bundle, a package's among them, is refused. Its client secret and the key its
     assertions are verified with are server properties or environment variables, named after its id,
-    never in a contribution. The token is the platform's JWT, signed with nuxeo.jwt.secret, valid on
-    the REST API only, for the host's lifetime, and held to its scope and its origins by the add-on's
-    filter before the REST API sees the request.
+    never in a contribution. The token is a JWT signed with the add-on's own key,
+    nuxeo.agentic.embedded.tokenSecret, never the platform's nuxeo.jwt.secret; it is signed in by the
+    add-on's own authenticator, in the REST API's chain alone, for the host's lifetime, and held to its
+    scope and its origins by the add-on's filter before the REST API sees the request.
   </documentation>
-
-  <require>org.nuxeo.ecm.jwt.JWTService</require>
 
   <implementation class="org.nuxeo.agentic.embedded.EmbeddedPanelComponent" />
 

@@ -22,7 +22,11 @@ import org.nuxeo.runtime.model.RuntimeContext;
  * <b>Only from the server's configuration directory.</b> Which systems may sign this server's users
  * in is the deployment's to decide, as the operations allow-list is in {@code nuxeo-agentic-core}: a
  * contribution is taken only from a file in {@code nxserver/config/}, which the runtime deploys in its
- * own context; one from a bundle, a package's among them, is refused and logged, whatever it says.
+ * own context; one from a bundle, a package's bundle among them, is refused and logged, whatever it
+ * says. A Marketplace package can still write a file into {@code nxserver/config/} when it is
+ * installed, through its {@code install.xml} or a template: the app package pipeline refuses a
+ * configuration package that would, and one it did not build is checked by nothing but the
+ * administrators who install it, as for the allow-list.
  *
  * A host is registered only once {@link Host#of} accepts it. One that does not is logged and left
  * out, and takes a host registered earlier with the same id out with it, so that a contribution
@@ -119,9 +123,10 @@ public class EmbeddedPanelComponent extends DefaultComponent implements Embedded
 
     @Override
     public void start(ComponentContext context) {
-        start(new EmbeddedSettings(Framework::getProperty, System::getenv), new KeyValueReplayGuard(),
-                new PlatformUserDirectory(), new PlatformTokenCodec(), new PlatformExchangeAudit(),
-                Clock.systemUTC());
+        EmbeddedSettings settings = new EmbeddedSettings(Framework::getProperty, System::getenv);
+        Clock clock = Clock.systemUTC();
+        start(settings, new KeyValueReplayGuard(), new PlatformUserDirectory(), new PanelTokenCodec(settings, clock),
+                new PlatformExchangeAudit(), clock);
     }
 
     /** Package-private for tests. */

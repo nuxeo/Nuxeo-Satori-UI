@@ -96,6 +96,47 @@ class EmbeddedXmlTest {
                 "no authentication filter: the host's server is not a Nuxeo user");
     }
 
+    /** The REST API's chain on LTS 2025.10.18, as nuxeo-rest-api-server's OSGI-INF/auth-contrib.xml has it. */
+    static final List<String> REST_API_CHAIN_2025 = List.of("AUTOMATION_BASIC_AUTH", "TOKEN_AUTH", "OAUTH2_AUTH",
+            "JWT_AUTH");
+
+    @Test
+    void thePanelsAuthenticatorIsInTheRestApisChainAloneAndKeepsNoSession() throws Exception {
+        String auth = resource("OSGI-INF/embedded-panels-auth-contrib.xml").replaceAll("(?s)<!--.*?-->", "");
+        String compact = auth.replaceAll("\\s+", " ");
+        assertTrue(compact.contains("<require>org.nuxeo.ecm.restapi.server.auth.config</require>"),
+                "after the platform's REST API chain, which it replaces");
+        assertTrue(compact.contains("<authenticationPlugin name=\"" + PanelTokenAuthenticator.NAME
+                + "\" enabled=\"true\" class=\"" + PanelTokenAuthenticator.class.getName() + "\">"));
+        assertTrue(compact.contains("<stateful>false</stateful>"), "stateless: no session for a panel's token");
+        assertTrue(compact.contains("<needStartingURLSaving>false</needStartingURLSaving>"));
+
+        // Exactly one chain, the REST API's, by its URL pattern, with the platform's plugins in their order
+        // and the panel's last.
+        Matcher chains = Pattern.compile("<specificAuthenticationChain name=\"([^\"]+)\">(.*?)</specificAuthenticationChain>",
+                Pattern.DOTALL).matcher(auth);
+        assertTrue(chains.find());
+        assertEquals("RestAPI", chains.group(1));
+        assertTrue(chains.group(2).contains("<url>(.*)/api/v.*</url>"));
+        List<String> plugins = new ArrayList<>();
+        Matcher plugin = Pattern.compile("<plugin>([^<]+)</plugin>").matcher(chains.group(2));
+        while (plugin.find()) {
+            plugins.add(plugin.group(1));
+        }
+        List<String> expected = new ArrayList<>(REST_API_CHAIN_2025);
+        expected.add(PanelTokenAuthenticator.NAME);
+        assertEquals(expected, plugins);
+        assertFalse(chains.find(), "no other chain holds the panel's authenticator");
+        assertFalse(resource("OSGI-INF/embedded-panels-service.xml").contains("JWTService"),
+                "the panel's token is not the platform's JWT");
+    }
+
+    @Test
+    void theCompiledInterfaceCopyIsKeptOutOfTheJar() throws Exception {
+        String pom = Files.readString(Path.of("pom.xml")).replaceAll("(?s)<!--.*?-->", "").replaceAll("\\s+", "");
+        assertTrue(pom.contains("<excludes><exclude>org/nuxeo/ecm/**</exclude></excludes>"), pom);
+    }
+
     @Test
     void thePanelsFilesAreOpenAndNothingElse() throws Exception {
         String auth = resource("OSGI-INF/embedded-panels-auth-contrib.xml").replaceAll("(?s)<!--.*?-->", "");

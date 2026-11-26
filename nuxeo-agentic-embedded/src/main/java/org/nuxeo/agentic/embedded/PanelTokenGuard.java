@@ -10,17 +10,18 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 
 /**
- * What the server does with a request that carries a panel's token, before the REST API sees it: the
- * rule {@link PanelTokenFilter} applies. Any token whose claims, read without checking them, name a
- * host ({@link TokenCodec#HOST}) is held to it, whether or not its signature is good, so that one
- * that claims to be a panel's and fails a check is refused here rather than left to another plugin.
+ * What the server does with a request that carries a panel's token: the rule {@link PanelTokenFilter}
+ * applies before the REST API sees the request, and {@link PanelTokenAuthenticator} again before it
+ * signs the user in. Any token whose claims, read without checking them, name a host
+ * ({@link TokenCodec#HOST}) is held to it, whether or not its signature is good, so that one that
+ * claims to be a panel's and fails a check is refused here rather than left to another plugin.
  *
  * <ol>
- * <li><b>Never in a URL or a form.</b> A panel's token as an {@code access_token} parameter, which
- * the platform's JWT authenticator would also read, is refused, 401.</li>
- * <li><b>A good token:</b> signed by this server and not expired ({@link TokenCodec#verify}), of a
- * host still registered and enabled, so that removing a host ends its tokens at once, and living no
- * longer than the host allows; else 401.</li>
+ * <li><b>Never in a URL or a form.</b> A panel's token as an {@code access_token} parameter is
+ * refused, 401: the panel's authenticator reads the {@code Authorization} header only.</li>
+ * <li><b>A good token:</b> signed with the add-on's key, for this server, and not expired
+ * ({@link TokenCodec#verify}), of a host still registered and enabled, so that removing a host ends
+ * its tokens at once, and living no longer than the host allows; else 401.</li>
  * <li><b>From the host's pages:</b> a request with an {@code Origin} must name one of the host's
  * origins; else 403. A browser always sends it on a request from another origin; any other client
  * may leave it out, so this binds a token to its host's pages in a browser, and is not a control
@@ -40,12 +41,18 @@ public final class PanelTokenGuard {
     }
 
     /**
-     * What the guard decides: pass it on, as a request that carries no panel's token or one in its
-     * scope; or refuse it, with the status and a reason for the log.
+     * What the guard decides: pass it on, as a request that carries no panel's token, or one in its
+     * scope, with the user it signs in; or refuse it, with the status and a reason for the log.
+     *
+     * @param username for a panel's token in its scope, the user it signs in; else {@code null}
      */
-    public record Decision(int status, String reason) {
+    public record Decision(int status, String reason, String username) {
 
-        static final Decision PASS = new Decision(0, null);
+        static final Decision PASS = new Decision(0, null, null);
+
+        Decision(int status, String reason) {
+            this(status, reason, null);
+        }
 
         public boolean passes() {
             return status == 0;
@@ -115,10 +122,14 @@ public final class PanelTokenGuard {
                 host.operations())) {
             return new Decision(403, "a panel's token outside its scope");
         }
-        return Decision.PASS;
+        Object subject = claims.get("sub");
+        if (!(subject instanceof String username) || username.isBlank()) {
+            return new Decision(401, "a panel's token that names no user");
+        }
+        return new Decision(0, null, username);
     }
 
-    /** The token of an {@code Authorization: Bearer} header, as the platform's JWT authenticator reads it. */
+    /** The token of an {@code Authorization: Bearer} header, as the platform's authenticators read one. */
     static String bearer(String authorization) {
         if (authorization == null || !authorization.startsWith(BEARER)) {
             return null;

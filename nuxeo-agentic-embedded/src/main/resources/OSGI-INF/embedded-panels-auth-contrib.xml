@@ -1,11 +1,49 @@
 <?xml version="1.0"?>
 <component name="org.nuxeo.agentic.embedded.authentication.contrib">
 
+  <!-- After the REST API's own chain, which the specific chain below replaces. -->
+  <require>org.nuxeo.ecm.restapi.server.auth.config</require>
+
+  <!--
+    The panel's authenticator: it signs in the user of a panel's token, a JWT signed with the add-on's
+    own key, which no other plugin of the platform verifies. Stateless: no session is kept for it.
+  -->
+  <extension point="authenticators"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <authenticationPlugin name="AGENTIC_EMBEDDED_AUTH" enabled="true"
+                          class="org.nuxeo.agentic.embedded.PanelTokenAuthenticator">
+      <needStartingURLSaving>false</needStartingURLSaving>
+      <stateful>false</stateful>
+    </authenticationPlugin>
+  </extension>
+
+  <!--
+    The REST API's chain, as nuxeo-rest-api-server's OSGI-INF/auth-contrib.xml has it on LTS
+    2025.10.18, with the panel's authenticator last: the platform replaces a specific chain whole, so
+    this is the only way to add a plugin to it. An upgrade that changes the platform's chain must be
+    followed here; EmbeddedXmlTest holds this one to the 2025.10.18 chain plus the panel's. The
+    panel's token is then signed in on the REST API and nowhere else.
+  -->
+  <extension point="specificChains"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <specificAuthenticationChain name="RestAPI">
+      <urlPatterns>
+        <url>(.*)/api/v.*</url>
+      </urlPatterns>
+      <replacementChain>
+        <plugin>AUTOMATION_BASIC_AUTH</plugin>
+        <plugin>TOKEN_AUTH</plugin>
+        <plugin>OAUTH2_AUTH</plugin>
+        <plugin>JWT_AUTH</plugin>
+        <plugin>AGENTIC_EMBEDDED_AUTH</plugin>
+      </replacementChain>
+    </specificAuthenticationChain>
+  </extension>
+
   <!--
     The panel's own files, which nuxeo-agentic-ui-package serves at /nuxeo/agentic-ui/embedded/: its
     script and its translations, read by another system's page before anyone is signed in, as the
-    application's images are (nuxeo-agentic-core's agenticUIImages). They hold no data. A page reads
-    them only where the server's CORS configuration lets its origin, since the script is a module.
+    application's images are (nuxeo-agentic-core's agenticUIImages). They hold no data.
   -->
   <extension point="openUrl"
              target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">

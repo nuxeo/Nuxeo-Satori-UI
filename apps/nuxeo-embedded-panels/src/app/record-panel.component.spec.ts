@@ -271,6 +271,28 @@ describe('RecordPanelComponent: a record page panel inside another system page',
     backend.verify();
   });
 
+  it('asks for a fresh token once only: a second refusal in a row is an error, not another exchange', async () => {
+    await start();
+    backend.expectOne(HOSTS).flush({ host: 'crm', origins: [page] });
+    await settle();
+    give(FIRST);
+    await settle();
+    backend
+      .expectOne((request) => request.url === DOCUMENT)
+      .flush({ status: 401 }, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+    give(SECOND);
+    await settle();
+    backend
+      .expectOne((request) => request.url === DOCUMENT)
+      .flush({ status: 401 }, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+    expect(state()).toBe('failed');
+    expect(posted.map((each) => each.message['type'])).toEqual([READY, EXPIRED]);
+    expect(shadow().querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('401');
+    backend.verify();
+  });
+
   it('shows a record the user may not read as not found, and a refused one as such', async () => {
     await start();
     backend.expectOne(HOSTS).flush({ host: 'crm', origins: [page] });

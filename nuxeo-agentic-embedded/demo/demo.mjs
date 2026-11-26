@@ -193,7 +193,7 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
     const authorization = request.headers['authorization'] ?? '';
     if (/(^|&)access_token=/.test(request.url?.split('?')[1] ?? '')) return { status: 401 };
     if (!authorization.startsWith('Bearer ')) return { status: 401 };
-    const claims = verifyJwt(authorization.slice(7).trim(), signingKey, 'sha512', 'HS512');
+    const claims = verifyJwt(authorization.slice(7).trim(), signingKey, 'sha256', 'HS256');
     const now = Math.floor(Date.now() / 1000);
     if (!claims || claims.nxe_host !== HOST_ID || !(claims.exp > now)) return { status: 401 };
     const origin = request.headers['origin'];
@@ -231,12 +231,13 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
     state.exchanges += 1;
     const expired = state.expireNext;
     state.expireNext = false;
+    // As the add-on signs one: HS256 with a key of its own, never the platform's nuxeo.jwt.secret.
     const token = signJwt(
-      { alg: 'HS512', typ: 'JWT' },
+      { alg: 'HS256', typ: 'JWT' },
       {
-        iss: 'nuxeo',
+        iss: 'nuxeo-agentic-embedded',
         sub: NUXEO_USER,
-        aud: 'site/api/v1',
+        aud: audience,
         iat: now,
         exp: expired ? now - 1 : now + TOKEN_LIFETIME,
         jti: randomUUID(),
@@ -244,7 +245,7 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         scope: 'read',
       },
       signingKey,
-      'sha512',
+      'sha256',
     );
     return send(response, 200, {
       access_token: token,

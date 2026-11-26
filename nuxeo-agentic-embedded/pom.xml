@@ -12,7 +12,7 @@
 
   <artifactId>nuxeo-agentic-embedded</artifactId>
   <name>Nuxeo Agentic Embedded Panels</name>
-  <description>OSGi bundle: token exchange for embedded panels. A host application the server's configuration registers, with its own credentials and allowed origins, exchanges its signed assertion of a user for a short-lived, audience-bound Nuxeo token for that user (OAuth 2.0 token exchange, RFC 8693), minted by the platform's JWT service and accepted by its JWT authenticator. Only users the configuration maps, never an administrator unless allowed, scoped to reads unless configured otherwise, every exchange audited.</description>
+  <description>OSGi bundle: token exchange for embedded panels. A host application the server's configuration registers, with its own credentials and allowed origins, exchanges its signed assertion of a user for a short-lived, audience-bound Nuxeo token for that user (OAuth 2.0 token exchange, RFC 8693), signed with the add-on's own key and signed in by its own authenticator, on the REST API only. Only users the configuration maps, never an administrator unless allowed, scoped to reads unless configured otherwise, every exchange audited.</description>
 
   <dependencies>
     <!-- NuxeoPrincipal, the user an exchange is for. -->
@@ -39,20 +39,21 @@
       <scope>provided</scope>
     </dependency>
     <!--
-      The platform's JWT service, which signs the token an exchange issues and verifies it again, so
-      that the platform's own JWT authenticator, JWT_AUTH, in the REST API's chain, signs the user in
-      with it. Nothing here signs a token itself.
+      UserIdentificationInfo, what the add-on's authentication plugin answers with: in
+      nuxeo-platform-api, with no servlet type, on 11.5 and on LTS 2025 alike. The plugin's interface,
+      which carries Jakarta servlet types on 2025, is a compile-time copy kept out of the jar (below).
     -->
     <dependency>
       <groupId>org.nuxeo.ecm.platform</groupId>
-      <artifactId>nuxeo-platform-login-jwt</artifactId>
+      <artifactId>nuxeo-platform-api</artifactId>
       <scope>provided</scope>
     </dependency>
     <!--
-      The library the platform's JWT service is built on, in nxserver/lib: java-jwt 4.5.0 on LTS
-      2025.10.18, 3.12.0 for the 11.5 artifacts the tests run on. It verifies a host's assertion; only
-      what the two versions share is called (JWT.decode, Algorithm.verify, the claims' getters), and
-      every time and claim check is the add-on's own (AssertionVerifier).
+      The JWT library the platform ships in nxserver/lib: java-jwt 4.5.0 on LTS 2025.10.18, 3.12.0 for
+      the 11.5 artifacts the tests run on. It verifies a host's assertion and signs and verifies the
+      panel's own token, with the add-on's own key, never the platform's nuxeo.jwt.secret. Only what
+      the two versions share is called, by the same descriptors, and every time and claim check is the
+      add-on's own.
     -->
     <dependency>
       <groupId>com.auth0</groupId>
@@ -120,6 +121,13 @@
           <archive>
             <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
           </archive>
+          <!--
+            The compile-time copy of the platform's NuxeoAuthenticationPlugin, never shipped: the
+            server's own is the one the plugin implements at run time.
+          -->
+          <excludes>
+            <exclude>org/nuxeo/ecm/**</exclude>
+          </excludes>
         </configuration>
       </plugin>
       <plugin>

@@ -26,8 +26,17 @@ public final class KeyValueReplayGuard implements ReplayGuard {
     @Override
     public boolean firstUse(String host, String assertionId, Instant expiresAt, Instant now) {
         KeyValueStore store = Framework.getService(KeyValueService.class).getKeyValueStore(STORE);
-        long ttl = Math.max(1, Duration.between(now, expiresAt.plus(AssertionVerifier.SKEW)).getSeconds());
-        return store.compareAndSet(key(host, assertionId), null, "used", ttl);
+        return store.compareAndSet(key(host, assertionId), null, "used", ttl(expiresAt, now));
+    }
+
+    /**
+     * How long an assertion's id is kept, in whole seconds, rounded up and one more: never less than
+     * the time the verifier still accepts the assertion, its end plus the skew.
+     */
+    static long ttl(Instant expiresAt, Instant now) {
+        Duration left = Duration.between(now, expiresAt.plus(AssertionVerifier.SKEW));
+        long seconds = left.getSeconds() + (left.getNano() > 0 ? 1 : 0);
+        return Math.max(1, seconds + 1);
     }
 
     static String key(String host, String assertionId) {

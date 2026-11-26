@@ -4,8 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * Issues a panel's token, and reads one back: in production the platform's JWT service, so that the
- * platform's own authenticator signs the user in with it ({@link PlatformTokenCodec}).
+ * Issues a panel's token, and reads one back: {@link PanelTokenCodec}, with the add-on's own key.
  */
 public interface TokenCodec {
 
@@ -21,13 +20,11 @@ public interface TokenCodec {
      * @param host the host it was exchanged by
      * @param username the Nuxeo user it signs in
      * @param scope {@code read}, or {@code read write}
-     * @param audiencePath the path prefix it is valid on ({@link EmbeddedSettings#tokenPath()})
      * @param id its own id, a random one
-     * @param issuedAt when it is issued
+     * @param issuedAt when it is issued: its {@code iat}, and the start of its lifetime
      * @param lifetime how long it lives, in seconds
      */
-    record Grant(String host, String username, String scope, String audiencePath, String id, Instant issuedAt,
-            int lifetime) {
+    record Grant(String host, String username, String scope, String id, Instant issuedAt, int lifetime) {
 
         public Instant expiresAt() {
             return issuedAt.plusSeconds(lifetime);
@@ -47,8 +44,8 @@ public interface TokenCodec {
     String issue(Grant grant);
 
     /**
-     * The token's claims once its signature and its end are checked, or {@code null} for a token that
-     * is not one this server signed, or has expired.
+     * The token's claims, numbers as longs, once its signature, issuer, audience and end are checked,
+     * or {@code null} for a token that is not one this server signed for panels, or has expired.
      */
     Map<String, Object> verify(String token);
 }

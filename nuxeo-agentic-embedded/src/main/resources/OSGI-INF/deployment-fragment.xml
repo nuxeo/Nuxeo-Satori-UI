@@ -25,7 +25,7 @@
     A panel's token held to its scope, its host's origins and the REST API, before the REST API sees
     the request: on /api/*, where it is asked, and on /site/*, where the REST API's servlet forwards it
     and the server authenticates it (Nuxeo's API forward servlet, /api/v1/ to /site/api/v1/). A request
-    with no panel's token passes untouched.
+    with no panel's token passes untouched. The panel's authenticator applies the same rule again.
   -->
   <extension target="web#FILTER-MAPPING">
     <filter>

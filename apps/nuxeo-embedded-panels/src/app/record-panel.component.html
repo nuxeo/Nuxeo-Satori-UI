@@ -50,7 +50,7 @@
         [status]="current.error"
         [heading]="'embedded-panels.failed' | translate"
         [headingLevel]="3"
-        [retryable]="true"
+        [retryable]="current.error !== 401"
         (retry)="retry()"
       />
     }

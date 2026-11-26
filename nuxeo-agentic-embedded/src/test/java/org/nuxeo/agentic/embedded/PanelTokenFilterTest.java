@@ -28,8 +28,8 @@ class PanelTokenFilterTest {
     @BeforeEach
     void setUp() {
         Map<String, Host> hosts = new HashMap<>(Map.of("crm", Fixtures.host()));
-        Fixtures.PlatformLikeCodec tokens = new Fixtures.PlatformLikeCodec(Fixtures.clock(Fixtures.NOW));
-        token = tokens.issue(new TokenCodec.Grant("crm", "jsmith", "read", "site/api/v1", "t-1", Fixtures.NOW, 300));
+        Fixtures.RecordingCodec tokens = new Fixtures.RecordingCodec(Fixtures.properties(Fixtures.host()), Fixtures.clock(Fixtures.NOW));
+        token = tokens.issue(new TokenCodec.Grant("crm", "jsmith", "read", "t-1", Fixtures.NOW, 300));
         EmbeddedPanelComponent component = new EmbeddedPanelComponent();
         component.register(Fixtures.descriptor(), "test");
         component.start(Fixtures.settings(Fixtures.properties(Fixtures.host())), new Fixtures.MemoryReplayGuard(),

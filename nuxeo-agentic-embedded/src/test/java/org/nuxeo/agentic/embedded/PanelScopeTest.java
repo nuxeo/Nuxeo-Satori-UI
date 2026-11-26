@@ -79,6 +79,20 @@ class PanelScopeTest {
     }
 
     @Test
+    void noTokenRunsAnOperationOfItsChoosingThroughAnUploadOrABulkAction() {
+        // An upload's execute runs any operation on a batch, and a bulk action any action.
+        for (String path : List.of("upload/batch-1/execute/Bulk.RunAction", "upload/batch-1/0/execute/Document.Delete",
+                "repo/default/upload/batch-1/execute/Bulk.RunAction", "id/x/@bulk/trash", "bulk/abc/abort", "bulk",
+                "search/lang/NXQL/bulk/trash")) {
+            assertFalse(write("POST", path), path);
+            assertFalse(write("PUT", path), path);
+        }
+        // Uploading itself is a write a write token may do.
+        assertTrue(write("POST", "upload/batch-1/0"));
+        assertTrue(write("DELETE", "upload/batch-1"));
+    }
+
+    @Test
     void aPathWithAnEmptySegmentIsNeverAPanelsRequest() {
         assertFalse(read("GET", "id//x"));
         assertFalse(read("GET", "id/x/"));

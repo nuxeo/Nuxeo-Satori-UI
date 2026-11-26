@@ -4,8 +4,8 @@ import java.util.function.UnaryOperator;
 
 /**
  * Where the exchange reads what each server sets: a host's client secret and the key its assertions
- * are verified with, from the server's properties ({@code nuxeo.conf}) or the environment, and the
- * server's own audience.
+ * are verified with, the key the panels' tokens are signed with, from the server's properties
+ * ({@code nuxeo.conf}) or the environment, and the server's own audience.
  *
  * These are the only sources. Nothing the exchange checks a request against is read from a
  * contribution, a document or the request. The lookups are taken as functions so that tests run
@@ -14,22 +14,21 @@ import java.util.function.UnaryOperator;
 public record EmbeddedSettings(UnaryOperator<String> property, UnaryOperator<String> env) {
 
     /**
-     * The audience a host's assertions must name: this server, as the host knows it. Its own
-     * setting, else the server's public address, {@code nuxeo.url}.
+     * The audience a host's assertions must name, and that a panel's token names: this server, as the
+     * host knows it. Its own setting, else the server's public address, {@code nuxeo.url}.
      */
     public static final String AUDIENCE = "nuxeo.agentic.embedded.audience";
 
     static final String NUXEO_URL = "nuxeo.url";
 
     /**
-     * The path prefix, below the context path, that a token is valid on: the platform's JWT
-     * authenticator signs a request in with a token only on a path that starts with its {@code aud}.
-     * The REST API's {@code /api/v1/} forwards to {@code /site/api/v1/}, where the server
-     * authenticates it, so that is the default.
+     * The key a panel's token is signed with, the add-on's own and no other setting's: at least 32
+     * bytes, the same on every node of a cluster. Never the platform's {@code nuxeo.jwt.secret}
+     * ({@link PanelTokenCodec}).
      */
-    public static final String TOKEN_PATH = "nuxeo.agentic.embedded.token.path";
+    public static final String TOKEN_SECRET = "nuxeo.agentic.embedded.tokenSecret";
 
-    static final String DEFAULT_TOKEN_PATH = "site/api/v1";
+    static final String TOKEN_SECRET_ENV = "NUXEO_EMBEDDED_TOKEN_SECRET";
 
     /** The audience, or {@code null} when the server sets neither. */
     public String audience() {
@@ -37,9 +36,10 @@ public record EmbeddedSettings(UnaryOperator<String> property, UnaryOperator<Str
         return own != null ? own : property(NUXEO_URL);
     }
 
-    public String tokenPath() {
-        String path = property(TOKEN_PATH);
-        return path == null ? DEFAULT_TOKEN_PATH : path.replaceAll("^/+|/+$", "");
+    /** The key a panel's token is signed with, from the server's property first, or {@code null}. */
+    public String tokenKey() {
+        String value = property(TOKEN_SECRET);
+        return value != null ? value : env(TOKEN_SECRET_ENV);
     }
 
     /** The host's client secret, from the server's property first, or {@code null}. */

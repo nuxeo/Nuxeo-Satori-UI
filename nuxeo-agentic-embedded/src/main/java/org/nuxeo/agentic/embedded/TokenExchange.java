@@ -38,7 +38,7 @@ import com.auth0.jwt.algorithms.Algorithm;
  * user, the anonymous user nor a transient one, is no administrator unless the host allows them, and
  * when mapped through the host's groups, is in one; else {@code invalid_grant}, with one sentence for
  * every case, so that a host learns nothing of the server's users;</li>
- * <li>the token: the platform's JWT service signs it ({@link TokenCodec}).</li>
+ * <li>the token: signed with the add-on's own key ({@link PanelTokenCodec}).</li>
  * </ol>
  * The answer never holds the assertion, and the log and the audit never hold it or the token.
  */
@@ -203,8 +203,8 @@ public final class TokenExchange {
         }
 
         // 6. The token.
-        TokenCodec.Grant grant = new TokenCodec.Grant(host.id(), user.username(), scope, settings.tokenPath(),
-                ids.get(), now, host.tokenLifetime());
+        TokenCodec.Grant grant = new TokenCodec.Grant(host.id(), user.username(), scope, ids.get(), now,
+                host.tokenLifetime());
         String token;
         try {
             token = tokens.issue(grant);

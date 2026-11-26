@@ -17,22 +17,28 @@ import java.util.Set;
  * Nothing else, which leaves out the user's own authentication tokens ({@code token}), their OAuth
  * tokens ({@code oauth2}) and administration ({@code management}), even to read.</li>
  * <li><b>{@code write}</b>, only where the host's configuration allows it and the exchange asked for
- * it: as well, {@code POST}, {@code PUT} and {@code DELETE} on documents, uploads and bulk actions;
- * an operation, through {@code automation} or a document's {@code @op}, still only one the host
- * names. Never users, groups, vocabularies, the content model, {@code me}, {@code token},
- * {@code oauth2} or {@code management}.</li>
+ * it: as well, {@code POST}, {@code PUT} and {@code DELETE} on documents and on uploads, but an
+ * upload's {@code execute}, which runs any operation on a batch; an operation, through
+ * {@code automation} or a document's {@code @op}, still only one the host names. Never users,
+ * groups, vocabularies, the content model, {@code me}, bulk actions, {@code token}, {@code oauth2}
+ * or {@code management}.</li>
  * </ul>
  *
- * A path of a repository, {@code repo/<name>/...}, is held to the rule of the path below it.
+ * A path of a repository, {@code repo/<name>/...}, is held to the rule of the path below it. The rule
+ * does not know which operations are reads: a host that names one that writes lets a {@code read}
+ * token run it.
  */
 public final class PanelScope {
 
     static final Set<String> READ_ROOTS = Set.of("id", "path", "search", "query", "config", "directory", "user",
             "group", "me");
 
-    static final Set<String> WRITE_ROOTS = Set.of("id", "path", "upload", "bulk");
+    static final Set<String> WRITE_ROOTS = Set.of("id", "path", "upload");
 
     static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE");
+
+    /** The segments of a write that runs an operation of the caller's choosing: an upload's, a bulk action's. */
+    static final Set<String> RUNS_ANY_OPERATION = Set.of("execute", "@bulk", "bulk");
 
     private PanelScope() {
     }
@@ -65,6 +71,10 @@ public final class PanelScope {
         }
         if ("automation".equals(root)) {
             return "POST".equals(method) && segments.size() == 2 && operations.contains(segments.get(1));
+        }
+        if (segments.stream().anyMatch(RUNS_ANY_OPERATION::contains)) {
+            // An upload's execute, or a bulk action, which can run any operation: never.
+            return false;
         }
         int op = segments.indexOf("@op");
         if (op >= 0) {
