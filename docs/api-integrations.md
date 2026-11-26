@@ -2822,6 +2822,60 @@ checked on a server: the add-on's 0.2.0, which has them, is installed nowhere.
 
 ---
 
+## 43. Capture Page — Photos from a Phone, through `Blob.AttachOnDocument`
+
+| Field           | Value                                                                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `CaptureRecordsService` and `CaptureFilingService` (`libs/features/capture/src/lib/`), the upload through `DocumentDetailService`         |
+| **Methods**     | `find(number)`, `load(uid)` and `holds(...)` on the person's ask; `send(...)` for each photo and the note, in turn, on File the photos    |
+| **HTTP Method** | `GET` for the record and the search; `POST` for each upload                                                                               |
+| **Endpoints**   | `/nuxeo/api/v1/search/lang/NXQL/execute`, `/nuxeo/api/v1/id/{uid}`, `/nuxeo/api/v1/automation/Blob.AttachOnDocument`                      |
+| **Server side** | Stock Nuxeo's `Blob.AttachOnDocument`, the document page's Attachments panel's own upload                                                 |
+| **Turned on**   | A type's `view` layout's `capture` (docs/business-apps/layout-v2.md, section 2, "Capture"): the property, and where a number is looked up |
+
+**The lookup of a number:** one NXQL search over every type whose `view` layout has a capture with
+`findBy`, the number as typed and in capitals, each a `queryParams` value, never in the query's text,
+21 records at most (20 listed, and one to tell there are more), live ones only:
+
+```sql
+SELECT * FROM Document WHERE ((ecm:primaryType = ? AND (dmg:number IN (?, ?) OR dmg:moveNumber IN (?, ?))))
+  AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0 ORDER BY dc:modified DESC
+```
+
+A type's name and its properties are written into the text: each is held to a name's form first,
+and one that is not is left out. Only records the person may read come back.
+
+**The record:** `GET /id/{uid}` with `properties: *` and `enrichers.document: permissions`, so that
+the page refuses a record the person may not write (`Write` or `WriteProperties`, not a version)
+before any photo is taken.
+
+**Each upload:** `multipart/form-data`, a `request` part and a `file` part, as the Attachments
+panel's, with the browser's upload progress:
+
+```json
+{ "params": { "document": "<uid>", "save": "true", "xpath": "files:files" } }
+```
+
+The `xpath` is the capture's `property`. The file is the photo as the page prepared it, under a
+name of its own, `DC-3003-photo-20261126-140512-1.jpg`, and the note a `text/plain` file named
+`DC-3003-note-20261126-140700.txt`.
+
+**A dropped connection** (no answer, `408`, `429`, `502`, `503` or `504`, a try that sends nothing
+for a minute, or one whose answer takes more than three minutes once the file is sent) is tried
+again after 1, 4 and 10 seconds. Before each try again, and before a photo a request carried
+already, `GET /id/{uid}` reads the record's property, for at most 15 seconds: a file of the photo's
+name and size there is the earlier try's, whose answer was lost, and is not sent again. A file the
+server is still saving when the record is read, or a read that fails, can still be filed twice.
+
+**Errors:** a `403` stops the filing, saying the person may not add files to the record; a `404`
+says the record is gone; a `413` or another refusal leaves the photo, with the reason, and the rest
+go on, and a `500`, the server's own failure, is not tried again but may be filed again later.
+Nuxeo checks the permission on every upload: what the page offers is no control. Run against
+a stand-in of the server only (`scripts/beta-harness/steps/capture-phone.mjs`), no server having
+the moves kit.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

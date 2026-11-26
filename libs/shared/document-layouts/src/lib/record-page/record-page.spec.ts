@@ -454,6 +454,56 @@ describe('RecordPageComponent', () => {
     expect(valueOf(root, 'member:caseManager')).toBe('Jane Doe');
   });
 
+  describe('the link to the capture page', () => {
+    const CAPTURE = { property: 'files:files', findBy: [], keepLocation: false };
+    const draw = async (
+      document: NuxeoDocument,
+      capture: typeof CAPTURE | null,
+      readOnly = false,
+    ): Promise<HTMLElement> => {
+      fixture = TestBed.createComponent(RecordPageComponent);
+      fixture.componentRef.setInput('document', document);
+      fixture.componentRef.setInput('layout', { ...layoutOf(MEMBER_PAGE), capture });
+      fixture.componentRef.setInput('readOnly', readOnly);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    };
+    const writable = (extra: Record<string, unknown> = {}) =>
+      ({
+        ...member(),
+        contextParameters: { permissions: ['Read', 'Write'] },
+        ...extra,
+      }) as NuxeoDocument;
+
+    it('links a record its layout captures photos for to the capture page, above the cards', async () => {
+      const root = await draw(writable(), CAPTURE);
+      const link = root.querySelector<HTMLAnchorElement>('.record-page__capture-link');
+      expect(link?.textContent?.trim()).toBe('Take photos and file them here');
+      expect(link?.getAttribute('href')).toBe('/capture?record=m1');
+      expect(
+        root
+          .querySelector('.record-page__capture')
+          ?.compareDocumentPosition(root.querySelector('.record-page__grid') as Node),
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('offers no link to a reader who may not write the record, on a version, or read-only', async () => {
+      expect((await draw(member(), CAPTURE)).querySelector('.record-page__capture')).toBeNull();
+      fixture.destroy();
+      expect(
+        (await draw(writable({ isVersion: true }), CAPTURE)).querySelector('.record-page__capture'),
+      ).toBeNull();
+      fixture.destroy();
+      expect(
+        (await draw(writable(), CAPTURE, true)).querySelector('.record-page__capture'),
+      ).toBeNull();
+      fixture.destroy();
+      expect((await draw(writable(), null)).querySelector('.record-page__capture')).toBeNull();
+    });
+  });
+
   describe('a document-link', () => {
     const linksOf = (root: HTMLElement, field: string) =>
       [...root.querySelectorAll<HTMLAnchorElement>(`[data-field="${field}"] a`)].map((link) => ({

@@ -1,4 +1,4 @@
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpEventType, provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1085,6 +1085,37 @@ describe('DocumentDetailService', () => {
       expect(await (request as Blob).text()).toContain('"save":"true"');
       req.flush(new Blob(['ok']));
       await pending;
+    });
+
+    it('attaches into the list property it is given, reporting how much is sent', async () => {
+      const percents: number[] = [];
+      let answered = false;
+      service
+        .uploadAttachment('doc-1', new File(['12345'], 'p.jpg'), {
+          xpath: 'claim:photos',
+          onUploadPercent: (percent) => percents.push(percent),
+        })
+        .subscribe(() => (answered = true));
+      const req = httpMock.expectOne('/nuxeo/api/v1/automation/Blob.AttachOnDocument');
+      expect(req.request.reportProgress).toBe(true);
+      const request = req.request.body.get('request') as Blob;
+      expect(JSON.parse(await request.text())).toEqual({
+        params: { document: 'doc-1', save: 'true', xpath: 'claim:photos' },
+      });
+      req.event({ type: HttpEventType.UploadProgress, loaded: 1, total: 4 });
+      // A browser that cannot tell the total is measured against the file's own size.
+      req.event({ type: HttpEventType.UploadProgress, loaded: 4, total: 0 });
+      expect(answered).toBe(false);
+      req.flush(new Blob(['ok']));
+      expect(percents).toEqual([25, 80, 100]);
+      expect(answered).toBe(true);
+    });
+
+    it('asks no progress of a plain upload, as the Attachments panel makes', () => {
+      service.uploadAttachment('doc-1', new File(['x'], 'a.txt')).subscribe();
+      const req = httpMock.expectOne('/nuxeo/api/v1/automation/Blob.AttachOnDocument');
+      expect(req.request.reportProgress).toBe(false);
+      req.flush(new Blob(['ok']));
     });
 
     it('replaces an attachment at its indexed xpath, not the whole list', async () => {

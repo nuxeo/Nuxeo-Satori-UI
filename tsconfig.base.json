@@ -20,6 +20,7 @@
         "libs/features/assets/src/lib/assets-drawer/assets-drawer.component.ts"
       ],
       "@agentic-ui/feature-browse": ["libs/features/browse/src/index.ts"],
+      "@agentic-ui/feature-capture": ["libs/features/capture/src/index.ts"],
       "@agentic-ui/feature-collections": ["libs/features/collections/src/index.ts"],
       "@agentic-ui/feature-document-detail": ["libs/features/document-detail/src/index.ts"],
       "@agentic-ui/feature-knowledge-discovery": ["libs/features/knowledge-discovery/src/index.ts"],
