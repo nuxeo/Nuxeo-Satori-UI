@@ -41,9 +41,26 @@ function elements(xml, name) {
   return found;
 }
 
+/**
+ * `xml` without its comments, each cut out from its `<!--` to the end of its `-->`, so that a
+ * policy element named in a comment is not read as one. An unclosed comment runs to the end, as an
+ * XML parser would refuse it. Not a sanitiser: the file is the kit's own, and nothing of it is
+ * written anywhere.
+ */
+function withoutComments(xml) {
+  let text = '';
+  let at = 0;
+  for (let open = xml.indexOf('<!--', at); open !== -1; open = xml.indexOf('<!--', at)) {
+    text += xml.slice(at, open);
+    const close = xml.indexOf('-->', open + 4);
+    at = close === -1 ? xml.length : close + 3;
+  }
+  return text + xml.slice(at);
+}
+
 /** The kit's policy, as the stand-in decides by it: the add-on reads the same file through XMap. */
 export function kitPolicy(xml = readFileSync(POLICY_FILE, 'utf8')) {
-  const text = xml.replace(/<!--[\s\S]*?-->/g, '');
+  const text = withoutComments(xml);
   const delivery = /<delivery>([\s\S]*?)<\/delivery>/.exec(text)?.[1] ?? '';
   const outside = text.replace(/<delivery>[\s\S]*?<\/delivery>/, '');
   const original = elements(outside, 'original')[0];
