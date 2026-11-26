@@ -15,6 +15,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -346,7 +347,10 @@ describe('writePackage, refusing before anything runs', () => {
           );
         expect(readdirSync(outside).sort()).toEqual(['sub', 'victim']);
       } finally {
-        rmSync(join(packages, 'through'));
+        // The link itself, never what it names. `rmSync` on a link to a folder follows it on
+        // Node 25 and throws "Path is a directory"; Node 24 removed the link. `unlink` does not
+        // follow on either.
+        unlinkSync(join(packages, 'through'));
       }
     },
   );

@@ -343,9 +343,10 @@ reaches only when the integration branch does, and a tag names exactly what is p
   passes a kit's `deployment/build-allow-list.json` with `--allow-list` when the kit has one,
   which today only the Payers kit does; a kit without one is built with none, and every operation
   its buttons run is refused ([`app-packages.yml`](../../.github/workflows/app-packages.yml)).
-- **Where kits live:** under `business-apps/packages/` for now. Version 1's configuration packages
-  moved to nuxeo/Nuxeo-Satori-Config; whether kits follow them, calling this pipeline from there,
-  is open.
+- **Where kits live:** under `business-apps/packages/`, beside the pipeline that checks them,
+  decided on 26 November 2026 ([decisions.md](decisions.md), "Settled"). Version 1's configuration
+  packages moved to nuxeo/Nuxeo-Satori-Config, whose builder is the platform's configuration
+  package builder and checks none of an app definition's version 2 files.
 - **Not exercised yet:** steps 7 and 8, which run only for a tag.
 - **The workflow passes no server's content model.** A kit that ships a stand-in model is held to
   its own `content-model.json` on every pull request (section 4). A package on a customer's model
