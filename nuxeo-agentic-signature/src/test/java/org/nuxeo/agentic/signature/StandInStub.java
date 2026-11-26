@@ -46,7 +46,7 @@ final class StandInStub implements AutoCloseable {
 
     /** How the stub answers, one way of failing at a time. */
     enum Mode {
-        NORMAL, SEND_FAILS, NOT_SIGNED, TAMPERED, REDIRECT
+        NORMAL, SEND_FAILS, NOT_SIGNED, PENDING, TAMPERED, REDIRECT
     }
 
     private final HttpServer server;
@@ -148,7 +148,7 @@ final class StandInStub implements AutoCloseable {
         byte[] signed = signed(sent.content(), sent.id());
         ObjectNode result = JSON.createObjectNode();
         result.put("envelope", sent.id());
-        result.put("status", "signed");
+        result.put("status", mode == Mode.PENDING ? "sent" : "signed");
         ObjectNode document = result.putObject("document");
         document.put("fileName", sent.body().path("document").path("fileName").asText());
         document.put("mimeType", "application/pdf");

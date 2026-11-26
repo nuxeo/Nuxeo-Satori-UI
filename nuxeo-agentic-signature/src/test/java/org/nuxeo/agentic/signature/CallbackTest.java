@@ -237,6 +237,9 @@ public class CallbackTest {
     public void whenTheServiceDoesNotSaySignedNothingIsFiledAndTheRetryIsTaken() {
         stub.mode = StandInStub.Mode.NOT_SIGNED;
         unchanged(signed("evt_1"), CallbackEndpoint.PROVIDER_FAILED);
+        // A result, which says the envelope is not signed yet.
+        stub.mode = StandInStub.Mode.PENDING;
+        unchanged(signed("evt_1"), CallbackEndpoint.PROVIDER_FAILED);
         stub.mode = StandInStub.Mode.TAMPERED;
         unchanged(signed("evt_1"), CallbackEndpoint.PROVIDER_FAILED);
         stub.mode = StandInStub.Mode.NORMAL;

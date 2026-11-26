@@ -113,7 +113,7 @@ import org.nuxeo.runtime.api.Framework;
  * while it is out.</li>
  * <li><strong>{@code documentCreatedByCopy}:</strong> a request is not copied; a record's copy is not
  * out for signature, and its {@code sgn:} properties are emptied.</li>
- * <li><strong>{@code aboutToRemove} and {@code documentTrashed}:</strong> a request is kept, but for
+ * <li><strong>{@code aboutToRemove}, {@code aboutToRemoveVersion} and {@code documentTrashed}:</strong> a request is kept, but for
  * an administrator, once it is no longer out; a record is not removed while it is out; the version
  * that holds a signed file is kept, but for an administrator.</li>
  * </ul>
@@ -152,9 +152,9 @@ public class SignatureRequestListener implements EventListener {
                 case DocumentEventTypes.DOCUMENT_CREATED -> documentCreated(context, doc);
                 case DocumentEventTypes.DOCUMENT_CREATED_BY_COPY -> copied(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
-                case DocumentEventTypes.ABOUT_TO_REMOVE, "documentTrashed" -> removal(context, doc);
+                case DocumentEventTypes.ABOUT_TO_REMOVE, "aboutToRemoveVersion", "documentTrashed" -> removal(context, doc);
                 default -> {
-                    // Not one of ours: the contribution lists the six above.
+                    // Not one of ours: the contribution lists the seven above.
                 }
             }
         } catch (NuxeoException e) {

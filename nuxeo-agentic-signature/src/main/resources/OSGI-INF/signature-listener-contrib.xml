@@ -7,7 +7,8 @@
     marks the record out for signature; lets the requester or an administrator cancel it while it
     is out; and refuses every other change to a request, any change to a record's sgn: properties
     but the server's, a change to the file out for signature, and the deletion or trash of a
-    request, or of a record while it is out. No Automation operation: a person reaches it by
+    request, or of a record while it is out, and of the version that holds a signed file but by an
+    administrator. No Automation operation: a person reaches it by
     creating a request, as every client does, through the REST API or a workflow's chain. Every
     refusal marks the transaction for rollback.
   </documentation>
@@ -23,6 +24,7 @@
       <event>documentCreatedByCopy</event>
       <event>beforeDocumentModification</event>
       <event>aboutToRemove</event>
+      <event>aboutToRemoveVersion</event>
       <event>documentTrashed</event>
     </listener>
   </extension>

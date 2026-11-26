@@ -253,6 +253,19 @@ public class GuardTest {
         assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.signed",
                 text(Desk.stored(repository, requestId), Signatures.ENVELOPE), null));
         String version = text(Desk.stored(repository, requestId), Signatures.SIGNED_VERSION);
+        // Alice may remove anything of the case's, and the case has changed since, so its signed
+        // version is no longer the one it was checked in as: only the add-on keeps it now.
+        Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository, (CoreSession s) -> {
+            org.nuxeo.ecm.core.api.security.ACP acp = s.getACP(new IdRef(caseId));
+            acp.getOrCreateACL().add(new org.nuxeo.ecm.core.api.security.ACE(ALICE, "Everything", true));
+            s.setACP(new IdRef(caseId), acp, true);
+            return null;
+        }));
+        Desk.inTransactionAs(repository, ALICE, s -> {
+            DocumentModel record = s.getDocument(new IdRef(caseId));
+            record.setPropertyValue("dc:description", "Signed; account to open");
+            return s.saveDocument(record);
+        });
         refused(403, ALICE, s -> {
             s.removeDocument(new IdRef(version));
             return null;
