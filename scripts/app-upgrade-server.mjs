@@ -242,7 +242,7 @@ export function guardedFetch(base, credentials, reads, fetchImpl) {
     if (
       url.origin !== root.origin ||
       rest === null ||
-      /%(?:2f|5c|2e)|;/i.test(url.pathname) ||
+      /%(?:2f|5c|2e|3b)|;/i.test(url.pathname) ||
       !READS.some((path) => path.test(rest))
     )
       throw new Refusal(
@@ -1115,8 +1115,11 @@ async function deploymentLayer({
           (inForce
             ? `deployment layer overrides at version ${state.live.version ?? file.version}. The override keeps winning, so ${server.app}'s people see none of the kit's change.`
             : "deployment layer holds a draft of, which does not have the kit's change: approved after the upgrade, it replaces the package's file with one that lacks it."),
-        steps:
-          ours === undefined
+        steps: !inForce
+          ? ours === undefined
+            ? 'The package no longer has the file: approved after the upgrade, the draft would be its only version. Discard it, or approve it knowing that.'
+            : "After the upgrade, take the kit's change into the draft in the layout designer before it is approved, or discard it."
+          : ours === undefined
             ? 'After the upgrade the override is the only version of the file: keep it, or roll it back to drop it.'
             : "After the upgrade, open the file in the layout designer and take the kit's change into a new draft, or roll the override back to the package's version.",
       });
@@ -1256,10 +1259,16 @@ function modelAfter(server, beforeModel, kitModel) {
  */
 async function registeredIds(nuxeo) {
   const answer = await nuxeo.get('/api/v1/management/configuration');
-  if (answer.status !== 200 || !isRecord(answer.body))
+  // Its shape read from Nuxeo 2025.10.18: `runtimeProperties` and `configuredProperties`, objects.
+  if (
+    answer.status !== 200 ||
+    !isRecord(answer.body) ||
+    !(isRecord(answer.body.runtimeProperties) || isRecord(answer.body.configuredProperties))
+  )
     throw new Refusal(
-      `/api/v1/management/configuration answered ${answer.status}, so the ids the deployment registers for its layer, ` +
-        "which the server's validator is given, cannot be read, and an override cannot be held to the new version as the server would hold it.",
+      `/api/v1/management/configuration answered ${answer.status}${answer.status === 200 ? ' with no runtimeProperties or configuredProperties' : ''}, ` +
+        "so the ids the deployment registers for its layer, which the server's validator is given, cannot be read, " +
+        'and an override cannot be held to the new version as the server would hold it.',
     );
   const property = (name) => {
     for (const group of ['runtimeProperties', 'configuredProperties']) {
@@ -1615,14 +1624,23 @@ function xsdProperties(source) {
       values: values.length > 0 ? values : null,
     };
   };
+  // Nuxeo's other way to write a list of scalars: a complex type whose sequence holds one element
+  // that may repeat. Its items' type is its type; any other complex type is `complex`.
+  const complex = (inner) => {
+    const items = [...inner.matchAll(new RegExp(`<${prefix}element${TAG}`, 'g'))].map(([, tag]) =>
+      attributesOf(tag),
+    );
+    return items.length === 1 && items[0].maxOccurs === 'unbounded' && items[0].type
+      ? { base: `list of ${items[0].type}`, values: null }
+      : { base: 'complex', values: null };
+  };
   const properties = new Map();
   for (const [name, { type, inner, named }] of written) {
     let held;
     if (named !== undefined)
-      held = named.kind === 'complexType' ? { base: 'complex', values: null } : simple(named.inner);
+      held = named.kind === 'complexType' ? complex(named.inner) : simple(named.inner);
     else if (type !== undefined) held = { base: type, values: null };
-    else if (new RegExp(`<${prefix}complexType\\b`).test(inner))
-      held = { base: 'complex', values: null };
+    else if (new RegExp(`<${prefix}complexType\\b`).test(inner)) held = complex(inner);
     else held = simple(inner);
     properties.set(name, {
       ...held,

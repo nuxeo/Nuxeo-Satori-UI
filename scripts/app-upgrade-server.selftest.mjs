@@ -259,11 +259,13 @@ function answer(state, url) {
   }
   if (path === '/api/v1/management/page-providers') return json(state.pageProviderList);
   if (path === '/api/v1/management/configuration')
-    return json({
-      'entity-type': 'configuration',
-      configuredProperties: { 'nuxeo.db.password': '***' },
-      runtimeProperties: state.properties,
-    });
+    return json(
+      state.configuration ?? {
+        'entity-type': 'configuration',
+        configuredProperties: { 'nuxeo.db.password': '***' },
+        runtimeProperties: state.properties,
+      },
+    );
   if ((match = /^\/agentic-ui-apps\/apps\/([^/]+)\/layer\.json$/.exec(decoded))) {
     if (state.layer === null)
       return json(
@@ -727,6 +729,11 @@ const itself = (scratch) => {
       {},
     ],
     [
+      'an encoded semicolon, the ..; form a decoding proxy climbs with',
+      'http://127.0.0.1:9/nuxeo/api/v1/search/pp/..%3B/execute',
+      {},
+    ],
+    [
       'a path that climbs out of its address',
       'http://127.0.0.1:9/nuxeo/api/v1/me/../../../site/connectClient/remove/start/x',
       {},
@@ -906,6 +913,37 @@ try {
     exit: 1,
     findings: [['error', 'records', 'property claim:legacyCode', 'Copy it to claim:diagnosis.']],
   });
+  await control(
+    "a list written as a repeating element whose items' type changes: an error",
+    stand,
+    {
+      packages: upgrade(
+        (directory) =>
+          edit(
+            directory,
+            CLAIM_SCHEMA,
+            '  <xs:element name="diagnosis" type="xs:string" />',
+            '  <xs:element name="diagnosis" type="xs:string" />\n  <xs:element name="codes">\n    <xs:complexType>\n      <xs:sequence>\n        <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded" />\n      </xs:sequence>\n    </xs:complexType>\n  </xs:element>',
+          ),
+        (directory) =>
+          edit(
+            directory,
+            CLAIM_SCHEMA,
+            '  <xs:element name="diagnosis" type="xs:string" />',
+            '  <xs:element name="diagnosis" type="xs:string" />\n  <xs:element name="codes">\n    <xs:complexType>\n      <xs:sequence>\n        <xs:element name="item" type="xs:long" minOccurs="0" maxOccurs="unbounded" />\n      </xs:sequence>\n    </xs:complexType>\n  </xs:element>',
+          ),
+      ),
+      server: (state) => {
+        const claim = state.model.schemas.find((each) => each.name === 'claim');
+        claim.fields = { ...claim.fields, codes: { type: 'string[]' } };
+        state.counts.push([/claim:codes\/\* IS NOT NULL/, 4]);
+      },
+      exit: 1,
+      findings: [
+        ['error', 'records', 'property claim:codes', 'from list of xs:string to list of xs:long'],
+      ],
+    },
+  );
   await control(
     "a property's type changed, with values: an error the offline half cannot see",
     stand,
@@ -1152,6 +1190,19 @@ try {
         }),
       exit: 0,
       findings: [['warning', 'layer', 'queue my-claims', 'saved by designer-one']],
+    },
+  );
+  await control(
+    'a configuration that holds none of its properties: the ids cannot be read, exit 2',
+    stand,
+    {
+      packages: upgrade(),
+      server: (state, installed) => {
+        state.configuration = { 'entity-type': 'configuration' };
+        layerWith(state, queueOf(installed), { live: queueOf(installed) });
+      },
+      exit: 2,
+      says: ['with no runtimeProperties or configuredProperties'],
     },
   );
   await control('an override naming a row action the deployment registers: fits, kept', stand, {

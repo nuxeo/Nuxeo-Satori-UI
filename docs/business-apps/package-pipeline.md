@@ -784,9 +784,11 @@ which only the version installed may be. `--json` prints the report as data, wit
 
 **It only reads.** Every request is a `GET`, sent by one function, `guardedFetch`, which refuses
 before anything is sent any other method, a body, another origin, an address holding a
-percent-encoded slash, backslash or dot, which a proxy that decodes the path would turn into a move
-up, and any address not on its list, `READS`; it never follows a redirect. A name from the package
-or from an answer is put in an address only when it is letters, digits, `_`, `.` and `-`. The
+percent-encoded slash, backslash, dot or semicolon, or a semicolon, which a proxy that decodes the
+path would turn into a move up, and any address not on its list, `READS`; it never follows a
+redirect. A name from the package or from an answer is put in an address only when it is letters,
+digits, `_`, `.` and `-`, but for the schemas' names `/config/schemas` lists, which the content
+model's reader encodes, and the guard then holds as it holds every address. The
 report says how many reads it made, and `--json` lists each. The credentials are `NUXEO_USER` and
 `NUXEO_PASS`, in the `Authorization` header only, never printed, over HTTPS, or HTTP to this
 machine; it refuses to run when Node is told to send through the environment's proxy
@@ -845,9 +847,9 @@ here.
 
 **Its controls:** `npm run app-upgrade:server-selftest` runs the check, as a command, against a
 stand-in Nuxeo on this machine that answers each read as a Nuxeo 2025 with the demo kit installed
-does. It holds 45 negative controls and 18 sound ones: each finding, with its severity and exit code; each refusal; and the
+does. It holds 48 negative controls and 18 sound ones: each finding, with its severity and exit code; each refusal; and the
 guard called directly, refusing a `POST`, a body, a `DELETE`, another origin, an address it does
-not read, the listing's install link, two encoded slashes and a path that climbs out of the
+not read, the listing's install link, two encoded slashes, an encoded semicolon and a path that climbs out of the
 server's address. The sound ones include the version installed checked against itself; an upgrade
 that changes a page provider, a route model, a vocabulary and an overridden file with nothing left
 behind; an enumeration widened; a type the package stops appending to; a page provider moved to
@@ -855,7 +857,7 @@ the index; an override naming a row action the deployment registers; and those t
 After every run each request the stand-in saw must be a `GET` with the credentials, of an address
 on a list the selftest writes apart from the check's own, one for one with the reads the report
 lists, and neither the password nor the encoded header may be in what the check printed or in an
-address. Each check taken out of the script, or turned to the wrong version or model, each refusal, the guard's method, encoded-path and address checks, the credentials header, the report's list of reads, the selftest's own list and the routing of `--server` turn their control red: 60 such changes, each seen failing. The workflow runs it beside the offline half's controls.
+address. Each check taken out of the script, or turned to the wrong version or model, each refusal, the guard's method, encoded-path and address checks, the credentials header, the report's list of reads, the selftest's own list and the routing of `--server` turn their control red: 63 such changes, each seen failing. The workflow runs it beside the offline half's controls.
 
 **Run on the local Docker Nuxeo,** 26 November 2026, read only, as its administrator: payers
 0.6.1 against the 0.6.1 installed, the version read from the package manager, the registry showing
@@ -867,7 +869,12 @@ package manager's file was the same, byte for byte, after the run. Since the ver
 the version checked, that run read the identity, the version, the layouts, the content model, two
 counts and the layer's switch; what an upgrade with changes reads, the counts of what it removes,
 the page providers run, the route models, the vocabulary and the layer's files, has been run only
-against the stand-in.
+against the stand-in. The answers the stand-in gives were each read first from that server, by
+hand and read only: `/me`, the distribution, the package manager's listing, the registry, the
+layouts, the content model, an NXQL count, a page provider's definition and its `execute` with
+aggregates, `/management/page-providers`, `/workflowModel`, a route model's document, a vocabulary,
+`/management/configuration`'s two groups of properties, and the layer's export switched off. The
+layer's files, with the layer on, were read from `LayerService.java`, not from a server.
 
 ### What it does not see, and what a server-side test would add
 
