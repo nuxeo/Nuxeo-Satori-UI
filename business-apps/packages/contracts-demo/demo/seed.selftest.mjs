@@ -500,7 +500,8 @@ await against({ unendedRenewals: true }, async ({ run }) => {
 {
   const read = (file) => JSON.parse(readFileSync(join(CONFIG, file), 'utf8'));
   const { labels } = read('labels/en.json');
-  const nameOf = (item) => item?.label ?? labels[item?.labelKey];
+  // An empty `label` is no label, as the app reads one.
+  const nameOf = (item) => item?.label || labels[item?.labelKey];
   const queue = read(`queues/${RENEWALS_QUEUE}.json`);
   const card = read('home.json').cards.find((each) => each.queue === RENEWALS_QUEUE);
   const entry = read('navigation.json').entries.find((each) => each.queue === RENEWALS_QUEUE);

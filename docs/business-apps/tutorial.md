@@ -36,8 +36,8 @@ Properties panel's headings for its two schemas (step 7), and moved to 0.1.1. St
 were run again on it with its version put back to the generator's 0.1.0, as a reader's package is,
 and their digest is quoted; nothing else was run again. Three things were not run at all, and
 each place says so: registering the MCP server with Claude Code, installing the package on a
-server, and a person outside the team doing all of it. The times are estimates for a person new to the repository, not
-measurements: measuring them is the plan's acceptance test, still to run.
+server, and a person outside the team doing all of it. The times are estimates for a person new
+to the repository, not measurements: measuring them is the plan's acceptance test, still to run.
 
 ## What you build
 
@@ -950,7 +950,8 @@ facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facil
 
 The same zip, byte for byte. With no `--model`, the pipeline held the package to its own
 `content-model.json`, as CI and `validate_package` do, because the package ships a stand-in
-model. Your digest is the same as this one if your files are the reference answer's; compare them:
+model. Your digest is the same as this one if your files are the reference answer's at the
+generator's version, 0.1.0; compare them:
 
 ```bash
 git status --short business-apps/packages/facilities-demo
@@ -958,9 +959,9 @@ git status --short business-apps/packages/facilities-demo
 
 It lists `README.md`, ` M business-apps/packages/facilities-demo/README.md`: the reference
 answer's README describes the kit, and yours is the generator's. It also lists the three files that
-hold the version, `app.json`, `package/package.xml` and `bundle/META-INF/MANIFEST.MF`: the
-reference answer is 0.1.1, since its two schema headings, and yours is the generator's 0.1.0. Any
-other file listed is where yours differs; `git diff` shows how.
+hold the version, `bundle/agentic-ui-config/app.json`, `package/package.xml` and
+`bundle/META-INF/MANIFEST.MF`: the reference answer is 0.1.1, since its two schema headings, and
+yours is the generator's 0.1.0. Any other file listed is where yours differs; `git diff` shows how.
 
 **A deliberate mistake.** Misspell a property, as anyone does: in the WorkOrder page, change
 `"wo:assignee"` in the schedule card to `"wo:asignee"`. Run the pipeline as CI runs it, the second

@@ -379,10 +379,12 @@ node business-apps/packages/contracts-demo/demo/seed.mjs
   of the nine turned at least one control red.
 - **Two controls since 0.2.1.** The seed already failed a renewals page provider that leaves out
   the ended contracts, since its data expects CTR-1007 there; one control now proves it, and that
-  the run names CTR-1007 alone. The other reads the kit's files rather than the script: the names
-  the queue's file and the home's card for it give by their `labelKey` must say "overdue" while
+  the run names CTR-1007 alone. The other reads the kit's files rather than the script: the
+  queue's name, its home card's and its menu entry's, each read as the app reads it, a `label`
+  first, else its `labelKey`'s text, the menu entry's else the queue's, must say "overdue" while
   the data expects an ended contract in the queue. Each went red when broken on purpose: the
-  seed's check for a missing renewal turned off, and the two names put back to "Up for renewal".
+  seed's check for a missing renewal turned off, the names put back to "Up for renewal", and the
+  queue's `labelKey` pointed at another key.
 
 It prints the home, the queue and three record pages, one up for renewal, one overdue and one
 terminated, on the app at `APP_URL` (`http://localhost:4200` by default).
