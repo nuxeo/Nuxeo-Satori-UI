@@ -73,9 +73,11 @@ Designer, the development plan and its decisions. Start here when you pick this 
 16. [administrator-guide.md](administrator-guide.md): for a Nuxeo administrator, what to install
     and in what order, every server setting with its default, upgrading and removing a kit, the
     demo server, the logs, and what is not ready for production.
+17. [security-reviews.md](security-reviews.md): every security review the work needs, deferred
+    until the app is finished: what each covers, where its notes are, and the decision it rests on.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
-recommendation, and waiting for its security review:
+recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):
 
 - [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md): an asset's rights, refused at the
   platform's download permission (phase 5).
