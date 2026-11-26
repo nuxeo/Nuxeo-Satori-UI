@@ -32,6 +32,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.PathRef;
+import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.UserPrincipal;
 import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
@@ -78,9 +79,10 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
 @Deploy("org.nuxeo.agentic.assets:OSGI-INF/media-delivery-listener.xml")
 @Deploy("org.nuxeo.agentic.assets.test:OSGI-INF/test-media-model-contrib.xml")
 @Deploy("org.nuxeo.agentic.assets.test:OSGI-INF/kit/media-demo-rights.xml")
+@Deploy("org.nuxeo.agentic.assets.test:OSGI-INF/test-media-other-contrib.xml")
 public class MediaDeliveryTest {
 
-    private static final LocalDate TODAY = LocalDate.now(ZoneOffset.UTC);
+    private final LocalDate today = LocalDate.now(ZoneOffset.UTC);
 
     /** The distribution coordinator who files deliveries. */
     private static final String FILER = "dana";
@@ -147,7 +149,7 @@ public class MediaDeliveryTest {
         assertEquals(french.getId(), delivery.getPropertyValue("mdlv:version"));
         assertEquals(FILER, delivery.getPropertyValue("mdlv:deliveredBy"));
         Calendar at = (Calendar) delivery.getPropertyValue("mdlv:deliveredAt");
-        assertEquals(TODAY, at.toInstant().atZone(ZoneOffset.UTC).toLocalDate());
+        assertEquals(today, at.toInstant().atZone(ZoneOffset.UTC).toLocalDate());
 
         List<Map<String, Serializable>> files = files(delivery);
         assertEquals(3, files.size());
@@ -212,13 +214,13 @@ public class MediaDeliveryTest {
      */
     @Test
     public void eachLocalisedVersionIsDecidedByItsOwnRights() {
-        french.setPropertyValue("dc:expired", midnightUtc(TODAY.minusDays(1)));
+        french.setPropertyValue("dc:expired", midnightUtc(today.minusDays(1)));
         session.saveDocument(french);
         commit();
         refused("rights-ended", () -> deliver(FILER, french, "Acme Suisse", "CH"));
         deliver(FILER, german, "Acme Suisse", "CH");
 
-        french.setPropertyValue("dc:expired", midnightUtc(TODAY.plusDays(365)));
+        french.setPropertyValue("dc:expired", midnightUtc(today.plusDays(365)));
         french.setPropertyValue("fver:channels", new String[] { "SVOD" });
         session.saveDocument(french);
         commit();
@@ -312,7 +314,7 @@ public class MediaDeliveryTest {
         delivery.setPropertyValue("mdlv:distributor", "Acme Distribution France");
         delivery.setPropertyValue("mdlv:territory", "FR");
         delivery.setPropertyValue("mdlv:deliveredBy", "someone else");
-        delivery.setPropertyValue("mdlv:deliveredAt", midnightUtc(TODAY.minusDays(400)));
+        delivery.setPropertyValue("mdlv:deliveredAt", midnightUtc(today.minusDays(400)));
         Map<String, Serializable> forged = new HashMap<>();
         forged.put("use", "original");
         forged.put("digest", "forged");
@@ -322,7 +324,7 @@ public class MediaDeliveryTest {
 
         DocumentModel kept = session.getDocument(delivery.getRef());
         assertEquals(FILER, kept.getPropertyValue("mdlv:deliveredBy"));
-        assertEquals(TODAY, ((Calendar) kept.getPropertyValue("mdlv:deliveredAt")).toInstant()
+        assertEquals(today, ((Calendar) kept.getPropertyValue("mdlv:deliveredAt")).toInstant()
                                                                                  .atZone(ZoneOffset.UTC)
                                                                                  .toLocalDate());
         assertEquals(3, files(kept).size());
@@ -330,8 +332,102 @@ public class MediaDeliveryTest {
     }
 
     /**
+     * Moved and trashed by an administrator only: its filer, who may write the folder, may do
+     * neither.
+     */
+    @Test
+    public void aDeliveryIsMovedOrTrashedByAnAdministratorOnly() {
+        DocumentModel delivery = deliver(FILER, french, "Acme Distribution France", "FR");
+        CoreSession filer = as(FILER);
+        DocumentModel archive = folder("/deliveries", "archive", "Archive");
+        commit();
+
+        refused("kept", () -> filer.move(delivery.getRef(), archive.getRef(), null));
+        refused("kept", () -> Framework.getService(TrashService.class).trashDocument(filer.getDocument(delivery.getRef())));
+        assertEquals("/deliveries/" + delivery.getName(), session.getDocument(delivery.getRef()).getPathAsString());
+        assertFalse(session.getDocument(delivery.getRef()).isTrashed());
+
+        session.move(delivery.getRef(), archive.getRef(), null);
+        commit();
+        assertEquals("/deliveries/archive/" + delivery.getName(),
+                session.getDocument(delivery.getRef()).getPathAsString());
+        Framework.getService(TrashService.class).trashDocument(session.getDocument(delivery.getRef()));
+        commit();
+        assertTrue(session.getDocument(delivery.getRef()).isTrashed());
+    }
+
+    /**
+     * A folder holding a delivery is not removed, trashed, moved or copied by anyone but an
+     * administrator: the platform does those to the folder's documents with no event of their own.
+     * A folder holding none is the folder's permissions' business.
+     */
+    @Test
+    public void aFolderHoldingADeliveryIsKeptWithIt() {
+        CoreSession filer = as(FILER);
+        DocumentModel batch = filer.createDocument(filer.createDocumentModel("/deliveries", "batch", "Folder"));
+        DocumentModel empty = filer.createDocument(filer.createDocumentModel("/deliveries", "empty", "Folder"));
+        commit();
+        deliver(FILER, "/deliveries/batch", french, "Acme Distribution France", "FR");
+
+        refused("kept", () -> filer.removeDocument(batch.getRef()));
+        refused("kept", () -> Framework.getService(TrashService.class).trashDocument(filer.getDocument(batch.getRef())));
+        refused("kept", () -> filer.move(batch.getRef(), empty.getRef(), null));
+        refused("kept", () -> filer.copy(batch.getRef(), new PathRef("/deliveries"), "batch-copy"));
+        assertEquals(1, deliveries());
+
+        filer.removeDocument(empty.getRef());
+        commit();
+        assertFalse(session.exists(empty.getRef()));
+
+        session.removeDocument(batch.getRef());
+        commit();
+        assertEquals(0, deliveries());
+    }
+
+    /** An import, which writes a document whole, is refused: a delivery is decided when it is filed. */
+    @Test
+    public void aDeliveryIsNotImported() {
+        DocumentModel imported = session.createDocumentModel("/deliveries", "imported", Deliveries.TYPE);
+        ((DocumentModelImpl) imported).setId(java.util.UUID.randomUUID().toString());
+        imported.setPropertyValue("mdlv:version", french.getId());
+        imported.setPropertyValue("mdlv:distributor", "Acme Distribution France");
+        imported.setPropertyValue("mdlv:territory", "DE");
+        imported.setPropertyValue("mdlv:deliveredBy", FILER);
+        refused("server-only", () -> session.importDocuments(List.of(imported)));
+        assertEquals(0, deliveries());
+    }
+
+    /**
+     * The document a version names for its windows must be of the type its policy says, there and
+     * live: another type that holds the same windows, a proxy of the film, and an id of nothing
+     * refuse, at the download endpoints and for a delivery.
+     */
+    @Test
+    public void aVersionsWindowsAreItsFilmsAlone() {
+        DocumentModel poster = session.createDocumentModel("/films", "poster", "NotAFilm");
+        poster.setPropertyValue("film:windows", session.getDocument(film.getRef()).getPropertyValue("film:windows"));
+        poster = session.createDocument(poster);
+        DocumentModel proxy = session.createProxy(film.getRef(), new PathRef("/versions"));
+        commit();
+        for (String named : List.of(poster.getId(), proxy.getId(), java.util.UUID.randomUUID().toString())) {
+            DocumentModel version = session.getDocument(french.getRef());
+            version.setPropertyValue("fver:film", named);
+            session.saveDocument(version);
+            commit();
+            assertFalse(named, download(french, MASTER));
+            refused("policy-error", () -> deliver(FILER, french, "Acme Distribution France", "FR"));
+        }
+        DocumentModel version = session.getDocument(french.getRef());
+        version.setPropertyValue("fver:film", film.getId());
+        session.saveDocument(version);
+        commit();
+        assertTrue(download(french, MASTER));
+        assertEquals(0, deliveries());
+    }
+
+    /**
      * Once made, a delivery's record is kept: its own properties are not written again, it is not
-     * copied, moved or trashed, and only an administrator deletes it. Its description may change.
+     * copied, and only an administrator deletes it. Its description may change.
      */
     @Test
     public void aDeliveryIsKept() {
@@ -408,7 +504,7 @@ public class MediaDeliveryTest {
         version.setPropertyValue("fver:language", language);
         version.setPropertyValue("fver:territories", territories.toArray(new String[0]));
         version.setPropertyValue("fver:channels", channels);
-        version.setPropertyValue("dc:expired", midnightUtc(TODAY.plusDays(rightsForDays)));
+        version.setPropertyValue("dc:expired", midnightUtc(today.plusDays(rightsForDays)));
         version.setPropertyValue("files:files", (Serializable) List.of(attachment("master of " + name),
                 attachment("subtitles of " + name), attachment("key art of " + name)));
         DocumentModel created = session.createDocument(version);
@@ -422,12 +518,12 @@ public class MediaDeliveryTest {
         return entry;
     }
 
-    private static Map<String, Serializable> window(String territory, String channel, Integer from, Integer until) {
+    private Map<String, Serializable> window(String territory, String channel, Integer from, Integer until) {
         Map<String, Serializable> window = new HashMap<>();
         window.put("territory", territory);
         window.put("channel", channel);
-        window.put("from", midnightUtc(TODAY.plusDays(from)));
-        window.put("until", until == null ? null : midnightUtc(TODAY.plusDays(until)));
+        window.put("from", midnightUtc(today.plusDays(from)));
+        window.put("until", until == null ? null : midnightUtc(today.plusDays(until)));
         return window;
     }
 
@@ -440,8 +536,13 @@ public class MediaDeliveryTest {
     }
 
     private DocumentModel deliver(String who, DocumentModel version, String distributor, String territory) {
+        return deliver(who, "/deliveries", version, distributor, territory);
+    }
+
+    private DocumentModel deliver(String who, String in, DocumentModel version, String distributor,
+            String territory) {
         CoreSession as = as(who);
-        DocumentModel delivery = as.createDocumentModel("/deliveries", "delivery-" + ++filed, Deliveries.TYPE);
+        DocumentModel delivery = as.createDocumentModel(in, "delivery-" + ++filed, Deliveries.TYPE);
         delivery.setPropertyValue("mdlv:version", version.getId());
         delivery.setPropertyValue("mdlv:distributor", distributor);
         delivery.setPropertyValue("mdlv:territory", territory);
@@ -459,13 +560,18 @@ public class MediaDeliveryTest {
         void run();
     }
 
-    /** The call is refused with {@code code}, and its transaction rolled back, as a request's is. */
+    /**
+     * The call is refused with {@code code}, the listener having marked the transaction for
+     * rollback, as a request's is, which this then rolls back.
+     */
     private static DeliveryRefusal refused(String code, Call call) {
         try {
             call.run();
         } catch (DeliveryRefusal refusal) {
+            boolean marked = TransactionHelper.isTransactionMarkedRollback();
             rollback();
             assertEquals(refusal.getMessage(), code, refusal.getCode());
+            assertTrue("the listener marks the transaction for rollback", marked);
             return refusal;
         }
         fail("not refused: " + code);

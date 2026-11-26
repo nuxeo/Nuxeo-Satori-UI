@@ -33,7 +33,7 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *
  * <pre>
  * &lt;territories xpath="fver:territories" /&gt;
- * &lt;windows xpath="film:windows" document="fver:film" /&gt;
+ * &lt;windows xpath="film:windows" document="fver:film" type="Film" /&gt;
  * &lt;delivery&gt;
  *   &lt;original /&gt;
  *   &lt;blob xpath="files:files/1/file" /&gt;
@@ -90,6 +90,10 @@ public class RightsPolicyDescriptor {
     @XNode("windows@document")
     protected String windowsDocumentXpath;
 
+    /** With {@link #windowsDocumentXpath}: the type that document must be, such as {@code Film}. */
+    @XNode("windows@type")
+    protected String windowsDocumentType;
+
     /** The files a delivery of the type carries. */
     @XNode("delivery")
     protected DeliveryDescriptor delivery;
@@ -140,6 +144,10 @@ public class RightsPolicyDescriptor {
 
     public String getWindowsDocumentXpath() {
         return windowsDocumentXpath;
+    }
+
+    public String getWindowsDocumentType() {
+        return windowsDocumentType;
     }
 
     public DeliveryDescriptor getDelivery() {

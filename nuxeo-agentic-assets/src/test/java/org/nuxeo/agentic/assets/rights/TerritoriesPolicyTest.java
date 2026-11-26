@@ -65,7 +65,7 @@ class TerritoriesPolicyTest {
                 <policy type="FilmVersion">
                 %s
                   <territories xpath="fver:territories" />
-                  <windows xpath="film:windows" document="fver:film" />
+                  <windows xpath="film:windows" document="fver:film" type="Film" />
                 %s
                 </policy>
                 """.formatted(RULES, extra));
@@ -86,6 +86,7 @@ class TerritoriesPolicyTest {
         assertEquals("fver:territories", policy.territoriesXpath());
         assertEquals("film:windows", policy.windowsXpath());
         assertEquals("fver:film", policy.windowsDocumentXpath());
+        assertEquals("Film", policy.windowsDocumentType());
         assertEquals(List.of(Use.ORIGINAL, Use.blob("files:files/1/file"), Use.blob("files:files/2/file")),
                 policy.delivery());
         assertFalse(policy.deliveryBroken());
@@ -108,7 +109,9 @@ class TerritoriesPolicyTest {
     void aTerritoryWithNoWindowOrAWindowWithNoTerritoryBreaksThePolicy() throws Exception {
         for (String half : List.of("<territories xpath=\"fver:territories\" />", "<windows xpath=\"film:windows\" />",
                 "<windows document=\"fver:film\" />",
-                "<territories xpath=\"fver:territories\" /><windows document=\"fver:film\" />")) {
+                "<territories xpath=\"fver:territories\" /><windows document=\"fver:film\" />",
+                // Windows from another document, of no type said: any document could lend its own.
+                "<territories xpath=\"fver:territories\" /><windows xpath=\"film:windows\" document=\"fver:film\" />")) {
             RightsPolicy policy = parse("<policy type=\"FilmVersion\">" + RULES + half + "</policy>");
             assertTrue(policy.broken(), half);
             assertFalse(policy.problems().isEmpty(), half);
@@ -265,6 +268,7 @@ class TerritoriesPolicyTest {
         assertEquals("fver:territories", kit.territoriesXpath());
         assertEquals("film:windows", kit.windowsXpath());
         assertEquals("fver:film", kit.windowsDocumentXpath());
+        assertEquals("Film", kit.windowsDocumentType());
         assertEquals("files:files/0/file", kit.originalXpath());
         assertEquals(List.of(Use.ORIGINAL, Use.blob("files:files/1/file"), Use.blob("files:files/2/file")),
                 kit.delivery());

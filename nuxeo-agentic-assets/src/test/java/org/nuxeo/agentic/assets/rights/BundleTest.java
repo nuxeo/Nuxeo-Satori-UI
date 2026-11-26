@@ -126,12 +126,12 @@ class BundleTest {
     }
 
     /**
-     * The delivery listener is synchronous, before the commit, on every event that could make,
-     * change, copy, move or remove a delivery; and a delivery is not versionable, so never checked
-     * in or restored.
+     * The delivery listener is synchronous, before the commit, on the events this list names, so that
+     * one dropped from the component is seen; and a delivery is not versionable. What it does on
+     * each is MediaDeliveryTest's, in a runtime.
      */
     @Test
-    void theDeliveryListenerHearsEveryWayADeliveryCouldBeMadeOrChanged() throws Exception {
+    void theDeliveryListenerIsSynchronousOnTheEventsItDecides() throws Exception {
         org.w3c.dom.Document xml = parse(resource("OSGI-INF/media-delivery-listener.xml"));
         NodeList listeners = xml.getElementsByTagName("listener");
         assertEquals(1, listeners.getLength());
@@ -145,7 +145,8 @@ class BundleTest {
             events.add(named.item(i).getTextContent());
         }
         assertEquals(List.of("aboutToCreate", "aboutToImport", "beforeDocumentModification", "aboutToRemove",
-                "aboutToMove", "aboutToCopy", "aboutToCheckIn", "beforeRestoringDocument", "documentTrashed"), events);
+                "aboutToMove", "aboutToCopy", "documentCreatedByCopy", "aboutToCheckIn", "beforeRestoringDocument",
+                "documentTrashed"), events);
 
         org.w3c.dom.Document types = parse(resource("OSGI-INF/media-delivery-types.xml"));
         Element doctype = (Element) types.getElementsByTagName("doctype").item(0);

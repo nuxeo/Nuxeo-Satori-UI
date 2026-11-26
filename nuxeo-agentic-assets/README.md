@@ -326,7 +326,7 @@ Automation operation and no button.
   <rightsEnd xpath="dc:expired" />
   <channels xpath="fver:channels" />
   <territories xpath="fver:territories" />
-  <windows xpath="film:windows" document="fver:film" />
+  <windows xpath="film:windows" document="fver:film" type="Film" />
   <original xpath="files:files/0/file" channel="SVOD" />
   <blob xpath="files:files/1/file" channel="SVOD" />
   <blob xpath="files:files/2/file" channel="Marketing" />

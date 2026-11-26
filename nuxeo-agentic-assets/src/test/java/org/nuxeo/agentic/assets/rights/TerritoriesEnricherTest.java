@@ -97,7 +97,7 @@ class TerritoriesEnricherTest {
     void windowsReadFromAnotherDocumentDecideAndAreNotWritten() throws Exception {
         AssetRightsComponent component = new AssetRightsComponent(Fakes.CLOCK, document -> document,
                 (container, types) -> false, (asset, policy) -> windows());
-        component.register(policy("<windows xpath=\"film:windows\" document=\"fver:film\" />"), "test");
+        component.register(policy("<windows xpath=\"film:windows\" document=\"fver:film\" type=\"Film\" />"), "test");
 
         assertEquals(JSON.readTree("""
                 { "assetRights": {

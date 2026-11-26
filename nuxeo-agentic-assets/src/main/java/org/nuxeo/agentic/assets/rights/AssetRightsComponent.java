@@ -270,7 +270,7 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
      * An asset's release windows: its own, at the policy's {@code <windows>}, or, when that names a
      * {@code document}, the windows of the document whose id the asset holds there, read with a
      * privileged session, since the asset's reader may not read it. That document must be there,
-     * live and not in the trash.
+     * live, not in the trash, and of the type the policy's {@code <windows type>} names.
      */
     static Serializable windowsOf(DocumentModel asset, RightsPolicy policy) {
         if (policy.windowsDocumentXpath() == null) {
@@ -293,6 +293,10 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
             DocumentModel holder = privileged.getDocument(ref);
             if (holder.isVersion() || holder.isProxy() || holder.isTrashed()) {
                 throw new IllegalStateException("the document " + id + " named for the release windows is not live");
+            }
+            if (!holder.getType().equals(policy.windowsDocumentType())) {
+                throw new IllegalStateException("the document " + id + " named for the release windows is not a "
+                        + policy.windowsDocumentType());
             }
             return holder.getPropertyValue(policy.windowsXpath());
         });

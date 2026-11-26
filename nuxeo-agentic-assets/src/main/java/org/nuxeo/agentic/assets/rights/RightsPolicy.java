@@ -79,6 +79,8 @@ public final class RightsPolicy {
 
     private final String windowsDocumentXpath;
 
+    private final String windowsDocumentType;
+
     /** The delivery package's files, in its order; {@code null} when the policy has none. */
     private final List<Use> delivery;
 
@@ -86,7 +88,7 @@ public final class RightsPolicy {
 
     private RightsPolicy(String type, String rightsEndXpath, String channelsXpath, String originalXpath,
             Map<Use, Rule> rules, List<String> problems, boolean broken, String territoriesXpath, String windowsXpath,
-            String windowsDocumentXpath, List<Use> delivery, boolean deliveryBroken) {
+            String windowsDocumentXpath, String windowsDocumentType, List<Use> delivery, boolean deliveryBroken) {
         this.type = type;
         this.rightsEndXpath = rightsEndXpath;
         this.channelsXpath = channelsXpath;
@@ -97,6 +99,7 @@ public final class RightsPolicy {
         this.territoriesXpath = territoriesXpath;
         this.windowsXpath = windowsXpath;
         this.windowsDocumentXpath = windowsDocumentXpath;
+        this.windowsDocumentType = windowsDocumentType;
         this.delivery = delivery == null ? null : List.copyOf(delivery);
         this.deliveryBroken = deliveryBroken;
     }
@@ -174,6 +177,12 @@ public final class RightsPolicy {
             problems.add("<windows document=\"...\"> with no xpath: every use is refused");
             broken = true;
         }
+        String windowsType = trimmed(descriptor.getWindowsDocumentType());
+        if (windowsDocument != null && windowsType == null) {
+            // Any document could then lend its windows: the one named must be of the type said.
+            problems.add("<windows document=\"...\"> with no type=\"...\" for that document: every use is refused");
+            broken = true;
+        }
         boolean territorial = territories != null && windows != null;
 
         List<Use> delivery = null;
@@ -185,7 +194,7 @@ public final class RightsPolicy {
         }
         return new RightsPolicy(type, rightsEnd, channels, originalXpath, rules, problems, broken,
                 territorial ? territories : null, territorial ? windows : null, territorial ? windowsDocument : null,
-                delivery, deliveryBroken);
+                territorial && windowsDocument != null ? windowsType : null, delivery, deliveryBroken);
     }
 
     /**
@@ -352,6 +361,14 @@ public final class RightsPolicy {
      */
     public String windowsDocumentXpath() {
         return windowsDocumentXpath;
+    }
+
+    /**
+     * The type the document named for the windows must be, such as {@code Film}; {@code null} when
+     * the windows are the asset's own.
+     */
+    public String windowsDocumentType() {
+        return windowsDocumentType;
     }
 
     /** The delivery package's files, in its order; {@code null} when the policy has no {@code <delivery>}. */

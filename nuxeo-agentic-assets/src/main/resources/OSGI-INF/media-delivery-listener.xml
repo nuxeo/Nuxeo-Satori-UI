@@ -8,7 +8,9 @@
     policy, as the asset rights service decides a download, for the delivery's territory. Refused
     whole, the request is rolled back and answered 403 with the server's reason, and nothing is
     written. It refuses, too, any later change to a delivery's own properties, a copy, an import, a
-    move, a trash and a deletion, but an administrator's deletion.
+    check-in and a restore; a move, a trash and a deletion but an administrator's; and, but an
+    administrator's, the removal, move, trash or copy of a folder holding a delivery, which the
+    platform does to the folder's documents with no event of their own.
   </documentation>
 
   <require>org.nuxeo.agentic.assets.delivery.types</require>
@@ -23,6 +25,7 @@
       <event>aboutToRemove</event>
       <event>aboutToMove</event>
       <event>aboutToCopy</event>
+      <event>documentCreatedByCopy</event>
       <event>aboutToCheckIn</event>
       <event>beforeRestoringDocument</event>
       <event>documentTrashed</event>

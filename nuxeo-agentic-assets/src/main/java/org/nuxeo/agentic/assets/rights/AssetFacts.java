@@ -78,13 +78,17 @@ public record AssetFacts(LocalDate rightsEnd, Set<String> channels, Set<String> 
     }
 
     /**
-     * Read from {@code document} at the policy's xpaths, its windows included.
+     * Read from {@code document} at the policy's xpaths, its windows included when they are its own.
      *
      * @throws IllegalStateException when a value is of a kind a rights end or a channel list cannot
      *             be, and whatever the document throws for a property its type does not have: the
-     *             caller refuses the use either way
+     *             caller refuses the use either way; and for a policy whose windows are another
+     *             document's, which only the rights service reads
      */
     public static AssetFacts read(DocumentModel document, RightsPolicy policy) {
+        if (policy.windowsDocumentXpath() != null) {
+            throw new IllegalStateException("the release windows are another document's: the rights service reads them");
+        }
         return read(document, policy.territorial() ? document.getPropertyValue(policy.windowsXpath()) : null, policy);
     }
 
