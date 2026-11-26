@@ -754,17 +754,20 @@ describe('DocumentLayoutService', () => {
       http.expectNone((r) => r.url.includes('/config/types/'));
     });
 
-    it('gives up on a type that never answers, so the page still reads its links', async () => {
+    it('gives up on a type that never answers, cancels it, and asks again the next time', async () => {
       vi.useFakeTimers();
       try {
         const answer = linked(['Move'], 'move:deliveredOn');
-        // The type's read is the session's, shared with the page's own: it is left running.
-        http.expectOne(TYPE('Move'));
+        const stalled = http.expectOne(TYPE('Move'));
         await vi.advanceTimersByTimeAsync(LAYOUT_LOAD_TIMEOUT_MS);
         expect(await answer).toBeNull();
+        expect(stalled.cancelled).toBe(true);
         expect(warnings).toContain(
-          '[agentic-ui-layouts] schemas of Move, which a show links to, not read: no response within 10 s',
+          '[agentic-ui-layouts] schemas of Move not read: no response within 10 s',
         );
+        const again = linked(['Move'], 'move:deliveredOn');
+        http.expectOne(TYPE('Move')).flush(MOVE);
+        expect(await again).toEqual({ schema: 'move', definition: { type: 'date' } });
       } finally {
         vi.useRealTimers();
       }

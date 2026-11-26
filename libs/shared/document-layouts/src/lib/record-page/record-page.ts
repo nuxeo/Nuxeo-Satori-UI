@@ -44,7 +44,7 @@ import {
   canWriteDocument,
   renderTrustedHtml,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { type Observable, forkJoin, map, merge, of, switchMap } from 'rxjs';
+import { type Observable, filter, forkJoin, map, merge, of, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
@@ -86,6 +86,7 @@ import {
   readLabels,
   recordLookups,
   recordReadOf,
+  type RecordRead,
   sameIds,
   sameLookups,
 } from './record-lookups';
@@ -574,17 +575,27 @@ export class RecordPageComponent {
    * yet shows nothing, never its id.
    */
   private readonly recordRead = recordReadOf(this.lookups);
+
+  /**
+   * Whether every `show` the page has now is known: its types read for this file, not only for the
+   * one drawn before it, as the designer's preview is drawn anew on every edit.
+   */
+  private readonly showsKnown = computed(() => {
+    const shows = this.shows();
+    return shows !== null && showEntries(this.layout()).every((entry) => shows.has(showKey(entry)));
+  });
+
   private readonly records = toSignal(
     toObservable(
-      computed(() => (this.shows() === null ? null : this.recordRead()), {
+      computed(() => (this.showsKnown() ? this.recordRead() : null), {
         equal: (a, b) =>
           a === b ||
           (a !== null && b !== null && sameIds(a.ids, b.ids) && sameIds(a.schemas, b.schemas)),
       }),
     ).pipe(
-      switchMap((read) =>
-        read === null ? of(NO_RECORDS) : this.linkedRecords.records(read.ids, read.schemas),
-      ),
+      // Until they are, the records read so far stay shown, and nothing is asked for.
+      filter((read): read is RecordRead => read !== null),
+      switchMap((read) => this.linkedRecords.records(read.ids, read.schemas)),
     ),
     { initialValue: NO_RECORDS },
   );

@@ -647,24 +647,17 @@ export class DocumentLayoutService {
    * record's type is, has a schema of `show`'s prefix with that property. `null` when none has it,
    * or none could be read, and the console says which. Never errors.
    *
-   * Each type's read is waited for {@link LAYOUT_LOAD_TIMEOUT_MS} at most: a page reads its linked
-   * records once these are known, its plain `document-link`s' titles included, so a type that never
-   * answers counts as one not read rather than keeping every link on the page blank.
+   * Each type's read is waited for {@link LAYOUT_LOAD_TIMEOUT_MS} at most, as every type's is: a
+   * page reads its linked records once these are known, its plain `document-link`s' titles
+   * included, so a type that never answers counts as one not read rather than keeping every link on
+   * the page blank, and is asked for again by the next page that needs it.
    */
   linkedProperty(types: readonly string[], show: string): Observable<LinkedProperty | null> {
     const wanted = [...new Set(types.filter((type) => typeof type === 'string' && type !== ''))];
     if (wanted.length === 0) return of(null);
     const prefix = prefixOfXpath(show);
     const name = show.slice(show.indexOf(':') + 1);
-    const read = (type: string): Observable<DocumentTypeDefinition | null> =>
-      this.documentType(type).pipe(
-        timeout(LAYOUT_LOAD_TIMEOUT_MS),
-        catchError((error: unknown) => {
-          warn(`schemas of ${type}, which a show links to, not read: ${describe(error)}`);
-          return of(null);
-        }),
-      );
-    return forkJoin(wanted.map(read)).pipe(
+    return forkJoin(wanted.map((type) => this.documentType(type))).pipe(
       map((definitions) => {
         for (const definition of definitions) {
           const schema = definition?.schemas.find((each) => each.prefix === prefix);
@@ -1162,6 +1155,9 @@ export class DocumentLayoutService {
           'fetch-schema': 'fields',
         })
         .pipe(
+          // As a schema's read is: a page waits for it, its linked records' reads included, and
+          // one that never answers is given up, cancelled and not kept, so the next asks again.
+          timeout(LAYOUT_LOAD_TIMEOUT_MS),
           map((raw) => {
             const definition = readDocumentType(raw, type);
             if (!definition) throw new Error('the response is not a document type');

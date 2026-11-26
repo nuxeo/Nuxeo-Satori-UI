@@ -265,6 +265,7 @@ describe('namesOf and recordIdsOf', () => {
     vocabulary: [],
     principals: [{ kind: 'user', id: user }],
     records,
+    schemas: [],
   });
 
   it('change only when their own half does, so labels and records are not read again for each other', () => {

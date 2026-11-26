@@ -815,6 +815,44 @@ describe('RecordPageComponent', () => {
       expect(linkedProperty).toHaveBeenCalledWith(['Member'], 'audit:checkedOn');
     });
 
+    it('reads nothing for a file drawn anew until its own shows are known, then each record once', async () => {
+      // The case manager's field holds a record's id, which the first file does not name.
+      await render(member({ 'member:referrer': WEI, 'member:caseManager': MARIA }), SHOW_PAGE);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      const pending = new Subject<{ schema: string; definition: LayoutFieldType } | null>();
+      linkedProperty = vi.fn(() => pending);
+      // A plain link to a record not read yet, and a show whose types are not read yet.
+      fixture.componentRef.setInput(
+        'layout',
+        layoutOf({
+          version: 2,
+          cards: [
+            {
+              id: 'links',
+              fields: [
+                { field: 'member:caseManager', widget: 'document-link' },
+                {
+                  id: 'checked',
+                  field: 'member:caseManager',
+                  widget: 'document-link',
+                  parameters: { types: ['Member'], show: 'audit:checkedOn' },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      pending.next(PLAN['audit:checkedOn']);
+      pending.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      // Read once, with the new file's schema, not first with the old file's and then again.
+      expect(linkedRecords.mock.calls.slice(1)).toEqual([[[MARIA], ['audit']]]);
+    });
+
     it("never pairs a file's show with what another file's read, as the page is drawn anew", async () => {
       const root = await render(member({ 'member:referrer': WEI }), SHOW_PAGE);
       expect(valueOf(root, 'member:referrer/plan:name')).toBe('Gold');

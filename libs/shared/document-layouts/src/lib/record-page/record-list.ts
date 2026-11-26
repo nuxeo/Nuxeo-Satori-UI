@@ -49,6 +49,7 @@ import {
 import {
   type Observable,
   catchError,
+  filter,
   forkJoin,
   map,
   merge,
@@ -89,6 +90,7 @@ import {
   readLabels,
   recordLookups,
   recordReadOf,
+  type RecordRead,
   sameIds,
   sameLookups,
 } from './record-lookups';
@@ -463,17 +465,27 @@ export class RecordListComponent {
    * columns' `show` read, once those are known, so that a record is read once with them.
    */
   private readonly recordRead = recordReadOf(this.lookups);
+
+  /** Whether every column's `show` is known: its types read for these columns. */
+  private readonly showsKnown = computed(() => {
+    const shows = this.shows();
+    return (
+      shows !== null &&
+      this.shownColumns().every((column) => showOf(column) === null || shows.has(showKey(column)))
+    );
+  });
+
   private readonly records = toSignal(
     toObservable(
-      computed(() => (this.shows() === null ? null : this.recordRead()), {
+      computed(() => (this.showsKnown() ? this.recordRead() : null), {
         equal: (a, b) =>
           a === b ||
           (a !== null && b !== null && sameIds(a.ids, b.ids) && sameIds(a.schemas, b.schemas)),
       }),
     ).pipe(
-      switchMap((read) =>
-        read === null ? of(NO_RECORDS) : this.linkedRecords.records(read.ids, read.schemas),
-      ),
+      // Until they are, the records read so far stay shown, and nothing is asked for.
+      filter((read): read is RecordRead => read !== null),
+      switchMap((read) => this.linkedRecords.records(read.ids, read.schemas)),
     ),
     { initialValue: NO_RECORDS },
   );
