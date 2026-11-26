@@ -1,0 +1,197 @@
+/* The capture page, phone first: one column, which a wider screen keeps to a readable width.
+   Nothing is wider than the narrowest phone, 320 CSS pixels, so the page never scrolls sideways. */
+:host {
+  display: block;
+  box-sizing: border-box;
+  max-width: 40rem;
+  padding-block: 16px 32px;
+  padding-inline: 16px;
+  color: var(--mat-sys-on-surface);
+}
+
+/* Each class twice: the theme's own heading and paragraph styles are as specific as one class. */
+.capture__title.capture__title {
+  margin: 0 0 4px;
+  font: var(--mat-sys-headline-small);
+  letter-spacing: normal;
+}
+
+.capture__intro.capture__intro,
+.capture__hint.capture__hint,
+.capture__message.capture__message {
+  margin: 0 0 12px;
+  font: var(--mat-sys-body-medium);
+  overflow-wrap: anywhere;
+}
+
+/* A hint, graded for text (AGENTS/08-bug-patterns.md, pattern 22). */
+.capture__hint.capture__hint {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.capture__section {
+  margin-block-start: 24px;
+}
+
+.capture__heading.capture__heading {
+  margin: 0 0 12px;
+  font: var(--mat-sys-title-medium);
+  letter-spacing: normal;
+
+  /* Focused by the page when a record opens, so that a screen reader goes on from there. */
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+.capture__find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+
+.capture__code {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.capture__find nxs-button {
+  /* Level with the field's outline, which its label sits in. */
+  margin-block-start: 8px;
+}
+
+.capture__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-block: 8px 12px;
+}
+
+.capture__record-title {
+  margin: 0;
+  font: var(--mat-sys-title-small);
+  overflow-wrap: anywhere;
+}
+
+.capture__record-number {
+  margin: 0 0 8px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.capture__record nxs-banner {
+  margin-block: 8px;
+}
+
+.capture__open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--mat-sys-primary);
+}
+
+.capture__choices,
+.capture__photos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capture__choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.capture__choice-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.capture__choice-number {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.capture__photo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+
+  &[data-state='failed'],
+  &[data-state='refused'] {
+    border-color: var(--mat-sys-error);
+  }
+}
+
+.capture__thumb {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--mat-sys-surface-container);
+}
+
+.capture__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.capture__photo-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.capture__photo-name {
+  font: var(--mat-sys-title-small);
+}
+
+.capture__photo-state {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  overflow-wrap: anywhere;
+}
+
+[data-state='failed'] .capture__photo-state,
+[data-state='refused'] .capture__photo-state {
+  color: var(--mat-sys-error);
+}
+
+.capture__remove {
+  flex: 0 0 auto;
+}
+
+.capture__note {
+  display: flex;
+  inline-size: 100%;
+}
+
+.capture__result {
+  margin-block-start: 12px;
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}

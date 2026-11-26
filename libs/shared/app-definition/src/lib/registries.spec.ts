@@ -127,6 +127,7 @@ describe('the JSON Schema, held to the registries and the validator', () => {
       ['bannerLink', LAYOUT_V2_KEYS.bannerLink],
       ['review', LAYOUT_V2_KEYS.review],
       ['shareLinks', LAYOUT_V2_KEYS.shareLinks],
+      ['capture', LAYOUT_V2_KEYS.capture],
       ['tab', LAYOUT_V2_KEYS.tab],
       ['card', LAYOUT_V2_KEYS.card],
       ['field', LAYOUT_V2_KEYS.field],

@@ -10384,9 +10384,22 @@ const DESIGNER_HTML = `<!-- Was a <mat-form-field> round a select matNativeContr
 <nxs-icon-button icon="arrow_up" [label]="up > 0 ? 'a' : 'b'" (press)="moveUp()" />
 `;
 
+/** The second listed feature, the capture page, on the controls from its start. */
+const CAPTURE = 'libs/features/capture/src/lib/capture-page';
+const CAPTURE_TS =
+  "import { MatProgressBarModule } from '@angular/material/progress-bar';\n" +
+  "import { NxsButtonComponent, NxsTextFieldComponent } from '@nuxeo/satori-platform/components';\n" +
+  'export class CapturePageComponent {}\n';
+const CAPTURE_HTML = `<nxs-text-field [label]="'capture.find.label' | translate" [(value)]="code" />
+<nxs-button appearance="filled" type="submit">{{ 'capture.find.submit' | translate }}</nxs-button>
+<mat-progress-bar mode="determinate" [value]="percent" />
+`;
+
 const controlsTree = (extra = {}) => ({
   [`${DESIGNER}/layout-designer-page.ts`]: DESIGNER_TS,
   [`${DESIGNER}/layout-designer-page.html`]: DESIGNER_HTML,
+  [`${CAPTURE}/capture-page.ts`]: CAPTURE_TS,
+  [`${CAPTURE}/capture-page.html`]: CAPTURE_HTML,
   ...extra,
 });
 
@@ -10462,6 +10475,17 @@ expectRed(
   }),
   null,
   /html:12 draws `matButton`[\s\S]*html:13 draws `matNativeControl`/,
+);
+
+expectRed(
+  'every listed feature is held, the capture page as well as the designer',
+  'checkNxsControlsNotBypassed',
+  controlsTree({
+    [`${CAPTURE}/capture-page.html`]:
+      CAPTURE_HTML + '<button mat-flat-button type="button">File</button>\n',
+  }),
+  null,
+  /capture-page\.html:4 draws `mat-flat-button`, Angular Material's own[\s\S]*libs\/features\/capture has moved onto the `nxs-` controls/,
 );
 
 expectRed(
