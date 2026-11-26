@@ -573,6 +573,20 @@ files itself.
 - operations (2 accounts);
 - licensed apparel, within brand and product DAM.
 
+**Built so far,** 26 November 2026: the phone capture app, as a page of the app, `/#/capture`
+([`libs/features/capture`](../../libs/features/capture/README.md)), not a native app: it needs only
+the phone's browser, signs in, times out and is permitted as the app is, and reaches the camera
+through the browser's file input. The person chooses the record by its number or barcode, typed,
+pasted or scanned by a scanner that types, by a link, or from the record page's link; takes photos
+with the camera or chooses them, looks them over, removes any, adds a note, and files them as the
+record's attachments, through the Attachments panel's upload, with its progress and a try again
+after a dropped connection that never files a photo twice. Each photo is drawn down to 3,072 pixels
+where larger, upright as its EXIF orientation says, and with its location taken out unless the
+layout keeps it. A type's `view` layout turns it on, `capture` (layout-v2.md, section 2), and the
+moves kit's damage claim does, since 0.3.0, so that a driver files a photo on the claim of the move
+by the move's number: demo step 5, run against a stand-in of the server at a phone's 320 pixels
+(`scripts/beta-harness/steps/capture-phone.mjs`). Not yet on a server, since no server has the kit.
+
 ### Phase 9. Media rights, records at scale (8 weeks)
 
 **Goal.** The most demanding rights, and the largest repositories.
