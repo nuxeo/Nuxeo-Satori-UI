@@ -1,0 +1,27 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.0 http://maven.apache.org/xsd/assembly-2.1.0.xsd">
+  <id>package</id>
+  <formats>
+    <format>zip</format>
+  </formats>
+  <includeBaseDirectory>false</includeBaseDirectory>
+
+  <files>
+    <!-- Marketplace metadata: package.xml with its version filled in, and install.xml. -->
+    <file>
+      <source>${project.build.directory}/package/package.xml</source>
+      <outputDirectory>/</outputDirectory>
+    </file>
+    <file>
+      <source>${project.build.directory}/package/install.xml</source>
+      <outputDirectory>/</outputDirectory>
+    </file>
+    <!-- The bundle this module's jar plugin built, under a name without the Maven version. -->
+    <file>
+      <source>${project.build.directory}/${project.build.finalName}.jar</source>
+      <outputDirectory>/install/bundles</outputDirectory>
+      <destName>nuxeo-agentic-signature.jar</destName>
+    </file>
+  </files>
+</assembly>

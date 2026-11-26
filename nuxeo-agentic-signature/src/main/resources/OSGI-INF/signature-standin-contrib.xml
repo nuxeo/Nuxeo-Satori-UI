@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.signature.standin" version="1.0">
+
+  <documentation>
+    The stand-in provider, for development and demonstration servers: it sends to the stand-in
+    e-signature service in the add-on's demo folder, which signs nothing for real. No vendor is
+    chosen (decision H). Registered, and inert: a server uses it only when its nuxeo.conf sets
+    nuxeo.agentic.signature.provider=standin and the stand-in's address, API key and callback
+    secret (the add-on's README).
+  </documentation>
+
+  <require>org.nuxeo.agentic.signature</require>
+
+  <extension target="org.nuxeo.agentic.signature" point="providers">
+    <provider id="standin" class="org.nuxeo.agentic.signature.standin.StandInProvider" />
+  </extension>
+
+</component>

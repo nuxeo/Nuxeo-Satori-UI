@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.signature" version="1.0">
+
+  <documentation>
+    The e-signature service: the providers a server may send files to, each registered here by an
+    id and a class implementing org.nuxeo.agentic.signature.SignatureProvider, and the one the
+    server uses, which its nuxeo.conf names in nuxeo.agentic.signature.provider. With none named,
+    or the one named not configured, nothing is sent and every request is refused. A provider's
+    own settings, its address and its credentials, are server settings, under
+    nuxeo.agentic.signature.(provider id).*, never in a contribution, a document or a request.
+
+    Each provider's callback is answered at /nuxeo/agentic-signature/callback/(provider id), by
+    CallbackServlet, with no sign-in: the provider authenticates it, and only then is it read.
+  </documentation>
+
+  <require>org.nuxeo.agentic.signature.schema</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <implementation class="org.nuxeo.agentic.signature.SignatureComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.signature.SignatureService" />
+  </service>
+
+  <extension-point name="providers">
+    <documentation>
+      An e-signature provider, by its id, 1 to 32 lower-case letters, digits and "-", starting with
+      a letter, which its callback path names, and its class. enabled="false" removes one.
+
+      <code>
+        <provider id="standin" class="org.nuxeo.agentic.signature.standin.StandInProvider" />
+      </code>
+    </documentation>
+    <object class="org.nuxeo.agentic.signature.ProviderDescriptor" />
+  </extension-point>
+
+</component>

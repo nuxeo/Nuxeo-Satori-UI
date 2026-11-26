@@ -20,6 +20,8 @@
     <module>nuxeo-agentic-records</module>
     <!-- The document control module's server add-on, with its own Marketplace package (decision B). -->
     <module>nuxeo-agentic-documents</module>
+    <!-- The e-signature step's server add-on, provider-neutral, with its own Marketplace package (decision B). -->
+    <module>nuxeo-agentic-signature</module>
     <module>nuxeo-agentic-ui-package</module>
   </modules>
 

@@ -278,6 +278,33 @@ way.
     requiring the module's, and the review would be switched on by a setting instead, off by
     default.
 
+- **B, the e-signature step's server add-on (26 November 2026).** Built against the
+  recommendation, "one add-on per domain module": the e-signature step is
+  [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [onboarding kit](../../business-apps/packages/onboarding-demo/README.md),
+  `onboarding-demo`, depends on; nothing of it went into `nuxeo-agentic-core`. A kit's record type
+  carries the add-on's `Signable` facet, its signature request type the `SignatureRequest` facet;
+  a request created by someone who may write its record sends the record's file to the provider
+  the server configures, and the provider's callback, authenticated, fresh and taken once, ends it
+  signed, the signed file filed on the record as a new version with the provider's evidence, or
+  declined. **Decision H is not taken, and waits for its owners:** the add-on is provider-neutral,
+  and its one provider is a stand-in that signs nothing, talking to a stand-in service, so a vendor
+  chosen with procurement and presales is a class registered at the add-on's `providers` point
+  and its server settings, and nothing else changes. Decision 3 is not touched: the add-on
+  registers no Automation operation, a person sends a file by creating a request, as every client
+  creates a document, and a workflow's chain may create one the same way. Its security review is
+  deferred until the app is finished, as every security review is; it is installed nowhere. What
+  changes if B goes another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, with its deployment
+    fragment, and the kit's `package.xml` depends on that package in place of
+    `nuxeo-agentic-signature`. The component, facet, schema and setting names do not change, so no
+    kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then answer the callback path,
+    `/nuxeo/agentic-signature/`, with no sign-in, and run the listener on every document change;
+    so the servlet would be switched on by a setting instead, off by default, and the facets would
+    stay, inert until a type carries one.
+
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
   serves some of an asset's picture views, and its original where its rights allow, watermarked on

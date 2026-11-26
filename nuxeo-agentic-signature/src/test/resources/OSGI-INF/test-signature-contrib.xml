@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- What a kit and a server give the add-on, for the tests: record types that can be sent for
+     signature, one with attachments and one with a main file, one that keeps no versions and one
+     that cannot be signed at all, a signature request type, and the add-on's key/value store in
+     memory. The stand-in provider's settings are the tests' own (Desk.configure). -->
+<component name="org.nuxeo.agentic.signature.test.contrib">
+
+  <require>org.nuxeo.agentic.signature</require>
+  <require>org.nuxeo.agentic.signature.schema</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <extension target="org.nuxeo.runtime.kv.KeyValueService" point="configuration">
+    <store name="agentic-signature" class="org.nuxeo.runtime.kv.MemKeyValueStore" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- An onboarding case, as the onboarding kit's: a record page with attachments, versionable. -->
+    <doctype name="TestCase" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="uid" />
+      <schema name="files" />
+      <facet name="Versionable" />
+      <facet name="Signable" />
+    </doctype>
+    <!-- A record whose main file is signed. -->
+    <doctype name="TestAgreement" extends="File">
+      <facet name="Signable" />
+    </doctype>
+    <!-- Signable, and keeps no versions: refused. -->
+    <doctype name="TestUnversioned" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <facet name="Signable" />
+    </doctype>
+    <!-- Not signable. -->
+    <doctype name="TestPlain" extends="File" />
+    <doctype name="TestRequest" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="SignatureRequest" />
+    </doctype>
+  </extension>
+
+</component>

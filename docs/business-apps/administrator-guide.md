@@ -18,6 +18,7 @@ wait for a security review, and some are built on open decisions
 | `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints and video operations, and an asset's share links             | Nothing                                                      | 0.3.0                            | Nowhere                                           |
 | `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page, kept per connector, and change events. **A bundle, no package yet**     | No package                                                   | 0.1.0, its jar 2026.0.2-SNAPSHOT | Nowhere                                           |
 | `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                            | Nowhere                                           |
+| `nuxeo-agentic-signature`   | The e-signature step: a record's file sent to its signers, the callback authenticated, the signed file filed. A stand-in provider only      | Nothing                                                      | 0.1.0                            | Nowhere                                           |
 | `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons              | `nuxeo-agentic-ui:2026.0.2`                                  | 0.7.0                            | 0.6.1 on the local server; 0.7.0 nowhere          |
 | `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.3.0`    | 0.2.4                            | 0.2.0 on the local server; 0.1.1 to 0.2.4 nowhere |
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                            | Nowhere                                           |
@@ -27,6 +28,7 @@ wait for a security review, and some are built on open decisions
 | `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents             | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                            | Nowhere                                           |
 | `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging              | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                            | Nowhere                                           |
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                            | Nowhere                                           |
+| `onboarding-demo`           | The onboarding kit: cases with their KYC checklist and an e-signature step, disputes, three queues                                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-signature:0.1.0` | 0.1.0                            | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -42,11 +44,13 @@ installed on any server yet"), and the kits' READMEs:
 [facilities](../../business-apps/packages/facilities-demo/README.md),
 [moves](../../business-apps/packages/moves-demo/README.md),
 [P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
-[controlled documents](../../business-apps/packages/controlled-documents-demo/README.md) and
-[records](../../business-apps/packages/records-demo/README.md); the
+[controlled documents](../../business-apps/packages/controlled-documents-demo/README.md),
+[records](../../business-apps/packages/records-demo/README.md) and
+[onboarding](../../business-apps/packages/onboarding-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
-and the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
-on any server").
+the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
+on any server") and the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
+("Nothing here is installed on any server").
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.
@@ -276,6 +280,9 @@ Two places, both the server's and never a package's:
 | `nuxeo.agentic.records.disposition.maxRecords`                                                                                       | 200                                       | The most records one disposition run holds, 1 to 1000, so that its disposal is one transaction of a bounded size                                                                                                                  |
 | `nuxeo.agentic.records.audit.export.settleSeconds`                                                                                   | 30                                        | How long after its period's end an audit export waits before it reads the audit, 0 to 600, so that the audit's last entries are in it                                                                                             |
 | `nuxeo.agentic.share.groups`                                                                                                         | Unset: administrators only                | The groups whose members may make share links, besides administrators, separated by commas ([below](#share-links))                                                                                                                | A link gives whoever holds it some of an asset's pictures, with no sign-in. The share links' security review is pending |
+| `nuxeo.agentic.signature.provider`                                                                                                   | Unset: every request refused, 503         | The e-signature provider requests are sent through, by its id: `standin`, the stand-in, is the only one there is, and signs nothing                                                                                               | For a demonstration server only                                                                                         |
+| The stand-in's `nuxeo.agentic.signature.standin.address`, `.apiKey`, `.callbackSecret` and `.callbackSecret.previous`                | Unset: not configured, nothing sent       | Its service's address (`https`, or `http` with `.http.allowed=true`), the key sent to it, and the secret its callbacks are signed with, 32 characters at least, and the one before while it is rotated                            | Never logged; the key and secrets also from the environment. Review pending                                             |
+| `nuxeo.agentic.signature.callback.window`                                                                                            | 300                                       | How far a callback's signed time may be from the server's, in seconds, 30 to 3600                                                                                                                                                 | A callback's id is kept twice as long                                                                                   |
 
 Sources, row by row:
 [`LayerSettings.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerSettings.java)
@@ -292,7 +299,10 @@ value";
 [`AgenticNotificationDocumentIdCodec.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/url/codec/AgenticNotificationDocumentIdCodec.java)
 and [`45-agentic-ui-url.sample.conf`](../../nuxeo-conf/45-agentic-ui-url.sample.conf);
 [`Disposition.java`](../../nuxeo-agentic-records/src/main/java/org/nuxeo/agentic/records/Disposition.java),
-where a value out of range is the default. The layer's
+where a value out of range is the default;
+[`SignatureSettings.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/SignatureSettings.java),
+[`StandInProvider.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/standin/StandInProvider.java)
+and [`SignatureComponent.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/SignatureComponent.java). The layer's
 two switches use Java's `Boolean.parseBoolean`, so `TRUE` counts too; `http.allowed` counts only
 `true`.
 
@@ -465,6 +475,7 @@ groups give them, and gets every diagnostic.
 | `pc-claims`, at `property-claims` | `property-claims-adjusters`, `property-claims-managers`     |
 | `controlled-documents`            | `document-controllers`, `engineers`                         |
 | `records`                         | `records-managers`, `records-approvers`                     |
+| `onboarding`                      | `onboarding-officers`, `kyc-analysts`, `dispute-analysts`   |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
@@ -723,7 +734,9 @@ outside a development or demonstration server.
   off; `nuxeo-agentic-assets` 0.2.0 and its share links, left off the local server because a share
   link is reached without signing in; Payers 0.7.0, with its appeal review workflow; brand assets
   0.2.1 to 0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs
-  only in its tests, and which needs `nuxeo-retention` from the Marketplace; every kit's removal.
+  only in its tests, and which needs `nuxeo-retention` from the Marketplace; `nuxeo-agentic-signature`
+  and the onboarding kit, the e-signature step run in its tests and against the stand-in service
+  only, decision H choosing no vendor yet; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push

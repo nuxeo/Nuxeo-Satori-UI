@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<fragment version="1">
+
+  <!--
+    The providers' callbacks, from the provider's servers, which have no account here. No
+    authentication filter is mapped on /agentic-signature/*, on purpose: each callback is
+    authenticated by its provider's scheme, a signature over its body made with a secret only the
+    server and the provider hold, compared in constant time, before anything of it is parsed
+    (CallbackEndpoint). The servlet mapping is more specific than Tomcat's default servlet, so the
+    servlet alone answers for this path, and nothing on the server's disk under it is served. The
+    server's filters on every path, its CORS and CSRF filter among them, still run: a provider's
+    request carries no Origin, which that filter lets through.
+  -->
+  <extension target="web#SERVLET">
+    <servlet>
+      <servlet-name>Agentic Signature Callbacks</servlet-name>
+      <servlet-class>org.nuxeo.agentic.signature.CallbackServlet</servlet-class>
+    </servlet>
+  </extension>
+
+  <extension target="web#SERVLET-MAPPING">
+    <servlet-mapping>
+      <servlet-name>Agentic Signature Callbacks</servlet-name>
+      <url-pattern>/agentic-signature/*</url-pattern>
+    </servlet-mapping>
+  </extension>
+
+</fragment>

@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "onboarding.nav.home", "icon": "home", "page": "home" },
+    {
+      "id": "open-cases",
+      "icon": "inbox",
+      "queue": "open-cases",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["onboarding-officers", "kyc-analysts"]
+      }
+    },
+    {
+      "id": "awaiting-signature",
+      "icon": "inbox",
+      "queue": "awaiting-signature",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["onboarding-officers"] }
+    },
+    {
+      "id": "open-disputes",
+      "icon": "inbox",
+      "queue": "open-disputes",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["dispute-analysts"] }
+    }
+  ]
+}
