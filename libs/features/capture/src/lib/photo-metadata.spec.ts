@@ -204,16 +204,7 @@ describe('what is kept is listed, and nothing else is', () => {
   const adobe = () =>
     segment(
       0xee,
-      new Uint8Array(
-        [...'Adobe'].map((c) => c.charCodeAt(0)),
-        0,
-        100,
-        0,
-        0,
-        0,
-        0,
-        1,
-      ),
+      new Uint8Array([...[...'Adobe'].map((c) => c.charCodeAt(0)), 0, 100, 0, 0, 0, 0, 1]),
     );
 
   it('reads a segment after fill bytes at its marker, and finds and strips it there', () => {
