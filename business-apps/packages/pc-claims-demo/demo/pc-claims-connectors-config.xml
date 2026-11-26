@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  The P&C claims kit's connector: a property claim's policy and payment, from the connectors' stand-in
+  core system (nuxeo-agentic-connectors/demo/core-system.mjs), by the claim's number. Fictional
+  data only. The kit only configures it: nothing here is installed anywhere.
+
+  Not in the package's bundle on purpose. It requires org.nuxeo.agentic.connectors, which has no
+  Marketplace package yet, so carried by the bundle it would stay pending on every server without
+  the add-on. For a demo server that has the add-on, drop this file into nxserver/config/, as
+  the add-on's own demo connector is (README.md, "Connecting the core system").
+
+  It reads PropertyClaim documents only, keyed on pclaim:number. The address is not written here:
+  it is the server property nuxeo.agentic.connectors.pcclaims.policyPayments.address, in
+  nuxeo.conf. Nor is the credential: it is the server property
+  nuxeo.agentic.connectors.pcclaims.policyPayments.token, else the environment variable
+  NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN. Without it the connector sends nothing.
+
+  registered.json, beside this file, lists the same fields for the package pipeline's --registered.
+-->
+<component name="nuxeo.config.pc-claims-demo.connectors" version="1.0">
+  <require>org.nuxeo.agentic.connectors</require>
+
+  <extension target="org.nuxeo.agentic.connectors" point="connectors">
+    <connector id="pcclaims.policyPayments">
+      <type>PropertyClaim</type>
+      <address property="nuxeo.agentic.connectors.pcclaims.policyPayments.address" />
+      <path>/claims/{key}</path>
+      <key xpath="pclaim:number" />
+      <permission>Read</permission>
+      <credential header="Authorization" prefix="Bearer " property="nuxeo.agentic.connectors.pcclaims.policyPayments.token"
+                  env="NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN" />
+      <connectTimeout>2000</connectTimeout>
+      <timeout>5000</timeout>
+      <maxBytes>65536</maxBytes>
+      <maxConcurrent>8</maxConcurrent>
+      <field name="policyStatus" pointer="/policy/status" />
+      <field name="policyNumber" pointer="/policy/number" />
+      <field name="deductibleMet" pointer="/policy/deductibleMet" />
+      <field name="paymentStatus" pointer="/payment/status" />
+      <field name="paidAmount" pointer="/payment/amount" />
+      <field name="paidOn" pointer="/payment/paidOn" />
+      <field name="paymentReference" pointer="/payment/reference" />
+    </connector>
+  </extension>
+</component>

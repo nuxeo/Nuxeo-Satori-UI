@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional propertyclaim schema of the PropertyClaim type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertyclaim"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/pc-claims-demo/propertyclaim">
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="policy" type="xs:string" />
+  <xs:element name="lossDate" type="xs:date" />
+  <xs:element name="cause">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Fire" />
+        <xs:enumeration value="Water" />
+        <xs:enumeration value="Wind" />
+        <xs:enumeration value="Hail" />
+        <xs:enumeration value="Theft" />
+        <xs:enumeration value="Vandalism" />
+        <xs:enumeration value="Other" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="lossLocation" type="xs:string" />
+  <xs:element name="lossDescription" type="xs:string" />
+  <xs:element name="reportedOn" type="xs:date" />
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Reported" />
+        <xs:enumeration value="Investigating" />
+        <xs:enumeration value="Approved" />
+        <xs:enumeration value="Denied" />
+        <xs:enumeration value="Closed" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="adjuster" type="xs:string" />
+  <xs:element name="reserve" type="xs:double" />
+  <xs:element name="denialReason" type="xs:string" />
+</xs:schema>

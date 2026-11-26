@@ -33,6 +33,7 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li><b>bob</b>, <b>carol</b> and <b>erin</b> approve them: ApproveDisposition.</li>
  * <li><b>dave</b> may read the folder and file in it, and holds neither permission.</li>
  * <li><b>grace</b> files audit exports: ExportRecordsAudit.</li>
+ * <li><b>frank</b> and <b>heidi</b> are clerks of the custody desk ({@link Physicals}).</li>
  * </ul>
  * Everyone named reads the records folder, but the record {@code unreadable}, which alice cannot.
  */
@@ -42,7 +43,7 @@ final class Fixtures {
 
     static final String RECORDS = "/records";
 
-    static final List<String> PEOPLE = List.of("alice", "bob", "carol", "dave", "erin", "grace");
+    static final List<String> PEOPLE = List.of("alice", "bob", "carol", "dave", "erin", "grace", "frank", "heidi");
 
     private Fixtures() {
     }
@@ -211,7 +212,12 @@ final class Fixtures {
         return file(admin, name, action, run.getId());
     }
 
-    /** What {@code action} is refused with: its code. The transaction is rolled back, as a request's is. */
+    /**
+     * What {@code action} is refused with: its code. The transaction is rolled back, as a request's is,
+     * and also when nothing refused it, so that the test fails there: left open, what the action wrote
+     * holds its rows while the framework empties the repository from another thread, and the run
+     * hangs instead.
+     */
     static String refused(Supplier<?> action) {
         try {
             action.get();
@@ -219,6 +225,7 @@ final class Fixtures {
             rollback();
             return refusal.getCode();
         }
+        rollback();
         fail("Not refused");
         return null;
     }

@@ -5,6 +5,7 @@
  * development plan's phase 10, "a release candidate across all kits").
  *
  *   node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]
+ *     (--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>] | --unsigned-kits)
  *
  * In order, each stage stopping the run when it refuses, the cheap ones first:
  *
@@ -20,7 +21,17 @@
  *      as it was there (`--export`). So step 3 refuses a version that did not move as far as its
  *      changes need, and an upgrade that does not keep every customer configuration, on the kit's
  *      side or the platform's (package-pipeline.md, section 10). A kit `--since` does not have is
- *      new, and held to nothing.
+ *      new, and held to nothing. Given `--signatures`, a folder of kits' signatures as the tag
+ *      builds made them, `<name>-<version>.zip.sig.json`, each kit's zip is held to its own
+ *      (`kitSignature`, `package-signature.mjs`), against `business-apps/trusted-signers.json` or
+ *      `--trusted-signers`: a kit unsigned, signed by no trusted signer, or signed over other bytes
+ *      or for another version refuses the candidate. `--trusted-root` is Sigstore's trusted root for
+ *      `gh attestation verify`, for a keyless signature checked offline. A signature made from a
+ *      commit that neither the candidate's history nor `origin/main`, which a ruleset protects,
+ *      holds is refused too (`inProtectedHistory`). The verified
+ *      signature is written beside the kit's zip. `--unsigned-kits` takes kits with no signature
+ *      instead, as every kit is until its first tag, and the manifest and the release note say so;
+ *      one of the two must be given.
  *   3. The kits as a set, read from the zips the pipeline wrote: no two contribute the same package
  *      name, app id, address, queue, action, component, document type, facet, schema, lifecycle,
  *      page provider, automation chain or operation, directory, workflow, layout, rights policy, or
@@ -95,12 +106,15 @@ import { fileURLToPath } from 'node:url';
 
 import { spawnToolSync } from './beta-harness/package-command.mjs';
 import { withoutCredentials } from './nuxeo-content-model.mjs';
+import { TRUSTED_SIGNERS, Usage, readTrustedSigners } from './package-signature.mjs';
 import { demoSteps, demoStepsMarkdown } from './release-candidate-demo.mjs';
 import {
   allowListArguments,
   bundleDifferences,
   descriptorOf,
   duplicatesAcross,
+  inProtectedHistory,
+  kitSignature,
   readKit,
   setProblems,
   uncommittedPaths,
@@ -119,9 +133,17 @@ const CLIENT_MODULE = 'apps/nuxeo-ui';
 const DEPLOYED_BUNDLE = ['web', 'nuxeo.war', 'agentic-ui'];
 const NOT_PACKAGED = 'agentic-ui-config';
 const USAGE =
-  'usage: node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]';
+  'usage: node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]\n' +
+  '         (--signatures <folder> [--trusted-signers <file>] [--trusted-root <file>] | --unsigned-kits)';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
-const VALUED = ['--out', '--since', '--version'];
+const VALUED = [
+  '--out',
+  '--since',
+  '--version',
+  '--signatures',
+  '--trusted-signers',
+  '--trusted-root',
+];
 /** A version Maven and a file name both take: digits, then a classifier. */
 const VERSION = /^[0-9]+(?:\.[0-9]+){0,2}(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?$/;
 
@@ -134,7 +156,9 @@ function parse(argv) {
     const arg = argv[index];
     // An empty value is refused, not taken as no option: `--since "$BASE"` unset would otherwise
     // hold no kit to anything.
-    if (
+    if (arg === '--unsigned-kits' && options['unsigned-kits'] === undefined)
+      options['unsigned-kits'] = true;
+    else if (
       VALUED.includes(arg) &&
       argv[index + 1] !== undefined &&
       argv[index + 1] !== '' &&
@@ -300,6 +324,38 @@ if (!version || !VERSION.test(version)) {
   );
   process.exit(2);
 }
+// The kits' signatures, when the candidate is to hold each kit to its own: a folder there, and
+// trusted signers that read, before anything is built.
+const signatures = options.signatures === undefined ? null : resolve(options.signatures);
+if (signatures === null && (options['trusted-signers'] || options['trusted-root'])) {
+  console.error(
+    `--trusted-signers and --trusted-root hold the kits to their signatures, which only --signatures gives.\n${USAGE}`,
+  );
+  process.exit(2);
+}
+// A candidate holds every kit to its signature unless it is told, in so many words, to take kits
+// no tag has signed: until the first tag, none has been.
+if ((signatures === null) === (options['unsigned-kits'] === undefined)) {
+  console.error(
+    `${signatures === null ? 'Give --signatures <folder>, to hold each kit to its signature, or --unsigned-kits, to take kits no tag has signed.' : '--signatures and --unsigned-kits say opposite things: give one.'}\n${USAGE}`,
+  );
+  process.exit(2);
+}
+if (signatures !== null && !statSync(signatures, { throwIfNoEntry: false })?.isDirectory()) {
+  console.error(`--signatures ${options.signatures} is not a folder.\n${USAGE}`);
+  process.exit(2);
+}
+let trusted = null;
+const trustedSigners = resolve(options['trusted-signers'] ?? TRUSTED_SIGNERS);
+if (signatures !== null) {
+  try {
+    trusted = readTrustedSigners(trustedSigners);
+  } catch (error) {
+    if (!(error instanceof Usage)) throw error;
+    console.error(`${error.message}\n${USAGE}`);
+    process.exit(2);
+  }
+}
 // The client is built with the Node that runs this, as Nx is started with it: the pinned one.
 const pinned = readFileSync(join(REPO, '.nvmrc'), 'utf8').trim().replace(/^v/, '').split('.')[0];
 if (process.versions.node.split('.')[0] !== pinned) {
@@ -420,7 +476,11 @@ async function build() {
 
 // ── 2. Every kit through the pipeline ─────────────────────────────────────────────────────────
 async function buildKits() {
-  stage(2, `Every kit through the pipeline, held to ${options.since}`);
+  stage(
+    2,
+    `Every kit through the pipeline, held to ${options.since}` +
+      (signatures === null ? '' : `, and to its signature in ${fromRepo(signatures)}`),
+  );
   const directories = readdirSync(PACKAGES, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
@@ -429,6 +489,8 @@ async function buildKits() {
   const kitsOut = join(out, 'kits');
   mkdirSync(kitsOut);
   const refused = [];
+  /** The kits not signed by a trusted signer over the zip built here, given `--signatures`. */
+  const unsigned = [];
   const kits = [];
   /** The platform as it was at `--since`, exported once for the upgrade check's platform side. */
   let platformBefore = null;
@@ -503,6 +565,35 @@ async function buildKits() {
     if (!existsSync(zip))
       throw new Refused(`stage 2: the pipeline passed ${name} and wrote no ${basename(zip)}.`);
     const changes = join(kitsOut, `${descriptor.name}-${descriptor.version}.changes.md`);
+    let signature = null;
+    if (signatures !== null) {
+      // gh, for a keyless signature, is started with no token: a bundle on disk needs none.
+      const held = kitSignature({
+        zip,
+        name: descriptor.name,
+        version: descriptor.version,
+        signatures,
+        trusted,
+        trustedRoot: options['trusted-root'],
+        env: childEnv(),
+        // The commit it was signed from, in the history the candidate is built from.
+        inHistory: (commit) => inProtectedHistory(commit, REPO),
+      });
+      await checkpoint();
+      if (!held.ok) {
+        process.stdout.write(
+          `${name}: not taken, for its signature, ${fromRepo(held.signature)}:\n`,
+        );
+        for (const problem of held.problems) process.stdout.write(`  - ${problem}\n`);
+        unsigned.push(`${descriptor.name} ${descriptor.version}`);
+      } else {
+        signature = { ...held.record, file: fromOut(join(kitsOut, basename(held.signature))) };
+        copyFileSync(held.signature, join(kitsOut, basename(held.signature)));
+        process.stdout.write(
+          `${name}: signed by ${signature.signer}, from ${signature.commit.slice(0, 12)}, over the zip built here.\n`,
+        );
+      }
+    }
     kits.push({
       directory,
       name: descriptor.name,
@@ -511,10 +602,15 @@ async function buildKits() {
       changes: existsSync(changes) ? fromOut(changes) : null,
       previous: previous?.version ?? null,
       allowList: allowList.length > 0 ? fromRepo(allowList[1]) : null,
+      signature,
     });
   }
   if (refused.length > 0)
     throw new Refused(`stage 2: the pipeline refused ${refused.join(', ')}, as above.`);
+  if (unsigned.length > 0)
+    throw new Refused(
+      `stage 2: ${unsigned.length} kit(s) not signed by a trusted signer over the zip built here: ${unsigned.join(', ')}, as above.`,
+    );
   // A kit `--since` had and this candidate has not: the release note says so. A folder some kit is
   // held to is that kit's, renamed, not removed.
   const listed = git(['ls-tree', '-d', '--name-only', sinceCommit, 'business-apps/packages/']);
@@ -825,6 +921,15 @@ function write({ kits, bundle, server, demo }) {
     }),
     ...kits.flatMap((kit) => [
       artifact('kit', { name: kit.name, version: kit.version }, join(out, kit.path)),
+      ...(kit.signature
+        ? [
+            artifact(
+              'kit signature',
+              { name: kit.name, version: kit.version, signer: kit.signature.signer },
+              join(out, kit.signature.file),
+            ),
+          ]
+        : []),
       ...(kit.changes
         ? [
             artifact(
@@ -846,6 +951,15 @@ function write({ kits, bundle, server, demo }) {
     commit: head,
     uncommitted,
     since: { ref: options.since, commit: sinceCommit },
+    // Whether each kit was held to its signature, and by whom it may be signed.
+    signatures:
+      signatures === null
+        ? { checked: false, unsignedKits: true }
+        : {
+            checked: true,
+            trustedSigners: fromRepo(trustedSigners),
+            signers: trusted.map((each) => each.id),
+          },
     platform: { name: platform.name, version: platform.version },
     artifacts,
     kits: kits.map((kit) => ({
@@ -856,6 +970,7 @@ function write({ kits, bundle, server, demo }) {
       platform: kit.read.app.platform,
       heldTo: kit.previous,
       allowList: kit.allowList,
+      signature: kit.signature,
       dependencies: kit.read.descriptor.dependencies,
       targetPlatform: kit.read.descriptor.targetPlatform,
     })),
@@ -871,7 +986,9 @@ function write({ kits, bundle, server, demo }) {
   writeFileSync(join(out, 'SHA256SUMS'), sums.join(''));
   process.stdout.write(
     `\nRelease candidate ${version} written to ${fromRepo(out)}: ${artifacts.length} artifacts in manifest.json, ` +
-      `${sums.length} files in SHA256SUMS, RELEASE-NOTES.md and DEMO-STEPS.md. Nothing was signed, tagged or published.\n`,
+      `${sums.length} files in SHA256SUMS, RELEASE-NOTES.md and DEMO-STEPS.md. ` +
+      `${signatures === null ? 'Its kits were taken unsigned (--unsigned-kits). ' : `Each of the ${kits.length} kits was held to its signature. `}` +
+      'Nothing was signed, tagged or published.\n',
   );
 }
 
@@ -883,7 +1000,10 @@ function releaseNotes({ kits, bundle, server }) {
     `Assembled offline from ${head?.slice(0, 12) ?? 'no commit'}` +
       `${uncommitted.length > 0 ? `, with ${uncommitted.length} uncommitted path(s) listed in manifest.json` : ''}, ` +
       `and compared with --since, ${options.since} (${sinceCommit.slice(0, 12)}). Not signed, ` +
-      'not published, and installed on no server.',
+      'not published, and installed on no server. ' +
+      (signatures === null
+        ? 'Its kits were taken unsigned, with --unsigned-kits: no kit was held to a signature.'
+        : `Each kit was held to its signature, by the trusted signers in \`${fromRepo(trustedSigners)}\`.`),
     '',
     '## The platform',
     '',
@@ -906,6 +1026,13 @@ function releaseNotes({ kits, bundle, server }) {
   ];
   for (const kit of kits) {
     lines.push(`### ${kit.name} ${kit.version}`, '');
+    if (kit.signature !== null)
+      lines.push(
+        `Signed by ${kit.signature.signer}, from ${kit.signature.commit.slice(0, 12)}` +
+          `${kit.signature.kind === 'github-workflow' ? `, by ${kit.signature.workflow} for ${kit.signature.ref}` : ''}: ` +
+          'the signature is over the zip this candidate built.',
+        '',
+      );
     if (kit.allowList !== null)
       lines.push(
         `Built against its deployment's allow-list, \`${kit.allowList}\`, as app-packages.yml builds it. ` +

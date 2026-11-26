@@ -245,17 +245,25 @@ way.
   add-on's `ReviewComment` facet, and the cycle closes only with none open, the server's check, and
   is then recorded on the revision. Two more synchronous listeners, not a route model, and still no
   operation, so decision 3 is not touched ([the add-on's README](../../nuxeo-agentic-documents/README.md#transmittals-and-review-cycles-listeners-not-a-route-model)
-  says why). Export-control marks are not built, nor outside users (decision C): a transmittal to
-  an outside contractor waits on the portal. What changes if B goes another way:
+  says why). **Since its version 0.3.0, export-control marks,** in the same add-on, with the kit's
+  0.3.0: a revision's classification and the groups that may receive it, in a third schema of the
+  `ControlledDocument` facet; its files and renditions refused to anyone outside those groups
+  through the platform's download permission, as the assets add-on refuses on rights, and a
+  transmittal of it refused by the transmittal listener; the mark carried to the revision that
+  supersedes it; a change of it held to the add-on's own permission, `ChangeExportMark`, and written
+  to the platform's audit. Still no operation, so decision 3 is not touched. Outside users are not
+  built (decision C): a transmittal to an outside contractor waits on the portal, and a mark's groups
+  are the server's. What changes if B goes another way:
   - **One large add-on:** the module's bundle moves into that add-on's package as it is, and the
     kit's `package.xml` depends on that package in place of `nuxeo-agentic-documents`. The
-    component a kit's series require, `org.nuxeo.agentic.documents`, the facets and the schemas
-    (`docctl`, `docrev`, `trm`, `trr`, `rvw`, `rvwc`) do not change, so no kit's files do.
+    component a kit's series require, `org.nuxeo.agentic.documents`, the facets, the schemas
+    (`docctl`, `docrev`, `docmark`, `trm`, `trr`, `rvw`, `rvwc`) and the permission,
+    `ChangeExportMark`, do not change, so no kit's files do.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
     dropped from the kit, and every server then gets the facets, the schemas and the listeners,
     which number, issue and review nothing until a type carries a facet and a package registers a
     series. Every comment written on such a server then costs the review listener a look at its
-    ancestors.
+    ancestors, and every download the marks' permission a look at its document's facets.
   - **Not affected either way:** layout version 2's banner `link`, which the kit's record page
     uses, is the platform's ([layout-v2.md](layout-v2.md), section 2), and links any record a
     property names; and its comments card, where a cycle's reviewers write, is the platform's too.
@@ -273,7 +281,13 @@ way.
   is finished, as every security review is; it is installed nowhere. Its 0.2.0 adds the audit export
   and access logging in the same add-on, still with no operation and no endpoint: an export is a
   document filed in the same folder, and a view is logged by the REST API's own JSON writer for a
-  document, which the add-on extends. What changes if B goes another way:
+  document, which the add-on extends. Its 0.3.0 adds physical records, with locations, barcodes the
+  server issues from the platform's sequencer, and a chain of custody, in the same add-on and with
+  the kit's 0.2.0, still with no operation and no endpoint: a move, a check-out or a return is a
+  document filed in a custody desk at the repository's root, which a second listener checks, and a
+  run records a physical record's destruction or transfer rather than deleting it. The kit's barcode
+  lookup is a queue with a search, the platform's, configuration and no code of the kit's. What
+  changes if B goes another way:
   - **One large add-on:** the bundle moves into that add-on's package as it is, with its dependency
     on `nuxeo-retention`, and the kit's `package.xml` depends on that package in place of
     `nuxeo-agentic-records`. The type, schema and permission names do not change.
@@ -281,6 +295,33 @@ way.
     stay unresolved on a server without the retention module; so the records types would stop
     requiring the module's, and the review would be switched on by a setting instead, off by
     default.
+
+- **B, the e-signature step's server add-on (26 November 2026).** Built against the
+  recommendation, "one add-on per domain module": the e-signature step is
+  [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [onboarding kit](../../business-apps/packages/onboarding-demo/README.md),
+  `onboarding-demo`, depends on; nothing of it went into `nuxeo-agentic-core`. A kit's record type
+  carries the add-on's `Signable` facet, its signature request type the `SignatureRequest` facet;
+  a request created by someone who may write its record sends the record's file to the provider
+  the server configures, and the provider's callback, authenticated, fresh and taken once, ends it
+  signed, the signed file filed on the record as a new version with the provider's evidence, or
+  declined. **Decision H is not taken, and waits for its owners:** the add-on is provider-neutral,
+  and its one provider is a stand-in that signs nothing, talking to a stand-in service, so a vendor
+  chosen with procurement and presales is a class registered at the add-on's `providers` point
+  and its server settings, and nothing else changes. Decision 3 is not touched: the add-on
+  registers no Automation operation, a person sends a file by creating a request, as every client
+  creates a document, and a workflow's chain may create one the same way. Its security review is
+  deferred until the app is finished, as every security review is; it is installed nowhere. What
+  changes if B goes another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, with its deployment
+    fragment, and the kit's `package.xml` depends on that package in place of
+    `nuxeo-agentic-signature`. The component, facet, schema and setting names do not change, so no
+    kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then answer the callback path,
+    `/nuxeo/agentic-signature/`, with no sign-in, and run the listener on every document change;
+    so the servlet would be switched on by a setting instead, off by default, and the facets would
+    stay, inert until a type carries one.
 
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
@@ -322,6 +363,53 @@ way.
     server's configuration, and does not pass the reader's sign-in on. So the other system's own
     access rules are not applied reader by reader: whoever may read the record sees its connector's
     fields. Token exchange, decision F, is what would change that.
+
+- **D, the connectors add-on's caching and change events (26 November 2026).** Built against the
+  same recommendation: the add-on's version 0.1.0 keeps `Connector.Read`'s answers for a time each
+  server sets per connector, and takes the system of record's signed change events at
+  `/nuxeo/agentic-connectors/events/<connector>`, which drop the answers kept for a record and do
+  nothing else ([the connectors README](../../nuxeo-agentic-connectors/README.md#the-cache)). The
+  reader is not in the cache's key: every check runs before the lookup, and the answer does not
+  depend on who reads, since F is not touched. Outbound webhooks are not built. What changes if D
+  goes another way:
+  - **A separate integration service, reached through Nuxeo:** the service may keep answers and
+    take events itself; `Connector.Read` keeps its checks before any kept answer, and the card,
+    which reads `age`, does not change.
+  - **A separate service the client calls itself:** the cache and the events move to the service,
+    and the card reads the same `age` from it.
+  - **If F passes the reader's identity on,** the reader joins the cache's key.
+
+- **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
+  "exchange in phase 7": a record page's panel inside another system's page,
+  [embedded-panels.md](embedded-panels.md), and its server's half,
+  [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md). A host the server's
+  administrators register in `nxserver/config/`, never a package's bundle, exchanges its signed
+  assertion of a user for a short-lived token, for the Nuxeo user its configuration maps, never an
+  administrator unless it allows one; an OAuth 2.0 token exchange (RFC 8693), with the host's client
+  secret and key in the server's settings. The token is a JWT signed with a key of the add-on's own,
+  not the platform's `nuxeo.jwt.secret`, whose tokens the platform also takes at its JWT
+  authenticator and its OAuth 2.0 provider's JWT bearer grant; the add-on's own authenticator signs
+  the user in with it, in the REST API's two chains alone, which the add-on contributes again with it, and
+  the add-on's filter and that authenticator hold it to its host's origins and to reads; each exchange
+  is audited. The panel, `<nuxeo-record-panel>`, is
+  the layout engine's record page in a shadow root, given its token by `postMessage`. An add-on of
+  its own rather than `nuxeo-agentic-core`, so that a server that embeds no panel gets no endpoint;
+  on B's recommendation either way, since it is no runtime essential of every server. Its security
+  review is deferred until the app is finished, as every security review is; it is installed
+  nowhere, and its demo runs against a stand-in. The shell's token-based sign-in, the decision's
+  other half, is not touched: the shell signs in as before. What changes if F goes another way:
+  - **No token exchange:** the add-on and `apps/nuxeo-embedded-panels` go, with the package's
+    `embedded/v1/` files and the frontend module's build of them; nothing else uses either.
+  - **Exchange through Nuxeo's OAuth 2.0 provider,** should the platform gain a token exchange whose
+    tokens carry a scope it enforces: the add-on's servlet, `TokenExchange`, its codec and its
+    authenticator go, the host's contribution becomes the provider's client, and the REST API's chains
+    go back to the platform's. The panel does not change.
+  - **The platform's own JWT, with an audience the platform holds to a path:** not built, since the
+    provider's JWT bearer grant takes any token of the platform's JWT service and answers an access
+    token with no scope; it would be possible only once that grant checks a token's audience.
+  - **Connectors, decision D:** the panel's card from another system still reads through
+    `Connector.Read` with the service credential; passing the user's own identity on to the other
+    system is not built.
 
 - **5, the spike its recommendation asks for (25 November 2026).** Built as the recommendation
   says, "spike in phase 6": a prototype loader in `tools/plugin-spike`, which ships nothing, and

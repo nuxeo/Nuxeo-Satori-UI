@@ -10,6 +10,13 @@
     nothing is written. An audit export filed there is checked the same way, and, once created, made
     readable by its filer alone. It refuses, too, every other change to the add-on's documents but its
     own.
+
+    Physical records have a listener of their own, the same way in: a PhysicalRecord is given its
+    barcode and its first custody entry as it is made, a PhysicalLocation its place in the
+    hierarchy, and a CustodyRequest filed in the CustodyDesk moves, checks out or returns a record,
+    inside the same lock as a disposition request, so that a run never disposes of a record being
+    moved. It refuses every other change to what the server writes of them, and copying or
+    deleting a folder that would take them along.
   </documentation>
 
   <require>org.nuxeo.agentic.records.types</require>
@@ -17,6 +24,19 @@
   <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
     <listener name="agenticRecordsDisposition" async="false" postCommit="false" priority="50"
       class="org.nuxeo.agentic.records.DispositionListener">
+      <event>aboutToCreate</event>
+      <event>aboutToImport</event>
+      <event>documentCreated</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>aboutToMove</event>
+      <event>aboutToCopy</event>
+      <event>aboutToCheckIn</event>
+      <event>beforeRestoringDocument</event>
+      <event>documentTrashed</event>
+    </listener>
+    <listener name="agenticRecordsPhysical" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.records.PhysicalListener">
       <event>aboutToCreate</event>
       <event>aboutToImport</event>
       <event>documentCreated</event>

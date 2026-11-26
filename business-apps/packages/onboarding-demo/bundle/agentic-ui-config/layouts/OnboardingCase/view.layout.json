@@ -1,0 +1,190 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "out-for-signature",
+      "tone": "info",
+      "labelKey": "onboarding.banner.case.outForSignature",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sgn:status" }, "sent"]
+      }
+    },
+    {
+      "id": "declined",
+      "tone": "warning",
+      "labelKey": "onboarding.banner.case.declined",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sgn:status" }, "declined"]
+      }
+    },
+    {
+      "id": "high-risk",
+      "tone": "negative",
+      "labelKey": "onboarding.banner.case.highRisk",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "onb:riskRating" }, "High"] },
+          {
+            "type": "core.not",
+            "parameters": [
+              {
+                "type": "app.rules.fieldIn",
+                "parameters": [{ "field": "onb:status" }, "Approved", "Declined"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "case",
+      "labelKey": "onboarding.card.onboardingCase.case",
+      "fields": [
+        "onb:number",
+        { "field": "dc:title", "labelKey": "onboarding.field.caseTitle" },
+        "onb:customer",
+        {
+          "field": "onb:customerType",
+          "widget": "status-badge",
+          "parameters": { "tones": { "Individual": "neutral", "Business": "info" } }
+        },
+        "onb:country",
+        "onb:product",
+        {
+          "field": "onb:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Open": "info",
+              "KYC review": "warning",
+              "Awaiting signature": "warning",
+              "Approved": "positive",
+              "Declined": "negative"
+            }
+          }
+        },
+        {
+          "field": "onb:riskRating",
+          "widget": "status-badge",
+          "parameters": { "tones": { "Low": "positive", "Medium": "warning", "High": "negative" } }
+        },
+        { "field": "onb:openedOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysOpen",
+          "widget": "number",
+          "labelKey": "onboarding.field.daysOpen",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "onb:openedOn" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "core.not",
+            "parameters": [
+              {
+                "type": "app.rules.fieldIn",
+                "parameters": [{ "field": "onb:status" }, "Approved", "Declined"]
+              }
+            ]
+          }
+        },
+        { "field": "onb:officer", "widget": "user" }
+      ]
+    },
+    {
+      "id": "kyc",
+      "labelKey": "onboarding.card.onboardingCase.kyc",
+      "checklist": {
+        "field": "kyc:checklist",
+        "tickable": true,
+        "items": [
+          { "id": "identity", "labelKey": "onboarding.kyc.identity" },
+          { "id": "address", "labelKey": "onboarding.kyc.address" },
+          { "id": "sanctions", "labelKey": "onboarding.kyc.sanctions" },
+          { "id": "pep", "labelKey": "onboarding.kyc.pep" },
+          { "id": "sourceOfFunds", "labelKey": "onboarding.kyc.sourceOfFunds" },
+          { "id": "riskApproved", "labelKey": "onboarding.kyc.riskApproved" }
+        ]
+      }
+    },
+    {
+      "id": "signature",
+      "labelKey": "onboarding.card.onboardingCase.signature",
+      "fields": [
+        {
+          "field": "sgn:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "sent": "warning",
+              "signed": "positive",
+              "declined": "negative",
+              "cancelled": "neutral"
+            }
+          }
+        },
+        { "field": "sgn:signers", "widget": "chips" },
+        { "field": "sgn:sentAt", "widget": "relative-date" },
+        { "field": "sgn:completedAt", "widget": "relative-date" },
+        {
+          "field": "sgn:request",
+          "widget": "document-link",
+          "parameters": { "types": ["ESignatureRequest"] }
+        }
+      ]
+    },
+    {
+      "id": "attachments",
+      "labelKey": "onboarding.card.onboardingCase.attachments",
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "signature-requests",
+      "labelKey": "onboarding.card.onboardingCase.requests",
+      "span": 2,
+      "related": {
+        "pageProvider": "onboarding_case_signatures",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          { "field": "dc:title", "labelKey": "onboarding.field.requestTitle" },
+          "sigreq:sentFileName",
+          {
+            "field": "sigreq:status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "sent": "warning",
+                "signed": "positive",
+                "declined": "negative",
+                "cancelled": "neutral"
+              }
+            }
+          },
+          { "field": "sigreq:requestedBy", "widget": "user" },
+          { "field": "sigreq:requestedAt", "widget": "relative-date" },
+          { "field": "sigreq:completedAt", "widget": "relative-date" }
+        ],
+        "sort": [{ "field": "sigreq:requestedAt", "order": "desc" }],
+        "pageSize": 10
+      }
+    },
+    {
+      "id": "notes",
+      "labelKey": "onboarding.card.onboardingCase.notes",
+      "span": 2,
+      "fields": [{ "field": "onb:notes", "widget": "long-text" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "onboarding.card.onboardingCase.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

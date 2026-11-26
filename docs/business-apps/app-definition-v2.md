@@ -191,6 +191,31 @@ demo/                                starter kits only; not checked
 - **`visibleWhen`** decides who sees the queue. Hiding a queue is not a security control: the page
   provider still returns only what the person may read.
 - **A queue needs a name:** `label` or `labelKey`.
+- **`search`** makes the queue one a person searches rather than browses: a text field above its
+  list, named by the search's `label` or `labelKey`, with a Search button. **Added on 26 November
+  2026** for the records kit's barcode lookup
+  ([its README](../../business-apps/packages/records-demo/README.md)):
+
+  ```json
+  {
+    "version": 2,
+    "labelKey": "records.queue.barcode-lookup",
+    "pageProvider": "records_physical_by_barcode",
+    "search": { "labelKey": "records.lookup.barcode", "open": "single" },
+    "columns": ["phys:barcode", "dc:title", "phys:locationPath"]
+  }
+  ```
+
+  The text, trimmed, is the page provider's **last parameter**, after the queue's own
+  `parameters`: its query has one `?` more than they fill, `phys:barcode = ?` here. Nuxeo quotes a
+  parameter as a literal before it reaches the query. Nothing is asked of the page provider until
+  the person searches: the page says what to do instead, and an empty text is no search. Enter in
+  the field searches, as a barcode scanner presses it after a code. **`"open": "single"`**: a
+  search whose results are one record alone opens that record's page, as a row does; one that
+  finds none says so, and one that finds several lists them. A preview, the layout designer's,
+  never opens one. The search's only keys are `label`, `labelKey` and `open`, whose only value is
+  `single`; a finding in the search refuses the queue, since without its search the page provider
+  would be asked with a parameter too few.
 
 ### Where the app reads it
 

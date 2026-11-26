@@ -23,6 +23,14 @@ class ConnectorTest {
         return assertThrows(IllegalArgumentException.class, () -> Connector.of(d)).getMessage();
     }
 
+    /** The test connector under another id, with its address property under that id. */
+    private static Connector named(String id) {
+        ConnectorDescriptor d = Fixtures.descriptor();
+        d.id = id;
+        d.addressProperty = Connector.PROPERTY_PREFIX + id + ".address";
+        return Connector.of(d);
+    }
+
     @Test
     void aSoundDescriptorTakesTheDefaults() {
         Connector connector = Connector.of(Fixtures.descriptor());
@@ -157,6 +165,39 @@ class ConnectorTest {
         assertTrue(refused.contains("<credential env>"), refused);
         assertTrue(refusal(d -> d.id = "test.http").contains("its id"));
         assertEquals("NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_", Connector.envPrefix("payers.claim-payments"));
+    }
+
+    /**
+     * The server's own settings for a connector are two names under its prefix. A connector whose id
+     * ended in the first of them would hold the second as a name of its own: {@code test.events}'s
+     * credential {@code secret} is {@code test}'s events secret, sent to {@code test.events}'s address.
+     */
+    @Test
+    void noIdEndsWhereTheServersOwnSettingsForAnotherBegin() {
+        Connector test = named("test");
+        for (String server : List.of(test.httpAllowedProperty(), test.cacheTtlProperty(),
+                test.cacheMaxEntriesProperty(), test.eventsSecretProperty())) {
+            String segment = server.substring((Connector.PROPERTY_PREFIX + "test.").length()).split("\\.")[0];
+            String refused = refusal(d -> {
+                Fixtures.withCredential(d);
+                d.id = "test." + segment;
+                d.addressProperty = Connector.PROPERTY_PREFIX + "test." + segment + ".address";
+                d.credentialProperty = server;
+                d.credentialEnv = null;
+            });
+            assertTrue(refused.contains("its id"), server + ": " + refused);
+            assertTrue(refused.contains(".http, .cache or .events"), refused);
+        }
+        assertEquals("nuxeo.agentic.connectors.test.events.secret", test.eventsSecretProperty());
+        // Nor can the connector itself name them: they are two names under its prefix, not one.
+        String own = refusal(d -> {
+            Fixtures.withCredential(d);
+            d.credentialProperty = Fixtures.EVENTS_SECRET;
+        });
+        assertTrue(own.contains("<credential property>"), own);
+        // A segment that only starts like one is a name like any other.
+        assertEquals("test.cached", named("test.cached").id());
+        assertEquals("test.eventsLog", named("test.eventsLog").id());
     }
 
     @Test

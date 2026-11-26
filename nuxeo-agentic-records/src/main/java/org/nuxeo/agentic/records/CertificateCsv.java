@@ -19,6 +19,9 @@ import java.util.List;
  * <li>Times are UTC instants, ISO 8601.</li>
  * <li>A field that starts with {@code =}, {@code +}, {@code -}, {@code @}, a tab or a carriage
  * return starts with {@code '} instead, so that no spreadsheet reads a title as a formula.</li>
+ * <li>{@code disposition} is each record's: {@code deleted} for an electronic record, deleted
+ * permanently, and for a physical one {@code destroyed} or {@code transferred}, to
+ * {@code transferred_to}, its document kept. {@code barcode} is a physical record's.</li>
  * </ul>
  */
 final class CertificateCsv {
@@ -26,7 +29,7 @@ final class CertificateCsv {
     static final List<String> HEADER = List.of("run_number", "run_started_by", "run_started_at", "approved_by_1",
             "approved_at_1", "approved_by_2", "approved_at_2", "disposed_at", "disposition", "record_uid",
             "record_path", "record_title", "record_type", "retention_rule_uid", "retention_rule_title",
-            "retention_ended");
+            "retention_ended", "barcode", "transferred_to");
 
     static final byte[] BOM = { (byte) 0xEF, (byte) 0xBB, (byte) 0xBF };
 
@@ -46,14 +49,34 @@ final class CertificateCsv {
         for (DueRecords.Due record : records) {
             row(csv, List.of(Long.toString(runNumber), text(startedBy), instant(startedAt), text(first.by()),
                     instant(first.at()), text(second.by()), instant(second.at()), instant(disposedAt),
-                    Disposition.METHOD, text(record.uid()), text(record.path()), text(record.title()),
+                    method(record), text(record.uid()), text(record.path()), text(record.title()),
                     text(record.type()), text(record.ruleId()), text(record.ruleTitle()),
-                    instant(record.retentionEnded())));
+                    instant(record.retentionEnded()), text(record.barcode()), text(record.transferTo())));
         }
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         bytes.writeBytes(BOM);
         bytes.writeBytes(csv.toString().getBytes(StandardCharsets.UTF_8));
         return bytes.toByteArray();
+    }
+
+    /** How a record was disposed of: deleted, destroyed or transferred. */
+    static String method(DueRecords.Due record) {
+        return switch (record.disposal()) {
+        case Physical.DESTROY -> Physical.DESTROYED;
+        case Physical.TRANSFER -> Physical.TRANSFERRED;
+        default -> Disposition.METHOD;
+        };
+    }
+
+    /** The methods a certificate's records were disposed of by, each once, deleted first, then destroyed, then transferred. */
+    static String methods(List<DueRecords.Due> records) {
+        List<String> methods = new java.util.ArrayList<>();
+        for (String method : List.of(Disposition.METHOD, Physical.DESTROYED, Physical.TRANSFERRED)) {
+            if (records.stream().anyMatch(record -> method.equals(method(record)))) {
+                methods.add(method);
+            }
+        }
+        return String.join(", ", methods);
     }
 
     static String sha256(byte[] bytes) {

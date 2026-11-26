@@ -47,6 +47,22 @@
             </section>
           }
           <div class="queue-page__main">
+            @if (shown.queue.search) {
+              <form class="queue-search" role="search" (submit)="onSearch($event)">
+                <nxs-text-field
+                  class="queue-search__field"
+                  [label]="searchLabel()"
+                  [(value)]="searchDraft"
+                  autocomplete="off"
+                />
+                <nxs-button
+                  class="queue-search__button"
+                  type="submit"
+                  appearance="filled"
+                  [label]="'queues.search.button' | translate"
+                />
+              </form>
+            }
             @if (notice(); as notice) {
               <div class="queue-whole-query">
                 <nxs-banner
@@ -73,21 +89,27 @@
                 }
               </div>
             }
-            <lib-record-list
-              class="queue-page__list"
-              [list]="shown.list"
-              [parameters]="shown.queue.parameters"
-              [label]="title() ?? shown.id"
-              [stateHeadingLevel]="readOnly() ? 4 : 2"
-              [source]="'queues/' + shown.id + '.json'"
-              [aggregates]="chosen()"
-              [filterable]="facets().length > 0"
-              [selectable]="rowsSelectable()"
-              [selectedIds]="selectedIds()"
-              [emptyHeading]="'queues.empty' | translate"
-              (selectedIdsChange)="onSelection($event)"
-              (loaded)="onLoaded($event)"
-            />
+            @if (listParameters(); as parameters) {
+              <lib-record-list
+                class="queue-page__list"
+                [list]="shown.list"
+                [parameters]="parameters"
+                [label]="title() ?? shown.id"
+                [stateHeadingLevel]="readOnly() ? 4 : 2"
+                [source]="'queues/' + shown.id + '.json'"
+                [aggregates]="chosen()"
+                [filterable]="facets().length > 0"
+                [selectable]="rowsSelectable()"
+                [selectedIds]="selectedIds()"
+                [emptyHeading]="
+                  (shown.queue.search ? 'queues.search.none' : 'queues.empty') | translate
+                "
+                (selectedIdsChange)="onSelection($event)"
+                (loaded)="onLoaded($event)"
+              />
+            } @else {
+              <p class="queue-page__message">{{ 'queues.search.prompt' | translate }}</p>
+            }
           </div>
         </div>
       }

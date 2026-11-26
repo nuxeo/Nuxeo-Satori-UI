@@ -26,7 +26,12 @@ public class CertificateCsvTest {
 
     private static DueRecords.Due record(String title) {
         return new DueRecords.Due("1b2c", "/records/" + title, title, "File", "9f8e", "Claims, seven years",
-                Dispositions.calendar(AT.minusSeconds(86_400)));
+                Dispositions.calendar(AT.minusSeconds(86_400)), null, Physical.DELETE, null);
+    }
+
+    private static DueRecords.Due physical(String title, String disposal, String transferTo) {
+        return new DueRecords.Due("3d4e", "/records/" + title, title, Physical.RECORD_TYPE, "9f8e", "Claims, seven years",
+                Dispositions.calendar(AT.minusSeconds(86_400)), "PR000000034", disposal, transferTo);
     }
 
     @Test
@@ -38,7 +43,23 @@ public class CertificateCsvTest {
                 lines[0]);
         assertEquals("\"7\",\"alice\",\"2026-11-26T09:30:00Z\",\"bob\",\"2026-11-26T09:31:00Z\",\"carol\","
                 + "\"2026-11-26T09:32:00Z\",\"2026-11-26T09:32:01Z\",\"deleted\",\"1b2c\",\"/records/Claim 1001\","
-                + "\"Claim 1001\",\"File\",\"9f8e\",\"Claims, seven years\",\"2026-11-25T09:30:00Z\"", lines[1]);
+                + "\"Claim 1001\",\"File\",\"9f8e\",\"Claims, seven years\",\"2026-11-25T09:30:00Z\",\"\",\"\"", lines[1]);
+    }
+
+    /** A physical record's row: destroyed or transferred, with its barcode, and to whom. */
+    @Test
+    public void aPhysicalRecordsRowSaysHowAndItsBarcode() {
+        String[] lines = csv(physical("Box 7", Physical.DESTROY, null),
+                physical("Box 8", Physical.TRANSFER, "The county archive")).split("\r\n", -1);
+        assertEquals("\"7\",\"alice\",\"2026-11-26T09:30:00Z\",\"bob\",\"2026-11-26T09:31:00Z\",\"carol\","
+                + "\"2026-11-26T09:32:00Z\",\"2026-11-26T09:32:01Z\",\"destroyed\",\"3d4e\",\"/records/Box 7\","
+                + "\"Box 7\",\"PhysicalRecord\",\"9f8e\",\"Claims, seven years\",\"2026-11-25T09:30:00Z\",\"PR000000034\",\"\"",
+                lines[1]);
+        assertEquals(true, lines[2].contains(",\"transferred\","));
+        assertEquals(true, lines[2].endsWith(",\"PR000000034\",\"The county archive\""));
+        assertEquals("deleted, destroyed, transferred", CertificateCsv.methods(List.of(record("Claim 1001"),
+                physical("Box 7", Physical.DESTROY, null), physical("Box 8", Physical.TRANSFER, "The county archive"))));
+        assertEquals("destroyed", CertificateCsv.methods(List.of(physical("Box 7", Physical.DESTROY, null))));
     }
 
     @Test

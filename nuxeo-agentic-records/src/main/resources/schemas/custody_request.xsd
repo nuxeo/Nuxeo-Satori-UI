@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!-- A custody request: a person asks for a physical record to be moved, checked out or returned,
+     by filing one in the repository's CustodyDesk. The filer writes action, item, location,
+     borrower, dueBack and reason; the server writes the rest, over whatever the filer sent, and
+     PhysicalListener refuses any change afterwards. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/custody-request"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/custody-request">
+
+  <!-- move, check-out or return -->
+  <xs:element name="action" type="xs:string" />
+  <!-- The physical record, by its barcode or its id. The server writes back its id. -->
+  <xs:element name="item" type="xs:string" />
+  <!-- A move's destination, or where a return puts it: a PhysicalLocation's id. -->
+  <xs:element name="location" type="xs:string" />
+  <!-- A check-out's: to whom, the filer when none is named, and when it is due back. -->
+  <xs:element name="borrower" type="xs:string" />
+  <xs:element name="dueBack" type="xs:date" />
+  <!-- Why: required, up to 2000 characters. -->
+  <xs:element name="reason" type="xs:string" />
+
+  <!-- The server's. -->
+  <xs:element name="by" type="xs:string" />
+  <xs:element name="at" type="xs:date" />
+  <xs:element name="barcode" type="xs:string" />
+  <xs:element name="fromPath" type="xs:string" />
+  <xs:element name="toPath" type="xs:string" />
+  <!-- moved, checked-out or returned -->
+  <xs:element name="outcome" type="xs:string" />
+
+</xs:schema>

@@ -1,0 +1,143 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "sent",
+      "tone": "info",
+      "labelKey": "onboarding.banner.request.sent",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sigreq:status" }, "sent"]
+      }
+    },
+    {
+      "id": "signed",
+      "tone": "info",
+      "labelKey": "onboarding.banner.request.signed",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sigreq:status" }, "signed"]
+      }
+    },
+    {
+      "id": "declined",
+      "tone": "negative",
+      "labelKey": "onboarding.banner.request.declined",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sigreq:status" }, "declined"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "request",
+      "labelKey": "onboarding.card.eSignatureRequest.request",
+      "fields": [
+        { "field": "dc:title", "labelKey": "onboarding.field.requestTitle" },
+        {
+          "field": "sigreq:document",
+          "widget": "document-link",
+          "parameters": { "types": ["OnboardingCase"] }
+        },
+        {
+          "id": "caseCustomer",
+          "field": "sigreq:document",
+          "widget": "document-link",
+          "labelKey": "onboarding.field.caseCustomer",
+          "parameters": { "types": ["OnboardingCase"], "show": "onb:customer" }
+        },
+        "sigreq:sentFileName",
+        {
+          "field": "sigreq:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "sent": "warning",
+              "signed": "positive",
+              "declined": "negative",
+              "cancelled": "neutral"
+            }
+          }
+        },
+        { "field": "sigreq:message", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "progress",
+      "labelKey": "onboarding.card.eSignatureRequest.progress",
+      "fields": [
+        { "field": "sigreq:requestedBy", "widget": "user" },
+        { "field": "sigreq:requestedAt", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "sigreq:completedAt", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "sigreq:declineReason",
+          "widget": "long-text",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "sigreq:status" }, "declined"]
+          }
+        },
+        {
+          "field": "sigreq:cancelledBy",
+          "widget": "user",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "sigreq:status" }, "cancelled"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "signers",
+      "labelKey": "onboarding.card.eSignatureRequest.signers",
+      "span": 2,
+      "fields": [
+        {
+          "field": "sigreq:signers",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "sigreq:name", "labelKey": "onboarding.field.signerName" },
+              {
+                "field": "sigreq:email",
+                "labelKey": "onboarding.field.signerEmail",
+                "widget": "email"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "labelKey": "onboarding.card.eSignatureRequest.evidence",
+      "span": 2,
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "sigreq:status" }, "signed"]
+      },
+      "fields": [
+        {
+          "field": "sigreq:signedVersion",
+          "widget": "document-link",
+          "parameters": { "types": ["OnboardingCase"] }
+        },
+        "sigreq:provider",
+        "sigreq:envelope",
+        "sigreq:sentDigest",
+        "sigreq:signedDigest",
+        "sigreq:evidenceDigest",
+        "sigreq:event"
+      ]
+    },
+    {
+      "id": "history",
+      "labelKey": "onboarding.card.eSignatureRequest.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

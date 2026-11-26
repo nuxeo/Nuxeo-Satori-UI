@@ -1,7 +1,7 @@
 <package type="addon" name="nuxeo-agentic-records" version="@records.package.version@">
-  <title>Nuxeo Satori records: disposition review</title>
+  <title>Nuxeo Satori records: disposition review and physical records</title>
   <description>
-    <p>The records module's server add-on, on the platform's retention module. A disposition run holds the records whose retention has ended and that are under no legal hold; two people other than its starter approve it, and only then are the records deleted, with a certificate kept as a record. Everything is checked on the server, and nothing is disposed of until a run has its two approvals.</p>
+    <p>The records module's server add-on, on the platform's retention module. A disposition run holds the records whose retention has ended and that are under no legal hold; two people other than its starter approve it, and only then are the records deleted, or a physical record's destruction or transfer recorded, with a certificate kept as a record. Physical records have a barcode, a location and a chain of custody the server records. Everything is checked on the server, and nothing is disposed of until a run has its two approvals.</p>
   </description>
   <vendor>Hyland Software</vendor>
   <installer restart="true" />

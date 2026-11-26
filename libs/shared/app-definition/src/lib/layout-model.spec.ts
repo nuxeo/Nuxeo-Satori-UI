@@ -475,6 +475,67 @@ describe('validateLayoutV2, given the content model', () => {
     expect(messages(shared, { type: 'Member', given: null })).toEqual([]);
   });
 
+  it("holds a capture's property to a list of files of the type, and its findBy to its texts", () => {
+    const reading = readContentModel({
+      doctypes: {
+        Claim: { parent: 'Document', facets: ['Attached'], schemas: ['dublincore', 'claim'] },
+      },
+      facets: [
+        {
+          name: 'Attached',
+          schemas: [
+            { name: 'files', fields: { files: { type: 'complex[]', fields: { file: 'blob' } } } },
+          ],
+        },
+      ],
+      schemas: [
+        { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+        {
+          name: 'claim',
+          '@prefix': 'cl',
+          fields: {
+            number: 'string',
+            amount: 'double',
+            tags: 'string[]',
+            photo: 'blob',
+            scans: 'blob[]',
+            notes: { type: 'complex[]', fields: { text: 'string' } },
+            loose: 'complex[]',
+          },
+        },
+      ],
+    });
+    if (!reading.model) throw new Error(reading.problems.join('\n'));
+    const given = reading.model;
+    const capture = (value: Record<string, unknown>) =>
+      messages({ ...withFields('dc:title'), capture: value }, { type: 'Claim', given });
+    // A facet's files:files, a list of blobs, and a list whose subfields the model did not read.
+    expect(capture({ property: 'files:files', findBy: ['cl:number'] })).toEqual([]);
+    expect(capture({ property: 'cl:scans' })).toEqual([]);
+    expect(capture({ property: 'cl:loose' })).toEqual([]);
+    expect(capture({ property: 'cl:photo' })).toEqual([
+      'capture.property: a capture adds each photo to a list of files, and "cl:photo" is a blob property [parameter]',
+    ]);
+    expect(capture({ property: 'cl:notes' })).toEqual([
+      'capture.property: a capture adds each photo to a list of files, and the entries of "cl:notes" have no "file" subfield that is a blob [parameter]',
+    ]);
+    expect(capture({ property: 'cl:missing' })[0]).toMatch(/^capture\.property: .*\[unknown\]$/);
+    expect(
+      capture({ property: 'files:files', findBy: ['cl:amount', 'cl:tags', 'cl:gone'] }),
+    ).toEqual([
+      'capture.findBy[0]: a capture looks a number up in a text, and "cl:amount" is a double property [parameter]',
+      'capture.findBy[1]: a capture looks a number up in a text, and "cl:tags" is a string[] property [parameter]',
+      expect.stringMatching(/^capture\.findBy\[2\]: .*\[unknown\]$/),
+    ]);
+    // Without a model nothing says what the type has: the record page holds it to the schemas.
+    expect(
+      messages(
+        { ...withFields('dc:title'), capture: { property: 'cl:photo' } },
+        { type: 'Claim', given: null },
+      ),
+    ).toEqual([]);
+  });
+
   it('refuses a type the model does not have, and a model given without a type', () => {
     expect(messages(withFields('member:firstName'), { type: 'Claim' })).toEqual([
       ': the document type "Claim" is not in the content model [unknown]',

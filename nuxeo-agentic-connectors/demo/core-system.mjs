@@ -20,15 +20,75 @@
  *   `--add-host=host.docker.internal:host-gateway` and this with `--host 0.0.0.0`.
  *
  * Each request is logged with its method, path and status, never its token.
+ *
+ * **It also tells Nuxeo when a record changes,** as a system of record would, so that the answers
+ * the connector keeps for it are dropped:
+ *
+ *   CORE_SYSTEM_EVENTS_SECRET=<the connector's events secret> node nuxeo-agentic-connectors/demo/core-system.mjs \
+ *     notify CLAIM-000130 --to http://localhost:8080/nuxeo/agentic-connectors/events/payers.claimPayments
+ *
+ * - **The secret is required,** at least 32 characters, the one the server sets in
+ *   `nuxeo.agentic.connectors.<id>.events.secret`. There is no default. Make one up for the demo,
+ *   such as `openssl rand -hex 32`.
+ * - The event is signed as `change-event.mjs` says, with a fresh nonce and the current time, and
+ *   sent once. It prints the address and the status, never the secret or the signature, and exits
+ *   0 when Nuxeo answers 204.
  */
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
+
+import { MIN_SECRET_LENGTH, changeEvent } from './change-event.mjs';
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
   const at = args.indexOf(name);
   return at >= 0 && args[at + 1] !== undefined ? args[at + 1] : fallback;
 };
+
+/** `notify <key> --to <events address>`: one signed change event, and its status. */
+async function notify() {
+  const key = args[1] ?? '';
+  const to = option('--to', '');
+  const secret = process.env['CORE_SYSTEM_EVENTS_SECRET'] ?? '';
+  if (secret.length < MIN_SECRET_LENGTH) {
+    console.error(
+      `CORE_SYSTEM_EVENTS_SECRET is required, at least ${MIN_SECRET_LENGTH} characters: the connector's events secret on the server.`,
+    );
+    return 2;
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(key)) {
+    console.error('notify needs the record key: one path segment of letters, digits, ".", "_" or "-"');
+    return 2;
+  }
+  let address;
+  try {
+    address = new URL(to);
+  } catch {
+    address = null;
+  }
+  const connector = /\/agentic-connectors\/events\/([A-Za-z][A-Za-z0-9._-]{0,63})$/.exec(
+    address?.pathname ?? '',
+  )?.[1];
+  if (!address || !['http:', 'https:'].includes(address.protocol) || !connector || address.search) {
+    console.error('--to must be Nuxeo\'s address for the connector\'s events: .../nuxeo/agentic-connectors/events/<connector>');
+    return 2;
+  }
+  const event = changeEvent(secret, connector, key);
+  let response;
+  try {
+    response = await fetch(address, { method: 'POST', headers: event.headers, body: event.body });
+  } catch (error) {
+    console.error(`POST ${address.origin}${address.pathname} could not be sent (${error?.name ?? 'Error'})`);
+    return 1;
+  }
+  console.log(`POST ${address.origin}${address.pathname} ${response.status}`);
+  return response.status === 204 ? 0 : 1;
+}
+
+if (args[0] === 'notify') {
+  process.exit(await notify());
+}
+
 const port = Number(option('--port', '8091'));
 const host = option('--host', '127.0.0.1');
 const token = process.env['CORE_SYSTEM_TOKEN'] ?? '';

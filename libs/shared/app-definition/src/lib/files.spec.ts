@@ -332,9 +332,38 @@ describe('a queue', () => {
       input: queue({ columns: ['var:decision'] }),
       found: ['columns[0]: "var:" names a task variable, which only a task form has [structure]'],
     },
+    {
+      what: 'a search that is not an object, or names nothing for the person',
+      input: queue({ search: 'barcode' }),
+      found: [
+        'search: a search is { "label" or "labelKey", and "open": "single" or none } [structure]',
+      ],
+    },
+    {
+      what: 'a search with no name',
+      input: queue({ search: { open: 'single' } }),
+      found: ['search: needs a "label" or a "labelKey" [structure]'],
+    },
+    {
+      what: 'a search that opens what it cannot',
+      input: queue({ search: { label: 'Barcode', open: 'first', camera: true } }),
+      found: [
+        'search.camera: "camera" is not a key version 2 has [unknown]',
+        'search.open: a search opens "single": the one record it finds alone [structure]',
+      ],
+    },
   ];
   it.each(rows)('refuses $what', ({ input, found }) => {
     expect(show(validateQueue(input))).toEqual(found);
+  });
+
+  it('passes a search, its text the page provider’s last parameter', () => {
+    expect(
+      show(
+        validateQueue(queue({ search: { labelKey: 'records.lookup.barcode', open: 'single' } })),
+      ),
+    ).toEqual([]);
+    expect(show(validateQueue(queue({ search: { label: 'Barcode' } })))).toEqual([]);
   });
 });
 

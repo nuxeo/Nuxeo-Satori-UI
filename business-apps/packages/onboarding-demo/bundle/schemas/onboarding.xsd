@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional onboarding schema of the OnboardingCase type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/onboarding-demo/onboarding"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/onboarding-demo/onboarding">
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="customer" type="xs:string" />
+  <xs:element name="customerType">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Individual" />
+        <xs:enumeration value="Business" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="country" type="xs:string" />
+  <xs:element name="product" type="xs:string" />
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Open" />
+        <xs:enumeration value="KYC review" />
+        <xs:enumeration value="Awaiting signature" />
+        <xs:enumeration value="Approved" />
+        <xs:enumeration value="Declined" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="riskRating">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Low" />
+        <xs:enumeration value="Medium" />
+        <xs:enumeration value="High" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="openedOn" type="xs:date" />
+  <xs:element name="officer" type="xs:string" />
+  <xs:element name="notes" type="xs:string" />
+</xs:schema>

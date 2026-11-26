@@ -20,6 +20,8 @@
     <layout type="DispositionCertificate" mode="view" src="agentic-ui-config/layouts/DispositionCertificate/view.layout.json" />
     <layout type="RecordsAuditExport" mode="view" src="agentic-ui-config/layouts/RecordsAuditExport/view.layout.json" />
     <layout type="RecordsFile" mode="view" src="agentic-ui-config/layouts/RecordsFile/view.layout.json" />
+    <layout type="PhysicalRecord" mode="view" src="agentic-ui-config/layouts/PhysicalRecord/view.layout.json" />
+    <layout type="PhysicalLocation" mode="view" src="agentic-ui-config/layouts/PhysicalLocation/view.layout.json" />
   </extension>
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
@@ -29,6 +31,9 @@
       <file path="queues/certificates.json" />
       <file path="navigation.json" />
       <file path="queues/audit-exports.json" />
+      <file path="queues/barcode-lookup.json" />
+      <file path="queues/checked-out.json" />
+      <file path="queues/overdue.json" />
     </app>
   </extension>
 </component>

@@ -63,7 +63,8 @@ public final class TestHooks {
             CyclicBarrier barrier = filing;
             if (barrier != null && event.getContext() instanceof DocumentEventContext context) {
                 DocumentModel doc = context.getSourceDocument();
-                if (doc != null && Disposition.REQUEST_TYPE.equals(doc.getType())) {
+                if (doc != null && (Disposition.REQUEST_TYPE.equals(doc.getType())
+                        || Physical.REQUEST_TYPE.equals(doc.getType()))) {
                     try {
                         barrier.await(20, TimeUnit.SECONDS);
                     } catch (Exception e) {

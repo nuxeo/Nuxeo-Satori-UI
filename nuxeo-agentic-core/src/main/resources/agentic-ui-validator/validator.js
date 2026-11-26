@@ -1601,6 +1601,42 @@ var agenticUiValidator = (function () {
             else if (schemas.has("video"))
                 add("shareLinks", "unknown", "share links serve a picture's views, and the type \"".concat(type, "\" has the \"video\" schema: its record page keeps its player, not its picture"));
         }
+        var capture2 = function (entry2) {
+            var _a, _b, _c;
+            var name = entry2["property"];
+            if (typeof name === "string" && XPATH.test(name)) {
+                var at2 = join("capture", "property");
+                var property = properties.get(name);
+                if (!property)
+                    add(at2, "unknown", whyMissing(model, type, name));
+                else {
+                    var shown2 = propertyTypeOf(property);
+                    var file2 = (_a = property.fields) == null ? void 0 : _a.get("file");
+                    var read = ((_c = (_b = property.fields) == null ? void 0 : _b.size) != null ? _c : 0) > 0;
+                    if (shown2 === "complex[]") {
+                        if (read && (!file2 || propertyTypeOf(file2) !== "blob"))
+                            add(at2, "parameter", "a capture adds each photo to a list of files, and the entries of \"".concat(name, "\" have no \"file\" subfield that is a blob"));
+                    }
+                    else if (shown2 !== "blob[]")
+                        add(at2, "parameter", "a capture adds each photo to a list of files, and \"".concat(name, "\" is a ").concat(shown2, " property"));
+                }
+            }
+            var findBy = entry2["findBy"];
+            if (!Array.isArray(findBy))
+                return;
+            findBy.forEach(function (each, index) {
+                if (typeof each !== "string" || !XPATH.test(each))
+                    return;
+                var at2 = join(join("capture", "findBy"), index);
+                var property = properties.get(each);
+                if (!property)
+                    add(at2, "unknown", whyMissing(model, type, each));
+                else if (propertyTypeOf(property) !== "string")
+                    add(at2, "parameter", "a capture looks a number up in a text, and \"".concat(each, "\" is a ").concat(propertyTypeOf(property), " property"));
+            });
+        };
+        if (isRecord(file["capture"]))
+            capture2(file["capture"]);
         return findings;
     }
     function schemasOf(model, type) {
@@ -1663,6 +1699,7 @@ var agenticUiValidator = (function () {
         "banners",
         "review",
         "shareLinks",
+        "capture",
         "cards",
         "tabs"
     ];
@@ -1684,6 +1721,8 @@ var agenticUiValidator = (function () {
     var COMMENTS_KEYS = ["pageSize"];
     var REVIEW_KEYS = [];
     var SHARE_LINKS_KEYS = [];
+    var CAPTURE_KEYS = ["property", "findBy", "keepLocation"];
+    var CAPTURE_FIND_BY_MAX = 5;
     var EXTERNAL_KEYS = ["connector", "fields"];
     var EXTERNAL_FIELD_KEYS = ["name", "label", "labelKey", "widget", "parameters", "visibleWhen"];
     var CHECKLIST_KEYS = ["field", "items", "tickable"];
@@ -1814,6 +1853,12 @@ var agenticUiValidator = (function () {
             else
                 shareLinks(c, file["shareLinks"]);
         }
+        if ("capture" in file) {
+            if (!view)
+                c.add("capture", "structure", "capture belongs in view mode only");
+            else
+                capture(c, file["capture"]);
+        }
         var hasCards = "cards" in file;
         var hasTabs = "tabs" in file;
         if (hasCards === hasTabs)
@@ -1889,6 +1934,36 @@ var agenticUiValidator = (function () {
             return;
         }
         c.unknownKeys(item, SHARE_LINKS_KEYS, "shareLinks");
+    }
+    function ownProperty(value) {
+        return typeof value === "string" && XPATH.test(value) && !value.startsWith("ecm:") && !value.startsWith("var:");
+    }
+    function capture(c, item) {
+        if (!isRecord(item)) {
+            c.add("capture", "structure", 'capture is an object: { "property": "<prefix>:<name>" }');
+            return;
+        }
+        c.unknownKeys(item, CAPTURE_KEYS, "capture");
+        if (!ownProperty(item["property"]))
+            c.add(join("capture", "property"), "structure", "needs the property the photos are added to, <prefix>:<name>, such as files:files, never an ecm: or var: name");
+        if ("findBy" in item) {
+            var findBy = item["findBy"];
+            if (!Array.isArray(findBy) || findBy.length === 0 || findBy.length > CAPTURE_FIND_BY_MAX)
+                c.add(join("capture", "findBy"), "structure", "findBy is a list of 1 to ".concat(CAPTURE_FIND_BY_MAX, " properties a typed or scanned number is looked up in"));
+            else {
+                var seen_1 = /* @__PURE__ */ new Set();
+                findBy.forEach(function (name, index) {
+                    var at2 = join(join("capture", "findBy"), index);
+                    if (!ownProperty(name))
+                        c.add(at2, "structure", "needs a property of the record, <prefix>:<name>, never an ecm: or var: name");
+                    else if (seen_1.has(name))
+                        c.add(at2, "structure", "\"".concat(name, "\" is listed twice"));
+                    seen_1.add(name);
+                });
+            }
+        }
+        if ("keepLocation" in item && typeof item["keepLocation"] !== "boolean")
+            c.add(join("capture", "keepLocation"), "structure", "keepLocation is true or false");
     }
     function related(c, item, path) {
         if (!isRecord(item)) {
@@ -2308,6 +2383,7 @@ var agenticUiValidator = (function () {
         "administration",
         "browse",
         "browse-adf-hx",
+        "capture",
         "clipboard",
         "collections",
         "contracts",
@@ -2797,6 +2873,7 @@ var agenticUiValidator = (function () {
         "labelKey",
         "pageProvider",
         "parameters",
+        "search",
         "columns",
         "sort",
         "pageSize",
@@ -2806,6 +2883,8 @@ var agenticUiValidator = (function () {
         "visibleWhen"
     ];
     var FACET_KEYS = ["aggregate", "label", "labelKey", "widget"];
+    var SEARCH_KEYS = ["label", "labelKey", "open"];
+    var SEARCH_OPEN = ["single"];
     var FACET_WIDGETS = ["document-link"];
     function validateQueue(content, options) {
         if (options === void 0) { options = {}; }
@@ -2819,6 +2898,8 @@ var agenticUiValidator = (function () {
         c.schemaKey(queue2);
         c.named(queue2, "");
         c.list(queue2, "", { openRecord: false });
+        if ("search" in queue2)
+            search(c, queue2["search"]);
         if ("facets" in queue2)
             facets(c, queue2["facets"]);
         if ("bulkActions" in queue2)
@@ -2826,6 +2907,16 @@ var agenticUiValidator = (function () {
         if ("visibleWhen" in queue2)
             c.rule(queue2["visibleWhen"], "visibleWhen");
         return c.findings;
+    }
+    function search(c, value) {
+        if (!isRecord(value)) {
+            c.add("search", "structure", 'a search is { "label" or "labelKey", and "open": "single" or none }');
+            return;
+        }
+        c.unknownKeys(value, SEARCH_KEYS, "search");
+        c.named(value, "search");
+        if ("open" in value && (typeof value["open"] !== "string" || !SEARCH_OPEN.includes(value["open"])))
+            c.add(join("search", "open"), "structure", "a search opens ".concat(SEARCH_OPEN.map(function (each) { return "\"".concat(each, "\""); }).join(" or "), ": the one record it finds alone"));
     }
     function facets(c, value) {
         if (!Array.isArray(value)) {

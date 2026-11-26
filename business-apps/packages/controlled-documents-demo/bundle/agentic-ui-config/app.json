@@ -4,7 +4,7 @@
   "id": "controlled-documents",
   "label": "Controlled documents",
   "labelKey": "controlled-documents.app",
-  "packageVersion": "0.2.0",
+  "packageVersion": "0.3.0",
   "platform": ">=0.2.0 <1.0.0",
   "address": "controlled-documents",
   "groups": ["document-controllers", "engineers"],

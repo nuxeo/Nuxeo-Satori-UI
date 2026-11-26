@@ -393,6 +393,18 @@ export class RecordPageComponent {
    */
   readonly readOnly = input(false);
 
+  /**
+   * The capture page's address for this record, when its file has a `capture` and the reader may
+   * write the record, as the Attachments panel asks (layout-v2.md, section 2, "Capture"): `null`
+   * on a page drawn read-only, and on a version. Not a control: the server decides who may add a
+   * file to the record.
+   */
+  protected readonly captureLink = computed((): { readonly record: string } | null => {
+    const document = this.document();
+    if (this.readOnly() || !this.layout().capture || document.isVersion) return null;
+    return canWriteDocument(document) ? { record: document.uid } : null;
+  });
+
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
   protected readonly detailId = checklistDetailId;

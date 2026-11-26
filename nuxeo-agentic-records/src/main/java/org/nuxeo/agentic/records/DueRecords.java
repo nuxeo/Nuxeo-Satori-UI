@@ -36,7 +36,9 @@ import org.nuxeo.ecm.core.api.IdRef;
  * their retention ends, with no review: those records are never a run's;</li>
  * <li>it is the live document: not a version, not a proxy;</li>
  * <li>it is a document, not a folder, since deleting a folder deletes what it holds, and none of the
- * add-on's own documents, a certificate made a record among them.</li>
+ * add-on's own documents, a certificate made a record among them;</li>
+ * <li>for a physical record: it is in its location, not checked out, and has not been disposed of
+ * already, and a run can take its disposition action, destroy or transfer.</li>
  * </ul>
  * A record in the trash is still a record, and is due as any other: the trash is not a disposition.
  * A run finds them with its starter's session, so it holds only records its starter may read. Each
@@ -44,9 +46,18 @@ import org.nuxeo.ecm.core.api.IdRef;
  */
 final class DueRecords {
 
-    /** One record of a run: what the certificate says of it. */
+    /**
+     * One record of a run: what the certificate says of it. {@code disposal} is what the run does
+     * with it: {@code delete}, an electronic record's, or a physical record's {@code destroy} or
+     * {@code transfer}, to {@code transferTo}; {@code barcode} is a physical record's.
+     */
     record Due(String uid, String path, String title, String type, String ruleId, String ruleTitle,
-            Calendar retentionEnded) {
+            Calendar retentionEnded, String barcode, String disposal, String transferTo) {
+
+        /** Whether it is a physical record, which a run does not delete. */
+        boolean physical() {
+            return !Physical.DELETE.equals(disposal);
+        }
     }
 
     /** How many candidates the query returns at a time, and how many a start reads at most. */
@@ -65,11 +76,7 @@ final class DueRecords {
      * most {@code max}. {@code reader} is the starter's session; {@code privileged} reads the rules.
      */
     static List<Due> find(CoreSession reader, CoreSession privileged, Set<String> held, int max, Instant now) {
-        String query = "SELECT * FROM Document WHERE ecm:mixinType = '" + RECORD_FACET + "' AND ecm:isRecord = 1"
-                + " AND ecm:mixinType <> 'Folderish' AND ecm:primaryType NOT IN ('" + String.join("', '",
-                        new TreeSet<>(Disposition.TYPES))
-                + "') AND ecm:isProxy = 0 AND ecm:isVersion = 0 AND " + RECORD_RETAIN_UNTIL + " < TIMESTAMP '"
-                + now.truncatedTo(ChronoUnit.MILLIS) + "' ORDER BY " + RECORD_RETAIN_UNTIL + ", ecm:uuid";
+        String query = candidates(now);
         List<Due> due = new ArrayList<>();
         for (long offset = 0; offset < SCAN && due.size() < max; offset += PAGE) {
             DocumentModelList page = reader.query(query, null, PAGE, offset, false);
@@ -89,12 +96,32 @@ final class DueRecords {
         return due;
     }
 
+    /**
+     * The query a start reads its candidates with, oldest retention end first. A physical record
+     * disposed of already is none: it is kept, and its retention ended long ago, so that otherwise it
+     * would come first in every scan and, once there were {@value #SCAN} of them, hide every record due.
+     */
+    static String candidates(Instant now) {
+        return "SELECT * FROM Document WHERE ecm:mixinType = '" + RECORD_FACET + "' AND ecm:isRecord = 1"
+                + " AND ecm:mixinType <> 'Folderish' AND ecm:primaryType NOT IN ('" + String.join("', '", ownTypes())
+                + "') AND ecm:isProxy = 0 AND ecm:isVersion = 0 AND " + RECORD_RETAIN_UNTIL + " < TIMESTAMP '"
+                + now.truncatedTo(ChronoUnit.MILLIS) + "' AND " + Physical.DISPOSED_AT + " IS NULL ORDER BY "
+                + RECORD_RETAIN_UNTIL + ", ecm:uuid";
+    }
+
+    /** The add-on's own types, which no run holds, in order. */
+    static List<String> ownTypes() {
+        TreeSet<String> types = new TreeSet<>(Disposition.TYPES);
+        types.addAll(Physical.NEVER_DUE);
+        return List.copyOf(types);
+    }
+
     /** Why {@code doc} is not due, in a phrase that follows "It", or {@code null} when it is. */
     static String why(DocumentModel doc, CoreSession privileged, Instant now) {
         if (doc.isVersion() || doc.isProxy()) {
             return "is a version or a proxy, not a record itself";
         }
-        if (Disposition.TYPES.contains(doc.getType())) {
+        if (Disposition.TYPES.contains(doc.getType()) || Physical.NEVER_DUE.contains(doc.getType())) {
             return "is one of the disposition review's own documents";
         }
         // Deleting a folder deletes what it holds, which no one reviewed: a run holds documents alone.
@@ -111,6 +138,10 @@ final class DueRecords {
         }
         if (doc.hasLegalHold()) {
             return "is under a legal hold";
+        }
+        String physical = PhysicalRecords.whyNotDue(doc);
+        if (physical != null) {
+            return physical;
         }
         Calendar until = doc.getRetainUntil();
         if (doc.isUnderRetentionOrLegalHold() || until != null && !until.toInstant().isBefore(now)) {
@@ -138,8 +169,29 @@ final class DueRecords {
     static Due of(DocumentModel doc, CoreSession privileged) {
         String ruleId = ruleId(doc);
         DocumentModel rule = ruleId == null ? null : rule(privileged, ruleId);
+        boolean physical = Physical.RECORD_TYPE.equals(doc.getType());
+        String disposal = physical ? PhysicalRecords.disposalOf(doc) : Physical.DELETE;
         return new Due(doc.getId(), doc.getPathAsString(), title(doc), doc.getType(), ruleId,
-                rule == null ? null : title(rule), ended(doc));
+                rule == null ? null : title(rule), ended(doc),
+                physical ? text(doc, Physical.BARCODE) : null, disposal,
+                Physical.TRANSFER.equals(disposal) ? text(doc, Physical.TRANSFER_TO) : null);
+    }
+
+    /**
+     * Whether a run's row says what the record says now: the same disposition action, and for a
+     * transfer the same recipient. A row of a run started before physical records says none, and
+     * was a deletion.
+     */
+    static boolean sameDisposal(java.util.Map<String, Serializable> row, Due now) {
+        Object disposal = row.get("disposal");
+        String was = disposal instanceof String text && !text.isEmpty() ? text : Physical.DELETE;
+        Object transferTo = row.get("transferTo");
+        String wasTo = transferTo instanceof String text && !text.isEmpty() ? text : null;
+        return was.equals(now.disposal()) && java.util.Objects.equals(wasTo, now.transferTo());
+    }
+
+    private static String text(DocumentModel doc, String xpath) {
+        return doc.getPropertyValue(xpath) instanceof String value && !value.isBlank() ? value : null;
     }
 
     /** The first of the record's rules, or {@code null}. */

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.checked-out",
+  "pageProvider": "records_checked_out",
+  "columns": [
+    "phys:barcode",
+    "dc:title",
+    "phys:borrower",
+    "phys:checkedOutAt",
+    "phys:dueBack",
+    "phys:locationPath"
+  ],
+  "sort": [{ "field": "phys:dueBack", "order": "asc" }],
+  "pageSize": 50
+}

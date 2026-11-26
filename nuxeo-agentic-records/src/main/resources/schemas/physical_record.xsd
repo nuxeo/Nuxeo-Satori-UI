@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<!-- A physical record: a box, a file or a volume, kept at a location, with a barcode and its chain
+     of custody. A record of the retention module's like any other, under the same rules and holds.
+
+     The creator writes kind and location when it is made; dispositionAction and transferTo stay
+     theirs, and a writer's, until it is disposed of. Everything else is written by the add-on
+     alone, and PhysicalListener refuses any other write: the barcode, where it is and its path,
+     whether it is checked out and to whom, and its custody, every entry of which is kept as written. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/physical-record"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/physical-record">
+
+  <xs:simpleType name="physicalLocationIds">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- box, file or volume -->
+  <xs:element name="kind" type="xs:string" />
+
+  <!-- Issued by the server when the record is made, from the platform's sequencer: unique, never
+       given twice, with a check digit. -->
+  <xs:element name="barcode" type="xs:string" />
+
+  <!-- Where it is kept: a PhysicalLocation's id, given when it is made, then changed by a move or a
+       return alone. Kept while it is checked out, as where it goes back to. -->
+  <xs:element name="location" type="xs:string" />
+  <!-- That location and every location above it, its site first: what a location's page lists. -->
+  <xs:element name="locations" type="nxs:physicalLocationIds" />
+  <!-- The location's path, its site first, as it read when the record was put there. -->
+  <xs:element name="locationPath" type="xs:string" />
+
+  <!-- in, out (checked out), destroyed or transferred -->
+  <xs:element name="state" type="xs:string" />
+
+  <!-- While it is checked out: to whom, by whom, when, and when it is due back. -->
+  <xs:element name="borrower" type="xs:string" />
+  <xs:element name="checkedOutBy" type="xs:string" />
+  <xs:element name="checkedOutAt" type="xs:date" />
+  <xs:element name="dueBack" type="xs:date" />
+
+  <!-- What a disposition run does with it once its retention has ended: destroy, the default, or
+       transfer, to transferTo. -->
+  <xs:element name="dispositionAction" type="xs:string" />
+  <xs:element name="transferTo" type="xs:string" />
+
+  <!-- Once a run has disposed of it: when, the run and its certificate. -->
+  <xs:element name="disposedAt" type="xs:date" />
+  <xs:element name="disposalRun" type="xs:string" />
+  <xs:element name="disposalCertificate" type="xs:string" />
+
+  <!-- Its chain of custody, oldest first: one entry per thing that happened to where it is. -->
+  <xs:element name="custody" type="nxs:physicalCustody" />
+  <xs:complexType name="physicalCustody">
+    <xs:sequence>
+      <xs:element name="entry" type="nxs:physicalCustodyEntry" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="physicalCustodyEntry">
+    <xs:sequence>
+      <!-- registered, moved, checked-out, returned, destroyed or transferred -->
+      <xs:element name="event" type="xs:string" />
+      <xs:element name="at" type="xs:date" />
+      <xs:element name="by" type="xs:string" />
+      <!-- From where, and to where: a location's id and its path then. A check-out goes to its
+           borrower, and a return comes from them. -->
+      <xs:element name="fromLocation" type="xs:string" />
+      <xs:element name="fromPath" type="xs:string" />
+      <xs:element name="toLocation" type="xs:string" />
+      <xs:element name="toPath" type="xs:string" />
+      <xs:element name="borrower" type="xs:string" />
+      <xs:element name="dueBack" type="xs:date" />
+      <xs:element name="transferredTo" type="xs:string" />
+      <!-- Why: the request's reason, or what the server did and why. -->
+      <xs:element name="reason" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>
