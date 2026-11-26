@@ -79,6 +79,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'admin.admin-vocabularies-page.edit-entry': 'Edit entry',
   'admin.admin-vocabularies-page.loading': 'Loading',
   'admin.admin-vocabularies-page.select-a-vocabulary': 'Select a Vocabulary',
+  'admin.diagnostics.loading': 'Loading the diagnostics',
   'admin.user-form-dialog.loading': 'Loading',
   'admin.vocabulary-entry-form-dialog.loading': 'Loading',
   'admin.vocabulary-entry-form-dialog.select-a-parent': 'Select a Parent',
