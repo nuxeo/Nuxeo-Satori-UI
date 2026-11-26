@@ -227,17 +227,25 @@ way.
   add-on's `ReviewComment` facet, and the cycle closes only with none open, the server's check, and
   is then recorded on the revision. Two more synchronous listeners, not a route model, and still no
   operation, so decision 3 is not touched ([the add-on's README](../../nuxeo-agentic-documents/README.md#transmittals-and-review-cycles-listeners-not-a-route-model)
-  says why). Export-control marks are not built, nor outside users (decision C): a transmittal to
-  an outside contractor waits on the portal. What changes if B goes another way:
+  says why). **Since its version 0.3.0, export-control marks,** in the same add-on, with the kit's
+  0.3.0: a revision's classification and the groups that may receive it, in a third schema of the
+  `ControlledDocument` facet; its files and renditions refused to anyone outside those groups
+  through the platform's download permission, as the assets add-on refuses on rights, and a
+  transmittal of it refused by the transmittal listener; the mark carried to the revision that
+  supersedes it; a change of it held to the add-on's own permission, `ChangeExportMark`, and written
+  to the platform's audit. Still no operation, so decision 3 is not touched. Outside users are not
+  built (decision C): a transmittal to an outside contractor waits on the portal, and a mark's groups
+  are the server's. What changes if B goes another way:
   - **One large add-on:** the module's bundle moves into that add-on's package as it is, and the
     kit's `package.xml` depends on that package in place of `nuxeo-agentic-documents`. The
-    component a kit's series require, `org.nuxeo.agentic.documents`, the facets and the schemas
-    (`docctl`, `docrev`, `trm`, `trr`, `rvw`, `rvwc`) do not change, so no kit's files do.
+    component a kit's series require, `org.nuxeo.agentic.documents`, the facets, the schemas
+    (`docctl`, `docrev`, `docmark`, `trm`, `trr`, `rvw`, `rvwc`) and the permission,
+    `ChangeExportMark`, do not change, so no kit's files do.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
     dropped from the kit, and every server then gets the facets, the schemas and the listeners,
     which number, issue and review nothing until a type carries a facet and a package registers a
     series. Every comment written on such a server then costs the review listener a look at its
-    ancestors.
+    ancestors, and every download the marks' permission a look at its document's facets.
   - **Not affected either way:** layout version 2's banner `link`, which the kit's record page
     uses, is the platform's ([layout-v2.md](layout-v2.md), section 2), and links any record a
     property names; and its comments card, where a cycle's reviewers write, is the platform's too.
@@ -382,3 +390,4 @@ Taken on 19 November 2026 in the Studio parity plan, `docs/nuxeo-studio-parity-p
 | The security reviews wait until the app is finished; what each covers is in [security-reviews.md](security-reviews.md)                                                                                                                                                                                                                                                                                                                                                                                                  | Decided by the plan's author                                                                                              | 26 November 2026 |
 | `app-model --attachments`, the generators' one change made while an agent built the moves kit: a stand-in type may carry Nuxeo's `files` schema                                                                                                                                                                                                                                                                                                                                                                         | Approved by the plan's author, for the generators' owner ([moves kit](../../business-apps/packages/moves-demo/README.md)) | 26 November 2026 |
 | Business-app kits stay in this repository, under `business-apps/packages/`, beside the app definition pipeline that checks them; version 1's configuration packages stay in nuxeo/Nuxeo-Satori-Config, whose builder checks no version 2 file ([package-pipeline.md](package-pipeline.md))                                                                                                                                                                                                                              | Decided by the plan's author                                                                                              | 26 November 2026 |
+| The migration work still to do is held until the plan's other remaining items are done, then done with care, as the migration's most important part; what is built stays. It covers phase 4's three real packages, lab server, server halves of checks 5, 6 and 7, accepting proposals and reviewers; migration M3, the code track (a Studio package's custom elements to Angular plugins, with harness check 9, resting on decision 5); and phase 10's upload                                                          | Decided by the plan's author                                                                                              | 26 November 2026 |

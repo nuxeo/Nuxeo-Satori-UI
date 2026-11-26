@@ -87,6 +87,30 @@ final class TransactionSynchronizations {
         return false;
     }
 
+    /**
+     * The current transaction, as an object to tell it apart from another by identity, or
+     * {@code null} when there is none. {@code TransactionHelper.lookupTransactionManager()} returns a
+     * javax {@code TransactionManager} on 11.5 and a jakarta one on LTS 2025, so it and
+     * {@code getTransaction()} are called by reflection.
+     */
+    static Object current() {
+        if (!TransactionHelper.isTransactionActiveOrMarkedRollback()) {
+            return null;
+        }
+        try {
+            Method lookup = TransactionHelper.class.getMethod("lookupTransactionManager");
+            Object manager = lookup.invoke(null);
+            if (manager == null) {
+                return null;
+            }
+            // Through the interface the lookup declares: the manager's own class need not be public.
+            return lookup.getReturnType().getMethod("getTransaction").invoke(manager);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            log.warn("Controlled documents: could not read the current transaction", e);
+            return null;
+        }
+    }
+
     private static void run(Runnable action) {
         try {
             action.run();

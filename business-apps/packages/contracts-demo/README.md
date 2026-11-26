@@ -241,9 +241,9 @@ repository. Seeing all of this live needs the package installed and seeded, next
 
 ### Step 5. Publish to pre-production
 
-**Not done, and not built in the MCP server.** Signing and promotion are a proposal
-([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 9), and no
-`app-package/*` tag was pushed.
+**Not done, and not built in the MCP server.** Signing is built and runs only for a tag,
+promotion is a proposal ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
+section 9), and no `app-package/*` tag was pushed.
 
 ## Building it
 
