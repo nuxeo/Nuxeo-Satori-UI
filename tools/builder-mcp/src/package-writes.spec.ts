@@ -1182,6 +1182,62 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect((await validatePackage({ directory: pkg }, { roots: [packages] })).passed).toBe(true);
     });
 
+    it('makes a demo kit with a checklist, a facet, a type with no schema of its own and a register, none by hand', async () => {
+      const pkg = join(packages, 'acme-onboard');
+      const model = `${pkg}/content-model.json`;
+      const view = `${CONFIG}/layouts/Customer/view.layout.json`;
+      const generator = (name: string, options: Record<string, unknown>): Change => ({
+        kind: 'generator',
+        generator: name,
+        options,
+      });
+      const result = await writePackage(
+        {
+          package: pkg,
+          changes: [
+            generator('app-package', { owner: 'acme', title: 'Acme Onboarding' }),
+            generator('app-model', {
+              type: 'Customer',
+              properties: 'number,status=Open|Done,steps:checklist',
+              facets: 'Versionable',
+              attachments: true,
+            }),
+            generator('app-model', { type: 'Request', schemaless: true, facets: 'Versionable' }),
+            generator('app-model', {
+              type: 'CustomerRegister',
+              folder: true,
+              subtypes: 'Customer,Request',
+            }),
+            generator('app-layout', { type: 'Customer', model }),
+          ],
+        },
+        OPTIONS,
+      );
+      expect(result.written, JSON.stringify(result.validation?.stdout ?? result)).toBe(true);
+      const described = JSON.parse(read(pkg, 'content-model.json'));
+      expect(Object.keys(described.doctypes)).toEqual(['Customer', 'Request', 'CustomerRegister']);
+      // The checklist card on the generated record page, held to the property's shape.
+      const page = JSON.parse(read(pkg, view));
+      page.cards.push({
+        id: 'steps',
+        label: 'Steps',
+        checklist: {
+          field: 'customer:steps',
+          tickable: true,
+          items: [{ id: 'identity', label: 'Identity checked' }],
+        },
+      });
+      const card = await writeFile(pkg, view, `${JSON.stringify(page, null, 2)}\n`);
+      expect(card.written, JSON.stringify(card.validation?.stdout)).toBe(true);
+      // On a property that is not a checklist's entries, the same card is refused.
+      page.cards[page.cards.length - 1].checklist.field = 'customer:status';
+      const wrong = await writeFile(pkg, view, `${JSON.stringify(page, null, 2)}\n`);
+      expect(wrong.written).toBe(false);
+      expect(wrong.validation?.findings.map((finding) => finding.message).join('\n')).toContain(
+        'a checklist reads a list of complex values',
+      );
+    });
+
     it("makes a new package on a server's model in one generator, the model a file in the repository", async () => {
       const pkg = join(packages, 'acme-contracts');
       const result = await writePackage(

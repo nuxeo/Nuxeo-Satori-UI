@@ -1,5 +1,9 @@
 import type { Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { readModel, schemasOf } from '../app-layout/content-model';
@@ -446,6 +450,237 @@ describe('app-model generator', () => {
       );
       expect(tree.exists(MODEL)).toBe(false);
     });
+  });
+
+  describe('a checklist, facets, a type with no schema of its own, and a folder', () => {
+    const model = () => JSON.parse(read(tree, `${ROOT}/content-model.json`));
+    const doctype = (name: string) => {
+      const xml = read(tree, MODEL);
+      const at = xml.indexOf(`<doctype name="${name}"`);
+      return at < 0 ? '' : xml.slice(at, xml.indexOf('</doctype>', at) + '</doctype>'.length);
+    };
+
+    it('writes a checklist property as the entries a checklist card reads, in the schema and the model', async () => {
+      await generate({ properties: 'number, steps:checklist' });
+      const xsd = read(tree, `${ROOT}/bundle/schemas/contract.xsd`);
+      expect(xsd).toContain(
+        '  <xs:element name="steps" type="nxs:stepsEntries" />\n' +
+          '  <xs:complexType name="stepsEntries">\n' +
+          '    <xs:sequence>\n' +
+          '      <xs:element name="entry" type="nxs:stepsEntry" minOccurs="0" maxOccurs="unbounded" />\n' +
+          '    </xs:sequence>\n' +
+          '  </xs:complexType>\n' +
+          '  <xs:complexType name="stepsEntry">\n' +
+          '    <xs:sequence>\n' +
+          '      <xs:element name="item" type="xs:string" />\n' +
+          '      <xs:element name="done" type="xs:boolean" />\n' +
+          '      <xs:element name="doneBy" type="xs:string" />\n' +
+          '      <xs:element name="doneOn" type="xs:date" />\n',
+      );
+      expect(
+        model().schemas.find((each: { name: string }) => each.name === 'contract').fields,
+      ).toEqual({
+        number: 'string',
+        steps: {
+          type: 'complex[]',
+          fields: { item: 'string', done: 'boolean', doneBy: 'string', doneOn: 'date' },
+        },
+      });
+      // Read back as the other generators read it: a list of complex values with those subfields.
+      const read_ = readModel(model(), 'content-model.json');
+      const steps = read_.schemas.get('contract')?.properties.get('steps');
+      expect(steps).toMatchObject({ type: 'complex', list: true });
+      expect([...(steps?.fields.keys() ?? [])]).toEqual(['item', 'done', 'doneBy', 'doneOn']);
+      // A checklist groups nothing: a terms aggregate is refused on it.
+      await expect(generate({ pageProvider: 'p', aggregates: 'contract:steps' })).rejects.toThrow(
+        '"contract:steps" is a complex[] property',
+      );
+    });
+
+    it("gives a type Nuxeo's own facets, Versionable with the uid schema, when first written", async () => {
+      await generate({ properties: 'number', facets: 'Versionable, Commentable' });
+      expect(doctype('Contract')).toBe(
+        '<doctype name="Contract" extends="Document">\n' +
+          '      <schema name="common" />\n' +
+          '      <schema name="dublincore" />\n' +
+          '      <schema name="contract" />\n' +
+          '      <schema name="uid" />\n' +
+          '      <facet name="Versionable" />\n' +
+          '      <facet name="Commentable" />\n' +
+          '    </doctype>',
+      );
+      expect(model().doctypes.Contract).toEqual({
+        parent: 'Document',
+        facets: ['Versionable', 'Commentable'],
+        schemas: ['common', 'dublincore', 'contract', 'uid'],
+      });
+      expect(model().facets).toEqual([
+        { name: 'Versionable', schemas: [] },
+        { name: 'Commentable', schemas: [] },
+      ]);
+      const asRead = readModel(model(), 'content-model.json');
+      const contractType = asRead.types.get('Contract');
+      expect(contractType && schemasOf(asRead, contractType)).toContain('uid');
+    });
+
+    it("adds an add-on's facet a given model describes, with its schema, and keeps it when --force writes the schema again", async () => {
+      await contract();
+      const addOn = `${ROOT}/../addon-model.json`;
+      tree.write(
+        addOn,
+        JSON.stringify({
+          doctypes: {},
+          facets: [
+            {
+              name: 'Signable',
+              schemas: [
+                { name: 'signable', prefix: 'sgn', '@prefix': 'sgn', fields: { status: 'string' } },
+              ],
+            },
+          ],
+          schemas: [],
+        }),
+      );
+      // Read from the file system, as the write tools give a model.
+      const file = join(mkdtempSync(join(tmpdir(), 'app-model-')), 'addon-model.json');
+      writeFileSync(file, read(tree, addOn));
+      await generate({ facets: 'Signable,Versionable', model: file });
+      expect(doctype('Contract')).toContain(
+        '      <schema name="contract" />\n' +
+          '      <schema name="uid" />\n' +
+          '      <facet name="Signable" />\n' +
+          '      <facet name="Versionable" />\n' +
+          '    </doctype>',
+      );
+      const entry = {
+        parent: 'Document',
+        facets: ['Signable', 'Versionable'],
+        schemas: ['common', 'dublincore', 'contract', 'uid', 'signable'],
+      };
+      expect(model().doctypes.Contract).toEqual(entry);
+      expect(model().facets.map((each: { name: string }) => each.name)).toEqual([
+        'Signable',
+        'Versionable',
+      ]);
+      expect(model().schemas.map((each: { name: string }) => each.name)).toContain('signable');
+      // Given again, nothing is added twice.
+      const xml = read(tree, MODEL);
+      await generate({ facets: 'Signable', model: file });
+      expect(read(tree, MODEL)).toBe(xml);
+      // The schema written again: the type's facets and schemas stay, in the component and the model.
+      await generate({ properties: 'number, value:double', force: true });
+      expect(model().doctypes.Contract).toEqual(entry);
+      expect(read(tree, MODEL)).toBe(xml);
+      // Without the model, a facet no model describes is refused.
+      await expect(generate({ facets: 'Sealed' })).rejects.toThrow(
+        '"Sealed" is not one of Nuxeo\'s own facets that bring no schema',
+      );
+    });
+
+    it("writes a type with no schema of its own, its properties all a facet's", async () => {
+      await generate({
+        type: 'Request',
+        schemaless: true,
+        facets: 'Versionable',
+        attachments: true,
+      });
+      expect(doctype('Request')).toBe(
+        '<doctype name="Request" extends="Document">\n' +
+          '      <schema name="common" />\n' +
+          '      <schema name="dublincore" />\n' +
+          '      <schema name="files" />\n' +
+          '      <schema name="uid" />\n' +
+          '      <facet name="Versionable" />\n' +
+          '    </doctype>',
+      );
+      expect(read(tree, MODEL)).toContain('<type name="Request">default</type>');
+      expect(model().doctypes.Request).toEqual({
+        parent: 'Document',
+        facets: ['Versionable'],
+        schemas: ['common', 'dublincore', 'files', 'uid'],
+      });
+      expect(tree.exists(`${ROOT}/bundle/schemas/request.xsd`)).toBe(false);
+      // No schema of its own, so no Properties heading for one.
+      expect(read(tree, `${ROOT}/bundle/agentic-ui-config/labels/en.json`)).not.toContain(
+        'layout.schema.request',
+      );
+    });
+
+    it('writes a folder whose Create menu offers its subtypes, and adds to them', async () => {
+      await contract();
+      await generate({ type: 'Register', folder: true, subtypes: 'Contract' });
+      expect(doctype('Register')).toBe(
+        '<doctype name="Register" extends="Folder">\n' +
+          '      <subtypes>\n' +
+          '        <type>Contract</type>\n' +
+          '      </subtypes>\n' +
+          '    </doctype>',
+      );
+      expect(read(tree, MODEL)).toContain(
+        '<!-- A folder: its Create menu offers its subtypes. -->',
+      );
+      expect(model().doctypes.Register).toEqual({
+        parent: 'Folder',
+        facets: ['Folderish'],
+        schemas: ['common', 'dublincore'],
+      });
+      expect(model().facets).toContainEqual({ name: 'Folderish', schemas: [] });
+      await generate({ type: 'Register', subtypes: 'Contract, File' });
+      expect(doctype('Register')).toBe(
+        '<doctype name="Register" extends="Folder">\n' +
+          '      <subtypes>\n' +
+          '        <type>Contract</type>\n' +
+          '        <type>File</type>\n' +
+          '      </subtypes>\n' +
+          '    </doctype>',
+      );
+      // Read back as the pipeline reads a model: it is one.
+      expect(readModel(model(), 'content-model.json').types.get('Register')).toBeDefined();
+    });
+
+    const refusals: [string, Partial<AppModelSchema>, string][] = [
+      [
+        '--schemaless with --properties',
+        { schemaless: true, properties: 'a' },
+        'give one of the two',
+      ],
+      [
+        'Folderish as a facet',
+        { properties: 'a', facets: 'Folderish' },
+        'write the type with --folder',
+      ],
+      [
+        'a facet twice',
+        { properties: 'a', facets: 'Versionable,Versionable' },
+        'lists "Versionable" twice',
+      ],
+      ['a facet name that is not one', { properties: 'a', facets: 'a b' }, '"a b" is not a facet'],
+      ['--model without --facets', { properties: 'a', model: 'x.json' }, 'give those too'],
+      [
+        '--subtypes on a type that is not a folder',
+        { properties: 'a', subtypes: 'File' },
+        'write the type with --folder too',
+      ],
+      [
+        'a subtype the model does not have',
+        { folder: true, subtypes: 'Nothing' },
+        '"Nothing" is no type of',
+      ],
+      [
+        '--facets on a type the package does not have',
+        { facets: 'Versionable' },
+        'has no type Contract to add',
+      ],
+      ['--buckets without --aggregates', { pageProvider: 'p', buckets: 20 }, 'give those too'],
+    ];
+    for (const [what, options, message] of refusals) {
+      it(`refuses ${what}, and writes nothing`, async () => {
+        const manifest = read(tree, MANIFEST);
+        await expect(generate(options)).rejects.toThrow(message);
+        expect(tree.exists(MODEL)).toBe(false);
+        expect(read(tree, MANIFEST)).toBe(manifest);
+      });
+    }
   });
 
   describe('refuses, and writes nothing', () => {

@@ -18,7 +18,7 @@
     },
     "properties": {
       "type": "string",
-      "description": "Writes the type: its properties, separated by commas, each <name>, <name>:<type> or <name>=<value>|<value>. A type is string (the default), long, double, boolean or date, or a list of one but boolean, such as string[]. Values make a string take only those, such as status=Draft|Active."
+      "description": "Writes the type: its properties, separated by commas, each <name>, <name>:<type> or <name>=<value>|<value>. A type is string (the default), long, double, boolean or date, or a list of one but boolean, such as string[]; or checklist, a list of the entries a checklist card reads, item, done, doneBy and doneOn, such as steps:checklist. Values make a string take only those, such as status=Draft|Active."
     },
     "schema": {
       "type": "string",
@@ -51,9 +51,35 @@
       "type": "string",
       "description": "With pageProvider: properties of the type, <prefix>:<name> separated by commas, that a queue's facets or a home's figures group the records by. The page provider then reads the search index, which alone answers aggregates, with a terms aggregate <prefix>_<name>_agg for each, and the type gets a search document, <Type>Search. Not with a ? in where: a queue has no record to fill it."
     },
+    "buckets": {
+      "type": "number",
+      "description": "With aggregates: how many buckets each aggregate answers, its most frequent values, 1 to 1000. Defaults to 10, Nuxeo's own: a facet on a larger team lists ten people, and no more."
+    },
+    "facets": {
+      "type": "string",
+      "description": "Facets the type declares, separated by commas, such as Versionable or an add-on's Signable: given when the type is first written, or alone to add them to it. Nuxeo's own that bring no schema (Commentable, HiddenInNavigation, NotFulltextIndexable, Orderable, Publishable, Versionable, which brings the uid schema too) need nothing more; any other must be described by the package's content-model.json or by model. Not Folderish: write a folder with folder."
+    },
+    "model": {
+      "type": "string",
+      "description": "With facets: a content model that describes them, { doctypes, facets, schemas }, such as one npm run app-package:model exported from a server with the add-on that registers them, into the checkout's tmp/. The facets and their schemas are copied into content-model.json."
+    },
+    "schemaless": {
+      "type": "boolean",
+      "description": "Write the type with no schema of its own: Nuxeo's common and dublincore, and what facets brings, such as a request whose properties are all an add-on's facet's. Not with properties.",
+      "default": false
+    },
+    "folder": {
+      "type": "boolean",
+      "description": "Write the type as a folder, extending Folder, such as a register: with properties for a schema of its own, or none. Its Create menu offers its subtypes.",
+      "default": false
+    },
+    "subtypes": {
+      "type": "string",
+      "description": "With folder, or alone for a folder type the package has: the types its Create menu offers, separated by commas, each one of the package's model or Nuxeo's own."
+    },
     "attachments": {
       "type": "boolean",
-      "description": "With properties, when the type is first written: give it Nuxeo's own files schema as well, files:files, which holds a record's attachments as a File's does. The document page's Attachments panel adds to it, and a file-list field shows it. The type still opens as a record page: only the file and note schemas keep a record's own view.",
+      "description": "With properties, schemaless or folder, when the type is first written: give it Nuxeo's own files schema as well, files:files, which holds a record's attachments as a File's does. The document page's Attachments panel adds to it, and a file-list field shows it. The type still opens as a record page: only the file and note schemas keep a record's own view.",
       "default": false
     },
     "force": {
