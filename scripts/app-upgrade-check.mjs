@@ -11,6 +11,13 @@
  *     [--previous-platform <repository>] [--root <repository>] [--deployment <file>] [--json]
  *   node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]
  *   node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]
+ *   node scripts/app-upgrade-check.mjs <package directory> --server <address>
+ *     [--previous <package directory>] [--root <repository>] [--json]
+ *
+ * `--server` is the server half (`app-upgrade-server.mjs`): before the package is installed over
+ * the version a running Nuxeo has, it reads that server, `GET` only and as `NUXEO_USER`, and adds
+ * what only the server shows to this check's own findings, the upgrade from the version installed
+ * held to the package given with `--previous`, or to the package itself when it is that version.
  *
  * `--since` compares each package, every one under `business-apps/packages/` when none is named,
  * and the platform, with what they were at a git ref: the working tree against the ref, a package
@@ -106,7 +113,9 @@ const USAGE =
   '       node scripts/app-upgrade-check.mjs <package directory> --previous <package directory>' +
   ' [--previous-platform <repository>] [--root <repository>] [--deployment <file>] [--json]\n' +
   '       node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]\n' +
-  '       node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]';
+  '       node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]\n' +
+  '       node scripts/app-upgrade-check.mjs <package directory> --server <address> [--previous <package directory>]' +
+  ' [--root <repository>] [--json]';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 const KITS = 'business-apps/packages';
 const NOTES = 'upgrade-notes.json';
@@ -175,7 +184,10 @@ const PLATFORM_KINDS = new Map([
  * each: a record page, an edit or a create form, and a queue.
  */
 const OVERRIDABLE = [
-  [/^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/, (match) => `layout ${match[1]}/${match[2]}`],
+  [
+    /^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/,
+    (match) => `layout ${match[1]}/${match[2]}`,
+  ],
   [/^queues\/([^/]+)\.json$/, (match) => `queue ${match[1]}`],
 ];
 
@@ -191,7 +203,12 @@ try {
   process.exit(await main(options));
 } catch (error) {
   // Any run that ends here could not be made, so it exits 2: a crash must not read as "not kept".
-  console.error(error instanceof Usage ? `app-upgrade-check: ${error.message}` : error);
+  // The server half's refusals are said as the command's own errors are: the message alone.
+  console.error(
+    error instanceof Usage || error?.name === 'Refusal'
+      ? `app-upgrade-check: ${error.message}`
+      : error,
+  );
   process.exit(2);
 }
 
@@ -208,7 +225,16 @@ function parse(argv) {
       if (!given(value) || !given(argv[index + 2]) || options[key]) return null;
       options[key] = { ref: value, path: argv[index + 2] };
       index += 2;
-    } else if (['--since', '--previous', '--previous-platform', '--root', '--deployment'].includes(arg)) {
+    } else if (
+      [
+        '--since',
+        '--previous',
+        '--previous-platform',
+        '--root',
+        '--deployment',
+        '--server',
+      ].includes(arg)
+    ) {
       const key = arg.slice(2);
       if (!given(value) || options[key] !== undefined) return null;
       options[key] = value;
@@ -216,6 +242,15 @@ function parse(argv) {
     } else if (arg.startsWith('-')) return null;
     else options.packages.push(arg);
   }
+  // With --server, --previous is the package as installed, not a mode of its own; the server's own
+  // deployment layer is read, so --deployment is not given, and the platform is the one installed.
+  if (options.server !== undefined)
+    return options.packages.length === 1 &&
+      ['export', 'place-at', 'since', 'previous-platform', 'deployment'].every(
+        (key) => options[key] === undefined,
+      )
+      ? options
+      : null;
   const modes = ['export', 'place-at', 'since', 'previous'].filter(
     (mode) => options[mode] !== undefined,
   );
@@ -257,8 +292,22 @@ async function main(options) {
   }
   const current = await readPlatform(root);
   const notes = readNotes(root, PLATFORM_NOTES, PLATFORM_KINDS, PLATFORM_NOTES);
-  const deployment =
-    options.deployment === undefined ? null : readDeployment(options.deployment);
+  if (options.server !== undefined) {
+    // The server half: what the server installed has, read only, with this check's own findings
+    // for the upgrade from the version installed, held to the package as installed.
+    const { serverCheck } = await import('./app-upgrade-server.mjs');
+    const kit = readKit(directoryOf(options.packages[0], 'the package'));
+    const given =
+      options.previous === undefined ? null : readKit(directoryOf(options.previous, '--previous'));
+    return serverCheck({
+      server: options.server,
+      kit,
+      given,
+      asJson: options.json === true,
+      offline: (before) => check(before, kit, { previous: null, current, notes }),
+    });
+  }
+  const deployment = options.deployment === undefined ? null : readDeployment(options.deployment);
   if (options.previous !== undefined) {
     const previous =
       options['previous-platform'] === undefined
@@ -428,7 +477,11 @@ function readDeployment(path) {
       `--deployment ${shown}: ${what}. It is the deployment layer's export, as GET /nuxeo/agentic-ui-apps/layer.json answers it: ` +
         '{ "format": "nuxeo-agentic-ui-layer/1", "apps": [{ "id", "files": [{ "path", "version" }] }] }.',
     );
-  if (!isRecord(content) || content.format !== 'nuxeo-agentic-ui-layer/1' || !Array.isArray(content.apps))
+  if (
+    !isRecord(content) ||
+    content.format !== 'nuxeo-agentic-ui-layer/1' ||
+    !Array.isArray(content.apps)
+  )
     throw wrong('it is not the export');
   const apps = new Map();
   for (const app of content.apps) {
@@ -1544,7 +1597,8 @@ function report(results, asJson, gone = []) {
       out(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
     for (const [note, items] of byNote(result.covered))
       console.log(`  kept by the note for ${list(items)}, at ${note.version}: ${note.note}`);
-    for (const warning of result.warnings) console.log(`  warning: ${warning.item}: ${warning.what}`);
+    for (const warning of result.warnings)
+      console.log(`  warning: ${warning.item}: ${warning.what}`);
     for (const line of result.said) console.log(`  note: ${line}`);
   }
   if (results.length === 0) console.log('No package to check.');

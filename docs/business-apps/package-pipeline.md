@@ -564,7 +564,9 @@ tag app-package/<name>/<version>
 
 Phase 10 of the [development plan](development-plan.md) asks for "an upgrade that keeps every
 app's configuration". This is its offline half, built on 25 November 2026: it runs in CI with no
-server, and nothing here installs anything on one.
+server, and nothing here installs anything on one. Its server half, built on 26 November 2026,
+reads a running server before an install, and changes nothing there
+([On a server, before the install](#on-a-server-before-the-install)).
 
 A customer's configuration is made on one version of a kit and of the platform. Their own package
 layers over the kit's: it `<require>`s the kit's component to come after it, replaces or disables a
@@ -763,6 +765,122 @@ labels, when approval moved into the claims review workflow; contracts 0.2.0, fr
 the app's address from `contracts` to `contract-desk`. Each kit now has the note that says what to
 change, and both are kept.
 
+### On a server, before the install
+
+The server half, built on 26 November 2026, is for an administrator about to install a package
+over the version a running Nuxeo has. Given that server, it adds what only the server shows to the
+offline findings for the upgrade from the version installed, and prints them as the offline half
+does, each with its severity and what to do:
+
+```bash
+node scripts/app-upgrade-check.mjs business-apps/packages/payers-claims-demo --server https://<host>/nuxeo
+node scripts/app-upgrade-check.mjs <the kit> --server https://<host>/nuxeo --previous <the kit as installed>
+```
+
+The address is the server's, with `/nuxeo`, as `app-package --model-server` takes it. `--previous`
+is the package as installed, such as the kit at its tag; without it the package is held to itself,
+which only the version installed may be. `--json` prints the report as data, with every read made.
+[`scripts/app-upgrade-server.mjs`](../../scripts/app-upgrade-server.mjs) is the check.
+
+**It only reads.** Every request is a `GET`, sent by one function, `guardedFetch`, which refuses
+before anything is sent any other method, a body, another origin, an address holding a
+percent-encoded slash, backslash, dot or semicolon, or a semicolon, which a proxy that decodes the
+path would turn into a move up, and any address not on its list, `READS`; it never follows a
+redirect. A name from the package or from an answer is put in an address only when it is letters,
+digits, `_`, `.` and `-`, but for the schemas' names `/config/schemas` lists, which the content
+model's reader encodes, and the guard then holds as it holds every address. The
+report says how many reads it made, and `--json` lists each. The credentials are `NUXEO_USER` and
+`NUXEO_PASS`, in the `Authorization` header only, never printed, over HTTPS, or HTTP to this
+machine; it refuses to run when Node is told to send through the environment's proxy
+(`NODE_USE_ENV_PROXY`), which would carry them there. It reads the content model as
+`app-package --model-server` does (`scripts/nuxeo-content-model.mjs`), through the same guard, and
+a page provider's parameters and search client as the Builder MCP server does
+(`tools/builder-mcp/src/page-providers.ts`).
+
+**It refuses a server it cannot identify,** exit 2:
+
+- `/api/v1/me` does not answer as `NUXEO_USER`, the identity guard's judgement, or answers someone
+  who is not an administrator: every count would be of what they may read;
+- `/api/v1/management/distribution` lists no `org.nuxeo.agentic.core`, or not the kit's bundle, its
+  `Bundle-SymbolicName`: the kit is not installed, and a first install needs no check;
+- the version installed cannot be read, is read two ways that disagree, waits for a restart, is in
+  a state the check does not know, or is two versions running at once. It is read from the package
+  manager's listing, `GET /nuxeo/site/connectClient/packages/local?type=<the package's type>`, the
+  page the Connect client serves an administrator, where the version in force is `running`; and
+  from the app registry, whose listing gives `app.json`'s `packageVersion` to someone in one of the
+  app's groups. The distribution lists the kit's bundle at 0.0.0: Nuxeo reads a bundle's version
+  from a Maven `pom.properties`, which a kit's jar does not have. The listing is HTML, and its rows
+  link to installing and removing a package: the check reads the page and follows nothing on it;
+- the package is older than the version installed, or newer with no `--previous`, or `--previous`
+  is another version;
+- a layout the installed version's bundle serves, `/nuxeo/agentic-ui-config/layouts/...`, differs
+  from the package it is held to, or is one the package does not have: it is another build of that
+  version. Of the same version, `mp-install` skips the new build as unchanged
+  ([administrator guide](administrator-guide.md), section 5).
+
+**What it checks:**
+
+| Check          | Read on the server                                                                                                                                | Found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Records        | NXQL counts, `/api/v1/search/lang/NXQL/execute`, with no filter, so trashed records are among them; the content model                             | **Error:** records of a type the upgrade removes; carrying a schema it removes, or one a type of the same name stops carrying; holding a value of a property it removes, or whose type changes, read from the XSD with its constraints set aside; of a type whose lifecycle in the new version does not have their state. A type the package appends to, such as `File`, is not the package's to remove. **Warning:** records holding a value an enumeration no longer allows; records in a state the lifecycle keeps only as a way in, with no transition to it, as claims made before payers 0.4.0 wait in `project`. The kit's note for the item, if it has one, is in the steps                                                                                                                             |
+| Page providers | `/api/v1/search/pp/<name>` and its `execute`, with a queue's or a home figure's parameters; `/api/v1/management/page-providers`                   | **Error:** a page provider the package changes, as written, CDATA included, that the server does not answer, or answers without an aggregate both versions have, with the search client that answers it: the repository answers none. Said instead: an aggregate only the new version has, or one the new version moves to another class, answered after the upgrade; a page provider given a parameter a related list fills from its record, which is not run                                                                                                                                                                                                                                                                                                                                                  |
+| Workflows      | `/api/v1/workflowModel`; NXQL, by `docri:modelId`                                                                                                 | **Error:** workflows neither done nor cancelled on a route model whose zip the package changes. The routing service replaces the model at the next start (the kit's workflow component says how), and a workflow keeps the nodes it was started with, as one started under payers 0.6.0 kept a supervisor's step that cannot be completed                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Layer          | `/nuxeo/agentic-ui-apps/layer.json`, `apps/<id>/layer.json` and `apps/<id>/layer/<path>`, as an administrator; `/api/v1/management/configuration` | **Error:** an override in force the new version's validator refuses, held as the server holds it (`validateDeploymentFile`): to the package's `app.json` and `actions.json`, the ids the deployment registers, `nuxeo.agentic.ui.layer.registered.*`, of which nothing else in the configuration is kept, and the content model the server will have, its own less the types, schemas and properties the upgrade removes, under the package's stand-in model. After the upgrade the registry serves the package's file instead. **Warning:** a draft the layout designer saved that does not fit, the app's summary listing a draft of a file no override replaces yet; a file an override or a draft replaces that the upgrade adds, changes or removes; an override made on another version of the kit's file |
+| Vocabularies   | `/api/v1/directory/<name>`                                                                                                                        | **Error:** an entry of a CSV the package changes that the server's vocabulary has not, unless its `createTablePolicy` is `always`: Nuxeo loads the file when it makes the directory, and again at each start only with `always`, as its directory configuration says; not measured here. **Warning:** with `always`, entries an administrator added, which the next start drops                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Diagnostics    | The app registry's `diagnostics`; the distribution's `errors`                                                                                     | **Warning:** each error the server reports, for the app or its runtime, before the upgrade, so that a new one after it can be told                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+An error makes the exit code 1, as an offline finding does; a warning leaves it alone. Exit 2 is a
+check not made: a count the server cannot make, a read of what a check weighs that fails, a
+redirect or a connection that fails anywhere. A page provider's own answer is what its check
+weighs, so its failure is a finding. Two reads only help, and are said when they fail: one of the
+two sources of the version, and the page providers' search clients. A deployment layer that is
+switched off is said, and so is each check with nothing to look at.
+
+**Not seen:** whether a customer's own component started, which only `server.log`'s
+`Component Loading Status` says, though a runtime error the distribution reports is a warning;
+records of a schema or a type the package as installed does not define; workflows started on a
+model an earlier upgrade replaced, whose `docri:modelId` names a model that is gone; a complex
+property's values, which are not counted; the Admin Center's install path; and the upgrade itself,
+which the server-side test below would install and check. The offline half reads a type the
+package appends to, such as `File`, as one of its own, and asks a note of its removal: not mended
+here.
+
+**Its controls:** `npm run app-upgrade:server-selftest` runs the check, as a command, against a
+stand-in Nuxeo on this machine that answers each read as a Nuxeo 2025 with the demo kit installed
+does. It holds 48 negative controls and 18 sound ones: each finding, with its severity and exit code; each refusal; and the
+guard called directly, refusing a `POST`, a body, a `DELETE`, another origin, an address it does
+not read, the listing's install link, two encoded slashes, an encoded semicolon and a path that climbs out of the
+server's address. The sound ones include the version installed checked against itself; an upgrade
+that changes a page provider, a route model, a vocabulary and an overridden file with nothing left
+behind; an enumeration widened; a type the package stops appending to; a page provider moved to
+the index; an override naming a row action the deployment registers; and those that only warn.
+After every run each request the stand-in saw must be a `GET` with the credentials, of an address
+on a list the selftest writes apart from the check's own, one for one with the reads the report
+lists, and neither the password nor the encoded header may be in what the check printed or in an
+address. Each check taken out of the script, or turned to the wrong version or model, each refusal, the guard's method, encoded-path and address checks, the credentials header, the report's list of reads, the selftest's own list and the routing of `--server` turn their control red: 63 such changes, each seen failing. The workflow runs it beside the offline half's controls.
+
+**Run on the local Docker Nuxeo,** 26 November 2026, read only, as its administrator: payers
+0.6.1 against the 0.6.1 installed, the version read from the package manager, the registry showing
+the administrator no app. Every configuration kept, exit 0: no record of a state the claim
+lifecycle does not have, no page provider, route model or vocabulary changed, the deployment layer
+switched off, and one warning, the error the registry already reports for the kit's action
+`payers.claim.referToInvestigations`, whose operation the server's allow-list does not hold. The
+package manager's file was the same, byte for byte, after the run. Since the version installed was
+the version checked, that run read the identity, the version, the layouts, the content model, two
+counts and the layer's switch. A second run, the same day, held payers 0.7.0, from the staging
+branch, to the 0.6.1 installed, given as `--previous` from the commit before 0.7.0 merged: kept,
+exit 0, with the same warning. It read that 0.7.0 replaces the route model `PayersClaimReview`,
+whose zip changed, and counted no workflow running on the server's model, by its `docri:modelId`;
+and that the server has no vocabulary `PayersAppealDecision` yet, which 0.7.0 adds. The package
+manager's file was again the same after it. What neither run reached, the counts of what an upgrade
+removes, a page provider run, a vocabulary's entries and the layer's files, has been run only
+against the stand-in. The answers the stand-in gives were each read first from that server, by
+hand and read only: `/me`, the distribution, the package manager's listing, the registry, the
+layouts, the content model, an NXQL count, a page provider's definition and its `execute` with
+aggregates, `/management/page-providers`, `/workflowModel`, a route model's document, a vocabulary,
+`/management/configuration`'s two groups of properties, and the layer's export switched off. The
+layer's files, with the layer on, were read from `LayerService.java`, not from a server.
+
 ### What it does not see, and what a server-side test would add
 
 - **Only what a kit names stands for what a customer names.** The platform's side weighs the IDs
@@ -775,7 +893,10 @@ change, and both are kept.
   complex property's subfields, or a facet.
 - **A server-side upgrade test**, which is the later step, would install the kit's version before
   and a customer's configuration package on a server, upgrade the kit and the platform package
-  with `nuxeoctl mp-install`, and check what only a server shows:
+  with `nuxeoctl mp-install`, and check what only a server shows. The server half above reads,
+  before an install, what of this a running server already shows: the records, page providers,
+  route models, vocabularies and deployment layer an upgrade would leave behind. It installs
+  nothing, so what only an install shows is still this test's:
   - that the customer's component still starts, with no pending component, and that the served
     configuration, `bootstrap.json`, `manifest.json`, `layouts.json` and the app registry's
     listing and files, is the customer's, with the same contributions replaced or removed and no
