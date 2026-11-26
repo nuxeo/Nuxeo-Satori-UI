@@ -66,6 +66,13 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
   (app-definition-v2.md, section 4). An action is offered over the whole query only while its
   handler declares the mapping (`ExtensionActionRegistry.runsOverWholeQuery`), so a customer's
   replacement for Delete's handler takes Delete off the whole query.
+- **Draws a search** for a queue with one, as the records kit's barcode lookup is: an
+  `nxs-text-field` and an `nxs-button` in a `role="search"` form above the list, and the list only
+  once something is searched for. The text, trimmed, is the page provider's last parameter, after
+  the queue's own; Enter in the field searches, as a scanner presses it; the same text again asks
+  nothing. With `"open": "single"`, results that are one record alone open its page, once per
+  search; never in a preview. A finding in the search refuses the queue (app-definition-v2.md,
+  section 4).
 
 **In the layout designer's preview** (`libs/features/layout-designer`), the page is given the file it
 draws, `content`, instead of reading `queues/<id>.json`, and drawn `readOnly`: it asks the page

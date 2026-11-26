@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.overdue",
+  "pageProvider": "records_overdue",
+  "columns": [
+    "phys:barcode",
+    "dc:title",
+    "phys:borrower",
+    "phys:dueBack",
+    "phys:checkedOutBy",
+    "phys:locationPath"
+  ],
+  "sort": [
+    {
+      "field": "phys:dueBack",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50
+}

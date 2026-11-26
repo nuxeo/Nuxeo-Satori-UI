@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "physical_location",
+      "labelKey": "records.card.physicalLocation.physical_location",
+      "fields": ["ploc:kind", "ploc:path"]
+    },
+    {
+      "id": "holds",
+      "labelKey": "records.card.physicalLocation.holds",
+      "span": 2,
+      "related": {
+        "pageProvider": "records_location_holds",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "phys:barcode",
+          "dc:title",
+          "phys:kind",
+          "phys:state",
+          "phys:locationPath",
+          { "field": "phys:borrower", "widget": "user" },
+          { "field": "phys:dueBack", "widget": "date" }
+        ],
+        "sort": [{ "field": "phys:locationPath", "order": "asc" }],
+        "pageSize": 50
+      }
+    },
+    {
+      "id": "within",
+      "labelKey": "records.card.physicalLocation.within",
+      "span": 2,
+      "related": {
+        "pageProvider": "records_location_within",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": ["dc:title", "ploc:kind"],
+        "sort": [{ "field": "dc:title", "order": "asc" }],
+        "pageSize": 50
+      }
+    }
+  ]
+}

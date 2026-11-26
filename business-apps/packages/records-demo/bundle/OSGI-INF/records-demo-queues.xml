@@ -6,7 +6,7 @@
   the stand-in's own types only.
 
   Each reads the repository with the reader's permissions: a person who may not read the
-  disposition runs folder sees none of them.
+  disposition runs folder sees none of them, nor a physical record they may not read.
 -->
 <component name="nuxeo.config.records-demo.queues" version="1.0">
   <require>org.nuxeo.agentic.records.types</require>
@@ -55,6 +55,66 @@
       </pattern>
       <sort column="dreq:at" ascending="true" />
       <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- Physical records, the add-on's since its 0.3.0. -->
+
+    <!-- The barcode lookup: the physical record a barcode names, given the barcode, typed or
+         scanned. Nuxeo quotes the parameter as a literal; a barcode no record holds, or one the
+         reader may not read, finds nothing. -->
+    <coreQueryPageProvider name="records_physical_by_barcode">
+      <pattern>
+        SELECT * FROM PhysicalRecord WHERE phys:barcode = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0
+      </pattern>
+      <sort column="phys:barcode" ascending="true" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The physical records checked out, the soonest due back first. -->
+    <coreQueryPageProvider name="records_checked_out">
+      <pattern>
+        SELECT * FROM PhysicalRecord WHERE phys:state = 'out'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="phys:dueBack" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- Those of them past the time they were due back, the longest overdue first. -->
+    <coreQueryPageProvider name="records_overdue">
+      <pattern>
+        SELECT * FROM PhysicalRecord WHERE phys:state = 'out' AND phys:dueBack &lt; NOW()
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="phys:dueBack" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- What a location holds, given its id: every physical record kept there or in a location
+         inside it, checked out or not, which phys:locations names. -->
+    <coreQueryPageProvider name="records_location_holds">
+      <pattern>
+        SELECT * FROM PhysicalRecord WHERE phys:locations = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="phys:locationPath" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The locations inside a location, given its id. -->
+    <coreQueryPageProvider name="records_location_within">
+      <pattern>
+        SELECT * FROM PhysicalLocation WHERE ecm:parentId = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:title" ascending="true" />
+      <pageSize>50</pageSize>
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>
   </extension>

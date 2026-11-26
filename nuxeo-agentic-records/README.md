@@ -1,11 +1,12 @@
 # Nuxeo Agentic Records
 
-The records module's server add-on, its first two slices: a **disposition review** on the
-platform's retention module, and the **audit export** and **access logging** a records specialist
-reviews, for phase 9 of the business apps
-[development plan](../docs/business-apps/development-plan.md) ("A disposition run: the records
-due, approved by two people, with a certificate"; "audit export; access logging"; "a records
-specialist accepts the disposition audit export"). A Maven module beside `nuxeo-agentic-core`, with
+The records module's server add-on, version 0.3.0, its first three slices: a **disposition
+review** on the platform's retention module; the **audit export** and **access logging** a records
+specialist reviews; and **physical records**, with locations, barcodes and chain of custody, for
+phase 9 of the business apps [development plan](../docs/business-apps/development-plan.md) ("A
+disposition run: the records due, approved by two people, with a certificate"; "disposition review;
+physical records with locations, barcodes and chain of custody; audit export; access logging"; "a
+records specialist accepts the disposition audit export"). A Maven module beside `nuxeo-agentic-core`, with
 a Marketplace package of its own, on decision B's recommendation, "one add-on per domain module"
 ([decision log](../docs/business-apps/decisions.md)). The decision is still open, and the log's
 note says what changes if it goes another way.
@@ -46,6 +47,21 @@ that review will read.
   its `download` event; the add-on adds a record's views, a record under retention or a legal hold
   sent to a person as a document of its own, at about 0.1 ms a read, and each disposition run's
   decisions on each of its records ([below](#access-logging)).
+- **Physical records** ([below](#physical-records)): a box, a file or a volume is a
+  `PhysicalRecord`, a record of the retention module's like any other, under the same rules and
+  holds. The server gives it a **barcode** when it is made, from the platform's sequencer, as the
+  document control add-on numbers its documents, with a check digit; it is kept at a
+  `PhysicalLocation`, a site, a room, a shelf or a position, each inside the one before it.
+- **Chain of custody, on the server:** a person with `RecordCustody` files a `CustodyRequest` in the
+  repository's custody desk to **move**, **check out** or **return** a record, by its barcode or its
+  id, saying why. The server records each on the record, with who, from where to where, when and
+  why, and in the platform's audit as an entry of its own kind, `custody`. **A record checked out is
+  not checked out again, nor moved, until it is returned**, two requests at once included. **Its
+  custody cannot be edited:** no one changes or removes an entry, an administrator included.
+- **Disposed of by the same run, with the same two approvals:** a physical record due is held in a
+  run as an electronic one is, and the second approval records its **destruction** or its
+  **transfer**, to whom its record names, on the record, in its custody and on the certificate. It
+  is not deleted: nothing is deleted beyond the run's electronic records, as before.
 
 ## The platform's retention module: used, and how
 
@@ -98,6 +114,11 @@ It cannot be undone: that is why it takes two people other than the starter, a c
 record at the moment of disposal, one transaction, and a certificate. A record's file is removed by
 the platform's blob garbage collection, as after any deletion; its versions as the platform's
 version removal policy says.
+
+**A physical record is not deleted.** What a run disposes of is the box, the file or the volume
+itself, which leaves the organisation's custody, shredded or handed to an archive: the run records
+that, and keeps the document, with its barcode and its custody, so that the barcode still says what
+became of it and is never given to another record ([below](#in-a-disposition-run)).
 
 ## The audit export
 
@@ -164,7 +185,7 @@ happened, to which record, by whom and when.
 | `entry_id`           | The audit's own id for the entry: the order the audit wrote it, and how to find it again                                                               |
 | `event_date`         | When it happened, a UTC instant                                                                                                                        |
 | `logged_date`        | When the audit recorded it: a moment after `event_date`                                                                                                |
-| `kind`               | `retention`, `hold`, `disposition`, `deletion`, `read`, `change`, `export` or `other`, below                                                           |
+| `kind`               | `retention`, `hold`, `disposition`, `custody`, `deletion`, `read`, `change`, `export` or `other`, below                                                |
 | `event`              | The audit's event ID, such as `afterSetLegalHold`                                                                                                      |
 | `what`               | What it means, in a few words, such as "Legal hold placed"; an event the add-on does not know reads as its ID                                          |
 | `user`               | Who: the person, or, for what the add-on's session did, `system`, such as the deletion of a record disposed of                                         |
@@ -182,21 +203,27 @@ happened, to which record, by whom and when.
 | `download_reason`    | For a file read: `download`, `view`, `preview` or `rendition`, as the platform says                                                                    |
 | `blob_xpath`         | Which file: `file:content`, or a rendition's or a picture view's                                                                                       |
 | `file_name`          | The file's name                                                                                                                                        |
+| `barcode`            | For a physical record's entry, its custody and its disposal: its barcode                                                                               |
+| `custody_from`       | For a move, a check-out, a destruction and a transfer: the path of the location it left, as it read then                                               |
+| `custody_to`         | For a registration, a move and a return: the path of the location it was put at, as it read then                                                       |
+| `borrower`           | For a check-out and a return: to whom it was lent                                                                                                      |
+| `due_back`           | For a check-out: when it was due back, a UTC instant                                                                                                   |
 | `category`           | The audit's category: `records` for the add-on's entries, `eventDocumentCategory` for most of the platform's                                           |
 | `extended`           | The rest of the entry's extended information, as one line of JSON with its keys sorted: a run's starter and approvers, an approval's number, and so on |
 
 The kinds, by event ID:
 
-| Kind          | Events                                                                                                                                                                                |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `retention`   | `afterMakeRecord`, `retentionRuleAttached` (the retention module's), `afterSetRetention`, `afterExtendRetention`, `afterUnsetRetention`, `retentionExpired`, `retentionActiveChanged` |
-| `hold`        | `afterSetLegalHold`, `afterRemoveLegalHold`                                                                                                                                           |
-| `disposition` | The add-on's: `dispositionRunStarted`, `dispositionRunApproved`, `dispositionRunRejected`, `dispositionRunHalted`, `recordDisposed`                                                   |
-| `deletion`    | `documentRemoved`, `versionRemoved`, `proxyRemoved`                                                                                                                                   |
-| `read`        | `download` (the platform's), `recordViewed` (the add-on's)                                                                                                                            |
-| `export`      | `recordsAuditExported`                                                                                                                                                                |
-| `change`      | The platform's other document events: created, modified, moved, permissions changed, locked, versioned, trashed, a lifecycle transition, and so on                                    |
-| `other`       | Anything else, under its own event ID                                                                                                                                                 |
+| Kind          | Events                                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `retention`   | `afterMakeRecord`, `retentionRuleAttached` (the retention module's), `afterSetRetention`, `afterExtendRetention`, `afterUnsetRetention`, `retentionExpired`, `retentionActiveChanged`                                    |
+| `hold`        | `afterSetLegalHold`, `afterRemoveLegalHold`                                                                                                                                                                              |
+| `disposition` | The add-on's: `dispositionRunStarted`, `dispositionRunApproved`, `dispositionRunRejected`, `dispositionRunHalted`, `recordDisposed`; and a physical record's, `recordDestroyed` and `recordTransferred`, its record kept |
+| `custody`     | The add-on's, a physical record's chain of custody: `custodyRegistered`, `custodyMoved`, `custodyCheckedOut`, `custodyReturned`                                                                                          |
+| `deletion`    | `documentRemoved`, `versionRemoved`, `proxyRemoved`                                                                                                                                                                      |
+| `read`        | `download` (the platform's), `recordViewed` (the add-on's)                                                                                                                                                               |
+| `export`      | `recordsAuditExported`                                                                                                                                                                                                   |
+| `change`      | The platform's other document events: created, modified, moved, permissions changed, locked, versioned, trashed, a lifecycle transition, and so on                                                                       |
+| `other`       | Anything else, under its own event ID                                                                                                                                                                                    |
 
 **The CSV,** `records-audit-<export id>.csv`, the export's main file: as the certificate's, RFC 4180,
 every field in double quotes, UTF-8 with a byte order mark, times as UTC instants, and a field a
@@ -205,6 +232,12 @@ id>.json`, its attachment: `{"export": {...}, "entries": [...], "summary": {...}
 scope, period, filer, the format's version and the columns first; an object per row with the CSV's
 column names, numbers as numbers, `record_exists` a boolean and `extended` an object; and last the
 counts and the CSV's SHA-256, so that the JSON file vouches for the CSV.
+
+**The format's version** is the JSON file's `export.format`: **2** since the add-on's 0.3.0, which
+added the five columns of a physical record, `barcode` to `due_back`, before `category`; 1 before
+it. A program that reads the CSV by its header row reads both; one that reads it by position reads
+`category` and `extended` five columns later. A custody entry's location ids, and a transfer's
+recipient, `transferTo`, are in `extended`.
 
 ### Kept as written
 
@@ -242,6 +275,11 @@ they are asked to check, for a seeded period with a disposition run in it:
 7. **Reads:** views and file reads of the records under retention are there, by whom and when, and
    the kind of read (`download_reason`); the specialist knows what is not logged (below).
 8. **Nothing outside:** no row is outside the folder or the period.
+9. **Each physical record disposed of** has its chain of custody, `custody` rows from its
+   registration on, each with who, from where to where, when and the reason in `comment`; then its
+   run's rows as an electronic record's; and, in place of a deletion, `recordDestroyed` or
+   `recordTransferred`, with its barcode, the location it left, the run and the certificate, and
+   `record_exists` `yes`. The certificate's CSV lists it with the same barcode, and how.
 
 None of this has been done with a records specialist: the add-on is installed on no server.
 
@@ -277,6 +315,9 @@ bundles, records a document read without its file.
   certificate. The platform logs the deletion itself as the add-on's session's, `system`, so without
   these a record's history would not say who decided.
 - **An export written,** `recordsAuditExported`, on the export.
+- **A physical record's custody,** `custodyRegistered`, `custodyMoved`, `custodyCheckedOut` and
+  `custodyReturned`, and its disposal, `recordDestroyed` or `recordTransferred`
+  ([below](#physical-records)): who, from where to where, to whom, until when, and why.
 
 Each is an event of the add-on's, fired in the transaction of what it records, so that a refused or
 failed request, or a read whose transaction is rolled back, records nothing. `RecordsAuditWriter`
@@ -339,22 +380,170 @@ answer is the request, with its outcome: `started`, `approved`, `disposed`, `hal
 Runs and certificates are written by the add-on alone. A run's states: `pending`, then `disposed`,
 `halted` or `rejected`.
 
+**A physical record's custody is reached the same way:** a `CustodyRequest` filed in the
+repository's `CustodyDesk`, which a second synchronous listener, `PhysicalListener`, checks and
+does, inside the same lock ([Physical records](#physical-records)). Still no operation, and no
+endpoint.
+
 ## The certificate
 
 A `DispositionCertificate`, `certificate-<run number>`, beside the run, written in the transaction
 that deletes the records, then made a record, so that the repository keeps its file as written:
 
 - **its properties** (`dcert:`): the run and its number, who started it and when, the approvals,
-  when the records were disposed of and how (`deleted`), their count, each record (its id, path,
-  title, type, rule id and title, and the day its retention ended), and the SHA-256 of the CSV;
+  when the records were disposed of and how (`dcert:method`: each method once, in this order,
+  `deleted`, `destroyed`, `transferred`), their count, each record (its id, path, title, type, rule
+  id and title, the day its retention ended, and for a physical record its barcode, `disposal`,
+  `destroy` or `transfer`, and to whom), and the SHA-256 of the CSV;
 - **its file**, `disposition-certificate-<n>.csv`: one row per record, each row whole on its own
   (the run's number, starter and start, both approvers and when, when disposed of, how, and the
-  record's identifiers, rule and retention end), so that a records specialist can sort and filter it
-  in a spreadsheet. RFC 4180, UTF-8 with a byte order mark, times in UTC. A field that a spreadsheet
-  would read as a formula (`=`, `+`, `-`, `@`, a tab, a carriage return) starts with `'`, so such a
-  title reads in the CSV with a `'` the certificate's properties do not have.
+  record's identifiers, rule and retention end, then its `barcode` and `transferred_to`), so that a
+  records specialist can sort and filter it in a spreadsheet. Its `disposition` is the record's:
+  `deleted`, `destroyed` or `transferred`. RFC 4180, UTF-8 with a byte order mark, times in UTC. A
+  field that a spreadsheet would read as a formula (`=`, `+`, `-`, `@`, a tab, a carriage return)
+  starts with `'`, so such a title reads in the CSV with a `'` the certificate's properties do not
+  have. The two columns of 0.3.0 are after the others, so that a column read by its position reads
+  as before.
 
 The run keeps the certificate's id and the CSV's SHA-256 too.
+
+## Physical records
+
+A box, a file or a volume, kept at a location in a records centre, with a barcode and a chain of
+custody. Since 0.3.0.
+
+### The types
+
+| Type               | What it is                                                                                                                                                         | Who makes it                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `PhysicalRecord`   | A box, a file or a volume, filed where its records are, as an electronic record: a record of the retention module's like any other. No file, no folder, no version | Whoever may create documents in its folder, who may read the location it is kept at |
+| `PhysicalLocation` | A `site`, a `room`, a `shelf` or a `position`, each inside the one before it: a site anywhere but in another location, a room in a site, and so on                 | Whoever may create documents where it is made                                       |
+| `CustodyDesk`      | The repository's one desk, at its root, where custody requests are filed                                                                                           | An administrator, once                                                              |
+| `CustodyRequest`   | A move, a check-out or a return, filed in the desk                                                                                                                 | A person with `RecordCustody` on the desk                                           |
+
+**The same retention and holds as an electronic record.** The retention module's rules attach to a
+`PhysicalRecord` as to any type a rule's `retention_rule:docTypes` lists; the platform's holds
+apply to it; the repository refuses to delete it while it is under either. The add-on decides
+neither, as for an electronic record.
+
+**What its creator writes** (`phys:`, schema `physical_record`): `kind`, `box`, `file` or `volume`;
+`location`, the id of the location it is kept at; and `dispositionAction`, `destroy` by default or
+`transfer`, with `transferTo`, who receives it, up to 500 characters. **The server writes the
+rest**, over whatever was sent: the barcode, issued last so that a refused record spends none; the
+location's path, `locationPath`, as its titles read; `locations`, the ids of the location and of
+every location above it, which a location's page lists by; `state`, `in`; and the first entry of
+its custody, `registered`, by its creator, at the location. A location its creator may not read is
+refused as one that does not exist, 404; one in the trash, 409.
+
+**A location's path** (`ploc:path`) is its title after every title above it, its site first, joined
+by `/`: `Northfield / Room 1 / Shelf A / Position 1`. Its kind, its path and its title are kept as
+they were made, since every record put there carries the path; nor is a location moved or copied,
+nor, but by an administrator, deleted or put in the trash while it or a location inside it holds a
+record. A location renamed is a new location, and its records are moved to it.
+
+### Barcodes
+
+`PR000000422`: a prefix, the sequencer's value with leading zeros to eight digits, and a check
+digit, Luhn's over those digits. A code-128 or a code-39 label prints it as it is.
+
+| Step            | What happens                                                                                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A record made   | The next value of the platform's default `UIDSequencer`, under the key `org.nuxeo.agentic.records.barcode`, as the document control add-on numbers a document. On LTS 2025, `KeyValueStoreUIDSequencer` |
+| The prefix      | `PR`, or what `nuxeo.agentic.records.barcode.prefix` says in `nuxeo.conf`: one to four capital letters, or `PR`. Every prefix counts in the one sequence, so a new prefix gives no value a second time  |
+| The check digit | One digit mistyped, or two neighbouring digits swapped, makes the barcode no barcode: a request naming it is refused, 400 `bad-barcode`, rather than finding another record                             |
+| Read as scanned | Spaces and hyphens are taken out, and letters put in capitals, before it is checked                                                                                                                     |
+
+- **Unique, and never given twice.** The sequencer gives each value once, for the whole cluster, from
+  its key/value store, which does not take part in the creator's transaction: a creation that rolls
+  back leaves a gap, never a value given again. The SQL key/value store gives up after five tries of
+  its compare-and-set under contention, having taken no value, and the add-on asks again, up to 20
+  times, as the document control add-on does.
+- **Kept with its record.** No save changes it, an administrator's included; a record is not copied,
+  checked in or restored, so that no other document, a version included, carries it; and a record
+  disposed of is kept, so that its barcode still says what became of it.
+- **Only the server's.** A barcode a creator sends is replaced. A deployment whose boxes already
+  carry another scheme's labels cannot give the add-on theirs: below, "What is not built".
+
+### Custody requests: a move, a check-out, a return
+
+A person with `RecordCustody` on the desk files a `CustodyRequest` there, over the REST API
+(`POST /api/v1/path/custody-desk`), naming the record by its barcode or its id:
+
+| `creq:action` | Also                                                                                                             | Of a record                      | What it does                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `move`        | `creq:location`, the location's id                                                                               | In its location                  | Puts it at that location                                                              |
+| `check-out`   | `creq:dueBack`, after now and within 366 days; `creq:borrower`, a name on one line, the filer when none is named | In its location, not checked out | Lends it to the borrower until then; where it is kept stays, as where it goes back to |
+| `return`      | `creq:location`, optional: where it is kept, when none is named                                                  | Checked out                      | Puts it back, and ends the loan                                                       |
+
+`creq:reason` is required, up to 2000 characters: why. Each adds one entry to the record's custody,
+`phys:custody`, after the others, with what happened (`moved`, `checked-out`, `returned`), when, by
+whom, from where to where (each location's id, and its path as it read then), the borrower and due
+date of a loan, and the reason; changes where the record is and whether it is checked out; and
+writes the audit's entry, of the add-on's kind `custody`. The request then says what came of it:
+its title, the record's id and barcode, from where and to where, who and when, and `creq:outcome`,
+`moved`, `checked-out` or `returned`. Once created, it is readable by its filer alone, and
+administrators: it says who moved what, and why.
+
+**Refused, with nothing written:**
+
+| Refusal                                                                                                                               | Status   | Code                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
+| No `RecordCustody` on the desk                                                                                                        | 403      | `permission`                                     |
+| A record, or a location, the filer may not read, or none                                                                              | 404      | `no-item`, `no-location`                         |
+| A barcode whose check digit is wrong                                                                                                  | 400      | `bad-barcode`                                    |
+| A check-out of a record checked out already                                                                                           | 409      | `checked-out`                                    |
+| A move of a record checked out: it is returned first                                                                                  | 409      | `checked-out`                                    |
+| A return of a record that is not checked out                                                                                          | 409      | `not-checked-out`                                |
+| Anything of a record destroyed or transferred                                                                                         | 409      | `disposed`                                       |
+| A record in the trash; a location in the trash                                                                                        | 409      | `trashed`, `location-trashed`                    |
+| A move to where it is                                                                                                                 | 409      | `already-there`                                  |
+| No reason, no due date, a due date past or beyond 366 days, a borrower or a due date on a move or a return, a location on a check-out | 400      | `bad-request`                                    |
+| Filed anywhere but the desk; a desk not at the root, not the one, in the trash, or that inherits                                      | 400, 409 | `not-in-desk`, `desk-misplaced`, `desk-inherits` |
+| Filed by the system or an anonymous user                                                                                              | 403      | `not-a-person`                                   |
+
+**One at a time.** Each request is taken inside the disposition review's lock, the server's and,
+in a cluster, the cluster's, and in a transaction of its own, as a disposition request is
+([below](#security-notes-for-the-review)): two check-outs of one record at once are taken one after
+the other, and the second is refused, `checked-out`. The same lock holds a disposal, so a run never
+disposes of a record while it is being moved or checked out.
+
+### What no one changes
+
+- **A record's custody is the server's alone.** No save changes an entry, removes one, adds one or
+  replaces the list, an administrator's included; nor the barcode, the location, its path, the
+  state, the loan, or what a run did. A save that sends them back as they were goes through, so a
+  client that sends the whole document is not refused. `dispositionAction` and `transferTo` are
+  their writer's, until the record is disposed of.
+- **A request is kept as filed:** nothing of `creq:` changes once it is filed.
+- **Nothing takes a record's custody away with it:** a record is not copied, checked in, restored
+  or imported; nor is a folder copied that holds a record, a location or a request; and only an
+  administrator deletes a record, a request or the desk, puts one in the trash, or deletes a folder
+  that holds a record, each logged, since the repository deletes a folder's contents with no event
+  of their own. The platform's audit keeps every entry of a record deleted so.
+
+### In a disposition run
+
+A physical record whose retention has ended, under no hold, is due as an electronic record is, and
+also when it is **in its location**: one checked out is not due until it is back, and one
+disposed of already is never a candidate. A run's row for it says its barcode and what the run is
+to do with it, `disposal`, `destroy` or `transfer`, and to whom. At the second approval, each is
+checked again as every record is; a physical record checked out since the start, or whose
+disposition action or recipient has changed, halts the run, and nothing is disposed of.
+
+Otherwise, in the same transaction as the electronic records' deletion, each physical record is:
+
+- **kept**, with its barcode, and its `state` `destroyed` or `transferred`, `disposedAt`, the run
+  and its certificate; it is at no location any more;
+- **the last entry of its custody**: `destroyed` or `transferred`, by the approver whose approval
+  disposed of the run, from the location it was kept at, to whom for a transfer, naming the run, its
+  approvers and its certificate;
+- **in the audit**, `recordDestroyed` or `recordTransferred`, of kind `disposition`, with the
+  barcode, the location it left, the run, its approvers and the certificate, in place of a deletion;
+- **on the certificate**, with its barcode and how, `destroyed` or `transferred`.
+
+The add-on records the destruction or the transfer that the run approved; the box is shredded, or
+handed over, by people, and the add-on does not know when. Nothing else is deleted: the record, its
+locations, its requests and its audit entries stay.
 
 ## Security notes, for the review
 
@@ -420,6 +609,30 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   the server's own reads, for no one, are not logged.
 - **The add-on writes to the audit through its own listener,** the platform building each entry from
   its event; it adds entries and never changes or removes one.
+- **Custody's permission is `RecordCustody`, on the custody desk,** which must block what it would
+  inherit, as the runs folder must, so that an inherited `Everything` grants it to no one; and one
+  desk, at the root, made by an administrator, for the same reasons as the runs folder. With it, a
+  person moves, checks out and returns **any physical record they may read**, to any location they
+  may read: it is a strong permission, for the few clerks of a records centre. The record's and the
+  location's readability are checked with the filer's own session, inside the request's transaction,
+  and a record or location they may not read is answered as one that does not exist, its barcode
+  included.
+- **The custody is written by the add-on's session alone,** inside the lock and in a transaction of
+  its own, and a save of anyone else's that would change it is refused, an administrator's
+  included: values are compared as stored, so a change hidden in an unchanged-looking save is
+  refused too, and a save that changes nothing of it goes through. A request is restricted to its
+  filer once created, as an audit export is.
+- **A record's barcode is the server's,** from the platform's sequencer, never the creator's, and
+  never carried by a copy or a version; a request names a record by it after its check digit, and
+  the query it runs holds capital letters and digits alone.
+- **A physical record's disposal is a run's,** with the same two approvals as an electronic one's,
+  and deletes nothing: the record says it was destroyed or transferred, and refuses every request
+  and a change of its disposition action afterwards.
+- **A physical record is deleted or trashed by an administrator alone,** as the add-on's documents
+  are, and so is a folder holding one; a folder holding one, or a location, or a request, is not
+  copied, by anyone. Each refusal reads, with the add-on's session, whether anything below the
+  folder is one of them, since the copy or the deletion would take the whole tree, what its user may
+  not read included.
 - **What it does not close:**
   - a hold put on in the instant of a disposal, by a transaction that has not committed when the
     disposal reads the record, is not seen by the add-on; the repository's own check at deletion has
@@ -471,16 +684,45 @@ The run keeps the certificate's id and the CSV's SHA-256 too.
   - each read transaction that views a record costs the add-on's writer one background work and one
     write to the audit, where the platform batches its own entries through a stream;
   - the add-on's LTS 2025 paths to the audit (`AuditAccess`) are tested against stand-ins, since
-    the tests run on 11.5's platform; no LTS 2025 server has run them.
+    the tests run on 11.5's platform; no LTS 2025 server has run them;
+  - the custody is a record of what people filed, not of where a box is: the add-on cannot tell a
+    box moved without a request, or a request filed for a box that was not moved;
+  - a borrower is a name the filer writes, not checked against the server's users, so that a box
+    lent to someone with no account can be recorded;
+  - a change to a physical record's disposition action saved in the instant of its disposal, by a
+    transaction that has not committed when the disposal reads the record, is not seen, as a hold
+    put on in that instant is not: the record may then keep that action beside its state; its
+    custody and the certificate say what the run did;
+  - a request is written to the record in a transaction of its own, before the request document
+    is written by the filer's: should the filer's transaction fail after, the custody keeps what
+    was done, and the request document is missing, as for a disposition request. A request filed by
+    a script that has itself written the record in the same transaction waits on its own lock, until
+    the database's lock timeout;
+  - an administrator may delete a physical record, its location, a request or the desk, each
+    logged, or a folder holding them; the platform's audit keeps their entries;
+  - a folder holding physical records put in the trash puts them in the trash with it, as the
+    platform does every document below it; their custody stays, and they come back with it;
+  - a location deleted under a folder an administrator deletes, or that is not a site's, leaves its
+    records naming a location that is gone: their path stays, and a move or a return names another;
+  - the barcode's prefix is a server's setting: two servers with the same prefix give the same
+    barcodes, each to a record of its own;
+  - the request's title names the barcode and the filer, which the desk's administrators see;
+  - the overdue queue and the record page's banner are the kit's, not a control, and nothing
+    reminds a borrower: a loan overdue is still a loan, returned the same way.
 
 ## What is not built
 
-- **Physical records,** with locations, barcodes and chain of custody.
+- **Of physical records:** a barcode printed on a label, or one a deployment's own labels already
+  carry, taken in place of the server's; a file kept inside a box, as a record within a record:
+  each record is kept at a location of its own; a location's own barcode, scanned to name it; a
+  position that holds one record at most; a reminder to a borrower, or a loan renewed in place of
+  a return and a new check-out; a transfer's or a destruction's own confirmation, by the archive or
+  the shredding company; and a move of many records at once.
 - **The specialist's acceptance** of the audit export, phase 9's "Done when": the export is built and
   tested, and no records specialist has seen one ("What a records specialist checks in the export").
 - **Tenancy**, decision G, which the plan says is designed with the platform team.
-- **A button in the app.** Decision 3 is open; a run is started and decided, and an export filed,
-  over the REST API. The app's create dialog asks a file of any type with the `file` schema, and an
+- **A button in the app.** Decision 3 is open; a run is started and decided, an export filed, and
+  a record moved, checked out or returned, over the REST API. The app's create dialog asks a file of any type with the `file` schema, and an
   export's CSV is that file, so that the repository keeps it: an export has no create form.
 - **A disposition schedule.** A run is started by a person; nothing starts one on a timer.
 
@@ -492,22 +734,30 @@ retention module's model from its jar. Nuxeo's 11.5 test framework is the last o
 repository; on Java 21 it needs a newer ASM and Chronicle Queue, which the pom pins for the tests
 alone, and some JDK packages opened.
 
-| Test                        | What it proves                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DispositionRunTest`        | Which records a run holds and which it does not; two approvals dispose and certify; a rejection frees the records; the platform's own expiry makes a record due                                                                                                                                                                                                                |
-| `DispositionRefusalTest`    | Every refusal: no permission to start or approve, the starter's approval, a second by the same person, a hold, a retention or a retention end since the start, a record gone                                                                                                                                                                                                   |
-| `DispositionAtomicityTest`  | A failure partway through disposes of nothing; two approvals, two second approvals, one person's two, and two starts, at once                                                                                                                                                                                                                                                  |
-| `DispositionGuardTest`      | The add-on's documents are its own; one folder per repository, an administrator's, at the root; a folder moved from it, or that inherits, takes no request                                                                                                                                                                                                                     |
-| `DispositionClusterTest`    | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                                                                                                                                                                                                                               |
-| `CertificateCsvTest`        | The CSV's rows, quoting and formula guard                                                                                                                                                                                                                                                                                                                                      |
-| `RetentionModelTest`        | What the add-on reads of the module, held to the module's own files; the module's audited events, as the tests register them                                                                                                                                                                                                                                                   |
-| `BundleTest`                | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                                                                                                                                                                                                                          |
-| `AuditExportTest`           | Refused without the permission, and what it cannot cover; filed in the runs folder alone; its contents for a seeded period; a period longer than a page; its checksums; kept as written; its filer's alone; the folder by path or id; the server writes the rest                                                                                                               |
-| `AuditExportGenerationTest` | Written once; waits for its period to settle, so that an entry written after the filing is in it; an export whose audit fails, or whose filer is not known, keeps nothing and says so                                                                                                                                                                                          |
-| `AccessLogTest`             | A view of a record under retention or a hold logged with who, when and what, and nothing else's; a record listed is not viewed; the server's own reads, and a read for a person; a read rolled back; a view that cannot be recorded does not refuse the read; a download is the platform's own entry; the registry picks the add-on's writer, which writes the platform's JSON |
-| `RecordAccessCostTest`      | What a logged view adds to a read, measured, and held under 2 ms; what its entry costs the background, measured                                                                                                                                                                                                                                                                |
-| `DispositionAuditTest`      | A run's decisions in each record's history: held, approved twice, disposed of with its certificate; rejected; halted; a refusal records nothing                                                                                                                                                                                                                                |
-| `AuditAccessTest`           | The audit reached on 11.5 and, through stand-ins, as on LTS 2025: its service's default store, and an entry's extended information                                                                                                                                                                                                                                             |
+| Test                        | What it proves                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DispositionRunTest`        | Which records a run holds and which it does not; two approvals dispose and certify; a rejection frees the records; the platform's own expiry makes a record due                                                                                                                                                                                                                   |
+| `DispositionRefusalTest`    | Every refusal: no permission to start or approve, the starter's approval, a second by the same person, a hold, a retention or a retention end since the start, a record gone                                                                                                                                                                                                      |
+| `DispositionAtomicityTest`  | A failure partway through disposes of nothing; two approvals, two second approvals, one person's two, and two starts, at once                                                                                                                                                                                                                                                     |
+| `DispositionGuardTest`      | The add-on's documents are its own; one folder per repository, an administrator's, at the root; a folder moved from it, or that inherits, takes no request                                                                                                                                                                                                                        |
+| `DispositionClusterTest`    | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                                                                                                                                                                                                                                  |
+| `CertificateCsvTest`        | The CSV's rows, quoting and formula guard                                                                                                                                                                                                                                                                                                                                         |
+| `RetentionModelTest`        | What the add-on reads of the module, held to the module's own files; the module's audited events, as the tests register them                                                                                                                                                                                                                                                      |
+| `BundleTest`                | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                                                                                                                                                                                                                             |
+| `AuditExportTest`           | Refused without the permission, and what it cannot cover; filed in the runs folder alone; its contents for a seeded period; a period longer than a page; its checksums; kept as written; its filer's alone; the folder by path or id; the server writes the rest                                                                                                                  |
+| `AuditExportGenerationTest` | Written once; waits for its period to settle, so that an entry written after the filing is in it; an export whose audit fails, or whose filer is not known, keeps nothing and says so                                                                                                                                                                                             |
+| `AccessLogTest`             | A view of a record under retention or a hold logged with who, when and what, and nothing else's; a record listed is not viewed; the server's own reads, and a read for a person; a read rolled back; a view that cannot be recorded does not refuse the read; a download is the platform's own entry; the registry picks the add-on's writer, which writes the platform's JSON    |
+| `RecordAccessCostTest`      | What a logged view adds to a read, measured, and held under 2 ms; what its entry costs the background, measured                                                                                                                                                                                                                                                                   |
+| `DispositionAuditTest`      | A run's decisions in each record's history: held, approved twice, disposed of with its certificate; rejected; halted; a refusal records nothing                                                                                                                                                                                                                                   |
+| `AuditAccessTest`           | The audit reached on 11.5 and, through stand-ins, as on LTS 2025: its service's default store, and an entry's extended information                                                                                                                                                                                                                                                |
+| `BarcodeTest`               | A barcode's form, padded and never cut, its check digit, every one-digit mistype of the first 2000 refused, as scanned or typed, and the prefix a deployment sets                                                                                                                                                                                                                 |
+| `BarcodeConcurrencyTest`    | **A barcode unique under concurrency:** 16 threads making 25 physical records each, every seventh rolled back after its barcode was taken; every committed barcode held once and valid, none rolled back stored, the values given exactly 1 to 400, and the next 401                                                                                                              |
+| `PhysicalRecordTest`        | A record given its barcode, its place and its first custody entry; the creator's values of the server's replaced; a refusal spends no barcode; a location the creator may not read, or in the trash, refused; a transfer names its recipient; a location's path, and each kind inside the one before it                                                                           |
+| `CustodyTest`               | A move, a check-out and a return each recorded with who, from where to where, when and why; by barcode as scanned or typed, or by id; a mistyped barcode refused; **a double check-out refused**, and a move while checked out; **two check-outs at once, one taken and the other refused**; what a request must say                                                              |
+| `CustodyHistoryTest`        | **The history immutable:** no save changes, removes or adds an entry, or replaces them, an administrator's included, nor anything else the server writes; a save that changes nothing of it goes through; a request kept as filed and its filer's alone; no copy, version or deletion but an administrator's; a location kept as made, and not deleted while it holds a record    |
+| `PhysicalDispositionTest`   | **A disposition of a physical item recorded:** held in a run with its barcode; destroyed or transferred at the second approval, kept, on its custody and the certificate, with only the electronic record deleted; not due under a hold or checked out; halted when checked out or given another action since the start; never in a later run nor taking custody once disposed of |
+| `PhysicalPermissionTest`    | **Permissions:** `RecordCustody` on the desk; a record or a location the filer may not read answered as none, by id and by barcode; a request filed in the desk alone, by a person; a desk that inherits, moved or a second one; the desk an administrator's, at the root                                                                                                         |
+| `CustodyAuditTest`          | Each move, check-out and return an audit entry of its own kind, with who, from where to where and why; a refused request records nothing; the audit export's custody rows and columns, and a destruction's, under the format's version 2                                                                                                                                          |
 
 The audit tests run the platform's own audit, as its `AuditFeature` deploys it, its JPA store in H2,
 through `RecordsAuditFeature`, whose waiter waits for an entry of its own rather than the audit
@@ -527,24 +777,48 @@ person wrote before it). A wrong SHA-256 for the module's jar fails the build.
 **The audit export's and access logging's checks, seen failing** the same way (26 November 2026),
 each taken out in turn, and the test that holds it went red: the export's permission, the folder its filer may read, an unreadable document left out, the scope held exactly, the period, every page read, the CSV's checksum, the export made a record, its files and figures guarded, the export its filer's alone, the server writing the rest of it, an export written once, a failed export keeping nothing, a view at the answer only, a record under retention only, the server's own reads, the writer writing, a disposed record's entry, a document kept as fired, the cost's bound, a period ending when the export is filed, the period settled before it is read, a view's failure never refusing the read, and the LTS 2025 entry's extended information.
 
+**Physical records' checks, seen failing** the same way (26 November 2026): each of these 50 taken
+out in turn, and the test that holds it went red: `RecordCustody` on the desk; a record named by id
+read as the filer, and by barcode searched as the filer; the check digit; no second check-out; the
+lock, for two check-outs at once; no move while checked out; no return of what is not out; no
+custody once disposed of; a due date within a year; a location the person may read, and out of the
+trash; the desk blocking what it inherits, at the root, the one, an administrator's, made at the
+root and once; a request filed in the desk, by a person; what the server writes of a record;
+values compared as stored, not by the dirty flag; no disposition action changed once disposed of;
+the creator's values replaced; the barcode issued last; a record's kind; a transfer's recipient;
+each kind of location inside the one before it, and a site in none; a location kept as made, and
+not moved; a location, and a folder of sites, holding a record not deleted; a folder holding them
+not copied, nor deleted but by an administrator; a record deleted by an administrator alone, not
+copied and not checked in; a request kept as filed, and its filer's alone; a record checked out
+not due; the same disposition action at disposal; a physical record not deleted; one disposed of
+no candidate, and not due; the custody entry, the registration and the destruction in the audit;
+the export's custody columns; a reason; and not moved to where it is. The seed's controls were
+seen failing with the desk's grant, and with an older rule's update, taken out.
+
+The tests set the sequencer as LTS 2025 does, `KeyValueStoreUIDSequencer` on the SQL key/value
+store, on H2 (`test-sequencer.xml`), as the document control add-on's do.
+
 ```bash
 mvn verify -pl nuxeo-agentic-records -am
 ```
 
 ## What is in it
 
-| File                                               | What it is                                                                                                                                                                                          |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/java/org/nuxeo/agentic/records/`         | The listener, the requests and the disposal, the records due, the certificate's CSV; the audit export and its files; the add-on's audit entries, their writer, and the JSON writer that logs a view |
-| `src/main/resources/OSGI-INF/records-types.xml`    | The five types and their schemas, after the retention module's                                                                                                                                      |
-| `src/main/resources/OSGI-INF/records-security.xml` | `StartDisposition`, `ApproveDisposition` and `ExportRecordsAudit`                                                                                                                                   |
-| `src/main/resources/OSGI-INF/records-listener.xml` | The listener                                                                                                                                                                                        |
-| `src/main/resources/OSGI-INF/records-audit.xml`    | The JSON writer for a document, the audit entries' writer, and the export's                                                                                                                         |
-| `src/main/package/`, `src/main/assemble/`          | The Marketplace package, `nuxeo-agentic-records` 0.2.0, which depends on `nuxeo-retention`                                                                                                          |
-| `src/test/`                                        | The tests, the module's types and audited events as the tests register them, the platform's audit as the tests deploy it, and test-only listeners and stand-ins                                     |
+| File                                               | What it is                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main/java/org/nuxeo/agentic/records/`         | The listener, the requests and the disposal, the records due, the certificate's CSV; the audit export and its files; the add-on's audit entries, their writer, and the JSON writer that logs a view; physical records, their barcodes, their custody requests and their listener (`Physical*`, `Barcodes`, `Custody`) |
+| `src/main/resources/OSGI-INF/records-types.xml`    | The nine types and their schemas, after the retention module's                                                                                                                                                                                                                                                        |
+| `src/main/resources/OSGI-INF/records-security.xml` | `StartDisposition`, `ApproveDisposition`, `ExportRecordsAudit` and `RecordCustody`                                                                                                                                                                                                                                    |
+| `src/main/resources/OSGI-INF/records-listener.xml` | The two listeners: the disposition review's, and physical records'                                                                                                                                                                                                                                                    |
+| `src/main/resources/OSGI-INF/records-audit.xml`    | The JSON writer for a document, the audit entries' writer, and the export's                                                                                                                                                                                                                                           |
+| `src/main/package/`, `src/main/assemble/`          | The Marketplace package, `nuxeo-agentic-records` 0.3.0, which depends on `nuxeo-retention`                                                                                                                                                                                                                            |
+| `src/test/`                                        | The tests, the module's types and audited events as the tests register them, the platform's audit as the tests deploy it, the sequencer as LTS 2025 sets it, and test-only listeners and stand-ins                                                                                                                    |
 
 `nuxeo.agentic.records.audit.export.settleSeconds`, in `nuxeo.conf`, sets how long after its period's
 end an export waits before it reads the audit, 0 to 600, 30 by default.
+
+`nuxeo.agentic.records.barcode.prefix`, in `nuxeo.conf`, sets the prefix of the barcodes the server
+issues, one to four capital letters, `PR` by default.
 
 `nuxeo.agentic.records.disposition.maxRecords`, in `nuxeo.conf`, sets the most records a run holds,
 1 to 1000, 200 by default, so that a disposal is one transaction of a bounded size.

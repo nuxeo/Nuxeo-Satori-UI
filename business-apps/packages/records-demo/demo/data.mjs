@@ -16,12 +16,14 @@ export const RUNS = { name: 'disposition-runs', title: 'Disposition runs' };
 /**
  * The retention rule the seed makes in the retention module's /RetentionRules: one minute from when
  * it is attached, with no end action, so that its records wait for a disposition review rather than
- * being deleted by the rule itself. A demo's minute; a real schedule says years.
+ * being deleted by the rule itself. A demo's minute; a real schedule says years. It takes the kit's
+ * records files and the add-on's physical records.
  */
 export const RULE = {
   name: 'records-demo-one-minute',
   title: 'Records demo: one minute, then a disposition review',
   durationMillis: 60_000,
+  docTypes: ['RecordsFile', 'PhysicalRecord'],
 };
 
 /**
@@ -32,6 +34,60 @@ export const GRANTS = [
   { group: 'records-managers', permission: 'StartDisposition' },
   { group: 'records-approvers', permission: 'ApproveDisposition' },
   { group: 'records-managers', permission: 'ExportRecordsAudit' },
+];
+
+/**
+ * The repository's custody desk, at its root, where the records add-on takes custody requests only,
+ * and who files them there: a records manager, as the clerk of the records centre.
+ */
+export const DESK = { name: 'custody-desk', title: 'Custody desk' };
+export const CUSTODY_GRANTS = [{ group: 'records-managers', permission: 'RecordCustody' }];
+
+/**
+ * The records centre, a folder of the workspace, and its locations, each inside the one before it: a
+ * site, a room, shelves and positions. Each has a name of its own, by which the physical records
+ * below name where they are kept.
+ */
+export const CENTRE = { name: 'records-centre', title: 'Records centre' };
+export const LOCATIONS = [
+  { name: 'northfield', title: 'Northfield records centre', kind: 'site', in: null },
+  { name: 'room-1', title: 'Room 1', kind: 'room', in: 'northfield' },
+  { name: 'shelf-a', title: 'Shelf A', kind: 'shelf', in: 'room-1' },
+  { name: 'shelf-b', title: 'Shelf B', kind: 'shelf', in: 'room-1' },
+  { name: 'a-01', title: 'Position A-01', kind: 'position', in: 'shelf-a' },
+  { name: 'a-02', title: 'Position A-02', kind: 'position', in: 'shelf-a' },
+  { name: 'b-01', title: 'Position B-01', kind: 'position', in: 'shelf-b' },
+];
+
+/**
+ * The physical records: a box, a file and a volume, each kept at a position, under the same rule as
+ * the electronic records. One is to be transferred, not destroyed; one is put under a legal hold, so
+ * that a run leaves it out.
+ */
+export const PHYSICAL = [
+  {
+    name: 'finance-2016-box-1',
+    title: 'Finance 2016, box 1: invoices',
+    kind: 'box',
+    at: 'a-01',
+    disposition: 'destroy',
+  },
+  {
+    name: 'personnel-2009-file-3',
+    title: 'Personnel 2009, file 3: a fictional former employee',
+    kind: 'file',
+    at: 'a-02',
+    disposition: 'transfer',
+    transferTo: 'The county record office, a fictional archive',
+  },
+  {
+    name: 'board-2014-volume-2',
+    title: 'Board minutes 2014, volume 2',
+    kind: 'volume',
+    at: 'b-01',
+    disposition: 'destroy',
+    hold: 'A fictional audit: kept until it closes',
+  },
 ];
 
 /** The records. One is put under a legal hold, so that a run leaves it out. */

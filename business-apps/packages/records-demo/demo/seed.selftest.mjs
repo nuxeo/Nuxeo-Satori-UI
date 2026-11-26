@@ -6,15 +6,16 @@
  *   node business-apps/packages/records-demo/demo/seed.selftest.mjs
  *
  * Each control runs the seed as a command and checks what it asked the stand-in and what it said.
- * The seed must never file a disposition request: starting and approving a run are the demo's
- * people's, never a script's.
+ * The seed must never file a disposition request, nor a custody request: starting and approving a
+ * run, and moving, checking out or returning a physical record, are the demo's people's, never a
+ * script's.
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { GRANTS, RECORDS, RULE } from './data.mjs';
+import { CUSTODY_GRANTS, GRANTS, LOCATIONS, PHYSICAL, RECORDS, RULE } from './data.mjs';
 
 const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
 const PASSWORD = 'not-a-real-password-for-the-stand-in';
@@ -26,7 +27,9 @@ function check(name, ok, detail = '') {
 }
 
 /** A stand-in Nuxeo: documents by path, ACLs, the operations the seed runs, and every request kept. */
-function standIn({ administrator = true, types = ['RetentionRule', 'DispositionRuns', 'RecordsFile'] } = {}) {
+const TYPES = ['RetentionRule', 'DispositionRuns', 'CustodyDesk', 'PhysicalLocation', 'PhysicalRecord', 'RecordsFile'];
+
+function standIn({ administrator = true, types = TYPES } = {}) {
   const docs = new Map();
   const requests = [];
   let next = 1;
@@ -61,11 +64,19 @@ function standIn({ administrator = true, types = ['RetentionRule', 'DispositionR
         const created = add(`${path === '/' ? '' : path}/${json.name}`, json.type, json.properties);
         return send(201, view(created));
       }
-      if (api === '/search/lang/NXQL/execute')
-        return send(200, { entries: [...docs.values()].filter((doc) => doc.type === 'DispositionRuns').map(view) });
+      if (api === '/search/lang/NXQL/execute') {
+        const type = /FROM (\w+)/.exec(url.searchParams.get('query') ?? '')?.[1];
+        return send(200, { entries: [...docs.values()].filter((doc) => doc.type === type).map(view) });
+      }
       const acl = /^\/id\/([^/]+)\/@acl$/.exec(api);
       if (acl) return send(200, { acl: [{ name: 'local', aces: byUid(acl[1]).acl }] });
       const id = /^\/id\/([^/]+)$/.exec(api);
+      if (id && request.method === 'PUT') {
+        const doc = byUid(id[1]);
+        if (!doc) return send(404, {});
+        Object.assign(doc.properties, json.properties);
+        return send(200, view(doc));
+      }
       if (id) return byUid(id[1]) ? send(200, view(byUid(id[1]))) : send(404, {});
       const operation = /^\/automation\/(.+)$/.exec(api)?.[1];
       const input = byUid(String(json?.input ?? '').replace(/^doc:/, ''));
@@ -103,6 +114,7 @@ function run(url, { env = {}, args = [] } = {}) {
 
 const writes = (requests) => requests.filter((each) => each.method !== 'GET');
 const filedRequests = (requests) => requests.filter((each) => each.json?.type === 'DispositionRequest' || /DispositionRequest/.test(JSON.stringify(each.json ?? '')));
+const custodyRequests = (requests) => requests.filter((each) => /CustodyRequest/.test(JSON.stringify(each.json ?? '')));
 
 // 1. No credentials: refused before anything is asked.
 {
@@ -124,7 +136,7 @@ const filedRequests = (requests) => requests.filter((each) => each.json?.type ==
 
 // 3. The records add-on not installed: refused, naming it.
 {
-  const stub = await standIn({ types: ['RetentionRule', 'RecordsFile'] });
+  const stub = await standIn({ types: TYPES.filter((type) => !['DispositionRuns', 'CustodyDesk', 'PhysicalLocation', 'PhysicalRecord'].includes(type)) });
   const result = await run(stub.url);
   check('no records add-on: exit 2, naming it', result.status === 2 && result.output.includes('nuxeo-agentic-records'), result.output);
   check('no records add-on: nothing written', writes(stub.requests).length === 0);
@@ -149,6 +161,47 @@ const filedRequests = (requests) => requests.filter((each) => each.json?.type ==
     check(`seeded: ${permission} for ${group}`, folder.acl.some((ace) => ace.username === group && ace.permission === permission && ace.granted));
   check('seeded: the folder blocks what it would inherit', folder.acl.some((ace) => ace.username === 'Everyone' && ace.permission === 'Everything' && !ace.granted));
   check('seeded: no disposition request filed', filedRequests(stub.requests).length === 0);
+  check('seeded: the rule takes physical records too', RULE.docTypes.every((type) => rule.properties['retention_rule:docTypes'].includes(type)));
+
+  // Physical records: the locations, each inside the one before it; the records at their positions.
+  const locations = [...stub.docs.values()].filter((doc) => doc.type === 'PhysicalLocation');
+  check('seeded: every location of data.mjs', locations.length === LOCATIONS.length);
+  const byName = new Map(locations.map((doc) => [doc.path.split('/').pop(), doc]));
+  check(
+    'seeded: each location inside the one data.mjs puts it in, with its kind',
+    LOCATIONS.every((each) => {
+      const doc = byName.get(each.name);
+      const parent = each.in === null ? '/records-centre' : `/${each.in}`;
+      return doc && doc.path.endsWith(`${parent}/${each.name}`) && doc.properties['ploc:kind'] === each.kind;
+    }),
+  );
+  const physical = [...stub.docs.values()].filter((doc) => doc.type === 'PhysicalRecord');
+  check('seeded: every physical record of data.mjs', physical.length === PHYSICAL.length);
+  check(
+    'seeded: each kept at its position, with its kind and what a run is to do with it',
+    PHYSICAL.every((each) => {
+      const doc = physical.find((candidate) => candidate.path.endsWith(`/${each.name}`));
+      return (
+        doc &&
+        doc.properties['phys:location'] === byName.get(each.at).uid &&
+        doc.properties['phys:kind'] === each.kind &&
+        doc.properties['phys:dispositionAction'] === each.disposition &&
+        (doc.properties['phys:transferTo'] ?? null) === (each.transferTo ?? null)
+      );
+    }),
+  );
+  check('seeded: every physical record a record of the rule', physical.every((doc) => doc.isRecord));
+  check(
+    'seeded: the physical record data.mjs marks, and it alone, held',
+    JSON.stringify(physical.filter((doc) => doc.hasLegalHold).map((doc) => doc.path.split('/').pop())) ===
+      JSON.stringify(PHYSICAL.filter((each) => each.hold).map((each) => each.name)),
+  );
+  const desk = stub.docs.get('/custody-desk');
+  check('seeded: the custody desk, at the root', desk?.type === 'CustodyDesk');
+  for (const { group, permission } of CUSTODY_GRANTS)
+    check(`seeded: ${permission} for ${group} on the desk`, desk.acl.some((ace) => ace.username === group && ace.permission === permission && ace.granted));
+  check('seeded: the desk blocks what it would inherit', desk.acl.some((ace) => ace.username === 'Everyone' && ace.permission === 'Everything' && !ace.granted));
+  check('seeded: no custody request filed', custodyRequests(stub.requests).length === 0);
   check('seeded: no check fired without --end-retention-now', !stub.requests.some((each) => each.path.endsWith('/Event.Fire')));
   check('seeded: every request to the server named, and only it', stub.requests.every((each) => each.authorization?.startsWith('Basic ')));
   check('seeded: the password never printed', !result.output.includes(PASSWORD));
@@ -158,6 +211,37 @@ const filedRequests = (requests) => requests.filter((each) => each.json?.type ==
   const again = await run(stub.url);
   check('again: exit 0', again.status === 0, again.output);
   check('again: nothing written', writes(stub.requests).length === before, `${writes(stub.requests).length - before} write(s)`);
+  stub.server.close();
+}
+
+// 5b. A rule the seed made before physical records: given their type, once, and nothing else changed.
+{
+  const stub = await standIn();
+  stub.docs.set(`/RetentionRules/${RULE.name}`, { uid: 'uid-rule', path: `/RetentionRules/${RULE.name}`, type: 'RetentionRule', properties: { 'retention_def:endActions': [], 'retention_rule:docTypes': ['RecordsFile'] }, acl: [] });
+  const result = await run(stub.url);
+  const puts = stub.requests.filter((each) => each.method === 'PUT');
+  check('an older rule: exit 0', result.status === 0, result.output);
+  check('an older rule: given PhysicalRecord, once', puts.length === 1 && JSON.stringify(puts[0].json.properties['retention_rule:docTypes']) === JSON.stringify(['RecordsFile', 'PhysicalRecord']));
+  check('an older rule: nothing of it but its types written', Object.keys(puts[0]?.json?.properties ?? {}).join() === 'retention_rule:docTypes');
+  stub.server.close();
+}
+
+// 5c. A records add-on before physical records: refused, naming its version.
+{
+  const stub = await standIn({ types: TYPES.filter((type) => type !== 'CustodyDesk') });
+  const result = await run(stub.url);
+  check('an add-on without physical records: exit 2, naming 0.3.0', result.status === 2 && result.output.includes('0.3.0'), result.output);
+  check('an add-on without physical records: nothing written', writes(stub.requests).length === 0);
+  stub.server.close();
+}
+
+// 5d. A custody desk elsewhere: the seed makes no second one.
+{
+  const stub = await standIn();
+  stub.docs.set('/other-desk', { uid: 'uid-desk', path: '/other-desk', type: 'CustodyDesk', properties: {}, acl: [] });
+  const result = await run(stub.url);
+  check('a desk elsewhere: exit 1, naming it', result.status === 1 && result.output.includes('/other-desk'), result.output);
+  check('a desk elsewhere: no second one', [...stub.docs.values()].filter((doc) => doc.type === 'CustodyDesk').length === 1);
   stub.server.close();
 }
 

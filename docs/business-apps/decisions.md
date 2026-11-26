@@ -255,7 +255,13 @@ way.
   is finished, as every security review is; it is installed nowhere. Its 0.2.0 adds the audit export
   and access logging in the same add-on, still with no operation and no endpoint: an export is a
   document filed in the same folder, and a view is logged by the REST API's own JSON writer for a
-  document, which the add-on extends. What changes if B goes another way:
+  document, which the add-on extends. Its 0.3.0 adds physical records, with locations, barcodes the
+  server issues from the platform's sequencer, and a chain of custody, in the same add-on and with
+  the kit's 0.2.0, still with no operation and no endpoint: a move, a check-out or a return is a
+  document filed in a custody desk at the repository's root, which a second listener checks, and a
+  run records a physical record's destruction or transfer rather than deleting it. The kit's barcode
+  lookup is a queue with a search, the platform's, configuration and no code of the kit's. What
+  changes if B goes another way:
   - **One large add-on:** the bundle moves into that add-on's package as it is, with its dependency
     on `nuxeo-retention`, and the kit's `package.xml` depends on that package in place of
     `nuxeo-agentic-records`. The type, schema and permission names do not change.
