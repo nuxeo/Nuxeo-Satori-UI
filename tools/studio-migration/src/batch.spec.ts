@@ -576,10 +576,10 @@ describe('migrate, given several packages', () => {
           'claims',
           'claims-3',
         ]);
-        // Two builds of one version: each runs, and the summary says so.
+        // One name and version from different bytes: each runs, and the summary says so.
         expect(sameNameAndVersion).toEqual([{ package: 'Acme-Claims 1.0.0', numbers: [1, 2, 3] }]);
         expect(readFileSync(join(out, 'summary.txt'), 'utf8')).toContain(
-          '\nTwo builds of one version: 1, 2 and 3 each declare Acme-Claims 1.0.0, from different bytes.',
+          '\nOne name and version, different bytes: 1, 2 and 3 each declare Acme-Claims 1.0.0, most often as builds of it.',
         );
       },
       SEVERAL_RUNS,

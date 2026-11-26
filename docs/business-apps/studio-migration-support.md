@@ -253,13 +253,14 @@ npm run studio-migration -- migrate ~/studio/claims-1.0.0.zip ~/studio/policies-
   file is refused before anything is written.
 - **The same package twice,** the same bytes under any name, runs once: the summary lists the
   second as the same package as the first. **Two files of one name** from two folders get two
-  folders, `claims` and `claims-2`, told apart as a file system that ignores case would. **Two
-  builds of one version,** packages that declare the same name and version from different bytes,
-  both run, and the summary says so: their decisions are not interchangeable.
+  folders, `claims` and `claims-2`, told apart as a file system that ignores case would. Packages
+  that **declare the same name and version** from different bytes, most often two builds of one
+  version, both run, and the summary says so: a build's decisions are its own.
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
   folder for the same build, whatever its file is called now: the same name, version, Studio
-  commit, build time and bundle, which is what a run of one package holds its decisions to. A package the earlier run did not
-  hold, or whose run there wrote no decisions, starts again, and its line says "Nothing carried".
+  commit, build time and bundle, which is what a run of one package holds its decisions to. A
+  package the earlier run did not hold, or whose run there wrote no decisions, starts again, and
+  its line says "Nothing carried".
   `--from` a run of one package is refused: run that package on its own with `--from`. The other
   way round too: a run of one package given `--from` a run of several finds no decisions there;
   give it `--from <that run>/packages/<name>`.

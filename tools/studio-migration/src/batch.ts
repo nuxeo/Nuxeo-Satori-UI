@@ -24,8 +24,8 @@
  *   as the same package as the first, and not run again. **Two files of one name,** from two
  *   folders, get two folders, the second numbered (`claims`, `claims-2`), told apart as a file
  *   system that ignores case would. Two packages that declare **the same name and version** from
- *   different bytes are two builds, and both run; the summary says so, as decisions are for one
- *   build.
+ *   different bytes, most often two builds of it, both run; the summary says so, as decisions are
+ *   for one build.
  * - **A folder** gives the `.zip` files directly in it, in the order of their names; anything else
  *   in it is listed as left out. A folder with no `.zip` file in it is refused.
  * - **`--from` an earlier run of several** carries each package's decisions from that run's folder
@@ -616,7 +616,7 @@ function closingLines(summary: BatchSummary, request: BatchRequest): string[] {
   for (const { package: pkg, numbers } of summary.sameNameAndVersion)
     lines.push(
       '',
-      `Two builds of one version: ${listed(numbers)} each declare ${pkg}, from different bytes. Decisions are for one build, so each has its own.`,
+      `One name and version, different bytes: ${listed(numbers)} each declare ${pkg}, most often as builds of it. Decisions are for one build, so each carries its own.`,
     );
   for (const { folder, entries } of summary.leftOut)
     lines.push('', `Left out of ${folder}, as no .zip file: ${entries.join(', ')}`);

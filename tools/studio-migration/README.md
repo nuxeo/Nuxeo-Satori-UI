@@ -171,8 +171,8 @@ One argument that is a package file runs as above, unchanged; several, or a fold
 - **Duplicates.** The same bytes given twice, under any name, run once; the second is
   `the same package` as the first, and not run again. Two files of one name from two folders get
   two folders, `claims` and `claims-2`, told apart as a file system that ignores case would. Two
-  packages that declare one name and version from different bytes are two builds: both run, and
-  the summary says so. A folder given twice is listed once.
+  packages that declare one name and version from different bytes, most often two builds of it,
+  both run, and the summary says so. A folder given twice is listed once.
 - **A folder** gives the `.zip` files directly in it, by name; what else it holds is listed as left
   out, but for names that start with a dot, the system's own, such as the `._<name>.zip` a Mac
   leaves beside a file on a drive that cannot hold its attributes, which are passed over. A folder

@@ -355,9 +355,9 @@ others: each runs as it would have without it. `--out` holds:
 anything else it holds as left out, but for files whose name starts with a dot, which your system
 keeps. **The same package twice**, the same file or a copy of it under another name, runs once:
 the summary says the second is the same package as the first. **Two files of one name**, from two
-folders, get two folders, `claims` and `claims-2`. **Two builds of one version**, two packages that
-declare the same name and version but are not the same file, both run, and the summary says so:
-each has its own decisions.
+folders, get two folders, `claims` and `claims-2`. Two packages that **declare the same name and
+version** but are not the same file, most often two builds of one version, both run, and the
+summary says so: each has its own decisions.
 
 **When it ends,** it exits as the worst of its packages would alone:
 
@@ -369,11 +369,10 @@ each has its own decisions.
 
 **Running them again.** Fill in each package's `conversion/decisions.json`, then give `--from` the
 earlier run's `--out`: each package carries the decisions of its own earlier folder, found by the
-package's build, as section 6 says, whatever its file is called now. A package
-the earlier run did not have, or a new build of one, starts its decisions again, and its line says
-"Nothing carried". The summary prints
-the command, with the next free folder. To carry the decisions of a run of one package, run that
-package on its own with `--from` that run.
+package's build, as section 6 says, whatever its file is called now. A package the earlier run did
+not have, or a new build of one, starts its decisions again, and its line says "Nothing carried".
+The summary prints the command, with the next free folder. To carry the decisions of a run of one
+package, run that package on its own with `--from` that run.
 
 ## 9. Words the output uses
 
