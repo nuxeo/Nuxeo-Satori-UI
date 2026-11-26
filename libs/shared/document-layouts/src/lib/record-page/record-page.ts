@@ -97,7 +97,9 @@ import {
   type RecordListEntry,
   type RecordPropertyField,
   type RecordTimelineEntry,
+  linkedTypesOf,
   propertiesReadBy,
+  showKey,
   showOf,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
@@ -299,37 +301,24 @@ function fieldShowing(
   );
 }
 
-/** A field or a list's column with a `show`, and where it is, for what its linked types say. */
-interface ShowEntry {
-  readonly place: string;
-  readonly show: string;
-  readonly types: readonly string[];
-}
-
 /**
  * Every `document-link` with a `show` on the page (layout-v2.md, section 12): its fields', and its
  * related lists' columns', whose records the page's lookup reads too, so that it reads them once.
  */
-function showEntries(layout: ResolvedRecordLayout): ShowEntry[] {
-  const entries: ShowEntry[] = [];
-  const add = (place: string, field: Pick<RecordPropertyField, 'widget' | 'parameters'>) => {
-    const show = showOf(field);
-    if (show === null) return;
-    const types = field.parameters['types'];
-    entries.push({
-      place,
-      show,
-      types: Array.isArray(types) ? types.filter((type) => typeof type === 'string') : [],
-    });
-  };
-  for (const card of cardsOf(layout)) {
-    for (const field of card.fields) if (field.kind === 'property') add(field.place, field);
-    for (const column of card.related?.columns ?? []) add(column.place, column);
-  }
-  return entries;
+function showEntries(layout: ResolvedRecordLayout): RecordPropertyField[] {
+  return cardsOf(layout).flatMap((card) => [
+    ...card.fields.filter(
+      (field): field is ResolvedPropertyField =>
+        field.kind === 'property' && showOf(field) !== null,
+    ),
+    ...(card.related?.columns ?? []).filter((column) => showOf(column) !== null),
+  ]);
 }
 
-/** What each `show` on the page reads, by its place: `null` where none of its types has it. */
+/**
+ * What each `show` on the page reads, by its entry (`showKey`): `null` where none of its types has
+ * it. An entry not in it is still being read.
+ */
 type Shows = ReadonlyMap<string, LinkedProperty | null>;
 
 /**
@@ -512,7 +501,7 @@ export class RecordPageComponent {
         }
         const value = properties[field.xpath];
         // A `show` none of its types has is left out: the records it names are not read for it.
-        if (showOf(field) !== null && !usableShow(this.shows()?.get(field.place))) continue;
+        if (showOf(field) !== null && !usableShow(this.shows()?.get(showKey(field)))) continue;
         if (field.widget !== 'table') {
           named(field.widget, field.parameters, field.definition, value);
           continue;
@@ -567,8 +556,12 @@ export class RecordPageComponent {
         const entries = showEntries(layout);
         if (entries.length === 0) return of(new Map());
         return forkJoin(
-          entries.map((entry) => this.layouts.linkedProperty(entry.types, entry.show)),
-        ).pipe(map((read) => new Map(entries.map((entry, index) => [entry.place, read[index]]))));
+          entries.map((entry) =>
+            this.layouts.linkedProperty(linkedTypesOf(entry), showOf(entry) as string),
+          ),
+        ).pipe(
+          map((read) => new Map(entries.map((entry, index) => [showKey(entry), read[index]]))),
+        );
       }),
     ),
     { initialValue: null },
@@ -977,16 +970,14 @@ export class RecordPageComponent {
   ): RecordFieldShown[] {
     const show = showOf(field) as string;
     const key = `${field.xpath}/${show}`;
-    const shows = this.shows();
-    if (shows === null) {
+    // While its types are read, it shows nothing, never the stored id.
+    const linked = this.shows()?.get(showKey(field));
+    if (linked === undefined) {
       return [{ place: field.place, key, label, value: { kind: 'records', records: [] } }];
     }
-    const linked = shows.get(field.place) ?? null;
-    const types = field.parameters['types'];
-    const named = Array.isArray(types) ? types.join(', ') : '';
     if (linked === null) {
       this.tell(
-        `${layout.type}/view layout: ${field.place} left out: none of the types it links to, ${named}, has ${show}, or their schemas could not be read`,
+        `${layout.type}/view layout: ${field.place} left out: none of the types it links to, ${linkedTypesOf(field).join(', ')}, has ${show}, or their schemas could not be read`,
       );
       return [];
     }

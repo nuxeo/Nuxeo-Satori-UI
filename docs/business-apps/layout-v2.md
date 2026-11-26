@@ -1344,7 +1344,12 @@ search section 11 describes, `SELECT * FROM Document WHERE ecm:uuid IN (?, …)`
   the page has read asks nothing again. A record read without a schema that something on the page
   needs later is read again with both: the only second read of a record on one page. A queue's
   list asks once for each page of rows, with its columns' schemas, and shares its lookup with the
-  queue's facets (app-definition-v2.md, section 4).
+  queue's facets, which ask with the same schemas (app-definition-v2.md, section 4), so a record a
+  cell and a bucket both name is read once. A read with more schemas that fails keeps the one
+  before it: the title read already still shows.
+- **The types' definitions are waited for 10 seconds at most,** as a layout file is: a type that
+  does not answer counts as one not read, its `show` is left out, and the page's other links are
+  read without it.
 - **The schemas come from the types `types` lists:** each type's definition,
   `/config/types/<type>`, read once per session as the open record's is, and the first of them
   with a schema of the shown property's prefix gives the schema and the property's type. A `show`
@@ -1391,8 +1396,11 @@ search section 11 describes, `SELECT * FROM Document WHERE ecm:uuid IN (?, …)`
 
 A column showing a linked record's property cannot be sorted by it, and its header does not offer
 to: a related list's headers sort on the server (section 11), and a page provider sorts its own
-records' properties. So of the Claims table's columns, which the plan calls sortable, the
-provider's name and NPI are the ones that cannot be.
+records' properties. So of the Claims table's columns, which the plan calls sortable, the NPI is the
+one that cannot be. The provider's name, a plain `document-link` column, still sorts from its
+header as every such column does: by the stored id, not by the title shown. The file's own `sort`
+may not name the reference once a column shows it through `show` (above), though the plain column's
+header still offers to.
 
 ### What the Studio migration would write
 

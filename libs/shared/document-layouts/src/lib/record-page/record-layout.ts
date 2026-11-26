@@ -55,6 +55,24 @@ export function showOf(field: Pick<RecordFieldBase, 'widget' | 'parameters'>): s
   return field.widget === 'document-link' && typeof show === 'string' ? show : null;
 }
 
+/** The types a `document-link` field says it links to, its `types`, as texts. */
+export function linkedTypesOf(field: Pick<RecordFieldBase, 'parameters'>): string[] {
+  const types = field.parameters['types'];
+  return Array.isArray(types)
+    ? types.filter((type): type is string => typeof type === 'string')
+    : [];
+}
+
+/**
+ * What a `show` is read for: the field's place, its `show` and its types. A page drawn anew with
+ * another file, as the designer's preview is on every edit, keeps the reads of the file before
+ * until those of the new one arrive, and a key that names the whole entry never pairs one file's
+ * `show` with what another's read.
+ */
+export function showKey(field: Pick<RecordFieldBase, 'place' | 'widget' | 'parameters'>): string {
+  return JSON.stringify([field.place, showOf(field), linkedTypesOf(field)]);
+}
+
 /**
  * What a list keys a column by: its property, and for one with `show`, the shown property too, so
  * that a column showing a linked record's title and one showing its property stand side by side.

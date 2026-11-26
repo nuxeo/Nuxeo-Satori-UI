@@ -241,7 +241,8 @@ provider, for the development server.
   feedback", item 4). The titles are read as a `document-link`'s are
   ([layout-v2.md](layout-v2.md), section 11): one search for every bucket's id at once, through the
   REST API as the reader, only keys that are documents' ids sent, each as a query parameter of its
-  own. The queue keeps one lookup for as long as it is drawn, which its list shares, so a record a
+  own. The queue keeps one lookup for as long as it is drawn, which its list shares, and asks with
+  the schemas its columns' `show` read, as the list does (layout-v2.md, section 12), so a record a
   cell and a bucket both name is read once. **Where a title cannot be read, the bucket shows its
   key,** the stored id: a record the reader may not read, one that no longer exists, a key that is
   not an id, a search that failed, and a record still being read. Unlike a `document-link` cell,

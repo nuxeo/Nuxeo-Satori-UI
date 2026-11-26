@@ -234,6 +234,20 @@ describe('LinkedRecordLookup', () => {
       expect(asked).toHaveLength(2);
     });
 
+    it('keeps an earlier read when one asked again with more schemas fails, and asks again next time', async () => {
+      await read([A], []);
+      answer = () => of(null);
+      const failed = await read([A], ['move']);
+      // The title read before still shows; the property the failed read was for does not.
+      expect(failed.get(A)?.title).toBe('Wei Chen');
+      answer = (ids) => of(found(ids));
+      await read([A], ['move']);
+      expect(withSchemas).toEqual([[], ['move'], ['move']]);
+      // A record never read before, whose read fails, is still unavailable.
+      answer = () => of(null);
+      expect((await read([C], ['move'])).get(C)).toBeNull();
+    });
+
     it('never asks with a schema for a set that names none', async () => {
       await records([A]);
       expect(withSchemas).toEqual([[]]);

@@ -1,5 +1,15 @@
 import { Injectable, type Signal, computed, inject } from '@angular/core';
-import { type Observable, catchError, forkJoin, map, of, shareReplay, startWith, tap } from 'rxjs';
+import {
+  type Observable,
+  catchError,
+  forkJoin,
+  map,
+  of,
+  shareReplay,
+  startWith,
+  switchMap,
+  tap,
+} from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { type VocabularyValue, vocabularyValues } from '../document-layout/field-view';
@@ -241,9 +251,9 @@ interface ReadRecord {
  * schema it and its lists need, so a list asks again only for a record the page does not name.
  *
  * Provided by the record page, whose lists share it, so a record a field and a list both name is
- * read once; by a form; and by the Properties panel, for the references its schemas name, so a
- * document page showing both the panel and a record page asks once for each. A list drawn
- * elsewhere, as a queue's, has one of its own
+ * read once; by a form; by the Properties panel, for the references its schemas name, so a
+ * document page showing both the panel and a record page asks once for each; and by a queue's
+ * page, whose facets and list share it. A list drawn elsewhere has one of its own
  * ({@link linkedRecordLookup}). Per page, not per session as a label is: a record's title changes
  * more often than a user's name, and a record the reader may not read today may be shared with
  * them tomorrow.
@@ -282,24 +292,44 @@ export class LinkedRecordLookup {
     ).pipe(map((pairs): LinkedRecords => new Map(pairs)));
   }
 
-  /** One request for `ids`, with `schemas`, shared by each of them. */
+  /**
+   * One request for `ids`, with `schemas`, shared by each of them. An id read before, without some
+   * of `schemas`, keeps that read if this one fails: it answers it again, and is asked for anew by
+   * the next set that names it, rather than showing as unavailable meanwhile.
+   */
   private ask(ids: readonly string[], schemas: readonly string[]): void {
     const ones = new Map<string, ReadRecord>();
+    const earlier = new Map(
+      ids.flatMap((id): [string, ReadRecord][] => {
+        const read = this.read.get(id);
+        return read ? [[id, read]] : [];
+      }),
+    );
     const request = this.layouts.linkedRecords(ids, schemas).pipe(
       catchError(() => of(null)),
       // Once, as the request answers, whether or not anything still waits for it: a request kept
       // running after the page moved on to another set must not leave its failure cached.
       tap((found) => {
         if (found !== null) return;
-        for (const [id, one] of ones) if (this.read.get(id) === one) this.read.delete(id);
+        for (const [id, one] of ones) {
+          if (this.read.get(id) !== one) continue;
+          const before = earlier.get(id);
+          if (before) this.read.set(id, before);
+          else this.read.delete(id);
+        }
       }),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
     const read = new Set(schemas);
     for (const id of ids) {
+      const before = earlier.get(id);
       const one: ReadRecord = {
         schemas: read,
-        record: request.pipe(map((found) => found?.get(id) ?? null)),
+        record: request.pipe(
+          switchMap((found) =>
+            found === null && before ? before.record : of(found?.get(id) ?? null),
+          ),
+        ),
       };
       ones.set(id, one);
       this.read.set(id, one);

@@ -103,7 +103,21 @@ describe('QueuePageComponent', () => {
   let warnings: string[];
   /** The linked records' search: each call is one request, with the ids it was given. */
   let linkedRecords: ReturnType<
-    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, unknown> | null>>
+    typeof vi.fn<
+      (
+        ids: readonly string[],
+        schemas?: readonly string[],
+      ) => Observable<ReadonlyMap<string, unknown> | null>
+    >
+  >;
+  /** What a column's `show` reads of the types it links to. */
+  let linkedProperty: ReturnType<
+    typeof vi.fn<
+      (
+        types: readonly string[],
+        show: string,
+      ) => Observable<{ schema: string; definition: { type: string } } | null>
+    >
   >;
 
   function create(groups: readonly string[] = ['claims-adjusters', 'members']): void {
@@ -142,7 +156,9 @@ describe('QueuePageComponent', () => {
               ),
             vocabularyLabel: () => of(null),
             principalLabel: () => of(null),
-            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
+            linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
+              schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
+            linkedProperty: (types: readonly string[], show: string) => linkedProperty(types, show),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
@@ -216,6 +232,7 @@ describe('QueuePageComponent', () => {
     });
     warnings = [];
     linkedRecords = vi.fn(() => of(new Map()));
+    linkedProperty = vi.fn(() => of(null));
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
       warnings.push(String(message)),
     );
@@ -342,6 +359,35 @@ describe('QueuePageComponent', () => {
       // The first move is in a cell and a bucket, and read once; a value that is no id never.
       expect(asked.sort()).toEqual([FIRST, GONE, SECOND].sort());
       expect(asked).not.toContain('not-an-id');
+    });
+
+    it("reads each record once with the schema a show column reads, the facet's buckets included", async () => {
+      files = {
+        'claims-by-move': {
+          kind: 'file',
+          content: {
+            ...BY_MOVE,
+            columns: [
+              ...BY_MOVE.columns,
+              {
+                field: 'claim:move',
+                widget: 'document-link',
+                label: 'Customer',
+                parameters: { types: ['Move'], show: 'move:customer' },
+              },
+            ],
+          },
+        },
+      };
+      linkedProperty = vi.fn(() => of({ schema: 'move', definition: { type: 'string' } }));
+      create();
+      await open('claims-by-move');
+      await answer([onMove(1, FIRST), onMove(2, SECOND)], MOVES);
+      const asked = linkedRecords.mock.calls.flatMap(([ids]) => [...ids]);
+      expect(asked.sort()).toEqual([FIRST, GONE, SECOND].sort());
+      // Whichever asked first, the facet's or the list's, asked with the show column's schema.
+      for (const [, schemas] of linkedRecords.mock.calls) expect(schemas).toEqual(['move']);
+      expect(facets()[0][1]).toBe('[ ] Quinlan household (2)');
     });
 
     it('shows the id while its record is read, and after a search that fails', async () => {

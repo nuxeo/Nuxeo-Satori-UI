@@ -25,7 +25,9 @@ export {
 export { RECORD_VIDEO_ID, RecordVideoComponent } from './lib/record-page/record-video';
 export { TaskFormComponent } from './lib/task-form/task-form';
 export {
+  linkedTypesOf,
   readRecordList,
+  showOf,
   type EntryReading,
   type RecordListEntry,
   type RecordListSort,

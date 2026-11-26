@@ -15,10 +15,13 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  DocumentLayoutService,
   LinkedRecordLookup,
   NO_RECORDS,
   RecordListComponent,
   isDocumentId,
+  linkedTypesOf,
+  showOf,
   type RecordListEntry,
 } from '@agentic-ui/shared/document-layouts';
 import {
@@ -53,9 +56,11 @@ import {
   resultWindow,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
+  type Observable,
   Subject,
   type Subscription,
   filter,
+  forkJoin,
   map,
   merge,
   of,
@@ -192,6 +197,7 @@ export class QueuePageComponent {
 
   private readonly queues = inject(QueueService);
   private readonly linkedRecords = inject(LinkedRecordLookup);
+  private readonly layouts = inject(DocumentLayoutService);
   private readonly rules = inject(ExtensionRuleRegistry);
   private readonly slots = inject(ExtensionSlotRegistry);
   private readonly extensions = inject(AppExtensionsService);
@@ -334,13 +340,58 @@ export class QueuePageComponent {
   );
 
   /**
+   * The schemas the list's columns' `show` read (layout-v2.md, section 12), for the buckets'
+   * records to be read with too: whichever of the two asks first, a record both name is read once,
+   * with all of them. `null` until the list's linked types are read, as the list waits for them.
+   */
+  private readonly listSchemas = toSignal(
+    toObservable(this.queue).pipe(
+      switchMap((queue): Observable<readonly string[]> => {
+        const columns = (queue?.list.columns ?? []).filter((column) => showOf(column) !== null);
+        if (columns.length === 0) return of([]);
+        return forkJoin(
+          columns.map((column) =>
+            this.layouts.linkedProperty(linkedTypesOf(column), showOf(column) as string),
+          ),
+        ).pipe(
+          map((read) =>
+            [
+              ...new Set(
+                read.flatMap((linked) =>
+                  linked && linked.definition.documentReference !== true ? [linked.schema] : [],
+                ),
+              ),
+            ].sort(),
+          ),
+        );
+      }),
+    ),
+    { initialValue: null },
+  );
+
+  /**
    * Those records, read in one search through the page's lookup, which its list shares, as the
-   * reader: a record the list's `document-link` cells name too is read once. Every id a set adds
-   * is asked for in one request; a bucket shows its key until its record is read, and where it
-   * cannot be.
+   * reader, with the schemas the list's `show` columns read: a record the list's `document-link`
+   * cells name too is read once. Every id a set adds is asked for in one request; a bucket shows
+   * its key until its record is read, and where it cannot be.
    */
   private readonly bucketRecords = toSignal(
-    toObservable(this.bucketIds).pipe(switchMap((ids) => this.linkedRecords.records(ids))),
+    toObservable(
+      computed(
+        () => {
+          const schemas = this.listSchemas();
+          return schemas === null ? null : { ids: this.bucketIds(), schemas };
+        },
+        {
+          equal: (a, b) =>
+            a === b || (a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b)),
+        },
+      ),
+    ).pipe(
+      switchMap((read) =>
+        read === null ? of(NO_RECORDS) : this.linkedRecords.records(read.ids, read.schemas),
+      ),
+    ),
     { initialValue: NO_RECORDS },
   );
 

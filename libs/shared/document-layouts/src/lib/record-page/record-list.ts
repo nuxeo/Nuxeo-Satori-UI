@@ -74,7 +74,9 @@ import {
   type RecordListEntry,
   type RecordPropertyField,
   columnKey,
+  linkedTypesOf,
   ruleRefusal,
+  showKey,
   showOf,
 } from './record-layout';
 import {
@@ -321,14 +323,12 @@ export class RecordListComponent {
         const linked = columns.filter((column) => showOf(column) !== null);
         if (linked.length === 0) return of(new Map());
         return forkJoin(
-          linked.map((column) => {
-            const types = column.parameters['types'];
-            return this.layouts.linkedProperty(
-              Array.isArray(types) ? types.filter((type) => typeof type === 'string') : [],
-              showOf(column) as string,
-            );
-          }),
-        ).pipe(map((read) => new Map(linked.map((column, index) => [column.place, read[index]]))));
+          linked.map((column) =>
+            this.layouts.linkedProperty(linkedTypesOf(column), showOf(column) as string),
+          ),
+        ).pipe(
+          map((read) => new Map(linked.map((column, index) => [showKey(column), read[index]]))),
+        );
       }),
     ),
     { initialValue: null },
@@ -339,9 +339,8 @@ export class RecordListComponent {
    * where none of them has the property, or it is itself a reference, and the column is left out.
    */
   private linkedOf(column: RecordPropertyField): LinkedProperty | null | undefined {
-    const shows = this.shows();
-    if (shows === null) return undefined;
-    const linked = shows.get(column.place) ?? null;
+    const linked = this.shows()?.get(showKey(column));
+    if (linked === undefined) return undefined;
     if (linked === null) {
       this.tell(
         `${column.place}: none of the types it links to has ${showOf(column)}, or their schemas could not be read; that column left out`,

@@ -646,13 +646,25 @@ export class DocumentLayoutService {
    * show it by. From the first of `types` whose definition, read once per session as the open
    * record's type is, has a schema of `show`'s prefix with that property. `null` when none has it,
    * or none could be read, and the console says which. Never errors.
+   *
+   * Each type's read is waited for {@link LAYOUT_LOAD_TIMEOUT_MS} at most: a page reads its linked
+   * records once these are known, its plain `document-link`s' titles included, so a type that never
+   * answers counts as one not read rather than keeping every link on the page blank.
    */
   linkedProperty(types: readonly string[], show: string): Observable<LinkedProperty | null> {
     const wanted = [...new Set(types.filter((type) => typeof type === 'string' && type !== ''))];
     if (wanted.length === 0) return of(null);
     const prefix = prefixOfXpath(show);
     const name = show.slice(show.indexOf(':') + 1);
-    return forkJoin(wanted.map((type) => this.documentType(type))).pipe(
+    const read = (type: string): Observable<DocumentTypeDefinition | null> =>
+      this.documentType(type).pipe(
+        timeout(LAYOUT_LOAD_TIMEOUT_MS),
+        catchError((error: unknown) => {
+          warn(`schemas of ${type}, which a show links to, not read: ${describe(error)}`);
+          return of(null);
+        }),
+      );
+    return forkJoin(wanted.map(read)).pipe(
       map((definitions) => {
         for (const definition of definitions) {
           const schema = definition?.schemas.find((each) => each.prefix === prefix);

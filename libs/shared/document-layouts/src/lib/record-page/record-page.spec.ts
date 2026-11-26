@@ -791,10 +791,61 @@ describe('RecordPageComponent', () => {
           },
         ],
       };
-      await render(member({ 'member:referrer': WEI }), page);
+      // The list's one row names the record the page's fields name.
+      execute.mockImplementation(() =>
+        of({
+          entries: [{ ...member({ 'member:referrer': WEI }), uid: 'm2' }],
+          totalSize: 1,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+          isNextPageAvailable: false,
+        }),
+      );
+      rowProperties = () => of(new Map([['member:referrer', { type: 'string' }]]));
+      const root = await render(member({ 'member:referrer': WEI }), page);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const list = fixture.debugElement.query(By.directive(RecordListComponent));
+      expect(list).not.toBeNull();
+      // The list drew its row, and read nothing: the page read the record with the list's schema.
+      expect(root.querySelector('[data-card-id="referred"] tr[data-uid="m2"]')).not.toBeNull();
       expect(linkedRecords).toHaveBeenCalledTimes(1);
       expect(linkedRecords.mock.calls[0]).toEqual([[WEI], ['audit', 'plans']]);
       expect(linkedProperty).toHaveBeenCalledWith(['Member'], 'audit:checkedOn');
+    });
+
+    it("never pairs a file's show with what another file's read, as the page is drawn anew", async () => {
+      const root = await render(member({ 'member:referrer': WEI }), SHOW_PAGE);
+      expect(valueOf(root, 'member:referrer/plan:name')).toBe('Gold');
+      // The same place shows another property; its type is not read yet.
+      const pending = new Subject<{ schema: string; definition: LayoutFieldType } | null>();
+      linkedProperty = vi.fn(() => pending);
+      const fields = SHOW_PAGE.cards[0].fields;
+      fixture.componentRef.setInput(
+        'layout',
+        layoutOf({
+          ...SHOW_PAGE,
+          cards: [
+            {
+              ...SHOW_PAGE.cards[0],
+              fields: [
+                fields[0],
+                { ...fields[1], parameters: { types: ['Member'], show: 'plan:joinedOn' } },
+              ],
+            },
+          ],
+        }),
+      );
+      fixture.detectChanges();
+      // Meanwhile it shows nothing: not the name read for the file before, under the new label.
+      expect(valueOf(root, 'member:referrer/plan:joinedOn')).toBe('');
+      expect(root.textContent).not.toContain('Gold');
+      pending.next(PLAN['plan:joinedOn']);
+      pending.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(valueOf(root, 'member:referrer/plan:joinedOn')).toBe('March 1, 2024');
     });
   });
 

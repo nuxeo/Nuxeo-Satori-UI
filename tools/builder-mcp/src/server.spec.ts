@@ -110,7 +110,7 @@ describe('createServer', () => {
           parameters: { positional: 0 },
           aggregates: [
             { id: 'dmg_state_agg', type: 'terms', field: 'dmg:state' },
-            { id: 'dmg_moveNumber_agg', type: 'terms', field: 'dmg:moveNumber' },
+            { id: 'dmg_move_agg', type: 'terms', field: 'dmg:move' },
           ],
         });
         // The where clause, unescaped: what the server would run.
