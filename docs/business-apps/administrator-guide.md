@@ -442,8 +442,11 @@ after sign-in.
    November 2026. A rebuild of a version already installed is skipped as unchanged: run
    `nuxeoctl mp-remove <kit> --accept=true` first, in the same script
    ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#installing-it-on-a-local-nuxeo)).
-4. **Follow the kit's README for its version.** Payers 0.6.0 needs a `nuxeo-agentic-ui` whose
-   layout engine knows a checklist's `tickable`, or the Case page's checklist is left out; Payers
+4. **Follow the kit's README for its version.** Payers 0.6.1 gives the supervisor's step the
+   variables facet Nuxeo's task completion needs, so a workflow started under 0.6.0 has a
+   supervisor's approval that cannot be completed: cancel it. Payers 0.6.0 needs a
+   `nuxeo-agentic-ui` whose layout engine knows a checklist's `tickable`, or the Case page's
+   checklist is left out; Payers
    0.5.0 needs a `nuxeo-agentic-ui` with the allow-list, and the allow-list in `nxserver/config/`;
    Payers 0.4.0 adds a claim lifecycle, so claims seeded under 0.3.0 wait in `project` until the
    seed runs again. None of the three was run on a server ([Payers README](../../business-apps/packages/payers-claims-demo/README.md)).
@@ -585,13 +588,29 @@ decision G, are not built: the registry knows groups only
 
 ### Installed or shown only on a local server, or nowhere
 
-- **On a local server only:** earlier builds of `nuxeo-agentic-ui`, with the app registry; the
-  Payers kit 0.3.0; the brand assets kit 0.1.0
-  ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs).
-- **On no server:** `nuxeo-agentic-assets`; the connectors; the deployment layer; the operation
-  buttons; Payers 0.4.0 to 0.6.0; brand assets 0.1.1 to 0.2.2; the contracts, facilities, moves
-  and records kits; `nuxeo-agentic-records`, whose disposition runs only in its tests; every kit's
-  removal.
+- **On a local server only,** the local Docker Nuxeo, as of 26 November 2026:
+  - `nuxeo-agentic-ui` built from the staging branch, with the app registry and the operation
+    buttons' allow-list in `nxserver/config/`;
+  - `nuxeo-agentic-assets` 0.1.0, with the brand assets kit 0.2.0;
+  - Payers 0.6.0, with its seed and the demo users;
+  - contracts 0.2.1;
+  - moves 0.1.0;
+  - `nuxeo-agentic-documents` 0.1.0, with the controlled documents kit 0.1.0.
+
+  Earlier, Payers 0.3.0 to 0.4.1 and the brand assets kit 0.1.0
+  ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs). On 26 November
+  2026, through the development server:
+  - the Payers demo's steps files passed 40 of 40;
+  - the appeals' passed 43 of 43;
+  - the operation buttons' passed 31 of 32: the one failure was the steps file reading the button's
+    text rather than its accessible name, fixed with 0.6.1;
+  - the claims review workflow's passed 27 of 32: the supervisor's Approve failed on the step's
+    missing variables facet, which Payers 0.6.1 fixes.
+
+- **On no server:** the connectors; the deployment layer, which `nuxeo-agentic-ui` holds switched
+  off; `nuxeo-agentic-assets` 0.2.0 and its share links; Payers 0.6.1; brand assets 0.2.1 to
+  0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs only in
+  its tests; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push

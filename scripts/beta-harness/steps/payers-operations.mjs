@@ -258,10 +258,14 @@ export default async function run(page, h) {
   const name = labels['payers.action.requestRecords'];
   const button = page.locator(`[data-action-id="${REQUEST}"]`);
   await button.waitFor({ state: 'visible', timeout: 30_000 }).catch(unread);
+  // Its accessible name, not its text: Satori's action bar names an icon button with aria-label
+  // and puts no text in it, and Material's with visually hidden text. Its innerText was empty on
+  // the local server, 26 November 2026, while a screen reader read the button's name.
+  const named = await button.ariaSnapshot().catch(() => '');
   h.check(
-    'the claim in review offers Request medical records on its toolbar',
-    (await button.count()) === 1 && (await button.innerText().catch(() => '')).includes(name),
-    `${await button.count()} buttons, named ${JSON.stringify(await button.innerText().catch(() => ''))}`,
+    'the claim in review offers Request medical records on its toolbar, by that name',
+    (await button.count()) === 1 && named.includes(`button ${JSON.stringify(name)}`),
+    `${await button.count()} button(s): ${JSON.stringify(named)}`,
   );
   h.check(
     "the toolbar does not offer Refer to special investigations, which the server's allow-list leaves out",

@@ -322,6 +322,13 @@ export function problemsOf(kit) {
     const variablesFacet = text('variablesFacet');
     if (variablesFacet && (!systemFacets.includes(variablesFacet) || !facets.has(variablesFacet)))
       problem(`${where}'s variablesFacet ${variablesFacet} is not a contributed facet it carries`);
+    // Nuxeo reads a task's completion through the node's variables facet
+    // (TaskCompletionRequestJsonReader) and throws without one, so the task is never completed:
+    // the supervisor's Approve, on the local server, 26 November 2026.
+    if (text('hasTask') === 'true' && !variablesFacet)
+      problem(
+        `${where} has a task and names no variablesFacet: Nuxeo completes a task through its node's variables facet, and throws without one`,
+      );
     const transitions = childrenNamed(fields.get('transitions'), 'transition').map((transition) => {
       for (const part of transition.children)
         if (!TRANSITION_FIELDS.has(part.name))
@@ -680,6 +687,18 @@ refuse(
     rebuild();
   },
   /names the facet facet-var_PayersClaimReview_decide, which no component contributes/,
+);
+refuse(
+  'a node with a task and no variables facet',
+  ({ edit, rebuild }) => {
+    edit(
+      SUPERVISOR,
+      '    <rnode:variablesFacet><![CDATA[facet-var_PayersClaimReview_supervisorApproval]]></rnode:variablesFacet>\n',
+      '',
+    );
+    rebuild();
+  },
+  /supervisorApproval.* has a task and names no variablesFacet/,
 );
 refuse(
   "a variable schema's namespace apart from its file's",
