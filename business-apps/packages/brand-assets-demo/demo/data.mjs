@@ -160,6 +160,44 @@ export const ASSETS = [
 ];
 
 /**
+ * The videos, each an `AcmeVideo`: two short films generated from a test pattern by ffmpeg, a few
+ * kilobytes of WebM each, not filmed or downloaded; `video.file` is its file under `demo/videos/`,
+ * and the README, "The videos", has the command that made it. Asset 511 holds no Print channel, so
+ * its original, the master, is refused and its web cut, the server's transcoded videos, served; it
+ * runs 12 seconds, long enough for Nuxeo's storyboard, which it makes from 10. Asset 512 is cleared
+ * everywhere, and too short for a storyboard.
+ */
+export const VIDEOS = [
+  {
+    id: 'ast-511',
+    title: 'Into the Hills, campaign film',
+    product: 'AO-3102',
+    colorway: 'Ember',
+    shot: 'Film',
+    campaign: 'Into the Hills',
+    rightsEndInDays: 300,
+    channels: ['E-commerce', 'Social'],
+    regions: 'Worldwide',
+    credit: STUDIO,
+    rights: 'Acme Outdoor, for the Into the Hills campaign only.',
+    video: { file: 'ast-511.webm', mimeType: 'video/webm', seconds: 12, size: [160, 90] },
+  },
+  {
+    id: 'ast-512',
+    title: 'Trailhead Rain Jacket, Moss, turntable',
+    product: 'AO-3101',
+    colorway: 'Moss',
+    shot: 'Turntable',
+    rightsEndInDays: 200,
+    channels: ALL_CHANNELS,
+    regions: 'Worldwide',
+    credit: STUDIO,
+    rights: 'Acme Outdoor. Shot by its own studio.',
+    video: { file: 'ast-512.webm', mimeType: 'video/webm', seconds: 4, size: [90, 120] },
+  },
+];
+
+/**
  * Each product's shot list: the shots it needs, by colourway. `asset` is the asset that fills one;
  * `null`, it is missing, as the product page's "Missing shots" card lists it.
  */

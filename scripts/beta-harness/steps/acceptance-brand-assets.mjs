@@ -127,9 +127,15 @@ export default async function run(page, h) {
     existsSync(SEED_DATA),
     'restore it: git checkout -- business-apps/packages/brand-assets-demo',
   );
-  const { ASSETS, MARKER, PRODUCTS, SHOTS, WORKSPACE, shotName } = await import(
-    pathToFileURL(SEED_DATA).href
-  );
+  const {
+    ASSETS,
+    MARKER,
+    PRODUCTS,
+    SHOTS,
+    VIDEOS = [],
+    WORKSPACE,
+    shotName,
+  } = await import(pathToFileURL(SEED_DATA).href);
   const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
   const ENDING = ASSETS.find((asset) => asset.id === ENDING_ID);
   const ENDED = ASSETS.find((asset) => asset.id === ENDED_ID);
@@ -444,7 +450,9 @@ export default async function run(page, h) {
       `drawn ${JSON.stringify(menu)}`,
     );
     await checkQueueNarrows(page, h, { id: queue.id, queue: queueFile, labels, item: 'D9' });
-    const libraryTitles = ASSETS.map((asset) => asset.title);
+    // From 0.2.2 the seed writes two videos, which the reference kit's library lists too: a row
+    // may show a video's title.
+    const libraryTitles = [...ASSETS, ...VIDEOS].map((asset) => asset.title);
     const rows =
       (await page
         .evaluate(() =>

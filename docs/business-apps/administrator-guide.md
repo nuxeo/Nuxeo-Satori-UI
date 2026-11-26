@@ -19,7 +19,7 @@ wait for a security review, and some are built on open decisions
 | `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                   | 2026.0.2-SNAPSHOT     | Nowhere                                           |
 | `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                 | Nowhere                                           |
 | `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                                  | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
-| `brand-assets-demo`         | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`    | 0.2.2                 | 0.1.0 on the local server; 0.1.1 to 0.2.2 nowhere |
+| `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`    | 0.2.3                 | 0.2.0 on the local server; 0.1.1 to 0.2.3 nowhere |
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
 | `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                 | Nowhere                                           |
@@ -121,7 +121,8 @@ The order the [demo server](../../business-apps/demo-server/README.md) installs 
      `Payers.RequestMedicalRecords allowed by payers-claims-demo.deployment.operations`
      ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#over-version-041-version-050-with-the-operation-buttons));
    - with the assets add-on, the log names `org.nuxeo.agentic.assets.rights` and its kit's
-     `nuxeo.config.brand-assets-demo.rights`, and has no `Asset rights:` error
+     `nuxeo.config.brand-assets-demo.rights` and `nuxeo.config.brand-assets-demo.video-rights`,
+     and has no `Asset rights:` error
      ([assets README](../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo)).
 6. **Create the groups each app names, and put people in them** ([section 4](#the-app-registrys-groups)).
    An administrator in none of them sees no app.
@@ -334,8 +335,11 @@ sets its address and credential ([connectors README](../../nuxeo-agentic-connect
 
 `nuxeo-agentic-assets` refuses, on the server, the downloads an asset's rights do not cover, for
 every user, administrators included, by a rights policy a kit contributes for its document type
-([assets README](../../nuxeo-agentic-assets/README.md)). The brand assets kit's is
-[`brand-assets-demo-rights.xml`](../../business-apps/packages/brand-assets-demo/bundle/OSGI-INF/brand-assets-demo-rights.xml).
+([assets README](../../nuxeo-agentic-assets/README.md)). The brand assets kit's are
+[`brand-assets-demo-rights.xml`](../../business-apps/packages/brand-assets-demo/bundle/OSGI-INF/brand-assets-demo-rights.xml),
+for its pictures, and
+[`brand-assets-demo-video-rights.xml`](../../business-apps/packages/brand-assets-demo/bundle/OSGI-INF/brand-assets-demo-video-rights.xml),
+for its videos.
 
 - **It refuses nothing until a package contributes a policy for a document type** (its
   `package.xml`).

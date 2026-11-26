@@ -148,6 +148,7 @@ describe('the synthetic library', () => {
       'acme_product_agg',
       'acme_rights_agg',
       'acme_shot_agg',
+      'acme_type_agg',
     ]);
   });
 

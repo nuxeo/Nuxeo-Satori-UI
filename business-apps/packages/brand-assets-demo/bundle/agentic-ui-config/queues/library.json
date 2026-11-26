@@ -15,6 +15,7 @@
   "facets": [
     { "aggregate": "acme_rights_agg", "labelKey": "brand.facet.rights" },
     { "aggregate": "acme_shot_agg", "labelKey": "brand.facet.shot" },
-    { "aggregate": "acme_product_agg", "labelKey": "brand.facet.product" }
+    { "aggregate": "acme_product_agg", "labelKey": "brand.facet.product" },
+    { "aggregate": "acme_type_agg", "labelKey": "brand.facet.type" }
   ]
 }

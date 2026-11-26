@@ -20,4 +20,6 @@
   <xs:element name="acme_shot_agg" type="nxs:stringList" />
   <!-- The products chosen in its Product facet, by style number. -->
   <xs:element name="acme_product_agg" type="nxs:stringList" />
+  <!-- The types chosen in its Type facet: AcmeAsset, a picture, or AcmeVideo. -->
+  <xs:element name="acme_type_agg" type="nxs:stringList" />
 </xs:schema>

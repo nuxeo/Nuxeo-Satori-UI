@@ -101,6 +101,21 @@ export class DocumentDetailService {
       .pipe(map((document) => assetRights(document)));
   }
 
+  /**
+   * A rendition of the document by its name, such as a video's `MP4 480p`, through the REST API's
+   * rendition adapter, which names it to the server's download permission by that name: the name a
+   * rights policy lists it by. The name is sent as one encoded path segment; an empty one, `.` or
+   * `..`, which a URL resolves as no segment or as a step up, errors without a request.
+   */
+  fetchRendition(uid: string, name: string): Observable<Blob> {
+    if (name === '' || name === '.' || name === '..')
+      return throwError(() => new Error(`"${name}" is not a rendition's name`));
+    return this.http.get(
+      this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@rendition/${encodeURIComponent(name)}`),
+      { responseType: 'blob' },
+    );
+  }
+
   fetchPdfRendition(uid: string): Observable<Blob> {
     return this.http.get(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@rendition/pdf`), {
       responseType: 'blob',
