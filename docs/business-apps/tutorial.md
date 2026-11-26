@@ -765,8 +765,10 @@ it. Their keys need a text; `app-queue` gave the queue's own name one. Add to `l
 }
 ```
 
-- **Nothing checks a queue's columns against the model yet** ([package-pipeline.md](package-pipeline.md),
-  section 7): read them against step 2's model yourself.
+- **The pipeline holds a queue's columns and sort to the type its page provider lists,** when the
+  package defines the page provider and its NXQL says the type, `ecm:primaryType = 'WorkOrder'` as
+  `app-model` writes it, given step 2's model ([package-pipeline.md](package-pipeline.md),
+  section 2). On a page provider of the server's, read them against the model yourself.
 - **A header sorts on the server.** The search index maps `dc:title` as analysed text, which it
   cannot sort by, so a click on that header shows the error state, and Retry goes back to the
   file's order.
@@ -985,8 +987,9 @@ digest it had.
   refuses it ([package-pipeline.md](package-pipeline.md), section 4).
 - **Never weaken a check to pass.** A refusal is fixed in the package.
 - **What it does not check yet:** that a page provider exists, a facet on a page provider of the
-  server's, and the properties of a queue's or a related list's columns, a rule or a computation.
-  Read those against the model yourself.
+  server's, a queue's or a related list's columns and sorts on a page provider of the server's, the
+  properties a rule or a computation names, and whether NXQL the check of its tokens passes will
+  run. Read those against the model, and the server, yourself.
 
 ## Step 9. Preview in dev mode
 

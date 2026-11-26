@@ -55,6 +55,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GeneratedChange, GeneratorAnswer, GeneratorRequest } from './run-generator.ts';
+import { schemaHeadingWarnings } from './schema-headings.ts';
 import {
   REPO_ROOT,
   inRepository,
@@ -153,6 +154,12 @@ export interface WriteResult {
   readonly validation: PackageCheck | null;
   /** What each generator printed, in order. */
   readonly generatorOutput: readonly string[];
+  /**
+   * What the package, as written, still lacks that no check refuses: each of a demo kit's own
+   * schemas whose Properties heading has no text (`schema-headings.ts`). Only when written, and
+   * only when there is one.
+   */
+  readonly warnings?: readonly string[];
   readonly note: string;
 }
 
@@ -251,7 +258,7 @@ function writtenBy(path: string): string {
 
 // ------------------------------------------------------------------------------- the package
 
-interface Target {
+export interface Target {
   readonly directory: string;
   readonly name: string;
   /** As the answers name it: from the repository when inside it. */
@@ -269,7 +276,7 @@ function fromRepository(path: string): string | null {
 }
 
 /** The package folder a request names, or why it is not one the tools write. */
-function packageFolder(path: string, roots: readonly string[]): Target {
+export function packageFolder(path: string, roots: readonly string[]): Target {
   // A `..` is refused rather than resolved: the file system follows a link before it, and the
   // text does not, so `<root>/link/../x` names one folder to `relative` and another to `lstat`.
   if (path.split(/[\\/]/).some((part) => part === '..' || part === '.'))
@@ -853,12 +860,14 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       if (unreleased !== null) left.push(unreleased);
       if (madePackage && !committed) removeIfEmpty(target.directory);
     }
+    const warnings = schemaHeadingWarnings((path) => after.get(path)?.toString('utf8'));
     return {
       package: target.shown,
       written: true,
       changes,
       validation: check,
       generatorOutput: said,
+      ...(warnings.length > 0 ? { warnings } : {}),
       note:
         `Written: ${changes.length} ${changes.length === 1 ? 'file' : 'files'}, after the pipeline's` +
         " steps 1 to 6 passed on the package as it now is, as CI runs them on the package's files" +

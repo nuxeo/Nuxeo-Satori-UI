@@ -1,7 +1,7 @@
 <package type="addon" name="<%= name %>" version="<%= version %>">
   <title><%= title %></title>
   <description>
-    <p>The <%= title %> app definition, a Nuxeo Satori business app: its record pages, queues, actions and labels.</p>
+    <p>The <%= title %> app definition, a Nuxeo Satori business app.</p>
   </description>
   <vendor><%= vendor %></vendor>
   <installer restart="true" />

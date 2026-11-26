@@ -23,7 +23,11 @@
  *      package's labels must give every label key a text, and a content model: the one given, or,
  *      for a package that ships a stand-in model, its own `content-model.json`. A queue's facet and
  *      a home's figure name an aggregate their page provider defines, when the package's own
- *      model defines it. The layouts the component contributes are the files the validator read, in the modes it
+ *      model defines it; the NXQL of a page provider the package defines holds nothing Nuxeo's
+ *      grammar has no place for, by a check of its tokens, not a parse; a queue's and a related
+ *      list's columns and sorts, on such a page provider whose NXQL says the type it lists, name
+ *      that type's properties in the content model, with widgets that show them. The layouts the
+ *      component contributes are the files the validator read, in the modes it
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
@@ -78,7 +82,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import '../libs/shared/app-definition/src/typescript-hook.mjs';
 import {
   EXIT_PRECONDITION,
   missingNuxeoCredentialsMessage,
@@ -97,6 +102,12 @@ import {
 } from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+/** The validator's library, which Node loads as it is through the hook imported above. */
+const LIBRARY = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'lib');
+const { listedColumnFindings, listedType, nxqlProblems } = await import(
+  pathToFileURL(join(LIBRARY, 'page-providers.ts')).href
+);
+const { readContentModel } = await import(pathToFileURL(join(LIBRARY, 'content-model.ts')).href);
 const TEMPLATE = join(
   REPO,
   'tools',
@@ -358,12 +369,28 @@ function run({
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
+  const refusedQueries = refusedNxql(directory);
+  if (refusedQueries.length > 0) {
+    for (const finding of refusedQueries) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a page provider's NXQL holds what Nuxeo refuses, listed above. This is a check of its tokens, not of the query: one it passes may still be refused on the server.",
+    );
+  }
   const unanswered = unansweredAggregates(directory, root);
   if (unanswered.length > 0) {
     for (const finding of unanswered) process.stdout.write(`${finding}\n`);
     return refuse(
       2,
       'a facet or a figure names an aggregate its page provider does not define, listed above.',
+    );
+  }
+  const unlisted = unlistedColumns(directory, root, heldTo);
+  if (unlisted.length > 0) {
+    for (const finding of unlisted) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a queue's or a related list's column or sort names a property the records its page provider lists do not have, or a widget that does not show one, listed above.",
     );
   }
   const contributed =
@@ -752,12 +779,53 @@ function componentsOf(directory) {
     const file = componentFileOf(resolve(bundle), component);
     if (typeof file !== 'string' || file === '') continue;
     try {
-      components.push({ component, xml: componentXmlOf(readFileSync(file, 'utf8')) });
+      const source = readFileSync(file, 'utf8');
+      // `xml` is `kept` with its CDATA and documentation blanked, offset for offset, so a text
+      // found in one is read, CDATA and all, from the other.
+      components.push({
+        component,
+        xml: componentXmlOf(source),
+        kept: withoutCommentsOrInstructions(source),
+      });
     } catch {
       // Unreadable: layoutContributions says so.
     }
   }
   return components;
+}
+
+/**
+ * An element's text as the server reads it: a CDATA section's as written, the rest with its
+ * entities and character references decoded.
+ */
+function xmlText(text) {
+  return text
+    .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
+    .map((part) =>
+      part.startsWith('<![CDATA[')
+        ? part.slice('<![CDATA['.length, -']]>'.length)
+        : part.replace(
+            /&(?:#x([0-9A-Fa-f]+)|#([0-9]+)|(lt|gt|amp|quot|apos));/g,
+            (reference, hex, decimal, named) => {
+              if (named) return { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" }[named];
+              const codePoint = hex ? parseInt(hex, 16) : Number(decimal);
+              return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : reference;
+            },
+          ),
+    )
+    .join('');
+}
+
+/**
+ * The text of the first `<element>` of `blanked`, read from `kept` at the same offsets, or `null`
+ * when there is none.
+ */
+function elementText(blanked, kept, element) {
+  const open = new RegExp(`<${element}${TAG}`).exec(blanked);
+  if (!open || open[1].trimEnd().endsWith('/')) return open ? '' : null;
+  const start = open.index + open[0].length;
+  const end = blanked.indexOf(`</${element}`, start);
+  return xmlText(kept.slice(start, end === -1 ? kept.length : end));
 }
 
 /**
@@ -782,24 +850,27 @@ function ownModel(directory) {
 
 /**
  * The page providers the package's own components define, by name: the component, whether it reads
- * the repository (`coreQueryPageProvider`) or is generic, such as the search index's, and the ids of
- * the aggregates it defines. A disabled definition takes the page provider away, as the server
- * does; of two definitions, the later the manifest loads is the one the server keeps.
+ * the repository (`coreQueryPageProvider`) or is generic, such as the search index's, the ids of
+ * the aggregates it defines, its NXQL, a pattern's or a where clause's fixed part, as the server
+ * reads it, and the type its NXQL lists, when it says (`listedType`). A disabled definition takes
+ * the page provider away, as the server does; of two definitions, the later the manifest loads is
+ * the one the server keeps.
  */
 function pageProvidersOf(directory) {
   const providers = new Map();
-  for (const { component, xml } of componentsOf(directory)) {
+  for (const { component, xml, kept } of componentsOf(directory)) {
     for (const [from, to] of extensionsOf(
       xml,
       'org.nuxeo.ecm.platform.query.api.PageProviderService',
       'providers',
     )) {
       const extension = xml.slice(from, to);
+      const extensionKept = kept.slice(from, to);
       for (const match of extension.matchAll(
         new RegExp(`<(coreQueryPageProvider|genericPageProvider)${TAG}`, 'g'),
       )) {
         const [tag, element, inside] = match;
-        const { name, enabled } = attributesOf(inside);
+        const { name, enabled, class: className } = attributesOf(inside);
         if (!name) continue;
         if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
           providers.delete(name);
@@ -810,13 +881,37 @@ function pageProvidersOf(directory) {
           ? start
           : extension.indexOf(`</${element}`, start);
         const definition = extension.slice(start, end === -1 ? extension.length : end);
+        const definitionKept = extensionKept.slice(start, end === -1 ? extension.length : end);
         const aggregates = [...definition.matchAll(new RegExp(`<aggregate${TAG}`, 'g'))]
           .map(([, attributes]) => attributesOf(attributes).id)
           .filter((id) => id !== undefined && id !== '');
+        // Nuxeo builds the query from the where clause whenever there is one, and from the pattern
+        // only when there is not.
+        const whereClause = new RegExp(`<whereClause${TAG}`).exec(definition);
+        const fixedPart =
+          whereClause === null
+            ? null
+            : elementText(
+                definition.slice(whereClause.index),
+                definitionKept.slice(whereClause.index),
+                'fixedPart',
+              );
+        const pattern =
+          whereClause === null ? elementText(definition, definitionKept, 'pattern') : null;
+        // Read only from a page provider that takes NXQL: the repository's, or a generic one of
+        // Nuxeo's NXQL classes. Another class's pattern, such as the audit's, is another language.
+        const takesNxql =
+          element === 'coreQueryPageProvider' ||
+          /(?:^|\.)(?:SearchServicePageProvider|ElasticSearchNxqlPageProvider|CoreQueryDocumentPageProvider|CoreQueryAndFetchPageProvider)$/.test(
+            className ?? '',
+          );
+        const nxql = takesNxql ? (pattern ?? fixedPart) : null;
         providers.set(name, {
           component,
           repository: element === 'coreQueryPageProvider',
           aggregates: new Set(aggregates),
+          nxql: nxql === null ? null : { text: nxql, pattern: pattern !== null },
+          listed: nxql === null ? null : listedType(nxql, { pattern: pattern !== null }),
         });
       }
     }
@@ -891,6 +986,70 @@ function unansweredAggregates(directory, root) {
       if (isObject(kpi))
         check('home.json', `cards[${index}].kpi.aggregate`, kpi.pageProvider, kpi.aggregate);
     });
+  return findings;
+}
+
+/**
+ * What Nuxeo refuses in the NXQL of each page provider the package defines, as a finding in the
+ * validator's form: the component, the page provider and the element, why (`nxqlProblems`). A
+ * check of the query's tokens for constructs Nuxeo's grammar has no place for, such as
+ * `BETWEEN NOW(...)`, which a server answered 400: not a parse, so a query it passes may still be
+ * refused on install (package-pipeline.md, section 2).
+ */
+function refusedNxql(directory) {
+  const findings = [];
+  for (const [name, { component, nxql }] of pageProvidersOf(directory)) {
+    if (nxql === null) continue;
+    const place = `pageProviders.${name}.${nxql.pattern ? 'pattern' : 'whereClause.fixedPart'}`;
+    for (const problem of nxqlProblems(nxql.text, { pattern: nxql.pattern }))
+      findings.push(
+        `${join(directory, 'bundle', ...component.split('/'))}: ${place}: ${problem} [structure]`,
+      );
+  }
+  return findings;
+}
+
+/**
+ * Each column and sort of a queue, or of a layout's related list, on a page provider of the
+ * package's own, that names a property the type it lists does not have, or a widget that does not
+ * show its property, held to `model`, the content model the validator was given: as a finding in
+ * the validator's form, the file, the place, why (`listedColumnFindings`). The type is the one the
+ * page provider's NXQL lists, when it says plainly (`listedType`). None without a model, and none
+ * for a page provider the package does not define, which is the server's.
+ */
+function unlistedColumns(directory, root, model) {
+  if (model === undefined || model === null) return [];
+  let read;
+  try {
+    read = readContentModel(JSON.parse(readFileSync(model, 'utf8').replace(/^\uFEFF/, '')));
+  } catch {
+    // The validator has read it already, and said what was wrong.
+    return [];
+  }
+  if (!read.model) return [];
+  const providers = new Map(
+    [...pageProvidersOf(directory)].map(([name, { component, listed }]) => [
+      name,
+      { component, listed },
+    ]),
+  );
+  if (providers.size === 0) return [];
+  const findings = [];
+  for (const folder of ['queues', 'layouts']) {
+    const at = join(root, folder);
+    if (!existsSync(at) || !lstatSync(at).isDirectory()) continue;
+    for (const path of filesUnder(at)
+      .filter((file) => file.endsWith('.json'))
+      .sort()) {
+      const file = `${folder}/${path}`;
+      const content = definitionFile(join(root, ...file.split('/')));
+      if (content === null) continue;
+      for (const finding of listedColumnFindings(file, content, providers, read.model))
+        findings.push(
+          `${join(root, ...file.split('/'))}: ${finding.path}: ${finding.message} [${finding.kind}]`,
+        );
+    }
+  }
   return findings;
 }
 

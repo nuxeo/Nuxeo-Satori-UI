@@ -364,11 +364,13 @@ groups give them, and gets every diagnostic.
 | `contracts`, at `contract-desk` | `contract-managers`, `legal-reviewers`                      |
 | `facilities`                    | `facilities-coordinators`, `facilities-technicians`         |
 | `moves`                         | `move-coordinators`, `move-claims-adjusters`                |
+| `controlled-documents`          | `document-controllers`, `engineers`                         |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
-- **Create the groups yourself.** The contracts, brand assets and moves seeds create no user and no
-  group; the Payers seed creates its fictional demo people and its groups, for a demo server.
+- **Create the groups yourself.** The contracts, brand assets, moves and controlled documents seeds
+  create no user and no group; the Payers seed creates its fictional demo people and its groups,
+  for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
 - **Anonymous:** on a server that defines an anonymous user, a request with no credentials is

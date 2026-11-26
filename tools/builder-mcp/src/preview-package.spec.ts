@@ -22,6 +22,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   DEV_CONFIG_SCRIPT,
   SERVED,
+  pagesOf,
   previewPackage,
   type PreviewOptions,
 } from './preview-package.ts';
@@ -245,9 +246,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           `${origin}/#/queues/unassigned-claims`,
           `${origin}/#/tasks`,
         ]);
-        expect(preview.pages.some((page) => page.what === 'the Claim record page (view)')).toBe(
-          true,
-        );
+        expect(preview.pages.some((page) => page.what === 'the Claim record page')).toBe(true);
 
         // Nothing is left in the package: its dist/, made for the check, is gone with it.
         expect(everyFile(directory)).toEqual(before);
@@ -472,6 +471,36 @@ describe('the names previewPackage passes to config:dev', () => {
     expect(SERVED.language.source).toBe(language);
     const part = constant('TASK_PART');
     expect(SERVED.task.source).toBe(`${part.slice(0, -1)}\\.${part.slice(1)}`);
+  });
+});
+
+describe('the pages a preview names', () => {
+  const origin = 'http://localhost:4200';
+  const layout = (type: string, mode: string) => ({
+    file: `layouts/${type}/${mode}.layout.json`,
+    servedAt: `/agentic-ui-config/layouts/${type}/${mode}.layout.json`,
+    what: `the ${type} layout`,
+  });
+
+  it('names each layout by what it draws: a record page, the Properties panel, a form', () => {
+    const pages = pagesOf(origin, [
+      layout('DamageClaim', 'view'),
+      layout('DamageClaim', 'metadata'),
+      layout('DamageClaim', 'edit'),
+      layout('DamageClaim', 'create'),
+    ]);
+    expect(pages.map((page) => page.what)).toEqual([
+      'the DamageClaim record page',
+      "the DamageClaim record page's Properties panel",
+      'the DamageClaim Edit form',
+      'the DamageClaim Create form',
+    ]);
+    // No form is called a record page.
+    expect(pages.filter((page) => /record page \(/.test(page.what))).toEqual([]);
+    expect(pages[2].how).toContain('Open a DamageClaim record');
+    expect(pages[2].how).toContain('Edit');
+    expect(pages[3].how).toContain('new DamageClaim record');
+    expect(pages.every((page) => page.url === null)).toBe(true);
   });
 });
 
