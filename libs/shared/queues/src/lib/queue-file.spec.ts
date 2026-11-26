@@ -62,7 +62,7 @@ describe('readQueue', () => {
     expect(read_.list.pageSize).toBe(50);
     expect(read_.parameters).toEqual([]);
     expect(read_.facets).toEqual([
-      { aggregate: 'claim_type_agg', label: 'Claim type', labelKey: null },
+      { aggregate: 'claim_type_agg', label: 'Claim type', labelKey: null, widget: null },
     ]);
     // `payers.claim.requestRecords` and `payers.claims.assignToMe` are the package's, from its
     // actions.json: phase 2 runs them, so this build registers neither.
@@ -172,6 +172,34 @@ describe('readQueue', () => {
       ]);
     });
 
+    it("a facet's buckets shown as records, and a facet whose widget is another, left out", () => {
+      const result = read(
+        queue({
+          facets: [
+            {
+              aggregate: 'claim_member_agg',
+              labelKey: 'payers.facet.member',
+              widget: 'document-link',
+            },
+            { aggregate: 'claim_adjuster_agg', label: 'Adjuster', widget: 'user' },
+          ],
+        }),
+      );
+      expect(queueOf(result).facets).toEqual([
+        {
+          aggregate: 'claim_member_agg',
+          label: null,
+          labelKey: 'payers.facet.member',
+          widget: 'document-link',
+        },
+      ]);
+      expect(problems(result)).toEqual([
+        expect.stringMatching(
+          /^facets\[1\]\.widget: a facet shows its buckets .*; facets\[1\] left out$/,
+        ),
+      ]);
+    });
+
     it('a facet a finding names, one the search would read for itself, and one repeated', () => {
       const result = read(
         queue({
@@ -185,7 +213,7 @@ describe('readQueue', () => {
         }),
       );
       expect(queueOf(result).facets).toEqual([
-        { aggregate: 'claim_state_agg', label: null, labelKey: 'payers.facet.state' },
+        { aggregate: 'claim_state_agg', label: null, labelKey: 'payers.facet.state', widget: null },
       ]);
       expect(problems(result)).toEqual([
         expect.stringMatching(/^facets\[0\]\.colour: .*; facets\[0\] left out$/),

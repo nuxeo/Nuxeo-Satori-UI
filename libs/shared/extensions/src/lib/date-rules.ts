@@ -1,6 +1,7 @@
 /**
- * How many days a date is from today, for layout version 2's date rules, `app.rules.datePassed`
- * and `app.rules.dateWithin` (docs/business-apps/layout-v2.md, section 5).
+ * How many days a date is from today, or from another date, for layout version 2's date rules,
+ * `app.rules.datePassed`, `app.rules.dateWithin` and `app.rules.dateAfter`
+ * (docs/business-apps/layout-v2.md, section 5).
  *
  * A day and an instant are different kinds, and JavaScript has one type for both
  * (`AGENTS/08-bug-patterns.md`, pattern 29). So a value is read as the record page's `date` widget
@@ -98,6 +99,51 @@ function dayNumber({ year, month, day }: CalendarDay): number {
   const dayOfEra =
     yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
   return era * 146097 + dayOfEra - 719468;
+}
+
+/**
+ * The reader's own day, in place of a date: what `app.rules.dateAfter`'s `"today"` stands for. A
+ * symbol, never a text, so that no stored value, which is JSON, is ever read as it: a property
+ * holding the text `"today"` is not a date.
+ */
+export const TODAY: unique symbol = Symbol('today');
+
+/** A value's day as a day number, {@link TODAY} `today`'s, or `null` for no date. */
+function dayNumberOf(
+  value: unknown,
+  today: CalendarDay,
+  timeZone: string | undefined,
+): number | null {
+  const day = value === TODAY ? today : dayOf(value, timeZone);
+  return day === null ? null : dayNumber(day);
+}
+
+/**
+ * How many days `later` is after `earlier`, each read as {@link daysFromToday} reads a date, or
+ * {@link TODAY}, the reader's day: `30` for a claim filed thirty days after its delivery, `-1` for
+ * one filed the day before. `null` when either is not a date, `today` not a valid `Date`, or
+ * `timeZone` not a zone `Intl` reads. The day each value names is counted, not the hours between
+ * them, so two instants on the reader's same day are `0` days apart.
+ */
+export function daysBetween(
+  later: unknown,
+  earlier: unknown,
+  today: Date,
+  timeZone: string | undefined = undefined,
+): number | null {
+  if (!(today instanceof Date) || Number.isNaN(today.getTime())) return null;
+  try {
+    // Read first, even for two stored days that need no zone, so that a zone `Intl` does not know
+    // reads no count, as it reads no day for the other date rules.
+    const now = dayIn(today, timeZone);
+    const last = dayNumberOf(later, now, timeZone);
+    const first = dayNumberOf(earlier, now, timeZone);
+    return last === null || first === null ? null : last - first;
+  } catch (error) {
+    // As for `daysFromToday`: a zone `Intl` does not know reads no day.
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
 }
 
 /**

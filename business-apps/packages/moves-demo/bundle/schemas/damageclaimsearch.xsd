@@ -13,5 +13,5 @@
   </xs:simpleType>
 
   <xs:element name="dmg_state_agg" type="nxs:stringList" />
-  <xs:element name="dmg_moveNumber_agg" type="nxs:stringList" />
+  <xs:element name="dmg_move_agg" type="nxs:stringList" />
 </xs:schema>
