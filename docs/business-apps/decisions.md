@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 25 November 2026.
+Updated 26 November 2026.
 
 ## Open: from the plan
 
@@ -144,6 +144,29 @@ way.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
     dropped from the kit, and every customer then gets the download permission, which refuses
     nothing until a policy is contributed.
+
+- **B, the document control module's server add-on (26 November 2026).** Built against the
+  recommendation: numbering, revisions and supersession are
+  [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [controlled documents kit](../../business-apps/packages/controlled-documents-demo/README.md)
+  depends on; nothing of it went into `nuxeo-agentic-core`. A type is controlled by the add-on's
+  `ControlledDocument` facet; a kit registers its number series at `org.nuxeo.agentic.documents`;
+  a synchronous listener numbers a document on creation from the platform's sequencer, and a new
+  revision that names the one it supersedes takes its number and marks it superseded in the same
+  transaction, with no Automation operation, so decision 3 is not touched. Transmittals, review
+  cycles and export-control marks are not built, nor outside users (decision C). What changes if B
+  goes another way:
+  - **One large add-on:** the module's bundle moves into that add-on's package as it is, and the
+    kit's `package.xml` depends on that package in place of `nuxeo-agentic-documents`. The
+    component a kit's series require, `org.nuxeo.agentic.documents`, the facet and the `docctl`
+    schema do not change, so no kit's files do.
+  - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
+    dropped from the kit, and every server then gets the facet, the schema and the listener, which
+    numbers nothing until a type carries the facet and a package registers a series.
+  - **Not affected either way:** layout version 2's banner `link`, which the kit's record page
+    uses, is the platform's ([layout-v2.md](layout-v2.md), section 2), and links any record a
+    property names.
 
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
