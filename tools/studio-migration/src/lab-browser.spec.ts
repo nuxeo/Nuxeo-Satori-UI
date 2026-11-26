@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import {
   identityProblems,
   labControl,
@@ -497,6 +498,32 @@ describe('lab mode: recording an app', () => {
     expect(failed.unreadable).toEqual([
       'its layout /nuxeo/ui/document/note/nuxeo-note-view-layout.html could not be read: net::ERR_FAILED',
     ]);
+
+    // A new app's form layout shows nothing on the page: one that failed takes nothing away.
+    const form = fakeBrowser(
+      [
+        {
+          url: 'http://app.test:4297/nuxeo/api/v1/me',
+          headers: { authorization: AUTHORIZATION },
+          body: { id: 'alice' },
+        },
+        {
+          url: 'http://app.test:4297/agentic-ui-config/layouts/Note/edit.layout.json',
+          kind: 'xhr',
+          fails: 'net::ERR_FAILED',
+        },
+        {
+          url: 'http://app.test:4297/agentic-ui-config/layouts/Note/metadata.layout.json',
+          kind: 'xhr',
+          fails: 'net::ERR_FAILED',
+        },
+      ],
+      { kind: 'document', fields: [] },
+    );
+    const app = await recordApp(form.browser, 'new-app', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(app.unreadable).toEqual([
+      'its layout /agentic-ui-config/layouts/Note/metadata.layout.json could not be read: net::ERR_FAILED',
+    ]);
   });
 
   it('says when the page is still sending at the end of its wait', async () => {
@@ -532,12 +559,33 @@ describe('lab mode: recording an app', () => {
       { kind: 'document', fields: [] },
     );
     await recordApp(browser, 'new-app', TARGET, USER, DOCUMENT, OPTIONS);
-    expect(seen.evaluated[0]).toContain(
-      "document.querySelector('lib-document-detail .detail-header') ? 'document'",
+    // The script lab mode sends the page, run on the app's pages as each state draws them.
+    const pageOf = (body: string): { kind: string; fields: string[] } =>
+      new JSDOM(`<body>${body}</body>`, { runScripts: 'outside-only' }).window.eval(
+        seen.evaluated[0],
+      ) as { kind: string; fields: string[] };
+    const header = (title: string): string =>
+      `<div class="detail-header"><div class="header-title">${title}</div></div>`;
+    expect(
+      pageOf(
+        `<lib-document-detail>${header('A note')}<div data-field="dc:x"></div></lib-document-detail>`,
+      ),
+    ).toEqual({
+      kind: 'document',
+      fields: ['dc:x'],
+    });
+    // Loading, or open on another document: not the document's page.
+    expect(
+      pageOf('<lib-document-detail><div class="detail-loading"></div></lib-document-detail>').kind,
+    ).toBe('other');
+    expect(pageOf(`<lib-document-detail>${header('Another')}</lib-document-detail>`).kind).toBe(
+      'other',
     );
-    expect(seen.evaluated[0]).toContain(
-      "document.querySelector('lib-browse .panel-toggle-btn') ? 'browse'",
-    );
+    // Browse draws its header and its panel's button before it has the folder: its header must name it.
+    const browse = (heading: string): string =>
+      `<lib-browse><nxs-folder-header><h1>${heading}</h1></nxs-folder-header><button class="panel-toggle-btn"></button></lib-browse>`;
+    expect(pageOf(browse('A note')).kind).toBe('browse');
+    expect(pageOf(browse('')).kind).toBe('other');
   });
 
   it('puts a control into the new app alone: a property withheld from its answers, or fewer schemas asked', async () => {

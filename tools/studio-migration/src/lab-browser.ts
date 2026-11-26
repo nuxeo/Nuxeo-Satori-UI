@@ -26,6 +26,7 @@ import {
   webUiLayoutMode,
   webUiLayouts,
   appLayoutMode,
+  SHOWN_MODES,
   type AppPage,
   type AppRecording,
   type LabApp,
@@ -457,11 +458,17 @@ export async function recordApp(
     let pageSeen: { kind: AppPage; fields: string[] } | undefined;
     if (app === 'new-app') {
       try {
+        // Each page is told by its header naming the document: the document page draws its header
+        // only once the document is read, and Browse's names the folder only once it has it.
         pageSeen = await page.evaluate<{ kind: AppPage; fields: string[] }>(
-          `({
-            kind: document.querySelector('lib-document-detail .detail-header') ? 'document' : document.querySelector('lib-browse .panel-toggle-btn') ? 'browse' : 'other',
-            fields: [...document.querySelectorAll('[data-field]')].map((element) => element.getAttribute('data-field')).filter((field) => field && field.includes(':')),
-          })`,
+          `(() => {
+            const title = ${JSON.stringify(document.title)};
+            const names = (selector) => [...document.querySelectorAll(selector)].some((element) => (element.textContent || '').includes(title));
+            return {
+              kind: names('lib-document-detail .detail-header') ? 'document' : names('lib-browse nxs-folder-header') ? 'browse' : 'other',
+              fields: [...document.querySelectorAll('[data-field]')].map((element) => element.getAttribute('data-field')).filter((field) => field && field.includes(':')),
+            };
+          })()`,
         );
       } catch (error) {
         unreadable.push(`its page could not be read: ${firstLine(error)}`);
@@ -480,8 +487,13 @@ export async function recordApp(
       (request): request is RecordedRequest => request !== null,
     );
     const files = await Promise.all(layoutFiles);
+    // A new app's form layout, `edit` or `create`, shows nothing on the page, so one it could not
+    // read takes nothing from the comparison.
     for (const file of files)
-      if (file.unreadable !== undefined)
+      if (
+        file.unreadable !== undefined &&
+        (app === 'web-ui' || SHOWN_MODES.has(appLayoutMode(document.type, file.path) ?? ''))
+      )
         unreadable.push(`its layout ${file.path} could not be read: ${file.unreadable}`);
     return {
       app,

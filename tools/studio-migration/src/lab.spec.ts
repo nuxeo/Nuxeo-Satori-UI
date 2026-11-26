@@ -200,6 +200,63 @@ describe('lab mode: reading what each app loaded', () => {
     expect(metadata.unbound).toEqual(['nuxeo-document-attachments']);
   });
 
+  it('decides each place a property is named, so a field shows to everyone what it names outside its condition', () => {
+    const [layout] = webUiLayout(`<dom-module id="nuxeo-member-metadata-layout"><template>
+    <div role="widget">
+      <div>[[document.properties.member:amount]]</div>
+      <template is="dom-if" if="[[document.properties.member:flag]]"><div>[[document.properties.member:secret]]</div></template>
+      <nuxeo-filter document="[[document]]" group="auditors"><template>[[document.properties.member:audit]]</template></nuxeo-filter>
+    </div>
+    <div role="widget"><div>[[document.properties.member:audit]]</div></div>
+    <h2>[[document.properties.member:number]]</h2>
+    <nuxeo-filter document="[[document]]" group="x"><template><span>[[document.properties.member:note]]</span></template></nuxeo-filter>
+  </template></dom-module>`);
+    expect(layout.fields).toEqual([
+      { xpath: 'member:amount', conditional: false },
+      // The condition's own test is under it: it reads a value, and shows none.
+      { xpath: 'member:flag', conditional: true },
+      { xpath: 'member:secret', conditional: true },
+      { xpath: 'member:audit', conditional: true },
+      // Under a condition in one field, and to everyone in another.
+      { xpath: 'member:audit', conditional: false },
+      // Named outside every field, held as a field's is.
+      { xpath: 'member:number', conditional: false },
+      { xpath: 'member:note', conditional: true },
+    ]);
+    expect(layout.outside).toEqual(['member:number', 'member:note']);
+    const all = [
+      'member:amount',
+      'member:flag',
+      'member:secret',
+      'member:audit',
+      'member:number',
+      'member:note',
+    ];
+    const web = webUi({
+      layouts: [layout],
+      requests: [
+        request({
+          method: 'POST',
+          path: '/nuxeo/api/v1/automation/login',
+          answeredAs: 'Administrator',
+        }),
+        read(all),
+      ],
+    });
+    const app = newApp([], {
+      requests: [request({ answeredAs: 'Administrator' }), read(all)],
+      layouts: [],
+    });
+    expect(findingsOf(web, app).map((finding) => finding.split(' (')[0])).toEqual([
+      'Web UI shows member:amount',
+      'Web UI shows member:audit',
+      'Web UI shows member:number',
+    ]);
+    expect(compareDocument(DOCUMENT, web, app).listing.join('\n')).toContain(
+      'member:number, member:note named outside every field',
+    );
+  });
+
   it('reads every property a widget names, and one it names in an `xpath`', () => {
     const [layout] = webUiLayout(
       WEB_UI_LAYOUT.replace(
@@ -588,8 +645,8 @@ describe("lab mode: the rows the new app's pages draw themselves", () => {
       [...new Set([...rows, 'dc:title', 'nxtag:tags'])].sort(),
     );
     expect(DRAWN_BY_THE_PAGE.browse.has('dc:nature')).toBe(false);
-    // Lab mode takes the page for Browse by the button that opens its info panel.
-    expect(html).toContain('class="panel-toggle-btn"');
-    expect(html).toContain('(click)="togglePanel()"');
+    // Lab mode takes the page for Browse by its header naming the folder, which it does once it has it.
+    expect(html).toContain('<nxs-folder-header');
+    expect(html).toContain('[heading]="currentDoc()?.title ?? \'\'"');
   });
 });

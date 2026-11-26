@@ -13,13 +13,13 @@
  *    `X-NXproperties: *` to everything it proxies (`apps/nuxeo-ui/proxy.conf.json`), so what the
  *    new app receives there can be more than it asks.
  * 3. **Its properties.** Every property Web UI fetches and shows, the new app fetches and can
- *    show. Web UI shows a property when a document layout it loaded for the document binds it in a
- *    field outside every condition, read by the inventory's own reader, and fetched it when its
- *    answer for the document holds it. The new app fetches it when an answer for the document it
- *    received holds it, and can show it when its page holds a field of it (`data-field`), when a
- *    layout file it loaded for the document's type lists it, or when its page draws it itself
- *    ({@link DRAWN_BY_THE_PAGE}). A field under a condition is listed, not held: whether it shows
- *    is the condition's, which check 5 holds.
+ *    show. Web UI shows a property when a document layout it loaded for the document names it in a
+ *    place outside every condition ({@link webUiLayouts}), and fetched it when its answer for the
+ *    document holds it. The new app fetches it when an answer for the document it received holds
+ *    it, and can show it when its page holds a field of it (`data-field`), when a `view` or
+ *    `metadata` layout file it loaded for the document's type lists it, or when its page draws it
+ *    itself ({@link DRAWN_BY_THE_PAGE}). A property named only under a condition is listed, not
+ *    held: whether it shows is the condition's, which check 5 holds.
  *
  * Listed side by side for the reviewer, and held to nothing yet: the enrichers each app asks the
  * document with, the page providers each asks with their parameters and result counts, the other
@@ -27,9 +27,8 @@
  */
 import type { CheckResult } from './harness';
 import { layoutFields } from './app-walk';
-import { inventory } from './inventory';
-import { elementsOf, parseHtml } from './markup';
-import type { StudioPackage } from './studio-package';
+import { isCondition } from './inventory';
+import { parseHtml } from './markup';
 
 /** The two apps lab mode opens a document in. */
 export type LabApp = 'web-ui' | 'new-app';
@@ -82,6 +81,8 @@ export interface LoadedLayout {
   readonly fields: readonly { readonly xpath: string; readonly conditional: boolean }[];
   /** Web UI: the elements of its fields that name no property, such as a viewer: not held. */
   readonly unbound?: readonly string[];
+  /** Web UI: the properties it names outside every field, held as any field's are. */
+  readonly outside?: readonly string[];
   /** Why what it holds could not be read, which stops the document's comparison. */
   readonly unreadable?: string;
 }
@@ -141,7 +142,7 @@ export const DRAWN_BY_THE_PAGE: Readonly<Record<AppPage, ReadonlySet<string>>> =
 };
 
 /** The modes of the new app's layout files its document page shows: the record page and its panel. */
-const SHOWN_MODES: ReadonlySet<string> = new Set(['view', 'metadata']);
+export const SHOWN_MODES: ReadonlySet<string> = new Set(['view', 'metadata']);
 
 /** The headers a request names the schemas it wants in. */
 const PROPERTY_HEADERS = ['properties', 'x-nxproperties', 'x-nxdocumentproperties'];
@@ -169,97 +170,88 @@ export function appLayoutMode(type: string, path: string): string | null {
 }
 
 /**
- * Web UI's document layouts, given as the files it loaded, read by the inventory's own reader:
- * each placed where a Studio package's bundle holds it, so that what Web UI serves is read exactly
- * as a package's layout is. Nothing in them is run.
+ * Web UI's document layouts, given as the files it loaded, read as the inventory reads a
+ * package's: parsed with its markup reader, which runs nothing, its fields the elements marked
+ * `role="widget"`, and its conditions what the inventory takes for one (`isCondition`).
+ *
+ * A field shows each property it names: every `document.properties.<prefix>:<name>` in its
+ * attributes and text, and each `xpath` that is a property, as `nuxeo-document-blob` takes one.
+ * Each place a property is named is under a condition or not, so one field can show a property to
+ * everyone and another only while a condition passes. A property named outside every field is
+ * read the same way: Web UI shows it as much.
  */
 export function webUiLayouts(
   files: readonly { readonly path: string; readonly status: number; readonly body: Buffer }[],
   type: string,
 ): LoadedLayout[] {
-  const bundleFiles = new Map<string, Buffer>();
-  for (const file of files) {
-    const mode = webUiLayoutMode(type, file.path);
-    if (mode !== null && file.status === 200)
-      bundleFiles.set(`web/nuxeo.war/ui/${webUiLayoutPath(type, mode)}`, file.body);
-  }
-  const pkg: StudioPackage = {
-    descriptor: {
-      type: 'studio',
-      name: 'web-ui-as-served',
-      version: '0',
-      targetPlatform: null,
-      targetPlatformName: null,
-      dependencies: [],
-    },
-    packageFiles: new Map(),
-    bundlePath: 'web-ui-as-served.jar',
-    bundleFiles,
-  };
-  const read = bundleFiles.size > 0 ? inventory(pkg).layouts : [];
   return files.flatMap((file): LoadedLayout[] => {
     const mode = webUiLayoutMode(type, file.path);
     if (mode === null) return [];
-    const layout = read.find((candidate) => candidate.path.endsWith(webUiLayoutPath(type, mode)));
-    // Only a layout answered 200 was given to the inventory, so another has no reading here.
-    if (!layout) return [{ path: file.path, status: file.status, mode, fields: [] }];
-    // The inventory reads a field's first binding and its conditions. A widget can name more than
-    // one property, or name it in an `xpath`, as `nuxeo-document-blob` does: each is read here,
-    // from the same widgets, in the same order, and given the conditions the inventory found.
-    const widgets = widgetProperties(file.body.toString('utf8'));
-    if (widgets.length !== layout.fields.length)
-      return [
-        {
-          path: file.path,
-          status: file.status,
-          mode,
-          fields: [],
-          unreadable: `the inventory read ${layout.fields.length} fields where it has ${widgets.length} widgets`,
-        },
-      ];
-    return [
-      {
-        path: file.path,
-        status: file.status,
-        mode,
-        fields: layout.fields.flatMap((field, index) =>
-          widgets[index].map((xpath) => ({ xpath, conditional: field.conditions.length > 0 })),
-        ),
-        unbound: layout.fields.flatMap((field, index) =>
-          widgets[index].length === 0 ? [field.element] : [],
-        ),
-      },
-    ];
+    if (file.status !== 200) return [{ path: file.path, status: file.status, mode, fields: [] }];
+    const { fields, unbound, outside } = layoutBindings(file.body.toString('utf8'));
+    return [{ path: file.path, status: file.status, mode, fields, unbound, outside }];
   });
 }
 
-/**
- * The properties each field of a Web UI layout names, its elements marked `role="widget"` in the
- * file's order, as the inventory finds them: every `document.properties.<prefix>:<name>` in its
- * attributes, text and templates, and each `xpath` attribute that is a property.
- */
-function widgetProperties(html: string): string[][] {
-  return elementsOf(parseHtml(html))
-    .filter((element) => element.getAttribute('role') === 'widget')
-    .map((widget) => {
-      const elements = [widget, ...elementsOf(widget)];
-      const texts = [
-        ...elements.flatMap((element) =>
-          Array.from(element.attributes).map((attribute) => attribute.value),
-        ),
-        widget.textContent ?? '',
-        ...elements
-          .filter((element) => element.localName === 'template')
-          .map((element) => (element as HTMLTemplateElement).content?.textContent ?? ''),
-      ].join('\n');
-      const named = [...texts.matchAll(/document\.properties\.([\w-]+:[\w-]+)/g)].map(
-        (match) => match[1],
+/** Every property a Web UI layout names, each held to whether it is named outside a condition. */
+function layoutBindings(html: string): {
+  fields: { xpath: string; conditional: boolean }[];
+  unbound: string[];
+  outside: string[];
+} {
+  const widgets: { element: string; shown: Set<string>; guarded: Set<string> }[] = [];
+  const loose = { shown: new Set<string>(), guarded: new Set<string>() };
+  const name = (texts: readonly string[], widget: number | null, guarded: boolean): void => {
+    const into = widget === null ? loose : widgets[widget];
+    for (const text of texts)
+      for (const match of text.matchAll(/document\.properties\.([\w-]+:[\w-]+)/g))
+        (guarded ? into.guarded : into.shown).add(match[1]);
+  };
+  // Walked by hand, as the inventory walks conditions: a template's content does not lead back to
+  // the template, so what is around a place cannot be found by climbing from it.
+  const visit = (node: ParentNode, widget: number | null, guarded: boolean): void => {
+    name(
+      Array.from(node.childNodes)
+        .filter((child) => child.nodeType === 3)
+        .map((child) => child.textContent ?? ''),
+      widget,
+      guarded,
+    );
+    for (const child of Array.from(node.children)) {
+      const at =
+        child.getAttribute('role') === 'widget'
+          ? widgets.push({ element: child.localName, shown: new Set(), guarded: new Set() }) - 1
+          : widget;
+      // A condition's own attributes test a value rather than show it: they count as under it.
+      const under = guarded || isCondition(child);
+      name(
+        Array.from(child.attributes).map((attribute) => attribute.value),
+        at,
+        under,
       );
-      const xpaths = elements
-        .map((element) => element.getAttribute('xpath') ?? '')
-        .filter((xpath) => /^[\w-]+:[\w-]+$/.test(xpath));
-      return [...new Set([...named, ...xpaths])];
-    });
+      const xpath = child.getAttribute('xpath') ?? '';
+      if (/^[\w-]+:[\w-]+$/.test(xpath)) name([`document.properties.${xpath}`], at, under);
+      visit(child, at, under);
+      const content = (child as Partial<HTMLTemplateElement>).content;
+      if (child.localName === 'template' && content) visit(content, at, under);
+    }
+  };
+  visit(parseHtml(html), null, false);
+
+  const fields: { xpath: string; conditional: boolean }[] = [];
+  const add = (shown: ReadonlySet<string>, guarded: ReadonlySet<string>): void => {
+    for (const xpath of shown) fields.push({ xpath, conditional: false });
+    for (const xpath of guarded) if (!shown.has(xpath)) fields.push({ xpath, conditional: true });
+  };
+  for (const widget of widgets) add(widget.shown, widget.guarded);
+  add(loose.shown, loose.guarded);
+  return {
+    fields,
+    unbound: widgets
+      .filter((widget) => widget.shown.size === 0 && widget.guarded.size === 0)
+      .map((widget) => widget.element),
+    outside: [...new Set([...loose.shown, ...loose.guarded])],
+  };
 }
 
 /** The new app's layout files for the type, given as it loaded them, by the fields they list. */
@@ -530,9 +522,10 @@ function listingOf(document: LabDocument, web: AppRecording, app: AppRecording):
             .map((layout) => {
               const conditional = layout.fields.filter((field) => field.conditional).length;
               const unbound = layout.unbound ?? [];
+              const outside = layout.outside ?? [];
               return `${layoutName(layout.path)} ${layout.status}${
                 layout.status === 200
-                  ? `, binding ${layout.fields.map((field) => field.xpath).join(', ') || 'no property'}${conditional ? `, ${conditional} of them under a condition, not held` : ''}${unbound.length ? `; ${unbound.length === 1 ? 'a field' : `${unbound.length} fields`} naming no property, not held: ${unbound.join(', ')}` : ''}`
+                  ? `, binding ${layout.fields.map((field) => field.xpath).join(', ') || 'no property'}${conditional ? `, ${conditional} of them under a condition, not held` : ''}${outside.length ? `; ${outside.join(', ')} named outside every field` : ''}${unbound.length ? `; ${unbound.length === 1 ? 'a field' : `${unbound.length} fields`} naming no property, not held: ${unbound.join(', ')}` : ''}`
                   : ''
               }`;
             })

@@ -836,9 +836,9 @@ npm run studio-migration -- lab <document>... --out <new-directory> --app http:/
   (`properties`, `X-NXproperties`, `X-NXDocumentProperties`), enrichers and fetch headers it asks
   with; and its status. Of the answers: the names of the properties the document's own answer
   holds, a page's result count, and who `/me` and Web UI's sign-in say the requests ran as. Of the
-  pages: the document layouts Web UI loaded for the document's type, read by the inventory's own
-  reader as a package's are; the layout files the new app loaded for it; and which page the new app
-  showed, with the `data-field` of each field on it. Never a credential, and of the document's
+  pages: the document layouts Web UI loaded for the document's type, read with the inventory's
+  markup reader and its idea of a condition, as a package's are read; the layout files the new app
+  loaded for it; and which page the new app showed, with the `data-field` of each field on it. Never a credential, and of the document's
   answer only its properties' names; a query is kept as it was sent.
 - **Read only.** A request either app sends is refused before it leaves the browser, and listed,
   unless it is a `GET`, `HEAD` or `OPTIONS`, or a `POST` of an operation that only reads: Web UI's
@@ -867,20 +867,22 @@ npm run studio-migration -- lab <document>... --out <new-directory> --app http:/
      `X-NXproperties: *` to everything it proxies (`apps/nuxeo-ui/proxy.conf.json`), so there it
      receives every schema whatever it asks: only what it asks says what a server would send it.
   3. **Its properties: every property Web UI fetches and shows, the new app fetches and can
-     show.** Web UI shows a property when a field of a document layout it loaded for the document,
-     outside every condition, names it: in a binding, `document.properties.<prefix>:<name>`, each
-     one the field holds, or in an `xpath`. The layouts are read by the inventory's own reader,
-     which gives each field's conditions. Web UI fetched the property when its answer for the
-     document holds it. The new app fetches it when an answer for the document it received holds
-     it, and can show it when its page holds a field of it, when a `view` or `metadata` layout file
-     it loaded for the type lists it, as on a tab not opened, or when its page draws it itself: the
-     document page's Properties panel, or the info panel of Browse, where the new app opens a
-     folder (`DRAWN_BY_THE_PAGE`). That table is a copy of those components, which `lab.spec.ts`
-     holds to their source files. The page is told apart by what it draws once the document is
-     open: the document page's header, or Browse's button for its info panel. Listed, not held: a
-     field under a condition, since whether it shows is the condition's, which check 5 holds; and a
-     field that names no property, such as Web UI's viewer or its attachments, whose property lab
-     mode cannot read from the layout.
+     show.** Web UI shows a property when a document layout it loaded for the document names it in
+     a place outside every condition: a binding, `document.properties.<prefix>:<name>`, or an
+     `xpath`, in a field or outside every field. Each place is decided on its own, so a field that
+     shows one property to everyone and another only under a `dom-if` holds the first and lists
+     the second; a condition's own test reads a value and shows none. Web UI fetched the property
+     when its answer for the document holds it. The new app fetches it when an answer for the
+     document it received holds it, and can show it when its page holds a field of it, when a
+     `view` or `metadata` layout file it loaded for the type lists it, as on a tab not opened, or
+     when its page draws it itself: the document page's Properties panel, or the info panel of
+     Browse, where the new app opens a folder (`DRAWN_BY_THE_PAGE`). That table is a copy of those
+     components, which `lab.spec.ts` holds to their source files. The page is told apart by its
+     header naming the document: the document page draws its header only once it has read the
+     document, and Browse's header names the folder only once it has it. Listed, not held: a
+     property named only under a condition, since whether it shows is the condition's, which check
+     5 holds; and a field that names no property, such as Web UI's viewer or its attachments, whose
+     property lab mode cannot read from the layout.
 
   Listed side by side, and held to nothing yet: the enrichers each app asks the document with, the
   page providers each asks with their parameters and result counts, the other endpoints, and what
@@ -1228,31 +1230,35 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
-- **For lab mode, 66 guards**, broken one at a time by a script, kept outside the repository, that
+- **For lab mode, 72 guards**, broken one at a time by a script, kept outside the repository, that
   runs its four specs and restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
     the new app does not fetch, or cannot show; the page's fields, a `view` or `metadata` layout
     file it loaded, and the rows the page draws itself, each as what it can show; the schemas,
     every one and by name; a new app that never asks, or is answered otherwise; Web UI never
-    asking; identity, what could not be read, and a page still sending; a read by path; Web UI's
-    conditions, each binding of a field and its `xpath`, and a field naming none listed; the
-    servlet's envelope; a Web UI layout that did not load.
+    asking; identity, what could not be read, and a page still sending; a read by path; in Web
+    UI's layouts, each place decided under a condition or not, a condition's own test, a property
+    named only under one listed, an `xpath`, a property named outside every field, a template's
+    content, and a field naming none listed; the servlet's envelope; a Web UI layout that did not
+    load.
   - **The browser:** downloads through the API and through the servlets, and the new app's
     sign-out; only reads, and only the operations that only read, by `POST`; the header to the
     server's origin alone; controls on the new app alone; an unsigned request, to Nuxeo and not
     only its API, but for the configuration service's files; an answer naming another, and none
     naming the user; a refused request recorded; a layout and a page that could not be read, an
-    answer for the document that is not the document, and a layout that failed, kept as such; the
-    pages told apart by what each draws once open.
+    answer for the document that is not the document, and a layout that failed, kept as such, but
+    for the new app's forms; the document page and Browse each told by its header naming the
+    document.
   - **The server's reads:** one origin, no redirect, the session sent back; a field, a widget's
     type and a type's schemas, a vocabulary, a page provider and a task's variable, each against
     the server's model; a model that cannot be read; the package byte for byte, and the conversion
     as JSON.
   - **The command:** the credentials, a new or empty `--out`, who the credentials are, exit 2 on
     identity and 1 on a difference or a document not compared, a control's exit and its own
-    finding, the package installed and the conversion served, and check 3 failing.
+    finding, for the schemas the control gave and left out too, the package installed and the
+    conversion served, and check 3 failing.
 
-  Six rounds ran. The first, of 46, found three no test reached: a field on the new app's page
+  Seven rounds ran. The first, of 46, found three no test reached: a field on the new app's page
   that no layout file lists, as its generated layout shows one; a layout Web UI was refused whose
   answer has a body; and the control kept to the new app, which a second test of the same thing
   hid, now gone. The script did not find a fourth, whose text formatting had changed. The second
@@ -1266,8 +1272,12 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   brought, found none. The fifth, of 66, after the review below, found a control counted by another
   property's finding of the same kind, which now has its test, and a check of a refused Web UI
   layout that a second one hid, now gone; the script did not find a third, whose text formatting
-  had changed. The sixth found none. A spec drives `recordApp` through a small stand-in for
-  Playwright, so the browser half is held too: what is refused, sent and recorded.
+  had changed. The sixth found none. The seventh, of 72, after the review's second round, found a
+  `narrow-schemas` control counted by a missing schema it had given itself, which now has its
+  test; the script did not find two whose formatting had changed, which were then run alone and
+  turned the suite red. A spec drives `recordApp` through a small stand-in for Playwright, so the
+  browser half is held too: what is refused, sent and recorded. The script lab mode sends the new
+  app's page to tell it apart is run in jsdom on each state the page draws.
 
 - **An independent review of lab mode**, by a reviewer given the diff and the `pre-pr-review`
   skill, found twelve things. Fixed, each with a test:
@@ -1290,6 +1300,25 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   Explained rather than changed: what Web UI's page draws outside its layouts, its info rows and
   the property a viewer shows by default, is not held (**Not done yet**); and whether the server
   records each sign-in in an authentication log was not checked, which the README now says.
+
+  **A second round** found seven of the twelve fixed and five in part, and five more things.
+  Fixed, each with a test:
+  - a property took its field's conditions, so a field showing one property to everyone and
+    another under a `dom-if` held neither, a false pass the first fix had widened to every binding:
+    each place is now decided on its own;
+  - Browse was told apart by a button it draws before it has its folder: each page is now told by
+    its header naming the document;
+  - a failed form layout of the new app stopped the comparison, though a form shows nothing on the
+    page;
+  - a `narrow-schemas` control was counted by any schema finding, not one of the schemas it gave
+    or left out;
+  - a property named outside every field was neither held nor listed: it is now held.
+
+  Checked rather than changed: the reviewer suspected that a change to the components the drift
+  test reads would not make this tool affected, so CI would not run it. Nx counts a target's
+  inputs as making the project affected: `nx show projects --affected --files=…` lists this tool
+  for `browse.html`, which is an input, and not for `browse.scss`, which is not. The template the
+  test now reads was added to the inputs.
 
 ## Not done yet
 

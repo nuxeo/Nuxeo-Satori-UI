@@ -304,6 +304,76 @@ describe('lab: the command', () => {
     ).toBe(1);
     expect(other.printed[0]).toContain(' 7  What the server is asked   FAIL');
     expect(other.printed[0]).toContain('The control was reported on none');
+    // Nor does a schema finding the control did not cause: the new app asked for dublincore.
+    const narrowed = io();
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh(), '--control', 'narrow-schemas=dublincore'],
+        narrowed,
+        deps(),
+      ),
+    ).toBe(0);
+    const elsewhere = io();
+    const askingLess: LabDeps['record'] = async (
+      browser,
+      app,
+      target,
+      credentials,
+      document,
+      options,
+    ) =>
+      recorder({})(browser, app, target, credentials, document, {
+        ...options,
+        ...(app === 'new-app'
+          ? { control: { kind: 'narrow-schemas', schemas: 'dublincore' } }
+          : {}),
+      });
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh(), '--control', 'narrow-schemas=file'],
+        elsewhere,
+        deps({ record: askingLess }),
+      ),
+    ).toBe(1);
+    expect(elsewhere.printed[0]).toContain('the new app only with dublincore');
+    expect(elsewhere.printed[0]).toContain('The control was reported on none');
+    // Web UI asking named schemas: a schema the control left out counts, one it gave does not.
+    const named =
+      (asked: string): LabDeps['record'] =>
+      async (browser, app, target, credentials, document, options) => {
+        const recording = await recorder({})(browser, app, target, credentials, document, options);
+        const [first, second] = recording.requests;
+        return {
+          ...recording,
+          requests: [
+            first,
+            { ...second, asks: { properties: app === 'web-ui' ? 'dublincore,file' : asked } },
+          ],
+        };
+      };
+    const leftOut = io();
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh(), '--control', 'narrow-schemas=dublincore'],
+        leftOut,
+        deps({ record: named('dublincore') }),
+      ),
+    ).toBe(0);
+    expect(leftOut.printed[0]).toContain(
+      'Web UI asks for the document with the schema file, the new app does not',
+    );
+    const given = io();
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh(), '--control', 'narrow-schemas=file'],
+        given,
+        deps({ record: named('dublincore') }),
+      ),
+    ).toBe(1);
+    expect(given.printed[0]).toContain(
+      'Web UI asks for the document with the schema file, the new app does not',
+    );
+    expect(given.printed[0]).toContain('The control was reported on none');
     // Nor does another property the new app does not fetch, the finding of the same kind.
     const notFetching: LabDeps['record'] = async (...args) => {
       const recording = await recorder({})(...args);

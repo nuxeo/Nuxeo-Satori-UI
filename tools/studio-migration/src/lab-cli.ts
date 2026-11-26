@@ -471,7 +471,17 @@ export function controlReported(control: LabControl, comparison: DocumentCompari
           finding.startsWith(`Web UI shows ${control.xpath} (`) &&
           finding.endsWith('the new app does not fetch it'),
       )
-    : findings.some((finding) =>
-        /^Web UI asks for the document with (every schema|the schema )/.test(finding),
-      );
+    : findings.some((finding) => {
+        // The finding names what the new app asked instead, or a schema it left out of it.
+        const asked = control.schemas.split(',').sort().join(', ');
+        const missing =
+          /^Web UI asks for the document with the schema (\S+), the new app does not$/.exec(
+            finding,
+          )?.[1];
+        return (
+          finding ===
+            `Web UI asks for the document with every schema (*), the new app only with ${asked}` ||
+          (missing !== undefined && !control.schemas.split(',').includes(missing))
+        );
+      });
 }
