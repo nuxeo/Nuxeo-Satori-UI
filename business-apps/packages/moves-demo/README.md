@@ -135,7 +135,7 @@ leaves the place for the photo: the claim's attachments, `files:files`.
 
 ## How it was built: the log
 
-Run on 26 November 2026, from 05:25 to 07:35 IST, in a worktree of
+Run on 26 November 2026, from 05:25 to 08:15 IST, in a worktree of
 `staging/enterprise-grade-app` at `749cbd660`, on Node 24.22.1, against the local Docker Nuxeo
 (container `nuxeo`, port 8080, which has the Satori package and the Payers and contracts kits
 installed), signed in with its default administrator account from the environment. **Nothing was
