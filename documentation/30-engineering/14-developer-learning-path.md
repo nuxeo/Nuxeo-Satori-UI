@@ -15,7 +15,9 @@ audience: engineering
 > §19 was re-verified, and only §22.2, the local gate list, at `fb97d44`
 > (`feature/nxsat-308-dependency-tree-gate`), and the `@hylandsoftware/satori-ui` row at
 > `d500aae` (`feature/nxsat-308-satori-ui-0-2-1`). The Angular and `dompurify` rows were re-verified on
-> 2026-10-05 at `b15d9cf` (`fix/nxsat-303-production-advisories`) — see Appendix A.
+> 2026-10-05 at `b15d9cf` (`fix/nxsat-303-production-advisories`) — see Appendix A. On 2026-11-25
+> the OpenSearch rows of §21 and Appendix A were corrected to 2.13.0, which the local container runs
+> and the demo server's `compose.yml` pins.
 > **Purpose:** the complete list of technologies, versions and concepts a developer must know to
 > build, extend and operate Nuxeo Satori **by hand**, with no AI assistance of any kind.
 > **Sources:** `package.json`, `package-lock.json`, `pom.xml`, `nx.json`, `angular.json`,
@@ -1014,7 +1016,7 @@ Estimated effort: **20 hours**.
 | Service                | Image / version                       | Port                                                            | Purpose                                                      |
 | ---------------------- | ------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
 | Nuxeo                  | container `nuxeo`                     | 8080                                                            | The backend                                                  |
-| OpenSearch             | `opensearchproject/opensearch:2.17.1` | 9200 / 9600                                                     | Search and audit indices                                     |
+| OpenSearch             | `opensearchproject/opensearch:2.13.0` | 9200 / 9600                                                     | Search and audit indices                                     |
 | Mailpit                | `axllent/mailpit:v1.22.3`             | 8025 web / 1025 SMTP                                            | Local SMTP sink for invites and permission notifications     |
 | ARender (6 containers) | `${ARENDER_VERSION}` = **2023.19.0**  | 9080 UI, 8761 broker, 9091 renderer, 8899 text, 19999 converter | Licensed document viewer and annotations                     |
 | nginx auth sidecar     | `nginx:alpine`                        | —                                                               | Injects `Authorization: Basic` on ARender→Nuxeo blob fetches |
@@ -1278,7 +1280,7 @@ before relying on it.
 | Maven                 | 3.9+                                                            |
 | `nuxeo-parent`        | 11.5.154                                                        |
 | Nuxeo target platform | `lts [2025.0,2026.0)`                                           |
-| OpenSearch            | 2.17.1                                                          |
+| OpenSearch            | 2.13.0                                                          |
 | Mailpit               | v1.22.3                                                         |
 | ARender               | 2023.19.0                                                       |
 | nginx                 | `alpine`                                                        |
