@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- A request about disposition, filed by the person who makes it: start a run, or approve or reject
+     one. The action, the run and the comment are the filer's; who, when and what came of it are
+     the add-on's. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/disposition-request"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/disposition-request">
+
+  <!-- start, approve or reject -->
+  <xs:element name="action" type="xs:string" />
+  <!-- The run, by its id: named by the filer to approve or reject it, by the server for a start. -->
+  <xs:element name="run" type="xs:string" />
+  <xs:element name="comment" type="xs:string" />
+
+  <xs:element name="by" type="xs:string" />
+  <xs:element name="at" type="xs:date" />
+  <xs:element name="runNumber" type="xs:long" />
+  <!-- started, approved, disposed, halted or rejected -->
+  <xs:element name="outcome" type="xs:string" />
+
+</xs:schema>

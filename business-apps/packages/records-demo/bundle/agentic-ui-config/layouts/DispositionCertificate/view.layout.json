@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "certificate",
+      "labelKey": "records.card.certificate.certificate",
+      "fields": [
+        { "field": "dcert:runNumber", "widget": "number" },
+        {
+          "field": "dcert:run",
+          "widget": "document-link",
+          "parameters": { "types": ["DispositionRun"] }
+        },
+        { "field": "dcert:disposedAt", "widget": "date", "parameters": { "format": "long" } },
+        "dcert:method",
+        { "field": "dcert:recordCount", "widget": "number" },
+        "dcert:sha256"
+      ]
+    },
+    {
+      "id": "decided",
+      "labelKey": "records.card.certificate.decided",
+      "fields": [
+        { "field": "dcert:startedBy", "widget": "user" },
+        { "field": "dcert:startedAt", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "dcert:approvals",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "dcert:by", "widget": "user", "labelKey": "records.column.approvedBy" },
+              {
+                "field": "dcert:at",
+                "widget": "date",
+                "labelKey": "records.column.approvedAt",
+                "parameters": { "format": "long" }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "records",
+      "labelKey": "records.card.certificate.records",
+      "span": 2,
+      "fields": [
+        {
+          "field": "dcert:records",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "dcert:title", "labelKey": "records.column.title" },
+              { "field": "dcert:type", "labelKey": "records.column.type" },
+              { "field": "dcert:path", "labelKey": "records.column.path" },
+              { "field": "dcert:ruleTitle", "labelKey": "records.column.rule" },
+              { "field": "dcert:ruleId", "labelKey": "records.column.ruleId" },
+              {
+                "field": "dcert:retentionEnded",
+                "widget": "date",
+                "labelKey": "records.column.retentionEnded"
+              },
+              { "field": "dcert:uid", "labelKey": "records.column.uid" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

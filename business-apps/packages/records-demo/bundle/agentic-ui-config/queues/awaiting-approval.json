@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.awaiting-approval",
+  "pageProvider": "records_runs_awaiting_approval",
+  "columns": [
+    { "field": "drun:number", "widget": "number" },
+    "dc:title",
+    { "field": "drun:startedBy", "widget": "user" },
+    { "field": "drun:startedAt", "widget": "relative-date" },
+    { "field": "drun:recordCount", "widget": "number" }
+  ],
+  "sort": [
+    {
+      "field": "drun:startedAt",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50
+}

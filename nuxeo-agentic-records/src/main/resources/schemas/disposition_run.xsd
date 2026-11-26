@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!-- A disposition run: the records it found due, who started it, who approved it, and how it ended.
+     Every property is written by the add-on alone: DispositionListener refuses any other write. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/records/disposition-run"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/records/disposition-run">
+
+  <xs:element name="number" type="xs:long" />
+
+  <!-- pending, disposed, halted or rejected -->
+  <xs:element name="state" type="xs:string" />
+
+  <xs:element name="startedBy" type="xs:string" />
+  <xs:element name="startedAt" type="xs:date" />
+
+  <xs:element name="recordCount" type="xs:long" />
+  <xs:element name="records" type="nxs:records" />
+  <xs:complexType name="records">
+    <xs:sequence>
+      <xs:element name="record" type="nxs:record" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="record">
+    <xs:sequence>
+      <xs:element name="uid" type="xs:string" />
+      <xs:element name="path" type="xs:string" />
+      <xs:element name="title" type="xs:string" />
+      <xs:element name="type" type="xs:string" />
+      <xs:element name="ruleId" type="xs:string" />
+      <xs:element name="ruleTitle" type="xs:string" />
+      <xs:element name="retentionEnded" type="xs:date" />
+      <!-- awaiting, disposed, kept or refused -->
+      <xs:element name="status" type="xs:string" />
+      <xs:element name="reason" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="approvals" type="nxs:approvals" />
+  <xs:complexType name="approvals">
+    <xs:sequence>
+      <xs:element name="approval" type="nxs:approval" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="approval">
+    <xs:sequence>
+      <xs:element name="by" type="xs:string" />
+      <xs:element name="at" type="xs:date" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="closedBy" type="xs:string" />
+  <xs:element name="closedAt" type="xs:date" />
+  <xs:element name="haltReason" type="xs:string" />
+  <xs:element name="certificate" type="xs:string" />
+  <!-- The SHA-256 of the certificate's CSV, in lower-case hex. -->
+  <xs:element name="certificateSha256" type="xs:string" />
+
+</xs:schema>

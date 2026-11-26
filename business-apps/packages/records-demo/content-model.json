@@ -1,0 +1,180 @@
+{
+  "doctypes": {
+    "RecordsFile": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "recordsfile"]
+    },
+    "DispositionRuns": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore", "disposition_runs"]
+    },
+    "DispositionRun": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "disposition_run"]
+    },
+    "DispositionRequest": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "disposition_request"]
+    },
+    "DispositionCertificate": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "file", "disposition_certificate"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "recordsfile",
+      "prefix": "rfile",
+      "@prefix": "rfile",
+      "fields": {
+        "reference": "string",
+        "series": "string",
+        "office": "string",
+        "closed": "date"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "disposition_runs",
+      "prefix": "druns",
+      "@prefix": "druns",
+      "fields": {
+        "sequence": "long"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "disposition_run",
+      "prefix": "drun",
+      "@prefix": "drun",
+      "fields": {
+        "number": "long",
+        "state": "string",
+        "startedBy": "string",
+        "startedAt": "date",
+        "recordCount": "long",
+        "records": {
+          "type": "complex[]",
+          "fields": {
+            "uid": "string",
+            "path": "string",
+            "title": "string",
+            "type": "string",
+            "ruleId": "string",
+            "ruleTitle": "string",
+            "retentionEnded": "date",
+            "status": "string",
+            "reason": "string"
+          }
+        },
+        "approvals": {
+          "type": "complex[]",
+          "fields": {
+            "by": "string",
+            "at": "date"
+          }
+        },
+        "closedBy": "string",
+        "closedAt": "date",
+        "haltReason": "string",
+        "certificate": "string",
+        "certificateSha256": "string"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "disposition_request",
+      "prefix": "dreq",
+      "@prefix": "dreq",
+      "fields": {
+        "action": "string",
+        "run": "string",
+        "comment": "string",
+        "by": "string",
+        "at": "date",
+        "runNumber": "long",
+        "outcome": "string"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "disposition_certificate",
+      "prefix": "dcert",
+      "@prefix": "dcert",
+      "fields": {
+        "run": "string",
+        "runNumber": "long",
+        "startedBy": "string",
+        "startedAt": "date",
+        "approvals": {
+          "type": "complex[]",
+          "fields": {
+            "by": "string",
+            "at": "date"
+          }
+        },
+        "disposedAt": "date",
+        "method": "string",
+        "recordCount": "long",
+        "records": {
+          "type": "complex[]",
+          "fields": {
+            "uid": "string",
+            "path": "string",
+            "title": "string",
+            "type": "string",
+            "ruleId": "string",
+            "ruleTitle": "string",
+            "retentionEnded": "date"
+          }
+        },
+        "sha256": "string"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "file",
+      "fields": {
+        "content": "blob"
+      }
+    }
+  ]
+}

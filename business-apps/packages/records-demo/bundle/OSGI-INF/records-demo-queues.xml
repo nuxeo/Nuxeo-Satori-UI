@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!--
+  The kit's page providers over the disposition review's documents, which the records add-on,
+  nuxeo-agentic-records, registers. Not part of the stand-in model: they stay when a real records
+  model replaces records-demo-model.xml. Written by hand, since app-model writes page providers for
+  the stand-in's own types only.
+
+  Each reads the repository with the reader's permissions: a person who may not read the
+  disposition runs folder sees none of them.
+-->
+<component name="nuxeo.config.records-demo.queues" version="1.0">
+  <require>org.nuxeo.agentic.records.types</require>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The queue of runs awaiting approval, the oldest first. -->
+    <coreQueryPageProvider name="records_runs_awaiting_approval">
+      <pattern>
+        SELECT * FROM DispositionRun WHERE drun:state = 'pending'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="drun:startedAt" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The certificates, the latest disposal first. -->
+    <coreQueryPageProvider name="records_certificates">
+      <pattern>
+        SELECT * FROM DispositionCertificate
+        WHERE ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dcert:disposedAt" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- A run's requests, given the run's id: who started it, approved or rejected it, and what
+         came of each, in the order they were filed. -->
+    <coreQueryPageProvider name="records_run_requests">
+      <pattern>
+        SELECT * FROM DispositionRequest WHERE dreq:run = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dreq:at" ascending="true" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

@@ -1,0 +1,157 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "awaiting",
+      "tone": "info",
+      "labelKey": "records.banner.awaiting",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "drun:state" }, "pending"]
+      }
+    },
+    {
+      "id": "halted",
+      "tone": "negative",
+      "labelKey": "records.banner.halted",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "drun:state" }, "halted"]
+      }
+    },
+    {
+      "id": "disposed",
+      "tone": "warning",
+      "labelKey": "records.banner.disposed",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "drun:state" }, "disposed"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "run",
+      "labelKey": "records.card.run.run",
+      "fields": [
+        { "field": "drun:number", "widget": "number" },
+        {
+          "field": "drun:state",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "pending": "info",
+              "disposed": "positive",
+              "halted": "negative",
+              "rejected": "neutral"
+            }
+          }
+        },
+        { "field": "drun:recordCount", "widget": "number" },
+        { "field": "drun:startedBy", "widget": "user" },
+        { "field": "drun:startedAt", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "outcome",
+      "labelKey": "records.card.run.outcome",
+      "fields": [
+        { "field": "drun:closedBy", "widget": "user" },
+        { "field": "drun:closedAt", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "drun:haltReason",
+          "widget": "long-text",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "drun:state" }, "halted"]
+          }
+        },
+        {
+          "field": "drun:certificate",
+          "widget": "document-link",
+          "parameters": { "types": ["DispositionCertificate"] }
+        },
+        "drun:certificateSha256"
+      ]
+    },
+    {
+      "id": "records",
+      "labelKey": "records.card.run.records",
+      "span": 2,
+      "fields": [
+        {
+          "field": "drun:records",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "drun:title", "labelKey": "records.column.title" },
+              { "field": "drun:type", "labelKey": "records.column.type" },
+              { "field": "drun:path", "labelKey": "records.column.path" },
+              { "field": "drun:ruleTitle", "labelKey": "records.column.rule" },
+              {
+                "field": "drun:retentionEnded",
+                "widget": "date",
+                "labelKey": "records.column.retentionEnded"
+              },
+              {
+                "field": "drun:status",
+                "widget": "status-badge",
+                "labelKey": "records.column.status",
+                "parameters": {
+                  "tones": {
+                    "awaiting": "info",
+                    "disposed": "positive",
+                    "kept": "neutral",
+                    "refused": "negative"
+                  }
+                }
+              },
+              { "field": "drun:reason", "labelKey": "records.column.reason" },
+              { "field": "drun:uid", "labelKey": "records.column.uid" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "approvals",
+      "labelKey": "records.card.run.approvals",
+      "fields": [
+        {
+          "field": "drun:approvals",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "drun:by", "widget": "user", "labelKey": "records.column.approvedBy" },
+              {
+                "field": "drun:at",
+                "widget": "date",
+                "labelKey": "records.column.approvedAt",
+                "parameters": { "format": "long" }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "requests",
+      "labelKey": "records.card.run.requests",
+      "related": {
+        "pageProvider": "records_run_requests",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dreq:action",
+          { "field": "dreq:by", "widget": "user" },
+          { "field": "dreq:at", "widget": "date" },
+          "dreq:outcome",
+          "dreq:comment"
+        ],
+        "sort": [{ "field": "dreq:at", "order": "asc" }],
+        "pageSize": 20
+      }
+    }
+  ]
+}

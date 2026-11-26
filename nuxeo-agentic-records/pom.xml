@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nuxeo.agentic</groupId>
+    <artifactId>nuxeo-agentic-ui-parent</artifactId>
+    <version>2026.0.2-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>nuxeo-agentic-records</artifactId>
+  <name>Nuxeo Agentic Records</name>
+  <description>
+    The records module's server add-on, its first slice: a disposition review on the platform's
+    retention module (nuxeo-retention). A run holds the records whose retention has ended and that
+    are under no legal hold, two people other than its starter approve it, and only then are its
+    records deleted, with a certificate kept. Its own Marketplace package, beside
+    nuxeo-agentic-core: one add-on per domain module (decision B's recommendation).
+  </description>
+
+  <properties>
+    <!--
+      The Marketplace package's version, its own: the add-on is released apart from
+      nuxeo-agentic-ui. The manifest's Bundle-Version repeats it, and BundleTest refuses a build
+      where the two differ.
+    -->
+    <records.package.version>0.1.0</records.package.version>
+
+    <!--
+      The retention module the add-on reads, as Nuxeo publishes it for LTS 2025: its jar is on the
+      public repository, but its parent, org.nuxeo:nuxeo-parent:2025.x, is not, like every LTS 2025
+      artifact, so Maven cannot take it as a dependency. The tests read its model files (its schemas,
+      its types and its permissions) from the jar itself, fetched by URL and held to its SHA-256, and
+      never load its classes. The SHA-1 the repository publishes beside it is
+      abe2d385685dd0ab587b5cfd378ae8b22179ae8f.
+    -->
+    <retention.version>2025.4.66</retention.version>
+    <retention.jar.url>https://packages.nuxeo.com/repository/maven-public/org/nuxeo/retention/nuxeo-retention/${retention.version}/nuxeo-retention-${retention.version}.jar</retention.jar.url>
+    <retention.jar.sha256>fa90be46afecce8fe93ab68532396e1c9457ee6fe241945945db5ef66706edc9</retention.jar.sha256>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Nuxeo's test framework at 11.5 on Java 21: the ASM it reads test classes with, and the
+        Chronicle Queue its stream service writes with, are too old to run on 21. These are the
+        versions that run on 21; only the test runtime uses them.
+      -->
+      <dependency><groupId>org.ow2.asm</groupId><artifactId>asm</artifactId><version>9.7.1</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-queue</artifactId><version>5.25ea17</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-core</artifactId><version>2.25ea15</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-wire</artifactId><version>2.25ea16</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-bytes</artifactId><version>2.25ea11</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-threads</artifactId><version>2.25ea7</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>affinity</artifactId><version>3.23.3</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>posix</artifactId><version>2.25ea0</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>compiler</artifactId><version>2.25ea3</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-analytics</artifactId><version>2.25ea0</version></dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The listener API: EventListener, Event, DocumentEventContext. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-event</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      TransactionHelper, which runs each request in a transaction of its own and marks a refused one's
+      for rollback; ClusterService, which says whether the server is in a cluster; and the key-value
+      store of the cluster's, where the add-on's lock holds requests to one at a time across it. All
+      are in the server's nxserver/bundles.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-jtajca</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-cluster</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-kv</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Nuxeo's own test framework: a repository, its events, its security and its transactions. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.openhft</groupId>
+      <artifactId>affinity</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- The retention module's model files, for the tests: fetched, held to their SHA-256, unpacked. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>retention-model</id>
+            <phase>generate-test-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <skip>${maven.test.skip}</skip>
+              <target>
+                <property name="retention.jar" value="${project.build.directory}/nuxeo-retention-${retention.version}.jar" />
+                <get src="${retention.jar.url}" dest="${retention.jar}" skipexisting="true" />
+                <checksum file="${retention.jar}" algorithm="SHA-256" property="${retention.jar.sha256}"
+                          verifyproperty="retention.jar.verified" />
+                <fail message="nuxeo-retention-${retention.version}.jar does not have the SHA-256 the pom names; it is not read.">
+                  <condition>
+                    <isfalse value="${retention.jar.verified}" />
+                  </condition>
+                </fail>
+                <unzip src="${retention.jar}" dest="${project.build.testOutputDirectory}/nuxeo-retention">
+                  <patternset>
+                    <include name="schemas/*.xsd" />
+                    <include name="OSGI-INF/retention-core-types.xml" />
+                    <include name="OSGI-INF/retention-security.xml" />
+                    <include name="directories/retention_end.csv" />
+                  </patternset>
+                </unzip>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <!-- What Nuxeo's stream service needs of the JDK on 21, in the test runtime. -->
+          <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-exports=java.base/jdk.internal.ref=ALL-UNNAMED --add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED</argLine>
+          <systemPropertyVariables>
+            <records.package.version>${records.package.version}</records.package.version>
+            <retention.version>${retention.version}</retention.version>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!-- package.xml with its version, for the Marketplace package. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>filter-package-descriptor</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/package</outputDirectory>
+              <useDefaultDelimiters>false</useDefaultDelimiters>
+              <delimiters>
+                <delimiter>@</delimiter>
+              </delimiters>
+              <resources>
+                <resource>
+                  <directory>src/main/package</directory>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- The Marketplace package: package.xml, install.xml and the bundle. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.6.0</version>
+        <configuration>
+          <descriptors>
+            <descriptor>src/main/assemble/assembly.xml</descriptor>
+          </descriptors>
+          <finalName>nuxeo-agentic-records-${records.package.version}</finalName>
+          <appendAssemblyId>false</appendAssemblyId>
+          <attach>false</attach>
+        </configuration>
+        <executions>
+          <execution>
+            <id>marketplace-package</id>
+            <phase>package</phase>
+            <goals><goal>single</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
