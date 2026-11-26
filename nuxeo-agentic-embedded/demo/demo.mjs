@@ -164,18 +164,22 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
   const usedAssertions = new Set();
   const state = { exchanges: 0, expireNext: false };
 
-  const record = (server, request, status) => {
+  const record = (server, request, status, error = null) => {
     const authorization = request.headers['authorization'] ?? '';
     log.push({
       server,
       method: request.method,
       path: (request.url ?? '').split('?')[0],
-      query: (request.url ?? '').includes('?') ? request.url.slice(request.url.indexOf('?') + 1) : '',
+      query: (request.url ?? '').includes('?')
+        ? request.url.slice(request.url.indexOf('?') + 1)
+        : '',
       status,
       bearer: authorization.startsWith('Bearer ') ? authorization.slice(7) : null,
       basic: authorization.startsWith('Basic '),
       cookie: Boolean(request.headers['cookie']),
       origin: request.headers['origin'] ?? null,
+      // A failure's message, kept here for whoever runs the demo, never in the answer.
+      error: error === null ? null : String(error?.message ?? error),
     });
   };
 
@@ -206,15 +210,25 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
 
   const exchange = async (request, response) => {
     if (request.url.includes('?')) return send(response, 400, { error: 'invalid_request' });
-    const [id, secret] = Buffer.from((request.headers['authorization'] ?? '').replace(/^Basic /, ''), 'base64')
+    const [id, secret] = Buffer.from(
+      (request.headers['authorization'] ?? '').replace(/^Basic /, ''),
+      'base64',
+    )
       .toString('utf8')
       .split(':');
     if (id !== HOST_ID || !sameText(secret ?? '', clientSecret)) {
-      return send(response, 401, { error: 'invalid_client' }, { 'WWW-Authenticate': 'Basic realm="agentic-embedded"' });
+      return send(
+        response,
+        401,
+        { error: 'invalid_client' },
+        { 'WWW-Authenticate': 'Basic realm="agentic-embedded"' },
+      );
     }
     const form = new URLSearchParams(await body(request));
-    if (form.get('grant_type') !== GRANT_TYPE) return send(response, 400, { error: 'unsupported_grant_type' });
-    if (form.get('subject_token_type') !== JWT_TYPE) return send(response, 400, { error: 'invalid_request' });
+    if (form.get('grant_type') !== GRANT_TYPE)
+      return send(response, 400, { error: 'unsupported_grant_type' });
+    if (form.get('subject_token_type') !== JWT_TYPE)
+      return send(response, 400, { error: 'invalid_request' });
     const claims = verifyJwt(form.get('subject_token'), assertionKey, 'sha256', 'HS256');
     const now = Math.floor(Date.now() / 1000);
     const valid =
@@ -308,7 +322,8 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         response.writeHead(204, {
           ...cors(request),
           'Access-Control-Allow-Methods': 'GET, POST, HEAD',
-          'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, properties, enrichers.document, fetch-document, fetch-schema',
+          'Access-Control-Allow-Headers':
+            'Authorization, Content-Type, Accept, properties, enrichers.document, fetch-document, fetch-schema',
           'Access-Control-Max-Age': '600',
         });
         return response.end();
@@ -316,7 +331,10 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
       if (path.startsWith('/nuxeo/agentic-ui/embedded/v1/')) {
         // The panel's files hold no data and need no sign-in, so any page may load them: the panel
         // itself refuses a page its host does not name (the integration guide, "CORS").
-        const file = await fileBelow(PANEL_DIST, decodeURIComponent(path.slice('/nuxeo/agentic-ui/embedded/v1/'.length)));
+        const file = await fileBelow(
+          PANEL_DIST,
+          decodeURIComponent(path.slice('/nuxeo/agentic-ui/embedded/v1/'.length)),
+        );
         if (!file) return reply(404, { error: 'not_found' });
         record('nuxeo', request, 200);
         response.writeHead(200, {
@@ -330,7 +348,8 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         // read, and nothing else.
         const origin = request.headers['origin'];
         const readable = origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
-        if (!origin || !allowedOrigins.has(origin)) return reply(404, { error: 'not_found' }, readable);
+        if (!origin || !allowedOrigins.has(origin))
+          return reply(404, { error: 'not_found' }, readable);
         return reply(200, { host: HOST_ID, origins: [...allowedOrigins] });
       }
       if (path === '/nuxeo/agentic-embedded/v1/token' && method === 'POST') {
@@ -347,12 +366,19 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         });
       }
       if (path === '/nuxeo/agentic-ui-config/layouts/Claim/view.layout.json') {
-        return reply(200, { format: FORMAT, layer: 'layout', type: 'Claim', mode: 'view', content: layout });
+        return reply(200, {
+          format: FORMAT,
+          layer: 'layout',
+          type: 'Claim',
+          mode: 'view',
+          content: layout,
+        });
       }
       if (path.startsWith('/nuxeo/api/v1/')) {
         const rest = path.slice('/nuxeo/api/v1/'.length);
         const checked = checkToken(request, method, rest);
-        if (checked.status) return reply(checked.status, { status: checked.status, message: 'refused' });
+        if (checked.status)
+          return reply(checked.status, { status: checked.status, message: 'refused' });
         if (rest === `id/${CLAIM_ID}` && method === 'GET') return reply(200, claim);
         if (rest.startsWith('id/')) return reply(404, { status: 404, message: 'not found' });
         if (rest === 'config/types/Claim') return reply(200, claimType);
@@ -374,7 +400,8 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
       }
       return reply(404, { error: 'not_found' });
     } catch (error) {
-      return reply(500, { error: String(error?.message ?? error) });
+      record('nuxeo', request, 500, error);
+      return send(response, 500, { error: 'server_error' });
     }
   };
 
@@ -420,7 +447,9 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         }
         const exchanged = await tokenForTheCrmUser();
         record('crm', request, exchanged ? 200 : 502);
-        return exchanged ? send(response, 200, exchanged) : send(response, 502, { error: 'exchange' });
+        return exchanged
+          ? send(response, 200, exchanged)
+          : send(response, 502, { error: 'exchange' });
       }
       const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
       const file = await fileBelow(join(HERE, 'crm'), name);
@@ -441,8 +470,8 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
       response.writeHead(200, { 'Content-Type': TYPES[extname(file.path)] ?? 'text/plain' });
       return response.end(text);
     } catch (error) {
-      record('crm', request, 500);
-      return send(response, 500, String(error?.message ?? error));
+      record('crm', request, 500, error);
+      return send(response, 500, 'The demo could not answer; its log holds the reason.');
     }
   };
 
@@ -468,7 +497,10 @@ if (isMain) {
     const at = args.indexOf(name);
     return at >= 0 && args[at + 1] !== undefined ? Number(args[at + 1]) : fallback;
   };
-  const demo = await startDemo({ nuxeoPort: option('--nuxeo-port', 8093), crmPort: option('--crm-port', 8094) });
+  const demo = await startDemo({
+    nuxeoPort: option('--nuxeo-port', 8093),
+    crmPort: option('--crm-port', 8094),
+  });
   process.stdout.write(
     `The stand-in Nuxeo: ${demo.nuxeoOrigin}\n` +
       `The CRM, an origin the host names:        ${demo.crmOrigin}/\n` +
