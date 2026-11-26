@@ -1,9 +1,12 @@
 import { documentNavigationUrl } from '@nuxeo/satori-platform/nuxeo-client';
 
+import type { LayoutFieldType } from '../layout.model';
+
 /**
  * What a `document-link` reads of the record it names (layout-v2.md, section 11): the record's
- * title, and the app's own route to it. Read by id, in one search for every id a page or a list
- * names, so that a list of fifty claims asks once for their members, not fifty times.
+ * title, and the app's own route to it, and, for one with `show`, the properties of the schemas the
+ * page asked for (section 12). Read by id, in one search for every id a page or a list names, so
+ * that a list of fifty claims asks once for their members, not fifty times.
  */
 
 /** A linked record as a `document-link` shows it. */
@@ -15,7 +18,27 @@ export interface LinkedRecord {
    * a record, browse for a folder, the collection page for a collection.
    */
   readonly url: string;
+  /**
+   * The properties the search returned for it, by `<prefix>:<name>`: those of the schemas it was
+   * asked with, for a `document-link`'s `show`, and none when it was asked with none. Only what the
+   * search returned to the reader, for this record's own id. A search always gives it; absent, none.
+   */
+  readonly properties?: Readonly<Record<string, unknown>>;
 }
+
+/**
+ * What a `document-link`'s `show` reads of the records it links to (layout-v2.md, section 12): the
+ * schema that holds the property, which the linked records are asked for with, and what the
+ * property is in it, which the value is shown by.
+ */
+export interface LinkedProperty {
+  /** The schema's name, as Nuxeo's `properties` header names one: `dublincore`, never `dc`. */
+  readonly schema: string;
+  readonly definition: LayoutFieldType;
+}
+
+/** A schema's name as the `properties` header may carry one: nothing else is ever sent in it. */
+export const SCHEMA_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /**
  * A document's id as Nuxeo writes `ecm:uuid`: a UUID, in lower case. Only such a value is ever
@@ -76,7 +99,7 @@ export function readLinkedRecords(
   const found = new Map<string, LinkedRecord>();
   for (const entry of entries) {
     if (!isRecord(entry)) continue;
-    const { uid, type, path, facets } = entry;
+    const { uid, type, path, facets, properties } = entry;
     if (!isDocumentId(uid) || !wanted.has(uid) || typeof type !== 'string') continue;
     const title =
       typeof entry['title'] === 'string' && entry['title'].trim() !== ''
@@ -93,6 +116,7 @@ export function readLinkedRecords(
           ? facets.filter((facet): facet is string => typeof facet === 'string')
           : [],
       }),
+      properties: isRecord(properties) ? properties : {},
     });
   }
   return found;

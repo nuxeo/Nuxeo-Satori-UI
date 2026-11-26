@@ -14,9 +14,12 @@ import { tableColumns } from './widget-support';
 import {
   DEFAULT_TIMELINE_EVENTS,
   MAX_RULE_LEVELS,
+  columnKey,
   entryOf,
   readRecordLayout,
+  readRecordList,
   refusedRule,
+  showOf,
   type RecordLayoutFile,
 } from './record-layout';
 
@@ -1583,5 +1586,94 @@ describe('refusedRule', () => {
     expect(answer(MAX_RULE_LEVELS)).toBe(false);
     // One level more, the registry stops descending and passes it: what the page leaves out.
     expect(answer(MAX_RULE_LEVELS + 1)).toBe(true);
+  });
+});
+
+describe("a document-link's show, as the page reads it", () => {
+  const npi = (more: Record<string, unknown> = {}) => ({
+    field: 'claim:provider',
+    widget: 'document-link',
+    parameters: { types: ['Provider'], show: 'provider:npi' },
+    ...more,
+  });
+  const reading = () => ({
+    leftOut: new Set<string>(),
+    isRuleKnown: () => true,
+    problems: [] as string[],
+  });
+
+  it('labels the field as the shown property, unless it has a label of its own', () => {
+    const file = read({
+      version: 2,
+      cards: [{ id: 'c', fields: [npi(), npi({ labelKey: 'payers.provider.npi' })] }],
+    });
+    const [shown, labelled] = file.cards[0].fields;
+    expect(shown.label).toEqual({ keys: ['layout.field.provider:npi'], fallback: 'Npi' });
+    expect(labelled.label).toEqual({
+      keys: ['payers.provider.npi', 'layout.field.provider:npi'],
+      fallback: 'Npi',
+    });
+    expect(showOf(shown)).toBe('provider:npi');
+    expect(showOf({ widget: 'text', parameters: { show: 'provider:npi' } })).toBeNull();
+  });
+
+  it("keys a list's column by the reference and the shown property, so both stand side by side", () => {
+    const at = reading();
+    const list = readRecordList(
+      {
+        pageProvider: 'member_claims',
+        columns: [
+          { field: 'claim:provider', widget: 'document-link', parameters: { types: ['Provider'] } },
+          npi(),
+          npi({ labelKey: 'again' }),
+        ],
+      },
+      '',
+      'the queue',
+      at,
+    );
+    expect(list?.columns.map(columnKey)).toEqual(['claim:provider', 'claim:provider/provider:npi']);
+    expect(at.problems).toEqual([
+      'columns[2] shows provider:npi of claim:provider again; that column left out',
+    ]);
+  });
+
+  it('leaves out of the order a key on a reference a column shows through show', () => {
+    const at = reading();
+    const list = readRecordList(
+      {
+        pageProvider: 'member_claims',
+        columns: ['claim:number', npi()],
+        sort: [
+          { field: 'claim:provider', order: 'asc' },
+          { field: 'claim:number', order: 'desc' },
+        ],
+      },
+      '',
+      'the queue',
+      at,
+    );
+    expect(list?.sort).toEqual([{ field: 'claim:number', order: 'desc' }]);
+    expect(at.problems).toEqual([
+      'sort[0] orders by claim:provider, which a column shows through "show"; that key left out of the order',
+    ]);
+  });
+
+  it('leaves a related card out whose order the validator refuses for it', () => {
+    const file = read({
+      version: 2,
+      cards: [
+        { id: 'claim', fields: ['claim:number'] },
+        {
+          id: 'claims',
+          related: {
+            pageProvider: 'member_claims',
+            columns: [npi()],
+            sort: [{ field: 'claim:provider', order: 'asc' }],
+          },
+        },
+      ],
+    });
+    expect(file.cards.map((card) => card.id)).toEqual(['claim']);
   });
 });

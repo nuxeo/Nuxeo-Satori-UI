@@ -18,6 +18,7 @@
  */
 import { join, type Finding } from './checker';
 import { propertiesOf, propertyTypeOf, type ContentModel } from './content-model';
+import { linkedShowFindings } from './layout-model';
 import { isRecord, PACKAGED_REGISTRIES, XPATH, type Registries } from './registries';
 
 /** One piece of NXQL: its text, and how deep in parentheses it is, strings told apart. */
@@ -316,8 +317,15 @@ export function listedColumnFindings(
         if (isRecord(entry)) property(entry['field'], join(join(join(at, 'sort'), index), 'field'));
       });
   };
-  if (path.startsWith('queues/')) list(content, '');
-  else if (path.startsWith('layouts/')) {
+  if (path.startsWith('queues/')) {
+    // A column's `show` names a property of the records it links to, whose types it says: checked
+    // whatever page provider lists the rows.
+    if (Array.isArray(content['columns']))
+      content['columns'].forEach((column, index) =>
+        findings.push(...linkedShowFindings(column, join('columns', index), model)),
+      );
+    list(content, '');
+  } else if (path.startsWith('layouts/')) {
     const cards = (value: unknown, at: string): void => {
       if (!Array.isArray(value)) return;
       value.forEach((card, index) => {

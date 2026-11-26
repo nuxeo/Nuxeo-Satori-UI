@@ -62,6 +62,8 @@ import {
 } from './form-layout/resolve-form-layout';
 import {
   LINKED_RECORDS_PER_REQUEST,
+  SCHEMA_NAME,
+  type LinkedProperty,
   type LinkedRecord,
   isDocumentId,
   linkedRecordsQuery,
@@ -603,11 +605,16 @@ export class DocumentLayoutService {
    * read: one they may not, or that no longer exists, is absent, and shows as unavailable. Each id
    * is sent as a `queryParams` value of its own, never in the query's text
    * ({@link linkedRecordsQuery}), and only an id {@link isDocumentId} accepts is sent at all; the
-   * others are left out of the search. No properties are asked for: the title, the type, the path
-   * and the facets that the route needs come with every record. Not cached: `LinkedRecordLookup`
-   * keeps what one page has read, for that page's life.
+   * others are left out of the search. The title, the type, the path and the facets that the route
+   * needs come with every record; `schemas` are the schemas whose properties a `document-link`'s
+   * `show` reads (layout-v2.md, section 12), sent as the `properties` header, which names schemas,
+   * not prefixes. With none, no property is asked for. Not cached: `LinkedRecordLookup` keeps what
+   * one page has read, for that page's life.
    */
-  linkedRecords(ids: readonly string[]): Observable<ReadonlyMap<string, LinkedRecord> | null> {
+  linkedRecords(
+    ids: readonly string[],
+    schemas: readonly string[] = [],
+  ): Observable<ReadonlyMap<string, LinkedRecord> | null> {
     const asked = [...new Set(ids.filter(isDocumentId))];
     if (asked.length === 0) return of(new Map());
     if (asked.length > LINKED_RECORDS_PER_REQUEST) {
@@ -621,12 +628,38 @@ export class DocumentLayoutService {
       .set('pageSize', asked.length)
       .set('currentPageIndex', 0);
     for (const id of asked) params = params.append('queryParams', id);
-    return this.api.get<unknown>('/nuxeo/api/v1/search/lang/NXQL/execute', params).pipe(
+    const named = [...new Set(schemas.filter((schema) => SCHEMA_NAME.test(schema)))].sort();
+    const headers = named.length > 0 ? { properties: named.join(',') } : undefined;
+    return this.api.get<unknown>('/nuxeo/api/v1/search/lang/NXQL/execute', params, headers).pipe(
       timeout(LAYOUT_LOAD_TIMEOUT_MS),
       map((raw) => readLinkedRecords(raw, asked)),
       catchError((error: unknown) => {
         warn(`${asked.length} linked records not read: ${describe(error)}`);
         return of(null);
+      }),
+    );
+  }
+
+  /**
+   * What a `document-link`'s `show` reads of the records it links to (layout-v2.md, section 12):
+   * the schema holding the property, to ask the linked records with, and what the property is, to
+   * show it by. From the first of `types` whose definition, read once per session as the open
+   * record's type is, has a schema of `show`'s prefix with that property. `null` when none has it,
+   * or none could be read, and the console says which. Never errors.
+   */
+  linkedProperty(types: readonly string[], show: string): Observable<LinkedProperty | null> {
+    const wanted = [...new Set(types.filter((type) => typeof type === 'string' && type !== ''))];
+    if (wanted.length === 0) return of(null);
+    const prefix = prefixOfXpath(show);
+    const name = show.slice(show.indexOf(':') + 1);
+    return forkJoin(wanted.map((type) => this.documentType(type))).pipe(
+      map((definitions) => {
+        for (const definition of definitions) {
+          const schema = definition?.schemas.find((each) => each.prefix === prefix);
+          const field = schema && Object.hasOwn(schema.fields, name) ? schema.fields[name] : null;
+          if (schema && field) return { schema: schema.name, definition: field };
+        }
+        return null;
       }),
     );
   }

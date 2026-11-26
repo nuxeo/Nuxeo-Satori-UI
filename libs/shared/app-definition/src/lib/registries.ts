@@ -154,6 +154,19 @@ const tones: ParameterCheck = (value) => {
     : `gives ${wrong.map(([key]) => key).join(', ')} a tone that is not one of ${TONES.join(', ')}`;
 };
 
+/**
+ * What a `document-link` shows of the record it names in place of its title, `show`
+ * (layout-v2.md, section 12): one of that record's own properties, as a layout names one, and
+ * never the server's `ecm:` or a task's `var:`.
+ */
+const linkedProperty: ParameterCheck = (value) =>
+  typeof value === 'string' &&
+  XPATH.test(value) &&
+  !value.startsWith('ecm:') &&
+  !value.startsWith('var:')
+    ? null
+    : 'must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:';
+
 /** A table's columns are field entries, checked with the rest of the layout. */
 const columns: ParameterCheck = (value) =>
   Array.isArray(value) && value.length > 0 ? null : 'must be a list of field entries';
@@ -178,7 +191,10 @@ export const PACKAGED_WIDGETS: Readonly<Record<string, WidgetDefinition>> = {
     parameters: { directory: text },
     required: ['directory'],
   },
-  'document-link': { accepts: ['string', 'string[]'], parameters: { types: textList } },
+  'document-link': {
+    accepts: ['string', 'string[]'],
+    parameters: { types: textList, show: linkedProperty },
+  },
   chips: { accepts: ['string[]'], parameters: {} },
   'status-badge': { accepts: ['string'], parameters: { tones }, required: ['tones'] },
   table: { accepts: ['complex[]'], parameters: { columns }, required: ['columns'] },

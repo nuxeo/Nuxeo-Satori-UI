@@ -23,6 +23,12 @@ export interface Lookups {
   readonly principals: readonly Principal[];
   /** The ids `document-link` values hold, each once, sorted: only those {@link isDocumentId} accepts. */
   readonly records: readonly string[];
+  /**
+   * The schemas the linked records are read with, each once, sorted: those holding what a
+   * `document-link`'s `show` reads (layout-v2.md, section 12). Empty where nothing on the page
+   * shows one.
+   */
+  readonly schemas: readonly string[];
 }
 
 /** The labels read, by lookup; one that could not be read is absent. */
@@ -38,7 +44,7 @@ const principalKey = (kind: Principal['kind'], id: string): string => `${kind}\n
 
 /** Whether two sets of lookups read the same names: a signal's `equal`, so equal sets read nothing. */
 export function sameLookups(a: Lookups, b: Lookups): boolean {
-  return sameNames(a, b) && sameIds(a.records, b.records);
+  return sameNames(a, b) && sameIds(a.records, b.records) && sameIds(a.schemas, b.schemas);
 }
 
 /** What a page reads labels for: the vocabulary entries and the users and groups its values name. */
@@ -80,6 +86,26 @@ export function recordIdsOf(lookups: Signal<Lookups>): Signal<readonly string[]>
   return computed(() => lookups().records, { equal: sameIds });
 }
 
+/** The linked records a page reads, and the schemas it reads them with. */
+export interface RecordRead {
+  readonly ids: readonly string[];
+  readonly schemas: readonly string[];
+}
+
+/**
+ * The linked records `lookups` names and the schemas they are read with, which changes only when
+ * either does: as {@link recordIdsOf}, for a page whose `document-link`s may have a `show`.
+ */
+export function recordReadOf(lookups: Signal<Lookups>): Signal<RecordRead> {
+  return computed(
+    (): RecordRead => {
+      const { records, schemas } = lookups();
+      return { ids: records, schemas };
+    },
+    { equal: (a, b) => sameIds(a.ids, b.ids) && sameIds(a.schemas, b.schemas) },
+  );
+}
+
 function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
   return [...new Map(items.map((item) => [key(item), item])).values()].sort((a, b) =>
     key(a).localeCompare(key(b)),
@@ -91,6 +117,15 @@ export class LookupCollector {
   private readonly vocabulary: VocabularyValue[] = [];
   private readonly principals: Principal[] = [];
   private readonly records: string[] = [];
+  private readonly schemas: string[] = [];
+
+  /**
+   * A schema the linked records are to be read with, for a `document-link`'s `show`: the page asks
+   * for every record once, with every schema something on it shows (layout-v2.md, section 12).
+   */
+  schema(name: string): void {
+    this.schemas.push(name);
+  }
 
   /**
    * What one value shown through `widget` names: the users or groups of a `user` or `group`
@@ -136,6 +171,7 @@ export class LookupCollector {
         principalKey(principal.kind, principal.id),
       ),
       records: sortedUnique(this.records, (id) => id),
+      schemas: sortedUnique(this.schemas, (name) => name),
     };
   }
 }
@@ -187,11 +223,22 @@ export type LinkedRecords = ReadonlyMap<string, LinkedRecord | null>;
 
 export const NO_RECORDS: LinkedRecords = new Map();
 
+/** One record read, or being read, by a page: the schemas it was asked with, and its answer. */
+interface ReadRecord {
+  readonly schemas: ReadonlySet<string>;
+  readonly record: Observable<LinkedRecord | null>;
+}
+
 /**
  * The records the `document-link` values of one page name, read for as long as the page is drawn:
  * each id once, in one request for every id a set adds, never one per field or cell. A set whose
  * ids are all read asks for nothing. A failed request is not kept, and its ids are asked for again
  * by the next set that names them; until then they show as unavailable.
+ *
+ * **With the schemas a `show` reads** (layout-v2.md, section 12): an id read with every schema a
+ * set asks for is not asked for again; one read without one of them is asked for again, with those
+ * it was read with and those asked for now, so that it loses none. The record page asks with every
+ * schema it and its lists need, so a list asks again only for a record the page does not name.
  *
  * Provided by the record page, whose lists share it, so a record a field and a list both name is
  * read once; by a form; and by the Properties panel, for the references its schemas name, so a
@@ -204,29 +251,41 @@ export const NO_RECORDS: LinkedRecords = new Map();
 @Injectable()
 export class LinkedRecordLookup {
   private readonly layouts = inject(DocumentLayoutService);
-  private readonly read = new Map<string, Observable<LinkedRecord | null>>();
+  private readonly read = new Map<string, ReadRecord>();
 
-  /** The records `ids` name, once all of them are read. Never errors. */
-  records(ids: readonly string[]): Observable<LinkedRecords> {
+  /**
+   * The records `ids` name, once all of them are read, each with at least the properties of
+   * `schemas`. Never errors.
+   */
+  records(ids: readonly string[], schemas: readonly string[] = []): Observable<LinkedRecords> {
     const wanted = [...new Set(ids.filter(isDocumentId))].sort();
     if (wanted.length === 0) return of(NO_RECORDS);
-    const unread = wanted.filter((id) => !this.read.has(id));
-    for (let start = 0; start < unread.length; start += LINKED_RECORDS_PER_REQUEST) {
-      this.ask(unread.slice(start, start + LINKED_RECORDS_PER_REQUEST));
+    const needed = [...new Set(schemas)];
+    const unread = wanted.filter((id) => {
+      const read = this.read.get(id);
+      return read === undefined || needed.some((schema) => !read.schemas.has(schema));
+    });
+    if (unread.length > 0) {
+      const asked = [
+        ...new Set([...needed, ...unread.flatMap((id) => [...(this.read.get(id)?.schemas ?? [])])]),
+      ].sort();
+      for (let start = 0; start < unread.length; start += LINKED_RECORDS_PER_REQUEST) {
+        this.ask(unread.slice(start, start + LINKED_RECORDS_PER_REQUEST), asked);
+      }
     }
     return forkJoin(
       wanted.map((id) =>
-        (this.read.get(id) ?? of(null)).pipe(
+        (this.read.get(id)?.record ?? of(null)).pipe(
           map((record): [string, LinkedRecord | null] => [id, record]),
         ),
       ),
     ).pipe(map((pairs): LinkedRecords => new Map(pairs)));
   }
 
-  /** One request for `ids`, shared by each of them. */
-  private ask(ids: readonly string[]): void {
-    const ones = new Map<string, Observable<LinkedRecord | null>>();
-    const request = this.layouts.linkedRecords(ids).pipe(
+  /** One request for `ids`, with `schemas`, shared by each of them. */
+  private ask(ids: readonly string[], schemas: readonly string[]): void {
+    const ones = new Map<string, ReadRecord>();
+    const request = this.layouts.linkedRecords(ids, schemas).pipe(
       catchError(() => of(null)),
       // Once, as the request answers, whether or not anything still waits for it: a request kept
       // running after the page moved on to another set must not leave its failure cached.
@@ -236,8 +295,12 @@ export class LinkedRecordLookup {
       }),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
+    const read = new Set(schemas);
     for (const id of ids) {
-      const one = request.pipe(map((found) => found?.get(id) ?? null));
+      const one: ReadRecord = {
+        schemas: read,
+        record: request.pipe(map((found) => found?.get(id) ?? null)),
+      };
       ones.set(id, one);
       this.read.set(id, one);
     }
@@ -262,8 +325,12 @@ export function linkedRecordLookup(): LinkedRecordLookup {
 export function recordLookups(
   records: LinkedRecords,
   unavailable: string,
-): Pick<RecordValueContext, 'record'> {
+): Pick<RecordValueContext, 'record' | 'linkedValue'> {
   return {
+    linkedValue: (id, xpath) => {
+      const properties = records.get(id)?.properties;
+      return properties && Object.hasOwn(properties, xpath) ? properties[xpath] : undefined;
+    },
     record: (id): RecordLink | null => {
       if (!isDocumentId(id)) return { text: unavailable, url: null };
       const record = records.get(id);

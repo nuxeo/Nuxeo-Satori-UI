@@ -718,6 +718,54 @@ describe('DocumentLayoutService', () => {
     });
   });
 
+  describe('linkedProperty', () => {
+    const TYPE = (name: string) => `/nuxeo/api/v1/config/types/${name}`;
+    const MOVE = {
+      name: 'Move',
+      schemas: [
+        { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+        { name: 'move', '@prefix': 'move', fields: { deliveredOn: 'date', number: 'string' } },
+      ],
+    };
+    const linked = (types: readonly string[], show: string) =>
+      firstValueFrom(service.linkedProperty(types, show));
+
+    it('gives the schema holding the property, by its name, and what the property is', async () => {
+      const answer = linked(['Move'], 'move:deliveredOn');
+      const request = http.expectOne(TYPE('Move'));
+      expect(request.request.headers.get('fetch-schema')).toBe('fields');
+      request.flush(MOVE);
+      expect(await answer).toEqual({ schema: 'move', definition: { type: 'date' } });
+      // A prefix that is not the schema's name is asked for by the name.
+      const title = linked(['Move'], 'dc:title');
+      http.expectNone(TYPE('Move'));
+      expect(await title).toEqual({ schema: 'dublincore', definition: { type: 'string' } });
+    });
+
+    it('reads the first type that has it, each type once per session', async () => {
+      const answer = linked(['Truck', 'Move'], 'move:number');
+      http.expectOne(TYPE('Truck')).flush({ name: 'Truck', schemas: [] });
+      http.expectOne(TYPE('Move')).flush(MOVE);
+      expect(await answer).toEqual({ schema: 'move', definition: { type: 'string' } });
+      expect(await linked(['Move', 'Truck'], 'move:number')).toEqual({
+        schema: 'move',
+        definition: { type: 'string' },
+      });
+      http.expectNone((r) => r.url.includes('/config/types/'));
+    });
+
+    it('is null where no type has it, or none could be read, and with no type at all', async () => {
+      const missing = linked(['Move'], 'move:nothing');
+      http.expectOne(TYPE('Move')).flush(MOVE);
+      expect(await missing).toBeNull();
+      const failed = linked(['Gone'], 'gone:x');
+      http.expectOne(TYPE('Gone')).flush('', { status: 404, statusText: 'Not Found' });
+      expect(await failed).toBeNull();
+      expect(await linked([], 'move:number')).toBeNull();
+      http.expectNone((r) => r.url.includes('/config/types/'));
+    });
+  });
+
   describe('linkedRecords', () => {
     const SEARCH = '/nuxeo/api/v1/search/lang/NXQL/execute';
     const MEMBER = 'a00e20f3-1398-4b64-827e-628bfdada64c';
@@ -746,10 +794,54 @@ describe('DocumentLayoutService', () => {
       expect(request.request.headers.has('properties')).toBe(false);
       request.flush({ entries: [record(OTHER, 'John Smith'), record(MEMBER, 'Wei Chen')] });
       const found = await answer;
-      expect(found?.get(MEMBER)).toEqual({ title: 'Wei Chen', url: `/doc/${MEMBER}` });
-      expect(found?.get(OTHER)).toEqual({ title: 'John Smith', url: `/doc/${OTHER}` });
+      expect(found?.get(MEMBER)).toEqual({
+        title: 'Wei Chen',
+        url: `/doc/${MEMBER}`,
+        properties: {},
+      });
+      expect(found?.get(OTHER)).toEqual({
+        title: 'John Smith',
+        url: `/doc/${OTHER}`,
+        properties: {},
+      });
       expect(found?.has(GONE)).toBe(false);
       expect(intercepted).toContain(SEARCH);
+    });
+
+    it("asks with the schemas a show reads, by their names, and keeps what each record's answer holds", async () => {
+      const answer = firstValueFrom(
+        service.linkedRecords([MEMBER, OTHER, GONE], ['member', 'dublincore', 'member']),
+      );
+      const request = http.expectOne((r) => r.url === SEARCH);
+      // The header names schemas, sorted and each once; the query and its parameters are as above.
+      expect(request.request.headers.get('properties')).toBe('dublincore,member');
+      expect(request.request.params.getAll('queryParams')).toEqual([MEMBER, OTHER, GONE]);
+      request.flush({
+        entries: [
+          { ...record(MEMBER, 'Wei Chen'), properties: { 'member:plan': 'Gold' } },
+          { ...record(OTHER, 'John Smith'), properties: 'not an object' },
+        ],
+      });
+      const found = await answer;
+      expect(found?.get(MEMBER)?.properties).toEqual({ 'member:plan': 'Gold' });
+      expect(found?.get(OTHER)?.properties).toEqual({});
+      // A record the reader may not read is not returned, so none of its values is ever held.
+      expect(found?.has(GONE)).toBe(false);
+    });
+
+    it('never sends a schema name that is not one in the header', async () => {
+      const answer = firstValueFrom(
+        service.linkedRecords([MEMBER], ['member', 'dc, *', '*', '', 'x\nproperties: *']),
+      );
+      const request = http.expectOne((r) => r.url === SEARCH);
+      expect(request.request.headers.get('properties')).toBe('member');
+      request.flush({ entries: [] });
+      await answer;
+      const none = firstValueFrom(service.linkedRecords([MEMBER], ['*']));
+      const plain = http.expectOne((r) => r.url === SEARCH);
+      expect(plain.request.headers.has('properties')).toBe(false);
+      plain.flush({ entries: [] });
+      await none;
     });
 
     it('never sends a value that is not a document id, whatever it holds', async () => {
@@ -809,6 +901,7 @@ describe('DocumentLayoutService', () => {
       expect(found?.get(MEMBER)).toEqual({
         title: 'member-100051',
         url: '/browse/default-domain/workspaces/payers-demo/members/member-100051',
+        properties: {},
       });
     });
 

@@ -8,6 +8,7 @@ import {
   computedDefinition,
   relativeDateText,
   richTextWords,
+  showLinkedProperty,
   showValue,
   viewText,
   type RecordValueContext,
@@ -360,6 +361,57 @@ describe('showValue', () => {
     it('shows no value as empty', () => {
       expect(show('document-link', [], {}, { type: 'string[]' })).toEqual({ kind: 'empty' });
       expect(show('document-link', '')).toEqual({ kind: 'empty' });
+    });
+
+    describe("with show, a property of the linked record's", () => {
+      const OTHER = '9a651335-d3d4-434c-a7b4-afe7e5c0edae';
+      const values: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+        [MEMBER]: { 'move:deliveredOn': '2026-11-14T00:00:00.000Z', 'move:crew': ['ana', 'bo'] },
+        [OTHER]: { 'move:deliveredOn': null },
+        // What a record the reader may not read would hold: never asked for, never shown.
+        [GONE]: { 'move:deliveredOn': '1999-01-01' },
+      };
+      const linked: RecordValueContext = {
+        ...context,
+        record: (id) =>
+          id === OTHER ? { text: 'Other move', url: `/doc/${OTHER}` } : context.record(id),
+        linkedValue: (id, xpath) => values[id]?.[xpath],
+      };
+      const delivered = { xpath: 'move:deliveredOn', definition: { type: 'date' } };
+      const shown = (value: unknown, property = delivered, on = linked) =>
+        showLinkedProperty(value, property, on);
+
+      it('shows the property by its schema type, as a link to the linked record', () => {
+        expect(shown(MEMBER)).toEqual({
+          kind: 'records',
+          records: [{ text: 'November 14, 2026', url: `/doc/${MEMBER}` }],
+        });
+        const crew = { xpath: 'move:crew', definition: { type: 'string[]' } };
+        expect(viewText(shown(MEMBER, crew), context.flagText)).toBe('ana, bo');
+      });
+
+      it('shows a record the reader may not read as unavailable, never one of its values', () => {
+        const view = shown([GONE, MEMBER, 'not-an-id']);
+        expect(view).toEqual({
+          kind: 'records',
+          records: [
+            { text: 'Unavailable', url: null },
+            { text: 'November 14, 2026', url: `/doc/${MEMBER}` },
+            { text: 'Unavailable', url: null },
+          ],
+        });
+        expect(viewText(view, context.flagText)).not.toContain('1999');
+      });
+
+      it('shows nothing while a record is read, and empty where every record lacks the property', () => {
+        expect(shown(PENDING)).toEqual({ kind: 'records', records: [] });
+        expect(shown(OTHER)).toEqual({ kind: 'empty' });
+        expect(shown([OTHER, PENDING])).toEqual({ kind: 'records', records: [] });
+        // A context with nothing read for a show is the same: the property is not there.
+        const { linkedValue: _, ...none } = linked;
+        expect(shown(OTHER, delivered, none)).toEqual({ kind: 'empty' });
+        expect(shown('')).toEqual({ kind: 'empty' });
+      });
     });
   });
 

@@ -86,7 +86,12 @@ describe('LookupCollector, for document-link', () => {
     const collector = new LookupCollector();
     collector.value('text', {}, STRING, A);
     collector.value('document-link', {}, { type: 'string', directory: 'statuses' }, B);
-    expect(collector.lookups()).toEqual({ vocabulary: [], principals: [], records: [B] });
+    expect(collector.lookups()).toEqual({
+      vocabulary: [],
+      principals: [],
+      records: [B],
+      schemas: [],
+    });
   });
 
   it('tells two sets apart by their records, so another set is read', () => {
@@ -103,11 +108,13 @@ describe('LookupCollector, for document-link', () => {
 
 describe('LinkedRecordLookup', () => {
   let asked: string[][];
+  let withSchemas: string[][];
   let answer: (ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>;
   let lookup: LinkedRecordLookup;
 
   beforeEach(() => {
     asked = [];
+    withSchemas = [];
     answer = (ids) => of(found(ids));
     TestBed.configureTestingModule({
       providers: [
@@ -115,8 +122,9 @@ describe('LinkedRecordLookup', () => {
         {
           provide: DocumentLayoutService,
           useValue: {
-            linkedRecords: (ids: readonly string[]) => {
+            linkedRecords: (ids: readonly string[], schemas: readonly string[] = []) => {
               asked.push([...ids]);
+              withSchemas.push([...schemas]);
               return answer(ids);
             },
           },
@@ -204,6 +212,34 @@ describe('LinkedRecordLookup', () => {
     expect([...read.keys()]).toEqual([B]);
   });
 
+  describe("with the schemas a document-link's show reads", () => {
+    const read = (ids: readonly string[], schemas: readonly string[]) =>
+      firstValueFrom(lookup.records(ids, schemas));
+
+    it('asks once with them, and not again for a set it read with as many or more', async () => {
+      await read([A, B], ['move', 'dublincore']);
+      expect(withSchemas).toEqual([['dublincore', 'move']]);
+      await read([A], ['move']);
+      await records([B]);
+      expect(asked).toHaveLength(1);
+    });
+
+    it('asks again for a record read without one, with every schema it was read with', async () => {
+      await read([A, B], ['dublincore']);
+      await read([B, C], ['move']);
+      // B again, with both; C, never read, in the same request.
+      expect(asked).toEqual([[A, B].sort(), [B, C].sort()]);
+      expect(withSchemas).toEqual([['dublincore'], ['dublincore', 'move']]);
+      await read([A, B, C], ['dublincore']);
+      expect(asked).toHaveLength(2);
+    });
+
+    it('never asks with a schema for a set that names none', async () => {
+      await records([A]);
+      expect(withSchemas).toEqual([[]]);
+    });
+  });
+
   it('asks nothing for a set with no document id', async () => {
     expect(await records(['member-100051'])).toBe(NO_RECORDS);
     expect(asked).toEqual([]);
@@ -254,5 +290,26 @@ describe('recordLookups', () => {
 
   it('gives nothing yet for a record still being read', () => {
     expect(record(B)).toBeNull();
+  });
+
+  it("gives a read record's property for a show, and nothing of a record not returned", () => {
+    const { linkedValue } = recordLookups(
+      new Map<string, LinkedRecord | null>([
+        [
+          A,
+          { title: 'Wei Chen', url: `/doc/${A}`, properties: { 'move:deliveredOn': '2026-11-14' } },
+        ],
+        [B, { title: 'John Smith', url: `/doc/${B}` }],
+        [D, null],
+      ]),
+      'Unavailable',
+    );
+    expect(linkedValue?.(A, 'move:deliveredOn')).toBe('2026-11-14');
+    expect(linkedValue?.(A, 'move:number')).toBeUndefined();
+    // An inherited key is no property of the record's.
+    expect(linkedValue?.(A, 'toString')).toBeUndefined();
+    expect(linkedValue?.(B, 'move:deliveredOn')).toBeUndefined();
+    expect(linkedValue?.(D, 'move:deliveredOn')).toBeUndefined();
+    expect(linkedValue?.(C, 'move:deliveredOn')).toBeUndefined();
   });
 });
