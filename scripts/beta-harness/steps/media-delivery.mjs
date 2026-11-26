@@ -149,10 +149,18 @@ async function demo(h, base, filer) {
       body: json ? JSON.stringify(json) : undefined,
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
-    }).then(async (response) => ({
-      status: response.status,
-      body: await response.json().catch(() => null),
-    }));
+    }).then(async (response) => {
+      const text = await response.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        // Not JSON, such as a proxy's error page: kept as text, so that a check naming the answer
+        // shows it, and every check reading a field fails on it.
+        body = { message: text.slice(0, 300) };
+      }
+      return { status: response.status, body };
+    });
   const today = todayUtc();
   // The deliveries are filed as a distribution coordinator: a member of the group, and no
   // administrator, whom the server would let move or delete a delivery.
