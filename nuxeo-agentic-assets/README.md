@@ -1,7 +1,8 @@
 # nuxeo-agentic-assets: an asset's rights and its share links, enforced on the server
 
 The assets module's server add-on ([development plan](../docs/business-apps/development-plan.md),
-phase 5, "The rights and sharing add-on"), version 0.2.0: the rights, and share links. A Maven
+phase 5, "The rights and sharing add-on"), version 0.3.0: the rights, for pictures and videos, and
+share links. A Maven
 module beside `nuxeo-agentic-core`, with its own Marketplace package, `nuxeo-agentic-assets`.
 Publishing to channels and outside users are not built.
 
@@ -18,17 +19,24 @@ anywhere: it was built, tested, and checked against the server's own jars, read 
 ## The short version
 
 - **It refuses, on the server, for every user, administrators included,** an asset's original, a
-  picture view or a rendition that the asset's rights do not cover: once its rights end day has
-  passed, or when its channels do not hold the channel that covers that use. A preview is served
-  whatever the rights. A use its policy does not list is refused.
+  picture view, a rendition, a video's transcoded video or a frame of its storyboard that the
+  asset's rights do not cover: once its rights end day has passed, or when its channels do not hold
+  the channel that covers that use. A preview is served whatever the rights. A use its policy does
+  not list is refused. A transcoded video is decided by its conversion's name, whether the
+  download endpoints or the video operations are given its name or its place.
 - **Through the platform's own download permission,** the `permissions` point of
   `org.nuxeo.ecm.core.io.download.DownloadService`, which the platform asks before it streams a
   blob. So `/nxfile/` and the REST API's `@blob`, `@rendition` and `@preview` answer 403 to any
   client that calls them, and `Blob.BulkDownload` leaves a refused asset out of its zip.
-- **Not yet every path.** Automation operations that return a document's blob, or a conversion of
-  it, hand it over without naming the document to that permission, and so are not refused; nor is
-  what another add-on serves from its own endpoints. Until the security review settles them (below,
-  "What it does not cover"), this is a control on the download endpoints, not on every API.
+- **The platform's `Video.*` operations ask the same rights.** Each is replaced by one of the same
+  id, parameters and answers, which decides the video it reads as a download of that file, refuses
+  it with 403 when the rights do not cover it, and otherwise runs the platform's own (below, "The
+  video operations").
+- **Not yet every path.** Other Automation operations that return a document's blob, or a
+  conversion of it, hand it over without naming the document to that permission, and so are not
+  refused; nor is what another add-on serves from its own endpoints. Until the security review
+  settles them (below, "What it does not cover"), this is a control on the download endpoints and
+  the video operations, not on every API.
 - **It says why,** through a document enricher, `assetRights`: the decision for each use, with a
   reason code a client translates. The enricher explains; the permission refuses.
 - **It enforces nothing on its own.** A package contributes a rights policy for its document type;
@@ -51,10 +59,12 @@ For a document of a type a policy covers, each download is first named as a use:
 | The policy's original xpath (`file:content` unless it names another); `blobholder:0` or the `mainBlob` rendition when the blob it returns has the original's digest | the original                                      |
 | `blobholder:0` or `mainBlob` returning another blob, such as `file:content` when the original is an attachment                                                      | that blob or rendition, never listed by the alias |
 | `picture:views/<n>/content`, with `n` written plainly                                                                                                               | the view, by its title                            |
+| `vid:transcodedVideos/<n>/content`, with `n` written plainly                                                                                                        | the rendition of its conversion's name            |
+| `vid:storyboard/<n>/content`, with `n` written plainly, a frame the document has                                                                                    | the storyboard: one use for every frame           |
 | A rendition, by the name the platform passes                                                                                                                        | the rendition, by name                            |
 | Any other xpath                                                                                                                                                     | that blob, by its xpath                           |
 | No xpath: the document's main blob, by its digest                                                                                                                   | the original                                      |
-| Anything else, such as a view's place the document does not have                                                                                                    | unknown, so never listed                          |
+| Anything else, such as a view's place the document does not have, or a transcoded video's with no name                                                              | unknown, so never listed                          |
 
 Then decided, the first that applies winning:
 
@@ -68,6 +78,13 @@ Then decided, the first that applies winning:
 | The asset's channels do not hold the channel covering the use | 403    | `channel-not-covered` |
 | Otherwise                                                     | served | `cleared`             |
 
+- **A video's files.** A transcoded video at its place, `vid:transcodedVideos/<n>/content`, is the
+  rendition of the name at `vid:transcodedVideos/<n>/name`, the name the platform's video rendition
+  provider serves it under through `@rendition`: so one `<rendition>` rule decides a conversion
+  through `@rendition/<name>`, `@blob`, `/nxfile/` and `@preview` alike, whichever place it has.
+  The platform appends a conversion when it finishes, and two run at once, so a place names no
+  particular one. Every frame of the storyboard is one use, decided by the policy's
+  `<storyboard>`, however many frames the server is configured to make.
 - **A version or a proxy has its live document's rights.** A version keeps the fields it had when
   it was made, so rights narrowed since would not reach it: the rights are read from the live
   document, with a privileged session, since a reader of a proxy may not read the live document.
@@ -101,6 +118,41 @@ Then decided, the first that applies winning:
   it is a folder or a collection. Nor is a download that names no document: the platform hands some
   blobs over that way.
 
+### The video operations
+
+`nuxeo-platform-video`'s Automation operations read a document's video and answer what they made of
+it: `Video.Slice` and `Video.SliceInParts` a cut, `Video.Concat` a join, `Video.AddWatermark` the
+video with a picture drawn over it, `Video.ExtractClosedCaptions` its captions. The platform's
+download service is not asked for any of them. So this add-on contributes five operations of the
+same ids, `replace="true"`, after the platform's (`OSGI-INF/asset-rights-video-operations-contrib.xml`):
+
+- **Each decides first,** for every document it is given, the file the platform's operation will
+  read, as a download of that file is decided: the blob at its `xpath`, or, with none, the
+  document's main blob, which is the original when it has the original's digest. So
+  `Video.Slice` of an asset without Print is refused, and of its `MP4 480p` at its place, on an
+  asset with E-commerce, is served. `Video.AddWatermark` decides the watermark document's
+  `file:content` too, which the platform draws into the video it answers. A list, for
+  `Video.Concat` or any operation given several documents, is refused whole when one is.
+- **A stored file is decided for the assets that hold it,** whether it is given as the input or
+  read from a document of a type no policy covers. A blob with a key in the blob store is looked
+  for, with the system's rights, in every blob field of the covered types' schemas and of every
+  facet's, and each covered document holding it is decided at each place it holds it, as a
+  download there is; a file held by more than 100 such documents is refused. The blob store keeps
+  one file per content, so the same bytes stored for a document no policy covers are refused as
+  the asset's are, which refuses more than it must, never less.
+- **A refusal is a `DocumentSecurityException`,** 403, logged at `INFO` as a download's is, with
+  the operation's id. A document of a type no policy covers is not refused here, unless its file
+  is a covered asset's, nor a blob stored for none, nor one not stored at all, such as an upload.
+  With the add-on's service not running,
+  every one of the five is refused, whatever its input.
+- **Then the platform's own operation runs,** given the same parameters, so its behaviour is the
+  platform's: the replacements declare each parameter as the platform's class does, since
+  Automation reads only the parameters a class declares itself, and hand them to an instance of
+  it. `BundleTest` holds each replacement to the platform's class: the id, every parameter's name,
+  type, `required` and values, and every input, answer and collector.
+- **On a server without `nuxeo-platform-video`** the component waits for the platform's and
+  replaces nothing.
+
 ### Administrators
 
 **Not exempt.** No line of the decision reads the user or their groups. Where the platform makes
@@ -130,6 +182,14 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
 - **The engine:** `nashorn-core-15.7.jar` in `nxserver/lib`; no `nashorn.args` in `nuxeo.conf`
   restricts Java from scripts. The tests run the contributed script through Nashorn 15.7 the way
   `checkPermission` does.
+- **A video's files and operations,** from `nuxeo-platform-video` 2025.10.18:
+  `VideoRenditionDefinitionProvider` names each rendition of a video by its transcoded video's
+  name; `VideoConversionWork` removes a conversion's entry and appends the new one at the end, and
+  the `videoConversion` queue runs two at a time; the five `Video.*` operations, in
+  `video-tools-operations-contrib.xml`, have the fields and methods their replacements copy, and
+  read the file as above. Automation's `OperationTypeImpl` reads a class's own declared `@Param`
+  fields only, and the automation component lets `replace="true"` replace an operation of the
+  same id.
 - **Who passes the document:** `DownloadServlet` (`/nxfile/`) through `handleDownload`; the REST
   API's `BlobObject` (`@blob`) through `DocumentBlobHolder`, and `PreviewAdapter` (`@preview`), with
   the document and the xpath; `RenditionObject` (`@rendition`) with the document and the
@@ -151,14 +211,16 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
   and a refusal there is a "not available" error with no reason a client could show.
 - **Compiled and tested against those jars:** the module's sources and tests compile against the
   server's own 2025.10.18 jars in place of the 11.5 ones Maven resolves, and all 63 tests pass
-  there.
+  there. For 0.3.0 the module's sources were compiled against them again, the video operations
+  included; the tests run on 11.5's, whose five video operations have the same fields and methods.
 
 ## What it does not cover
 
-- **It decides the downloads the platform's download service is asked for with their document.**
-  A blob the platform hands over without naming its document to that service, such as an
-  Automation operation's result, and a blob another add-on serves from its own endpoint, are not
-  decided here. Which of those must be closed, and how, is the security review's first question.
+- **It decides the downloads the platform's download service is asked for with their document,
+  and the platform's `Video.*` operations.** A blob the platform hands over without naming its
+  document to that service, such as another Automation operation's result, and a blob another
+  add-on serves from its own endpoint, are not decided here. Which of those must be closed, and
+  how, is the security review's first question.
 - **Who may write the rights.** A user who may read an asset and create a document somewhere, in
   their own workspace for one, can copy the asset there, write the copy's channels or rights end,
   and download the copy. Refusing that needs the rights fields written only by a rights manager,
@@ -187,12 +249,31 @@ Contributed to `org.nuxeo.agentic.assets.rights`, point `policies`, by a compone
 </policy>
 ```
 
+A video's, as the brand assets kit's for `AcmeVideo`:
+
+```xml
+<policy type="AcmeVideo">
+  <rightsEnd xpath="dc:expired" />
+  <channels xpath="acmeasset:channels" />
+  <original channel="Print" />
+  <rendition name="MP4 480p" channel="E-commerce" />
+  <rendition name="WebM 480p" channel="E-commerce" />
+  <view name="StaticPlayerView" preview="true" />
+  <rendition name="thumbnail" preview="true" />
+  <storyboard preview="true" />
+</policy>
+```
+
 - `rightsEnd` names a date property: its day in UTC is the last day the rights cover, and an empty
   one sets no end. `channels` names a text or list property.
 - One policy per type, the exact type: a subtype is not covered by its parent's policy. A later
   policy for the type replaces it whole; `enabled="false"` removes it.
 - A picture view and the rendition of the same name are listed apart, because they are two
   addresses for one file.
+- A video's transcoded video is listed once, as a `<rendition>` by its conversion's name, which
+  decides it at its place too. `<storyboard>`, with a channel or `preview="true"`, decides every
+  frame of the storyboard; with none, every frame is refused. A `<blob>` at a transcoded video's
+  or a frame's place is left out, and logged, since that place is decided by name.
 
 ## The `assetRights` enricher
 
@@ -200,7 +281,8 @@ Ask with the header `enrichers.document: assetRights`. For a document no policy 
 `"assetRights": null`. Otherwise its `type`, the server's `today`, the `rightsEnd`, whether it has
 `ended`, the `channels`, which are `null` for a proxy, whose live document a reader may not
 read, then `uses`: the original, each picture view the document has by its
-title, and each rendition and blob the policy lists, each with `allowed`, `reason`, and the
+title, a video's transcoded videos as renditions by their conversions' names, each rendition and
+blob the policy lists, and a video's storyboard, `"use": "storyboard"`, with no name, each with `allowed`, `reason`, and the
 `channel` that covers it when there is one, and `rightsEnd` when that is the reason; and
 `otherwise`, the answer for any use not listed. The client reads it in
 `libs/shared/nuxeo-client/src/lib/utils/asset-rights.ts`, and asks for it only after a 403.
@@ -404,36 +486,51 @@ mvn -pl nuxeo-agentic-assets -am package
 ```
 
 It runs the module's tests and writes the bundle and the Marketplace package,
-`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip`. `build-marketplace.yml` builds it on
-every pull request it runs for, without uploading or publishing it. The tests need no Nuxeo
-runtime: documents are proxies that answer only what the code reads.
+`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.3.0.zip`. `build-marketplace.yml` builds it on
+every pull request it runs for, without uploading or publishing it. The tests but one need no Nuxeo
+runtime: documents are proxies that answer only what the code reads. `VideoRightsTest` runs in the
+Nuxeo test framework, as `nuxeo-agentic-documents`'s tests do: a runtime and a repository on H2,
+the platform's Video type and `Video.*` operations, its download service evaluating the contributed
+permission through Nashorn, and the kit's own video policy, which the build copies from the kit; only
+the video tools service, which runs ffmpeg, is a fake.
 
-| Test                           | What it holds                                                                                                                                                                                                                                        |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                                                                                                                                          |
-| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                                                                                                                                        |
-| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                                                                                                                             |
-| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                             |
-| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                |
-| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                             |
-| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided                                                                                                                                                                        |
-| `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations |
-| `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                  |
-| `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                             |
-| `ShareLinkComponentTest`       | Making a link: the permission and the sharing group, items, day, rights now, each item's digest and SHA-256; opening it: every condition above, each refusal by its reason, the bytes marked and logged; one turn per link                           |
-| `WatermarkerTest`              | The mark across the whole picture, light and dark, the label whole on a thumbnail; nothing but the pixels kept; formats, bytes, pixels, sides, tiles and the budget refused from the header                                                          |
-| `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                    |
-| `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                          |
-| `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                    |
+| Test                           | What it holds                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                                                                                                                                                                                                                                                                          |
+| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                                                                                                                                                                                                                                                                        |
+| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                                                                                                                                                                                                                                                             |
+| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                                                                                                                                                             |
+| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                                                                                                                                                |
+| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                                                                                                                                                             |
+| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided, its transcoded videos by name at their places, every storyboard frame a preview                                                                                                                                                                                                                       |
+| `VideoPolicyTest`              | A video's files in their canonical forms only; `<storyboard>` through XMap, with a channel or as a preview; a `<blob>` at a video's place left out and said; what the enricher writes of them                                                                                                                                                                                        |
+| `VideoRightsTest`              | In a Nuxeo runtime: a transcoded video decided by its conversion's name at every place and through `/nxfile/`'s form, as by name; every one of twelve storyboard frames by the one rule; each `Video.*` operation refused or run as a download of its file, with every parameter handed on, a stored file given as its input decided for its holders, a version by its live document |
+| `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations; the five video operations, each the platform's id, parameters and methods                                                      |
+| `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                                                                                                                                                  |
+| `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                                                                                                                                                             |
+| `ShareLinkComponentTest`       | Making a link: the permission and the sharing group, items, day, rights now, each item's digest and SHA-256; opening it: every condition above, each refusal by its reason, the bytes marked and logged; one turn per link                                                                                                                                                           |
+| `WatermarkerTest`              | The mark across the whole picture, light and dark, the label whole on a thumbnail; nothing but the pixels kept; formats, bytes, pixels, sides, tiles and the budget refused from the header                                                                                                                                                                                          |
+| `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                                                                                                                                                    |
+| `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                                                                                                                                                          |
+| `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                                                                                                                                                    |
 
 Every guard was seen failing: each of 28 breakages, one at a time (a use not listed let through,
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
 print view given another channel, a version read by its own fields, a container's renditions
 served, a nested collection not looked for, a proxy's live fields written, and the others), turned
 the tests red, and the build unbroken was green. `KitVideoPolicyTest`, added with the kit's videos
-and with no change to the add-on's code, went red with the kit's `MP4 480p` given the Print channel. **What the tests cannot reach:** the privileged
-lookup of a version's live document and the container query run against fakes here; the query's
-text is held exactly, but neither has run on a repository.
+and with no change to the add-on's code, went red with the kit's `MP4 480p` given the Print channel.
+**The video rules' guards were seen failing too:** each of 15 breakages, one at a time, turned the
+tests red, `VideoRightsTest` among them for each that a runtime decides: a transcoded video named by
+its place, storyboard frames named by their places, a frame's place not checked, the operations'
+decision skipped, a stored file given as the input not decided, nor one read from a document no
+policy covers, a facet's blob fields not searched, a prefix-less schema's place misnamed, the watermark's picture not decided, a list's documents not decided,
+`<storyboard>` not read, the enricher listing no conversion, a `<blob>` at a frame kept, or at a
+video's place in another form, a parameter
+not handed to the platform's operation. **What the tests cannot reach:** the container query
+runs against fakes here; its text is held exactly, but it has not run on a repository. The
+privileged lookup of a version's live document, and the query for a stored file's holders, run on
+H2 in `VideoRightsTest`, not on the server's database.
 
 **The share links' guards were seen failing too:** each of 80 breakages, one at a
 time, turned the tests red, and the build unbroken was green. Among them: a link that never
@@ -458,10 +555,10 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 
 ## Installing it on a local Nuxeo
 
-**Not run for 0.2.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read only, on
-25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and `brand-assets-demo-0.2.0`
-started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.3, which depends on it, in one
-restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
+**Not run for 0.2.0 or 0.3.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read
+only, on 25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and
+`brand-assets-demo-0.2.0` started: this upgrades both, to the add-on 0.3.0 and the kit 0.2.4, which
+depends on it, in one restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
 process, so a one-off script installs them when the container next starts, as the kits' READMEs do.
 **Not before the share links' security review:** the upgrade opens `/nuxeo/agentic-share/` to
 anyone who can reach the server.
@@ -480,15 +577,15 @@ npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 package's later version upgrades the one installed:
 
 ```bash
-docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip nuxeo:/tmp/
+docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.3.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.3.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.4.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.3.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.3.0.zip /tmp/brand-assets-demo-0.2.4.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
@@ -498,12 +595,13 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
 **3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
 
 - `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed, at
-  0.2.0 and 0.2.3;
+  0.3.0 and 0.2.4;
 - the server log's `Component Loading Status` has nothing pending or missing, and names
   `org.nuxeo.agentic.assets.rights`, `org.nuxeo.agentic.assets.rights.download`,
   `org.nuxeo.agentic.assets.rights.enrichers`, `org.nuxeo.agentic.assets.share.directories`,
   `org.nuxeo.agentic.assets.share`, `org.nuxeo.agentic.assets.share.operations`,
-  `nuxeo.config.brand-assets-demo.rights` and `nuxeo.config.brand-assets-demo.video-rights`;
+  `org.nuxeo.agentic.assets.rights.video.operations`, `nuxeo.config.brand-assets-demo.rights` and
+  `nuxeo.config.brand-assets-demo.video-rights`;
 - the server log has no `Asset rights:` error and no `Share links:` error;
 - the generated `nxserver/nuxeo.war/WEB-INF/web.xml` maps the servlet `Agentic Share Links` on
   `/agentic-share/*`, and no `NuxeoAuthenticationFilter` on that path;
@@ -548,18 +646,27 @@ The plan requires one before this is relied on. It should check:
    do not, such as Automation operations that return a document's blob or a conversion of it
    (`Document.GetBlob`, `Document.GetBlobs`, `Picture.GetView`, `Picture.Resize`,
    `Document.GetRendition`, `Document.GetContainerRendition`, `Document.Export`, `Blob.ToPDF`,
-   `Blob.Convert`, and those of the previewer, PDF and video packages), CMIS renditions, and add-ons
+   `Blob.Convert`, and those of the previewer and PDF packages), CMIS renditions, and add-ons
    with their own endpoints. For each one that does not, decide how it is closed, or accept it in
-   writing. The list can be made again with the read-only scan the pull request describes.
+   writing. The list can be made again with the read-only scan the pull request describes. The
+   video package's five `Video.*` operations are decided here (above, "The video operations"):
+   check that their replacements still match the platform's classes on the release the server
+   runs, since a parameter the platform adds would not reach its operation.
 2. **The script and its failure modes:** that `checkPermission` still reads a permission as this
    README says on the release it runs on, that the engine still lets the script reach the class,
    and that refusing every download when the class cannot load is the right failure.
 3. **The classification:** that only canonical xpaths are named, that `blobholder:0` and the
    `mainBlob` rendition count as the original only when their blob has the original's digest, so a
-   rendition blob whose digest differs is refused, and that a view is
-   trusted by its title.
-4. **Who may write the rights fields and view titles** on the kit's types, copies included, and
-   whether they must be restricted to a rights manager.
+   rendition blob whose digest differs is refused, that a view is
+   trusted by its title, a transcoded video by its conversion's name, as `@rendition` trusts it,
+   and every storyboard frame as one use. A conversion's name is the document's to say: one named
+   as another rendition the policy lists, a preview among them, is decided by that rendition's
+   rule, as a view titled as a preview view is. And that a stored file read by a `Video.*`
+   operation is found for every covered document holding it, on the repository the server runs
+   (its blob fields' `data`, by one query of comparisons on each blob field), and what that query
+   costs there per call.
+4. **Who may write the rights fields, view titles and transcoded videos' names** on the kit's
+   types, copies included, and whether they must be restricted to a rights manager.
 5. **Versions, proxies and containers:** the live document's rights for a version or a proxy, read
    with a privileged session; and a container refused its renditions when the reader's session
    finds a covered document in it, by an `ecm:ancestorId` or collection-member query per rendition.

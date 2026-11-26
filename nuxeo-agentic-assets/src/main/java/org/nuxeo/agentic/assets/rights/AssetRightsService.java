@@ -4,6 +4,7 @@
 package org.nuxeo.agentic.assets.rights;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -13,6 +14,16 @@ public interface AssetRightsService {
 
     /** The policy for documents of {@code type}, or {@code null} when none covers it. */
     RightsPolicy policyFor(String type);
+
+    /**
+     * Every type a policy in force covers.
+     *
+     * @throws UnsupportedOperationException from an implementation that cannot list them: a caller
+     *             deciding a stored file then refuses it
+     */
+    default Set<String> coveredTypes() {
+        throw new UnsupportedOperationException("the covered types are not listed");
+    }
 
     /** Today, as the rights read it: the server's day in UTC. */
     LocalDate today();

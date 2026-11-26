@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.3 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.4 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, and the two videos
@@ -56,7 +56,7 @@ generated from a test pattern, not photographed, filmed or downloaded.
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
   there. Read only, on 25 November 2026, that server's package list shows 0.2.0 started, with
-  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 to 0.2.3 are installed nowhere,
+  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 to 0.2.4 are installed nowhere,
   so no share link and no video page has run on a server. The product page, the queues and the
   demo script have not run on a shared server.
 
@@ -113,8 +113,8 @@ after its rights end, in UTC, and any use the policy does not list, such as the 
 `zipExport` rendition. A preview is served whatever the rights, so the asset page and the lists
 still show an ended asset's picture. Nothing here exempts an administrator. The add-on decides the
 platform's download endpoints, `/nxfile/` and the REST API's `@blob`, `@rendition` and
-`@preview`, not yet Automation operations that return a blob: its README, "What it does not
-cover".
+`@preview`, and the platform's `Video.*` operations, not yet other Automation operations that
+return a blob: its README, "What it does not cover".
 
 **On the seeded assets:** asset 503 holds E-commerce and Social, so its print view and its
 original are refused and its web view served; asset 505's rights have ended, so everything but its
@@ -128,8 +128,8 @@ server refuses on assets 503 and 505.
 ## Share links
 
 The asset layout's `"shareLinks": {}` turns on the asset page's share links (layout-v2.md,
-section 2, "Share links"). From 0.2.2 the package depends on `nuxeo-agentic-assets` 0.2.0, which
-holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
+section 2, "Share links"). From 0.2.2 the package depends on `nuxeo-agentic-assets` 0.2.0, and
+from 0.2.4 on 0.3.0, which holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
 contributes nothing of its own to them.
 
 - **Who sees them:** the page asks the server for the asset's links, and draws nothing of them for
@@ -151,7 +151,7 @@ contributes nothing of its own to them.
   active, expired or revoked, who made it and when, and the downloads log: each item served, when,
   through which link, and nothing about who opened it.
 
-**Nothing of it has run on a server:** the add-on 0.2.0 and this version are installed nowhere,
+**Nothing of it has run on a server:** the add-on 0.2.0 or later and this version are installed nowhere,
 and the page was tested against a stand-in for the server's answers.
 
 ## The videos
@@ -173,17 +173,21 @@ lists both with the same columns and facets.
 **Its rights** are `bundle/OSGI-INF/brand-assets-demo-video-rights.xml`, a component of its own
 beside the pictures', as the prototype's video renditions table has them:
 
-| Use                                                                                    | Covered by |
-| -------------------------------------------------------------------------------------- | ---------- |
-| The original file (`file:content`): the master                                         | Print      |
-| The `MP4 480p` and `WebM 480p` renditions: the web cut                                 | E-commerce |
-| `Small` and `StaticPlayerView`, the frames Nuxeo takes from it, and the `thumbnail`    | A preview  |
-| `vid:storyboard/0/content` to `vid:storyboard/8/content`, the storyboard's nine frames | A preview  |
-| Any other file of it                                                                   | Not listed |
+| Use                                                                                 | Covered by |
+| ----------------------------------------------------------------------------------- | ---------- |
+| The original file (`file:content`): the master                                      | Print      |
+| The `MP4 480p` and `WebM 480p` renditions: the web cut                              | E-commerce |
+| `Small` and `StaticPlayerView`, the frames Nuxeo takes from it, and the `thumbnail` | A preview  |
+| Every frame of the storyboard, `<storyboard>`, however many the server makes        | A preview  |
+| Any other file of it                                                                | Not listed |
 
-The page asks for a transcoded video by its rendition's name, through `@rendition`, where the
-policy decides it. `nuxeo-agentic-assets`'s `KitVideoPolicyTest` reads this file and holds each
-of these decisions.
+The page asks for a transcoded video by its rendition's name, through `@rendition`; the
+server's download endpoints decide one by its conversion's name at its place in
+`vid:transcodedVideos` too, and the platform's `Video.*` operations on a video are decided as a
+download of the file they read. From 0.2.4 the storyboard is one rule, which needs
+`nuxeo-agentic-assets` 0.3.0, the package's dependency. `nuxeo-agentic-assets`'s
+`KitVideoPolicyTest` reads this file and holds each of these decisions, and its `VideoRightsTest`
+runs it in a Nuxeo runtime.
 
 - **The seeded videos:** asset 511, _Into the Hills, campaign film_, 12 seconds, holds E-commerce
   and Social, so its original is refused and its web cut served; asset 512, _Trailhead Rain
@@ -285,7 +289,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.3.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.4.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -328,11 +332,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.3.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.4.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.3.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.4.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -501,7 +505,7 @@ library it counts holds the two videos too.
 
 As a steps file of its own,
 [`brand-assets-video.mjs`](../../../scripts/beta-harness/steps/brand-assets-video.mjs), which needs
-the kit 0.2.3 and `nuxeo-agentic-assets` installed, and reads what the server made of the videos
+the kit 0.2.4 and `nuxeo-agentic-assets` 0.3.0 installed, and reads what the server made of the videos
 to check the branch it is on, and says which:
 
 1. the cleared video's page: its player plays it from a blob URL, the transcoded web cut where the
@@ -511,9 +515,10 @@ to check the branch it is on, and says which:
 2. the video with no Print channel: where the server transcoded it, its web cut plays, with its
    storyboard, whose last frame moves the player; where it did not, its original is refused with
    403, and the page says the server's reason, with no player;
-3. the REST API called directly: that original refused through `@blob` and `/nxfile/`, the cleared
-   video's served; where the server transcoded them, each video's transcoded file served by its
-   name through `@rendition`, and refused through `@blob`, which the policy does not list;
+3. the REST API called directly: that original refused through `@blob` and `/nxfile/`, and through
+   `Video.Slice`, which reads it, the cleared video's served; where the server transcoded them,
+   each video's transcoded files decided by their conversions' names, through `@rendition` and at
+   their places through `@blob` alike;
 4. the library: both videos listed among the pictures, the Type facet counting them, and narrowed
    to them on the server.
 
@@ -521,8 +526,8 @@ to check the branch it is on, and says which:
 NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-video
 ```
 
-**Not run:** no server has the kit 0.2.3. On the local Nuxeo, which has 0.2.0, it stops at its
-first precondition, the `AcmeVideo` type, with exit 2.
+**Not run:** no server has the kit 0.2.3 or later. On the local Nuxeo, which has 0.2.0, it stops at
+its first precondition, the `AcmeVideo` type, with exit 2.
 
 ### The review: phase 5's demo step 4
 
@@ -584,6 +589,12 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   answered them, with `acmeasset` added. Not installed on a server: no video page has run on one.
   The videos were first numbered 0.2.2, before the share links took that version on the staging
   branch.
+- **0.2.4 decides every storyboard frame by one rule,** `<storyboard preview="true" />` in place of
+  nine `<blob>` rules, and depends on `nuxeo-agentic-assets` 0.3.0, which reads it. Held to 0.2.3
+  on the staging branch with `--previous`: the video rights component and `package.xml` to judge,
+  a patch; the upgrade check, `npm run app-upgrade -- business-apps/packages/brand-assets-demo
+--since origin/staging/enterprise-grade-app`, keeps every configuration. Not installed on a
+  server.
 - **The rights policies,** `brand-assets-demo-rights.xml` and `brand-assets-demo-video-rights.xml`,
   are read by `nuxeo-agentic-assets`'s own tests, through XMap as the runtime reads a
   contribution, and decide the demo's uses as this README's tables say; giving `OriginalJpeg`
@@ -602,7 +613,7 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1 to 0.2.3 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
+- **Versions 0.1.1 to 0.2.4 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
   server, not a shared one: the review was seen with its layout from `config:dev`, and the
   product page, the queues, the full seed and the demo have not run on a shared server. No video
   page has run on a server, and the videos' steps file has not run past its first precondition.

@@ -73,7 +73,8 @@ class BundleTest {
         List<String> components = components();
         assertEquals(List.of("OSGI-INF/asset-rights-service.xml", "OSGI-INF/asset-rights-download-permission.xml",
                 "OSGI-INF/asset-rights-enricher-contrib.xml", "OSGI-INF/share-links-directories.xml",
-                "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml"), components);
+                "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml",
+                "OSGI-INF/asset-rights-video-operations-contrib.xml"), components);
         for (String component : components) {
             byte[] xml = resource(component);
             assertDoesNotThrow(() -> parse(xml),
@@ -93,7 +94,7 @@ class BundleTest {
             collect(xml.getElementsByTagName("register"), "class", classes);
             collect(xml.getElementsByTagName("operation"), "class", classes);
         }
-        assertEquals(10, classes.size(), classes::toString);
+        assertEquals(15, classes.size(), classes::toString);
         for (String name : classes) {
             assertDoesNotThrow(() -> Class.forName(name), name);
         }
@@ -197,6 +198,67 @@ class BundleTest {
             names.add(((Element) elements.item(i)).getAttribute("name"));
         }
         return names;
+    }
+
+    /**
+     * Each of the platform's five Video.* operations replaced by one of the same id, registered
+     * after the platform's own, with the same parameters and the same inputs, each answering the
+     * platform's own type of answer.
+     */
+    @Test
+    void theVideoOperationsReplaceThePlatformsOfTheSameIds() throws Exception {
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/asset-rights-video-operations-contrib.xml"));
+        List<String> requires = new ArrayList<>();
+        NodeList required = xml.getElementsByTagName("require");
+        for (int i = 0; i < required.getLength(); i++) {
+            requires.add(required.item(i).getTextContent().trim());
+        }
+        assertEquals(List.of("org.nuxeo.ecm.video.tools.operations", "org.nuxeo.agentic.assets.rights"), requires);
+        List<String> platform = List.of("AddWatermarkToVideo", "ConcatVideos", "ExtractClosedCaptionsFromVideo",
+                "SliceVideo", "SliceVideoInParts");
+        NodeList operations = xml.getElementsByTagName("operation");
+        assertEquals(platform.size(), operations.getLength());
+        for (int i = 0; i < operations.getLength(); i++) {
+            Element operation = (Element) operations.item(i);
+            assertEquals("true", operation.getAttribute("replace"));
+            Class<?> ours = Class.forName(operation.getAttribute("class"));
+            Class<?> theirs = Class.forName("org.nuxeo.ecm.platform.video.tools.operations." + platform.get(i));
+            org.nuxeo.ecm.automation.core.annotations.Operation op = org.nuxeo.ecm.automation.core.annotations.Operation.class.cast(
+                    ours.getAnnotation(org.nuxeo.ecm.automation.core.annotations.Operation.class));
+            assertEquals(theirs.getField("ID").get(null), op.id(), ours.getName());
+            assertEquals(params(theirs), params(ours), ours.getName());
+            assertEquals(methods(theirs), methods(ours), ours.getName());
+        }
+    }
+
+    /** Each parameter's name, Java type and whether it is required. */
+    private static List<String> params(Class<?> type) {
+        List<String> params = new ArrayList<>();
+        for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+            org.nuxeo.ecm.automation.core.annotations.Param param = field.getAnnotation(
+                    org.nuxeo.ecm.automation.core.annotations.Param.class);
+            if (param != null) {
+                params.add(param.name() + " " + field.getType().getName() + " " + param.required() + " "
+                        + Arrays.toString(param.values()));
+            }
+        }
+        params.sort(null);
+        return params;
+    }
+
+    /** Each operation method's input and answer, and its collector. */
+    private static List<String> methods(Class<?> type) {
+        List<String> methods = new ArrayList<>();
+        for (java.lang.reflect.Method method : type.getMethods()) {
+            org.nuxeo.ecm.automation.core.annotations.OperationMethod annotation = method.getAnnotation(
+                    org.nuxeo.ecm.automation.core.annotations.OperationMethod.class);
+            if (annotation != null) {
+                methods.add(Arrays.toString(method.getParameterTypes()) + " -> " + method.getReturnType().getName() + " "
+                        + annotation.collector().getName());
+            }
+        }
+        methods.sort(null);
+        return methods;
     }
 
     /** The four operations the asset page calls, each the class the contribution names. */

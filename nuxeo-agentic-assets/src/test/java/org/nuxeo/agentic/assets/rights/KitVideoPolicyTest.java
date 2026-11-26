@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.nuxeo.agentic.assets.rights.AssetRightsService.DownloadDecision;
@@ -19,8 +18,8 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 
 /**
  * The brand kit's video policy, read from where the kit keeps it, deciding a video asset's
- * downloads as the platform names them to the download permission. No code of the add-on is changed
- * for video; these hold what it does with the kit's policy as it is.
+ * downloads as the platform names them to the download permission. {@code VideoRightsTest} runs the
+ * same file in a Nuxeo runtime.
  */
 class KitVideoPolicyTest {
 
@@ -33,13 +32,16 @@ class KitVideoPolicyTest {
         return policies.get(0);
     }
 
-    /** A video asset as the kit seeds one: its original, its poster views, on these channels. */
+    /**
+     * A video asset as the kit seeds one, once the server has transcoded it: its original, its poster
+     * views, its two conversions in the order they finished, and a storyboard, on these channels.
+     */
     private static Fakes.Doc video(String rightsEnd, String... channels) {
         Fakes.Doc doc = new Fakes.Doc().rightsEnd(rightsEnd).channels(channels).original("original-digest");
         doc.type = "AcmeVideo";
         doc.schemas.add("video");
         // A Video's picture views are the frames Nuxeo takes from it, Small and StaticPlayerView.
-        return doc.views("Small", "StaticPlayerView");
+        return doc.views("Small", "StaticPlayerView").transcoded("WebM 480p", "MP4 480p").storyboard(12);
     }
 
     private static DownloadDecision download(DocumentModel document, String xpath, String rendition) throws Exception {
@@ -54,11 +56,12 @@ class KitVideoPolicyTest {
         assertEquals(List.of(), policy.problems());
         assertEquals("dc:expired", policy.rightsEndXpath());
         assertEquals("acmeasset:channels", policy.channelsXpath());
+        assertEquals(RightsPolicy.Rule.PREVIEW, policy.rule(Use.STORYBOARD));
     }
 
     /** The kit's demo: a video with no Print channel, its original refused, its web cut served. */
     @Test
-    void withNoPrintChannelTheOriginalIsRefusedAndTheTranscodedVideosServedByName() throws Exception {
+    void withNoPrintChannelTheOriginalIsRefusedAndTheTranscodedVideosServed() throws Exception {
         DocumentModel noPrint = video("2027-06-30", "E-commerce", "Social").model();
 
         DownloadDecision original = download(noPrint, "file:content", null);
@@ -72,6 +75,11 @@ class KitVideoPolicyTest {
             assertEquals(Use.rendition(name), web.use());
             assertEquals(Decision.allow(Reason.CLEARED, "E-commerce"), web.decision(), name);
         }
+        // At their places, as by their names: WebM 480p finished first.
+        assertEquals(Use.rendition("WebM 480p"), download(noPrint, "vid:transcodedVideos/0/content", null).use());
+        assertEquals(Use.rendition("MP4 480p"), download(noPrint, "vid:transcodedVideos/1/content", null).use());
+        assertEquals(Decision.allow(Reason.CLEARED, "E-commerce"),
+                download(noPrint, "vid:transcodedVideos/1/content", null).decision());
     }
 
     @Test
@@ -79,43 +87,48 @@ class KitVideoPolicyTest {
         DocumentModel ended = video("2026-11-14", "E-commerce", "Social", "Print").model();
 
         assertEquals(Reason.RIGHTS_ENDED, download(ended, null, "MP4 480p").decision().reason());
+        assertEquals(Reason.RIGHTS_ENDED, download(ended, "vid:transcodedVideos/0/content", null).decision().reason());
         assertEquals(Reason.RIGHTS_ENDED, download(ended, "file:content", null).decision().reason());
         assertEquals(Decision.allow(Reason.PREVIEW, null), download(ended, "picture:views/1/content", null).decision());
         assertEquals(Decision.allow(Reason.PREVIEW, null), download(ended, null, "thumbnail").decision());
-        assertEquals(Decision.allow(Reason.PREVIEW, null), download(ended, "vid:storyboard/8/content", null).decision());
+        for (int frame = 0; frame < 12; frame++) {
+            DownloadDecision decided = download(ended, "vid:storyboard/" + frame + "/content", null);
+            assertEquals(Use.STORYBOARD, decided.use());
+            assertEquals(Decision.allow(Reason.PREVIEW, null), decided.decision(), "frame " + frame);
+        }
     }
 
     /**
      * What the kit's policy does not list is refused, even to an asset cleared on every channel: a
-     * transcoded video's file through @blob, a storyboard frame it does not list, a conversion it
-     * does not name.
+     * conversion it does not name, at its place or by name, a frame the video does not have, another
+     * file of it.
      */
     @Test
     void whatThePolicyDoesNotListIsRefusedToEveryone() throws Exception {
-        DocumentModel cleared = video("2027-12-31", "E-commerce", "Wholesale", "Social", "Print").model();
+        Fakes.Doc doc = video("2027-12-31", "E-commerce", "Wholesale", "Social", "Print").transcoded("MP4 480p",
+                "WebM 480p", "Ogg 480p");
+        doc.properties.put("files:files/0/file", (java.io.Serializable) Fakes.blob("attachment"));
+        DocumentModel cleared = doc.model();
 
-        DownloadDecision byBlob = download(cleared, "vid:transcodedVideos/0/content", null);
-        assertEquals(Use.blob("vid:transcodedVideos/0/content"), byBlob.use());
-        assertEquals(Decision.refuse(Reason.NOT_CLEARED), byBlob.decision());
-
-        assertEquals(Decision.refuse(Reason.NOT_CLEARED), download(cleared, "vid:storyboard/9/content", null).decision());
-        // A conversion no policy names, such as the platform's Ogg 480p when it is made, is refused too.
+        DownloadDecision ogg = download(cleared, "vid:transcodedVideos/2/content", null);
+        assertEquals(Use.rendition("Ogg 480p"), ogg.use());
+        assertEquals(Decision.refuse(Reason.NOT_CLEARED), ogg.decision());
         assertEquals(Decision.refuse(Reason.NOT_CLEARED), download(cleared, null, "Ogg 480p").decision());
+        assertEquals(Decision.refuse(Reason.NOT_CLEARED), download(cleared, "vid:storyboard/12/content", null).decision());
+        assertEquals(Decision.refuse(Reason.NOT_CLEARED), download(cleared, "files:files/0/file", null).decision());
         // What the rights cover is served.
         assertTrue(download(cleared, null, "MP4 480p").decision().allowed());
+        assertTrue(download(cleared, "vid:transcodedVideos/0/content", null).decision().allowed());
         assertTrue(download(cleared, "file:content", null).decision().allowed());
     }
 
-    /** The enricher explains what the page asks: each transcoded video by its rendition's name. */
+    /** The enricher explains each transcoded video by its conversion's name, and the storyboard as one use. */
     @Test
-    void theEnricherListsTheTranscodedVideosByTheirRenditionsNames() throws Exception {
+    void theEnricherListsTheTranscodedVideosByNameAndTheStoryboard() throws Exception {
         RightsPolicy policy = RightsPolicy.of(kitVideoPolicy());
-        Set<Use> uses = Set.copyOf(AssetRightsJsonEnricher.uses(video("2027-06-30", "Social").model(), policy));
-        assertTrue(uses.contains(Use.ORIGINAL));
-        assertTrue(uses.contains(Use.rendition("MP4 480p")));
-        assertTrue(uses.contains(Use.rendition("WebM 480p")));
-        assertTrue(uses.contains(Use.view("StaticPlayerView")));
-        assertTrue(uses.contains(Use.blob("vid:storyboard/0/content")));
-        assertFalse(uses.contains(Use.blob("vid:transcodedVideos/0/content")));
+        List<Use> uses = AssetRightsJsonEnricher.uses(video("2027-06-30", "Social").transcoded("Ogg 480p").model(),
+                policy);
+        assertEquals(List.of(Use.ORIGINAL, Use.view("Small"), Use.view("StaticPlayerView"), Use.rendition("Ogg 480p"),
+                Use.rendition("MP4 480p"), Use.rendition("WebM 480p"), Use.rendition("thumbnail"), Use.STORYBOARD), uses);
     }
 }
