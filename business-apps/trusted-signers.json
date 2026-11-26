@@ -1,0 +1,11 @@
+{
+  "$comment": "Who may sign an app definition package. scripts/app-package-signature.mjs verify refuses a package signed by anyone else, before app-packages.yml publishes it and before the release candidate takes it (docs/business-apps/package-pipeline.md, section 9). A deployment may keep a copy of its own and give it with --trusted-signers. A github-workflow signer is trusted only for a run on its package's own tag, app-package/<name>/<version>, on GitHub's runners.",
+  "signers": [
+    {
+      "id": "app-packages-workflow",
+      "kind": "github-workflow",
+      "repository": "nuxeo/Nuxeo-Satori-UI",
+      "workflow": ".github/workflows/app-packages.yml"
+    }
+  ]
+}
