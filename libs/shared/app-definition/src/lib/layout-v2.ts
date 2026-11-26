@@ -54,7 +54,16 @@ export interface ValidationOptions {
   readonly type?: string;
 }
 
-const FILE_KEYS = ['$schema', 'version', 'columns', 'banners', 'review', 'cards', 'tabs'];
+const FILE_KEYS = [
+  '$schema',
+  'version',
+  'columns',
+  'banners',
+  'review',
+  'shareLinks',
+  'cards',
+  'tabs',
+];
 const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen', 'link'];
 /** A banner's link: the record one of the open record's properties names, as a `document-link`. */
 const BANNER_LINK_KEYS = ['field'];
@@ -76,6 +85,11 @@ const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
 const COMMENTS_KEYS = ['pageSize'];
 /** A review takes no options yet: `"review": {}` turns it on (layout-v2.md, section 2). */
 const REVIEW_KEYS: readonly string[] = [];
+/**
+ * A picture's share links take no options yet: `"shareLinks": {}` turns them on (layout-v2.md,
+ * section 2, "Share links"). The server, `nuxeo-agentic-assets`, holds every rule of a link.
+ */
+const SHARE_LINKS_KEYS: readonly string[] = [];
 const EXTERNAL_KEYS = ['connector', 'fields'];
 const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
 const CHECKLIST_KEYS = ['field', 'items'];
@@ -100,6 +114,7 @@ export const LAYOUT_V2_KEYS = {
   banner: BANNER_KEYS,
   bannerLink: BANNER_LINK_KEYS,
   review: REVIEW_KEYS,
+  shareLinks: SHARE_LINKS_KEYS,
   tab: TAB_KEYS,
   card: CARD_KEYS,
   field: FIELD_KEYS,
@@ -246,6 +261,10 @@ function layout(
     if (!view) c.add('review', 'structure', 'a review belongs in view mode only');
     else review(c, file['review']);
   }
+  if ('shareLinks' in file) {
+    if (!view) c.add('shareLinks', 'structure', 'share links belong in view mode only');
+    else shareLinks(c, file['shareLinks']);
+  }
   const hasCards = 'cards' in file;
   const hasTabs = 'tabs' in file;
   if (hasCards === hasTabs) c.add('', 'structure', 'a file has "cards" or "tabs", one of the two');
@@ -336,6 +355,21 @@ function review(c: Checker, item: unknown): void {
     return;
   }
   c.unknownKeys(item, REVIEW_KEYS, 'review');
+}
+
+/**
+ * The record page's share links: a picture's links for people outside, with their end day,
+ * revocation and downloads (layout-v2.md, section 2). Like the review, it names no property: the
+ * content model holds the type to a picture (`layout-model.ts`), and the record page leaves the
+ * links out of a record that shows none. Turning them on is not a control: the server decides who
+ * may share, what a link serves and until when.
+ */
+function shareLinks(c: Checker, item: unknown): void {
+  if (!isRecord(item)) {
+    c.add('shareLinks', 'structure', 'shareLinks is an object: {} turns them on');
+    return;
+  }
+  c.unknownKeys(item, SHARE_LINKS_KEYS, 'shareLinks');
 }
 
 /** A card's related records: a list of records from a page provider (layout-v2.md, section 7). */

@@ -450,8 +450,19 @@ the designer's three slices, at `/#/administration/layout-designer` and its `que
   the form engine for a form, draws each change read-only on a real record of the type; the form
   offers no Save, so nothing is sent.
 - **What it does with a queue:** it opens a queue the app's menu names, or any by its id, and changes
-  its name, columns, sort and facets. The queue page draws each change read-only against the server's
-  page provider: no row can be selected and no action is offered.
+  its name, columns, sort and facets, and its row and bulk actions: chosen, ordered and removed from
+  those this build registers and, once its `actions.json` is read, the app's own, as the validator
+  knows them, an unknown one refused. It names actions and makes none, binds nothing to an
+  operation, and runs none (decision 3 stays open). The queue page draws each change read-only
+  against the server's page provider: no row can be selected and no action is offered.
+- **Byte for byte (demo step 3):** what the designer saves is the file's JSON value as the
+  repository's Prettier lays it out afresh. Opened and saved unedited, 18 of the six kits' 27
+  record pages, edit forms and queues come back byte for byte; nine cannot by design, since each
+  keeps an object across lines that fits on one, as Prettier keeps what its author wrote, and the
+  server serves the designer the value, not the text. Each single edit the tests make on a kit's
+  file changes only the edited place, though not every edit can be, since the value is laid out
+  afresh. The round-trip tests walk every kit's folders, so a kit added later is held too
+  ([the designer's README](../../libs/features/layout-designer/README.md#byte-for-byte)).
 - **What it checks:** the validator checks every change, a layout file in its own mode, and the file
   is downloaded only when it finds nothing. A layout file is held to the server's content model when
   the model can be read; when it cannot, the page says so and makes every other check, as the

@@ -31,6 +31,10 @@
       "$ref": "#/$defs/review",
       "description": "View mode only. A picture's record page shows its picture as a review: pins on the view shown, each with a note, in rounds."
     },
+    "shareLinks": {
+      "$ref": "#/$defs/shareLinks",
+      "description": "View mode only. A picture's record page lists its share links for people outside, offers a new one and revoke, and shows their downloads, to those the server lets manage them."
+    },
     "cards": {
       "type": "array",
       "items": {
@@ -72,6 +76,12 @@
       "additionalProperties": false,
       "properties": {},
       "description": "No options yet: {} turns the review on. Drawn only for a record with the picture schema and not the video one; the content model, when given, holds the type to that."
+    },
+    "shareLinks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "description": "No options yet: {} turns the share links on. Drawn only for a record with the picture schema and not the video one; the content model, when given, holds the type to that. The server (nuxeo-agentic-assets) decides who may share, and what a link serves until when."
     },
     "banner": {
       "type": "object",

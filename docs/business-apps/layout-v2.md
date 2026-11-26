@@ -68,15 +68,16 @@ kit's own schemas a heading in its labels (app-definition-v2.md, section 7).
 }
 ```
 
-| Key       | Meaning                                                                                        |
-| --------- | ---------------------------------------------------------------------------------------------- |
-| `version` | Required: `2`                                                                                  |
-| `columns` | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
-| `banners` | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
-| `review`  | A picture's review: pins on the picture, in rounds (below). `view` mode only                   |
-| `cards`   | The cards, in order                                                                            |
-| `tabs`    | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
-| `$schema` | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
+| Key          | Meaning                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------- |
+| `version`    | Required: `2`                                                                                  |
+| `columns`    | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
+| `banners`    | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
+| `review`     | A picture's review: pins on the picture, in rounds (below). `view` mode only                   |
+| `shareLinks` | A picture's share links for people outside, with their downloads (below). `view` mode only     |
+| `cards`      | The cards, in order                                                                            |
+| `tabs`       | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
+| `$schema`    | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
 
 A file has `cards` or `tabs`, never both.
 
@@ -238,6 +239,54 @@ rounds. `{}` turns it on; it takes no option yet:
 - **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys, Home and End
   move among them and choose the one reached, which a hidden hint says. Each one's name says its
   number, its round, whether that round is past, its place in percent and its note.
+
+### Share links
+
+A record page that shows a picture can list its share links: addresses a person outside the
+company opens without signing in, each serving some of the picture's views, or its original, until
+a last day. `{}` turns them on; they take no option yet:
+
+```json
+{
+  "version": 2,
+  "review": {},
+  "shareLinks": {},
+  "cards": [{ "id": "asset", "labelKey": "acme.asset.card", "fields": ["dc:title"] }]
+}
+```
+
+- **Only on a picture,** as the review: drawn under the picture, above the cards, for a record with
+  the `picture` schema and not the `video` one. On any other record they are left out, and the
+  console says so; given the content model, the pipeline refuses them for a type without the
+  `picture` schema, or with the `video` one.
+- **The server holds every rule,** through `nuxeo-agentic-assets`
+  ([its README](../../nuxeo-agentic-assets/README.md)) and its Automation operations
+  `ShareLink.Create`, `ShareLink.List`, `ShareLink.Revoke` and `ShareLink.Downloads`
+  ([api-integrations.md](../api-integrations.md), section 42): who may manage a picture's links,
+  `WriteSecurity` on it, and who may make one, an administrator or a member of a group the server
+  names too; what a link may list; and that it serves its items watermarked, and only
+  while it is neither revoked nor past its last day and while the asset's rights allow each one.
+- **Drawn only for those the server lets manage them.** The page asks for the links, checking no
+  permission first, and on a 403 draws nothing of them: no heading, no frame. Any other failure is
+  said, with Retry. Hiding the section is not the control: the server refuses the same user's every
+  call.
+- **A new link** lists the original, when the record has one in `file:content`, or some of its
+  views, each by its title: a view with no title of its own is not offered. Its last day is a day in
+  UTC, from today to 90 days on, as the asset's rights end is. The server refuses an item the
+  asset's rights do not allow now, creating nothing, and the page says which and why, in the words
+  of the rights' reasons.
+- **Its address is shown once,** with Copy, made of this page's origin and the path the server
+  answers, and never one on another origin. The page holds it until Done, or another record, and
+  stores, logs and announces nothing of its token: the server keeps only the token's hash, so a
+  lost address is revoked and made again.
+- **Each link is listed** by its label, the first 8 characters of its id, which the server's
+  watermark also prints, with its state (active, expired or revoked), its items, its last day,
+  who made it and when, and, once revoked, who revoked it and when. Revoke, after a confirmation,
+  is offered on an active link.
+- **The downloads log** lists each item a link served, newest first: when, through which link,
+  and what, the latest 200 at most, and nothing about who opened it.
+- **On a page drawn read-only,** as the layout designer's preview is, the links and the log are
+  listed, with no new link and no Revoke.
 
 ### Cards
 
@@ -637,7 +686,8 @@ each done or not, with who did it and when, in `view` mode:
   card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that
   banner, and **one about the review,** such as an option this build does not have, leaves out the
-  review: the picture shows its views alone.
+  review: the picture shows its views alone. One about the share links leaves out the share
+  links alone.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -659,9 +709,9 @@ What counts as structural:
   `{ "field" }` naming a property, or names an `ecm:` or `var:` one;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments`,
-  `external` or `checklist` outside it;
-- a `review` that is not an object;
+- form-only keys in `view` mode, or `banners`, `review`, `shareLinks`, `related`, `timeline`,
+  `comments`, `external` or `checklist` outside it;
+- a `review` or a `shareLinks` that is not an object;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has

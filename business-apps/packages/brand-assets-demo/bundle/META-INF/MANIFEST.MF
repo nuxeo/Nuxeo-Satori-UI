@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: brand-assets-demo
 Bundle-SymbolicName: nuxeo.config.brand-assets-demo;singleton:=true
-Bundle-Version: 0.2.1
+Bundle-Version: 0.2.2
 Nuxeo-Component: OSGI-INF/brand-assets-demo-model.xml,OSGI-INF/brand-assets-demo-config.xml,OSGI-INF/brand-assets-demo-rights.xml

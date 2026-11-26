@@ -8,6 +8,10 @@
  * renamed to one that is taken, and the validator then refuses the file.
  */
 
+import { LAYOUT_V2_KEYS } from '@agentic-ui/shared/app-definition';
+
+import { jsonFileText } from './json-file-text';
+
 export type LayoutJson = Record<string, unknown>;
 
 /**
@@ -74,6 +78,32 @@ const isObject = (value: unknown): value is LayoutJson =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/**
+ * `object` with `key` set to `value` where a person writes it: in its place when the object has it,
+ * and otherwise before the first key `order` puts after it, so that every other key keeps its place
+ * and its line. A key `order` does not name, or one with no key after it, is written last.
+ */
+export function placeKey(
+  object: LayoutJson,
+  key: string,
+  value: unknown,
+  order: readonly string[],
+): void {
+  const rank = order.indexOf(key);
+  const entries = Object.entries(object);
+  const at =
+    Object.hasOwn(object, key) || rank < 0
+      ? -1
+      : entries.findIndex(([other]) => order.indexOf(other) > rank);
+  if (at < 0) {
+    object[key] = value;
+    return;
+  }
+  for (const [other] of entries) delete object[other];
+  entries.splice(at, 0, [key, value]);
+  for (const [other, item] of entries) object[other] = item;
+}
 
 /**
  * What one entry of a card's `fields`, or of a queue's `columns`, is: the two are written the same
@@ -234,7 +264,7 @@ export function setCardText(
 ): LayoutJson {
   return withCard(file, place, (card) => {
     if (key !== 'id' && value === '') delete card[key];
-    else card[key] = value;
+    else placeKey(card, key, value, LAYOUT_V2_KEYS.card);
   });
 }
 
@@ -261,7 +291,7 @@ export function setFieldRule(
     }
     if (!isObject(entry)) return;
     if (value === undefined) delete entry[key];
-    else entry[key] = structuredClone(value);
+    else placeKey(entry, key, structuredClone(value), LAYOUT_V2_KEYS.field);
     const keys = Object.keys(entry);
     if (keys.length === 1 && keys[0] === 'field' && typeof entry['field'] === 'string') {
       fields[index] = entry['field'];
@@ -315,7 +345,10 @@ export function layoutFileName(mode: string): string {
   return `${mode}.layout.json`;
 }
 
-/** The file as a download or a package holds it: JSON, two spaces deep, and a last newline. */
+/**
+ * The file as a download or a package holds it: its JSON as the repository's Prettier lays it out,
+ * byte for byte, with a last newline (`jsonFileText`). A queue's file is written the same way.
+ */
 export function layoutFileText(file: LayoutJson): string {
-  return `${JSON.stringify(file, null, 2)}\n`;
+  return jsonFileText(file);
 }

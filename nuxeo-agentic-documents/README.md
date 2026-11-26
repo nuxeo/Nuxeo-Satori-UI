@@ -279,11 +279,9 @@ of the 15 others refused as a conflict, 409, by the claim or by finding the old 
 by anything else, such as a lock timeout.
 
 **Every guard was seen failing.** Each of 29 breakages, one at a time, turned its tests red, and the
-build unbroken was green. The four the independent review's fixes added: values compared trimmed
-(a padded `" current "` let through); a blank `docctl:supersedes` kept on a first revision; a claim
-taken where no release could be registered (a transaction marked for rollback then blocked the next
-supersession); and a refusal thrown as a plain `NuxeoException` (the event service logged it as an
-error). The first 25: numbers from a constant; the creator's status kept; the write check
+build unbroken was green: values compared trimmed; a blank `docctl:supersedes` kept on a first
+revision; a claim taken where no release could be registered; a refusal thrown as a plain
+`NuxeoException`; numbers from a constant; the creator's status kept; the write check
 removed (the platform's own `WriteProperties` refusal still came, without the add-on's message);
 the rollback mark removed (a caller that caught the refusal committed the new revision alone); no
 claim (16 of 16 revisions created over one); a claim not released, or released only on commit; the

@@ -182,6 +182,27 @@ describe('resolveRecordLayout', () => {
     expect(without.layout.review).toBe(false);
     expect(without.notes).toEqual([]);
   });
+
+  it('keeps the share links for a record that shows its picture, and leaves them out, saying so, for one that does not', () => {
+    const shared = file([{ id: 'a', fields: ['dc:title'] }], { shareLinks: {} });
+    const shown = resolveRecordLayout(MEMBER, shared, [], 'picture');
+    expect(shown.layout.shareLinks).toBe(true);
+    expect(shown.notes).toEqual([]);
+
+    const none = resolveRecordLayout(MEMBER, shared, [], null);
+    expect(none.layout.shareLinks).toBe(false);
+    expect(none.notes).toEqual([
+      "shareLinks: share links serve a picture's views, and this record shows none; left out",
+    ]);
+
+    const without = resolveRecordLayout(
+      MEMBER,
+      file([{ id: 'a', fields: ['dc:title'] }]),
+      [],
+      'picture',
+    );
+    expect(without.layout.shareLinks).toBe(false);
+  });
 });
 
 describe("a table's columns", () => {

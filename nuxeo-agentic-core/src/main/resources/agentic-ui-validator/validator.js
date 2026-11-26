@@ -1525,6 +1525,13 @@ var agenticUiValidator = (function () {
             else if (schemas.has("video"))
                 add("review", "unknown", "a review is drawn on a picture, and the type \"".concat(type, "\" has the \"video\" schema: its record page keeps its player, not its picture"));
         }
+        if (isRecord(file["shareLinks"])) {
+            var schemas = schemasOf(model, type);
+            if (!schemas.has("picture"))
+                add("shareLinks", "unknown", "share links serve a picture's views, and the type \"".concat(type, "\" has no \"picture\" schema: its record page shows no picture"));
+            else if (schemas.has("video"))
+                add("shareLinks", "unknown", "share links serve a picture's views, and the type \"".concat(type, "\" has the \"video\" schema: its record page keeps its player, not its picture"));
+        }
         return findings;
     }
     function schemasOf(model, type) {
@@ -1580,7 +1587,16 @@ var agenticUiValidator = (function () {
     }
     // libs/shared/app-definition/src/lib/layout-v2.ts
     var LAYOUT_MODES = ["view", "metadata", "edit", "create"];
-    var FILE_KEYS = ["$schema", "version", "columns", "banners", "review", "cards", "tabs"];
+    var FILE_KEYS = [
+        "$schema",
+        "version",
+        "columns",
+        "banners",
+        "review",
+        "shareLinks",
+        "cards",
+        "tabs"
+    ];
     var BANNER_KEYS = ["id", "label", "labelKey", "tone", "visibleWhen", "link"];
     var BANNER_LINK_KEYS = ["field"];
     var BANNER_TONES = ["info", "warning", "negative"];
@@ -1598,6 +1614,7 @@ var agenticUiValidator = (function () {
     var TIMELINE_KEYS = ["events", "filter", "pageSize"];
     var COMMENTS_KEYS = ["pageSize"];
     var REVIEW_KEYS = [];
+    var SHARE_LINKS_KEYS = [];
     var EXTERNAL_KEYS = ["connector", "fields"];
     var EXTERNAL_FIELD_KEYS = ["name", "label", "labelKey", "widget", "parameters", "visibleWhen"];
     var CHECKLIST_KEYS = ["field", "items"];
@@ -1722,6 +1739,12 @@ var agenticUiValidator = (function () {
             else
                 review(c, file["review"]);
         }
+        if ("shareLinks" in file) {
+            if (!view)
+                c.add("shareLinks", "structure", "share links belong in view mode only");
+            else
+                shareLinks(c, file["shareLinks"]);
+        }
         var hasCards = "cards" in file;
         var hasTabs = "tabs" in file;
         if (hasCards === hasTabs)
@@ -1790,6 +1813,13 @@ var agenticUiValidator = (function () {
             return;
         }
         c.unknownKeys(item, REVIEW_KEYS, "review");
+    }
+    function shareLinks(c, item) {
+        if (!isRecord(item)) {
+            c.add("shareLinks", "structure", "shareLinks is an object: {} turns them on");
+            return;
+        }
+        c.unknownKeys(item, SHARE_LINKS_KEYS, "shareLinks");
     }
     function related(c, item, path) {
         if (!isRecord(item)) {

@@ -42,6 +42,16 @@
         <lib-record-picture-views [document]="document()" [stateHeadingLevel]="3" />
       }
     </section>
+    @if (layout().shareLinks) {
+      <!-- The picture's links for people outside (layout-v2.md, section 2, "Share links"). The
+           component draws nothing for a user the server does not let manage them. -->
+      <lib-record-share-links
+        class="record-page__share-links"
+        [document]="document()"
+        [readOnly]="readOnly()"
+        [headingLevel]="3"
+      />
+    }
   }
   @if (page.tabs) {
     <mat-tab-group

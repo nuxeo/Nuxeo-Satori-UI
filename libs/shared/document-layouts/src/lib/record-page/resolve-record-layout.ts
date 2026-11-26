@@ -58,6 +58,8 @@ export interface ResolvedRecordLayout {
   readonly preview: RecordPreview;
   /** Whether the picture shows as a review, pins and rounds: only ever with a `picture` preview. */
   readonly review: boolean;
+  /** Whether the page lists the picture's share links: only ever with a `picture` preview. */
+  readonly shareLinks: boolean;
   readonly tabs: readonly ResolvedRecordTab[] | null;
   readonly cards: readonly ResolvedRecordCard[];
   /**
@@ -207,7 +209,10 @@ export function resolveRecordLayout(
 ): {
   readonly layout: ResolvedRecordLayout;
   readonly skipped: readonly SkippedRecordField[];
-  /** What the console is told about a table's columns and a review left out, each note whole. */
+  /**
+   * What the console is told about a table's columns, and a review or share links left out, each
+   * note whole.
+   */
   readonly notes: readonly string[];
 } {
   const properties = propertyDefinitions([...type.schemas, ...facetSchemas]);
@@ -296,6 +301,13 @@ export function resolveRecordLayout(
   if (file.review && !review) {
     notes.push('review: a review is drawn on a picture, and this record shows none; left out');
   }
+  // Share links serve a picture's views: a record that shows no picture has none to share.
+  const shareLinks = file.shareLinks && preview === 'picture';
+  if (file.shareLinks && !shareLinks) {
+    notes.push(
+      "shareLinks: share links serve a picture's views, and this record shows none; left out",
+    );
+  }
   return {
     layout: {
       type: type.name,
@@ -303,6 +315,7 @@ export function resolveRecordLayout(
       banners,
       preview,
       review,
+      shareLinks,
       tabs,
       cards: tabs ? [] : cards(file.cards),
       properties,

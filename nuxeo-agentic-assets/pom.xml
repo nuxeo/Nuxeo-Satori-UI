@@ -13,10 +13,12 @@
   <artifactId>nuxeo-agentic-assets</artifactId>
   <name>Nuxeo Agentic Assets</name>
   <description>
-    The assets module's server add-on: an asset's rights enforced on the server. Its download
-    permission refuses the original, a picture view or a rendition that an asset's rights do not
-    cover, and its assetRights enricher says why. Its own Marketplace package, beside
-    nuxeo-agentic-core: one add-on per domain module (decision B's recommendation).
+    The assets module's server add-on: an asset's rights enforced on the server, and its share
+    links. Its download permission refuses the original, a picture view or a rendition that an
+    asset's rights do not cover, and its assetRights enricher says why. A share link serves the
+    picture views it lists, watermarked on the server, to anyone holding its token, while the link
+    and the asset's rights both hold. Its own Marketplace package, beside nuxeo-agentic-core: one
+    add-on per domain module (decision B's recommendation).
   </description>
 
   <properties>
@@ -25,7 +27,7 @@
       nuxeo-agentic-ui, and a package depends on it by this version. The manifest's Bundle-Version
       repeats it, and AddonPackageTest refuses a build where the two differ.
     -->
-    <assets.package.version>0.1.0</assets.package.version>
+    <assets.package.version>0.2.0</assets.package.version>
   </properties>
 
   <dependencies>
@@ -43,6 +45,34 @@
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
       <artifactId>nuxeo-runtime</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Share links: the operations signed-in users manage them with. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Share links and their downloads are kept in two directories, as Nuxeo keeps its own tokens. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-directory-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- A link's creator, with their groups, to ask whether they may still share the asset. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-usermanager</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      The share links' servlet. Nuxeo LTS 2025 is on Jakarta Servlet 6, while the 11.5 artifacts
+      Maven resolves for the rest are on javax: nuxeo-agentic-core names it the same way.
+    -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <version>6.0.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -104,6 +134,8 @@
         <configuration>
           <systemPropertyVariables>
             <assets.package.version>${assets.package.version}</assets.package.version>
+            <!-- As the server runs: the watermark draws with no display. -->
+            <java.awt.headless>true</java.awt.headless>
           </systemPropertyVariables>
         </configuration>
       </plugin>
