@@ -125,7 +125,8 @@ final class LayerService {
 
     /**
      * A layer switched off, with nothing behind it: what a server answers before the component has
-     * started, or without it. Every address is 404 and the registry serves no live file.
+     * started, or without it. Every address answers an administrator 404 and anyone else 403, as
+     * when the layer is on, so no one else learns whether it is on; the registry serves no live file.
      */
     static final LayerService SWITCHED_OFF = new LayerService(LayerSettings.OFF, null, null, () -> null,
             Clock.systemUTC(), AppLock.NONE);

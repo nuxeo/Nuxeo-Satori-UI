@@ -77,7 +77,7 @@ class LayerServiceTest {
     }
 
     @Test
-    void switchedOffEveryAddressIs404AndTheRegistryServesThePackagesFiles() {
+    void switchedOffAnswers404ToAnAdministratorAnd403ToOthersAndTheRegistryServesThePackagesFiles() {
         LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
         assertEquals(200, publish(service(ON, store), CLAIM_VIEW, claimViewWith("Published")).status());
 
