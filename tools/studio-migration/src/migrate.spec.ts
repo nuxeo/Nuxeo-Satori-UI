@@ -509,7 +509,6 @@ describe('migrate, its negative controls', () => {
       ['migrate', '--out', fresh()],
       ['migrate', 'acme.zip', '--out'],
       ['migrate', 'acme.zip', '--out', fresh(), '--json'],
-      ['migrate', 'acme.zip', 'more.zip', '--out', fresh()],
     ]) {
       const { code, err } = run(argv, files);
       expect(code).toBe(2);

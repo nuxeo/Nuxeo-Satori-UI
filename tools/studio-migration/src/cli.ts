@@ -15,6 +15,9 @@
  *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
  *                                                             all of them in order, for a customer's own
  *                                                             package (migrate.ts)
+ *   migrate   <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+ *                                                             the same for each of several packages, each
+ *                                                             into its own folder, with a summary (batch.ts)
  *   lab       <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>]
  *             [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
  *                                                             lab mode: the documents in Web UI and the
@@ -31,10 +34,13 @@
  *
  * `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, as a
  * person would by hand, keeping what each prints in a file of `--out`, and says what to do next
- * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer).
+ * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer). Given several
+ * packages, or a folder, it runs each so into a folder of `--out` of its own, and writes a summary
+ * of them all (`batch.ts`); one package file is run as it always was.
  *
- * Exit codes: 0 done, and for `check` and `migrate`, no check failed; 1 a check failed, or something
- * could not be read or written, with the reason; 2 the command was wrong. `report` exits 0 once it
+ * Exit codes: 0 done, and for `check` and `migrate`, no check failed (for several packages: in any
+ * of them); 1 a check failed, or something could not be read or written, with the reason (for
+ * several packages: in any of them); 2 the command was wrong. `report` exits 0 once it
  * has printed the report, whatever the report says. Nothing in a package is ever run, and nothing is
  * ever written over: `convert` and `mutate` write only into a new or empty directory, `decisions`
  * only a `decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty
@@ -59,6 +65,7 @@ import {
 import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
+import { isDirectory, migrateMany } from './batch';
 import { migrate } from './migrate';
 import {
   DECISION_MUTATIONS,
@@ -81,6 +88,11 @@ export interface CliIo {
    * result its `check` step printed, and knows the harness ran. Nothing else sets it.
    */
   readonly checked?: (result: HarnessResult) => void;
+  /**
+   * Given the report's summary once `report` has printed it: how a run of several packages reads,
+   * as data, each package's counts of constructs by outcome. Nothing else sets it.
+   */
+  readonly reported?: (summary: MigrationSummary) => void;
 }
 
 const USAGE = `usage:
@@ -92,6 +104,7 @@ const USAGE = `usage:
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+  studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
   studio-migration lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 `;
 
@@ -101,6 +114,8 @@ const COMMANDS: Readonly<
     string,
     {
       readonly args: number;
+      /** Takes `args` or more. */
+      readonly more?: boolean;
       readonly flags: readonly string[];
       readonly valued?: readonly string[];
     }
@@ -112,7 +127,7 @@ const COMMANDS: Readonly<
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
-  migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
+  migrate: { args: 1, more: true, flags: [], valued: ['--out', '--allow-list', '--from'] },
 };
 
 export function main(argv: readonly string[], io: CliIo): number {
@@ -139,7 +154,7 @@ export function main(argv: readonly string[], io: CliIo): number {
       flags.push(arg);
     } else args.push(arg);
   }
-  if (!spec || wrong || args.length !== spec.args) {
+  if (!spec || wrong || (spec.more ? args.length < spec.args : args.length !== spec.args)) {
     io.err(USAGE);
     return 2;
   }
@@ -255,6 +270,7 @@ export function main(argv: readonly string[], io: CliIo): number {
           ...(allowList ? { allowList } : {}),
         });
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
+        io.reported?.(summary);
         return 0;
       }
       case 'migrate': {
@@ -264,6 +280,18 @@ export function main(argv: readonly string[], io: CliIo): number {
           return 2;
         }
         const from = values.get('--from');
+        // Several packages, or a folder of them: each runs as one does, into a folder of its own.
+        if (args.length > 1 || isDirectory(args[0]))
+          return migrateMany(
+            {
+              packages: args,
+              out,
+              ...(allowListFile !== undefined ? { allowList: allowListFile } : {}),
+              ...(from !== undefined ? { from } : {}),
+            },
+            io,
+            main,
+          );
         // Each step is this very function, so each prints what the command prints by hand.
         return migrate(
           {

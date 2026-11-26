@@ -7,7 +7,9 @@ checks the result, and writes a report with a list of the decisions only a perso
 
 You need no Nuxeo server for it, and nothing leaves your computer. The tool behind it is
 [`tools/studio-migration`](../../tools/studio-migration/README.md); the
-[migration document](studio-migration.md) explains the approach.
+[migration document](studio-migration.md) explains the approach. If you have several Studio
+packages, one run can take them all (section 8). Your Nuxeo contact helps with what a run finds
+following the [support playbook](studio-migration-support.md).
 
 **Where it stands.** The command is the first piece of phase 10's self-service migration
 ([development plan](development-plan.md)). Its report tells you what still stands in the way, and
@@ -324,7 +326,55 @@ the team on a server, runs check 3's server half and part of 6 and 7; checks 5, 
 package installed there, and the lab server that would have it is not built. Keep your run, and
 ask your Nuxeo contact about having them run.
 
-## 8. Words the output uses
+## 8. Several packages in one run
+
+If you look after several Studio projects, give `migrate` all their packages at once, or the folder
+that holds them, or both:
+
+```bash
+npm run studio-migration -- migrate ~/studio/packages --out ~/studio/migration-1
+npm run studio-migration -- migrate ~/studio/claims-1.0.0.zip ~/studio/policies-2.1.0.zip --out ~/studio/migration-1
+```
+
+Each package runs exactly as it would alone, with the same `--allow-list`, into a folder of its
+own. One package that cannot be read, stops at a step, or fails a check changes nothing for the
+others: each runs as it would have without it. `--out` holds:
+
+- `packages/<name>/`, one folder for each package, holding what sections 2 to 6 describe for one
+  run: its report, its checks and its `conversion/decisions.json` to fill in. `<name>` is the
+  package's file name less `.zip`, with any character a file name cannot hold on every system
+  written `-`;
+- `printed/<name>.txt`, what that package's run printed: its steps and its verdict, or why it
+  stopped and what to do;
+- `summary.txt`, what the command printed: a line for each package with its result, its constructs
+  by outcome, as its report counts them, and where its report is; then how many ended each way,
+  and what to do next;
+- `summary.json`, the same as data.
+
+**A folder** gives the `.zip` files directly in it, in the order of their names. The summary lists
+anything else it holds as left out, but for files whose name starts with a dot, which your system
+keeps. **The same package twice**, the same file or a copy of it under another name, runs once:
+the summary says the second is the same package as the first. **Two files of one name**, from two
+folders, get two folders, `claims` and `claims-2`. **Two builds of one version**, two packages that
+declare the same name and version but are not the same file, both run, and the summary says so:
+each has its own decisions.
+
+**When it ends,** it exits as the worst of its packages would alone:
+
+- **0** when every package ran every step and no check failed in any of them. Their verdicts can
+  still be "not ready": they usually are.
+- **1** when a package stopped, or a check failed in one, or the command refused before writing
+  anything, as section 3 says for one package. A folder with no `.zip` file in it is refused too.
+- **2** when the command itself was wrong, such as a missing `--out`.
+
+**Running them again.** Fill in each package's `conversion/decisions.json`, then give `--from` the
+earlier run's `--out`: each package carries the decisions of its own earlier folder, found by the
+package's bytes, whatever its file is called now. A package the earlier run did not have, or a new
+build of one, starts its decisions again, and its line says "Nothing carried". The summary prints
+the command, with the next free folder. To carry the decisions of a run of one package, run that
+package on its own with `--from` that run.
+
+## 9. Words the output uses
 
 - **Construct:** one part of your package the tool counts and accounts for, such as a layout, a
   field, a column, a button, a translation, a theme colour or a file.
@@ -344,7 +394,7 @@ ask your Nuxeo contact about having them run.
   of the [migration document](studio-migration.md), and "(decision 3)" is in the
   [decision log](decisions.md).
 
-## 9. Not done yet
+## 10. Not done yet
 
 - **The server halves** of checks 5, 6 and 7 on your package, and the lab server they run on.
   Check 3's runs in the tool's lab mode, on a server.
@@ -354,4 +404,4 @@ ask your Nuxeo contact about having them run.
   beside Web UI is not part of this guide.
 - **Recording a reviewer's approval** of the report.
 - **An upload service.** You run the command yourself, on a copy of this repository; uploading a
-  package and getting its report back, and many packages in one run, come later in phase 10.
+  package and getting its report back comes later in phase 10.

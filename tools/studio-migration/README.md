@@ -12,7 +12,11 @@ result. It prints the report a person approves, with every reported item's owner
 
 ```bash
 npm run studio-migration -- migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+npm run studio-migration -- migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
 ```
+
+A support engineer helping them follows [the support playbook](../../docs/business-apps/studio-migration-support.md),
+which says what every finding the tool can print means and who acts on it.
 
 The commands it runs, one by one:
 
@@ -25,6 +29,7 @@ npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+npx tsx tools/studio-migration/src/cli.ts migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
 npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 ```
 
@@ -39,7 +44,8 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 - `report` prints the report of the migration document's section 8 (below, **The report**).
 - `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, in that
   order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
-  guided migration**).
+  guided migration**). Given several packages, or a folder, it runs each so into a folder of its
+  own, and writes a summary of them all (below, **Many packages in one run**).
 - `lab` opens documents in Web UI and in the new app on a real server, compares the requests each
   sends, and runs the server halves it can (below, **Lab mode**). It is the only command that
   talks to a server.
@@ -53,8 +59,10 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 **Exit codes:**
 
 - **0:** done, and for `check` and `migrate`, no check failed. A check that ran only in part has
-  not failed. `report` exits 0 once it has printed the report, whatever the report says.
-- **1:** a check failed, or something could not be read or written; the reason is printed.
+  not failed. `report` exits 0 once it has printed the report, whatever the report says. For
+  `migrate` of several packages: every package ran every step, and no check failed in any.
+- **1:** a check failed, or something could not be read or written; the reason is printed. For
+  `migrate` of several packages: in any of them.
 - **2:** the command was wrong; for `lab`, also its environment (below, **Lab mode**).
 
 `convert` and `mutate` write only into a new or empty directory, `decisions` only a
@@ -123,6 +131,68 @@ is byte-identical to the commands run by hand into the same paths:
 - **A re-run that would overwrite:** `migrate` into the `--out` of an earlier run, its decisions
   filled in, which refuses before writing anything and leaves the run byte for byte as it was;
   and a file appearing where a step's output goes during the run, which is not written over.
+
+## Many packages in one run
+
+`migrate <package.zip or folder>... --out <new-directory>` ([`src/batch.ts`](src/batch.ts)) is the
+second piece of migration M4: a customer with several Studio projects runs them all at once, and
+[the guide](../../docs/business-apps/studio-migration-guide.md), section 8, walks them through it.
+One argument that is a package file runs as above, unchanged; several, or a folder, run so.
+
+- **Each package runs as one does.** Each is given to `migrateOne`, the run `migrate` makes of one
+  package, with the same allow-list, into `<out>/packages/<name>`, `<name>` being its file's name
+  less `.zip`, each character a file name cannot hold on every system written `-`. What that run
+  prints goes into `<out>/printed/<name>.txt`, beside its folder rather than in it, so that the
+  folder is byte for byte what `migrate` of that package alone writes there, and the tests hold it
+  to that.
+- **Isolated.** A run is given only its own package, its own folder and the allow-list. A package
+  that cannot be read, is refused at a step, fails a check, or meets a defect of the tool, which
+  is caught, ends its own run alone; the next runs as it would have without it, byte for byte.
+- **Read once.** Each package's bytes are read once, hashed, and given to its run, as one run
+  gives each step the same bytes; so is the allow-list.
+- **The summary,** `summary.txt`, is what the command prints: for each package, its result, what
+  its `package.xml` declares, its constructs by outcome as its report counts them (`CliIo.reported`
+  hands `migrate` the report's own summary, as `checked` hands it the harness's), its report and
+  what it printed; then how many ended each way, the worst, and what to do next. `summary.json`
+  says the same as data, with paths under `<out>`, and its `format` is
+  `studio-migration-batch/1`.
+- **Results,** best first: `ready`; `not ready`, every step ran and no check failed; `check
+failed`; and `stopped`, at a step or before the first. The worst is the run's.
+- **Duplicates.** The same bytes given twice, under any name, run once; the second is `the same
+package` as the first, and not run again. Two files of one name from two folders get two
+  folders, `claims` and `claims-2`, told apart as a file system that ignores case would. Two
+  packages that declare one name and version from different bytes are two builds: both run, and
+  the summary says so.
+- **A folder** gives the `.zip` files directly in it, by name; what else it holds is listed as left
+  out, but for names that start with a dot, the system's own, such as the `._<name>.zip` a Mac
+  leaves beside a file on a drive that cannot hold its attributes, which are passed over. A folder
+  with no `.zip` file is refused before anything is written.
+- **`--from` an earlier run of several** carries each package's decisions from the earlier run's
+  folder for the same bytes, found through its `summary.json`, whatever the package's file is
+  called now. A package that run did not hold, or holds no decisions for, starts again, and its line
+  says so. A folder name read from that summary is used only when it is one the run could have
+  made. `--from` a run of one package is refused.
+- **It never writes over anything:** `--out` must be new or empty, and each file is written only
+  where none is.
+- **Exit codes,** the worst of its packages': 0 every package ran every step and no check failed
+  in any; 1 one stopped or failed a check, or the run of them all was refused before writing; 2
+  the command was wrong.
+
+**Its negative controls**, each in [`src/batch.spec.ts`](src/batch.spec.ts): a package that is no
+zip and an `addon` package among two sound ones, which stop alone while the others' folders and
+what they printed are unchanged; a package whose check fails, and one whose run throws, before two
+sound ones, likewise; an `--out` that holds files, a folder of no `.zip`, an allow-list of the
+wrong shape, and a `--from` that is a run of one package or nothing, each refused with nothing
+written; the same package three times, under two names; three files of one name, two of them
+differing by case alone; and a renamed package, carried by its bytes.
+
+**The single-package command is unchanged,** byte for byte:
+[`src/migrate-single.spec.ts`](src/migrate-single.spec.ts) holds what it prints and writes, on
+both made-up packages, with and without an allow-list, with `--from`, refused at each point, and
+with a check that fails, to SHA-256s written on `staging/enterprise-grade-app` at 7912b146e, before
+the batch was built. A change meant to change them writes them again with
+`UPDATE_MIGRATE_GOLDEN=1`, and says why. The one line of output it changes is the usage text, which
+gains the batch's form.
 
 ## The phase 0 demo
 
@@ -1230,6 +1300,23 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
+- **For many packages in one run, 8 guards**, broken one at a time by a script that runs
+  `batch.spec.ts` and restores the file, each seen turning it red: stopping at the first package
+  that stops; exiting with the best result rather than the worst; running the same package again;
+  telling folder names apart by case; counting a package's constructs from its first kind rather
+  than the report's `all`; carrying decisions by folder name rather than by bytes; reading a
+  package again for its run; and leaving the allow-list out of each package's run. The last was
+  missed at first: no test gave the batch an allow-list. It now has one.
+- **The single-package golden was seen failing:** one space added to `migrate`'s verdict line
+  turned seven of its scenarios red, and the refusals, which print no verdict, stayed green.
+- **The support playbook's coverage, 6 guards**, each seen turning `playbook.spec.ts` red: the
+  tool gaining a finding the playbook does not hold; a finding built in a way the scanner cannot
+  read as text; a new file of the tool adding findings with no section; the playbook losing a
+  row; the playbook holding a row the tool cannot print; and a row naming no one to act. The
+  scanner's own reading of a made-up source is a test of its own. Writing the playbook found two
+  findings the first scanner had not read: check 10's `sections must be a list`, returned rather
+  than pushed, and lab mode's `the platform's model could not be read: …`, returned to another
+  file; it reads both now.
 - **For lab mode, 72 guards**, broken one at a time by a script, kept outside the repository, that
   runs its four specs and restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
@@ -1323,9 +1410,9 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 ## Not done yet
 
 - **The rest of migration M4:** the upload, which validates a package sent to a service and returns
-  its report; many packages in one run; the support playbook. `migrate` runs on a copy of this
-  repository, so a customer needs `npm ci`, and with it a read token for the Hyland packages on
-  GitHub Packages.
+  its report. `migrate` runs on a copy of this repository, so a customer needs `npm ci`, and with
+  it a read token for the Hyland packages on GitHub Packages. Many packages in one run, and the
+  support playbook, ran on the made-up packages only.
 - **The rest of the server halves.** Lab mode runs check 3's whole, and checks 6 and 7 on the
   pages of the documents it is given. Still to come, on the migration lab server, with the Studio
   package installed and Web UI beside the new app (development plan, phase 4), which neither local
