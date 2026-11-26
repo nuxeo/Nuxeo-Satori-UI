@@ -4790,7 +4790,10 @@ class DocumentDetailService {
     acl?: string;
     }): Observable<NuxeoDocument>;
     removePermissionById(uid: string, aceId: string, acl?: string): Observable<NuxeoDocument>;
-    uploadAttachment(uid: string, file: File): Observable<unknown>;
+    uploadAttachment(uid: string, file: File, options?: {
+    readonly xpath?: string;
+    readonly onUploadPercent?: (percent: number) => void;
+    }): Observable<unknown>;
     removeAttachment(uid: string, index: number): Observable<NuxeoDocument>;
     replaceAttachment(uid: string, index: number, file: File): Observable<unknown>;
     removeMainFile(uid: string): Observable<NuxeoDocument>;

@@ -262,6 +262,19 @@ export interface RecordBannerEntry {
   readonly link: string | null;
 }
 
+/**
+ * Photos from a phone, filed on a record of the type (layout-v2.md, section 2, "Capture"): what the
+ * capture page reads of a type's `view` file, and what the record page links to it by.
+ */
+export interface RecordCapture {
+  /** The property each photo is added to, `<prefix>:<name>`: a list of files. */
+  readonly property: string;
+  /** The text properties a typed or scanned number is looked up in; empty for none. */
+  readonly findBy: readonly string[];
+  /** Whether the photos keep where they were taken. `false` unless the file says `true`. */
+  readonly keepLocation: boolean;
+}
+
 /** A `view` file that the app can show, with what it left out of it. */
 export interface RecordLayoutFile {
   /** 1 to 3. */
@@ -279,6 +292,11 @@ export interface RecordLayoutFile {
    * shows none.
    */
   readonly shareLinks: boolean;
+  /**
+   * Photos from a phone, filed on the record: the file's `capture`, unless a finding about it left
+   * it out; `null` when the file has none.
+   */
+  readonly capture: RecordCapture | null;
   /** The tabs, or `null` when the file lists its cards directly. */
   readonly tabs: readonly RecordTabEntry[] | null;
   /** The cards of a file without tabs; empty when it has tabs. */
@@ -317,9 +335,9 @@ export function labelOf(
 }
 
 /**
- * The entry a finding is about: the review, the share links, the banner, or the innermost tab,
- * card, field, list column, row action or field from another system its path passes through, as
- * `review`, `shareLinks`, `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
+ * The entry a finding is about: the review, the share links, the capture, the banner, or the
+ * innermost tab, card, field, list column, row action or field from another system its path passes
+ * through, as `review`, `shareLinks`, `capture`, `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
  * `cards[4].external.fields[0]`. A widget's own lists — a table's `parameters.columns` — are not
  * fields of the file, so a finding inside one names the field whose widget it is. `null` for a
  * finding about the file as a whole.
@@ -327,6 +345,7 @@ export function labelOf(
 export function entryOf(path: string): string | null {
   if (path === 'review' || path.startsWith('review.')) return 'review';
   if (path === 'shareLinks' || path.startsWith('shareLinks.')) return 'shareLinks';
+  if (path === 'capture' || path.startsWith('capture.')) return 'capture';
   let entry: string | null = null;
   for (const match of path.matchAll(
     /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions|external\.fields)\[(\d+)\]/g,
@@ -878,6 +897,8 @@ export function readRecordLayout(
   const review = isRecord(content['review']) && !leftOut.has('review');
   // The same for the share links: a finding about them leaves them out, and nothing else.
   const shareLinks = isRecord(content['shareLinks']) && !leftOut.has('shareLinks');
+  // And for the capture: a finding about it, such as an option this build lacks, leaves it out.
+  const capture = captureOf(content['capture'], leftOut.has('capture'));
 
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;
   if (!Array.isArray(content['tabs'])) {
@@ -886,6 +907,7 @@ export function readRecordLayout(
       banners,
       review,
       shareLinks,
+      capture,
       tabs: null,
       cards: cards(content['cards'], ''),
       problems,
@@ -906,5 +928,18 @@ export function readRecordLayout(
       },
     ];
   });
-  return { columns, banners, review, shareLinks, tabs, cards: [], problems };
+  return { columns, banners, review, shareLinks, capture, tabs, cards: [], problems };
+}
+
+/**
+ * A file's `capture` as the app uses it, once the validator has passed it: a structural finding
+ * about it refused the whole file, so what is read here has a property. `null` when the file has
+ * none, or when a finding left it out.
+ */
+function captureOf(value: unknown, leftOut: boolean): RecordCapture | null {
+  if (!isRecord(value) || leftOut || typeof value['property'] !== 'string') return null;
+  const findBy = Array.isArray(value['findBy'])
+    ? value['findBy'].filter((name): name is string => typeof name === 'string')
+    : [];
+  return { property: value['property'], findBy, keepLocation: value['keepLocation'] === true };
 }

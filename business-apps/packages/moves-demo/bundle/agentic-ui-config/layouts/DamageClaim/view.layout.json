@@ -2,6 +2,7 @@
   "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
   "version": 2,
   "columns": 2,
+  "capture": { "property": "files:files", "findBy": ["dmg:number", "dmg:moveNumber"] },
   "banners": [
     {
       "id": "filed-late",

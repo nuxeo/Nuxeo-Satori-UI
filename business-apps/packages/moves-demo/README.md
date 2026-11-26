@@ -18,7 +18,8 @@ Every name in it is fictional. The log of each step, its result and each departu
 - **A Damage Claim record page:** the move it belongs to, as a `document-link`, and its move's
   customer, read from the move (`show`, since 0.2.0); the items claimed, each a `document-link` to
   its inventory item; the amounts, the state, the dates, and the claim's **attachments**,
-  `files:files`, which is where the driver's photo of demo step 5 goes (below).
+  `files:files`, which is where the driver's photo of demo step 5 goes: since 0.3.0, the phone
+  capture page files it there, found by the claim's number or its move's (below).
 - **A banner for a claim filed late,** since 0.2.0: more than 30 days after delivery, with the
   registered rule `app.rules.dateAfter`, which this kit's build asked for
   ([below](#phase-8-feedback-where-the-tools-fell-short), item 2). The claim page still shows the
@@ -46,10 +47,10 @@ Every name in it is fictional. The log of each step, its result and each departu
 
 | File                                                            | What it is                                                                                       | Written by                                                   |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.2.0, two groups                                       | `app-package`                                                |
+| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.3.0, two groups                                       | `app-package`                                                |
 | `bundle/agentic-ui-config/layouts/Move/view.layout.json`        | The Move record page: two banners, four cards, the inventory, the claims and the history         | `app-layout`, then `write_package_file`                      |
 | `bundle/agentic-ui-config/layouts/MoveItem/view.layout.json`    | An inventory item's page: the item, its move, and the claims that name it                        | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: two banners, six cards, the attachments and the history among them | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: two banners, six cards, the attachments and the history, a capture | `app-layout`, then `write_package_file`; 0.3.0's by hand     |
 | `bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json` | The claim's Edit form: the denial reason's rule, two more, two checks, three read-only           | `app-form`, then `write_package_file`                        |
 | `bundle/agentic-ui-config/queues/open-claims.json`              | Open claims, oldest filed first, with State and Move facets, the moves by title                  | `app-queue`, then `write_package_file`                       |
 | `bundle/agentic-ui-config/queues/moves-this-week.json`          | Moves loading or delivering from today to seven days ahead, both days included                   | `app-queue`, then `write_package_file`                       |
@@ -69,12 +70,13 @@ Every name in it is fictional. The log of each step, its result and each departu
   written by hand, unlike the facilities and contracts kits' models.
 - **No `actions.json`.** None was asked for, and moving a claim through its states is a property
   here, not a lifecycle (below).
-- **One version in three places:** 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
+- **One version in three places:** 0.3.0, in `package.xml`, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`. `upgrade-notes.json` holds the note for the one item 0.2.0 removes
-  ([below](#version-020)).
+  ([below](#version-020)); 0.3.0 removes none.
 - **0.2.0 was written by hand,** not through the write tools: its edits are the engine's follow-ups
   to items 2 to 4 below, made in the same pull request as the engine, and held to the pipeline with
-  `--previous` (below).
+  `--previous` (below). **So was 0.3.0's one line,** the claim's capture, in the pull request that
+  built the capture page ([below](#version-030)).
 
 ## The stand-in model
 
@@ -128,16 +130,28 @@ a component of its own, `moves-demo-model.xml`, as the Payers kit does.
 ## Where the driver's photo goes
 
 Phase 8's demo step 5 has a driver photograph damaged goods on a phone, and the photo filed on
-the claim of the move. **The phone capture app is not built** (phase 8, "Builds"). This kit
-leaves the place for the photo: the claim's attachments, `files:files`.
+the claim of the move. **Since 0.3.0 the claim's layout turns the phone capture page on**
+([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 2, "Capture"):
 
-- **On the claim page,** the Attachments card lists them, with `file-list`, which shows each
-  file's name until it has its lookup (layout-v2.md, section 11). The document page's own
-  Attachments panel, beside the record page, uploads one for anyone who may write the claim.
-- **What the capture app would do** is add a file to `files:files` on the claim it is given, as
-  that panel does. Nothing here calls it, and nothing here has been tried with a photo: no server
-  has the package.
+```json
+"capture": { "property": "files:files", "findBy": ["dmg:number", "dmg:moveNumber"] }
+```
+
+- **The driver opens `/#/capture` on the phone,** types or scans the move's number, `MV-2003`, or
+  the claim's, `DC-3003`, and the page finds the claim: a claim keeps its move's number as
+  `dmg:moveNumber`, so the move's number finds the claims of the move, and the driver chooses one
+  when there are several. The claim page links to the same page for anyone who may write the
+  claim.
+- **The photos go to the claim's attachments, `files:files`,** as the document page's Attachments
+  panel uploads one, with the driver's own permission, which the server checks. The claim page's
+  Attachments card lists them, with `file-list`, which shows each file's name until it has its
+  lookup (layout-v2.md, section 11).
+- **Where each photo was taken is taken out** before it is sent: the capture keeps no location,
+  since `keepLocation` is not set. A move's addresses are on the move already.
 - **The seed never writes `files:files`,** so a photo filed on a claim stays through a second run.
+- **Not seen on a server:** the kit is not installed anywhere. The page was run against a stand-in
+  of the server with this kit's layout and model, at a phone's 320 pixels
+  (`scripts/beta-harness/steps/capture-phone.mjs`).
 
 ## How it was built: the log
 
@@ -317,8 +331,9 @@ it found, and what was done:
 npm run app-package -- business-apps/packages/moves-demo --platform 0.2.0
 ```
 
-It writes `dist/moves-demo-0.2.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model: sha256 `fbd58658…ef91` for 0.2.0, on 26 November 2026.
+It writes `dist/moves-demo-0.3.0.zip`, held to the package's own `content-model.json`, since it
+ships a stand-in model: sha256 `f4d3b319…1e19` for 0.3.0, on 26 November 2026 (`fbd58658…ef91`
+for 0.2.0).
 
 ## Installing it on a local Nuxeo
 
@@ -331,11 +346,11 @@ it when the container next starts, and removes itself: `nuxeoctl mp-install` ref
 server runs, and the server is the container's main process.
 
 ```bash
-docker cp business-apps/packages/moves-demo/dist/moves-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/moves-demo/dist/moves-demo-0.3.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/moves-demo-0.2.0.zip --accept=true > /var/log/nuxeo/moves-kit-install.log 2>&1 || echo "moves kit: install failed, see /var/log/nuxeo/moves-kit-install.log"' 'rm -f "$0"' > /tmp/zz-moves-kit-install.sh && chmod 755 /tmp/zz-moves-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/moves-demo-0.3.0.zip --accept=true > /var/log/nuxeo/moves-kit-install.log 2>&1 || echo "moves kit: install failed, see /var/log/nuxeo/moves-kit-install.log"' 'rm -f "$0"' > /tmp/zz-moves-kit-install.sh && chmod 755 /tmp/zz-moves-kit-install.sh
 ```
 
 ```bash
@@ -432,6 +447,23 @@ app at `APP_URL` (`http://localhost:4200` by default).
 Seeing an app is not a security control: Nuxeo's permissions still decide which moves and claims
 anyone reads, and the seed sets none, so its workspace has the server's defaults. A hidden card or
 banner hides nothing from the REST API.
+
+## Version 0.3.0
+
+The claim's capture, for the phone capture page that phase 8's demo step 5 needs, on 26 November
+2026, in the pull request that built the page. Held to 0.2.0 on the staging branch with
+`--previous`: one change, a key in the claim's record page, which needs a patch; 0.3.0 raises the
+minor, for a new feature, as 0.2.0 did. The upgrade check keeps every configuration.
+
+- **The capture:** photos go to `files:files`, and a number typed or scanned is looked up in
+  `dmg:number` and `dmg:moveNumber`, so that the move's number finds its claims. No location is
+  kept.
+- **The claim page links to the capture page** for a reader who may write the claim: the record
+  page's own, from the capture, with nothing of the kit's.
+- **No label, no menu entry.** The page's words are the platform's. A menu entry for the page would
+  be a platform menu entry, a public ID that the menu names ([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md),
+  section 9), which the platform does not have: the driver opens `/#/capture`, or the claim
+  page's link.
 
 ## Version 0.2.0
 
@@ -549,7 +581,8 @@ the kit, because it blocked it; items 2 to 4 were built in a later one, and the 
 - **Installing, seeding, and the live pages:** the orchestrator's.
 - **The delivery day read from the move** for the banner and the days to filing: a rule reads the
   open record only ([above](#version-020)).
-- **The photo from a phone:** the capture app is not built; the attachments are its place.
+- **The photo from a phone on a server:** the capture page files it, since 0.3.0, and has been run
+  against a stand-in of the server only.
 - **The coordinators, crews and adjusters are names, not people.**
 - **The Properties panel beside the record page** is version 1's generated one; a `metadata`
   layout would order it.

@@ -60,6 +60,7 @@ experience exists, so
 | `/#/administration/layout-designer/queues` | `@agentic-ui/feature-layout-designer` | `QueueDesignerPageComponent`   |
 | `/#/documents`                             | `@agentic-ui/feature-assets`          | `AssetSearchResultsComponent`  |
 | `/#/trash`                                 | `@agentic-ui/feature-trash`           | `TrashComponent`               |
+| `/#/capture`                               | `@agentic-ui/feature-capture`         | `CapturePageComponent`         |
 
 ---
 

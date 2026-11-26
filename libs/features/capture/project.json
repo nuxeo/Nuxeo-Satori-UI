@@ -1,0 +1,30 @@
+{
+  "name": "capture",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/capture/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:features", "type:feature"],
+  "$tagsComment": "Phase 8's phone capture page (docs/business-apps/development-plan.md): photos taken on a phone, filed on a record where its layout's capture says (layout-v2.md, section 2). A feature: it reads the layout through libs/shared/document-layouts and uploads through libs/shared/nuxeo-client, and nothing depends on it but the app.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/features/capture"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "$comment": "ngc, not tsc: it compiles the templates with strictTemplates too. The spec files are type-checked by the spec-types gate through tsconfig.spec.json.",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "command": "ngc -p libs/features/capture/tsconfig.lib.json --outDir dist/out-tsc/libs/features/capture"
+      }
+    }
+  }
+}

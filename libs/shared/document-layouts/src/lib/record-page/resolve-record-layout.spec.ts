@@ -203,6 +203,69 @@ describe('resolveRecordLayout', () => {
     );
     expect(without.layout.shareLinks).toBe(false);
   });
+
+  it('keeps a capture whose property is a list of files of the record, findBy cut to its texts', () => {
+    const FILES: DocumentTypeSchema = {
+      name: 'files',
+      prefix: 'files',
+      fields: { files: { type: 'complex[]', fields: { file: { type: 'blob' } } } },
+    };
+    const captured = (capture: Record<string, unknown>) =>
+      resolveRecordLayout(
+        MEMBER,
+        file([{ id: 'a', fields: ['dc:title'] }], { capture }),
+        [FILES],
+        null,
+      );
+
+    const kept = captured({
+      property: 'files:files',
+      findBy: ['member:phone', 'member:visits', 'x:y'],
+    });
+    expect(kept.layout.capture).toEqual({
+      property: 'files:files',
+      findBy: ['member:phone'],
+      keepLocation: false,
+    });
+    expect(kept.notes).toEqual([
+      'capture.findBy: "member:visits" is not a text of this record; left out',
+      'capture.findBy: "x:y" is not a text of this record; left out',
+    ]);
+    // A list of complex values the schema says nothing more of is taken as written, as a table is.
+    expect(captured({ property: 'member:bag' }).layout.capture).not.toBeNull();
+
+    const lines = captured({ property: 'member:lines' });
+    expect(lines.layout.capture).toBeNull();
+    expect(lines.notes).toEqual([
+      'capture: "member:lines" is a complex[] property, and photos are added to a list of files; left out',
+    ]);
+    const missing = captured({ property: 'member:photos' });
+    expect(missing.layout.capture).toBeNull();
+    expect(missing.notes).toEqual([
+      'capture: "member:photos" is not a property of this record; left out',
+    ]);
+    expect(
+      resolveRecordLayout(MEMBER, file([{ id: 'a', fields: ['dc:title'] }]), [], null).layout
+        .capture,
+    ).toBeNull();
+  });
+
+  it("reads the schema of a facet a capture's property is on", () => {
+    const captured = file([{ id: 'a', fields: ['dc:title'] }], {
+      capture: { property: 'files:files', findBy: ['aud:reviewer'] },
+    });
+    expect(
+      recordFacetSchemasToRead(
+        MEMBER,
+        [
+          { name: 'files', prefix: 'files' },
+          { name: 'audit', prefix: 'aud' },
+          { name: 'other', prefix: 'oth' },
+        ],
+        captured,
+      ).map((schema) => schema.name),
+    ).toEqual(['files', 'audit']);
+  });
 });
 
 describe("a table's columns", () => {
