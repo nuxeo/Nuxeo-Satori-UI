@@ -3,9 +3,9 @@
  * the tool can print, and no other: its section 9 has a row for each, under the section the
  * scanner (`testing/finding-kinds.ts`) gives it, and each row names who acts on it.
  */
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { RESULTS } from './batch';
 import { findingKinds, NOT_FINDINGS, SOURCES } from './testing/finding-kinds';
 
@@ -115,13 +115,17 @@ describe('the support playbook', () => {
 });
 
 describe('the scanner of findings, on a made-up source', () => {
-  /** A `src` of two files: one with a section, one without. */
-  function scan(source: string, unmapped = ''): ReturnType<typeof findingKinds> {
+  /** A `src` of files, by their paths there: `check-seen.ts` has a section, check 6. */
+  function scanFiles(files: Readonly<Record<string, string>>): ReturnType<typeof findingKinds> {
     const directory = mkdtempSync(join(tmpdir(), 'finding-kinds-'));
-    writeFileSync(join(directory, 'check-seen.ts'), source);
-    if (unmapped) writeFileSync(join(directory, 'elsewhere.ts'), unmapped);
+    for (const [path, source] of Object.entries(files)) {
+      mkdirSync(dirname(join(directory, path)), { recursive: true });
+      writeFileSync(join(directory, path), source);
+    }
     return findingKinds(directory);
   }
+  const scan = (source: string, unmapped = ''): ReturnType<typeof findingKinds> =>
+    scanFiles({ 'check-seen.ts': source, ...(unmapped ? { 'elsewhere.ts': unmapped } : {}) });
 
   it('reads a text, a template, each branch of a choice, and what a function is given', () => {
     const { kinds, unread } = scan(`
@@ -142,6 +146,66 @@ describe('the scanner of findings, on a made-up source', () => {
       ['Check 6', 'one way'],
       ['Check 6', 'the other, …'],
       ['Check 6', '… has no queue'],
+    ]);
+  });
+
+  it('reads every way a finding is added: unshifted, spliced, set by index, in a list of its own, or in an object', () => {
+    const { kinds, unread } = scan(`
+      const late = ['a late line'];
+      function helper(): string[] {
+        const out: string[] = [];
+        out.push('from a helper');
+        return out;
+      }
+      export function checkSeen(state: { findings: string[] }) {
+        const findings: string[] = ['a first line'];
+        findings.unshift('unshifted');
+        findings.splice(0, 0, 'spliced');
+        findings[findings.length] = 'set by index';
+        const issues: string[] = [];
+        issues.push('in a list of its own');
+        findings.push(...issues, ...helper());
+        state.findings.push('in an object');
+        return { findings };
+      }
+      export function another() {
+        const findings = late;
+        return { findings };
+      }`);
+    expect(unread).toEqual([]);
+    expect(kinds.map((kind) => kind.kind).sort()).toEqual(
+      [
+        'a first line',
+        'a late line',
+        'from a helper',
+        'in a list of its own',
+        'in an object',
+        'set by index',
+        'spliced',
+        'unshifted',
+      ].sort(),
+    );
+  });
+
+  it("reads what is added to the verdict's lines, and the files of a folder", () => {
+    const { kinds, unread } = scanFiles({
+      'harness.ts': `export function runHarness() {
+        const blockers = ['check 1 failed'];
+        blockers.push('one more line of the verdict');
+        return blockers;
+      }`,
+      'checks/check-extra.ts': `export function checkExtra() {
+        const findings: string[] = [];
+        findings.push('a check in a folder');
+        return { findings };
+      }`,
+    });
+    expect(kinds.map((kind) => [kind.section, kind.kind])).toEqual([
+      ['The verdict', 'check 1 failed'],
+      ['The verdict', 'one more line of the verdict'],
+    ]);
+    expect(unread).toEqual([
+      'checks/check-extra.ts:3: a finding in a file, or a function, with no section of the playbook in SOURCES',
     ]);
   });
 

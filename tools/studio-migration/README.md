@@ -139,52 +139,67 @@ second piece of migration M4: a customer with several Studio projects runs them 
 [the guide](../../docs/business-apps/studio-migration-guide.md), section 8, walks them through it.
 One argument that is a package file runs as above, unchanged; several, or a folder, run so.
 
+- **From the command line.** `commandLine` in `cli.ts` runs it, and is `main` for every other
+  command. `main` itself is unchanged: given several packages it prints its usage, as it always
+  did, and its steps are the steps a run of one package takes.
 - **Each package runs as one does.** Each is given to `migrateOne`, the run `migrate` makes of one
-  package, with the same allow-list, into `<out>/packages/<name>`, `<name>` being its file's name
-  less `.zip`, each character a file name cannot hold on every system written `-`. What that run
-  prints goes into `<out>/printed/<name>.txt`, beside its folder rather than in it, so that the
-  folder is byte for byte what `migrate` of that package alone writes there, and the tests hold it
-  to that.
+  package, with the same allow-list, into `<out>/packages/<name>`. `<name>` is its file's name less
+  `.zip`, each character but a letter, a digit, `.`, `_` and `-` written `-`, dots at its end
+  dropped, and a name Windows keeps for a device, such as `CON`, written `_CON`, so that every
+  system can hold it. What that run prints goes into `<out>/printed/<name>.txt`, beside its folder
+  rather than in it, so that the folder is byte for byte what `migrate` of that package alone
+  writes there, and the tests hold it to that.
 - **Isolated.** A run is given only its own package, its own folder and the allow-list. A package
-  that cannot be read, is refused at a step, fails a check, or meets a defect of the tool, which
-  is caught, ends its own run alone; the next runs as it would have without it, byte for byte.
+  that cannot be read, is refused at a step, fails a check, or meets a defect of the tool, in a
+  step or outside every step, which is caught, ends its own run alone; the next runs as it would
+  have without it, byte for byte.
+- **The event loop turns after each package.** jsdom keeps every document until the job that made
+  it ends: a run of the made-up package with M2's corpus holds about 170 MB of them, and a run of
+  many packages in one job would add them up until the heap ran out, as the tests did at 4 GB
+  before it turned. Each package's bytes are let go after its run too.
 - **Read once.** Each package's bytes are read once, hashed, and given to its run, as one run
   gives each step the same bytes; so is the allow-list.
 - **The summary,** `summary.txt`, is what the command prints: for each package, its result, what
   its `package.xml` declares, its constructs by outcome as its report counts them (`CliIo.reported`
   hands `migrate` the report's own summary, as `checked` hands it the harness's), its report and
   what it printed; then how many ended each way, the worst, and what to do next. `summary.json`
-  says the same as data, with paths under `<out>`, and its `format` is
+  says the same as data, with paths under `<out>`, `/`-separated, and its `format` is
   `studio-migration-batch/1`.
-- **Results,** best first: `ready`; `not ready`, every step ran and no check failed; `check
-failed`; and `stopped`, at a step or before the first. The worst is the run's.
-- **Duplicates.** The same bytes given twice, under any name, run once; the second is `the same
-package` as the first, and not run again. Two files of one name from two folders get two
-  folders, `claims` and `claims-2`, told apart as a file system that ignores case would. Two
+- **Results,** best first: `ready`; `not ready`, every step ran and no check failed;
+  `check failed`; and `stopped`, at a step, before the first, or by a defect. The worst is the
+  run's.
+- **Duplicates.** The same bytes given twice, under any name, run once; the second is
+  `the same package` as the first, and not run again. Two files of one name from two folders get
+  two folders, `claims` and `claims-2`, told apart as a file system that ignores case would. Two
   packages that declare one name and version from different bytes are two builds: both run, and
-  the summary says so.
+  the summary says so. A folder given twice is listed once.
 - **A folder** gives the `.zip` files directly in it, by name; what else it holds is listed as left
   out, but for names that start with a dot, the system's own, such as the `._<name>.zip` a Mac
   leaves beside a file on a drive that cannot hold its attributes, which are passed over. A folder
   with no `.zip` file is refused before anything is written.
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
-  folder for the same bytes, found through its `summary.json`, whatever the package's file is
-  called now. A package that run did not hold, or holds no decisions for, starts again, and its line
-  says so. A folder name read from that summary is used only when it is one the run could have
-  made. `--from` a run of one package is refused.
+  folder, found through its `summary.json`, for the same build, as `decisions.json` names it,
+  which is what `--from` holds one package's decisions to, whatever the package's file is called
+  now. A package that run did not hold, or holds no decisions for, starts
+  again, and its line says so. A folder name read from that summary is used only when it is one the
+  run could have made. `--from` a run of one package, or a summary that lists no packages, is
+  refused.
 - **It never writes over anything:** `--out` must be new or empty, and each file is written only
   where none is.
 - **Exit codes,** the worst of its packages': 0 every package ran every step and no check failed
-  in any; 1 one stopped or failed a check, or the run of them all was refused before writing; 2
-  the command was wrong.
+  in any; 1 one stopped or failed a check, or the run of them all was refused before writing, or
+  its summary could not be written; 2 the command was wrong.
 
 **Its negative controls**, each in [`src/batch.spec.ts`](src/batch.spec.ts): a package that is no
 zip and an `addon` package among two sound ones, which stop alone while the others' folders and
-what they printed are unchanged; a package whose check fails, and one whose run throws, before two
-sound ones, likewise; an `--out` that holds files, a folder of no `.zip`, an allow-list of the
-wrong shape, and a `--from` that is a run of one package or nothing, each refused with nothing
+what they printed are unchanged; a package whose check fails, one whose report step throws, and one
+whose run throws outside every step, before sound ones, likewise; a path that is no file; an
+`--out` that holds files, a folder of no `.zip`, an allow-list of the wrong shape, and a `--from`
+that is a run of one package, nothing, or a summary of no packages, each refused with nothing
 written; the same package three times, under two names; three files of one name, two of them
-differing by case alone; and a renamed package, carried by its bytes.
+differing by case alone, and the names Windows cannot hold; a renamed package, and a package
+zipped again, each carried by its build; and the event loop turning after each
+package.
 
 **The single-package command is unchanged,** byte for byte:
 [`src/migrate-single.spec.ts`](src/migrate-single.spec.ts) holds what it prints and writes, on
@@ -1300,23 +1315,33 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
-- **For many packages in one run, 8 guards**, broken one at a time by a script that runs
+- **For many packages in one run, 14 guards**, broken one at a time by a script that runs
   `batch.spec.ts` and restores the file, each seen turning it red: stopping at the first package
   that stops; exiting with the best result rather than the worst; running the same package again;
-  telling folder names apart by case; counting a package's constructs from its first kind rather
-  than the report's `all`; carrying decisions by folder name rather than by bytes; reading a
-  package again for its run; and leaving the allow-list out of each package's run. The last was
-  missed at first: no test gave the batch an allow-list. It now has one.
+  telling folder names apart by case; keeping a name Windows keeps for a device, and the dots it
+  drops from a name's end; counting a package's constructs from its first kind rather than the
+  report's `all`; carrying decisions by folder name, or by the package's file name, rather than by
+  its build; reading a package again for its run; leaving the allow-list out of each package's
+  run; letting a defect of one package's run end the whole run; and never letting the event loop
+  turn between packages. Two were missed at first and have their tests now: no test gave the batch
+  an allow-list, and the only test of a defect threw inside a step, which the run of one package
+  already catches, so removing the batch's own catch changed nothing; an independent review found
+  the second.
 - **The single-package golden was seen failing:** one space added to `migrate`'s verdict line
-  turned seven of its scenarios red, and the refusals, which print no verdict, stayed green.
+  turned seven of its scenarios red, and the refusals, which print no verdict, stayed green. The
+  review ran it against the code of `staging/enterprise-grade-app` before the batch, where it
+  passed, and saw it fail there too, on another line.
 - **The support playbook's coverage, 6 guards**, each seen turning `playbook.spec.ts` red: the
   tool gaining a finding the playbook does not hold; a finding built in a way the scanner cannot
   read as text; a new file of the tool adding findings with no section; the playbook losing a
   row; the playbook holding a row the tool cannot print; and a row naming no one to act. The
-  scanner's own reading of a made-up source is a test of its own. Writing the playbook found two
-  findings the first scanner had not read: check 10's `sections must be a list`, returned rather
-  than pushed, and lab mode's `the platform's model could not be read: …`, returned to another
-  file; it reads both now.
+  scanner's own tests hold each way it reads a finding on a made-up source. Writing the playbook
+  found two findings the first scanner had not read: check 10's `sections must be a list`, returned
+  rather than pushed, and lab mode's `the platform's model could not be read: …`, returned to
+  another file. The review found nine more ways past it: a line pushed to the verdict's `blockers`
+  or the inventory's `decisions` after they are built, `unshift`, an index, a list of its own
+  spread into one, a helper's list of another name, `x.findings.push`, a `findings` that is another
+  list, and a check in a folder. It reads each now, and its tests hold them.
 - **For lab mode, 72 guards**, broken one at a time by a script, kept outside the repository, that
   runs its four specs and restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
@@ -1430,6 +1455,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **What Web UI's page draws outside its layouts** is not held: its info rows of state, dates and
   people, and the property a viewer or attachments element shows by default. Holding them needs a
   table of Web UI's own elements, whose sources are not in this repository.
+- **A tab on several types, one of whose view layouts shows only the preview,** makes check 2 fail
+  on a fresh run: the converter writes the tab for the other types and reports it, and the check's
+  places (`formPlaces`, in `src/forms.ts`) still hold the type whose view it wrote no file for to
+  the tab, as `…: … is missing, though … shows it`. Found while writing the support playbook, with
+  a made-up package; not fixed here, and the playbook names it.
 - **Check 9** needs plugins, in M3.
 - **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
   screen's table. The server half of check 5 needs the migration server.

@@ -43,6 +43,8 @@ export const SOURCES: Readonly<Record<string, string | Readonly<Record<string, s
   'lab.ts': 'Lab mode: the request-log rule',
   'lab-server.ts': 'Lab mode: the server halves',
   'lab-browser.ts': 'Lab mode: as the same user',
+  // Each document's findings of checks 6 and 7, numbered, as lab.txt gives them.
+  'lab-cli.ts': { serverHalves: 'Lab mode: the request-log rule' },
 };
 
 /**
@@ -54,8 +56,11 @@ export const NOT_FINDINGS: Readonly<Record<string, string>> = {
     'the tool\'s own catalogue, checked as it loads: any problem in it stops every command with one refusal, "the catalogue in … is wrong", a defect of the tool and never of a package',
 };
 
-/** The lists a finding is pushed to. */
+/** The lists a finding is added to, by `push`, `unshift`, `splice` or an index. */
 const PUSHED = new Set(['findings', 'problems']);
+
+/** The methods that add what they are given to a list, by the index of the first they add. */
+const ADDING: Readonly<Record<string, number>> = { push: 0, unshift: 0, splice: 2 };
 
 /** The lists built whole, by file: the verdict's lines, and the inventory's decisions. */
 const BUILT: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -97,9 +102,7 @@ export interface Scanned {
 export function findingKinds(directory: string): Scanned {
   const kinds: FindingKind[] = [];
   const unread: string[] = [];
-  const files = readdirSync(directory)
-    .filter((name) => name.endsWith('.ts') && !name.endsWith('.spec.ts') && !name.endsWith('.d.ts'))
-    .sort();
+  const files = sourcesUnder(directory);
   const scans = new Map<string, FileScan>();
   for (const file of files) {
     const source = ts.createSourceFile(
@@ -112,6 +115,22 @@ export function findingKinds(directory: string): Scanned {
   }
   for (const scan of scans.values()) scan.run();
   return { kinds, unread };
+}
+
+/**
+ * Every source file under `src`, by its path there, `/`-separated: a new folder of checks is read
+ * as a file is. Specs, declarations and the test helpers of `testing/` print nothing to a customer.
+ */
+function sourcesUnder(directory: string, under = ''): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(join(directory, under), { withFileTypes: true })) {
+    const path = under === '' ? entry.name : `${under}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (path !== 'testing') files.push(...sourcesUnder(directory, path));
+    } else if (path.endsWith('.ts') && !path.endsWith('.spec.ts') && !path.endsWith('.d.ts'))
+      files.push(path);
+  }
+  return files.sort();
 }
 
 type Found = readonly string[] | { readonly why: string };
@@ -182,24 +201,64 @@ class FileScan {
     visit(this.source);
   }
 
-  private visit(node: ts.Node): void {
-    // `findings.push(…)`, `problems.push(…)`
+  /** The names of the lists whose every addition is a finding, in this file. */
+  private lists(): ReadonlySet<string> {
+    return new Set([...PUSHED, ...(BUILT[this.file] ?? [])]);
+  }
+
+  /** Whether an expression is a list of findings: `findings`, `blockers`, or `x.findings`. */
+  private isList(node: ts.Expression): boolean {
+    return (
+      (ts.isIdentifier(node) && this.lists().has(node.text)) ||
+      (ts.isPropertyAccessExpression(node) && PUSHED.has(node.name.text))
+    );
+  }
+
+  /**
+   * What an addition to a list gives it, when `node` adds to one: `push(…)`, `unshift(…)`,
+   * `splice(at, count, …)`, or `list[i] = …`. `undefined` when it adds nothing.
+   */
+  private added(node: ts.Node, isList: (list: ts.Expression) => boolean): Found | undefined {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'push' &&
-      ts.isIdentifier(node.expression.expression) &&
-      PUSHED.has(node.expression.expression.text)
-    ) {
-      for (const argument of node.arguments)
-        this.add(
-          argument,
+      Object.hasOwn(ADDING, node.expression.name.text) &&
+      isList(node.expression.expression)
+    )
+      return all(
+        node.arguments.slice(ADDING[node.expression.name.text]).map((argument) =>
           ts.isSpreadElement(argument)
             ? this.list(argument.expression)
             : ts.isObjectLiteralExpression(argument)
-              ? [] // a problem with its parts: its text is a property, read below
+              ? [] // a problem with its parts: its text is a property, read where it is set
               : this.texts(argument),
-        );
+        ),
+      );
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isElementAccessExpression(node.left) &&
+      isList(node.left.expression)
+    )
+      return this.texts(node.right);
+    return undefined;
+  }
+
+  private visit(node: ts.Node): void {
+    // `findings.push(…)`, `blockers.unshift(…)`, `x.findings[i] = …`
+    const added = this.added(node, (list) => this.isList(list));
+    if (added !== undefined) {
+      this.add(node, added);
+      return;
+    }
+    // `const findings = …`: what it starts with, and what it is when it is another list
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      PUSHED.has(node.name.text) &&
+      node.initializer !== undefined
+    ) {
+      this.add(node.initializer, this.list(node.initializer));
       return;
     }
     // A property whose text is a finding: `refused: '…'`, `message: '…'`
@@ -302,6 +361,12 @@ class FileScan {
       );
     if (ts.isParenthesizedExpression(node) || ts.isAwaitExpression(node))
       return this.list(node.expression);
+    if (
+      ts.isBinaryExpression(node) &&
+      (node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+        node.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+    )
+      return all([this.list(node.left), this.list(node.right)]);
     if (ts.isConditionalExpression(node))
       return all([this.list(node.whenTrue), this.list(node.whenFalse)]);
     // Another list of findings, `findings` or `x.findings`: read where its texts are added.
@@ -315,7 +380,12 @@ class FileScan {
       return this.list(node.arguments[0]);
     if (ts.isIdentifier(node) && PUSHED.has(node.text)) return [];
     if (ts.isPropertyAccessExpression(node) && PUSHED.has(node.name.text)) return [];
-    if (ts.isIdentifier(node)) return this.traced(node, (value) => this.list(value));
+    if (ts.isIdentifier(node)) {
+      // A list of its own, `const issues = []`, then spread into one: what is added to it too.
+      const own = this.localList(node);
+      if (own) return all([this.list(own.initializer), this.addedTo(own.scope, node.text)]);
+      return this.traced(node, (value) => this.list(value));
+    }
     if (ts.isCallExpression(node)) return this.call(node);
     return cannot(
       `a list of findings given as ${this.describe(node)}, which the scanner cannot read`,
@@ -355,6 +425,14 @@ class FileScan {
       }
       // `.filter(…)`, `.slice(…)`: no text of its own; the list it is called on holds them.
       if (method === 'filter' || method === 'slice') return [];
+      // `a.concat(b)`: what both hold.
+      if (method === 'concat')
+        return all([
+          this.list(callee.expression),
+          ...node.arguments.map((argument) =>
+            ts.isSpreadElement(argument) ? this.list(argument.expression) : this.list(argument),
+          ),
+        ]);
     }
     if (ts.isIdentifier(callee)) {
       const declared = this.declaredFunction(callee.text);
@@ -413,6 +491,32 @@ class FileScan {
     };
     visit(this.source);
     return found.length === 0 ? cannot(`a finding ${name} is never given`) : all(found);
+  }
+
+  /** A `const` array literal of that name, in a scope the identifier is in, with that scope. */
+  private localList(
+    node: ts.Identifier,
+  ): { readonly initializer: ts.ArrayLiteralExpression; readonly scope: ts.Node } | undefined {
+    for (let scope: ts.Node | undefined = node.parent; scope; scope = scope.parent) {
+      const declaration = declarationIn(scope, node.text);
+      if (declaration?.initializer)
+        return ts.isArrayLiteralExpression(declaration.initializer)
+          ? { initializer: declaration.initializer, scope }
+          : undefined;
+    }
+    return undefined;
+  }
+
+  /** What is added, anywhere in `scope`, to the list named `name`. */
+  private addedTo(scope: ts.Node, name: string): Found {
+    const found: Found[] = [];
+    const visit = (node: ts.Node): void => {
+      const added = this.added(node, (list) => ts.isIdentifier(list) && list.text === name);
+      if (added !== undefined) found.push(added);
+      ts.forEachChild(node, visit);
+    };
+    visit(scope);
+    return all(found);
   }
 
   private declaredFunction(name: string): FunctionLike | undefined {

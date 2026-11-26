@@ -342,8 +342,8 @@ others: each runs as it would have without it. `--out` holds:
 
 - `packages/<name>/`, one folder for each package, holding what sections 2 to 6 describe for one
   run: its report, its checks and its `conversion/decisions.json` to fill in. `<name>` is the
-  package's file name less `.zip`, with any character a file name cannot hold on every system
-  written `-`;
+  package's file name less `.zip`, with each character but a letter, a digit, `.`, `_` and `-`
+  written `-`, so that every system can hold it;
 - `printed/<name>.txt`, what that package's run printed: its steps and its verdict, or why it
   stopped and what to do;
 - `summary.txt`, what the command printed: a line for each package with its result, its constructs
@@ -369,8 +369,9 @@ each has its own decisions.
 
 **Running them again.** Fill in each package's `conversion/decisions.json`, then give `--from` the
 earlier run's `--out`: each package carries the decisions of its own earlier folder, found by the
-package's bytes, whatever its file is called now. A package the earlier run did not have, or a new
-build of one, starts its decisions again, and its line says "Nothing carried". The summary prints
+package's build, as section 6 says, whatever its file is called now. A package
+the earlier run did not have, or a new build of one, starts its decisions again, and its line says
+"Nothing carried". The summary prints
 the command, with the next free folder. To carry the decisions of a run of one package, run that
 package on its own with `--from` that run.
 

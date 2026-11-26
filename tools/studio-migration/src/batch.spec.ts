@@ -18,8 +18,8 @@ import {
   type BatchRequest,
   type BatchSummary,
 } from './batch';
-import { main, type CliIo } from './cli';
-import { shell, type Command } from './migrate';
+import { commandLine, main, type CliIo } from './cli';
+import { migrateOne, shell, type Command } from './migrate';
 import { m2CorpusFiles } from './testing/m2-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
 import { writeZip } from './testing/zip-writer';
@@ -60,17 +60,21 @@ const io = (): CliIo & { printed: () => Printed & { code: 0 } } => {
   };
 };
 
-/** The command line, as a person types it. */
-function run(argv: readonly string[]): Printed {
+/** The command line, as a person types it: several packages run asynchronously. */
+async function run(argv: readonly string[]): Promise<Printed> {
   const given = io();
-  const code = main(argv, given);
+  const code = await commandLine(argv, given);
   return { ...given.printed(), code };
 }
 
-/** The batch itself, its steps run by another command than `main`. */
-function runWith(request: BatchRequest, command: Command): Printed {
+/** The batch itself, its steps run by another command than `main`, or its runs by another than `migrateOne`. */
+async function runWith(
+  request: BatchRequest,
+  command: Command,
+  one?: Parameters<typeof migrateMany>[3],
+): Promise<Printed> {
   const given = io();
-  const code = migrateMany(request, given, command);
+  const code = await migrateMany(request, given, command, one);
   return { ...given.printed(), code };
 }
 
@@ -121,10 +125,10 @@ function fill(path: string): void {
 describe('migrate, given several packages', () => {
   it(
     'runs each into a folder of its own, byte for byte as migrate runs that package alone, and keeps what each printed',
-    () => {
+    async () => {
       const given = folder({ 'claims.zip': SOUND, 'policies.zip': CORPUS });
       const out = fresh();
-      const batch = run([
+      const batch = await run([
         'migrate',
         join(given, 'claims.zip'),
         join(given, 'policies.zip'),
@@ -143,7 +147,7 @@ describe('migrate, given several packages', () => {
       // Each package on its own, into the very folder the batch gave it, the batch moved away.
       renameSync(out, `${out}-batch`);
       for (const name of ['claims', 'policies']) {
-        const alone = run([
+        const alone = await run([
           'migrate',
           join(given, `${name}.zip`),
           '--out',
@@ -165,7 +169,7 @@ describe('migrate, given several packages', () => {
 
   it(
     "gives every package the deployment's allow-list, as a run of that package alone is given it",
-    () => {
+    async () => {
       const given = folder({
         'claims.zip': SOUND,
         'policies.zip': CORPUS,
@@ -173,7 +177,7 @@ describe('migrate, given several packages', () => {
       });
       const allow = join(given, 'allow.json');
       const out = fresh();
-      const batch = run(['migrate', given, '--out', out, '--allow-list', allow]);
+      const batch = await run(['migrate', given, '--out', out, '--allow-list', allow]);
       expect(batch.code).toBe(0);
       expect(summaryOf(out).allowList).toBe(allow);
       // The made-up package's button runs Claim.Approve: with the list, it becomes an action.
@@ -182,7 +186,7 @@ describe('migrate, given several packages', () => {
       );
       renameSync(out, `${out}-batch`);
       for (const name of ['claims', 'policies']) {
-        const alone = run([
+        const alone = await run([
           'migrate',
           join(given, `${name}.zip`),
           '--out',
@@ -202,7 +206,7 @@ describe('migrate, given several packages', () => {
 
   it(
     'writes a summary of every package: its result, its constructs by outcome as its report counts them, and its report',
-    () => {
+    async () => {
       const given = folder({
         'a-claims.zip': SOUND,
         'b-policies.zip': CORPUS,
@@ -210,7 +214,7 @@ describe('migrate, given several packages', () => {
         'd-addon.zip': ADDON,
       });
       const out = fresh();
-      const batch = run(['migrate', given, '--out', out]);
+      const batch = await run(['migrate', given, '--out', out]);
       // What it prints is the summary, byte for byte.
       expect(batch.out).toBe(readFileSync(join(out, 'summary.txt'), 'utf8'));
       const summary = summaryOf(out);
@@ -270,7 +274,7 @@ describe('migrate, given several packages', () => {
   describe('keeps each package to itself', () => {
     it(
       'a broken package among sound ones: it stops, and changes nothing the others write or print',
-      () => {
+      async () => {
         const sound = folder({ 'claims.zip': SOUND, 'policies.zip': CORPUS });
         const broken = folder({
           'claims.zip': SOUND,
@@ -279,9 +283,9 @@ describe('migrate, given several packages', () => {
           'policies.zip': CORPUS,
         });
         const without = fresh();
-        expect(run(['migrate', sound, '--out', without]).code).toBe(0);
+        expect((await run(['migrate', sound, '--out', without])).code).toBe(0);
         const among = fresh();
-        const ran = run(['migrate', broken, '--out', among]);
+        const ran = await run(['migrate', broken, '--out', among]);
         expect(ran.code).toBe(1);
         expect(summaryOf(among).packages.map((entry) => entry.result)).toEqual([
           'not ready',
@@ -314,11 +318,11 @@ describe('migrate, given several packages', () => {
 
     it(
       'a package whose check fails, or whose run meets a defect, ends alone, and the next runs as it would have',
-      () => {
+      async () => {
         const given = folder({ 'a.zip': LOW_CONTRAST, 'b.zip': SOUND, 'c.zip': CORPUS });
         const alone = fresh();
         expect(
-          run(['migrate', join(given, 'b.zip'), join(given, 'c.zip'), '--out', alone]).code,
+          (await run(['migrate', join(given, 'b.zip'), join(given, 'c.zip'), '--out', alone])).code,
         ).toBe(0);
         // A command whose report step throws for package a: a defect of the tool, in one run.
         const throwing: Command = (argv, given) => {
@@ -326,7 +330,7 @@ describe('migrate, given several packages', () => {
           return main(argv, given);
         };
         const out = fresh();
-        const ran = runWith(
+        const ran = await runWith(
           { packages: [join(given, 'a.zip'), join(given, 'b.zip'), join(given, 'c.zip')], out },
           throwing,
         );
@@ -341,7 +345,7 @@ describe('migrate, given several packages', () => {
 
         // And a check that fails ends that package alone too.
         const failing = fresh();
-        const checked = run(['migrate', given, '--out', failing]);
+        const checked = await run(['migrate', given, '--out', failing]);
         expect(checked.code).toBe(1);
         expect(summaryOf(failing).packages.map((entry) => entry.result)).toEqual([
           'check failed',
@@ -357,8 +361,66 @@ describe('migrate, given several packages', () => {
     );
 
     it(
+      'a defect outside every step of a run ends that package alone, and says it was a defect',
+      async () => {
+        const given = folder({ 'a.zip': SOUND, 'b.zip': CORPUS });
+        const alone = fresh();
+        expect(
+          (await run(['migrate', join(given, 'b.zip'), join(given, 'b.zip'), '--out', alone])).code,
+        ).toBe(0);
+        // The run of one package itself throws for package a, outside any of its steps.
+        const throwing: typeof migrateOne = (request, given, command) => {
+          if (request.package.endsWith('a.zip')) throw new Error('a defect outside every step');
+          return migrateOne(request, given, command);
+        };
+        const out = fresh();
+        const ran = await runWith(
+          { packages: [join(given, 'a.zip'), join(given, 'b.zip')], out },
+          main,
+          throwing,
+        );
+        expect(ran.code).toBe(1);
+        const [a, b] = summaryOf(out).packages;
+        expect(a).toMatchObject({
+          result: 'stopped',
+          defect: true,
+          stoppedAt: { step: 0, title: null },
+        });
+        expect(ran.out).toContain(
+          `\n1. ${join(given, 'a.zip')}: stopped by a defect of the tool\n`,
+        );
+        expect(readFileSync(join(out, 'printed', 'a.txt'), 'utf8')).toContain(
+          'Error: a defect outside every step',
+        );
+        expect(b).toMatchObject({ result: 'not ready' });
+        expect(tree(join(out, 'packages', 'b'), out)).toEqual(
+          tree(join(alone, 'packages', 'b'), alone),
+        );
+      },
+      SEVERAL_RUNS,
+    );
+
+    it(
+      'lets the event loop turn after each package, so that what its run parsed is freed before the next',
+      async () => {
+        const given = folder({ 'a.zip': SOUND, 'b.zip': CORPUS, 'c.zip': LOW_CONTRAST });
+        let turns = 0;
+        const seen: number[] = [];
+        // Each run counts the turns before it, and asks for one more.
+        const counting: typeof migrateOne = (request, given, command) => {
+          seen.push(turns);
+          setImmediate(() => turns++);
+          return migrateOne(request, given, command);
+        };
+        await runWith({ packages: [given], out: fresh() }, main, counting);
+        expect(seen).toEqual([0, 1, 2]);
+      },
+      SEVERAL_RUNS,
+    );
+
+    it(
       'reads each package once, and gives its run those bytes',
-      () => {
+      async () => {
         const given = folder({ 'a.zip': SOUND, 'b.zip': CORPUS });
         const reads: string[] = [];
         const counting: CliIo = {
@@ -369,7 +431,7 @@ describe('migrate, given several packages', () => {
             return readFileSync(path);
           },
         };
-        expect(migrateMany({ packages: [given], out: fresh() }, counting, main)).toBe(0);
+        expect(await migrateMany({ packages: [given], out: fresh() }, counting, main)).toBe(0);
         for (const name of ['a.zip', 'b.zip'])
           expect(reads.filter((path) => path === join(given, name))).toHaveLength(1);
       },
@@ -395,19 +457,19 @@ describe('migrate, given several packages', () => {
       ['one stopped', { 'a.zip': SOUND, 'b.zip': ADDON }, 1, 'stopped'],
     ] as const)(
       '%s',
-      (_, files, code, worst) => {
+      async (_, files, code, worst) => {
         const out = fresh();
-        expect(run(['migrate', folder(files), '--out', out]).code).toBe(code);
+        expect((await run(['migrate', folder(files), '--out', out])).code).toBe(code);
         expect(summaryOf(out)).toMatchObject({ exitCode: code, worst });
       },
       SEVERAL_RUNS,
     );
 
-    it('orders its results best first, as the worst is found', () => {
+    it('orders its results best first, as the worst is found', async () => {
       expect(RESULTS).toEqual(['ready', 'not ready', 'check failed', 'stopped']);
     });
 
-    it('refuses, before writing anything, an --out that holds files, a folder of no package, an allow-list or an earlier run it cannot use, and exits 1', () => {
+    it('refuses, before writing anything, an --out that holds files, a folder of no package, an allow-list or an earlier run it cannot use, and exits 1', async () => {
       const given = folder({
         'a.zip': SOUND,
         'b.zip': CORPUS,
@@ -416,7 +478,7 @@ describe('migrate, given several packages', () => {
       const holding = folder({ 'note.txt': Buffer.from('mine') });
       const empty = folder({ 'notes.txt': Buffer.from('no package here'), '.hidden.zip': SOUND });
       const single = fresh();
-      expect(run(['migrate', join(given, 'a.zip'), '--out', single]).code).toBe(0);
+      expect((await run(['migrate', join(given, 'a.zip'), '--out', single])).code).toBe(0);
       for (const [argv, problem] of [
         [[given, '--out', holding], `${holding} already holds files`],
         [[empty, '--out', fresh()], `the folder ${empty} holds no .zip file`],
@@ -435,7 +497,7 @@ describe('migrate, given several packages', () => {
       ] as const) {
         const out = argv[argv.indexOf('--out') + 1];
         const before = existsSync(out) ? readdirSync(out) : null;
-        const refused = run(['migrate', ...argv]);
+        const refused = await run(['migrate', ...argv]);
         expect(refused).toMatchObject({ code: 1, out: '' });
         expect(refused.err).toContain(problem);
         expect(refused.err).toContain('Nothing was written.');
@@ -443,14 +505,14 @@ describe('migrate, given several packages', () => {
       }
     });
 
-    it('exits 2 when the command is wrong: several packages and no --out', () => {
+    it('exits 2 when the command is wrong: several packages and no --out', async () => {
       const given = folder({ 'a.zip': SOUND });
       for (const argv of [
         ['migrate', join(given, 'a.zip'), join(given, 'a.zip')],
         ['migrate', given],
         ['migrate', given, '--out'],
       ]) {
-        const wrong = run(argv);
+        const wrong = await run(argv);
         expect(wrong.code).toBe(2);
         expect(wrong.err).toContain(
           '\n  studio-migration migrate <package.zip or folder>... --out <new-directory>',
@@ -462,10 +524,10 @@ describe('migrate, given several packages', () => {
   describe('duplicates', () => {
     it(
       'runs the same package once, however it is named or given, and says so',
-      () => {
+      async () => {
         const given = folder({ 'claims.zip': SOUND, 'copy-of-claims.zip': SOUND });
         const out = fresh();
-        const ran = run([
+        const ran = await run([
           'migrate',
           join(given, 'claims.zip'),
           given,
@@ -496,13 +558,13 @@ describe('migrate, given several packages', () => {
 
     it(
       'gives two files of one name their own folders, told apart as a file system that ignores case would',
-      () => {
+      async () => {
         // Three folders, as one cannot hold two names that differ by case alone on every system.
         const one = folder({ 'claims.zip': SOUND });
         const two = folder({ 'Claims.ZIP': CORPUS });
         const three = folder({ 'claims.zip': LOW_CONTRAST });
         const out = fresh();
-        run(['migrate', one, two, three, '--out', out]);
+        await run(['migrate', one, two, three, '--out', out]);
         const { packages, sameNameAndVersion } = summaryOf(out);
         expect(packages.map((entry) => [entry.result, entry.folder])).toEqual([
           ['not ready', 'packages/claims'],
@@ -523,7 +585,7 @@ describe('migrate, given several packages', () => {
       SEVERAL_RUNS,
     );
 
-    it('names folders with what a file name holds on every system, numbered past those taken', () => {
+    it('names folders with what a file name holds on every system, numbered past those taken', async () => {
       const taken = new Set<string>();
       expect(
         [
@@ -533,14 +595,32 @@ describe('migrate, given several packages', () => {
           '/d/my claims (1).zip',
           '/e/.zip',
           '/f/..zip',
+          '/g/CON.zip',
+          '/h/claims..zip',
+          '/i/nul.txt.zip',
+          '/j/Lpt9.zip',
+          '/k/com10.zip',
         ].map((path) => folderName(path, taken)),
-      ).toEqual(['claims', 'CLAIMS-2', 'claims-2-2', 'my-claims--1-', 'package', 'package-2']);
+      ).toEqual([
+        'claims',
+        'CLAIMS-2',
+        'claims-2-2',
+        'my-claims--1-',
+        'package',
+        'package-2',
+        // Windows keeps these names for its devices, and drops a name's last dots.
+        '_CON',
+        'claims-3',
+        '_nul.txt',
+        '_Lpt9',
+        'com10',
+      ]);
     });
   });
 
   it(
     'takes the .zip files of a folder in the order of their names, and lists what else it holds',
-    () => {
+    async () => {
       const given = folder({
         'b.zip': CORPUS,
         'A.zip': SOUND,
@@ -550,7 +630,7 @@ describe('migrate, given several packages', () => {
         'old/c.zip': SOUND,
       });
       const out = fresh();
-      const ran = run(['migrate', given, '--out', out]);
+      const ran = await run(['migrate', given, '--out', out]);
       expect(ran.code).toBe(0);
       const summary = summaryOf(out);
       expect(summary.packages.map((entry) => entry.given)).toEqual([
@@ -564,21 +644,29 @@ describe('migrate, given several packages', () => {
   );
 
   it(
-    'carries each package its own decisions from an earlier run of several, by its bytes, and says where none were',
-    () => {
+    'carries each package its own decisions from an earlier run of several, by its build, and says where none were',
+    async () => {
       const given = folder({ 'claims.zip': SOUND, 'policies.zip': CORPUS });
       // An earlier run of several: the claims package alone, its decisions filled in.
       const first = fresh();
       expect(
-        run(['migrate', join(given, 'claims.zip'), join(given, 'claims.zip'), '--out', first]).code,
+        (
+          await run([
+            'migrate',
+            join(given, 'claims.zip'),
+            join(given, 'claims.zip'),
+            '--out',
+            first,
+          ])
+        ).code,
       ).toBe(0);
       fill(join(first, 'packages', 'claims', 'conversion', 'decisions.json'));
       const before = tree(first, first);
 
-      // The policies package first now, and the claims package renamed: matched by its bytes.
+      // The policies package first now, and the claims package renamed: matched by its build.
       const renamed = folder({ 'claims-renamed.zip': SOUND });
       const out = fresh();
-      const ran = run([
+      const ran = await run([
         'migrate',
         join(given, 'policies.zip'),
         join(renamed, 'claims-renamed.zip'),
@@ -597,7 +685,7 @@ describe('migrate, given several packages', () => {
       expect(claims.constructs?.decided).toBe(claims.constructs?.reported);
       expect(policies.constructs?.decided).toBe(0);
       expect(ran.out).toContain(
-        `\n     Carried the decisions of ${join(first, 'packages', 'claims')}\n`,
+        `\n     Carried what still holds of the decisions of ${join(first, 'packages', 'claims')}\n`,
       );
       expect(ran.out).toContain(
         `\n     Nothing carried: ${first} holds no decisions for this package as it is now, so they start again\n`,
@@ -607,14 +695,16 @@ describe('migrate, given several packages', () => {
       // As by hand: the same package on its own, carrying that run's decisions.
       const alone = fresh();
       expect(
-        run([
-          'migrate',
-          join(renamed, 'claims-renamed.zip'),
-          '--out',
-          alone,
-          '--from',
-          join(first, 'packages', 'claims'),
-        ]).code,
+        (
+          await run([
+            'migrate',
+            join(renamed, 'claims-renamed.zip'),
+            '--out',
+            alone,
+            '--from',
+            join(first, 'packages', 'claims'),
+          ])
+        ).code,
       ).toBe(0);
       expect(
         readFileSync(
@@ -627,15 +717,63 @@ describe('migrate, given several packages', () => {
   );
 
   it(
+    'carries by the build when the bytes differ, as a run of one package does, and refuses a summary that lists no packages',
+    async () => {
+      // The same build, zipped with one more file beside its bundle: other bytes, the same build.
+      const rezipped = syntheticPackage({ package: { 'notes.txt': 'kept beside the bundle' } });
+      const given = folder({ 'claims.zip': SOUND });
+      const first = fresh();
+      expect((await run(['migrate', given, '--out', first])).code).toBe(0);
+      fill(join(first, 'packages', 'claims', 'conversion', 'decisions.json'));
+      const again = folder({ 'claims.zip': rezipped });
+      const out = fresh();
+      const ran = await run(['migrate', again, '--out', out, '--from', first]);
+      expect(ran.code).toBe(0);
+      const [claims] = summaryOf(out).packages;
+      expect(claims).toMatchObject({ carriedFrom: 'packages/claims' });
+      expect(claims.sha256).not.toBe(summaryOf(first).packages[0].sha256);
+      expect(claims.build).toEqual(summaryOf(first).packages[0].build);
+      expect(claims.constructs?.decided).toBeGreaterThan(0);
+
+      const listless = fresh();
+      mkdirSync(listless, { recursive: true });
+      writeFileSync(join(listless, 'summary.json'), JSON.stringify({ format: SUMMARY_FORMAT }));
+      const refused = await run(['migrate', again, '--out', fresh(), '--from', listless]);
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain('lists no packages. Nothing was written.');
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
+    'says a package it cannot read cannot be read, and runs the others',
+    async () => {
+      const given = folder({ 'claims.zip': SOUND });
+      const missing = join(given, 'no-such-package.zip');
+      const out = fresh();
+      const ran = await run(['migrate', join(given, 'claims.zip'), missing, '--out', out]);
+      expect(ran.code).toBe(1);
+      expect(ran.out).toContain(
+        `\n2. ${missing}: stopped before its first step\n     It cannot be read, and nothing was written for it\n`,
+      );
+      expect(readFileSync(join(out, 'printed', 'no-such-package.txt'), 'utf8')).toContain(
+        `the package ${missing} cannot be read: ENOENT`,
+      );
+      expect(summaryOf(out).packages[0]).toMatchObject({ result: 'not ready' });
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
     'runs one package file as it always ran, and one folder as several',
-    () => {
+    async () => {
       const given = folder({ 'claims.zip': SOUND });
       const one = fresh();
-      expect(run(['migrate', join(given, 'claims.zip'), '--out', one]).code).toBe(0);
+      expect((await run(['migrate', join(given, 'claims.zip'), '--out', one])).code).toBe(0);
       expect(existsSync(join(one, 'report.txt'))).toBe(true);
       expect(existsSync(join(one, 'summary.txt'))).toBe(false);
       const many = fresh();
-      expect(run(['migrate', given, '--out', many]).code).toBe(0);
+      expect((await run(['migrate', given, '--out', many])).code).toBe(0);
       expect(existsSync(join(many, 'summary.txt'))).toBe(true);
       expect(existsSync(join(many, 'packages', 'claims', 'report.txt'))).toBe(true);
     },

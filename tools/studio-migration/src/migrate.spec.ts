@@ -21,6 +21,10 @@ import { writeZip } from './testing/zip-writer';
 const UI = 'web/nuxeo.war/ui';
 /** For a test that runs migrate over a whole package several times: past Vitest's 5 seconds under the gate's load. */
 const SEVERAL_RUNS = 30_000;
+
+// jsdom keeps every document a run parsed until the job that parsed it ends, and Vitest runs one
+// synchronous test after another in one: a turn of the event loop after each lets them go.
+afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 const ALLOW = Buffer.from(JSON.stringify({ operations: ['Claim.Approve'] }));
 
 interface Printed {
@@ -509,6 +513,7 @@ describe('migrate, its negative controls', () => {
       ['migrate', '--out', fresh()],
       ['migrate', 'acme.zip', '--out'],
       ['migrate', 'acme.zip', '--out', fresh(), '--json'],
+      ['migrate', 'acme.zip', 'more.zip', '--out', fresh()],
     ]) {
       const { code, err } = run(argv, files);
       expect(code).toBe(2);

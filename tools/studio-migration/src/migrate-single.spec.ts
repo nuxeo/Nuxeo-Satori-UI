@@ -44,6 +44,10 @@ const UI = 'web/nuxeo.war/ui';
 /** Past Vitest's 5 seconds: some runs migrate a package twice. */
 const SEVERAL_RUNS = 60_000;
 
+// jsdom keeps every document a run parsed until the job that parsed it ends, and Vitest runs one
+// synchronous test after another in one: a turn of the event loop after each lets them go.
+afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
+
 interface Recorded {
   readonly code: number;
   readonly stdout: string;
@@ -264,6 +268,38 @@ const SCENARIOS: Readonly<Record<string, () => Recorded>> = {
       out,
       [[out, '<out>'], [earlier, '<earlier>'], ...bundleOf(first), ...bundleOf(other)],
     );
+  },
+  'refused: --out is a file': () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'studio-migrate-single-')), 'run');
+    writeFileSync(out, 'a file');
+    const refused = migrateRun(
+      ['migrate', 'acme.zip', '--out', out],
+      { 'acme.zip': PACKAGES.synthetic() },
+      out,
+      [[out, '<out>']],
+    );
+    return { ...refused, files: {} };
+  },
+  'refused: --from holds no decisions.json': () => {
+    const out = fresh();
+    const nowhere = mkdtempSync(join(tmpdir(), 'studio-migrate-single-'));
+    return migrateRun(
+      ['migrate', 'acme.zip', '--out', out, '--from', nowhere],
+      { 'acme.zip': PACKAGES.synthetic() },
+      out,
+      [
+        [out, '<out>'],
+        [nowhere, '<nowhere>'],
+      ],
+    );
+  },
+  'an empty --out, which is new enough': () => {
+    const data = PACKAGES.synthetic();
+    const out = mkdtempSync(join(tmpdir(), 'studio-migrate-single-'));
+    return migrateRun(['migrate', 'acme.zip', '--out', out], { 'acme.zip': data }, out, [
+      [out, '<out>'],
+      ...bundleOf(data),
+    ]);
   },
   'a check fails': () => {
     const data = syntheticPackage({

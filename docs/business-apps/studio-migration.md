@@ -448,7 +448,7 @@ These sit inside the [development plan](development-plan.md):
   changes nothing for another, and writes a summary of each package's result, its constructs by
   outcome and its report. It exits as the worst of them, runs the same package once, gives two
   files of one name two folders, and with `--from` an earlier run of several carries each
-  package's decisions by its bytes. One package file runs as before, byte for byte.
+  package's decisions by its build. One package file runs as before, byte for byte.
 - **Built:** the [support playbook](studio-migration-support.md), for a support engineer: how to
   read the report and the decisions file, every finding the tool can print with who acts on it,
   escalation, reproducing a customer's run safely, and lab mode. A test fails when the tool gains

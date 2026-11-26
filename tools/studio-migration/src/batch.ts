@@ -12,6 +12,10 @@
  *   allow-list; a package that cannot be read, is refused at a step, fails a check, or meets a
  *   defect of the tool, ends that package's run alone, and the next one runs as it would have
  *   without it. Nothing one run finds is given to another.
+ * - **Asynchronous, between packages.** After each package the event loop turns, so that what its
+ *   run parsed is freed before the next: jsdom keeps every document until the job that made it
+ *   ends, and a run of one package holds about a hundred and seventy megabytes of the made-up
+ *   package's, which a run of many in one job would add up until the heap ran out.
  * - **The summary,** `<out>/summary.txt`, is what the run prints: a line for each package with its
  *   result, the counts of its constructs by outcome, as its report gives them, and the full path of
  *   its report; then how many ended each way, the worst, and what to do next. `<out>/summary.json`
@@ -25,8 +29,8 @@
  * - **A folder** gives the `.zip` files directly in it, in the order of their names; anything else
  *   in it is listed as left out. A folder with no `.zip` file in it is refused.
  * - **`--from` an earlier run of several** carries each package's decisions from that run's folder
- *   for the same bytes, as `--from` does for one; a package that run did not hold, or holds no
- *   decisions for, starts its decisions again, and its line says so.
+ *   for the same build, as `--from` holds one package's decisions to it; a package that
+ *   run did not hold, or holds no decisions for, starts its decisions again, and its line says so.
  * - **It never writes over anything,** as for one package: `--out` must be new or empty, and each
  *   file is written only where none is.
  *
@@ -39,7 +43,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import type { CliIo } from './cli';
-import { allowListOf } from './convert';
+import { allowListOf, packageBuildOf } from './convert';
 import { DECISIONS_FILE } from './decisions';
 import {
   CONVERSION_DIRECTORY,
@@ -97,6 +101,11 @@ export interface PackageEntry {
   readonly sha256: string | null;
   /** What its `package.xml` declares, or `null` when it could not be read as a Studio package. */
   readonly package: { readonly name: string; readonly version: string } | null;
+  /**
+   * The build its decisions are held to, as `decisions.json` names it: its name, version, Studio
+   * commit and build time, and its bundle's SHA-256. `null` when it is not a package it can read.
+   */
+  readonly build: ReturnType<typeof packageBuildOf> | null;
   readonly result: Outcome;
   /** For `the same package`: the number of the one that ran. */
   readonly sameAs?: number;
@@ -107,8 +116,13 @@ export interface PackageEntry {
   readonly printed: string | null;
   /** Under `<out>`, its report, when its run wrote one. */
   readonly report: string | null;
-  /** Where its run stopped: the step's number and title, 0 and `null` before its first step. */
+  /**
+   * Where its run stopped: the step's number and title; 0 and `null` before its first step, or
+   * where a defect of the tool stopped it outside every step.
+   */
   readonly stoppedAt: { readonly step: number; readonly title: string | null } | null;
+  /** True when a defect of the tool ended its run, rather than a step that refused. */
+  readonly defect?: true;
   /** The numbers of the checks that failed. */
   readonly checksFailed: readonly number[];
   /** What stands in the way of readiness, as its verdict gives it, once its checks ran. */
@@ -117,8 +131,8 @@ export interface PackageEntry {
   readonly constructs:
     (Readonly<Record<Tally, number>> & { readonly total: number; readonly decided: number }) | null;
   /**
-   * With `--from`: under the earlier run, the folder its decisions were carried from, or `null`
-   * when that run held none for it.
+   * With `--from`: under the earlier run, `/`-separated, the folder whose decisions it was given to
+   * carry, or `null` when that run held none for it.
    */
   readonly carriedFrom?: string | null;
 }
@@ -155,7 +169,19 @@ interface Given {
   readonly path: string;
 }
 
-export function migrateMany(request: BatchRequest, io: CliIo, run: Command): number {
+/** A turn of the event loop, which frees what the run before it parsed. */
+const turn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/**
+ * The run of several packages. `one` is the run of one package, given only so that a test can
+ * stand a defect in its place.
+ */
+export async function migrateMany(
+  request: BatchRequest,
+  io: CliIo,
+  run: Command,
+  one: typeof migrateOne = migrateOne,
+): Promise<number> {
   const out = resolve(request.out);
   const refused = (problem: string, todo: string): number => {
     io.err(`migrate: ${problem}. Nothing was written.\n\nWhat to do: ${todo}\n`);
@@ -176,11 +202,16 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
   }
   const given: Given[] = [];
   const leftOut: { folder: string; entries: string[] }[] = [];
+  const folders = new Set<string>();
   for (const argument of request.packages) {
     if (!isDirectory(argument)) {
       given.push({ given: argument, path: resolve(argument) });
       continue;
     }
+    // A folder given twice gives its packages twice, each the same package as before, and is
+    // listed once.
+    const seen = folders.has(resolve(argument));
+    folders.add(resolve(argument));
     // A name that starts with a dot is the system's, such as `.DS_Store`, or the `._claims.zip` a
     // Mac leaves beside a file on a drive that cannot hold its attributes: passed over.
     const names = readdirSync(argument)
@@ -197,7 +228,7 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
     for (const name of packages)
       given.push({ given: join(argument, name), path: resolve(argument, name) });
     const others = names.filter((name) => !packages.includes(name));
-    if (others.length > 0) leftOut.push({ folder: argument, entries: others });
+    if (others.length > 0 && !seen) leftOut.push({ folder: argument, entries: others });
   }
   // Each file is read once, and every run is given those bytes: each package, and the allow-list.
   const cache = new Map<string, Buffer>();
@@ -233,6 +264,15 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
 
   const packagesOut = join(out, PACKAGES_DIRECTORY);
   const printedOut = join(out, PRINTED_DIRECTORY);
+  try {
+    mkdirSync(packagesOut, { recursive: true });
+    mkdirSync(printedOut, { recursive: true });
+  } catch (error) {
+    return refused(
+      `${out} cannot be written to: ${(error as Error).message}`,
+      'give --out a new directory in a folder you can write to.',
+    );
+  }
   const taken = new Set<string>();
   const bySha = new Map<string, number>();
   const entries: PackageEntry[] = [];
@@ -255,7 +295,8 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
       // Its own run says it cannot be read, as for one package, and the others run.
     }
     const sha256 = data === undefined ? null : createHash('sha256').update(data).digest('hex');
-    const declared = data === undefined ? null : declaredBy(data);
+    const build = data === undefined ? null : buildOf(data);
+    const declared = build === null ? null : { name: build.name, version: build.version };
     const first = sha256 === null ? undefined : bySha.get(sha256);
     if (first !== undefined) {
       entries.push({
@@ -263,6 +304,7 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
         given: as,
         sha256,
         package: declared,
+        build,
         result: 'the same package',
         sameAs: first,
         exitCode: null,
@@ -282,7 +324,8 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
     const name = folderName(path, taken);
     const folder = join(packagesOut, name);
     const printed = join(printedOut, `${name}.txt`);
-    const carried = sha256 === null || earlier === undefined ? undefined : earlier.get(sha256);
+    const carried =
+      earlier === undefined || build === null ? undefined : earlier.get(buildKey(build));
     const from =
       carried !== undefined && request.from !== undefined
         ? join(request.from, PACKAGES_DIRECTORY, carried)
@@ -295,9 +338,9 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
       readFile,
     };
     let ended: ReturnType<typeof migrateOne>;
+    let defect = false;
     try {
-      mkdirSync(packagesOut, { recursive: true });
-      ended = migrateOne(
+      ended = one(
         {
           package: as,
           out: folder,
@@ -311,10 +354,12 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
       // Something no run refuses on purpose: a defect, which ends this package's run alone.
       kept += `${(error as Error).stack ?? String(error)}\nThis is a defect in this tool, not a mistake in your package: send this message to your Nuxeo contact.\n`;
       ended = { code: 1, stopped: { number: 0, title: null } };
+      defect = true;
     }
+    // Its bytes are its run's alone: the next package's run does not need them.
+    cache.delete(as);
     let printedAt: string | null = printed;
     try {
-      mkdirSync(printedOut, { recursive: true });
       writeFileSync(printed, kept, { flag: 'wx' });
     } catch {
       printedAt = null;
@@ -337,6 +382,7 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
       given: as,
       sha256,
       package: declared,
+      build,
       result,
       exitCode: ended.code,
       folder: existsSync(folder) ? under(out, folder) : null,
@@ -346,15 +392,18 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
         ended.stopped === undefined
           ? null
           : { step: ended.stopped.number, title: ended.stopped.title },
+      ...(defect ? { defect: true as const } : {}),
       checksFailed: failed,
       blockers: ended.harness?.blockers ?? [],
       constructs: ended.summary ? constructsOf(ended.summary) : null,
       ...(request.from !== undefined
-        ? { carriedFrom: from === undefined ? null : join(PACKAGES_DIRECTORY, carried as string) }
+        ? { carriedFrom: from === undefined ? null : `${PACKAGES_DIRECTORY}/${carried as string}` }
         : {}),
     };
     entries.push(entry);
-    for (const line of packageLines(entry, out, request.from)) say(line);
+    for (const line of packageLines(entry, out, request.from, data !== undefined)) say(line);
+    // What its run parsed is freed before the next package's runs.
+    await turn();
   }
 
   const ran = entries.filter(
@@ -396,26 +445,38 @@ export function migrateMany(request: BatchRequest, io: CliIo, run: Command): num
   return exitCode;
 }
 
-/** What a package's `package.xml` declares, or `null` when it is not a Studio package it can read. */
-function declaredBy(data: Buffer): { name: string; version: string } | null {
+/** The build of a package, as its decisions are held to it, or `null` when it cannot be read. */
+function buildOf(data: Buffer): ReturnType<typeof packageBuildOf> | null {
   try {
-    const { descriptor } = readStudioPackage(data);
-    return { name: descriptor.name, version: descriptor.version };
+    return packageBuildOf(readStudioPackage(data));
   } catch {
     return null;
   }
 }
 
+/** A build as one text, for matching an earlier run's. */
+function buildKey(build: ReturnType<typeof packageBuildOf>): string {
+  return JSON.stringify([build.name, build.version, build.commit, build.buildTime, build.bundle]);
+}
+
 /**
- * A folder name for a package: its file's name less `.zip`, each character a file name cannot
- * hold on every system written `-`, and numbered when another package of the run has it, told apart
- * as a file system that ignores case would.
+ * A folder name for a package, one every system can hold: its file's name less `.zip`, each
+ * character but a letter, a digit, `.`, `_` and `-` written `-`, less the dots Windows drops from
+ * the end of a name, a name Windows keeps for a device, such as `CON`, written after `_`, and
+ * numbered when another package of the run has it, told apart as a file system that ignores case
+ * would.
  */
 export function folderName(path: string, taken: Set<string>): string {
   const stem = basename(path)
     .replace(/\.zip$/i, '')
-    .replace(/[^A-Za-z0-9._-]/g, '-');
-  const base = stem === '' || /^\.+$/.test(stem) ? 'package' : stem;
+    .replace(/[^A-Za-z0-9._-]/g, '-')
+    .replace(/\.+$/, '');
+  const base =
+    stem === ''
+      ? 'package'
+      : /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(stem)
+        ? `_${stem}`
+        : stem;
   let name = base;
   for (let number = 2; taken.has(name.toLowerCase()); number++) name = `${base}-${number}`;
   taken.add(name.toLowerCase());
@@ -423,31 +484,37 @@ export function folderName(path: string, taken: Set<string>): string {
 }
 
 /**
- * The earlier run's folder of each package by its bytes' SHA-256, for those whose run holds
- * decisions to carry. Throws when `from` holds no summary of a run of several.
+ * The earlier run's folder of each package by its build, as `decisions.json` names it, for those
+ * whose run holds decisions to carry: the same bytes are the same build, and a package zipped again
+ * is too, as a run of one package carries it. Throws when `from` holds no summary of a run of
+ * several.
  */
 function earlierRuns(from: string): ReadonlyMap<string, string> {
   const file = join(from, SUMMARY_FILES.data);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<BatchSummary> | null;
   if (raw === null || typeof raw !== 'object' || raw.format !== SUMMARY_FORMAT)
     throw new Error(`${file} is not a ${SUMMARY_FORMAT} summary`);
-  const runs = new Map<string, string>();
-  for (const entry of Array.isArray(raw.packages) ? raw.packages : []) {
+  if (!Array.isArray(raw.packages)) throw new Error(`${file} lists no packages`);
+  const byBuild = new Map<string, string>();
+  for (const entry of raw.packages) {
     const folder =
       typeof entry?.folder === 'string' && entry.folder.startsWith(`${PACKAGES_DIRECTORY}/`)
         ? entry.folder.slice(PACKAGES_DIRECTORY.length + 1)
         : undefined;
     // A name of the run's own making, never a path that leaves it.
+    const build = entry?.build;
     if (
-      typeof entry?.sha256 !== 'string' ||
       folder === undefined ||
-      !/^(?!\.{1,2}$)[A-Za-z0-9._-]+$/.test(folder)
+      !/^(?!\.{1,2}$)[A-Za-z0-9._-]+$/.test(folder) ||
+      build === null ||
+      typeof build !== 'object'
     )
       continue;
-    if (existsSync(join(from, PACKAGES_DIRECTORY, folder, CONVERSION_DIRECTORY, DECISIONS_FILE)))
-      runs.set(entry.sha256, folder);
+    if (!existsSync(join(from, PACKAGES_DIRECTORY, folder, CONVERSION_DIRECTORY, DECISIONS_FILE)))
+      continue;
+    if (!byBuild.has(buildKey(build))) byBuild.set(buildKey(build), folder);
   }
-  return runs;
+  return byBuild;
 }
 
 /** A path under `<out>`, `/`-separated, as `summary.json` gives it. */
@@ -463,14 +530,19 @@ function constructsOf(summary: MigrationSummary): NonNullable<PackageEntry['cons
 }
 
 /** What the summary says of one package that ran. */
-function packageLines(entry: PackageEntry, out: string, from: string | undefined): string[] {
+function packageLines(
+  entry: PackageEntry,
+  out: string,
+  from: string | undefined,
+  read: boolean,
+): string[] {
   const at = (path: string | null): string => (path === null ? '' : join(out, path));
   const head = `${entry.number}. ${entry.given}: `;
   const lines: string[] = [];
   if (entry.result === 'stopped') {
     const where = entry.stoppedAt;
     lines.push(
-      `${head}stopped ${where === null || where.step === 0 ? 'before its first step' : `at step ${where.step}, ${(where.title ?? '').toLowerCase()}`}`,
+      `${head}stopped ${entry.defect ? 'by a defect of the tool' : where === null || where.step === 0 ? 'before its first step' : `at step ${where.step}, ${(where.title ?? '').toLowerCase()}`}`,
     );
   } else if (entry.result === 'check failed')
     lines.push(
@@ -478,14 +550,18 @@ function packageLines(entry: PackageEntry, out: string, from: string | undefined
     );
   else lines.push(`${head}${RESULT_WORDS[entry.result]}`);
   lines.push(
-    `     ${entry.package ? `${entry.package.name} ${entry.package.version}` : 'Not a Studio package it can read'}, ${entry.folder === null ? 'and nothing was written for it' : `in ${at(entry.folder)}`}`,
+    `     ${entry.package ? `${entry.package.name} ${entry.package.version}` : read ? 'Not a Studio package it can read' : 'It cannot be read'}, ${entry.folder === null ? 'and nothing was written for it' : `in ${at(entry.folder)}`}`,
   );
-  if (from !== undefined)
+  if (from !== undefined) {
+    const earlier = entry.carriedFrom ? join(from, ...entry.carriedFrom.split('/')) : null;
     lines.push(
-      entry.carriedFrom
-        ? `     Carried the decisions of ${join(from, entry.carriedFrom)}`
-        : `     Nothing carried: ${from} holds no decisions for this package as it is now, so they start again`,
+      earlier === null
+        ? `     Nothing carried: ${from} holds no decisions for this package as it is now, so they start again`
+        : entry.stoppedAt?.title === 'The decisions, carried'
+          ? `     The decisions of ${earlier} could not be carried: what it printed says why`
+          : `     Carried what still holds of the decisions of ${earlier}`,
     );
+  }
   if (entry.constructs) {
     const counts = entry.constructs;
     const shown = TALLIES.filter((tally) => tally === 'missing' || counts[tally] > 0).map(
@@ -497,7 +573,9 @@ function packageLines(entry: PackageEntry, out: string, from: string | undefined
     lines.push(`     ${counts.total} constructs: ${shown.join(', ')}`);
   }
   if (entry.report !== null) lines.push(`     The report: ${at(entry.report)}`);
-  if (entry.result === 'check failed' && entry.folder !== null)
+  if (entry.result === 'stopped' && entry.checksFailed.length > 0)
+    lines.push(`     Before it stopped, these checks failed: ${entry.checksFailed.join(', ')}`);
+  if (entry.checksFailed.length > 0 && entry.folder !== null)
     lines.push(`     What the checks found: ${join(at(entry.folder), STEP_FILES.checks)}`);
   lines.push(
     entry.printed === null
@@ -569,7 +647,7 @@ function closingLines(summary: BatchSummary, request: BatchRequest): string[] {
   );
   if (ran.some((entry) => entry.report !== null) && !undecided)
     todo.push(
-      "Read each package's report. Every reported item of every package has an owner and a decision: none is left to fill in.",
+      "Read each package's report. Every reported item of every package that reached its report has an owner and a decision: none is left to fill in.",
     );
   if (undecided) {
     todo.push(

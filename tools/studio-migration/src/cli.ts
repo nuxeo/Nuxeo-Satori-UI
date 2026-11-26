@@ -35,8 +35,9 @@
  * `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, as a
  * person would by hand, keeping what each prints in a file of `--out`, and says what to do next
  * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer). Given several
- * packages, or a folder, it runs each so into a folder of `--out` of its own, and writes a summary
- * of them all (`batch.ts`); one package file is run as it always was.
+ * packages, or a folder, on the command line (`commandLine`), it runs each so into a folder of
+ * `--out` of its own, and writes a summary of them all (`batch.ts`); one package file is run as it
+ * always was. `main` runs one command, and one package.
  *
  * Exit codes: 0 done, and for `check` and `migrate`, no check failed (for several packages: in any
  * of them); 1 a check failed, or something could not be read or written, with the reason (for
@@ -66,7 +67,7 @@ import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
 import { isDirectory, migrateMany } from './batch';
-import { migrate } from './migrate';
+import { migrate, type Command } from './migrate';
 import {
   DECISION_MUTATIONS,
   MUTATIONS,
@@ -114,8 +115,6 @@ const COMMANDS: Readonly<
     string,
     {
       readonly args: number;
-      /** Takes `args` or more. */
-      readonly more?: boolean;
       readonly flags: readonly string[];
       readonly valued?: readonly string[];
     }
@@ -127,16 +126,22 @@ const COMMANDS: Readonly<
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
-  migrate: { args: 1, more: true, flags: [], valued: ['--out', '--allow-list', '--from'] },
+  migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
 };
 
-export function main(argv: readonly string[], io: CliIo): number {
+/** A command line read against {@link COMMANDS}: its arguments, flags and values. */
+interface Parsed {
+  readonly command: string | undefined;
+  readonly spec: (typeof COMMANDS)[string] | undefined;
+  readonly args: readonly string[];
+  readonly flags: readonly string[];
+  readonly values: ReadonlyMap<string, string>;
+  /** A flag the command does not take, or a value missing or given twice. */
+  readonly wrong: boolean;
+}
+
+function parse(argv: readonly string[]): Parsed {
   const [command, ...rest] = argv;
-  if (command === 'mutate' && rest.length === 1 && rest[0] === '--list') {
-    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
-      io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
-    return 0;
-  }
   const spec =
     command !== undefined && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
   const flags: string[] = [];
@@ -154,7 +159,53 @@ export function main(argv: readonly string[], io: CliIo): number {
       flags.push(arg);
     } else args.push(arg);
   }
-  if (!spec || wrong || (spec.more ? args.length < spec.args : args.length !== spec.args)) {
+  return { command, spec, args, flags, values, wrong };
+}
+
+/**
+ * The command line: `main`, but for `migrate` given several packages, or a folder, which runs
+ * them all (`batch.ts`) and is asynchronous. It lets the event loop turn after each package, so
+ * that what one package's run parsed is freed before the next: jsdom keeps a document it made
+ * until the job that made it ends. Every other command, one package's `migrate` among them, is
+ * `main` itself, run as it always was, and its code is given as `main` gives it.
+ */
+export function commandLine(argv: readonly string[], io: CliIo): number | Promise<number> {
+  const { command, args, values, wrong } = parse(argv);
+  const out = values.get('--out');
+  if (
+    command === 'migrate' &&
+    !wrong &&
+    out !== undefined &&
+    args.length > 0 &&
+    (args.length > 1 || isDirectory(args[0]))
+  ) {
+    const allowList = values.get('--allow-list');
+    const from = values.get('--from');
+    return migrateMany(
+      {
+        packages: args,
+        out,
+        ...(allowList !== undefined ? { allowList } : {}),
+        ...(from !== undefined ? { from } : {}),
+      },
+      io,
+      step,
+    );
+  }
+  return main(argv, io);
+}
+
+/** `main` as a step of `migrate`: one command, whose code is a number. */
+const step: Command = (argv, io) => main(argv, io);
+
+export function main(argv: readonly string[], io: CliIo): number {
+  const { command, spec, args, flags, values, wrong } = parse(argv);
+  if (command === 'mutate' && argv.length === 2 && argv[1] === '--list') {
+    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
+      io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
+    return 0;
+  }
+  if (!spec || wrong || args.length !== spec.args) {
     io.err(USAGE);
     return 2;
   }
@@ -280,18 +331,6 @@ export function main(argv: readonly string[], io: CliIo): number {
           return 2;
         }
         const from = values.get('--from');
-        // Several packages, or a folder of them: each runs as one does, into a folder of its own.
-        if (args.length > 1 || isDirectory(args[0]))
-          return migrateMany(
-            {
-              packages: args,
-              out,
-              ...(allowListFile !== undefined ? { allowList: allowListFile } : {}),
-              ...(from !== undefined ? { from } : {}),
-            },
-            io,
-            main,
-          );
         // Each step is this very function, so each prints what the command prints by hand.
         return migrate(
           {
@@ -646,5 +685,12 @@ if (require.main === module) {
     void import('./lab-cli').then(async ({ lab }) => {
       process.exitCode = await lab(argv.slice(1), io);
     });
-  else process.exitCode = main(argv, io);
+  else {
+    const code = commandLine(argv, io);
+    if (typeof code === 'number') process.exitCode = code;
+    else
+      void code.then((ended) => {
+        process.exitCode = ended;
+      });
+  }
 }
