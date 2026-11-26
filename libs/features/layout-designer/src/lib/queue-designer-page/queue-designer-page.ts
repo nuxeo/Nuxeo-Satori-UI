@@ -12,10 +12,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -29,12 +26,16 @@ import {
 import { QueuePageComponent, isQueueId, readQueue } from '@agentic-ui/shared/queues';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsConfirmDialogComponent,
-  NxsIconComponent,
+  NxsIconButtonComponent,
+  NxsSelectComponent,
   NxsSpinnerComponent,
+  NxsTextFieldComponent,
   type NxsConfirmDialogData,
+  type NxsSelectOption,
 } from '@nuxeo/satori-platform/components';
-import { type Observable, map, of, switchMap } from 'rxjs';
+import { type Observable, map, merge, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
 import { LayerPanelComponent } from '../layer/layer-panel';
@@ -100,12 +101,12 @@ const isObject = (value: unknown): value is LayoutJson =>
   standalone: true,
   imports: [
     LayerPanelComponent,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
     NxsBannerComponent,
-    NxsIconComponent,
+    NxsButtonComponent,
+    NxsIconButtonComponent,
+    NxsSelectComponent,
     NxsSpinnerComponent,
+    NxsTextFieldComponent,
     QueuePageComponent,
     RouterLink,
     TranslatePipe,
@@ -126,6 +127,36 @@ export class QueueDesignerPageComponent {
 
   /** What a queue may name, read once: the rules and actions register before a page shows. */
   private readonly registered = this.service.queueRegistered();
+
+  /**
+   * Ticks when the language or its catalogue changes, so that the order picker's labels, looked up
+   * with `instant`, follow it as the template's `translate` pipe does.
+   */
+  private readonly translationTick = toSignal(
+    merge(
+      this.translate.onLangChange,
+      this.translate.onTranslationChange,
+      this.translate.onFallbackLangChange,
+    ).pipe(map((_, index) => index)),
+    { initialValue: -1 },
+  );
+
+  /**
+   * The orders a sort may have: ascending or descending, and, for a sort that has none yet, none,
+   * which the page provider's own order then decides.
+   */
+  protected readonly orderOptions = computed<{
+    readonly unset: readonly NxsSelectOption[];
+    readonly set: readonly NxsSelectOption[];
+  }>(() => {
+    this.translationTick();
+    const option = (value: string, key: string): NxsSelectOption => ({
+      value,
+      label: this.translate.instant(`layout-designer.queue.order-${key}`),
+    });
+    const set = [option('asc', 'asc'), option('desc', 'desc')];
+    return { unset: [option('', 'none'), ...set], set };
+  });
 
   /** The queues the app's menu opens, offered as the id is typed. */
   readonly menuQueues = toSignal(this.service.queueIds(), { initialValue: { state: 'reading' } });
@@ -359,7 +390,7 @@ export class QueueDesignerPageComponent {
     ]);
     const left = this.columns().length;
     if (left > 0) this.focusEntry('columns', Math.min(column.index, left - 1), ['hide']);
-    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"]');
+    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"] button');
   }
 
   /** Puts the column back where it was, the focus on it. */
@@ -380,7 +411,7 @@ export class QueueDesignerPageComponent {
     else
       this.focusIn(
         `[data-part="${list}"]`,
-        `[data-picker="add-${list === 'sort' ? 'sort' : 'facet'}"]`,
+        list === 'sort' ? '[data-picker="add-sort"] select' : '[data-picker="add-facet"] input',
       );
   }
 
@@ -402,6 +433,11 @@ export class QueueDesignerPageComponent {
   unsorted(): readonly string[] {
     const sorted = new Set(this.sorts().map((sort) => sort.field));
     return this.sortable().filter((xpath) => !sorted.has(xpath));
+  }
+
+  /** The sort picker's choices: the properties not yet sorted on, by their xpaths. */
+  protected unsortedOptions(): readonly NxsSelectOption[] {
+    return this.unsorted().map((xpath) => ({ value: xpath, label: xpath }));
   }
 
   /** Adds what is typed or chosen to `list`, last, the focus on it. */
@@ -468,13 +504,6 @@ export class QueueDesignerPageComponent {
     return column.name ?? `columns[${column.index}]`;
   }
 
-  protected valueOf(event: Event): string {
-    const target = event.target;
-    return target instanceof HTMLInputElement || target instanceof HTMLSelectElement
-      ? target.value
-      : '';
-  }
-
   protected failed<T>(reading: Reading<T> | null): string | null {
     return reading?.state === 'failed' ? reading.problem : null;
   }
@@ -492,18 +521,25 @@ export class QueueDesignerPageComponent {
   private focusEntry(list: QueueList, index: number, actions: readonly string[]): void {
     this.focusIn(
       `[data-list="${list}"] > li:nth-child(${index + 1})`,
-      ...actions.map((action) => `[data-action="${action}"]`),
+      ...actions.map((action) => `[data-action="${action}"] button`),
     );
   }
 
-  private focusIn(container: string, ...buttons: readonly string[]): void {
+  /**
+   * Once the page is drawn again, the focus on the first control `controls` names in `container`
+   * that is offered. Each names the native control inside an `nxs-` element — its `button`,
+   * `select` or `input` — since that, not the element, is what takes the focus.
+   */
+  private focusIn(container: string, ...controls: readonly string[]): void {
     afterNextRender(
       () => {
         const within = this.host.nativeElement.querySelector(container);
-        for (const selector of buttons) {
-          const button = within?.querySelector<HTMLButtonElement>(selector);
-          if (button && !button.disabled) {
-            button.focus();
+        for (const selector of controls) {
+          const control = within?.querySelector<
+            HTMLButtonElement | HTMLSelectElement | HTMLInputElement
+          >(selector);
+          if (control && !control.disabled) {
+            control.focus();
             return;
           }
         }

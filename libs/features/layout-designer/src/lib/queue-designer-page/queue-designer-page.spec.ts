@@ -160,8 +160,9 @@ describe('QueueDesignerPageComponent', () => {
     await settle();
   }
 
+  /** The native button of the `nxs-` button `selector` names. */
   const button = (selector: string): HTMLButtonElement => {
-    const found = root().querySelector<HTMLButtonElement>(selector);
+    const found = root().querySelector<HTMLButtonElement>(`${selector} button`);
     if (!found) throw new Error(`no ${selector}`);
     return found;
   };
@@ -199,7 +200,9 @@ describe('QueueDesignerPageComponent', () => {
 
   it("offers the queues the app's menu opens, and opens one by its button", async () => {
     await settle();
-    const offered = [...root().querySelectorAll<HTMLOptionElement>('#queue-designer-ids option')];
+    const offered = [
+      ...root().querySelectorAll<HTMLOptionElement>('[data-picker="queue"] datalist option'),
+    ];
     expect(offered.map((option) => option.value)).toEqual(['up-for-renewal', 'terminated']);
     expect(button('[data-action="open"]').disabled).toBe(true);
     page.idChosen.set('../etc');
@@ -214,6 +217,33 @@ describe('QueueDesignerPageComponent', () => {
     expect(columns()).toEqual(['contract:number', 'dc:title', 'contract:end']);
     expect(page.sorts()).toEqual([{ index: 0, field: 'contract:end', order: 'asc' }]);
     expect(page.facets().map((facet) => facet.aggregate)).toEqual(['contract_status']);
+  });
+
+  it('takes the queue ID and a facet to add as each key is typed, and the queue name once left', async () => {
+    await settle();
+    const typeInto = (selector: string, text: string, event: 'input' | 'change'): void => {
+      const field = root().querySelector<HTMLInputElement>(`${selector} input`);
+      if (!field) throw new Error(`no ${selector}`);
+      field.value = text;
+      field.dispatchEvent(new Event(event));
+    };
+    typeInto('[data-picker="queue"]', 'up-for-renewal', 'input');
+    await settle();
+    expect(page.idChosen()).toBe('up-for-renewal');
+    expect(button('[data-action="open"]').disabled).toBe(false);
+
+    await open();
+    typeInto('[data-picker="add-facet"]', 'contract_category', 'input');
+    await settle();
+    expect(page.toAdd().facets).toBe('contract_category');
+    expect(button('[data-action="add-facet"]').disabled).toBe(false);
+
+    typeInto('[data-text="label"]', 'Renewals', 'input');
+    await settle();
+    expect(page.file()).toEqual(RENEWALS);
+    typeInto('[data-text="label"]', 'Renewals', 'change');
+    await settle();
+    expect(page.file()?.['label']).toBe('Renewals');
   });
 
   it('previews the queue with the queue page, given the file as edited and read-only', async () => {
@@ -242,7 +272,7 @@ describe('QueueDesignerPageComponent', () => {
   it("adds a column from the content model's properties, and sorts on a column", async () => {
     await open();
     const properties = [
-      ...root().querySelectorAll<HTMLOptionElement>('#queue-designer-properties option'),
+      ...root().querySelectorAll<HTMLOptionElement>('[data-picker="add-column"] datalist option'),
     ].map((option) => option.value);
     expect(properties).toEqual(['contract:end', 'contract:number', 'contract:owner', 'dc:title']);
     page.choose('columns', 'contract:owner');
@@ -464,7 +494,7 @@ describe('QueueDesignerPageComponent', () => {
     expect(names).toContain('Show the column dc:title again');
     const named = (list: string, action: string): string | null | undefined =>
       root()
-        .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"]`)
+        .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"] button`)
         ?.getAttribute('aria-label');
     expect(named('columns', 'up')).toBe('Move the column contract:number up');
     expect(named('columns', 'down')).toBe('Move the column contract:number down');
@@ -481,8 +511,16 @@ describe('QueueDesignerPageComponent', () => {
       facets: [{ aggregate: 'a' }, { aggregate: 'b' }],
     });
     const focused = (): string | null => {
+      // The focus is on the native control inside the `nxs-` element that names the action or the
+      // picker: its button, or the facet's input. Read only off one of those.
       const element = document.activeElement as HTMLElement | null;
-      return `${element?.closest('[data-facet],[data-part]')?.getAttribute('data-facet') ?? ''}:${element?.dataset['action'] ?? element?.dataset['picker'] ?? ''}`;
+      const control =
+        element instanceof HTMLButtonElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement
+          ? element.closest<HTMLElement>('[data-action],[data-picker]')
+          : null;
+      return `${element?.closest('[data-facet],[data-part]')?.getAttribute('data-facet') ?? ''}:${control?.dataset['action'] ?? control?.dataset['picker'] ?? ''}`;
     };
     button('[data-facet="a"] [data-action="remove"]').click();
     await settle();

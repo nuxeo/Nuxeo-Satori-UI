@@ -278,8 +278,9 @@ describe('LayoutDesignerPageComponent', () => {
     await settle();
   }
 
+  /** The native button of the `nxs-` button `selector` names. */
   const button = (selector: string): HTMLButtonElement => {
-    const found = root().querySelector<HTMLButtonElement>(selector);
+    const found = root().querySelector<HTMLButtonElement>(`${selector} button`);
     if (!found) throw new Error(`no ${selector}`);
     return found;
   };
@@ -373,11 +374,15 @@ describe('LayoutDesignerPageComponent', () => {
 
   it('keeps the focus on the field it moves, and on the next one when it hides one', async () => {
     await open();
+    // The action is read only off a native button: the focus is on the button inside the
+    // `nxs-` element that carries `data-action`, never on the element itself.
     const focused = (): [string | null | undefined, string | undefined] => {
       const element = document.activeElement as HTMLElement | null;
       return [
         element?.closest('[data-field]')?.getAttribute('data-field'),
-        element?.dataset['action'],
+        element instanceof HTMLButtonElement
+          ? (element.closest<HTMLElement>('[data-action]')?.dataset['action'] ?? undefined)
+          : undefined,
       ];
     };
     button('[data-field="member:status"] [data-action="up"]').click();
@@ -438,6 +443,23 @@ describe('LayoutDesignerPageComponent', () => {
       labelKey: 'payers.member.heading',
     });
     expect(page.saveState()).toBe('saveable');
+  });
+
+  it("writes a card's text once the field is left, not as each key is typed", async () => {
+    await open();
+    const field = root().querySelector<HTMLInputElement>(
+      '[data-card="cards[0]"] [data-text="label"] input',
+    );
+    if (!field) throw new Error('no heading text field');
+    field.value = 'The member';
+    field.dispatchEvent(new Event('input'));
+    await settle();
+    expect(page.file()).toEqual(MEMBER_VIEW);
+    expect(field.value).toBe('The member');
+    field.dispatchEvent(new Event('change'));
+    await settle();
+    expect((page.file()?.['cards'] as LayoutJson[])[0]).toMatchObject({ label: 'The member' });
+    expect(field.value).toBe('The member');
   });
 
   describe('saving', () => {
@@ -576,7 +598,7 @@ describe('LayoutDesignerPageComponent', () => {
 
   it('opens a type by its button, not as the picker changes', async () => {
     await settle();
-    const picker = root().querySelector<HTMLSelectElement>('[data-picker="type"]');
+    const picker = root().querySelector<HTMLSelectElement>('[data-picker="type"] select');
     if (!picker) throw new Error('no type picker');
     expect(button('[data-action="open"]').disabled).toBe(true);
     picker.value = 'Member/view';
@@ -664,7 +686,8 @@ describe('LayoutDesignerPageComponent', () => {
     await settle();
     const added = document.activeElement as HTMLElement | null;
     expect(added?.closest('[data-field]')?.getAttribute('data-field')).toBe('member:email');
-    expect(added?.dataset['action']).toBe('up');
+    expect(added).toBeInstanceOf(HTMLButtonElement);
+    expect(added?.closest<HTMLElement>('[data-action]')?.dataset['action']).toBe('up');
 
     button('[data-action="reset"]').click();
     await settle();
@@ -672,11 +695,11 @@ describe('LayoutDesignerPageComponent', () => {
   });
 
   describe('forms', () => {
-    /** Sets a picker or a field, as the person does, and lets it say so. */
+    /** Sets the native control of the picker or field `selector` names, as the person does. */
     const change = (selector: string, value: string): void => {
       const element = root().querySelector<
         HTMLSelectElement | HTMLTextAreaElement | HTMLInputElement
-      >(selector);
+      >(`${selector} select, ${selector} textarea, ${selector} input`);
       if (!element) throw new Error(`no ${selector}`);
       element.value = value;
       element.dispatchEvent(new Event('change'));
@@ -770,7 +793,7 @@ describe('LayoutDesignerPageComponent', () => {
       });
       expect(
         root().querySelector<HTMLTextAreaElement>(
-          '[data-field="member:status"] [data-rule="visibleWhen"]',
+          '[data-field="member:status"] [data-rule="visibleWhen"] textarea',
         )?.value,
       ).toBe(JSON.stringify({ type: 'app.rules.inGroup', parameters: ['members'] }, null, 2));
       expect(page.findings()).toEqual([]);

@@ -119,8 +119,11 @@ describe('LayerPanelComponent', () => {
   });
 
   const root = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  /** The native button of the `nxs-` button for `action`. */
   const button = (action: string): HTMLButtonElement =>
-    root().querySelector<HTMLButtonElement>(`[data-layer-action="${action}"]`) as HTMLButtonElement;
+    root().querySelector<HTMLButtonElement>(
+      `[data-layer-action="${action}"] button`,
+    ) as HTMLButtonElement;
 
   async function show(reading: LayerReading): Promise<void> {
     fixture.detectChanges();

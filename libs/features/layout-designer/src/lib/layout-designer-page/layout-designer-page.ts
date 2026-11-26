@@ -12,10 +12,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -33,13 +30,18 @@ import {
 } from '@agentic-ui/shared/document-layouts';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsConfirmDialogComponent,
-  NxsIconComponent,
+  NxsIconButtonComponent,
+  NxsSelectComponent,
   NxsSpinnerComponent,
+  NxsTextFieldComponent,
   type NxsConfirmDialogData,
+  type NxsSelectGroup,
+  type NxsSelectOption,
 } from '@nuxeo/satori-platform/components';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
-import { type Observable, combineLatest, map, of, switchMap } from 'rxjs';
+import { type Observable, combineLatest, map, merge, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
 import { LayerPanelComponent } from '../layer/layer-panel';
@@ -164,12 +166,12 @@ const isForm = (mode: DesignedMode): mode is 'edit' | 'create' => mode !== 'view
   imports: [
     DocumentLayoutFormComponent,
     LayerPanelComponent,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
     NxsBannerComponent,
-    NxsIconComponent,
+    NxsButtonComponent,
+    NxsIconButtonComponent,
+    NxsSelectComponent,
     NxsSpinnerComponent,
+    NxsTextFieldComponent,
     RecordPageComponent,
     RouterLink,
     TranslatePipe,
@@ -192,6 +194,19 @@ export class LayoutDesignerPageComponent {
   /** What a file may name, read once: the rules and row actions register before a page shows. */
   private readonly registries = this.service.registries();
 
+  /**
+   * Ticks when the language or its catalogue changes, so that the pickers' labels, looked up with
+   * `instant`, follow it as the template's `translate` pipe does.
+   */
+  private readonly translationTick = toSignal(
+    merge(
+      this.translate.onLangChange,
+      this.translate.onTranslationChange,
+      this.translate.onFallbackLangChange,
+    ).pipe(map((_, index) => index)),
+    { initialValue: -1 },
+  );
+
   readonly files = toSignal(this.service.files(), { initialValue: { state: 'reading' } });
   readonly model = toSignal(this.service.model(), { initialValue: { state: 'reading' } });
 
@@ -211,6 +226,30 @@ export class LayoutDesignerPageComponent {
         served: served.has(`${type}/${mode}`),
         key: `${type}/${mode}`,
       })),
+    }));
+  });
+
+  /** The picker's choices: each type's three files, under the type, named as the picker names them. */
+  protected readonly typeOptions = computed<readonly NxsSelectGroup[]>(() => {
+    this.translationTick();
+    return this.choices().map((group) => ({
+      label: group.type,
+      options: group.choices.map((choice) => ({
+        value: choice.key,
+        label: this.translate.instant(
+          choice.served ? 'layout-designer.choice' : 'layout-designer.choice-new',
+          { type: choice.type, mode: this.modeName(choice.mode) },
+        ),
+      })),
+    }));
+  });
+
+  /** What a form's field may be: not required, always required, or required while a rule passes. */
+  protected readonly requiredOptions = computed<readonly NxsSelectOption[]>(() => {
+    this.translationTick();
+    return (['no', 'always', 'rule'] as const).map((choice) => ({
+      value: choice,
+      label: this.translate.instant(`layout-designer.required-${choice}`),
     }));
   });
 
@@ -311,6 +350,11 @@ export class LayoutDesignerPageComponent {
     const records = this.records();
     return records?.state === 'read' ? records.value : [];
   });
+
+  /** The records the preview may draw, by their titles. */
+  protected readonly recordOptions = computed<readonly NxsSelectOption[]>(() =>
+    this.recordList().map((record) => ({ value: record.uid, label: record.title })),
+  );
 
   /** The record the preview draws: the first offered, until another is chosen. */
   readonly recordUid = linkedSignal<string | null>(() => {
@@ -495,7 +539,7 @@ export class LayoutDesignerPageComponent {
     ]);
     const left = card.fields.length - 1;
     if (left > 0) this.focusField(card.path, Math.min(field.index, left - 1), ['hide']);
-    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"]');
+    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"] button');
   }
 
   /** Puts the field back where it was, the focus on it. */
@@ -566,6 +610,11 @@ export class LayoutDesignerPageComponent {
     return (this.properties() ?? []).filter((xpath) => !shown.has(xpath));
   }
 
+  /** The add picker's choices for the card: the properties it may add, by their xpaths. */
+  protected addOptions(card: DesignerCard): readonly NxsSelectOption[] {
+    return this.addable(card).map((xpath) => ({ value: xpath, label: xpath }));
+  }
+
   chosen(card: DesignerCard): string {
     return this.toAdd()[card.path] ?? '';
   }
@@ -625,16 +674,6 @@ export class LayoutDesignerPageComponent {
     return field.name ?? `fields[${field.index}]`;
   }
 
-  /** What a field or a picker holds, from its change event. */
-  protected valueOf(event: Event): string {
-    const target = event.target;
-    return target instanceof HTMLInputElement ||
-      target instanceof HTMLSelectElement ||
-      target instanceof HTMLTextAreaElement
-      ? target.value
-      : '';
-  }
-
   protected failed<T>(reading: Reading<T> | null): string | null {
     return reading?.state === 'failed' ? reading.problem : null;
   }
@@ -652,10 +691,15 @@ export class LayoutDesignerPageComponent {
   private focusField(cardPath: string, index: number, actions: readonly string[]): void {
     this.focusIn(
       `[data-card="${cardPath}"] .layout-designer__fields > li:nth-child(${index + 1})`,
-      ...actions.map((action) => `[data-action="${action}"]`),
+      ...actions.map((action) => `[data-action="${action}"] button`),
     );
   }
 
+  /**
+   * Once the page is drawn again, the focus on the first button `buttons` names in `container`
+   * that is offered. Each names the native `button` inside an `nxs-` button, since that, not the
+   * element, is what takes the focus.
+   */
   private focusIn(container: string, ...buttons: readonly string[]): void {
     afterNextRender(
       () => {
