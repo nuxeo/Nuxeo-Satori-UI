@@ -3,6 +3,8 @@ import { join, posix } from 'node:path';
 
 import { workspaceRoot, type Tree } from '@nx/devkit';
 
+import { jsonFileText } from '../util/json-file-text';
+
 /**
  * What the business-app generators share: finding the app definition package they add to, and the
  * two files more than one of them writes into, its labels and its component.
@@ -111,6 +113,16 @@ export function parseJson(text: string, file: string): unknown {
 /** `value` as the generators write JSON. `formatFiles` then formats it as the repository does. */
 export function writeJson(tree: Tree, file: string, value: unknown): void {
   tree.write(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/**
+ * A file the layout designer opens, a type's record page or form, or a queue, written as the
+ * designer writes it (`util/json-file-text.ts`): so that the designer opens it and saves it back
+ * byte for byte, as `round-trip.spec.ts` holds every kit's files to. Written with `writeJson`, an
+ * entry that fits on a line, `{ "field": "dc:title", "required": true }`, is kept across four.
+ */
+export function writeDesignedJson(tree: Tree, file: string, value: unknown): void {
+  tree.write(file, jsonFileText(value));
 }
 
 /**

@@ -11,14 +11,14 @@ import {
   appContributionSaid,
   contributeApp,
   contributeLayout,
+  humanize,
   ID,
   listOption,
   parseJson,
   readAppPackage,
   schemaFor,
-  writeJson,
+  writeDesignedJson,
   XPATH,
-  humanize,
 } from '../app-package/package-files';
 import {
   readModel,
@@ -338,7 +338,7 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
   // First, since it may refuse: nothing is written before it has.
   contributeLayout(tree, pkg, options.type, 'view');
   const layoutColumns = columns ?? Math.min(2, cards.length);
-  writeJson(tree, file, {
+  writeDesignedJson(tree, file, {
     $schema: schemaFor(file, 'layout-v2.schema.json'),
     version: 2,
     ...(layoutColumns > 1 ? { columns: layoutColumns } : {}),
