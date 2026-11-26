@@ -143,10 +143,14 @@ public class AuditExportTest extends RecordsAuditTestCase {
 
         // In the period, but not under /records: a document elsewhere, and one under /records-old,
         // whose path only starts like it.
+        // Both readable by grace, so that only the scope leaves them out.
         DocumentModel elsewhere = session.createDocument(session.createDocumentModel("/", "elsewhere", "Folder"));
+        session.setACP(elsewhere.getRef(), readableBy("grace"), true);
         session.createDocument(session.createDocumentModel("/elsewhere", "other", "File"));
-        session.createDocument(session.createDocumentModel("/", "records-old", "Folder"));
-        session.createDocument(session.createDocumentModel("/records-old", "older", "File"));
+        DocumentModel old = session.createDocument(session.createDocumentModel("/", "records-old", "Folder"));
+        session.setACP(old.getRef(), readableBy("grace"), true);
+        DocumentModel older = session.createDocument(session.createDocumentModel("/records-old", "older", "File"));
+        assertTrue(Fixtures.as(session, "grace").hasPermission(older.getRef(), SecurityConstants.READ));
 
         // In the period and under /records, but a document grace may not read: left out, and counted.
         DocumentModel restricted = session.createDocument(session.createDocumentModel(Fixtures.RECORDS, "restricted",
@@ -416,6 +420,14 @@ public class AuditExportTest extends RecordsAuditTestCase {
 
     private long exports() {
         return session.query("SELECT * FROM " + Disposition.EXPORT_TYPE).size();
+    }
+
+    private static ACP readableBy(String name) {
+        ACP acp = new ACPImpl();
+        ACL acl = new ACLImpl(ACL.LOCAL_ACL);
+        acl.add(new ACE(name, SecurityConstants.READ, true));
+        acp.addACL(acl);
+        return acp;
     }
 
     private static ACP blocked() {

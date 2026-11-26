@@ -502,7 +502,7 @@ cluster's lock leaving the person's transaction alone (with `ClusterService.runA
 person wrote before it). A wrong SHA-256 for the module's jar fails the build.
 
 **The audit export's and access logging's checks, seen failing** the same way (26 November 2026),
-each taken out in turn: SEEN_FAILING.
+each taken out in turn, and the test that holds it went red: the export's permission, the folder its filer may read, an unreadable document left out, the scope held exactly, the period, every page read, the CSV's checksum, the export made a record, its files and figures guarded, the export its filer's alone, the server writing the rest of it, an export written once, a failed export keeping nothing, a view at the answer only, a record under retention only, the server's own reads, the writer writing, a disposed record's entry, a document kept as fired, the cost's bound, and the LTS 2025 entry's extended information.
 
 ```bash
 mvn verify -pl nuxeo-agentic-records -am

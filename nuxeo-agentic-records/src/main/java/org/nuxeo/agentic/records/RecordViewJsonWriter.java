@@ -5,6 +5,8 @@ import static org.nuxeo.ecm.core.io.registry.reflect.Priorities.OVERRIDE_REFEREN
 
 import java.io.IOException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.io.marshallers.json.document.DocumentModelJsonWriter;
 import org.nuxeo.ecm.core.io.registry.reflect.Setup;
@@ -34,11 +36,18 @@ import com.fasterxml.jackson.core.JsonStreamContext;
 @Setup(mode = SINGLETON, priority = OVERRIDE_REFERENCE)
 public class RecordViewJsonWriter extends DocumentModelJsonWriter {
 
+    private static final Logger log = LogManager.getLogger(RecordViewJsonWriter.class);
+
     @Override
     protected void writeEntityBody(DocumentModel doc, JsonGenerator jg) throws IOException {
         super.writeEntityBody(doc, jg);
         if (isAnswer(jg)) {
-            RecordsAudit.viewed(doc);
+            try {
+                RecordsAudit.viewed(doc);
+            } catch (RuntimeException e) {
+                // The read is the person's: it is answered, and the server's log says the view was not recorded.
+                log.error("Access logging: a view of {} could not be recorded", doc.getId(), e);
+            }
         }
     }
 
