@@ -2577,6 +2577,35 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.busy()).toBe(false);
     });
 
+    // A server add-on's refusal, such as nuxeo-agentic-documents' of a transmittal a recipient's
+    // export-control mark excludes: Nuxeo's 403 exception, its message the server's reason.
+    it("shows the server's refusal above the form in the server's words, and keeps the dialog open", async () => {
+      await createDialog();
+      const reason =
+        'Not sent: export-control marks exclude mlind from DWG-00003 at revision B, marked EC-2, ' +
+        "for ec2-cleared. A marked revision goes only to members of one of its mark's groups";
+      m.createChildDocument.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              statusText: 'Forbidden',
+              error: { 'entity-type': 'exception', status: 403, message: reason },
+            }),
+        ),
+      );
+      component.startCreateFromType({ type: 'Transmittal', label: 'Transmittal' });
+      stubForm(fixture).properties = { 'dc:title': 'Wiring', 'trm:recipients': ['mlind'] };
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).showServerErrors).not.toHaveBeenCalled();
+      expect(component.error()).toBe(reason);
+      expect(component.busy()).toBe(false);
+      expect(m.close).not.toHaveBeenCalled();
+    });
+
     it('falls back to a generic message when the create failure carries none', async () => {
       await createDialog();
       m.createChildDocument.mockReturnValue(throwError(() => ({})));

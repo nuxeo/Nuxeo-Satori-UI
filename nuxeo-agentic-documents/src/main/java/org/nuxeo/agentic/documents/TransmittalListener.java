@@ -61,7 +61,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
-import org.nuxeo.ecm.core.api.DocumentModelList;
 import org.nuxeo.ecm.core.api.DocumentNotFoundException;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.IdRef;
@@ -86,8 +85,10 @@ import org.nuxeo.runtime.api.Framework;
  * <li><strong>{@code aboutToCreate} of a transmittal:</strong> it is issued. Its documents, each
  * named by number or id, are each the current revision the issuer may read, written back as ids,
  * with their number, revision and title as they are now; its recipients are user names; its
- * purpose one of three; its due day not past. Then it is given the next number of the series
- * registered for transmittals, who issued it and when.</li>
+ * purpose one of three; its due day not past; and, since 0.3.0, each recipient in one of the groups
+ * of each marked document's export-control mark ({@link ExportMarks}), or the transmittal is refused,
+ * 403, naming who may not receive what. Then it is given the next number of the series registered
+ * for transmittals, who issued it and when.</li>
  * <li><strong>{@code documentCreated} of a transmittal:</strong> a receipt per recipient, beside
  * it, created as the issuer, {@value ControlledDocuments#AWAITING}.</li>
  * <li><strong>{@code aboutToCreate} of a receipt:</strong> refused, unless it is the add-on's own,
@@ -202,12 +203,14 @@ public class TransmittalListener implements EventListener {
         }
         List<String> ids = new ArrayList<>();
         List<Map<String, Serializable>> items = new ArrayList<>();
+        List<DocumentModel> revisions = new ArrayList<>();
         for (String entry : named) {
             DocumentModel revision = currentRevision(session, entry);
             if (ids.contains(revision.getId())) {
                 continue;
             }
             ids.add(revision.getId());
+            revisions.add(revision);
             Map<String, Serializable> item = new HashMap<>();
             item.put("document", revision.getId());
             item.put("number", ControlledDocuments.text(revision, NUMBER));
@@ -215,6 +218,7 @@ public class TransmittalListener implements EventListener {
             item.put("title", ControlledDocuments.text(revision, "dc:title"));
             items.add(item);
         }
+        checkMarks(revisions, recipients);
         List<NumberSeries> series = service().transmittalSeries();
         if (series.size() != 1) {
             throw invalid(series.isEmpty() ? "No number series is registered for transmittals"
@@ -235,33 +239,43 @@ public class TransmittalListener implements EventListener {
     /**
      * The current revision an entry names, as the issuer may read it: by its number, the one
      * revision of that number that is current, or by its id, which must be that revision.
+     *
+     * <p>The revision's mark fence is entered before the revision is first read, so that its
+     * export-control mark is read after any change of it this could cross has committed, and none
+     * starts until the transmittal's transaction ends ({@link ControlledDocumentService#enterMark}):
+     * a number is looked up by a projection, which reads no document, and its revision read after.
      */
     private static DocumentModel currentRevision(CoreSession session, String entry) {
         Matcher number = DOCUMENT_NUMBER.matcher(entry);
+        String id = entry;
         if (number.matches() && service().series(number.group(1)) != null) {
             // Its form is checked above, so it is written into the query as it is.
-            String query = "SELECT * FROM Document WHERE ecm:mixinType = '" + FACET + "' AND docctl:number = '"
+            String query = "SELECT ecm:uuid FROM Document WHERE ecm:mixinType = '" + FACET + "' AND docctl:number = '"
                     + entry + "' AND docctl:status = '" + CURRENT + "' AND ecm:isVersion = 0 AND ecm:isProxy = 0 "
                     + "AND ecm:isTrashed = 0";
-            DocumentModelList found = session.query(query, 2);
+            List<Map<String, Serializable>> found = session.queryProjection(query, 2, 0);
             if (found.isEmpty()) {
                 throw invalid("No current revision of " + entry + " that you may read");
             }
             if (found.size() > 1) {
                 throw conflict("More than one current revision of " + entry);
             }
-            return found.get(0);
+            Serializable uuid = found.get(0).get("ecm:uuid");
+            id = uuid == null ? null : uuid.toString();
         }
-        if (!isDocumentId(entry)) {
+        if (!isDocumentId(id)) {
             throw invalid("A transmittal's document is named by its number, such as DWG-00042, or its id");
+        }
+        if (!service().enterMark(id)) {
+            throw conflict("The export-control mark of " + entry + " is being changed at this moment; try again");
         }
         DocumentModel revision;
         try {
-            revision = session.getDocument(new IdRef(entry));
+            revision = session.getDocument(new IdRef(id));
         } catch (DocumentNotFoundException e) {
-            throw invalid("No document has the id " + entry);
+            throw invalid("No document has the id " + id);
         } catch (DocumentSecurityException e) {
-            throw forbidden("You may not read the document " + entry);
+            throw forbidden("You may not read the document " + id);
         }
         if (!isLive(revision, FACET)) {
             throw invalid("The document " + entry + " is not a live controlled document");
@@ -274,6 +288,38 @@ public class TransmittalListener implements EventListener {
                     + "current revisions");
         }
         return revision;
+    }
+
+    /**
+     * Each revision with an export-control mark goes only to recipients in one of its groups, as the
+     * user directory has them: refused, 403, naming each recipient a mark excludes and what from, and
+     * the mark, which the issuer may read on the revision. A name no user holds is in no group.
+     */
+    private static void checkMarks(List<DocumentModel> revisions, List<String> recipients) {
+        Map<String, NuxeoPrincipal> people = new HashMap<>();
+        List<String> excluded = new ArrayList<>();
+        for (DocumentModel revision : revisions) {
+            ExportMarks.Mark mark = ExportMarks.read(revision);
+            if (!mark.isMarked()) {
+                continue;
+            }
+            List<String> outside = new ArrayList<>();
+            for (String recipient : recipients) {
+                NuxeoPrincipal person = people.computeIfAbsent(recipient, ExportMarks::person);
+                if (!mark.isComplete() || person == null || !ExportMarks.receives(person, mark)) {
+                    outside.add(recipient);
+                }
+            }
+            if (!outside.isEmpty()) {
+                excluded.add(String.join(", ", outside) + " from " + ControlledDocuments.text(revision, NUMBER)
+                        + " at revision " + ControlledDocuments.text(revision, REVISION) + ", marked "
+                        + mark.describe());
+            }
+        }
+        if (!excluded.isEmpty()) {
+            throw forbidden("Not sent: export-control marks exclude " + String.join("; and ", excluded)
+                    + ". A marked revision goes only to members of one of its mark's groups");
+        }
     }
 
     // ------------------------------------------------------------------ receipts

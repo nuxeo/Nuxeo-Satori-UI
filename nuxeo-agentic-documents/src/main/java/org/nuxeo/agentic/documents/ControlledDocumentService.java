@@ -59,4 +59,19 @@ public interface ControlledDocumentService {
 
     /** The series registered for transmittals, by id: exactly one numbers them. */
     List<NumberSeries> transmittalSeries();
+
+    /**
+     * Enter a revision's mark fence, to read its export-control mark for what carries it on, a new
+     * revision superseding it or a transmittal sending it, until the current transaction ends:
+     * {@code false}, and nothing entered, while its mark is being changed. Entered before the mark
+     * is read, so that it is read after any change it could cross has committed.
+     */
+    boolean enterMark(String revisionId);
+
+    /**
+     * Take a revision's mark fence to change its mark, until the current transaction ends:
+     * {@code false} while a new revision or a transmittal is reading it, or another change is under
+     * way. Released when the transaction ends, whichever way.
+     */
+    boolean changeMark(String revisionId);
 }

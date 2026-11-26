@@ -1,11 +1,12 @@
-# nuxeo-agentic-documents: numbering, supersession, transmittals and review cycles, on the server
+# nuxeo-agentic-documents: numbering, supersession, transmittals, review cycles and export-control marks, on the server
 
 The document control module's server add-on ([development plan](../docs/business-apps/development-plan.md),
-phase 8, "The document control add-on"), version 0.2.0: numbering, revisions and supersession, its
-first slice, 0.1.0; and, its second, transmittals, and review cycles with comment resolution. A
-Maven module beside `nuxeo-agentic-core`, with its own Marketplace package,
-`nuxeo-agentic-documents`. The [controlled documents kit](../business-apps/packages/controlled-documents-demo/README.md)
-is built on it.
+phase 8, "The document control add-on"), version 0.3.0: numbering, revisions and supersession, its
+first slice, 0.1.0; transmittals, and review cycles with comment resolution, its second, 0.2.0; and
+export-control marks, its third, 0.3.0, which completes the add-on the plan lists. A Maven module
+beside `nuxeo-agentic-core`, with its own Marketplace package, `nuxeo-agentic-documents`. The
+[controlled documents kit](../business-apps/packages/controlled-documents-demo/README.md) is built
+on it.
 
 **Built against an open decision.** Decision B, the packaging of the server tier, is open; this
 follows its recommendation, "`nuxeo-agentic-core` for the runtime essentials; one add-on per domain
@@ -16,9 +17,9 @@ transmittal goes to named people inside the server.
 **Its security review is deferred until the app is finished,** as every security review is
 ([security-reviews.md](../docs/business-apps/security-reviews.md)): nothing here is to be relied on
 outside a development or demonstration server until it is done. "For the security review", below,
-is what that review is to check. Version 0.1.0 is installed on the local Docker Nuxeo; 0.2.0 is
-installed nowhere: it was built and tested on a Nuxeo runtime in the build's JVM, and checked
-against the local server's own jars, read only.
+is what that review is to check. Version 0.1.0 is installed on the local Docker Nuxeo; 0.2.0 and
+0.3.0 are installed nowhere: each was built and tested on a Nuxeo runtime in the build's JVM, and
+checked against the local server's own jars, read only.
 
 ## The short version
 
@@ -59,9 +60,19 @@ against the local server's own jars, read only.
   a close is refused while one thread is open, and a comment and a close cannot cross, through a
   fence in the key/value store. The closed cycle is added to the revision's `docrev:cycles`, as
   the opener. Nothing of a closed cycle, or its comments, changes afterwards.
+- **An export-control mark, since 0.3.0,** on a revision: a classification, such as a fictional
+  `EC-2`, and the groups that may receive it, in the `ControlledDocument` facet's third schema,
+  `export_mark`, prefix `docmark`. The server refuses the revision's files and renditions at the
+  platform's download endpoints, through its own download permission, and a transmittal of it, to
+  anyone in none of those groups, an administrator included, with the server's reason (below, "Export-control marks").
+- **A mark is carried, and changed only with the add-on's permission.** A new revision takes the
+  mark of the one it supersedes, whatever its creator wrote. Setting, changing and removing a mark
+  needs `ChangeExportMark`, the add-on's own permission; the server writes who and when, and each
+  change is an entry in the platform's audit, `exportMarkChanged`.
 - **No Automation operation, and no button.** Each is reached by creating or saving a document,
   through the REST API's document endpoints or Nuxeo's comment endpoint, which every client uses
-  (below, "Transmittals and review cycles: listeners, not a route model").
+  (below, "Transmittals and review cycles: listeners, not a route model"). The marks' refusals are
+  the platform's download permission's, which every download endpoint asks.
 
 ## The route: a listener, on creation
 
@@ -158,18 +169,24 @@ refused, 409, and rolls back.
 
 ## What it refuses
 
-| Change                                                                               | Answer | Why                                               |
-| ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------- |
-| A new document with no series, or one not registered                                 | 400    | It cannot be numbered                             |
-| `docctl:supersedes` not an id, of no document, or of one not a live controlled one   | 400    | There is nothing to supersede                     |
-| Superseding a document the user may not read                                         | 403    | As the platform answers a read of it              |
-| Superseding a revision of another type                                               | 400    | A revision is of its predecessor's type           |
-| Superseding a revision in the trash, superseded, being superseded, or with no number | 409    | Only the current revision is superseded, once     |
-| Superseding a revision the user may not write                                        | 403    | It could not be marked superseded                 |
-| Any change to a `docctl:` property on a save, by anyone, or through a live proxy     | 400    | They are the server's                             |
-| The facet added to a document, at creation or after, or removed                      | 400    | A type decides what is controlled                 |
-| Copying a controlled document, or a folder holding one, readable by the user or not  | 400    | The copy would carry the number                   |
-| Restoring a version whose `docctl:` properties differ from the live document's       | 409    | A superseded revision would be made current again |
+| Change                                                                                                                                                | Answer     | Why                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------- |
+| A new document with no series, or one not registered                                                                                                  | 400        | It cannot be numbered                             |
+| `docctl:supersedes` not an id, of no document, or of one not a live controlled one                                                                    | 400        | There is nothing to supersede                     |
+| Superseding a document the user may not read                                                                                                          | 403        | As the platform answers a read of it              |
+| Superseding a revision of another type                                                                                                                | 400        | A revision is of its predecessor's type           |
+| Superseding a revision in the trash, superseded, being superseded, or with no number                                                                  | 409        | Only the current revision is superseded, once     |
+| Superseding a revision the user may not write                                                                                                         | 403        | It could not be marked superseded                 |
+| Any change to a `docctl:` property on a save, by anyone, or through a live proxy                                                                      | 400        | They are the server's                             |
+| The facet added to a document, at creation or after, or removed                                                                                       | 400        | A type decides what is controlled                 |
+| Copying a controlled document, or a folder holding one, readable by the user or not                                                                   | 400        | The copy would carry the number                   |
+| Restoring a version whose `docctl:` properties differ from the live document's                                                                        | 409        | A superseded revision would be made current again |
+| Since 0.3.0: a mark's classification or groups changed without `ChangeExportMark`                                                                     | 403        | The add-on's permission marks a revision          |
+| A mark written that is not one: its form, no group, a group the server lacks                                                                          | 400        | A mark names groups the server has                |
+| `docmark:markedBy` or `docmark:markedAt` written                                                                                                      | 400        | They are the server's                             |
+| A mark changed through a proxy or a version, or restored from a version                                                                               | 400 or 409 | A mark is changed on the revision itself          |
+| A mark changed while a new revision or a transmittal reads it                                                                                         | 409        | Try again: the two cannot cross                   |
+| A marked revision, or a folder holding one, moved, or its next revision created in another folder, without `ChangeExportMark` on it and where it goes | 403        | Where it is decides who may change its mark       |
 
 Whatever the creator writes in the six properties of a new document is replaced, not refused,
 blanks and padding included: a REST client may send the whole document back. On a save, a value is
@@ -187,8 +204,9 @@ series id's form, and an id only once it is checked to be one.
 
 ### Administrators
 
-**Not exempt** from any of the refusals above, nor from those of transmittals and review cycles
-below: no check reads the user's groups but the one for deleting, and
+**Not exempt** from any of the refusals above, nor from those of transmittals, review cycles and
+export-control marks below: no check reads the user's groups but the one for deleting, and a
+mark's own, which reads them to ask whether the person is in one of its groups, and
 `GuardTest.noSaveChangesAControlledPropertyNotEvenAnAdministrators`,
 `TransmittalTest.anAcknowledgementBySomeoneNotARecipientIsRefused` and
 `ReviewCycleTest.onlyTheOpenerResolvesAndTheServerWritesWho` act as one. An administrator may
@@ -228,6 +246,12 @@ created, as a revision is, and is never a draft that changes later:
 | `trm:issuedBy`, `trm:issuedAt` | The server     | Who created it, and when                                                                                                                                                 |
 | `dc:description`               | The issuer     | A message, optional                                                                                                                                                      |
 
+- **Held to each document's export-control mark, since 0.3.0:** every recipient must be in one of
+  the groups of each marked document it lists, as the user directory has them, or the transmittal
+  is refused, 403, with nothing written and no number spent, naming each recipient a mark excludes,
+  from which document, and the mark: "Not sent: export-control marks exclude mlind from DWG-00004
+  at revision B, marked EC-2, for ec2-cleared." A name no user holds is in no group (below,
+  "Export-control marks").
 - **What the issuer sends is what they may read.** A number is looked up with the issuer's own
   session: a revision they may not read is not found, 400, the same answer as no revision; an id
   they may not read is refused, 403, as the platform answers a read of it. A superseded revision, a
@@ -384,6 +408,134 @@ it does for numbering, and as the records add-on does for its disposition review
   a task's due day escalation, and the app's Tasks page. A receipt's due day is shown, and listed
   first in the queue, but nothing reminds anyone.
 
+## Export-control marks
+
+Since 0.3.0. A revision's mark is the `ControlledDocument` facet's third schema, `export_mark`,
+prefix `docmark`, so every controlled type has it and no kit changes its model:
+
+| Property                               | Written by                     | What it is                                                                                    |
+| -------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `docmark:classification`               | A holder of `ChangeExportMark` | Capitals and digits in parts joined by hyphens, 32 characters at most: `EC-2`. Empty, no mark |
+| `docmark:groups`                       | With it                        | 1 to 20 groups the server has: a member of any one of them may receive the revision           |
+| `docmark:markedBy`, `docmark:markedAt` | The server                     | Who last set, changed or removed the mark, and when                                           |
+
+**Who receives a marked revision:** a member of one of its mark's groups, as the server reads their
+groups: the person signed in, for a download or a rendition; each recipient, looked up in the user
+directory, for a transmittal. Nobody else, an administrator included: one who must receive it is
+put in a group, or changes the mark. A mark with a classification and no group, which only a write
+past the add-on can leave, as an import writes, refuses everyone.
+
+### Downloads and renditions: the platform's download permission
+
+As the assets add-on refuses on rights ([its README](../nuxeo-agentic-assets/README.md)), the add-on
+contributes a permission to `org.nuxeo.ecm.core.io.download.DownloadService`, point `permissions`,
+which the platform asks before it streams a file or a rendition, and answers 403 when one refuses.
+So `/nxfile/` and the REST API's `@blob`, `@rendition` and `@preview` answer 403 to anyone outside
+the mark's groups, whichever client asks, and `Blob.BulkDownload` leaves the revision out of its zip.
+The script only hands its globals, `Document`, `Rendition`, `Reason` and `CurrentUser`, to
+`ExportMarkDownloadPermission`, inside a `try` that answers `false`: a failure, or a class that does
+not load, refuses.
+
+- **Every file and every rendition of a marked revision** is refused, its thumbnail included: a
+  drawing's thumbnail shows the drawing.
+- **A version or a proxy** is decided by its own mark and by its live document's, read with a
+  privileged session: a version keeps the mark it had when it was made, so one made before the
+  revision was marked is refused as the revision is. One whose live document cannot be read is
+  refused.
+- **A folder's or a collection's renditions,** but its thumbnail, are refused when the person's own
+  session finds below it, or among its members, a marked controlled document, a proxy or a version
+  of any controlled document, a collection, or, for a collection, a folder: the platform's
+  `zipTreeExport` and container renditions hold the bytes of what they zip, and a proxy or a version
+  is decided by its live document's mark, which the query cannot read. That refuses more than it
+  must, never less, as the assets add-on's container rule does: a cleared reader is refused the
+  folder's zip too.
+- **The server's reason** is the `exportMark` document enricher's, as the assets add-on's
+  `assetRights` explains a refusal: ask with `enrichers.document: exportMark`, and a controlled
+  document answers its `classification`, `groups`, `markedBy`, `markedAt`, whether the reader
+  `receives` it, and `reason`, `not-in-groups`, `mark-incomplete`, `holds-marked` or
+  `mark-unreadable`, a code a client translates; any other document answers `null`. The enricher
+  explains; the permission refuses. Each refusal is logged at `INFO`, with the document, its type,
+  the use, the person and the code.
+
+### Transmittals
+
+A transmittal listing a marked revision goes only to recipients in one of its mark's groups
+(above, "Transmittals"). The check is made last but for the number, so a refused transmittal
+writes nothing and spends no number, and its refusal names each excluded recipient, the document
+and the mark, which the issuer may read on the revision. The kit's Create form shows that reason,
+and stays open.
+
+### Carried to the next revision
+
+A new revision takes the mark of the one it supersedes, its classification, groups, who and when,
+as stored, whatever its creator wrote, in `aboutToCreate`, as it takes the number; an unmarked
+one's next revision is unmarked. `documentCreated` checks the two marks are the same, and audits
+the mark carried, on the new revision, naming the one superseded.
+
+### Set, changed and removed: `ChangeExportMark`
+
+The add-on's own permission, contributed to the platform's security service and shown in its
+permissions screens. A first revision is marked at its creation only by a holder of it on the
+folder it is created in, which the revision inherits; any later change of a mark, its removal
+included, only by a holder of it on the revision; 403 otherwise, nothing written. Write is needed
+besides, as for any save. Nuxeo counts `Everything` as holding every permission, and an
+administrator as holding them all, so they may change a mark, audited as anyone's.
+
+- **Checked when written:** a classification of its form; 1 to 20 groups, each a group's name, not
+  `Everyone`, and each one the user directory has; or neither, for no mark. Groups alone, with no
+  classification, are refused.
+- **The server's two:** `docmark:markedBy` and `docmark:markedAt` are written by the server on each
+  change, over whatever the save sent; a save that writes either and changes nothing else of the
+  mark is refused, 400. The same mark written back with blanks or padding, as a REST client may send
+  a document back, is no change: kept as stored, not audited.
+- **On the revision itself:** a change through a live proxy is refused, 400, since the proxy's
+  permissions are not the revision's; a version restored over a revision must carry its mark, or
+  the restore is refused, 409, as for the other properties the add-on keeps.
+- **Where it is decides who may change it,** since the permission is held where the revision is.
+  So a marked revision goes to another folder only by a holder of `ChangeExportMark` on it and on
+  that folder, 403 otherwise: its move; its next revision, created in another folder than its own;
+  and the move of a folder holding one, found with a privileged query, since the move takes what the
+  person may not read too. A rename in place moves nothing, and an unmarked revision, a folder
+  holding none, and a next revision beside its predecessor are not asked. Who may change the
+  permissions where a marked revision is, and so grant `ChangeExportMark` there, is the folders'
+  `WriteSecurity`, as for any permission.
+
+### Audited
+
+Each mark set, changed, removed or carried is one entry in the platform's audit, the revision's
+history: event `exportMarkChanged`, category `documentControl`, with the person and the extended
+information `change` (`marked`, `changed`, `removed` or `carried`), `classification` and `groups`,
+`previousClassification` and `previousGroups`, `carriedFrom` for a mark carried, and `by`, who acted,
+and a comment in words: "Export-control mark changed from EC-2, for ec2-cleared to EC-1, for
+ec1-cleared". The event is fired in the change's transaction, so a refused or failed change records
+nothing, and `ExportMarkAuditWriter` writes it once the transaction has committed, in the background,
+as the records add-on writes its entries, through `AuditAccess`, the records add-on's, copied.
+
+### A change and a reading cannot cross
+
+A new revision copies its predecessor's mark, and a transmittal checks its documents' marks, from
+what each transaction read; a change of the mark committing after that read would leave a revision
+carrying the mark as it was, or a transmittal sent to someone the new mark excludes. So each
+revision has a **mark fence** in the key/value store, key `mark.<id>`, in the store the claims are
+in, changed by compare-and-set only:
+
+- **A new revision and a transmittal** enter the fence of each revision whose mark they read,
+  adding one to its count of readers, before they first read that revision, and leave it when
+  their transaction ends, whichever way. They are refused, 409, while a change holds it. A
+  transmittal naming a document by its number finds its id by a projection, which reads no
+  document, so the fence is entered before the revision is read.
+- **A change of the mark** takes the fence from nothing, 409 otherwise, and releases it when its
+  transaction ends. A transaction that holds the fence already, to read or to change it, enters it
+  again at once: one that marks a revision and then supersedes it carries the new mark. What a
+  transaction holds is kept with the transaction itself, read through the transaction manager, so a
+  transaction begun inside another on the same thread holds none of the outer one's; and a reading
+  that its own transaction turned into a change leaves nothing behind it, the change's release
+  clearing the fence.
+- **No way out, no way in:** the release is registered first, as for a claim, and a transaction
+  where it cannot be registered is refused, 409. A server stopped mid-transaction leaves its count,
+  or its change, until the claims' time to live expires: that revision's mark cannot change, or be
+  read by a new revision or a transmittal, until then.
+
 ## The series
 
 Contributed to `org.nuxeo.agentic.documents`, point `series`, by a component that requires
@@ -406,9 +558,18 @@ Contributed to `org.nuxeo.agentic.documents`, point `series`, by a component tha
 
 ## What it does not cover yet
 
-- **The rest of the document control add-on** the plan lists: export-control marks enforced when
-  sharing. And outside users, who will receive transmittals and comment in the portal, wait on
-  decision C: here a transmittal goes to named people inside the server.
+- **Outside users,** who will receive transmittals and comment in the portal, wait on decision C:
+  here a transmittal goes to named people inside the server, and a mark's groups are the server's.
+- **A mark decides the downloads the platform's download service is asked for with their
+  document, and transmittals.** As for the assets add-on's rights, a blob the platform hands over
+  without naming its document to that service, such as another Automation operation's result, and
+  what another add-on serves from its own endpoint, are not decided here; nor is what a revision's
+  metadata says, which whoever may read it reads, the banner included.
+- **Review cycles do not read a mark.** A reviewer named on a marked revision's cycle reads and
+  comments as the cycle's permissions allow, and is refused its files and renditions as anyone
+  outside the mark's groups is.
+- **A mark per revision, not per number.** A change of one revision's mark does not reach the
+  others of its number: a revision already superseded keeps its own.
 - **Whether a recipient or a reviewer exists.** A name is held to a user name's form, and is not
   `system`; the server does not look it up, so a transmittal to a name no one holds, or to one
   written in another case than the user directory's, waits on that receipt for ever. Nor does it
@@ -474,6 +635,24 @@ written):
   (`comment-defaultPermissions-contrib.xml`), so whoever may read a cycle may add a document to its
   `Comments` folder, past the comment manager: the add-on reads where a comment is, not what it says.
   `getActingUser()` and `getOriginatingUser()` are on `NuxeoPrincipal` in both versions.
+- **For 0.3.0,** on 26 November 2026, the same way, read only: the bundle's sources, the marks'
+  classes among them, compile against the server's own 2025.10.18 jars in place of the 11.5 ones,
+  `nuxeo-core-io`, `nuxeo-platform-usermanager` and `nuxeo-platform-audit-core` (where LTS 2025 keeps
+  `AuditLogger`) besides those above. `DownloadServiceImpl.checkPermission` in
+  `nuxeo-core-io-2025.10.18.jar` gives a permission's script the globals `Document`, `XPath`, `Blob`,
+  `Reason`, `Infos`, `Rendition`, from the extended information `rendition`, and `CurrentUser`, as
+  11.5's does; `nxserver/lib` holds `nashorn-core-15.7.jar`, the engine the tests run the script
+  with. The components the marks' contribution requires are there by name:
+  `org.nuxeo.ecm.core.io.download.DownloadService`, `org.nuxeo.ecm.core.io.MarshallerRegistry.marshallers`
+  and `org.nuxeo.ecm.core.security.defaultPermissions`, with the security service's `permissions`
+  and `permissionsVisibility` points. The audit is reached as the records add-on reaches it, which
+  was checked on the same server for that add-on. The mark fence's bookkeeping is kept with the
+  transaction: `TransactionHelper.lookupTransactionManager()` returns a jakarta `TransactionManager`
+  there and a javax one on 11.5, so it and `getTransaction()` are called by reflection, and
+  `NuxeoContainer`'s wrapper answers `getTransaction()` with Geronimo's own `TransactionImpl` from
+  `geronimo-transaction-4.0.0-NX1.jar`, the thread's transaction, the same object until it ends.
+  `AbstractSession.move` fires `aboutToMove` with `destinationRef` the caller's destination, `null`
+  for a rename in place, and `destinationPath` the folder's.
 
 ## Building and testing it
 
@@ -483,8 +662,8 @@ From the repository's root, with JDK 21 and Maven:
 mvn -pl nuxeo-agentic-documents -am verify
 ```
 
-It runs the module's 88 tests and writes the bundle and the Marketplace package,
-`nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.2.0.zip`. `build-marketplace.yml` builds
+It runs the module's 102 tests and writes the bundle and the Marketplace package,
+`nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.3.0.zip`. `build-marketplace.yml` builds
 and tests it on every pull request it runs for, without uploading or publishing it.
 
 **Nuxeo's comments in the tests.** The comment manager needs relations, notifications and the user
@@ -505,21 +684,27 @@ class files where 11.5's 9.0 does not; the JDK packages opened to Nuxeo Stream; 
 2.25ea, where 11.5's 2.20 looks for a JDK method Java 21 removed. Chronicle publishes its open-source
 builds as `ea`, and the test runtime starts it whether a test uses streams or not. A fourth,
 `log4j-jcl`, takes 11.5's event service's Commons Logging to Log4j 2, where `RefusalLogTest` reads
-it.
+it. Since 0.3.0, `ExportMarkTest` runs on `ExportMarksFeature`: the same runtime with the platform's
+user manager and its test directories, where recipients and groups are, and the platform's audit,
+its service, listener and store on H2, as the records add-on's tests run it
+(`DocumentsAuditFeature`, its `RecordsAuditFeature` copied); and `nashorn-core` 15.7, the server's
+engine, which the platform's download service evaluates the contributed script with. Java 21 has
+none of its own.
 
-| Test                      | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NumberingTest`           | A first revision numbered from its series, each series counting alone, the creator's own values replaced, blanks and padding included, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `SupersessionTest`        | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time; no claim in a transaction marked for rollback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `ConcurrencyTest`         | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins and every other is refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `GuardTest`               | No save changes a `docctl:` property, an administrator's included, padded with spaces included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `RefusalLogTest`          | A refusal not logged by the event service as an error; an unforeseen failure still logged as one                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `NumberSeriesTest`        | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `SeriesRegistryTest`      | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `BundleTest`              | The manifest's five components, the service, every facet and its schema the runtime registers, the series for transmittals, and the package's version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `TransmittalTest`         | Issued with each document at its current revision, numbered, a receipt per recipient; the issuer's own values replaced; every check of what it says, with nothing written and no number spent when refused; what the issuer may not read refused; a receipt the server's alone; answered once, by its recipient, and the server says when; a return says why; the answer refused to anyone else, the issuer, another user who may write it and an administrator; the platform's refusal to a recipient who may not write; nothing else of a receipt or a transmittal changed; kept, not copied, not restored to awaiting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `ReviewCycleTest`         | Opened on a current revision its opener may write, one at a time; a reviewer's comment an open thread, a reply part of it, a comment elsewhere left alone; only the reviewers and the opener comment; only the opener resolves, closes, and the server writes who and when; a cycle with an open thread not closed; a closed cycle recorded on the revision; nothing of a closed cycle or its comments changed, not even through a privileged session on a user's behalf; the revision's record the server's, an administrator's write refused; the facet the server's; past the claim's and the fence's time, the cycles' own status still refusing; a comment written as a plain document the cycle's by where it is, its author and parents the server's; a comment's words its author's; a thread deleted by its author alone, not with its replies, nor its folder; nothing moved in or out, its Comments folder included, and a comment trashed by its author through the trash's rename in place; a comment elsewhere never naming a cycle; an open cycle trashed still holding its revision; a caller that catches a refusal unable to commit; `system` no one's name |
-| `WorkflowConcurrencyTest` | 16 recipients answering at once, each kept; one receipt answered 16 times at once, one answer taken and 15 refused as conflicts; 16 cycles opened on one revision at once, one opened; the fence held open on purpose, by a comment's transaction and then by a close's, each refusing the other until it ends; and 8 rounds of 6 reviewers commenting while the opener closes, after which no closed cycle holds an open comment, and every close and comment either went through or was refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Test                      | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NumberingTest`           | A first revision numbered from its series, each series counting alone, the creator's own values replaced, blanks and padding included, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `SupersessionTest`        | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time; no claim in a transaction marked for rollback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ConcurrencyTest`         | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins and every other is refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `GuardTest`               | No save changes a `docctl:` property, an administrator's included, padded with spaces included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `RefusalLogTest`          | A refusal not logged by the event service as an error; an unforeseen failure still logged as one                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `NumberSeriesTest`        | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `SeriesRegistryTest`      | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `BundleTest`              | The manifest's six components, the service, every facet and its schema the runtime registers, the mark's schema among them, the series for transmittals, and the package's version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `TransmittalTest`         | Issued with each document at its current revision, numbered, a receipt per recipient; the issuer's own values replaced; every check of what it says, with nothing written and no number spent when refused; what the issuer may not read refused; a receipt the server's alone; answered once, by its recipient, and the server says when; a return says why; the answer refused to anyone else, the issuer, another user who may write it and an administrator; the platform's refusal to a recipient who may not write; nothing else of a receipt or a transmittal changed; kept, not copied, not restored to awaiting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `ReviewCycleTest`         | Opened on a current revision its opener may write, one at a time; a reviewer's comment an open thread, a reply part of it, a comment elsewhere left alone; only the reviewers and the opener comment; only the opener resolves, closes, and the server writes who and when; a cycle with an open thread not closed; a closed cycle recorded on the revision; nothing of a closed cycle or its comments changed, not even through a privileged session on a user's behalf; the revision's record the server's, an administrator's write refused; the facet the server's; past the claim's and the fence's time, the cycles' own status still refusing; a comment written as a plain document the cycle's by where it is, its author and parents the server's; a comment's words its author's; a thread deleted by its author alone, not with its replies, nor its folder; nothing moved in or out, its Comments folder included, and a comment trashed by its author through the trash's rename in place; a comment elsewhere never naming a cycle; an open cycle trashed still holding its revision; a caller that catches a refusal unable to commit; `system` no one's name                                                                                                                                                                                                                                                                                                                      |
+| `WorkflowConcurrencyTest` | 16 recipients answering at once, each kept; one receipt answered 16 times at once, one answer taken and 15 refused as conflicts; 16 cycles opened on one revision at once, one opened; the fence held open on purpose, by a comment's transaction and then by a close's, each refusing the other until it ends; and 8 rounds of 6 reviewers commenting while the opener closes, after which no closed cycle holds an open comment, and every close and comment either went through or was refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `ExportMarkTest`          | A marked revision's file, at its place and its blob holder's, for a download, a preview and a view, and each rendition, refused through the platform's download service to anyone outside its groups, an administrator included, and served to a member; a version made before the mark, and a proxy of it, by the live document's mark, and the folder holding that proxy refused its zip; a folder holding a marked revision refused its renditions but its thumbnail, as the reader's own session finds it; a marked revision, a folder holding one and a next revision in another folder going elsewhere only with the permission on it and where it goes, a rename in place let through; the enricher's reason; a transmittal refused, naming who and what, with nothing written and no number spent, a name no user holds and an administrator included, and issued to members; the mark carried to a new revision, whatever its creator wrote; a change and a removal refused without `ChangeExportMark`, a new revision marked where it is not held, a mark of the wrong form, with no group, `Everyone`, a group the server lacks, who and when written, a change through a proxy and a restore refused, padding no change; an administrator's change; each change and a mark carried audited, a refused one not; the mark fence held open on purpose, by a new revision's transaction and then by a change's, each refusing the other until it ends; the permission registered and shown |
 
 **The concurrency test:** 16 threads, each creating 25 documents in one series, each creation in a
 transaction of its own, started together; every seventh creation rolls its transaction back after
@@ -569,11 +754,28 @@ open cycle); `system` taken for a name; and the fence never taken by a close, or
 comment while closing, each caught both by the fence held on purpose and by the race of comments
 and a close.
 
+**And 0.3.0's, the 31 guards of export-control marks,** each broken one at a time, each turned
+`ExportMarkTest` red, and the build unbroken was green: anyone in a group taken as receiving; an
+administrator exempt; the script letting everything through; a version decided by its own mark
+alone; no container refused; a container's thumbnail refused too; a transmittal not held to marks;
+a name no user holds let through; the mark not carried; the creator's mark kept on a new revision; a
+change without the permission; a new revision marked without it; who and when written by a client;
+`Everyone` taken for a group; a group the server lacks let through; a change not audited; a carried
+mark not audited; the audit writer writing nothing; a change taking no fence; a new revision, or a
+transmittal, entering none; the fence not re-entrant (a transaction that marked a revision could
+not then supersede it); a restore changing the mark; a change through a proxy; padding taken for a
+change; the enricher saying everyone receives; and, found by the independent review before the
+pull request and added with their tests, a marked revision moved anywhere, a folder holding one
+moved anywhere, a next revision created in any folder, a proxy of an older version in a folder
+not counting for its zip, and a rename with no destination refused.
+
 **What the tests cannot reach:** a server whose key/value store is MongoDB, or PostgreSQL, rather
 than H2; the jakarta half of the synchronization lookup, which only the server has; Nuxeo's comment
-manager itself, whose writes `Comments.java` repeats; and REST clients: the listeners see
-`CoreSession`, which every endpoint goes through, but no HTTP request is made here. The steps file
-makes them, once installed.
+manager itself, whose writes `Comments.java` repeats; LTS 2025's audit service, which the tests'
+11.5 platform does not have, and its download servlet's answer: the tests ask the download service
+itself, `checkPermission`, which `/nxfile/` and the REST API ask before they stream, and no HTTP
+request is made; and REST clients: the listeners see `CoreSession`, which every endpoint goes
+through. The steps files make them, once installed.
 
 ## Installing it on a local Nuxeo
 
@@ -582,28 +784,31 @@ makes them, once installed.
 the container next starts, as the assets add-on's README does. Install it with the controlled
 documents kit, which depends on it, in one restart. Over 0.1.0, which the local server has with the
 kit's 0.1.0, the same commands upgrade both: `mp-install` removes the version before. 0.2.0 adds
-schemas, facets, a schema to `ControlledDocument` and two listeners, and removes nothing, so no
-document needs deleting first; the documents numbered under 0.1.0 keep their numbers.
+schemas, facets, a schema to `ControlledDocument` and two listeners; 0.3.0 adds a third schema to
+`ControlledDocument`, a permission, a download permission, an enricher and an audit writer. Neither
+removes anything, so no document needs deleting first; the documents numbered under 0.1.0 keep their
+numbers, unmarked.
 
 ```bash
 mvn -pl nuxeo-agentic-documents -am package
 npm run app-package -- business-apps/packages/controlled-documents-demo --platform 0.2.0
-docker cp nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.2.0.zip nuxeo:/tmp/
-docker cp business-apps/packages/controlled-documents-demo/dist/controlled-documents-demo-0.2.0.zip nuxeo:/tmp/
+docker cp nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.3.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/controlled-documents-demo/dist/controlled-documents-demo-0.3.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-documents-0.2.0.zip /tmp/controlled-documents-demo-0.2.0.zip --accept=true > /var/log/nuxeo/documents-install.log 2>&1 || echo "documents: install failed, see /var/log/nuxeo/documents-install.log"' 'rm -f "$0"' > /tmp/zz-documents-install.sh && chmod 755 /tmp/zz-documents-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-documents-0.3.0.zip /tmp/controlled-documents-demo-0.3.0.zip --accept=true > /var/log/nuxeo/documents-install.log 2>&1 || echo "documents: install failed, see /var/log/nuxeo/documents-install.log"' 'rm -f "$0"' > /tmp/zz-documents-install.sh && chmod 755 /tmp/zz-documents-install.sh
 docker cp /tmp/zz-documents-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
 ```
 
 Then, once `http://localhost:8080/nuxeo/runningstatus` answers 200: the install log lists both
-packages at 0.2.0; the server log's `Component Loading Status` names `org.nuxeo.agentic.documents`,
+packages at 0.3.0; the server log's `Component Loading Status` names `org.nuxeo.agentic.documents`,
 `org.nuxeo.agentic.documents.schema`, `org.nuxeo.agentic.documents.listener`,
-`org.nuxeo.agentic.documents.transmittals`, `org.nuxeo.agentic.documents.reviews` and
-`nuxeo.config.controlled-documents-demo.series`, with nothing pending; it has no `Controlled
-documents:` error; `GET /nuxeo/api/v1/config/types/Transmittal` answers 200; and the kit's seed
-runs (its README). To remove both:
+`org.nuxeo.agentic.documents.transmittals`, `org.nuxeo.agentic.documents.reviews`,
+`org.nuxeo.agentic.documents.marks` and `nuxeo.config.controlled-documents-demo.series`, with
+nothing pending; it has no `Controlled documents:` error; `GET /nuxeo/api/v1/config/types/Transmittal`
+and `GET /nuxeo/api/v1/config/schemas/export_mark` answer 200; and the kit's seed runs (its
+README). To remove both:
 `nuxeoctl mp-remove controlled-documents-demo nuxeo-agentic-documents --accept=true`, the kit first.
 Documents of the kit's types must be deleted first, by an administrator for transmittals, receipts
 and review cycles: one whose type is gone cannot be read.
@@ -636,7 +841,7 @@ finding: a review's findings are kept outside this repository. For numbering and
    holding one, is right; the privileged query that looks below a folder, by `ecm:ancestorId`, with
    the folder's id written into it after a check of its form. Its refusal tells the user that such
    documents are below the folder, ones they may not read included.
-8. **The cost:** one listener on five events for every document, which reads only a facet for a
+8. **The cost:** one listener on six events for every document, which reads only a facet for a
    document that is not controlled, and one query per copy of a folder.
 
 For transmittals and review cycles, since 0.2.0:
@@ -679,3 +884,46 @@ For transmittals and review cycles, since 0.2.0:
     reads facets only, but for a deletion or trash, which asks whether it has children and, if it
     has, queries below it once, and a move, which reads its folders. A comment anywhere costs a
     privileged read of its folders and of each document it names, 17 at most.
+
+For export-control marks, since 0.3.0:
+
+18. **Every path that hands over a marked revision's bytes:** which call the platform's download
+    service with the document, so the permission decides them, `/nxfile/`, `@blob`, `@rendition`,
+    `@preview`, `Blob.BulkDownload` and CMIS's content stream, as the assets add-on read them; which
+    do not, as Automation operations that return a blob or a conversion of it, the REST API's
+    `@convert`, and what other add-ons serve; WebDAV and Nuxeo Drive among those to read; and whether
+    those must be closed for a mark, beyond what the assets add-on's review settles for rights.
+19. **Who is the person a download is decided for:** the download service's `CurrentUser`, and,
+    for a privileged session acting for someone, the originating user's groups, looked up; that no
+    path decides a download for the system or another person.
+20. **Group membership as the server reads it:** `NuxeoPrincipal.getAllGroups()`, with sub-groups,
+    for the person signed in and for each recipient, looked up in the user directory with a
+    privileged call; a name no user holds, in no group; a group deleted after a revision was marked,
+    which then admits no one of that name until it is made again.
+21. **Where a marked revision is:** a move, a next revision in another folder and a folder's move
+    held to `ChangeExportMark` on the revision and where it goes; every other path that changes where a
+    revision is, or the permissions there, `WriteSecurity` granting `ChangeExportMark` among them, and
+    whether any of them reaches a mark past that check.
+22. **The permission:** `ChangeExportMark`, held by `Everything` and by every administrator as the
+    platform counts them; who should hold it, on which folders; whether a mark should be set or
+    changed only by a group the server names, and whether a creator should mark a first revision.
+23. **What the refusals say:** a transmittal's names the excluded recipients, the document and its
+    mark's groups, which the issuer may read on the revision, and tells them who is in no group of
+    it; the enricher's tells a reader the mark of a revision they may read. Whether a refusal says
+    more than its reader may know.
+24. **The mark fence:** its key, `mark.<id>`, beside the claims; its release on every outcome; its
+    re-entry within a transaction, kept with the transaction the transaction manager names; a
+    stopped server's leftover, which blocks a change or a reading until it expires.
+25. **Containers:** the container query, run as the reader, by `ecm:ancestorId` and
+    `collectionMember:collectionIds`, with the id checked before it is written into it; that it
+    counts any proxy or version of a controlled document, and refuses a cleared reader's zip of a
+    folder too; that `ecm:mixinType` and `ecm:isProxy` match a proxy there on PostgreSQL and MongoDB
+    as on the tests' H2.
+26. **The audit:** that every change and carrying writes an entry after its commit, and none for a
+    refused change; that the audit's own retention keeps them as long as a mark's history must be
+    kept.
+27. **The cost:** the download permission's script on every download, which reads only facets for a
+    document that is not controlled and not a folder, and one query for a folder's or collection's
+    rendition; a transmittal's lookup of each recipient, and one key/value write per listed
+    revision; a revision's fence on its creation and on a change of its mark; a privileged query
+    for a folder's move.

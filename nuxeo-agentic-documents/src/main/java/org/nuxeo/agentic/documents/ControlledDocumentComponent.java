@@ -6,6 +6,7 @@ package org.nuxeo.agentic.documents;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -302,6 +303,126 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
             pause(attempt);
         }
         log.warn("Controlled documents: could not leave the fence {}; it expires on its own", key);
+    }
+
+    // ------------------------------------------------------------------ a revision's mark fence
+
+    static final String MARK_CHANGING = "changing:";
+
+    static final String MARK_READING = "reading";
+
+    /**
+     * What this thread's transactions hold of the mark fences: for each transaction, by identity,
+     * each fence's key and its change's token or {@link #MARK_READING}. A transaction begun inside
+     * another on the same thread holds none of the outer one's, and keeps its own apart.
+     */
+    private static final ThreadLocal<Map<Object, Map<String, String>>> MARK_FENCES = ThreadLocal.withInitial(
+            IdentityHashMap::new);
+
+    static String markFenceKey(String revisionId) {
+        return "mark." + revisionId;
+    }
+
+    /** What the current transaction holds of the fence: its token, {@link #MARK_READING}, or {@code null}. */
+    private static String held(String key) {
+        Object transaction = TransactionSynchronizations.current();
+        Map<String, String> fences = transaction == null ? null : MARK_FENCES.get().get(transaction);
+        return fences == null ? null : fences.get(key);
+    }
+
+    private static void hold(Object transaction, String key, String value) {
+        MARK_FENCES.get().computeIfAbsent(transaction, t -> new HashMap<>()).put(key, value);
+    }
+
+    /** Forget what the transaction held of the fence, if it is still that: whether it was. */
+    private static boolean forget(String key, Object transaction, String value) {
+        Map<Object, Map<String, String>> byTransaction = MARK_FENCES.get();
+        Map<String, String> fences = byTransaction.get(transaction);
+        if (fences == null || !value.equals(fences.get(key))) {
+            return false;
+        }
+        fences.remove(key);
+        if (fences.isEmpty()) {
+            byTransaction.remove(transaction);
+        }
+        return true;
+    }
+
+    /**
+     * A transaction that holds the fence already, to read or to change the mark, enters it again at
+     * once: it reads the mark as it has it, its own change included.
+     */
+    @Override
+    public boolean enterMark(String revisionId) {
+        String key = markFenceKey(revisionId);
+        if (held(key) != null) {
+            return true;
+        }
+        Object transaction = TransactionSynchronizations.current();
+        KeyValueStore store = claims();
+        long ttl = claimTtl();
+        AtomicBoolean entered = new AtomicBoolean();
+        // As for a claim and a cycle's fence: the way out is registered before the way in.
+        if (transaction == null || !TransactionSynchronizations.whenEnded(committed -> {
+            // Left only while it still reads: a reading this transaction made a change of has no
+            // count left in the store, and the change's own release clears it.
+            if (entered.get() && forget(key, transaction, MARK_READING)) {
+                leave(store, key, ttl);
+            }
+        })) {
+            throw noTransaction();
+        }
+        for (int attempt = 1; attempt <= FENCE_ATTEMPTS; attempt++) {
+            String value = store.getString(key);
+            Long readers = writers(value);
+            if (readers == null) {
+                // A change of the mark holds it.
+                return false;
+            }
+            if (store.compareAndSet(key, value, Long.toString(readers + 1), ttl)) {
+                entered.set(true);
+                hold(transaction, key, MARK_READING);
+                return true;
+            }
+            pause(attempt);
+        }
+        throw new NuxeoException("Controlled documents: too many revisions or transmittals are reading this "
+                + "revision's export-control mark at once; try again", 409);
+    }
+
+    /**
+     * Taken from nothing, or from this transaction's own reading alone: a transaction that read the
+     * mark, and changes it after, crosses no one.
+     */
+    @Override
+    public boolean changeMark(String revisionId) {
+        String key = markFenceKey(revisionId);
+        String held = held(key);
+        if (held != null && held.startsWith(MARK_CHANGING)) {
+            return true;
+        }
+        Object transaction = TransactionSynchronizations.current();
+        KeyValueStore store = claims();
+        long ttl = claimTtl();
+        String changing = MARK_CHANGING + UUID.randomUUID();
+        AtomicBoolean taken = new AtomicBoolean();
+        if (transaction == null || !TransactionSynchronizations.whenEnded(committed -> {
+            if (taken.get()) {
+                forget(key, transaction, changing);
+                // Whichever way it ended: a reader after it reads the mark as it was committed.
+                store.compareAndSet(key, changing, null);
+            }
+        })) {
+            throw noTransaction();
+        }
+        // Only from nothing, or from this transaction's one reading: another reader holds a count, and
+        // another change its token.
+        if (!store.compareAndSet(key, held == null ? null : "1", changing, ttl)) {
+            return false;
+        }
+        taken.set(true);
+        hold(transaction, key, changing);
+        return true;
     }
 
     private static KeyValueStore claims() {
