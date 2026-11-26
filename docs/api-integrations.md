@@ -2487,18 +2487,32 @@ the server.
 
 **Response (200 OK):** `status` is `found`, `not-found` (the other system has no such record) or
 `no-key` (the record holds no key the connector can send, so nothing was asked). `fields` holds the
-connector's allowed fields that have a text, number or boolean value:
+connector's allowed fields that have a text, number or boolean value. `age`, since
+`nuxeo-agentic-connectors` 0.1.0, is how long ago, in whole seconds, the other system gave the
+answer: 0 when it was just asked, more when the server answered from the connector's cache. A
+`no-key` answer has none, and neither has a server older than the cache; the card shows it under
+its fields as "Read from the other system 5 minutes ago", and an age that is not a whole number of
+seconds is dropped:
 
 ```json
 {
   "connector": "payers.claimPayments",
   "status": "found",
+  "age": 0,
   "fields": { "paymentStatus": "Paid", "paidAmount": 412.5 }
 }
 ```
 
+**Not sent by the client:** `"refresh": true` in `params` asks the other system past the cache, for
+an administrator only (anyone else's is `403`). The card never sends it, so a card drawn again
+within the connector's time to live is answered from the cache. How long that is, and whether there
+is a cache at all, is each server's, per connector
+([the connectors README](../nuxeo-agentic-connectors/README.md#the-cache)). The change events the
+other system sends, `POST /nuxeo/agentic-connectors/events/<connector>`, are between that system
+and the server: the client never calls them.
+
 **Errors:** the operation throws `403` without `Read` on the record, or the stronger permission its
-connector names, `404` for an unknown connector, `503` when the server's address or credential for
+connector names, or for a `refresh` that is not an administrator's, `404` for an unknown connector, `503` when the server's address or credential for
 it is missing or as many of its calls as it allows are running, `502` when the other system
 refuses, redirects, answers too much or not JSON, and `504`
 when it does not answer in time. The card shows the error state, with Retry for all but `401`,

@@ -638,9 +638,17 @@ package contributes, by a key the open record holds, such as a claim's number
   record, and holds the stronger permission the connector names if it names one, before it calls
   the other system, and reads the key from the record as stored. A record of a type the connector
   does not read, or with no key it can send, is answered "nothing to look up", and nothing is sent.
+  An answer the server kept is given only after the same checks.
 - **Its states:** loading; the fields; "nothing found" when the other system has no such record,
   or none of the fields has a value; "nothing to look up" when the record holds no key; and an
   error, with Retry for a server error, a timeout or an unreachable system.
+- **How old the answer is.** **Since 26 November 2026,** a server may keep a connector's answers
+  for a time it sets, and drop one when the other system says its record changed
+  ([the connectors README](../../nuxeo-agentic-connectors/README.md#the-cache)). Under the fields,
+  or under "nothing found", the card says how long ago the other system gave the answer: "Read from
+  the other system just now", or "5 minutes ago". The file has nothing to set for it, and a card
+  written before is drawn as it was, with that line under it; a server older than the cache sends
+  no age, and the card then says nothing of it.
 - **Not a security control,** as nothing in a layout is. A field hidden by its rule is hidden from
   this page; the operation returns every allowed field to anyone who may read the record.
 
