@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Connectors, tests
+Bundle-SymbolicName: org.nuxeo.agentic.connectors.test;singleton:=true
+Bundle-Version: 0.0.0
+Bundle-Vendor: Hyland Software
+

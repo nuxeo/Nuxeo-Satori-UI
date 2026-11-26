@@ -3,11 +3,14 @@ name: Build Marketplace Package
 on:
   # Build-only validation, so a PR that breaks the Maven package is caught before merge.
   # Never publishes — see the `if` on `push-to-preprod`. PRs into an `integration/<ticket>`
-  # branch get the same validation as PRs into `main`.
+  # or a `staging/<name>` branch get the same validation as PRs into `main`. Until 26 November
+  # 2026 `staging/**` was missing, as it was from ci.yml until #738: every add-on merged into
+  # `staging/enterprise-grade-app` had its Maven tests run only on its author's machine.
   pull_request:
     branches:
       - main
       - 'integration/**'
+      - 'staging/**'
 
   # The only lane that can publish, and the only lane that runs for `main`. There is
   # deliberately no `push` trigger: every merge to `main` used to build and publish a
@@ -144,6 +147,13 @@ jobs:
         run: |
           mvn verify -pl nuxeo-agentic-documents -am -B -nsu --no-transfer-progress
           ls nuxeo-agentic-documents/target/nuxeo-agentic-documents-*.zip
+
+      # The connectors module's add-on, a bundle of its own that the UI package above does not
+      # take in, so its tests ran nowhere in CI before 26 November 2026.
+      - name: Build and test the connectors add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-connectors -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-connectors/target/nuxeo-agentic-connectors-*.jar
 
       # The e-signature step's add-on, likewise its own package. Its tests start a Nuxeo runtime,
       # call the stand-in provider over the loopback interface, and run the stand-in service,

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The tests refuse on purpose, and the add-on logs each refusal: keep those out of the build
+     output. The add-on's loggers are on at every level, with no appender of their own and not
+     passed to the root's, so that ConnectorLogTest can read every line they write, debug included,
+     by adding its own appender to them. -->
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="console" target="SYSTEM_OUT">
+      <PatternLayout pattern="%-5p [%c{1}] %m%n" />
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Logger name="org.nuxeo.agentic.connectors" level="all" additivity="false" />
+    <Root level="warn">
+      <AppenderRef ref="console" />
+    </Root>
+  </Loggers>
+</Configuration>

@@ -99,6 +99,49 @@ class ConnectorXmlTest {
         assertEquals("Connector.Read", ReadConnectorOperation.class.getAnnotation(Operation.class).id());
     }
 
+    /** The manifest's version is the add-on's, as the pom sets it: a bump in one and not the other fails. */
+    @Test
+    void theManifestsVersionIsTheAddOnsVersion() throws Exception {
+        String version = System.getProperty("connectors.version");
+        assertNotNull(version, "the build passes connectors.version to the tests");
+        java.util.Enumeration<java.net.URL> manifests = ConnectorXmlTest.class.getClassLoader()
+                                                                             .getResources("META-INF/MANIFEST.MF");
+        String found = null;
+        while (manifests.hasMoreElements()) {
+            try (InputStream in = manifests.nextElement().openStream()) {
+                java.util.jar.Attributes main = new Manifest(in).getMainAttributes();
+                String name = main.getValue("Bundle-SymbolicName");
+                if (name != null && name.startsWith("org.nuxeo.agentic.connectors;")) {
+                    found = main.getValue("Bundle-Version");
+                }
+            }
+        }
+        assertEquals(version, found);
+    }
+
+    /** The change events' servlet, on its one path, with no authentication filter mapped on it. */
+    @Test
+    void theDeploymentFragmentMapsTheChangeEventServletOnItsPathAlone() throws Exception {
+        String fragment = resource("OSGI-INF/deployment-fragment.xml");
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        org.w3c.dom.Document xml = factory.newDocumentBuilder()
+                                          .parse(new ByteArrayInputStream(fragment.getBytes(StandardCharsets.UTF_8)));
+        assertEquals(List.of(ChangeEventServlet.class.getName()), texts(xml, "servlet-class"));
+        assertEquals(List.of("/agentic-connectors/events/*"), texts(xml, "url-pattern"));
+        assertEquals(List.of(), texts(xml, "filter-mapping"));
+        assertEquals(2, xml.getElementsByTagName("extension").getLength());
+    }
+
+    private static List<String> texts(org.w3c.dom.Document xml, String tag) {
+        List<String> texts = new ArrayList<>();
+        org.w3c.dom.NodeList nodes = xml.getElementsByTagName(tag);
+        for (int i = 0; i < nodes.getLength(); i++) {
+            texts.add(nodes.item(i).getTextContent().trim());
+        }
+        return texts;
+    }
+
     @Test
     void theServicesDocumentedExampleIsAConnectorTheServerRegisters() throws Exception {
         Matcher code = CODE.matcher(resource("OSGI-INF/connectors-service.xml"));
@@ -133,6 +176,43 @@ class ConnectorXmlTest {
         assertEquals("Bearer ", connector.credential().prefix());
         assertFalse(xml.contains("http://") || xml.contains("https://"),
                 "the demo contribution names its address by a server property, never writes it");
+    }
+
+    /**
+     * Every connector a kit in this repository ships, read from its own file by XMap and registered
+     * as the server would, together with the add-on's demo connector: a rule of this version, such as
+     * an id that may not end in {@code .cache} or {@code .events}, that refused a kit's connector would
+     * fail here rather than on a server.
+     */
+    @Test
+    void everyConnectorAKitShipsIsOneTheServerRegisters() throws Exception {
+        List<Path> files;
+        try (java.util.stream.Stream<Path> walk = Files.walk(Path.of("..", "business-apps", "packages"))) {
+            files = walk.filter(p -> p.toString().endsWith(".xml"))
+                        .filter(p -> !p.toString().contains("node_modules") && !p.toString().contains("dist"))
+                        .sorted()
+                        .toList();
+        }
+        ConnectorComponent component = new ConnectorComponent();
+        List<String> ids = new ArrayList<>();
+        for (Path file : files) {
+            Matcher extension = EXTENSION.matcher(Files.readString(file));
+            while (extension.find()) {
+                for (ConnectorDescriptor descriptor : load(extension.group())) {
+                    Connector connector = assertDoesNotThrow(() -> Connector.of(descriptor), file.toString());
+                    component.register(descriptor, file.toString());
+                    ids.add(connector.id());
+                }
+            }
+        }
+        Matcher demo = EXTENSION.matcher(Files.readString(Path.of("demo", "payers-claim-payments-config.xml")));
+        assertTrue(demo.find());
+        load(demo.group()).forEach(d -> component.register(d, "the add-on's demo"));
+        assertTrue(ids.contains("pcclaims.policyPayments"), "the P&C claims kit's connector, among " + ids);
+        for (String id : ids) {
+            assertNotNull(component.getConnector(id), id + " is registered beside the others");
+        }
+        assertNotNull(component.getConnector("payers.claimPayments"));
     }
 
     /**

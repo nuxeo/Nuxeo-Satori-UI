@@ -128,6 +128,57 @@ final class SystemOfRecordStub implements AutoCloseable {
         }
     }
 
+    /**
+     * One change event as this system sends it to Nuxeo: a timestamp, a nonce and the body, signed
+     * with the connector's events secret as {@code ChangeEvents} documents it. Its signing is written
+     * here, apart from the add-on's, so that a test holds the two to each other.
+     */
+    record Event(String connector, String timestamp, String nonce, String body) {
+
+        /** An event about {@code key}, now by {@code clock}, with a nonce never used before. */
+        static Event about(String connector, String key, java.time.InstantSource clock) {
+            return new Event(connector, Long.toString(clock.instant().getEpochSecond()),
+                    "stand-in-" + java.util.UUID.randomUUID(), "{\"key\":\"" + key + "\"}");
+        }
+
+        Event at(String timestamp) {
+            return new Event(connector, timestamp, nonce, body);
+        }
+
+        String signature(String secret) {
+            try {
+                javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+                mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                mac.update((connector + "\n" + timestamp + "\n" + nonce + "\n").getBytes(StandardCharsets.UTF_8));
+                return "sha256=" + java.util.HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+            } catch (java.security.GeneralSecurityException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    /** Sends the event to Nuxeo's change events address, with this signature, and answers the status. */
+    static int send(String events, Event event, String signature) throws IOException, InterruptedException {
+        java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
+                                                                             .newBuilder(java.net.URI.create(
+                                                                                     events + "/" + event.connector()))
+                                                                             .header("Content-Type", "application/json")
+                                                                             .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                                                                     event.body()));
+        if (event.timestamp() != null) {
+            request.header("X-Nuxeo-Connector-Timestamp", event.timestamp());
+        }
+        if (event.nonce() != null) {
+            request.header("X-Nuxeo-Connector-Nonce", event.nonce());
+        }
+        if (signature != null) {
+            request.header("X-Nuxeo-Connector-Signature", signature);
+        }
+        try (java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient()) {
+            return client.send(request.build(), java.net.http.HttpResponse.BodyHandlers.discarding()).statusCode();
+        }
+    }
+
     @Override
     public void close() {
         server.stop(0);
