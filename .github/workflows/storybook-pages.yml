@@ -18,7 +18,8 @@ name: Storybook on GitHub Pages
 # Still NOT published: `satori-components-satori`'s own Storybook, the components that exist only
 # under Satori. Nobody asked for it, and the approval above was for the themed build.
 #
-# Also published, at `/prototypes/business-apps/`: the clickable business-apps prototype, one
+# Also published, at `/prototypes/studio-designer-satori/` (same arrangement, same approval) and
+# `/prototypes/business-apps/`: the clickable business-apps prototype, one
 # self-contained page built from `docs/prototype/business-apps/src` with Satori's compiled theme
 # and the Satori icons it uses inlined. It is built here, where `@hylandsoftware` is installed, and
 # never committed (`.gitignore`), so the repository itself carries no Satori output. That this is
@@ -97,6 +98,11 @@ jobs:
       # renamed icon fails here rather than publishing buttons with nothing in them.
       - name: Build the business-apps prototype
         run: node docs/prototype/business-apps/src/build.cjs
+
+      # Same reason and same guard as the business-apps page above: Satori's theme and icons are
+      # inlined, so it is built here and never committed.
+      - name: Build the studio-designer-satori prototype
+        run: node docs/prototype/studio-designer-satori/src/build.cjs
 
       # Then as ci.yml builds it, with `@hylandsoftware` and `@alfresco` removed from node_modules,
       # so a Satori import fails this build instead of compiling into the root of the site. Nothing
@@ -191,6 +197,19 @@ jobs:
           dest="$SITE_DIR/prototypes/business-apps"
           if [ ! -s "$page" ]; then echo "::error::$page is missing or empty"; exit 1; fi
           if [ -e "$SITE_DIR/prototypes" ]; then echo "::error::$SITE_DIR/prototypes already exists in the assembled site"; exit 1; fi
+          mkdir -p "$dest"
+          cp "$page" "$dest/index.html"
+
+      # `/prototypes/studio-designer-satori/`: the Studio designer prototype, a hash-routed single
+      # page (`#/layouts` etc.), so it needs no server-side routing. Same refusals as above.
+      - name: Add the studio-designer-satori prototype to the site
+        shell: bash
+        run: |
+          set -euo pipefail
+          page=docs/prototype/studio-designer-satori/index.html
+          dest="$SITE_DIR/prototypes/studio-designer-satori"
+          if [ ! -s "$page" ]; then echo "::error::$page is missing or empty"; exit 1; fi
+          if [ -e "$dest" ]; then echo "::error::$dest already exists in the assembled site"; exit 1; fi
           mkdir -p "$dest"
           cp "$page" "$dest/index.html"
 
