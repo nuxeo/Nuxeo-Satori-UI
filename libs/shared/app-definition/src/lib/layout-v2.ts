@@ -300,7 +300,8 @@ function layout(
         cards(tab['cards'], join(path, 'cards'), columns);
       });
   }
-  if (model) c.findings.push(...againstModel(file, model.type, model.model, registries));
+  if (model)
+    c.findings.push(...againstModel(file, model.type, model.model, registries, c.references));
   return c.findings;
 }
 
