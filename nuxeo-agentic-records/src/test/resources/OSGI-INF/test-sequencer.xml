@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!-- The sequencer a physical record's barcode comes from, as Nuxeo LTS 2025 sets it: the platform's
+     KeyValueStoreUIDSequencer, counting in the SQL key/value store on H2, as the local server counts
+     on its repository's database, and as the document control add-on's tests set it. The store takes
+     a connection of its own, outside the caller's transaction, so that a creation rolled back leaves a
+     gap and never gives a value twice. -->
+<component name="org.nuxeo.agentic.records.test.sequencer">
+
+  <require>org.nuxeo.ecm.core.uidgen.UIDGeneratorService</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <extension target="org.nuxeo.runtime.datasource" point="datasources">
+    <datasource name="jdbc/recordskeyvaluestore" driverClassName="org.h2.Driver" maxTotal="40" minTotal="1"
+      maxWaitMillis="10000">
+      <property name="url">jdbc:h2:mem:agentic-records-kv;DB_CLOSE_DELAY=-1</property>
+      <property name="username">sa</property>
+      <property name="password"></property>
+    </datasource>
+  </extension>
+  <extension target="org.nuxeo.runtime.kv.KeyValueService" point="configuration">
+    <store name="sequence" class="org.nuxeo.ecm.core.storage.sql.kv.SQLKeyValueStore">
+      <property name="datasource">jdbc/recordskeyvaluestore</property>
+      <property name="table">kv</property>
+    </store>
+  </extension>
+
+  <!-- default="true" makes it the default on 11.5's component too, which picks the default by that
+       flag, not by the name. -->
+  <extension target="org.nuxeo.ecm.core.uidgen.UIDGeneratorService" point="sequencers">
+    <sequencer name="default" class="org.nuxeo.ecm.core.uidgen.KeyValueStoreUIDSequencer" default="true" />
+  </extension>
+
+</component>

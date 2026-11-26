@@ -11,6 +11,12 @@
     its Record facet, record:ruleIds and record:retainUntil, and the rule's retention_def:endActions.
     This component requires the module's types, so that without the module none of these types is
     registered and the add-on does nothing.
+
+    Physical records: a PhysicalRecord is a box, a file or a volume, a record of the module's like
+    any other, kept at a PhysicalLocation (a site, a room, a shelf or a position, nested in that
+    order), with a barcode the server issues and its chain of custody. It is moved, checked out and
+    returned by a CustodyRequest filed in the repository's one CustodyDesk, made by an administrator
+    at the repository's root, as the disposition runs folder is.
   </documentation>
 
   <require>org.nuxeo.ecm.core.CoreExtensions</require>
@@ -22,6 +28,9 @@
     <schema name="disposition_request" prefix="dreq" src="schemas/disposition_request.xsd" />
     <schema name="disposition_certificate" prefix="dcert" src="schemas/disposition_certificate.xsd" />
     <schema name="records_audit_export" prefix="rexp" src="schemas/records_audit_export.xsd" />
+    <schema name="physical_record" prefix="phys" src="schemas/physical_record.xsd" />
+    <schema name="physical_location" prefix="ploc" src="schemas/physical_location.xsd" />
+    <schema name="custody_request" prefix="creq" src="schemas/custody_request.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
@@ -65,6 +74,35 @@
       <schema name="file" />
       <schema name="files" />
       <schema name="records_audit_export" />
+    </doctype>
+
+    <!-- A physical record: no file, no folder, and no Versionable facet, so that no version carries
+         its barcode. Filed wherever its records are, as an electronic record is. -->
+    <doctype name="PhysicalRecord" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="physical_record" />
+    </doctype>
+
+    <!-- A location, holding the locations of the next kind down. -->
+    <doctype name="PhysicalLocation" extends="Folder">
+      <schema name="physical_location" />
+      <subtypes>
+        <type>PhysicalLocation</type>
+      </subtypes>
+    </doctype>
+
+    <!-- The repository's custody desk, at its root: every custody request is filed here. -->
+    <doctype name="CustodyDesk" extends="Folder">
+      <subtypes>
+        <type>CustodyRequest</type>
+      </subtypes>
+    </doctype>
+
+    <doctype name="CustodyRequest" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="custody_request" />
     </doctype>
   </extension>
 

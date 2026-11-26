@@ -29,6 +29,26 @@
       "parent": "Document",
       "facets": [],
       "schemas": ["common", "dublincore", "file", "files", "records_audit_export"]
+    },
+    "PhysicalRecord": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "physical_record"]
+    },
+    "PhysicalLocation": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore", "physical_location"]
+    },
+    "CustodyDesk": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore"]
+    },
+    "CustodyRequest": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "custody_request"]
     }
   },
   "facets": [],
@@ -106,6 +126,9 @@
             "ruleId": "string",
             "ruleTitle": "string",
             "retentionEnded": "date",
+            "barcode": "string",
+            "disposal": "string",
+            "transferTo": "string",
             "status": "string",
             "reason": "string"
           }
@@ -168,7 +191,10 @@
             "type": "string",
             "ruleId": "string",
             "ruleTitle": "string",
-            "retentionEnded": "date"
+            "retentionEnded": "date",
+            "barcode": "string",
+            "disposal": "string",
+            "transferTo": "string"
           }
         },
         "sha256": "string"
@@ -209,6 +235,69 @@
         "csvSha256": "string",
         "jsonSha256": "string",
         "failure": "string"
+      }
+    },
+    {
+      "name": "physical_record",
+      "prefix": "phys",
+      "fields": {
+        "kind": "string",
+        "barcode": "string",
+        "location": "string",
+        "locations": "string[]",
+        "locationPath": "string",
+        "state": "string",
+        "borrower": "string",
+        "checkedOutBy": "string",
+        "checkedOutAt": "date",
+        "dueBack": "date",
+        "dispositionAction": "string",
+        "transferTo": "string",
+        "disposedAt": "date",
+        "disposalRun": "string",
+        "disposalCertificate": "string",
+        "custody": {
+          "type": "complex[]",
+          "fields": {
+            "event": "string",
+            "at": "date",
+            "by": "string",
+            "fromLocation": "string",
+            "fromPath": "string",
+            "toLocation": "string",
+            "toPath": "string",
+            "borrower": "string",
+            "dueBack": "date",
+            "transferredTo": "string",
+            "reason": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "physical_location",
+      "prefix": "ploc",
+      "fields": {
+        "kind": "string",
+        "path": "string"
+      }
+    },
+    {
+      "name": "custody_request",
+      "prefix": "creq",
+      "fields": {
+        "action": "string",
+        "item": "string",
+        "location": "string",
+        "borrower": "string",
+        "dueBack": "date",
+        "reason": "string",
+        "by": "string",
+        "at": "date",
+        "barcode": "string",
+        "fromPath": "string",
+        "toPath": "string",
+        "outcome": "string"
       }
     }
   ]

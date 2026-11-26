@@ -11,6 +11,8 @@
  * - an empty parameter refuses it too, as a related list is not asked with one: an empty value
  *   matches what its author did not mean, or nothing;
  * - a facet whose aggregate a request cannot filter on is left out: see `isAggregateParameter`;
+ * - a search with a finding is left out, and the queue drawn without one, which asks its page
+ *   provider with one parameter fewer than it takes, so the queue is refused instead;
  * - a rule this build cannot answer hides the queue from everyone. That is a finding in
  *   `visibleWhen`, a rule this build does not register, or one nested deeper than the rule
  *   registry answers. The registry would answer `true` for it, and show the queue to everyone.
@@ -46,6 +48,17 @@ export interface QueueFacet {
   readonly widget: 'document-link' | null;
 }
 
+/**
+ * A text field above a queue's list, whose text, trimmed, is the page provider's last parameter,
+ * after the queue's own (app-definition-v2.md, section 4).
+ */
+export interface QueueSearch {
+  readonly label: string | null;
+  readonly labelKey: string | null;
+  /** Whether a search that finds one record alone opens it, as a scanned barcode opens its item. */
+  readonly openSingle: boolean;
+}
+
 export interface QueueFile {
   readonly label: string | null;
   readonly labelKey: string | null;
@@ -53,6 +66,8 @@ export interface QueueFile {
   readonly list: RecordListEntry;
   /** The page provider's parameters, literals each written as it is sent. */
   readonly parameters: readonly string[];
+  /** The queue's search, or `null` when it has none and its list is drawn at once. */
+  readonly search: QueueSearch | null;
   readonly facets: readonly QueueFacet[];
   /** The bulk actions by id, as the file lists them, less those a finding leaves out. */
   readonly bulkActions: readonly string[];
@@ -109,6 +124,11 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
   });
   const structural = findings.filter((finding) => finding.kind === 'structure');
   if (structural.length > 0) return { refused: structural.map(describe) };
+  // A search left out would ask the page provider with one parameter fewer than it takes.
+  const inSearch = findings.filter(
+    (finding) => finding.path === 'search' || finding.path.startsWith('search.'),
+  );
+  if (inSearch.length > 0) return { refused: inSearch.map(describe) };
 
   // With no `structure` finding the file has a queue's shape: an object with a page provider, a
   // list of columns, literal parameters, and well-formed facets, actions and rule where it has them.
@@ -171,6 +191,16 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
     });
   });
 
+  const searchEntry = isRecord(file['search']) ? file['search'] : null;
+  const search: QueueSearch | null =
+    searchEntry === null
+      ? null
+      : {
+          label: text(searchEntry['label']),
+          labelKey: text(searchEntry['labelKey']),
+          openSingle: searchEntry['open'] === 'single',
+        };
+
   const bulkActions = ((file['bulkActions'] as unknown[] | undefined) ?? []).filter(
     (id, index): id is string => typeof id === 'string' && !leftOut.has(`bulkActions[${index}]`),
   );
@@ -181,6 +211,7 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
       labelKey: text(file['labelKey']),
       list,
       parameters: list.parameters.map((parameter) => String(parameter)),
+      search,
       facets,
       bulkActions,
       visibleWhen: (file['visibleWhen'] as ExtensionRule | undefined) ?? null,

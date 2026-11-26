@@ -1,0 +1,197 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "overdue",
+      "tone": "negative",
+      "labelKey": "records.banner.physical.overdue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "phys:state" }, "out"] },
+          { "type": "app.rules.datePassed", "parameters": [{ "field": "phys:dueBack" }] }
+        ]
+      }
+    },
+    {
+      "id": "out",
+      "tone": "info",
+      "labelKey": "records.banner.physical.out",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "phys:state" }, "out"] },
+          {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.datePassed", "parameters": [{ "field": "phys:dueBack" }] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "destroyed",
+      "tone": "warning",
+      "labelKey": "records.banner.physical.destroyed",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "phys:state" }, "destroyed"]
+      }
+    },
+    {
+      "id": "transferred",
+      "tone": "warning",
+      "labelKey": "records.banner.physical.transferred",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "phys:state" }, "transferred"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "physical_record",
+      "labelKey": "records.card.physicalRecord.physical_record",
+      "fields": [
+        "phys:barcode",
+        "phys:kind",
+        {
+          "field": "phys:state",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "in": "positive",
+              "out": "warning",
+              "destroyed": "neutral",
+              "transferred": "neutral"
+            }
+          }
+        },
+        "dc:description"
+      ]
+    },
+    {
+      "id": "where",
+      "labelKey": "records.card.physicalRecord.where",
+      "fields": [
+        "phys:locationPath",
+        {
+          "field": "phys:location",
+          "widget": "document-link",
+          "parameters": { "types": ["PhysicalLocation"] }
+        }
+      ]
+    },
+    {
+      "id": "checked-out",
+      "labelKey": "records.card.physicalRecord.checkedOut",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "phys:state" }, "out"]
+      },
+      "fields": [
+        "phys:borrower",
+        { "field": "phys:dueBack", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "phys:checkedOutBy", "widget": "user" },
+        { "field": "phys:checkedOutAt", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "disposition",
+      "labelKey": "records.card.physicalRecord.disposition",
+      "fields": [
+        "phys:dispositionAction",
+        "phys:transferTo",
+        { "field": "phys:disposedAt", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "phys:disposalRun",
+          "widget": "document-link",
+          "parameters": { "types": ["DispositionRun"] }
+        },
+        {
+          "field": "phys:disposalCertificate",
+          "widget": "document-link",
+          "parameters": { "types": ["DispositionCertificate"] }
+        }
+      ]
+    },
+    {
+      "id": "custody",
+      "labelKey": "records.card.physicalRecord.custody",
+      "span": 2,
+      "fields": [
+        {
+          "field": "phys:custody",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              {
+                "field": "phys:event",
+                "widget": "status-badge",
+                "labelKey": "records.column.custodyEvent",
+                "parameters": {
+                  "tones": {
+                    "registered": "info",
+                    "moved": "info",
+                    "checked-out": "warning",
+                    "returned": "positive",
+                    "destroyed": "neutral",
+                    "transferred": "neutral"
+                  }
+                }
+              },
+              {
+                "field": "phys:at",
+                "widget": "date",
+                "labelKey": "records.column.when",
+                "parameters": { "format": "long" }
+              },
+              { "field": "phys:by", "widget": "user", "labelKey": "records.column.by" },
+              { "field": "phys:fromPath", "labelKey": "records.column.from" },
+              { "field": "phys:toPath", "labelKey": "records.column.to" },
+              { "field": "phys:borrower", "labelKey": "records.column.borrower" },
+              { "field": "phys:dueBack", "widget": "date", "labelKey": "records.column.dueBack" },
+              { "field": "phys:transferredTo", "labelKey": "records.column.transferredTo" },
+              { "field": "phys:reason", "labelKey": "records.column.reason" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "labelKey": "records.card.physicalRecord.history",
+      "span": 2,
+      "timeline": {
+        "events": [
+          "custodyRegistered",
+          "custodyMoved",
+          "custodyCheckedOut",
+          "custodyReturned",
+          "afterMakeRecord",
+          "retentionRuleAttached",
+          "afterSetRetention",
+          "afterExtendRetention",
+          "afterUnsetRetention",
+          "retentionExpired",
+          "afterSetLegalHold",
+          "afterRemoveLegalHold",
+          "dispositionRunStarted",
+          "dispositionRunApproved",
+          "dispositionRunRejected",
+          "dispositionRunHalted",
+          "recordDestroyed",
+          "recordTransferred",
+          "documentCreated",
+          "documentModified",
+          "documentMoved"
+        ],
+        "filter": true,
+        "pageSize": 20
+      }
+    }
+  ]
+}

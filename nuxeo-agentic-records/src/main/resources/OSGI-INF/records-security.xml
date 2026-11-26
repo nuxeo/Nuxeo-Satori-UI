@@ -2,7 +2,8 @@
 <component name="org.nuxeo.agentic.records.security" version="1.0">
 
   <documentation>
-    The records add-on's three permissions, granted on the repository's DispositionRuns folder:
+    The records add-on's four permissions. The first three are granted on the repository's
+    DispositionRuns folder, the fourth on its CustodyDesk:
 
     StartDisposition: starting a run, which finds the records due and holds them in it, and
     rejecting a run, which withdraws it.
@@ -11,6 +12,9 @@
     ExportRecordsAudit: filing an audit export, what the platform's audit holds of the documents
     under a folder the person may read, over a period: a strong permission, for the few records
     specialists a records schedule names (README, "The audit export").
+    RecordCustody: filing a custody request in the repository's CustodyDesk, which moves, checks out
+    or returns a physical record the person may read: for the clerks of a records centre (README,
+    "Physical records").
 
     Each includes Read and AddChildren, so that one grant on the folder is enough: a request is a
     document filed in it. Nuxeo counts Everything as holding every permission, and
@@ -33,6 +37,10 @@
       <include>Read</include>
       <include>AddChildren</include>
     </permission>
+    <permission name="RecordCustody">
+      <include>Read</include>
+      <include>AddChildren</include>
+    </permission>
   </extension>
 
   <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissionsVisibility">
@@ -40,6 +48,7 @@
       <item show="true" order="80">StartDisposition</item>
       <item show="true" order="81">ApproveDisposition</item>
       <item show="true" order="82">ExportRecordsAudit</item>
+      <item show="true" order="83">RecordCustody</item>
     </visibility>
   </extension>
 

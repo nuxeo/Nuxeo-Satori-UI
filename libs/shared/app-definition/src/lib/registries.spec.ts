@@ -168,6 +168,7 @@ describe("the other files' JSON Schemas, held to their validators", () => {
       [app['$defs'].image.oneOf[1], APP_V2_KEYS.image],
       [queue, QUEUE_V2_KEYS.queue],
       [queue['$defs'].facet, QUEUE_V2_KEYS.facet],
+      [queue['$defs'].search, QUEUE_V2_KEYS.search],
       [actions, ACTIONS_V2_KEYS.file],
       [actions['$defs'].action, ACTIONS_V2_KEYS.action],
       [actions['$defs'].message, ACTIONS_V2_KEYS.message],

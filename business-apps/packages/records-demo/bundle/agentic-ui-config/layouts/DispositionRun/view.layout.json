@@ -88,6 +88,9 @@
             "columns": [
               { "field": "drun:title", "labelKey": "records.column.title" },
               { "field": "drun:type", "labelKey": "records.column.type" },
+              { "field": "drun:barcode", "labelKey": "records.column.barcode" },
+              { "field": "drun:disposal", "labelKey": "records.column.disposal" },
+              { "field": "drun:transferTo", "labelKey": "records.column.transferTo" },
               { "field": "drun:path", "labelKey": "records.column.path" },
               { "field": "drun:ruleTitle", "labelKey": "records.column.rule" },
               {

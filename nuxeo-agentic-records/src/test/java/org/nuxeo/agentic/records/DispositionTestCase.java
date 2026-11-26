@@ -32,6 +32,7 @@ import org.nuxeo.runtime.test.runner.FeaturesRunner;
 @Deploy("org.nuxeo.agentic.records")
 @Deploy("org.nuxeo.agentic.records:OSGI-INF/test-retention-types.xml")
 @Deploy("org.nuxeo.agentic.records:OSGI-INF/test-failures.xml")
+@Deploy("org.nuxeo.agentic.records:OSGI-INF/test-sequencer.xml")
 public abstract class DispositionTestCase {
 
     @Inject

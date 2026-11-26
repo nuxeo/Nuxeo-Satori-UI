@@ -6,7 +6,8 @@
 
     The platform's audit already records what retention, holds and deletions do to a record, and
     every file its download service sends. The add-on adds a view of a record under retention or a
-    legal hold, a disposition run's decisions on each of its records, and each audit export: its
+    legal hold, a disposition run's decisions on each of its records, a physical record's custody,
+    and each audit export: its
     own events, which its writer below adds to the platform's audit once their transaction has
     committed, so that it needs no entry in the audit's own configuration.
 
@@ -35,6 +36,12 @@
       <event>dispositionRunRejected</event>
       <event>dispositionRunHalted</event>
       <event>recordDisposed</event>
+      <event>recordDestroyed</event>
+      <event>recordTransferred</event>
+      <event>custodyRegistered</event>
+      <event>custodyMoved</event>
+      <event>custodyCheckedOut</event>
+      <event>custodyReturned</event>
       <event>recordsAuditExported</event>
     </listener>
     <!-- An audit export, written in the background once it is filed. -->

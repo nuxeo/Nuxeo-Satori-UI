@@ -2369,6 +2369,12 @@
     "no-buckets": "No values",
     "none": "No queue is configured with this name.",
     "refused": "The queue could not be read.",
+    "search": {
+      "button": "Search",
+      "label": "Search",
+      "none": "Nothing matches this search",
+      "prompt": "Type or scan what you are looking for, then search."
+    },
     "title": "Queue",
     "whole-query": {
       "aborted": "{{action}} was stopped on the server. {{processed}} of {{total}} records were processed.",

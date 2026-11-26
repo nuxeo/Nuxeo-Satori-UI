@@ -2873,6 +2873,7 @@ var agenticUiValidator = (function () {
         "labelKey",
         "pageProvider",
         "parameters",
+        "search",
         "columns",
         "sort",
         "pageSize",
@@ -2882,6 +2883,8 @@ var agenticUiValidator = (function () {
         "visibleWhen"
     ];
     var FACET_KEYS = ["aggregate", "label", "labelKey", "widget"];
+    var SEARCH_KEYS = ["label", "labelKey", "open"];
+    var SEARCH_OPEN = ["single"];
     var FACET_WIDGETS = ["document-link"];
     function validateQueue(content, options) {
         if (options === void 0) { options = {}; }
@@ -2895,6 +2898,8 @@ var agenticUiValidator = (function () {
         c.schemaKey(queue2);
         c.named(queue2, "");
         c.list(queue2, "", { openRecord: false });
+        if ("search" in queue2)
+            search(c, queue2["search"]);
         if ("facets" in queue2)
             facets(c, queue2["facets"]);
         if ("bulkActions" in queue2)
@@ -2902,6 +2907,16 @@ var agenticUiValidator = (function () {
         if ("visibleWhen" in queue2)
             c.rule(queue2["visibleWhen"], "visibleWhen");
         return c.findings;
+    }
+    function search(c, value) {
+        if (!isRecord(value)) {
+            c.add("search", "structure", 'a search is { "label" or "labelKey", and "open": "single" or none }');
+            return;
+        }
+        c.unknownKeys(value, SEARCH_KEYS, "search");
+        c.named(value, "search");
+        if ("open" in value && (typeof value["open"] !== "string" || !SEARCH_OPEN.includes(value["open"])))
+            c.add(join("search", "open"), "structure", "a search opens ".concat(SEARCH_OPEN.map(function (each) { return "\"".concat(each, "\""); }).join(" or "), ": the one record it finds alone"));
     }
     function facets(c, value) {
         if (!Array.isArray(value)) {

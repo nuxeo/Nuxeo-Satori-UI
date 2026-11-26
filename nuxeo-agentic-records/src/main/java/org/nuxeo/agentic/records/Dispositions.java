@@ -174,15 +174,20 @@ final class Dispositions {
     }
 
     /** Whether {@code parent}, by id or by path, is the repository's root. */
-    private static boolean atRoot(CoreSession privileged, DocumentRef parent) {
+    static boolean atRoot(CoreSession privileged, DocumentRef parent) {
         return parent != null && privileged.exists(parent)
                 && privileged.getDocument(parent).getId().equals(privileged.getRootDocument().getId());
     }
 
     /** How many {@code DispositionRuns} folders the repository has, the trashed ones counted. */
     private static long folders(CoreSession privileged) {
-        return privileged.query("SELECT * FROM " + RUNS_TYPE + " WHERE ecm:isProxy = 0 AND ecm:isVersion = 0", null, 2,
-                0, false).size();
+        return count(privileged, RUNS_TYPE);
+    }
+
+    /** How many live documents of {@code type} the repository has, the trashed ones counted: 0, 1, or 2 for more. */
+    static long count(CoreSession privileged, String type) {
+        return privileged.query("SELECT * FROM " + type + " WHERE ecm:isProxy = 0 AND ecm:isVersion = 0", null, 2, 0, false)
+                         .size();
     }
 
     // --- A request filed ----------------------------------------------------------------------------
@@ -385,6 +390,9 @@ final class Dispositions {
                 if (why == null && !String.valueOf(record.get("ruleId")).equals(DueRecords.ruleId(doc))) {
                     why = "has another retention rule than when the run started";
                 }
+                if (why == null && !DueRecords.sameDisposal(record, DueRecords.of(doc, privileged))) {
+                    why = "has another disposition action than when the run started";
+                }
             }
             if (why != null) {
                 refused.put(uid, why);
@@ -418,9 +426,12 @@ final class Dispositions {
         }
 
         // Deleted, permanently. The repository itself refuses to delete a record under retention or a
-        // legal hold, whoever asks: a second check, below this add-on's.
+        // legal hold, whoever asks: a second check, below this add-on's. A physical record is not
+        // deleted: its destruction or transfer is recorded on it, once the certificate is written.
         for (DueRecords.Due record : current) {
-            privileged.removeDocument(new IdRef(record.uid()));
+            if (!record.physical()) {
+                privileged.removeDocument(new IdRef(record.uid()));
+            }
         }
         // Each record's own entry, by its path and id as the run kept them: the platform logs the
         // deletion itself as the add-on's system session's.
@@ -447,11 +458,19 @@ final class Dispositions {
         disposed.put(RecordsAudit.APPROVED_BY, String.join(", ", approvers));
         List<RecordsAudit.Subject> gone = new ArrayList<>();
         for (DueRecords.Due record : current) {
-            gone.add(new RecordsAudit.Subject(record.uid(), record.path(), record.type()));
+            if (!record.physical()) {
+                gone.add(new RecordsAudit.Subject(record.uid(), record.path(), record.type()));
+            }
         }
         RecordsAudit.run(RecordsAudit.RECORD_DISPOSED, privileged, person, gone, disposed,
                 "Disposed of in disposition run " + number + ", deleted permanently; approved by "
                         + String.join(" and ", approvers) + "; certificate " + certificate.getId());
+        // A physical record is kept, and what became of it written on it, in its custody.
+        for (DueRecords.Due record : current) {
+            if (record.physical()) {
+                PhysicalRecords.disposed(privileged, record, run, certificate, person, approvers, disposed, now);
+            }
+        }
         log.info("Disposition run {} disposed of {} record(s); certificate {}", longValue(run.getPropertyValue(RUN_NUMBER)),
                 current.size(), certificate.getId());
         return DISPOSED;
@@ -483,7 +502,7 @@ final class Dispositions {
         certificate.setPropertyValue(CERT_STARTED_AT, startedAt);
         certificate.setPropertyValue(CERT_APPROVALS, (Serializable) approvals(run));
         certificate.setPropertyValue(CERT_DISPOSED_AT, disposedAt);
-        certificate.setPropertyValue(CERT_METHOD, METHOD);
+        certificate.setPropertyValue(CERT_METHOD, CertificateCsv.methods(records));
         certificate.setPropertyValue(CERT_RECORD_COUNT, (long) records.size());
         List<Map<String, Serializable>> rows = new ArrayList<>();
         for (DueRecords.Due record : records) {
@@ -547,10 +566,15 @@ final class Dispositions {
 
     /** The person filing: never the system or an anonymous user. */
     static NuxeoPrincipal person(CoreSession session) {
+        return person(session, "A disposition request");
+    }
+
+    /** The person filing {@code what}: never the system or an anonymous user. */
+    static NuxeoPrincipal person(CoreSession session, String what) {
         NuxeoPrincipal principal = session.getPrincipal();
         if (principal == null || principal.isAnonymous()
                 || SecurityConstants.SYSTEM_USERNAME.equals(principal.getName())) {
-            throw new DispositionRefusal(403, "not-a-person", "A disposition request is filed by a person.");
+            throw new DispositionRefusal(403, "not-a-person", what + " is filed by a person.");
         }
         return principal;
     }
@@ -592,6 +616,9 @@ final class Dispositions {
         row.put("ruleId", record.ruleId());
         row.put("ruleTitle", record.ruleTitle());
         row.put("retentionEnded", record.retentionEnded());
+        row.put("barcode", record.barcode());
+        row.put("disposal", record.disposal());
+        row.put("transferTo", record.transferTo());
         row.put("status", status);
         row.put("reason", reason);
         return row;

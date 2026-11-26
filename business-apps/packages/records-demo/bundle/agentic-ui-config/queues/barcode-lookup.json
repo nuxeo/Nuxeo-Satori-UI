@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.barcode-lookup",
+  "pageProvider": "records_physical_by_barcode",
+  "search": { "labelKey": "records.lookup.barcode", "open": "single" },
+  "columns": ["phys:barcode", "dc:title", "phys:kind", "phys:state", "phys:locationPath"],
+  "pageSize": 10
+}

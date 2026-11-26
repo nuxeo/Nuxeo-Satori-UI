@@ -13,11 +13,13 @@
   <artifactId>nuxeo-agentic-records</artifactId>
   <name>Nuxeo Agentic Records</name>
   <description>
-    The records module's server add-on, its first slice: a disposition review on the platform's
-    retention module (nuxeo-retention). A run holds the records whose retention has ended and that
-    are under no legal hold, two people other than its starter approve it, and only then are its
-    records deleted, with a certificate kept. Its own Marketplace package, beside
-    nuxeo-agentic-core: one add-on per domain module (decision B's recommendation).
+    The records module's server add-on: a disposition review on the platform's retention module
+    (nuxeo-retention). A run holds the records whose retention has ended and that are under no legal
+    hold, two people other than its starter approve it, and only then are its records deleted, or a
+    physical record's destruction or transfer recorded, with a certificate kept. Physical records,
+    with locations, barcodes and their chain of custody; the audit export; access logging. Its own
+    Marketplace package, beside nuxeo-agentic-core: one add-on per domain module (decision B's
+    recommendation).
   </description>
 
   <properties>
@@ -26,7 +28,7 @@
       nuxeo-agentic-ui. The manifest's Bundle-Version repeats it, and BundleTest refuses a build
       where the two differ.
     -->
-    <records.package.version>0.2.0</records.package.version>
+    <records.package.version>0.3.0</records.package.version>
 
     <!--
       The retention module the add-on reads, as Nuxeo publishes it for LTS 2025: its jar is on the
@@ -76,6 +78,13 @@
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
       <artifactId>nuxeo-runtime</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The platform's sequencer, which a physical record's barcode comes from: UIDGeneratorService
+         and UIDSequencer, as the document control add-on numbers with them. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core</artifactId>
       <scope>provided</scope>
     </dependency>
     <!--
