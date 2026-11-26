@@ -1,0 +1,317 @@
+<section class="diagnostics" aria-labelledby="diagnostics-heading">
+  <h1 id="diagnostics-heading" class="diagnostics__title">
+    {{ 'admin.diagnostics.title' | translate }}
+  </h1>
+  <p class="diagnostics__intro">{{ 'admin.diagnostics.intro' | translate }}</p>
+
+  @switch (state().status) {
+    @case ('loading') {
+      <div class="diagnostics__loading" data-diagnostics-loading>
+        <nxs-spinner [diameter]="32" [label]="'admin.diagnostics.loading' | translate" />
+      </div>
+    }
+    @case ('failed') {
+      @if (state(); as failed) {
+        @if (failed.status === 'failed') {
+          <nxs-error-state
+            data-diagnostics-failed
+            [status]="failed.error"
+            [heading]="'admin.diagnostics.failed' | translate"
+            [headingLevel]="2"
+            [retryable]="failed.error === 500"
+            [retryHandler]="retry"
+          />
+        }
+      }
+    }
+    @case ('loaded') {
+      @if (report(); as report) {
+        <section class="diagnostics__section" aria-labelledby="diagnostics-versions">
+          <h2 id="diagnostics-versions">{{ 'admin.diagnostics.versions.heading' | translate }}</h2>
+          <dl class="diagnostics__facts" data-diagnostics-versions>
+            <dt>{{ 'admin.diagnostics.versions.platform' | translate }}</dt>
+            <dd>
+              {{ report.platform.product ?? ('admin.diagnostics.unknown' | translate) }}
+              {{ report.platform.version ?? '' }}
+            </dd>
+            <dt>{{ 'admin.diagnostics.versions.app' | translate }}</dt>
+            <dd>
+              {{ report.app.package }}
+              {{ report.app.version ?? ('admin.diagnostics.unknown' | translate) }}
+            </dd>
+            <dt>{{ 'admin.diagnostics.versions.core' | translate }}</dt>
+            <dd>{{ report.app.core ?? ('admin.diagnostics.unknown' | translate) }}</dd>
+            <dt>{{ 'admin.diagnostics.versions.generated' | translate }}</dt>
+            <dd>{{ report.generatedAt }}</dd>
+          </dl>
+        </section>
+
+        <section class="diagnostics__section" aria-labelledby="diagnostics-packages">
+          <h2 id="diagnostics-packages">{{ 'admin.diagnostics.packages.heading' | translate }}</h2>
+          @if (report.packages.problem; as problem) {
+            <nxs-banner
+              data-diagnostics-packages-problem
+              [tone]="report.packages.recorded ? 'info' : 'warning'"
+              [message]="problemKey(problem) | translate"
+            />
+          }
+          @if (report.packages.entries.length > 0) {
+            <div class="diagnostics__table-wrap">
+              <table class="diagnostics__table" data-diagnostics-packages>
+                <caption class="diagnostics__caption">
+                  {{
+                    'admin.diagnostics.packages.caption' | translate
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'admin.diagnostics.packages.name' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.packages.version' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.packages.kind' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.packages.state' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.packages.signature' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of report.packages.entries; track entry.name + entry.version) {
+                    <tr>
+                      <th scope="row" class="diagnostics__code">{{ entry.name }}</th>
+                      <td class="diagnostics__code">
+                        {{ entry.version ?? ('admin.diagnostics.unknown' | translate) }}
+                      </td>
+                      <td>{{ roleKey(entry) | translate }}</td>
+                      <td class="diagnostics__code">{{ entry.state }}</td>
+                      <td>{{ 'admin.diagnostics.packages.signature-not-recorded' | translate }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else if (report.packages.recorded) {
+            <p>{{ 'admin.diagnostics.packages.none' | translate }}</p>
+          }
+          <p class="diagnostics__note">
+            {{ 'admin.diagnostics.packages.signature-note' | translate }}
+          </p>
+        </section>
+
+        <section class="diagnostics__section" aria-labelledby="diagnostics-checks">
+          <h2 id="diagnostics-checks">{{ 'admin.diagnostics.checks.heading' | translate }}</h2>
+          <ul class="diagnostics__checks" data-diagnostics-checks>
+            @for (check of report.checks; track check.id) {
+              <li class="diagnostics__check" [attr.data-check]="check.id">
+                <span class="diagnostics__check-name">{{ checkName(check) | translate }}</span>
+                <nxs-status-tag [label]="statusLabel(check)" [status]="tone(check)" />
+                <span class="diagnostics__check-meaning">{{
+                  checkMeaning(check) | translate
+                }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section class="diagnostics__section" aria-labelledby="diagnostics-configuration">
+          <h2 id="diagnostics-configuration">
+            {{ 'admin.diagnostics.configuration.heading' | translate }}
+          </h2>
+          <p>
+            {{
+              'admin.diagnostics.configuration.built'
+                | translate: { builtAt: report.configuration.builtAt ?? '' }
+            }}
+          </p>
+          <h3>{{ 'admin.diagnostics.configuration.server-wide' | translate }}</h3>
+          <ul class="diagnostics__layers" data-diagnostics-server-layers>
+            @for (fragment of report.configuration.bootstrap; track $index) {
+              <li>
+                <span class="diagnostics__layer-name">{{
+                  'admin.diagnostics.configuration.bootstrap' | translate
+                }}</span>
+                <span class="diagnostics__code">{{ fragment.name }}</span>
+                <span class="diagnostics__code">{{ fragment.bundle }}</span>
+              </li>
+            }
+            @for (fragment of report.configuration.manifest; track $index) {
+              <li>
+                <span class="diagnostics__layer-name">{{
+                  'admin.diagnostics.configuration.manifest' | translate
+                }}</span>
+                <span class="diagnostics__code">{{ fragment.name }}</span>
+                <span class="diagnostics__code">{{ fragment.bundle }}</span>
+              </li>
+            }
+            <li>
+              <span class="diagnostics__layer-name">{{
+                'admin.diagnostics.configuration.layouts' | translate
+              }}</span>
+              <span>{{
+                'admin.diagnostics.configuration.layout-count'
+                  | translate: { count: report.configuration.layouts.length }
+              }}</span>
+            </li>
+            <li>
+              <span class="diagnostics__layer-name">{{
+                'admin.diagnostics.configuration.development-overrides' | translate
+              }}</span>
+              <span>{{
+                (report.configuration.developmentOverrides
+                  ? 'admin.diagnostics.status.on'
+                  : 'admin.diagnostics.status.off'
+                ) | translate
+              }}</span>
+            </li>
+          </ul>
+
+          @for (app of report.apps; track app.id) {
+            <article
+              class="diagnostics__app"
+              [attr.data-app]="app.id"
+              [attr.aria-labelledby]="'diagnostics-app-' + app.id"
+            >
+              <h3 [id]="'diagnostics-app-' + app.id" class="diagnostics__code">{{ app.id }}</h3>
+              <dl class="diagnostics__facts">
+                <dt>{{ 'admin.diagnostics.apps.version' | translate }}</dt>
+                <dd>{{ app.packageVersion ?? ('admin.diagnostics.unknown' | translate) }}</dd>
+                <dt>{{ 'admin.diagnostics.apps.platform' | translate }}</dt>
+                <dd class="diagnostics__code">
+                  {{ app.platform ?? ('admin.diagnostics.unknown' | translate) }}
+                </dd>
+                <dt>{{ 'admin.diagnostics.apps.package-layer' | translate }}</dt>
+                <dd>
+                  <span class="diagnostics__code">{{ app.package.bundle }}</span>
+                  <span class="diagnostics__files" data-app-files>{{
+                    app.package.files.join(', ')
+                  }}</span>
+                </dd>
+                <dt>{{ 'admin.diagnostics.apps.deployment-layer' | translate }}</dt>
+                <dd data-app-deployment>
+                  @if (!app.deployment.enabled) {
+                    {{ 'admin.diagnostics.status.off' | translate }}
+                  } @else if (app.deployment.files.length === 0) {
+                    {{ 'admin.diagnostics.apps.deployment-none' | translate }}
+                  } @else {
+                    <ul class="diagnostics__files-list">
+                      @for (file of app.deployment.files; track file.path) {
+                        <li class="diagnostics__code">
+                          {{
+                            'admin.diagnostics.apps.deployment-file'
+                              | translate: { path: file.path, version: file.version }
+                          }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                </dd>
+                <dt>{{ 'admin.diagnostics.apps.errors' | translate }}</dt>
+                <dd data-app-errors>
+                  {{
+                    'admin.diagnostics.apps.error-count'
+                      | translate: { count: messagesFor(app).length }
+                  }}
+                </dd>
+              </dl>
+            </article>
+          }
+        </section>
+
+        <section class="diagnostics__section" aria-labelledby="diagnostics-errors">
+          <h2 id="diagnostics-errors">{{ 'admin.diagnostics.errors.heading' | translate }}</h2>
+          @if (report.diagnostics.length === 0) {
+            <p data-diagnostics-no-errors>{{ 'admin.diagnostics.errors.none' | translate }}</p>
+          } @else {
+            <div class="diagnostics__table-wrap">
+              <table class="diagnostics__table" data-diagnostics-errors>
+                <caption class="diagnostics__caption">
+                  {{
+                    'admin.diagnostics.errors.caption' | translate
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'admin.diagnostics.errors.level' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.errors.app' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.errors.code' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.errors.message' | translate }}</th>
+                    <th scope="col">{{ 'admin.diagnostics.errors.source' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of report.diagnostics; track $index) {
+                    <tr [attr.data-level]="entry.level">
+                      <td>
+                        <nxs-status-tag
+                          [label]="
+                            (entry.level === 'error'
+                              ? 'admin.diagnostics.errors.error'
+                              : 'admin.diagnostics.errors.warning'
+                            ) | translate
+                          "
+                          [status]="entry.level === 'error' ? 'important' : 'warning'"
+                        />
+                      </td>
+                      <td class="diagnostics__code">
+                        {{ entry.app ?? ('admin.diagnostics.errors.server-wide' | translate) }}
+                      </td>
+                      <td class="diagnostics__code">{{ entry.code }}</td>
+                      <td>{{ entry.message }}</td>
+                      <td class="diagnostics__code">{{ entry.bundle }} {{ entry.source }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          @if (report.omitted.info > 0 || report.omitted.beyondLimit > 0) {
+            <p class="diagnostics__note" data-diagnostics-omitted>
+              {{
+                'admin.diagnostics.errors.omitted'
+                  | translate: { info: report.omitted.info, beyond: report.omitted.beyondLimit }
+              }}
+            </p>
+          }
+        </section>
+
+        <section class="diagnostics__section" aria-labelledby="diagnostics-support">
+          <h2 id="diagnostics-support">{{ 'admin.diagnostics.support.heading' | translate }}</h2>
+          <p id="diagnostics-support-hint">{{ 'admin.diagnostics.support.hint' | translate }}</p>
+          <label class="diagnostics__support-label" for="diagnostics-support-text">
+            {{ 'admin.diagnostics.support.label' | translate }}
+          </label>
+          <textarea
+            #supportField
+            id="diagnostics-support-text"
+            class="diagnostics__support-text"
+            data-diagnostics-support
+            readonly
+            rows="12"
+            spellcheck="false"
+            aria-describedby="diagnostics-support-hint"
+            [value]="support()"
+          ></textarea>
+          <div class="diagnostics__support-actions">
+            <nxs-button
+              appearance="filled"
+              icon="content_copy"
+              data-diagnostics-copy
+              (press)="copy(supportField)"
+            >
+              {{ 'admin.diagnostics.support.copy' | translate }}
+            </nxs-button>
+            <span
+              class="diagnostics__copied"
+              role="status"
+              aria-live="polite"
+              data-diagnostics-copied
+            >
+              @if (copyOutcome() === 'copied') {
+                {{ 'admin.diagnostics.support.copied' | translate }}
+              } @else if (copyOutcome() === 'failed') {
+                {{ 'admin.diagnostics.support.copy-failed' | translate }}
+              }
+            </span>
+          </div>
+        </section>
+      }
+    }
+  }
+</section>

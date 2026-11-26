@@ -204,6 +204,11 @@ final class LayerService {
         return settings.enabled();
     }
 
+    /** The settings it was started with, read once: for the diagnostics page's checks. */
+    LayerSettings settings() {
+        return settings;
+    }
+
     // --- What the registry serves ------------------------------------------------------------------
 
     /**

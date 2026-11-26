@@ -680,6 +680,57 @@ On Docker, the server log is `/var/log/nuxeo/server.log` in the container:
 `docker exec nuxeo grep -A20 "Component Loading Status" /var/log/nuxeo/server.log | tail -25`, as
 the [Payers README](../../business-apps/packages/payers-claims-demo/README.md) checks it.
 
+### The diagnostics page
+
+**Administration, Diagnostics**, at `/administration/diagnostics`, for administrators: what support
+needs to know of this server's apps, read only, in one place. It shows:
+
+- **the versions:** the platform's, Nuxeo's product name and version; the app's, the installed
+  `nuxeo-agentic-ui` package; and the `nuxeo-agentic-core` bundle's own build;
+- **the installed packages,** each with its version, its state and whether it is the app, a kit
+  (a package that depends on the app) or another add-on, as the package manager records them in
+  `nuxeo.mp.dir`. **Signature: "Not recorded by the server",** for every package: Nuxeo LTS 2025's
+  package manager keeps no record of a signature, so verify each one before installing it
+  ([section 3](#3-installing-in-order); [package-pipeline.md](package-pipeline.md), section 9.1);
+- **the server checks the apps depend on:** Nuxeo's retention module (its `RetentionRule` facet
+  registered), Template Rendering (its `TemplateBased` facet), the AI package (any `AI.*`
+  operation), the deployment layer on or off, the development overrides on or off, and the
+  operation allow-list in force or replaced;
+- **the configuration in force:** server-wide, the bootstrap and manifest fragments, in the order
+  the browser applies them, with the bundle each came from, and how many layouts; for each app, its
+  package version, the platform it needs, the bundle and files it is served from, its deployment
+  layer's live files with their versions, and how many configuration errors were logged for it;
+- **the configuration's errors and warnings** the server logged when it built the configuration in
+  force, and when the registry served each app's actions, each with its app, its code, its message
+  and the file it is about. Those for information only are counted, not listed;
+- **a "copy for support" text:** the same facts as plain text, a fact a line, in field names that
+  do not change with the page's language, and a Copy button.
+
+**What it leaves out, by construction:** no person, not the administrator asking, not who changed
+the deployment layer, not an app's groups; no property's value but the product's name and version
+and the switches as on or off; and no file's content. Every message is cleaned before it is sent:
+an email address, who a URL signs in as and its query, a home directory's owner and anything shaped
+like a key or a token are replaced ([`Redaction.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/Redaction.java)).
+
+**Who may read it is decided on the server.** The page reads
+`GET /nuxeo/agentic-ui-apps/diagnostics.json`, after sign-in, below the app registry's servlet:
+
+| Request                                          | Answer                                        |
+| ------------------------------------------------ | --------------------------------------------- |
+| `GET`, from an administrator (`isAdministrator`) | 200, the report, `Cache-Control: no-store`    |
+| `GET`, from anyone else, any group               | 403, before anything of the server is read    |
+| `GET`, with no sign-in                           | 401                                           |
+| Any other method, `HEAD` and `POST` included     | 405, `Allow: GET`, before anyone is looked at |
+
+The page's own route guard only keeps it out of the menu: someone who reaches the page without
+being an administrator sees the server's 403 and nothing of the report. Sources:
+[`DiagnosticsEndpoint.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsEndpoint.java),
+[`DiagnosticsReport.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsReport.java),
+[`InstalledPackages.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/InstalledPackages.java),
+and their tests, `DiagnosticsAccessTest` above all. Its security review waits with the others
+([security-reviews.md](security-reviews.md)). Telemetry, which would send any of this anywhere, is
+not built: [telemetry.md](telemetry.md) is its design, for decision T.
+
 ## 9. What is not production-ready yet
 
 ### Open decisions

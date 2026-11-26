@@ -1,0 +1,41 @@
+{
+  "$comment": "Phase 10's performance budgets in CI, which scripts/beta-harness/performance-budgets/pages.mjs and bundles.mjs fail on. Each limit's reasoning is in docs/business-apps/performance-budgets-ci.md, whose tables must match this file (performance-budgets.selftest.mjs). Change a limit only with that page's reasoning changed beside it.",
+  "pages": {
+    "home.firstRenderMs": 2500,
+    "queue.firstPageMs": 2500,
+    "record.firstRenderMs": 3000
+  },
+  "bundles": {
+    "initialBytes": 3436544,
+    "lazyBytes": {
+      "app:business-apps.actions": 4096,
+      "app:business-apps.menu": 56320,
+      "app:business-apps.routes": 53248,
+      "app:dashboard/dashboard-page": 32768,
+      "app:extensions/bulk-action.services": 7168,
+      "app:features/contracts/contracts-page": 4096,
+      "app:login/login-page": 25600,
+      "app:not-found-page": 4096,
+      "app:personal-space/personal-space-page": 4096,
+      "app:placeholder-page": 4096,
+      "app:settings/authorized-applications/authorized-applications-page": 5120,
+      "app:settings/cloud-services/cloud-services-page": 6144,
+      "app:settings/nuxeo-drive/nuxeo-drive-page": 10240,
+      "app:settings/profile/profile-page": 23552,
+      "app:settings/themes/themes-page": 7168,
+      "app:shell/app-shell": 260096,
+      "feature:administration": 158720,
+      "feature:assets/asset-search-results": 44032,
+      "feature:assets/assets-drawer": 32768,
+      "feature:browse": 224256,
+      "feature:capture": 55296,
+      "feature:collections": 57344,
+      "feature:document-detail": 558080,
+      "feature:knowledge-discovery": 90112,
+      "feature:layout-designer": 181248,
+      "feature:search": 81920,
+      "feature:tasks": 26624,
+      "feature:trash": 49152
+    }
+  }
+}

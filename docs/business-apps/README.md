@@ -75,6 +75,11 @@ Designer, the development plan and its decisions. Start here when you pick this 
     demo server, the logs, and what is not ready for production.
 17. [security-reviews.md](security-reviews.md): every security review the work needs, deferred
     until the app is finished: what each covers, where its notes are, and the decision it rests on.
+18. [performance-budgets-ci.md](performance-budgets-ci.md): phase 10's performance budgets in CI,
+    the bundles' sizes and three pages' first render in Chromium, each limit with its reasoning, and
+    how the job is seen failing.
+19. [telemetry.md](telemetry.md): telemetry, a design only, for decision T: opt-in and off by
+    default, to the customer's own collector, a closed list of fields, and what needs deciding.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):

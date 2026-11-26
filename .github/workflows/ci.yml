@@ -914,3 +914,96 @@ jobs:
           name: storybook-interactions
           path: ${{ runner.temp }}/storybook-interactions.json
           if-no-files-found: ignore
+
+  # Phase 10's performance budgets (docs/business-apps/performance-budgets-ci.md): the initial
+  # bundle and each lazy chunk held to a size, and three pages held to a time in Chromium against
+  # the asset performance check's stand-in for the server, each the median of five cold loads. A
+  # budget exceeded fails the job with the measure, the number and the budget. No Nuxeo and no
+  # credential but the package token every job has; Playwright is installed with --no-save, so the
+  # lockfile and `npm ci` are untouched, as for the Storybook interactions above.
+  #
+  # Its own job, so that a slow browser or a slow apt mirror holds up no other verdict. Every step
+  # runs on every pull request, affected or not: a budget that runs only when nuxeo-ui is affected
+  # is skipped exactly when a library it imports grows.
+  performance-budgets:
+    needs: base
+    runs-on: ubuntu-latest
+    env:
+      NX_BASE: ${{ needs.base.outputs.base }}
+      NX_HEAD: ${{ needs.base.outputs.head }}
+    steps:
+      # Must precede the local composite action below, which is loaded from the workspace.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          github-packages-token: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          base: ${{ needs.base.outputs.base }}
+          head: ${{ needs.base.outputs.head }}
+
+      # The production build, with the esbuild metafile `bundles.mjs` reads beside it.
+      - name: Build nuxeo-ui for production, with its metafile
+        run: npx nx run nuxeo-ui:build:production --stats-json --outputStyle=static
+
+      # Offline, and first: the judgement failing with both numbers, the reading of a metafile,
+      # the guard's controls, the page's tables against budgets.json, and this job's own steps.
+      - name: Run the performance budgets' selftest
+        run: npm run beta:budgets-selftest
+
+      - name: Hold the bundles to their budgets
+        run: npm run beta:bundle-budgets -- --report "$RUNNER_TEMP/bundle-budgets.json"
+
+      # The same pin and cache as the Storybook interactions, read from the one source for it.
+      - name: Resolve the pinned Playwright version
+        id: playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          test -n "$version" || { echo "could not read PLAYWRIGHT_TEST_VERSION"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the pinned Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # 30 minutes for the same reason as the Storybook interactions': `--with-deps` is an apt
+      # fetch whose pace is the mirror's. The measurement itself is about a minute.
+      - name: Hold the pages to their budgets, in Chromium
+        shell: bash
+        timeout-minutes: 30
+        env:
+          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          PLAYWRIGHT_TEST_VERSION: ${{ steps.playwright.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "@playwright/test@${PLAYWRIGHT_TEST_VERSION}"
+          npx playwright install --with-deps chromium
+          npm run beta:page-budgets -- --skip-build --report "$RUNNER_TEMP/page-budgets.json"
+
+      # The guard, seen failing: every budget lowered below its own number, one at a time, must
+      # fail with that number and that budget; then each check is run once more with a budget
+      # lowered, and must exit 1. A budget check that cannot go red certifies nothing.
+      - name: See every budget fail when it is lowered on purpose
+        run: |
+          npm run beta:budgets-controls -- \
+            --bundles "$RUNNER_TEMP/bundle-budgets.json" \
+            --pages "$RUNNER_TEMP/page-budgets.json" \
+            --run-checks
+
+      - name: Upload the performance budgets' reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-budgets
+          path: |
+            ${{ runner.temp }}/bundle-budgets.json
+            ${{ runner.temp }}/page-budgets.json
+          if-no-files-found: ignore
+          retention-days: 14

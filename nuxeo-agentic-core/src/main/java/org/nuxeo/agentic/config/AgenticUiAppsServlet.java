@@ -34,7 +34,8 @@ import org.nuxeo.runtime.api.Framework;
  * the layer's addresses read and write the layer, for administrators alone ({@link LayerService}).
  *
  * GET and HEAD, and POST to a deployment layer's file: every other method, and POST anywhere else,
- * is answered 405.
+ * is answered 405. The diagnostics page's report, {@code diagnostics.json}, takes GET alone, and
+ * answers administrators alone ({@link DiagnosticsEndpoint}).
  */
 public class AgenticUiAppsServlet extends HttpServlet {
 
@@ -45,6 +46,10 @@ public class AgenticUiAppsServlet extends HttpServlet {
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String method = request.getMethod();
+        if (DiagnosticsEndpoint.answers(request.getPathInfo())) {
+            diagnostics(method, request, response);
+            return;
+        }
         boolean read = "GET".equals(method) || "HEAD".equals(method);
         if (!read) {
             boolean layer = LayerEndpoint.answers(request.getPathInfo());
@@ -74,6 +79,40 @@ public class AgenticUiAppsServlet extends HttpServlet {
         } else {
             answer = endpoint().respond(path, viewer, request.getHeader("If-None-Match"));
         }
+        write(method, answer, response);
+    }
+
+    /**
+     * The diagnostics page's address ({@link DiagnosticsEndpoint}): {@code GET} only, refused before
+     * the person is looked at; then 401 with no Nuxeo principal, and 403 for anyone who is not an
+     * administrator, before anything of the server is read for the report.
+     */
+    private static void diagnostics(String method, HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        if (!"GET".equals(method)) {
+            write(method, DiagnosticsEndpoint.methodNotAllowed(), response);
+            return;
+        }
+        AppRegistryEndpoint.Viewer viewer = viewer(request.getUserPrincipal());
+        if (viewer == null) {
+            response.setHeader("Cache-Control", "no-store");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentLength(0);
+            return;
+        }
+        write(method, DiagnosticsEndpoint.respond(viewer, AgenticUiAppsServlet::diagnosticsReport), response);
+    }
+
+    /** The report, from the configuration, the registry and the deployment layer in force. */
+    static com.fasterxml.jackson.databind.node.ObjectNode diagnosticsReport() {
+        AppRegistryEndpoint registry = endpoint();
+        return DiagnosticsReport.build(registry.snapshot(), registry.diagnostics(), layer(),
+                Boolean.parseBoolean(Framework.getProperty(DevOverrides.ENABLED_PROPERTY, "false").strip()),
+                ServerProbe.live(), java.time.Clock.systemUTC());
+    }
+
+    private static void write(String method, AppRegistryEndpoint.Response answer, HttpServletResponse response)
+            throws IOException {
         response.setStatus(answer.status());
         for (Map.Entry<String, String> header : answer.headers().entrySet()) {
             if ("Content-Type".equals(header.getKey())) {
