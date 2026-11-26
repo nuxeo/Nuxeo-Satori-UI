@@ -7,7 +7,8 @@
  * server, with Web UI and the new app on it: 3 (model), 5 (conditions), 6 (what people see) and
  * 7 (what the server is asked). Their other half runs here, and each says what it did not run. A
  * check whose findings are empty but which did not run whole is `partial`, never a pass. Check 9
- * waits for M3's plugins.
+ * waits for M3's plugins. Lab mode (`lab-cli.ts`) runs what it can of the server halves, against a
+ * real server, and never through this file's result.
  *
  * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
  * decision, and every reported item has an owner and a decision, in the conversion's
@@ -164,6 +165,23 @@ export function runHarness(given: HarnessInput): HarnessResult {
       : []),
   ];
   return { checks, ready: blockers.length === 0, blockers };
+}
+
+/**
+ * Checks as `check` prints them, one line each with what it found: the harness's report format,
+ * which lab mode prints its checks in too.
+ */
+export function checkResultLines(checks: readonly CheckResult[]): string[] {
+  const lines: string[] = [];
+  for (const check of checks) {
+    const head = `${String(check.number).padStart(2)}  ${check.name.padEnd(26)}`;
+    if (check.status === 'not run') lines.push(`${head} not run: ${check.reason}`);
+    else if (check.status === 'partial') lines.push(`${head} partial: ${check.reason}`);
+    else lines.push(`${head} ${check.status === 'pass' ? 'pass' : 'FAIL'}`);
+    for (const finding of check.findings) lines.push(`      - ${finding}`);
+    if (check.status === 'fail' && check.reason) lines.push(`      Not run: ${check.reason}`);
+  }
+  return lines;
 }
 
 /** The first entry of each id, in the report's order. */

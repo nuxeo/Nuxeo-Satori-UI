@@ -58,13 +58,18 @@ Designer, the development plan and its decisions. Start here when you pick this 
 10. [package-pipeline.md](package-pipeline.md): the package pipeline's first stage, which checks,
     signs and publishes an app definition package.
 11. [tutorial.md](tutorial.md): build a small app from an empty package in a day, by hand and with
-    the agent, and the feedback its first run found.
+    the agent, and the feedback its first run found. Its test with someone outside the team, and
+    the plan's other acceptance tests, are run by [acceptance-tests.md](acceptance-tests.md): who
+    takes part, the server, the task, what is measured, how each passes, and what is recorded.
 12. [studio-migration-guide.md](studio-migration-guide.md): for a customer, migrating their own
     Studio package with one command, reading its report and filling in its decisions.
 13. [spikes/plugins-decision-5.md](spikes/plugins-decision-5.md): the spike for decision 5,
     customer code built in from the template or loaded at run time, signed and pinned.
 14. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
     assets, proposed, and the check that holds it without a server.
+15. [administrator-guide.md](administrator-guide.md): for a Nuxeo administrator, what to install
+    and in what order, every server setting with its default, upgrading and removing a kit, the
+    demo server, the logs, and what is not ready for production.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review:

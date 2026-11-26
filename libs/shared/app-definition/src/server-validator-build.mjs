@@ -224,6 +224,7 @@ const KIT_NAMES = [
   'contracts-demo',
   'controlled-documents-demo',
   'facilities-demo',
+  'moves-demo',
   'payers-claims-demo',
 ];
 

@@ -1,0 +1,65 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "item",
+      "labelKey": "moves.card.moveItem.item",
+      "fields": [
+        "moveitem:tag",
+        { "field": "dc:title", "labelKey": "moves.field.itemTitle" },
+        {
+          "field": "moveitem:move",
+          "widget": "document-link",
+          "parameters": { "types": ["Move"] }
+        },
+        "moveitem:room",
+        {
+          "field": "moveitem:condition",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Good": "positive",
+              "Worn": "neutral",
+              "Scratched": "warning",
+              "Damaged": "negative"
+            }
+          }
+        },
+        {
+          "field": "moveitem:declaredValue",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        }
+      ]
+    },
+    {
+      "id": "claims",
+      "labelKey": "moves.card.moveItem.claims",
+      "related": {
+        "pageProvider": "moves_item_claims",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dmg:number",
+          { "field": "dc:title", "labelKey": "moves.field.claimTitle" },
+          {
+            "field": "dmg:state",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Filed": "info",
+                "In review": "warning",
+                "Approved": "positive",
+                "Denied": "negative",
+                "Paid": "positive"
+              }
+            }
+          },
+          { "field": "dmg:filedOn", "widget": "date" }
+        ],
+        "sort": [{ "field": "dmg:filedOn", "order": "desc" }],
+        "pageSize": 10
+      }
+    }
+  ]
+}

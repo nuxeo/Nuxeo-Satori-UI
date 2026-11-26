@@ -210,7 +210,9 @@ What each writes, and what it leaves to you:
   none. It takes out a file the package no longer holds.
 - **`app-model`, for a demo kit only:** the write tools refuse it on a package that does not ship its own `content-model.json` already, unless the same call makes the package. A stand-in type with its schema, `--properties` such as
   `number,status=Draft|Active,value:double,end:date`, and page providers over it, `--pageProvider`
-  with `--where` and `--sort`, in a model component of its own that the manifest lists first. A
+  with `--where` and `--sort`, in a model component of its own that the manifest lists first.
+  `--attachments`, with `--properties` when the type is first written, gives it Nuxeo's `files`
+  schema too, `files:files`, where the document page's Attachments panel adds a record's files. A
   page provider reads the repository, which answers no aggregate; `--aggregates=<prefix>:<name>,...`
   writes it from the search index instead, with a terms aggregate `<prefix>_<name>_agg` for each
   property and the type's search document, so a queue's facets and a home's figures can name them.
@@ -265,6 +267,11 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **Every `labelKey` needs a text,** in the package's `labels/en.json` or the platform's catalogue:
   the pipeline refuses one with neither, naming the key and the file. Write the text in the same
   call as the key: `apply_package_changes`, the labels first.
+- **Name each of the kit's own schemas for the Properties panel:** `layout.schema.<schema>`, by the
+  schema's name, not its prefix, in `labels/en.json`. For a type with no `metadata` layout the panel
+  heads each schema's section with it, else with the name made readable, `acmeproduct` as
+  "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
+  `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
 - **The allow-list is the deployment's.** A package with an operation passes only against the
   allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
   which CI gives the pipeline. A package with none is refused at write time for every operation:

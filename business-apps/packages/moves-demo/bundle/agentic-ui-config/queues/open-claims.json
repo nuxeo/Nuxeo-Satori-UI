@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "moves.queue.open-claims",
+  "pageProvider": "moves_open_claims",
+  "columns": [
+    "dmg:number",
+    { "field": "dc:title", "labelKey": "moves.field.claimTitle" },
+    { "field": "dmg:move", "widget": "document-link" },
+    {
+      "field": "dmg:state",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Filed": "info",
+          "In review": "warning",
+          "Approved": "positive",
+          "Denied": "negative",
+          "Paid": "positive"
+        }
+      }
+    },
+    { "field": "dmg:filedOn", "widget": "relative-date" },
+    { "field": "dmg:amountClaimed", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "dmg:adjuster", "widget": "user" }
+  ],
+  "sort": [
+    {
+      "field": "dmg:filedOn",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "dmg_state_agg", "labelKey": "moves.facet.state" },
+    { "aggregate": "dmg_moveNumber_agg", "labelKey": "moves.facet.move" }
+  ]
+}

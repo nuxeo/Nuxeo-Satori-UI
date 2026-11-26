@@ -244,8 +244,13 @@ Below the Save section of either page, for the file open:
   at most 1 MiB and 64 KiB, nested at most 512 deep, with no repeated key. Every answer is
   `no-store`.
 - **The switch:** `nuxeo.agentic.ui.layer.enabled`, off unless it is `true`, as new work is
-  (decision J). Off, every address of the layer is 404 and the registry serves the packages' files,
-  though the stored layer is kept. So turning it off also takes every customer change out at once.
+  (decision J). Off, every address of the layer answers an administrator 404, _The deployment layer
+  is switched off on this server._, and anyone else 403, as when it is on, so no one else learns
+  that it is off (`LayerService.refusal`). Before either, on or off, a request that does not
+  authenticate is 401, and a method an address does not take is 405: GET and HEAD everywhere, POST
+  to a file's address only (`AgenticUiAppsServlet`, `LayerEndpoint`). The registry serves the
+  packages' files, though the stored layer is kept. So turning it off also takes every customer
+  change out at once.
 - **In the repository:** one `File` document per app under `/agentic-ui-layers`, a folder hidden in
   navigation whose ACL blocks every permission and grants none, so only administrators, whom Nuxeo
   lets past every ACL, and the system read it. The ACL is checked each time the layer is read or
@@ -283,13 +288,26 @@ Docker Nuxeo, as the kits' READMEs install a package:
    writes `nuxeo-agentic-ui-package-<version>.zip`. A plain `mvn package` at the root writes
    `nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-*.zip` too, but its `package.xml`
    says `@VERSION@`, which Nuxeo reads as 0.0.0, so it does not upgrade an installed one.
-2. **Switch the layer on** in `nuxeo.conf`, in the Docker image a file of `/etc/nuxeo/conf.d/`:
+2. **Switch the layer on** in `nuxeo.conf`:
 
    ```properties
    nuxeo.agentic.ui.layer.enabled=true
    # Only on a server with a single administrator:
    # nuxeo.agentic.ui.layer.selfApproval=true
    ```
+
+   In the Docker image that is `/etc/nuxeo/nuxeo.conf` itself, on a container that has started
+   before. The image's `/docker-entrypoint.sh` merges `/etc/nuxeo/conf.d/` into it only at the
+   container's first start, before it writes its `configured` marker (read from the local
+   2025.10.18 container; [`nuxeo-conf/README.md`](../../../nuxeo-conf/README.md) says so in its
+   "Local mail setup"), so a file copied into `conf.d` later is never read, and the layer stays
+   off:
+
+   ```bash
+   docker exec nuxeo sh -c 'grep -q "^nuxeo.agentic.ui.layer.enabled=" /etc/nuxeo/nuxeo.conf || echo "nuxeo.agentic.ui.layer.enabled=true" >> /etc/nuxeo/nuxeo.conf'
+   ```
+
+   On a container not started yet, a `conf.d` file works.
 
 3. **Install** with `nuxeoctl mp-install <zip> --accept=true` while the server is stopped: in the
    container, a one-off script in `/docker-entrypoint-initnuxeo.d/`, then `docker restart nuxeo`.
@@ -301,8 +319,9 @@ Docker Nuxeo, as the kits' READMEs install a package:
    draft and submits it; a second approves it; a claims adjuster opens a claim and sees the field.
    **Roll back** puts the package's page back.
 
-**Removing it:** set `nuxeo.agentic.ui.layer.enabled=false` and restart: the packages' files are
-served again. The stored layer stays in `/agentic-ui-layers` until an administrator deletes it.
+**Removing it:** set `nuxeo.agentic.ui.layer.enabled=false` in `nuxeo.conf`, which on Docker is
+`/etc/nuxeo/nuxeo.conf` as above, and restart: the packages' files are served again. The stored
+layer stays in `/agentic-ui-layers` until an administrator deletes it.
 
 ### What a review must cover
 

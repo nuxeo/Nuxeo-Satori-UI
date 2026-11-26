@@ -1,0 +1,68 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as IconButtonStories from './icon-button.stories';
+
+<Meta of={IconButtonStories} name="Overview" />
+
+# Icon button
+
+The icon button is a button that is only an icon: Angular Material's icon button, as a native
+`<button>`. Use it where a row repeats the same few actions — move up, move down, hide — and a
+button with text where there is room for the text.
+
+## Key features
+
+- **A required name.** An icon does not say what it does, so `label`, the accessible name, is
+  required. The icon is decorative.
+- **A native button.** Enter and Space press it, a disabled one is skipped by Tab, and it is of
+  `type="button"` unless you say otherwise.
+- **`press`, never while disabled.** One output for a click, Enter or Space.
+
+## Demo showcase
+
+<Canvas of={IconButtonStories.ARow} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsIconButtonComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-icon-button
+  icon="arrow_up"
+  [label]="'acme.designer.move-up' | translate: { field: field.name }"
+  [disabled]="first"
+  (press)="moveUp(field)"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`icon` and `label` are required; `label` takes text you have already translated. It needs no
+providers, and has no registered ID: place it in a template by its selector.
+
+## Examples
+
+### Disabled
+
+<Canvas of={IconButtonStories.Disabled} />
+
+### The keyboard
+
+<Canvas of={IconButtonStories.KeyboardContract} />
+
+## Accessibility
+
+- **Role and name.** It is a native `button` named by `label`. Name the thing it acts on when several
+  sit side by side — "Move member:phone up", not "Up" — so that a list of buttons read out is a list
+  of different buttons. A blank `label` leaves it with no name, which automated checks fail.
+- **Keyboard.** Tab reaches it, and Enter and Space press it, as any native button. Disabled, it is
+  a native disabled button: Tab skips it and nothing presses it.
+- **Focus.** It keeps the focus when pressed. A host that moves the focus afterwards finds the native
+  `button` inside the element and focuses that.
+- **Icon.** The icon is hidden from assistive technology, so the name is read once.

@@ -295,8 +295,10 @@ reaches only when the integration branch does, and a tag names exactly what is p
   none does yet.
 - **Promotion to production after a person approves:** proposed in section 9, a GitHub
   environment with required reviewers; not built. Versions are section 8's.
-- **The allow-list** is the deployment's (decision 3). Until it exists, the workflow passes none,
-  and every operation is refused.
+- **The allow-list** is the deployment's (decision 3), never in a package's bundle. The workflow
+  passes a kit's `deployment/build-allow-list.json` with `--allow-list` when the kit has one,
+  which today only the Payers kit does; a kit without one is built with none, and every operation
+  its buttons run is refused ([`app-packages.yml`](../../.github/workflows/app-packages.yml)).
 - **Where kits live:** under `business-apps/packages/` for now. Version 1's configuration packages
   moved to nuxeo/Nuxeo-Satori-Config; whether kits follow them, calling this pipeline from there,
   is open.
@@ -405,7 +407,9 @@ not there stops the run, exit 2. The library's spec holds each rule's classifica
 judgement. The workflow's step was run on a scratch clone: a pull request that changes nothing
 (built), one that removes a queue at the same version (refused), a tag 0.9.1 whose queue was
 removed in 0.9.1-rc.1, held to 0.9.0 and refused, and a tag 0.10.0, held to 0.9.1, not to
-0.10.0-rc.1. It has not run on GitHub yet.
+0.10.0-rc.1. On GitHub it runs on every pull request that changes a kit or the platform's
+sources: on one on 26 November 2026, each kit's version was held to the staging commit it was
+based on. Its tag path has not run there, since no `app-package/*` tag has been pushed.
 
 **Not yet:** `validate_package`, in the Builder MCP server, takes no previous package, so an agent
 learns that a version must move only from the pipeline.
@@ -673,7 +677,9 @@ at that commit. So a pull request that removes an ID a kit names fails here, and
 on a change to the platform's sources for that reason. The workflow's step, its fetch left out,
 was run on this repository, 25 November 2026, against the staging branch (every kit kept) and
 against payers 0.3.0's commit (payers kept by its note, which the summary carries under
-"Upgrading"; the other kits new); it has not run on GitHub yet.
+"Upgrading"; the other kits new). On GitHub it runs on pull requests too: on one on 26 November
+2026, each kit's upgrade was held to the staging commit it was based on. Its tag path has not run
+there.
 
 **Its controls:** `npm run app-upgrade:selftest` holds 51 negative controls and 12 sound ones. Each
 negative one breaks the demo, or a copy of the platform's files, in one way, and must be refused
@@ -736,7 +742,10 @@ change, and both are kept.
 Phase 10's first demo is a release-candidate tour across every kit
 ([development plan](development-plan.md), phase 10). `scripts/release-candidate.mjs` assembles the
 candidate that tour would install, offline: no Nuxeo server, no credential, no signature, no tag and
-no publishing. Built on 25 November 2026; it has not run on GitHub yet, only on a laptop.
+no publishing. Built on 25 November 2026. On GitHub it runs on every push to a `staging/**`
+branch ([in CI](#in-ci), below). The first, the merge of pull request #718 into
+`staging/enterprise-grade-app`, was green, and so was every one since, but for the merges of #717
+and #719, whose controls failed until #721.
 
 ```bash
 npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the last release>
@@ -761,9 +770,9 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
 - It needs the Node `.nvmrc` pins, 24, and refuses another, since the client is built with the Node
   that runs it; Maven with a JDK, `unzip`, git, `tar`, which the upgrade check's export uses, and an
   installed workspace (`npm ci`). It took about
-  thirty seconds on a laptop whose Angular build cache was warm; CI's first run will say how long it
-  takes without one. It has not been run on Windows, where Maven is a `.cmd` that Node starts only
-  through a shell.
+  thirty seconds on a laptop whose Angular build cache was warm; on GitHub the job that assembles
+  it took from 2 to 19 minutes on 25 November 2026. It has not been run on Windows, where Maven is
+  a `.cmd` that Node starts only through a shell.
 - **Its children get no token.** The GitHub Packages tokens, and `NUXEO_USER` and `NUXEO_PASS`, are
   taken out of the environment the pipeline, Nx, Maven's tests and git are started with.
 

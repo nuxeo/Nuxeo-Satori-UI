@@ -47,16 +47,23 @@ This guide walks through setting up OpenSearch for full-text search in the Nuxeo
 
 - **Docker Desktop** (with Docker Compose v2)
 - **Nuxeo Server** running on `localhost:8080` (or your configured port)
-- **Nuxeo `nuxeo-platform-opensearch` package** installed on your Nuxeo instance
+- **Nuxeo's OpenSearch 2 packages**, `nuxeo-search-client-opensearch2` and `nuxeo-audit-opensearch2`,
+  installed on your Nuxeo instance: the two the demo server installs
+  ([`compose.yml`](../business-apps/demo-server/compose.yml))
 
 ## Step 1: Start OpenSearch
 
-Create or add to your Nuxeo Docker Compose stack. A minimal OpenSearch service:
+Create or add to your Nuxeo Docker Compose stack. A minimal OpenSearch service, at 2.13.0, the
+version the local `nuxeo-opensearch` container runs (`docker inspect`, 25 November 2026) and the
+demo server pins. The demo server's [`compose.yml`](../business-apps/demo-server/compose.yml) is
+the version of record: `npm run demo-server:selftest` holds it to the stack
+[`scripts/demo-server-plan.mjs`](../scripts/demo-server-plan.mjs) declares, so a new version is
+made in both, and then here.
 
 ```yaml
 services:
   opensearch:
-    image: opensearchproject/opensearch:2.17.1
+    image: opensearchproject/opensearch:2.13.0
     container_name: opensearch
     environment:
       - discovery.type=single-node
@@ -119,19 +126,19 @@ opensearch.reindex.onStartup=false
 
 If running Nuxeo as a Docker container on the same `nuxeo-net` network, use `http://opensearch:9200` as the address. If Nuxeo runs on the host, use `http://localhost:9200`.
 
-### Install the OpenSearch package
+### Install the OpenSearch packages
 
-If not already included in your Nuxeo Docker image, install the package:
+If not already included in your Nuxeo Docker image, install the packages:
 
 ```bash
 # Inside the Nuxeo container or via nuxeoctl
-nuxeoctl mp-install nuxeo-platform-opensearch
+nuxeoctl mp-install nuxeo-search-client-opensearch2 nuxeo-audit-opensearch2
 ```
 
-Or add it to your Nuxeo Dockerfile:
+Or add them to your Nuxeo Dockerfile:
 
 ```dockerfile
-RUN /opt/nuxeo/bin/nuxeoctl mp-install nuxeo-platform-opensearch
+RUN /opt/nuxeo/bin/nuxeoctl mp-install nuxeo-search-client-opensearch2 nuxeo-audit-opensearch2
 ```
 
 ## Step 3: Initial Indexing
