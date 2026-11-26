@@ -1,6 +1,6 @@
 import { formatFiles, type Tree } from '@nx/devkit';
 
-import { cardId, loadModel, NUXEO_SCHEMAS, TYPE } from '../app-layout/generator';
+import { cardId, loadModel, NUXEO_SCHEMAS, schemasLeftOut, TYPE } from '../app-layout/generator';
 import { schemasOf, type ModelProperty, type ModelSchema } from '../app-layout/content-model';
 import {
   addLabels,
@@ -177,6 +177,7 @@ export default async function appFormGenerator(tree: Tree, options: AppFormSchem
     throw new Error(`Nothing in ${chosen.join(', ')} can be edited:\n  ${left.join('\n  ')}`);
   }
   if (withTitle) cards[0].fields.unshift(TITLE);
+  left.push(...schemasLeftOut(model, available, chosen, new Set(withTitle ? [TITLE] : [])));
 
   // `"required": true` on the fields --required names, each of which the form must list.
   const listed = new Set(

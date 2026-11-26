@@ -1,6 +1,9 @@
 /**
  * The tools as an MCP client calls them: in memory, against the recorded server.
  */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createServer } from './server.ts';
 import { connect } from './testing/client.ts';
@@ -33,6 +36,157 @@ describe('createServer', () => {
     } finally {
       await client.close();
     }
+  });
+
+  describe("reads a demo kit's own stand-in model, given its package, and says which answered", () => {
+    const MOVES = 'business-apps/packages/moves-demo';
+
+    it('answers the model and the page providers from the package, with no server at all', async () => {
+      const client = await connect(
+        createServer({ nuxeo: { problem: 'No server is configured.' } }),
+      );
+      try {
+        const model = await client.call('get_content_model', { package: MOVES });
+        expect(model.isError, model.text).toBe(false);
+        expect(model.json).toMatchObject({
+          source: 'package',
+          package: MOVES,
+          model: `${MOVES}/content-model.json`,
+          counts: { types: 3 },
+        });
+        expect(model.json).not.toHaveProperty('server');
+
+        const claim = await client.call('describe_document_type', {
+          type: 'DamageClaim',
+          package: MOVES,
+        });
+        expect(claim.isError, claim.text).toBe(false);
+        expect(claim.json).toMatchObject({ source: 'package', name: 'DamageClaim' });
+        expect(
+          (claim.json as { schemas: { name: string }[] }).schemas.map((schema) => schema.name),
+        ).toEqual(['common', 'dublincore', 'files', 'damageclaim']);
+
+        const schema = await client.call('describe_schema', { schema: 'dmg', package: MOVES });
+        expect(schema.json).toMatchObject({
+          source: 'package',
+          name: 'damageclaim',
+          usedByTypes: ['DamageClaim'],
+        });
+
+        const listed = await client.call('list_page_providers', { package: MOVES });
+        expect(listed.isError, listed.text).toBe(false);
+        expect(listed.json).toMatchObject({ source: 'package', total: 5 });
+        expect(
+          (listed.json as { pageProviders: { name: string; indexed: boolean }[] }).pageProviders,
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ name: 'moves_open_claims', indexed: null }),
+            expect.objectContaining({ name: 'moves_move_items', indexed: false }),
+          ]),
+        );
+
+        const items = await client.call('describe_page_provider', {
+          name: 'moves_move_items',
+          package: MOVES,
+        });
+        expect(items.isError, items.text).toBe(false);
+        expect(items.json).toMatchObject({
+          source: 'package',
+          defined: `${MOVES}/bundle/OSGI-INF/moves-demo-model.xml`,
+          name: 'moves_move_items',
+          parameters: { positional: 1 },
+          sort: [{ field: 'moveitem:tag', order: 'asc' }],
+          pageSize: 50,
+          maxPageSize: 100,
+        });
+        expect(JSON.stringify(items.json)).toContain("ecm:primaryType = 'MoveItem'");
+
+        const open = await client.call('describe_page_provider', {
+          name: 'moves_open_claims',
+          package: MOVES,
+        });
+        expect(open.json).toMatchObject({
+          source: 'package',
+          parameters: { positional: 0 },
+          aggregates: [
+            { id: 'dmg_state_agg', type: 'terms', field: 'dmg:state' },
+            { id: 'dmg_moveNumber_agg', type: 'terms', field: 'dmg:moveNumber' },
+          ],
+        });
+        // The where clause, unescaped: what the server would run.
+        expect(JSON.stringify(open.json)).toContain("dmg:state IN ('Filed', 'In review')");
+      } finally {
+        await client.close();
+      }
+    });
+
+    it("answers from the server what the package's own model does not have, and says so", async () => {
+      const client = await connect(createServer({ nuxeo: () => new RecordedReads() }));
+      try {
+        const file = await client.call('describe_document_type', { type: 'File', package: MOVES });
+        expect(file.isError, file.text).toBe(false);
+        expect(file.json).toMatchObject({
+          source: 'server',
+          server: RECORDED_ORIGIN,
+          name: 'File',
+        });
+        expect((file.json as { packageNote: string }).packageNote).toContain(
+          `${MOVES}'s own model has no document type "File"`,
+        );
+        const search = await client.call('describe_page_provider', {
+          name: 'default_search',
+          package: MOVES,
+        });
+        expect(search.json).toMatchObject({ source: 'server', name: 'default_search' });
+        // Without a package, the server answers, as it always did.
+        const plain = await client.call('describe_document_type', { type: 'File' });
+        expect(plain.json).toMatchObject({ source: 'server', server: RECORDED_ORIGIN });
+      } finally {
+        await client.close();
+      }
+    });
+
+    it("answers from the server for a package whose content-model.json describes a server's", async () => {
+      // A customer's package with an export beside its bundle, and no type of its own.
+      const root = mkdtempSync(join(tmpdir(), 'builder-mcp-reads-'));
+      try {
+        const pkg = join(root, 'acme-claims');
+        mkdirSync(join(pkg, 'bundle', 'META-INF'), { recursive: true });
+        writeFileSync(
+          join(pkg, 'content-model.json'),
+          JSON.stringify({ doctypes: {}, schemas: [] }),
+        );
+        writeFileSync(join(pkg, 'bundle', 'META-INF', 'MANIFEST.MF'), 'Manifest-Version: 1.0\n');
+        const client = await connect(
+          createServer({ nuxeo: () => new RecordedReads(), packageRoots: [root] }),
+        );
+        try {
+          const file = await client.call('describe_document_type', { type: 'File', package: pkg });
+          expect(file.isError, file.text).toBe(false);
+          expect(file.json).toMatchObject({ source: 'server', name: 'File' });
+          expect((file.json as { packageNote: string }).packageNote).toContain(
+            'ships no stand-in model',
+          );
+        } finally {
+          await client.close();
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses a package that is not one, before reading anything', async () => {
+      const client = await connect(
+        createServer({ nuxeo: { problem: 'No server is configured.' } }),
+      );
+      try {
+        const outside = await client.call('get_content_model', { package: '../elsewhere' });
+        expect(outside.isError).toBe(true);
+        expect(outside.text).toContain('package: ../elsewhere has a "." or ".." part');
+      } finally {
+        await client.close();
+      }
+    });
   });
 
   it('answers a refusal as a tool error the agent can read', async () => {

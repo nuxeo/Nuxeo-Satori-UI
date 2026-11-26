@@ -57,6 +57,43 @@ export const NUXEO_SCHEMAS: readonly string[] = [
   'relatedtext',
 ];
 
+/**
+ * Each schema `available` has and `chosen` does not name, with its properties and why they are
+ * left out, so that a generator's "Left out" names every property it does not write: Nuxeo's own,
+ * left out unless `--schemas` names them, a file schema saying where its files are shown; and the
+ * type's own, when `--schemas` names others. `written` is what it wrote all the same, such as the
+ * title a form adds: not said.
+ */
+export function schemasLeftOut(
+  model: Model,
+  available: readonly string[],
+  chosen: readonly string[],
+  written: ReadonlySet<string> = new Set(),
+): string[] {
+  return available
+    .filter((name) => !chosen.includes(name))
+    .flatMap((name) => {
+      const own = !NUXEO_SCHEMAS.includes(name);
+      const schema = model.schemas.get(name) as ModelSchema | undefined;
+      if (!schema)
+        return [
+          `the schema ${name}: ${own ? 'not named by --schemas' : "Nuxeo's own"}, which the model does not describe`,
+        ];
+      const properties = [...schema.properties.keys()]
+        .map((property) => `${schema.prefix}:${property}`)
+        .filter((xpath) => !written.has(xpath));
+      if (properties.length === 0) return [];
+      const why = own
+        ? `in the schema ${name}, which --schemas does not name`
+        : name === 'files'
+          ? `in Nuxeo's own schema files, a record's attachments, which the document page's Attachments panel shows and adds; a "file-list" widget shows them on the record page, written by hand`
+          : name === 'file'
+            ? `in Nuxeo's own schema file, a record's main file, which its own view shows; an "image" or "file-list" widget shows it on the record page, written by hand`
+            : `in Nuxeo's own schema ${name}, left out unless --schemas names it`;
+      return [`${properties.join(', ')}: ${why}`];
+    });
+}
+
 /** The subfield names an `address` widget's parts are read from, by part. */
 const ADDRESS_PARTS: Readonly<Record<string, readonly string[]>> = {
   street: ['street', 'line1', 'address'],
@@ -210,7 +247,10 @@ export async function loadModel(
  * - **A widget only where the model says more than the type:** a property bound to a directory is
  *   a `vocabulary`, a document's id a `document-link`, a list of complex values a `table` over its
  *   simple subfields, and a complex value with a street and a city an `address`. Files are left
- *   out, and said so.
+ *   out.
+ * - **Every property left out is said, and why,** under "Left out": a file, a name a layout
+ *   cannot write, each property of Nuxeo's own schemas, a record's attachments among them, and
+ *   each of a schema `--schemas` does not name.
  * - **The component contributes it**, from `agentic-ui-config/layouts/<Type>/view.layout.json`,
  *   which is where the package pipeline reads it and the only place it accepts.
  * - **Each card's heading** is a label key, with its English text added to `labels/en.json`.
@@ -293,6 +333,7 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
   if (cards.length === 0) {
     throw new Error(`Nothing in ${chosen.join(', ')} can be shown:\n  ${left.join('\n  ')}`);
   }
+  left.push(...schemasLeftOut(model, available, chosen));
 
   // First, since it may refuse: nothing is written before it has.
   contributeLayout(tree, pkg, options.type, 'view');

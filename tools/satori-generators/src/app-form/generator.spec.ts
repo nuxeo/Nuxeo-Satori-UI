@@ -1,6 +1,6 @@
 import type { Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import appLayoutGenerator from '../app-layout/generator';
 import appPackageGenerator from '../app-package/generator';
@@ -109,6 +109,23 @@ describe('app-form generator', () => {
         required: true,
       },
     ]);
+  });
+
+  it("says every property it left out and why, Nuxeo's own schemas' too, but not the title it adds", async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    let output: string;
+    try {
+      (await generate())();
+      output = log.mock.calls.map((call) => call.join(' ')).join('\n');
+    } finally {
+      log.mockRestore();
+    }
+    expect(output).not.toContain('Left out: nothing');
+    expect(output).toContain('contract:scan: a file, or a value holding one');
+    expect(output).toContain(
+      "dc:description, dc:created, dc:modified: in Nuxeo's own schema dublincore, left out unless --schemas names it",
+    );
+    expect(output).toContain('common:icon, common:size: in Nuxeo');
   });
 
   it('leaves the title out when asked, or when --schemas shows Dublin Core whole', async () => {

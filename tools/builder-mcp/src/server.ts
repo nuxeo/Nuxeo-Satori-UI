@@ -8,7 +8,13 @@
  */
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import { describeSchema, describeType, readContentModel, summarise } from './model.ts';
+import {
+  describeSchema,
+  describeType,
+  readContentModel,
+  summarise,
+  type ContentModel,
+} from './model.ts';
 import type { NuxeoReads } from './nuxeo.ts';
 import {
   DEFAULT_LIMIT,
@@ -18,7 +24,15 @@ import {
   readOperations,
 } from './operations.ts';
 import {
+  OWN_MODEL,
+  definedIn,
+  listPackagePageProviders,
+  readPackageSource,
+  type PackageSource,
+} from './package-model.ts';
+import {
   APP_GENERATORS,
+  DEFAULT_PACKAGE_ROOT,
   MAX_CHANGES,
   MAX_FILE_BYTES,
   writePackage,
@@ -26,7 +40,7 @@ import {
   type WriteRequest,
   type WriteResult,
 } from './package-writes.ts';
-import { describePageProvider, listPageProviders } from './page-providers.ts';
+import { describeDefinition, describePageProvider, listPageProviders } from './page-providers.ts';
 import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
 import { validatePackage, type PackageCheck, type PackageRequest } from './validate-package.ts';
 import { MAX_PAGE_SIZE, listVocabularies, readVocabulary } from './vocabularies.ts';
@@ -104,6 +118,56 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         const reader = nuxeo();
         return { server: reader.origin, ...asObject(await read(reader, args)) };
       });
+  /**
+   * A read of the model or of the page providers: from the package's own stand-in model when
+   * `package` names one that ships it and `own` finds what was asked there, else from the server.
+   * The answer's `source` says which; `packageNote`, why the server answered a package's question.
+   */
+  const readingModel =
+    <Args extends { readonly package?: string }>(
+      own: (source: PackageSource, args: Args) => { readonly found: unknown } | string,
+      read: (reader: NuxeoReads, args: Args) => Promise<unknown>,
+    ) =>
+    (args: Args): Promise<CallToolResult> =>
+      answer(async () => {
+        let packageNote: string | undefined;
+        if (args.package !== undefined) {
+          if (roots !== undefined && 'problem' in roots) throw new Error(roots.problem);
+          const source = readPackageSource(args.package, roots ?? [DEFAULT_PACKAGE_ROOT]);
+          if (source.model === null)
+            packageNote = `${source.shown} ships no stand-in model, a ${OWN_MODEL} with a component that registers a document type of its own: its types and page providers are the server's.`;
+          else {
+            const ownAnswer = own(source, args);
+            if (typeof ownAnswer !== 'string')
+              return {
+                source: 'package',
+                package: source.shown,
+                ...asObject(ownAnswer.found),
+              };
+            packageNote = ownAnswer;
+          }
+        }
+        if (typeof nuxeo !== 'function')
+          throw new Error(packageNote ? `${packageNote} ${nuxeo.problem}` : nuxeo.problem);
+        const reader = nuxeo();
+        return {
+          source: 'server',
+          server: reader.origin,
+          ...(packageNote ? { packageNote: `${packageNote} So the server answered.` } : {}),
+          ...asObject(await read(reader, args)),
+        };
+      });
+  const packageArgumentForReads = z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "A demo kit's package folder, such as business-apps/packages/moves-demo: when it ships a" +
+        ' stand-in model (a content-model.json beside bundle/, as app-model writes), the answer is' +
+        " read from it, and its source is 'package'; what it does not have, the server answers." +
+        " Leave it out for a package on a server's model.",
+    );
+  const modelFile = (source: PackageSource) => ({ model: `${source.shown}/${OWN_MODEL}` });
 
   server.registerTool(
     'get_content_model',
@@ -113,10 +177,17 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "The server's document types (parent, facets, schemas), facets (their schemas) and schemas" +
         ' (prefix, field count), read from /config/types, /config/facets and /config/schemas.' +
         ' The prefixes are those an app definition writes: Nuxeo reports file, uid and files with an' +
-        ' empty prefix and addresses them by name.',
+        " empty prefix and addresses them by name. Given a demo kit's package, its own stand-in" +
+        ' model instead, which no server has until the kit is installed; source says which answered.',
+      inputSchema: z.object({ package: packageArgumentForReads }),
       annotations: READS,
     },
-    reading(async (reader) => summarise(await readContentModel(reader))),
+    readingModel(
+      (source) => ({
+        found: { ...modelFile(source), ...summarise(source.model as ContentModel) },
+      }),
+      async (reader) => summarise(await readContentModel(reader)),
+    ),
   );
 
   server.registerTool(
@@ -125,12 +196,22 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       title: 'Document type',
       description:
         'One document type with every field it has, as <prefix>:<name> with its Nuxeo type, grouped' +
-        ' by schema; a schema a facet brings names the facet. Also its ancestors and subtypes.',
-      inputSchema: z.object({ type: z.string().min(1).describe('The type name, such as File') }),
+        ' by schema; a schema a facet brings names the facet. Also its ancestors and subtypes.' +
+        " Given a demo kit's package, from its own stand-in model when it has the type.",
+      inputSchema: z.object({
+        type: z.string().min(1).describe('The type name, such as File'),
+        package: packageArgumentForReads,
+      }),
       annotations: READS,
     },
-    reading(async (reader, { type }: { type: string }) =>
-      describeType(await readContentModel(reader), type),
+    readingModel(
+      (source, { type }: { type: string; package?: string }) => {
+        const model = source.model as ContentModel;
+        return model.types.some((candidate) => candidate.name === type)
+          ? { found: { ...modelFile(source), ...describeType(model, type) } }
+          : `${source.shown}'s own model has no document type "${type}".`;
+      },
+      async (reader, { type }) => describeType(await readContentModel(reader), type),
     ),
   );
 
@@ -140,12 +221,24 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       title: 'Schema',
       description:
         "One schema's fields, by its name or its prefix (dublincore or dc), with the types and" +
-        ' facets that use it.',
-      inputSchema: z.object({ schema: z.string().min(1).describe('A schema name or prefix') }),
+        " facets that use it. Given a demo kit's package, from its own stand-in model when it has" +
+        ' the schema.',
+      inputSchema: z.object({
+        schema: z.string().min(1).describe('A schema name or prefix'),
+        package: packageArgumentForReads,
+      }),
       annotations: READS,
     },
-    reading(async (reader, { schema }: { schema: string }) =>
-      describeSchema(await readContentModel(reader), schema),
+    readingModel(
+      (source, { schema }: { schema: string; package?: string }) => {
+        const model = source.model as ContentModel;
+        return model.schemas.some(
+          (candidate) => candidate.name === schema || candidate.prefix === schema,
+        )
+          ? { found: { ...modelFile(source), ...describeSchema(model, schema) } }
+          : `${source.shown}'s own model has no schema "${schema}".`;
+      },
+      async (reader, { schema }) => describeSchema(await readContentModel(reader), schema),
     ),
   );
 
@@ -157,13 +250,20 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "The names of the server's page providers, from Nuxeo's management API, which needs an" +
         ' administrator, each marked indexed when the search index answers it: an index lags, so' +
         ' a list that must show a write just made should not use one. A queue or a' +
-        ' related-records card names one of these.',
+        " related-records card names one of these. Given a demo kit's package, the page providers" +
+        ' its own components define instead, which no server has until the kit is installed.',
       inputSchema: z.object({
         query: z.string().optional().describe('Only names containing this, in any case'),
+        package: packageArgumentForReads,
       }),
       annotations: READS,
     },
-    reading((reader, { query }: { query?: string }) => listPageProviders(reader, query)),
+    readingModel(
+      (source, { query }: { query?: string; package?: string }) => ({
+        found: listPackagePageProviders(source, query),
+      }),
+      (reader, { query }) => listPageProviders(reader, query),
+    ),
   );
 
   server.registerTool(
@@ -174,11 +274,28 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "One page provider's definition, from /search/pp/<name>: its pattern or where clause, how" +
         " many parameters (?) a queue's or a card's parameters fill in order, the predicates a" +
         ' search document fills, its sorts, page sizes, quick filters and aggregates (the facets' +
-        ' a queue can offer).',
-      inputSchema: z.object({ name: z.string().min(1).describe('The page provider name') }),
+        " a queue can offer). Given a demo kit's package, from the component of its own that" +
+        ' defines it, when one does.',
+      inputSchema: z.object({
+        name: z.string().min(1).describe('The page provider name'),
+        package: packageArgumentForReads,
+      }),
       annotations: READS,
     },
-    reading((reader, { name }: { name: string }) => describePageProvider(reader, name)),
+    readingModel(
+      (source, { name }: { name: string; package?: string }) => {
+        const provider = source.pageProviders.get(name);
+        return provider
+          ? {
+              found: {
+                defined: definedIn(source, provider),
+                ...describeDefinition(provider.definition),
+              },
+            }
+          : `${source.shown} defines no page provider "${name}"${source.pageProviders.size > 0 ? `: it defines ${[...source.pageProviders.keys()].join(', ')}` : ''}.`;
+      },
+      (reader, { name }) => describePageProvider(reader, name),
+    ),
   );
 
   server.registerTool(
@@ -416,6 +533,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     ' the pipeline passes with no finding; otherwise written is false, the answer holds the' +
     ' findings and the step that refused it, and the package is unchanged. An id the platform or' +
     ' the package does not register, such as a widget, a rule or an operation, is refused so.' +
+    ' A written answer may hold warnings: what the package still lacks that no check refuses, such' +
+    " as a demo kit's schema with no Properties heading, layout.schema.<schema>, in labels/en.json." +
     ' Nothing is published, and no code of the package runs.';
 
   server.registerTool(
