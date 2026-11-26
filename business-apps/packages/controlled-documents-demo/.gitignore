@@ -1,0 +1,2 @@
+# The zips the package pipeline and `node build.mjs` write. Rebuilt from the reviewed source, so not committed.
+/dist/

@@ -81,6 +81,7 @@ describe("the Properties panel's generated headings in each business-apps kit", 
       expect.arrayContaining([
         'brand-assets-demo',
         'contracts-demo',
+        'controlled-documents-demo',
         'facilities-demo',
         'moves-demo',
         'payers-claims-demo',

@@ -212,6 +212,12 @@ export interface RecordBannerEntry {
   readonly label: LayoutLabel;
   readonly tone: RecordBannerTone;
   readonly visibleWhen: RecordRule | null;
+  /**
+   * The property of the open record that names the record the banner links to, `<prefix>:<name>`,
+   * or `null` for a banner that links nowhere. The page shows that record by its title, as a
+   * `document-link` does, and opens it.
+   */
+  readonly link: string | null;
 }
 
 /** A `view` file that the app can show, with what it left out of it. */
@@ -797,6 +803,12 @@ export function readRecordLayout(
           label: labelOf(banner, [], humanize(String(banner['id']))),
           tone,
           visibleWhen: (banner['visibleWhen'] as RecordRule | undefined) ?? null,
+          // A link whose field is not a property refused the whole file, as structural, and one
+          // with a key this build lacks left the banner out above, so a link here names one.
+          link:
+            isRecord(banner['link']) && typeof banner['link']['field'] === 'string'
+              ? banner['link']['field']
+              : null,
         },
       ];
     },
