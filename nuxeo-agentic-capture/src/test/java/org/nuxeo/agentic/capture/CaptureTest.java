@@ -320,6 +320,24 @@ public class CaptureTest {
         });
         assertEquals(1, Mailroom.attachments(repository, claim).size());
         assertEquals(Captures.FILED, text(Mailroom.stored(repository, id), Captures.STATUS));
+
+        // An item waiting for a person is theirs: a capture run again, by a provider that would
+        // now be sure of it, leaves it waiting, and files nothing.
+        String waiting = Mailroom.mail(repository, CAROL, INBOX, "waiting", Mailroom.letter("PC-24002", 2));
+        assertEquals(Captures.LOW_CONFIDENCE, text(Mailroom.stored(repository, waiting), Captures.REASON));
+        Mailroom.settings("scripted", null);
+        ScriptedProvider.classification = new Classification("claimLetter", 1);
+        ScriptedProvider.extraction = new Extraction(List.of(new ExtractedField("claimNumber", "PC-24002", 1)));
+        Mailroom.inTransaction(() -> {
+            org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                    (CoreSession s) -> Capture.run(s, waiting));
+            return null;
+        });
+        assertEquals(0, ScriptedProvider.CALLS.get());
+        DocumentModel item = Mailroom.stored(repository, waiting);
+        assertEquals(Captures.REVIEW, text(item, Captures.STATUS));
+        assertEquals(Captures.LOW_CONFIDENCE, text(item, Captures.REASON));
+        assertTrue(Mailroom.attachments(repository, claim("pc-24002")).isEmpty());
     }
 
     // ------------------------------------------------------------------ helpers

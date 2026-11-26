@@ -12,6 +12,13 @@ file through the server's write tools**, which commit a change only when the pip
 Every name in it is fictional. The log of each step, its result, its time and each departure is
 [below](#how-it-was-built-the-log).
 
+**Version 0.2.0 adds capture,** for phase 7's demo step 3, "A scanned claim letter classified, its
+fields extracted, and filed on the claim": a claims mail inbox, on the
+[`nuxeo-agentic-capture`](../../../nuxeo-agentic-capture/README.md) add-on, which the package now
+depends on, and a queue of the mail that waits for a person ([below](#capture-the-mail-inbox)).
+Those files were written by hand, not through the write tools, and checked by the pipeline
+([the log for 0.2.0](#020-capture-by-hand-27-november-2026)).
+
 ## The short version
 
 - **A Property Claim record page:** the loss (its date, cause, location and description), the
@@ -50,6 +57,11 @@ Every name in it is fictional. The log of each step, its result, its time and ea
   when a real one comes.
 - **A seed script,** with its controls, writing five fictional policies and eight claims. It
   creates no user and no group.
+- **Since 0.2.0, a claims mail inbox:** a letter put into it is classified, its fields extracted,
+  matched to its claim by the claim number and filed on it, by the capture add-on; one it cannot
+  file by itself waits in **Mail to confirm**, where an adjuster confirms, corrects or rejects it.
+  The claim page lists the mail filed on it. Two fictional letters, as PDFs, and a script that
+  mails them in, as a scanner would ([below](#capture-the-mail-inbox)).
 - **Not installed anywhere.** The package passes the pipeline; installing it, seeding it and
   connecting the core system are a person's ([below](#installing-it-on-a-local-nuxeo)).
 
@@ -57,7 +69,7 @@ Every name in it is fictional. The log of each step, its result, its time and ea
 
 | File                                                               | What it is                                                                                                  | Written by                                                   |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                                | The app: id `pc-claims`, address `property-claims`, version 0.1.0, two groups                               | `app-package`                                                |
+| `bundle/agentic-ui-config/app.json`                                | The app: id `pc-claims`, address `property-claims`, version 0.2.0, two groups                               | `app-package`                                                |
 | `bundle/agentic-ui-config/layouts/PropertyClaim/view.layout.json`  | The claim page: two banners; the claim, the loss, the policy, the core system, attachments, denial, history | `app-layout`, then `write_package_file`                      |
 | `bundle/agentic-ui-config/layouts/PropertyClaim/edit.layout.json`  | The claim's Edit form: the denial reason's rule, the loss date's check, the number read-only                | `app-form`, then `write_package_file`                        |
 | `bundle/agentic-ui-config/layouts/PropertyPolicy/view.layout.json` | The policy page: two banners, three cards, its claims and its history                                       | `app-layout`, then `write_package_file`                      |
@@ -85,8 +97,21 @@ Every name in it is fictional. The log of each step, its result, its time and ea
   for byte. No file of the kit is in its `NOT_BYTE_FOR_BYTE` list.
 - **No `actions.json`.** None was asked for: the claim's status is a property here, not a
   lifecycle, as the moves kit's is.
-- **One version in three places:** 0.1.0, in `package.xml`, `app.json`'s `packageVersion` and the
+- **One version in three places:** 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`.
+- **Since 0.2.0, files written by hand,** each checked by the pipeline and the layout designer's
+  round trip, written as the designer writes it:
+
+| File                                                                                  | What it is                                                                                                         |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `bundle/OSGI-INF/pc-claims-demo-capture.xml`                                          | The inbox and mail types, two page providers, and the capture profile `pc-claims-mail`                             |
+| `bundle/agentic-ui-config/queues/mail-to-confirm.json`                                | Mail to confirm: what waits for a person, oldest first, with why, the class, the confidence and the claim proposed |
+| `bundle/agentic-ui-config/layouts/PropertyClaimMail/edit.layout.json`                 | A piece of mail's Edit form: the decision, a note, the class, the fields, the claim                                |
+| `bundle/agentic-ui-config/layouts/PropertyClaim/view.layout.json`                     | The claim page, with a card of the mail filed on it                                                                |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`, `labels/en.json`             | The home's figure of mail waiting, the menu's entry, and the labels, the `capt:` properties' among them            |
+| `content-model.json`, `package/package.xml`, `bundle/META-INF/MANIFEST.MF`            | The two types and the add-on's facet in the model; the dependency on `nuxeo-agentic-capture:0.1.0`; the component  |
+| `demo/letters.mjs`, `demo/claim-letter-pc-24003.pdf`, `demo/claim-letter-unclear.pdf` | The two fictional letters, and the script that writes them byte for byte                                           |
+| `demo/mail-in.mjs`, `demo/mail-in.selftest.mjs`                                       | Demo step 3's intake, as a scanner, and its controls                                                               |
 
 ## The stand-in model
 
@@ -193,6 +218,70 @@ The claim's attachments are `files:files`, which `app-model --attachments` gave 
   key draws a preview on the record page itself; `file-list` has no parameter for one.
 - **The seed never writes `files:files`,** so a photo filed on a claim stays through a second run.
   Nothing here has been tried with a photo: no server has the package.
+
+## Capture: the mail inbox
+
+Since 0.2.0, on [`nuxeo-agentic-capture`](../../../nuxeo-agentic-capture/README.md) 0.1.0, which
+`package.xml` depends on. Its component, `pc-claims-demo-capture.xml`, is the kit's own, apart from
+the model `app-model` writes, as the onboarding kit's signature component is.
+
+| Type                 | What it is                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `PropertyClaimInbox` | The claims mail inbox, a folder that takes only mail. The demo's is `/default-domain/workspaces/pc-claims-demo/inbox`                 |
+| `PropertyClaimMail`  | A piece of mail: its file, `file:content`, and the add-on's `CaptureItem` facet, `capt:`. It opens on its file, beside its properties |
+
+**The profile,** `pc-claims-mail`: mail in a `PropertyClaimInbox` is filed on a `PropertyClaim`
+under the kit's workspace, by itself at a confidence of 85% and above.
+
+- **One class, a claim letter,** known by three phrases, "claim number", "policy number" and "date
+  of loss", which the stand-in counts: a letter with the three is a claim letter at 100%, with two
+  at 67%, below the threshold.
+- **Its fields:** the claim number, the key, matched to `pclaim:number`, of the form `PC-` and five
+  digits; the policy number, of the form `POL-PC-` and four digits; the date of loss; and who it is
+  from. Only the claim number decides where a letter is filed: the others are kept, with their
+  confidence, for the adjuster.
+
+| Where                        | What it shows                                                                                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mail to confirm**, a queue | What waits for a person, oldest first: the mail, why it waits, the class proposed, the confidence, the claim proposed by its number, when it came in. Page provider `pc_capture_review`, from the repository, so no lag |
+| The home                     | "Mail waiting for a person", a figure that opens the queue                                                                                                                                                              |
+| A piece of mail              | Its letter, and its properties under "Capture". Its Edit form: the decision, a note, the class, the fields as a table, the claim; each read-only once it is filed or rejected                                           |
+| The claim page               | "Mail filed on this claim": each piece of mail filed on it, its class, its confidence, how it was filed, by whom and when. Page provider `pc_claim_mail`                                                                |
+
+- **Confirm or correct, in the Edit form:** type `confirm` in Decision and save, with the class,
+  fields and claim as proposed, or corrected first. A corrected claim number is matched again; a
+  claim named is held to the letter's number. `reject` sets it aside. The server checks each
+  ([the add-on's README](../../../nuxeo-agentic-capture/README.md#the-persons-part)), and files only
+  on a claim the adjuster may write.
+- **Who may:** the inbox's permissions. Whoever may add to it uploads; whoever may write it
+  decides; filing needs the claim's write too. The seed sets none: an administrator gives the
+  adjusters `ReadWrite` on the inbox, and a scanner's account `AddChildren`.
+- **Seeing the queue is not a security control:** the server checks who may decide and file.
+
+## Demo step 3: a scanned claim letter filed on its claim
+
+With both packages installed and the stand-in configured
+([the add-on's README](../../../nuxeo-agentic-capture/README.md#installing-it-on-the-local-docker-nuxeo-for-the-demo)),
+the kit seeded, and the adjusters given `ReadWrite` on the inbox. **Not run:** no server has
+either package.
+
+1. **The letters come in,** as a scanner sends them: from the repository's root,
+   `NUXEO_USER=<a user who may add to the inbox> NUXEO_PASS=… node business-apps/packages/pc-claims-demo/demo/mail-in.mjs`.
+   It creates the inbox when it is not there, puts each letter into it, and says what the capture
+   made of each.
+2. **Filed by itself:** `claim-letter-pc-24003.pdf`, from Calder and Finch Bakery, is a claim letter
+   at 100%, its claim number PC-24003, its policy POL-PC-1002. On PC-24003's page, the letter is
+   among the photos and documents, and in "Mail filed on this claim", automatic, 97%; its history
+   says it was filed from the inbox.
+3. **Waiting for a person:** `claim-letter-unclear.pdf`, from Ottoline Brandt, read badly: no policy
+   number, and its claim number read `PC-24O08`, with a letter O. It is in **Mail to confirm**, "low
+   confidence", 0%, with no claim proposed.
+4. **An adjuster corrects it:** opens it, reads the letter, and in its Edit form corrects the claim
+   number to `PC-24008` and types `confirm`. It is filed on PC-24008, corrected, by the adjuster,
+   and leaves the queue.
+
+The letters are the kit's: `letters.mjs` writes them, byte for byte, and the add-on's
+`KitLetterTest` reads them with the stand-in and this profile, as the server would.
 
 ## How it was built: the log
 
@@ -380,14 +469,38 @@ After the edits: the pipeline, with `--model` and `--registered`, passed; the co
 38, and the seventeen breaks each turned one red; the parity corpus was written again and
 `DeploymentValidatorParityTest` passed; the round trip held the kit's files, 55 tests.
 
+### 0.2.0: capture, by hand (27 November 2026)
+
+Not the skill's steps, and **not through the write tools**: the capture add-on's types, facet,
+profile and page providers are a component no generator or write tool writes (feedback items 18
+and 19, below), and the session that built the add-on had no Builder MCP server connected. So each
+file in [What is in it](#what-is-in-it)'s 0.2.0 table was written by hand, formatted with the
+repository's Prettier, and then held to the pipeline, `--previous` 0.1.0 as staging had it
+([Building it](#building-it)), to the layout designer's round trip and the kits' lists
+(`npx nx run-many -t test -p shared-app-definition layout-designer`), and to the server
+validator's parity corpus, written again with `npm run app-definition:server-validator`. Nothing
+was written to any Nuxeo, and nothing was read from one.
+
 ## Building it
 
 ```bash
 npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/pc-claims-demo-0.1.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model. To hold the core system's card to its connector too:
+It writes `dist/pc-claims-demo-0.2.0.zip`, held to the package's own `content-model.json`, since it
+ships a stand-in model. Held to the version before it, as CI holds a pull request to its base:
+
+```bash
+mkdir -p /tmp/base
+git archive origin/staging/enterprise-grade-app business-apps/packages/pc-claims-demo | tar -x -C /tmp/base
+npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0 \
+  --previous /tmp/base/business-apps/packages/pc-claims-demo
+```
+
+On 27 November 2026, against 0.1.0: 4 layouts held to the model, 11 files passed, 41 changes, which
+need a patch, and 0.2.0 raises the minor, since the package now needs a domain module's add-on,
+`nuxeo-agentic-capture`, which a server without it cannot install. To hold the core system's card
+to its connector too:
 
 ```bash
 npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0 --registered business-apps/packages/pc-claims-demo/demo/registered.json
@@ -397,18 +510,20 @@ npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0 --
 
 **Not run.** Installing is a person's decision. Written from the moves kit's install, which follows
 the Payers kit's, the one that ran on the same container: the local Nuxeo is the Docker container
-`nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed.
+`nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed. **Since 0.2.0, install
+`nuxeo-agentic-capture` 0.1.0 first** ([its README](../../../nuxeo-agentic-capture/README.md#installing-it-on-the-local-docker-nuxeo-for-the-demo)):
+the package depends on it, and its model names the add-on's facet.
 
 **1. Build it,** as above. **2. Copy it into the container,** then a one-off script that installs
 it when the container next starts, and removes itself: `nuxeoctl mp-install` refuses while the
 server runs, and the server is the container's main process.
 
 ```bash
-docker cp business-apps/packages/pc-claims-demo/dist/pc-claims-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/pc-claims-demo/dist/pc-claims-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/pc-claims-demo-0.1.0.zip --accept=true > /var/log/nuxeo/pc-claims-kit-install.log 2>&1 || echo "pc-claims kit: install failed, see /var/log/nuxeo/pc-claims-kit-install.log"' 'rm -f "$0"' > /tmp/zz-pc-claims-kit-install.sh && chmod 755 /tmp/zz-pc-claims-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/pc-claims-demo-0.2.0.zip --accept=true > /var/log/nuxeo/pc-claims-kit-install.log 2>&1 || echo "pc-claims kit: install failed, see /var/log/nuxeo/pc-claims-kit-install.log"' 'rm -f "$0"' > /tmp/zz-pc-claims-kit-install.sh && chmod 755 /tmp/zz-pc-claims-kit-install.sh
 ```
 
 ```bash
@@ -611,6 +726,29 @@ candidate. Items the moves kit raised that are fixed now are at the end.
     token check (its 12). `app.rules.dateAfter` and `show` (its 2 and 3) made the late-report banner
     and the policy's values on the claim page possible with no copy on the claim.
 
+Since 0.2.0, capture met these:
+
+18. **`app-model` writes no type with an add-on's facet and a file of its own, and no folder with
+    subtypes** (the onboarding kit's items 2 and 3, still): `PropertyClaimMail` and
+    `PropertyClaimInbox` are in a component by hand.
+19. **No generator or write tool writes an add-on's contribution,** here the capture profile, nor
+    `package.xml`'s dependency on an add-on (the onboarding kit's item 5, still). By hand.
+20. **The app cannot put a file into a kit's own file type.** Its Create form has no file input,
+    and its import into a folder picks Nuxeo's own types only, `File`, `Picture`, `Video` and
+    `Audio` (`resolveImportBlobDocType` in `libs/shared/nuxeo-client`): dropped into the inbox, a
+    letter would be created as a `File`, which the inbox does not take. So the letters come in
+    through the REST API, as a scanner's would, `demo/mail-in.mjs`. Candidate: the import taking a
+    folder's one subtype with the `file` schema.
+21. **The Edit form types the decision and the claim** (layout version 2's form, section 11: a
+    `status-badge` is a text field, a `document-link` the stored id, until the select and the
+    picker come). So an adjuster types `confirm`; correcting the claim number, which the server
+    matches again, saves them typing a claim's id. Candidate: a one-click confirm, a row action on
+    the queue that sets the decision.
+22. **A type with a file of its own keeps its own view,** the file first (`OWN_VIEW_SCHEMAS`), so a
+    piece of mail has no record page of the kit's: its capture properties are in the Properties
+    panel, by their labels. That suits an adjuster checking a letter against what was read of it,
+    and a record page beside the file would order them.
+
 ## Decided without the user
 
 Each reversible, each the agent's recommendation:
@@ -629,6 +767,13 @@ Each reversible, each the agent's recommendation:
 - **A Policy facet on the open claims,** shown by title, the one reference a facet could group by:
   status, cause and adjuster are not references.
 - **Banners not asked for:** a denied claim, a policy not in force, a policy ending within 30 days.
+- **Since 0.2.0, capture's:** the type names `PropertyClaimMail` and `PropertyClaimInbox`; the
+  profile `pc-claims-mail`, its one class, its three keywords and its four fields, the claim number
+  its only key; the threshold, the add-on's 85%; the queue `mail-to-confirm`, for everyone in the
+  app, and its home figure; the claim page's card of filed mail; the inbox's place, `inbox` in the
+  kit's workspace, created by `mail-in.mjs` rather than the seed, so the seed and its controls are
+  as they were; the two letters, their senders and what each says; and the version, 0.2.0, a
+  minor, though the pipeline asks a patch, since the package now needs the capture add-on.
 
 ## Not done yet
 
@@ -639,4 +784,10 @@ Each reversible, each the agent's recommendation:
 - **The Properties panel beside the record page** is version 1's generated one; a `metadata` layout
   would order it.
 - **`content-model.json` is `app-model`'s,** until it is exported from a server with the package
-  installed.
+  installed; since 0.2.0, with the capture types and the add-on's facet added by hand.
+- **Capture on a server:** demo step 3 has not run. The add-on and the kit 0.2.0 are installed
+  nowhere, and the inbox's permissions are an administrator's to give.
+- **The AI provider:** the demo uses the stand-in. The AI package's capture operations do not exist
+  yet, and the AI data terms are not approved
+  ([the add-on's README](../../../nuxeo-agentic-capture/README.md#before-the-ai-provider-is-switched-on)).
+- **Mail from the app,** and a one-click confirm (feedback items 20 and 21).

@@ -114,6 +114,24 @@ public class ReviewTest {
     }
 
     @Test
+    public void aCorrectedClaimNumberWithTheProposedClaimLeftAsItWasIsMatchedAgain() {
+        String wrong = claim("pc-24001");
+        String right = claim("pc-24002");
+        String id = waiting("PC-24001");
+        assertEquals(wrong, text(Mailroom.stored(repository, id), Captures.RECORD));
+        // The person corrects the number only, as the Edit form lets them, and confirms.
+        Mailroom.decide(repository, ALICE, id, item -> {
+            Mailroom.field(item, "claimNumber", "PC-24002");
+            item.setPropertyValue(Captures.DECISION, Captures.CONFIRM);
+        });
+        DocumentModel item = Mailroom.stored(repository, id);
+        assertEquals(Captures.CORRECTED, text(item, Captures.OUTCOME));
+        assertEquals(right, text(item, Captures.RECORD));
+        assertEquals(1, Mailroom.attachments(repository, right).size());
+        assertTrue(Mailroom.attachments(repository, wrong).isEmpty());
+    }
+
+    @Test
     public void aClaimNamedByThePersonIsFiledOnAndItsNumberFilledFromIt() {
         String right = claim("pc-24005-b");
         // Two claims share the number: the item waits, ambiguous.
@@ -219,6 +237,24 @@ public class ReviewTest {
         assertEquals(400, Mailroom.refusedDecision(repository, BOB, id,
                 i -> i.setPropertyValue(Captures.DECISION, "fileItAnyway")).getStatusCode());
         assertEquals(Captures.REVIEW, text(Mailroom.stored(repository, id), Captures.STATUS));
+    }
+
+    @Test
+    public void anItemBeingFiledAtThisMomentIsNotFiledAgain() {
+        String claim = claim("pc-24001");
+        String id = waiting("PC-24001");
+        // Another filing of the item holds its claim, as one under way on another node would.
+        var store = org.nuxeo.runtime.api.Framework.getService(org.nuxeo.runtime.kv.KeyValueService.class)
+                                                   .getKeyValueStore(CaptureComponent.STORE);
+        store.put(Filing.claimKey(id), "claimed", 60);
+        NuxeoException refused = Mailroom.refusedDecision(repository, ALICE, id,
+                item -> item.setPropertyValue(Captures.DECISION, Captures.CONFIRM));
+        assertEquals(409, refused.getStatusCode());
+        assertTrue(Mailroom.attachments(repository, claim).isEmpty());
+        // Once it is released, the person files.
+        store.put(Filing.claimKey(id), (String) null);
+        Mailroom.decide(repository, ALICE, id, item -> item.setPropertyValue(Captures.DECISION, Captures.CONFIRM));
+        assertEquals(1, Mailroom.attachments(repository, claim).size());
     }
 
     @Test

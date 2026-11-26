@@ -92,6 +92,8 @@ public class PermissionTest {
         NuxeoException refused = Mailroom.refusedDecision(repository, BOB, id,
                 item -> item.setPropertyValue(Captures.DECISION, Captures.CONFIRM));
         assertEquals(403, refused.getStatusCode());
+        // The add-on's own refusal, before anything is written; the platform's check on the write backs it.
+        assertTrue(refused.getMessage(), refused.getMessage().contains("may not write the record"));
         DocumentModel item = Mailroom.stored(repository, id);
         assertEquals(Captures.REVIEW, text(item, Captures.STATUS));
         assertTrue(Mailroom.attachments(repository, claim).isEmpty());
@@ -113,12 +115,14 @@ public class PermissionTest {
             item.setPropertyValue(Captures.DECISION, Captures.CONFIRM);
         });
         assertEquals(403, byId.getStatusCode());
+        assertTrue(byId.getMessage(), byId.getMessage().contains("may not read the record"));
         // By its number: matched as the system, then read as Alice, and refused the same way.
         NuxeoException byNumber = Mailroom.refusedDecision(repository, ALICE, id, item -> {
             Mailroom.field(item, "claimNumber", "PC-24007");
             item.setPropertyValue(Captures.DECISION, Captures.CONFIRM);
         });
         assertEquals(403, byNumber.getStatusCode());
+        assertTrue(byNumber.getMessage(), byNumber.getMessage().contains("may not read the record"));
         assertTrue(Mailroom.attachments(repository, hidden).isEmpty());
         // An administrator may.
         Mailroom.decide(repository, Mailroom.ADMINISTRATOR, id, item -> {

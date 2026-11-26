@@ -264,8 +264,11 @@ public class CaptureItemListener implements EventListener {
                 throw invalid("The item's " + key.label() + " is not of its form");
             }
         }
+        // The record: matched again by the keys when the person corrected a key and left the
+        // record as it was, or gave none; otherwise the one they named.
         String recordId = Captures.text(doc, Captures.RECORD);
-        if (recordId == null) {
+        boolean recordKept = Objects.equals(recordId, Captures.text(previous, Captures.RECORD));
+        if (recordId == null || recordKept && !keys(captureClass, values).equals(keys(captureClass, values(previous)))) {
             recordId = matchOne(session, profile, captureClass, values);
         }
         DocumentModel record = readable(session, recordId);
@@ -300,6 +303,15 @@ public class CaptureItemListener implements EventListener {
         doc.setPropertyValue(Captures.FIELDS, (Serializable) fieldList(captureClass, values));
         Filing.markFiled(doc, record, attachment, outcome, decidedBy);
         Filing.audit(session, person, doc, record, attachment, outcome, decidedBy);
+    }
+
+    /** The class's keys among {@code values}, by name. */
+    private static Map<String, String> keys(CaptureClass captureClass, Map<String, String> values) {
+        Map<String, String> keys = new LinkedHashMap<>();
+        for (CaptureField key : captureClass.keys()) {
+            keys.put(key.name(), values.get(key.name()));
+        }
+        return keys;
     }
 
     /** The one record the keys match, as the system, or a refusal: none, or more than one. */

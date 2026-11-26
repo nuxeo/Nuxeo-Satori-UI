@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 1057 >>
+stream
+BT /F2 14 Tf 72 740 Td (Calder and Finch Bakery) Tj ET
+BT /F1 11 Tf 72 720 Td (9 Market Square, Old Town) Tj ET
+BT /F1 11 Tf 72 705 Td (office@calder-finch.example.com) Tj ET
+BT /F1 11 Tf 72 675 Td (To: the claims department, Northgate Mutual, a fictional insurer) Tj ET
+BT /F1 11 Tf 72 645 Td (From: Calder and Finch Bakery) Tj ET
+BT /F1 11 Tf 72 630 Td (Claim number: PC-24003) Tj ET
+BT /F1 11 Tf 72 615 Td (Policy number: POL-PC-1002) Tj ET
+BT /F1 11 Tf 72 600 Td (Date of loss: the night of the windstorm) Tj ET
+BT /F1 11 Tf 72 570 Td (Dear claims team,) Tj ET
+BT /F1 11 Tf 72 555 Td (Further to our claim, we enclose the roofer's estimate for the repairs to the roof) Tj ET
+BT /F1 11 Tf 72 540 Td (torn in the windstorm, and the list of the stock that was soaked. Please add them) Tj ET
+BT /F1 11 Tf 72 525 Td (to the claim.) Tj ET
+BT /F1 11 Tf 72 495 Td (Yours faithfully,) Tj ET
+BT /F1 11 Tf 72 480 Td (M. Calder) Tj ET
+BT /F1 8 Tf 72 450 Td (A fictional letter for the Nuxeo Satori P&C claims demo. No real person, business, policy or claim.) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000321 00000 n 
+0000000396 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1504
+%%EOF

@@ -16,6 +16,12 @@
       "queue": "open-property-claims"
     },
     {
+      "id": "mail-to-confirm",
+      "labelKey": "pc-claims.home.mailToConfirm",
+      "kpi": { "pageProvider": "pc_capture_review" },
+      "queue": "mail-to-confirm"
+    },
+    {
       "id": "high-reserve",
       "labelKey": "pc-claims.home.highReserve",
       "kpi": { "pageProvider": "pc_high_reserve_claims" },
