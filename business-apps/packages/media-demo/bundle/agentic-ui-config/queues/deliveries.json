@@ -10,11 +10,6 @@
     "mdlv:territory",
     { "field": "mdlv:deliveredBy", "widget": "user" }
   ],
-  "sort": [
-    {
-      "field": "mdlv:deliveredAt",
-      "order": "desc"
-    }
-  ],
+  "sort": [{ "field": "mdlv:deliveredAt", "order": "desc" }],
   "pageSize": 50
 }
