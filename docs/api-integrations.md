@@ -2728,9 +2728,11 @@ registry serves its live version:
 
 **Used by:** `LayerPanelComponent` (`libs/features/layout-designer`), and the upgrade check,
 `scripts/app-upgrade-check.mjs --deployment`, with an export of `/nuxeo/agentic-ui-apps/layer.json`.
-Its server half, `--server`, reads the export and each overridden file's
-`GET apps/<id>/layer/<path>` itself, as an administrator, and holds the live version and the draft
-to the new package with the validator the server runs (`validateDeploymentFile`); it sends no `POST`
+Its server half, `--server`, reads the export, the app's `GET apps/<id>/layer.json`, which also
+lists a file with a draft only, and each file's `GET apps/<id>/layer/<path>` itself, as an
+administrator, and holds the live version and the draft to the new package with the validator the
+server runs (`validateDeploymentFile`), given the ids the deployment registers and the content
+model the server will have after the upgrade; it sends no `POST`
 ([package-pipeline.md](business-apps/package-pipeline.md#on-a-server-before-the-install), section 10).
 
 ---

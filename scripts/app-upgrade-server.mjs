@@ -8,7 +8,7 @@
  * **Read only.** Every request is a `GET`, made by one function, {@link guardedFetch}, which
  * refuses any other method, a body, an address on another origin and any path that is not one of
  * {@link READS}; a redirect is never followed. Nothing here installs, starts, cancels, saves or
- * runs anything on the server. The report lists every read it made.
+ * runs anything on the server. The report counts the reads it made, and `--json` lists each.
  *
  * **As whom.** `NUXEO_USER` and `NUXEO_PASS`, from the environment only, in an `Authorization`
  * header only, never printed. Plain HTTP only to this machine.
@@ -61,6 +61,7 @@ import {
 } from './beta-harness/nuxeo-credentials.mjs';
 import { readServerModel, serverBase } from './nuxeo-content-model.mjs';
 import {
+  attribute,
   attributesOf,
   componentXmlOf,
   TAG,
@@ -96,6 +97,7 @@ export const READS = [
   /^\/api\/v1\/me$/,
   /^\/api\/v1\/management\/distribution$/,
   /^\/api\/v1\/management\/page-providers$/,
+  /^\/api\/v1\/management\/configuration$/,
   /^\/api\/v1\/config\/(?:types|facets|schemas)$/,
   /^\/api\/v1\/config\/schemas\/[^/]+$/,
   /^\/api\/v1\/search\/lang\/NXQL\/execute$/,
@@ -105,6 +107,7 @@ export const READS = [
   /^\/api\/v1\/directory\/[^/]+$/,
   /^\/agentic-ui-apps\/apps\.json$/,
   /^\/agentic-ui-apps\/layer\.json$/,
+  /^\/agentic-ui-apps\/apps\/[a-z][a-z0-9-]{0,62}\/layer\.json$/,
   /^\/agentic-ui-apps\/apps\/[a-z][a-z0-9-]{0,62}\/layer\/(?:layouts\/[^/]+\/[^/]+\.layout\.json|queues\/[^/]+\.json)$/,
   /^\/agentic-ui-config\/layouts\.json$/,
   /^\/agentic-ui-config\/layouts\/[^/]+\/[^/]+\.layout\.json$/,
@@ -149,6 +152,18 @@ export async function serverCheck({
 }) {
   const where = serverBase(server);
   if (where.problem) throw new Refusal(`--server: ${where.problem}.`);
+  // Node's fetch sends through the environment's proxy when told to: the Basic header would then
+  // go to the proxy too, in clear over HTTP, whatever the address's own rule says.
+  const proxied =
+    !['', '0'].includes(process.env.NODE_USE_ENV_PROXY ?? '') ||
+    [...process.execArgv, ...(process.env.NODE_OPTIONS ?? '').split(/\s+/)].includes(
+      '--use-env-proxy',
+    );
+  if (proxied)
+    throw new Refusal(
+      "Node is told to send requests through the environment's proxy (NODE_USE_ENV_PROXY or --use-env-proxy), " +
+        'which would carry the credentials there too: unset it for this command.',
+    );
   const credentials = readNuxeoCredentials();
   if (!credentials)
     throw new Refusal(missingNuxeoCredentialsMessage('read the server the upgrade is checked on'));
@@ -206,6 +221,12 @@ export async function serverCheck({
  * The one function that sends anything to the server. A `GET` of a path {@link READS} holds, on the
  * server's own origin and below its address, with the credentials in the header and no body; a
  * redirect comes back as it is, never followed. Anything else throws before a byte is sent.
+ *
+ * The path is held to the list as the URL parser leaves it, which reads `..` and `%2e%2e` as moves
+ * up. A percent-encoded slash, backslash or dot, or a `;`, is refused outright: Tomcat refuses an
+ * encoded slash, but a proxy in front of it that decodes the path would turn it into a move up, out
+ * of the addresses on the list, to one such as the Connect client's install link, which is a `GET`
+ * that changes the server.
  */
 export function guardedFetch(base, credentials, reads, fetchImpl) {
   const root = new URL(base);
@@ -218,7 +239,12 @@ export function guardedFetch(base, credentials, reads, fetchImpl) {
       : null;
     if (method !== 'GET' || init.body !== undefined)
       throw new Refusal(`a ${method} with a body was about to be sent; this check only reads.`);
-    if (url.origin !== root.origin || rest === null || !READS.some((path) => path.test(rest)))
+    if (
+      url.origin !== root.origin ||
+      rest === null ||
+      /%(?:2f|5c|2e)|;/i.test(url.pathname) ||
+      !READS.some((path) => path.test(rest))
+    )
       throw new Refusal(
         `${url.origin}${url.pathname} is not one of the addresses this check reads.`,
       );
@@ -377,7 +403,10 @@ async function identify(nuxeo, kit, kitModel, username) {
   // The installed version, from the package manager and from the app registry.
   const sources = [];
   const problems = [];
+  // Asked for the package's own type: with none, the page applies the filter an administrator last
+  // chose in the Admin Center, which could hide the kit's row. The parameter is read, not stored.
   const listing = await nuxeo.get('/site/connectClient/packages/local', {
+    query: { type: kitModel.type ?? undefined },
     headers: { accept: 'text/html', 'accept-language': 'en' },
   });
   if (listing.status !== 200 || !/<tr\b/.test(listing.text))
@@ -386,6 +415,12 @@ async function identify(nuxeo, kit, kitModel, username) {
     );
   else {
     const rows = packageRows(listing.text, kit.name);
+    const unknown = rows.filter((row) => row.state === null);
+    if (unknown.length > 0)
+      throw new Refusal(
+        `the package manager lists ${kit.name} ${list(unknown.map((row) => row.version))} in a state this does not know, ` +
+          'such as an install in progress: check the upgrade once the server says it is running.',
+      );
     const running = rows.filter((row) => row.state === 'running' || row.state === 'started');
     const waiting = rows.filter((row) => row.state === 'installed');
     if (running.length === 1)
@@ -447,6 +482,7 @@ async function identify(nuxeo, kit, kitModel, username) {
     unread: problems,
     app,
     registry,
+    registryRead: listed.status === 200 && isRecord(listed.body),
   };
 }
 
@@ -560,16 +596,7 @@ async function heldTo(nuxeo, server, kit, kitModel, given) {
  * Records of a type, a schema or a property the upgrade removes or changes, and of a type whose new
  * lifecycle does not have their state, counted on the server.
  */
-async function records({
-  nuxeo,
-  kit,
-  kitModel,
-  beforeModel,
-  model,
-  findings,
-  said,
-  result,
-}) {
+async function records({ nuxeo, kit, kitModel, beforeModel, model, findings, said, result }) {
   const noteFor = (item) => {
     const note = result.covered.find((each) => each.item === item)?.note;
     return note ? ` The kit's note for ${item}, at ${note.version}: ${note.note}` : '';
@@ -606,9 +633,10 @@ async function records({
       )
       .map((facet) => facet.name),
   });
-  const removedTypes = [...beforeModel.doctypes.keys()].filter(
-    (type) => !kitModel.doctypes.has(type),
-  );
+  // A type the package appends to, a platform's such as File, is not the package's to remove.
+  const removedTypes = [...beforeModel.doctypes]
+    .filter(([type, was]) => !was.append && !kitModel.doctypes.has(type))
+    .map(([type]) => type);
 
   for (const type of removedTypes)
     add(
@@ -648,40 +676,90 @@ async function records({
     }
     if (schema.properties === null || now.properties === null) continue;
     const fields = isRecord(serverSchemas.get(name)?.fields) ? serverSchemas.get(name).fields : {};
-    for (const [property, type] of schema.properties) {
+    for (const [property, was] of schema.properties) {
       const xpath = `${schema.prefix}:${property}`;
-      const changed = now.properties.has(property) && now.properties.get(property) !== type;
-      if (now.properties.has(property) && !changed) continue;
-      if (!(property in fields)) {
+      const is = now.properties.get(property);
+      if (is !== undefined && is.text === was.text) continue;
+      if (!Object.hasOwn(fields, property)) {
         said.push(`the server's schema ${name} has no ${xpath}, so no record holds a value of it.`);
         continue;
       }
-      const held = holding(xpath, fields[property]);
-      if (held === null) {
-        said.push(`${xpath} is a complex property, which is not counted by its values.`);
+      const operand = valueOf(xpath, fields[property]);
+      if (operand === null) {
+        said.push(`${xpath} is a complex property, whose values are not counted.`);
         continue;
       }
-      add(
-        `property ${xpath}`,
-        await count(nuxeo, `SELECT * FROM Document WHERE ${held}`),
-        changed ? 'changes' : 'removes',
-        {
-          what: changed
-            ? `hold a value of ${xpath}, whose type changes from ${type} to ${now.properties.get(property)}: a value the new type cannot hold fails to load.`
-            : `hold a value of ${xpath}, which the new version's schema ${name} no longer has: the value stays in the repository, read by no layout, queue or search.`,
-          do: changed
-            ? `Before installing, convert each value to one the new type holds, or clear it.`
-            : `Before installing, copy each value into a property the new version has, if it is wanted.`,
-        },
-      );
+      if (is === undefined || is.base !== was.base) {
+        add(
+          `property ${xpath}`,
+          await count(nuxeo, `SELECT * FROM Document WHERE ${operand} IS NOT NULL`),
+          is === undefined ? 'removes' : 'changes',
+          {
+            what:
+              is === undefined
+                ? `hold a value of ${xpath}, which the new version's schema ${name} no longer has: the value stays in the repository, read by no layout, queue or search.`
+                : `hold a value of ${xpath}, whose type changes from ${was.base} to ${is.base}: a value the new type cannot hold fails to load.`,
+            do:
+              is === undefined
+                ? 'Before installing, copy each value into a property the new version has, if it is wanted.'
+                : 'Before installing, convert each value to one the new type holds, or clear it.',
+          },
+        );
+        continue;
+      }
+      // The same type with other constraints: only an enumeration that no longer allows a value is
+      // counted, and it is a warning, since the value still loads.
+      const gone =
+        was.values === null ? null : was.values.filter((value) => !is.values?.includes(value));
+      if (is.values === null || (gone !== null && gone.length === 0)) {
+        said.push(
+          `${xpath}'s constraints change, and no enumeration is narrowed: nothing is counted.`,
+        );
+        continue;
+      }
+      if (![...is.values, ...(gone ?? [])].every((value) => LITERAL.test(value))) {
+        said.push(
+          `${xpath}'s enumeration holds a value NXQL is not given here, so it is not counted.`,
+        );
+        continue;
+      }
+      const narrowed = {
+        held:
+          gone === null
+            ? `${operand} IS NOT NULL AND ${operand} NOT IN (${is.values.map((value) => `'${value}'`).join(', ')})`
+            : `${operand} IN (${gone.map((value) => `'${value}'`).join(', ')})`,
+        gone,
+      };
+      const outside = await count(nuxeo, `SELECT * FROM Document WHERE ${narrowed.held}`);
+      if (outside.count === 0) {
+        said.push(
+          `no record holds a value of ${xpath} the new version's enumeration no longer allows.`,
+        );
+        continue;
+      }
+      findings.push({
+        severity: 'warning',
+        check: 'records',
+        item: `property ${xpath}`,
+        what:
+          `${counted(outside)} record(s) on the server hold a value of ${xpath} the new version's enumeration no longer allows` +
+          `${narrowed.gone ? ` (${list(narrowed.gone)})` : ` (it allows ${list(is.values)})`}: the value still loads, and is no longer one the schema allows.`,
+        steps: `Change each to a value the new version allows, before or after installing.${noteFor(`property ${xpath}`)}`,
+      });
     }
   }
 
-  // A type that keeps its name and loses a schema leaves that schema's values behind.
+  // A type that keeps its name and loses a schema leaves that schema's values behind; so does a
+  // platform's type the package stops appending a schema to.
   for (const [type, was] of beforeModel.doctypes) {
-    const is = kitModel.doctypes.get(type);
+    const is = kitModel.doctypes.get(type) ?? (was.append ? { schemas: [] } : undefined);
     if (is === undefined) continue;
-    for (const schema of was.schemas.filter((each) => !is.schemas.includes(each))) {
+    // A schema the package removes outright is said once, above, with every type that carries it.
+    for (const schema of was.schemas.filter(
+      (each) =>
+        !is.schemas.includes(each) &&
+        !(beforeModel.schemas.has(each) && !kitModel.schemas.has(each)),
+    )) {
       add(
         `type ${type}`,
         await count(nuxeo, `SELECT * FROM Document WHERE ecm:primaryType = ${quoted(type)}`),
@@ -698,7 +776,12 @@ async function records({
   // and one in a state it keeps only as a way in waits there until someone follows its transition.
   for (const [type, policy] of kitModel.lifecycleOf) {
     const lifecycle = kitModel.lifecycles.get(policy);
-    if (lifecycle === undefined || !kitModel.doctypes.has(type)) continue;
+    if (
+      lifecycle === undefined ||
+      !kitModel.doctypes.has(type) ||
+      kitModel.doctypes.get(type).append
+    )
+      continue;
     const states = [...lifecycle.states.keys()];
     const outside = await count(
       nuxeo,
@@ -732,18 +815,23 @@ async function records({
 }
 
 /**
- * The NXQL that holds the records with a value of `xpath`, given the field as the server describes
- * it, `"string[]"` or, read with `fetch-schema: fields`, `{ "type": "string[]", ... }`; `null` for a
- * complex property, whose values are not counted one by one.
+ * What NXQL compares for a value of `xpath`, given the field as the server describes it, `"string[]"`
+ * or, read with `fetch-schema: fields`, `{ "type": "string[]", ... }`: the property, each item of a
+ * list, a blob's data; `null` for a complex property, whose values are not counted.
  */
-function holding(xpath, field) {
-  const [prefix, name] = xpath.split(':');
-  if (!NAME.test(prefix) || !NAME.test(name))
+function valueOf(xpath, field) {
+  const parts = xpath.split(':');
+  if (parts.length !== 2 || !NAME.test(parts[0]) || !NAME.test(parts[1]))
     throw new Refusal(`${xpath} is not a name NXQL is given here.`);
   const type = isRecord(field) ? field.type : field;
   if (typeof type !== 'string' || type.startsWith('complex')) return null;
-  return type.endsWith('[]') ? `${xpath}/* IS NOT NULL` : `${xpath} IS NOT NULL`;
+  if (type === 'blob') return `${xpath}/data`;
+  if (type === 'blob[]') return `${xpath}/*/data`;
+  return type.endsWith('[]') ? `${xpath}/*` : xpath;
 }
+
+/** An enumeration's value this puts into NXQL, between quotes. */
+const LITERAL = /^[A-Za-z0-9 _.:@/+-]*$/;
 
 function anyOf(typeField, types, facetField, facets) {
   const parts = [];
@@ -796,10 +884,6 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
       throw new Refusal(
         `/api/v1/search/pp/${name} answered ${definition.status}${nuxeoMessage(definition.body)}.`,
       );
-    if (provider.aggregates.length === 0) {
-      said.push(`${name} changes, and has no aggregate to answer.`);
-      continue;
-    }
     const theirs = new Set(
       (Array.isArray(definition.body.aggregates) ? definition.body.aggregates : [])
         .filter(isRecord)
@@ -809,6 +893,12 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
     const wanted = countParameters(typeof query === 'string' ? query : '');
     const by = named.get(name);
     const parameters = by?.parameters ?? [];
+    // Only parameters a queue or a home figure gives as they are: one a related list fills from
+    // its record, `{...}`, or that is not text, has no value here, and would shift the others.
+    if (by?.literal === false) {
+      said.push(`${name} is given a parameter filled from a record, so it was not run.`);
+      continue;
+    }
     if (wanted > parameters.length) {
       said.push(
         `${name} takes ${wanted} parameter(s), and no queue or home figure of the package gives them, so it was not run.`,
@@ -831,6 +921,11 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
       continue;
     }
     const answered = isRecord(run.body.aggregations) ? run.body.aggregations : {};
+    if (provider.aggregates.length === 0)
+      said.push(`the server answers ${name}, which has no aggregate.`);
+    // A new version that moves the page provider to another class, such as the search index's,
+    // answers its aggregates only once it is installed.
+    const moves = (beforeModel.pageProviders.get(name)?.class ?? null) !== provider.class;
     for (const aggregate of provider.aggregates) {
       if (!theirs.has(aggregate.id)) {
         said.push(
@@ -840,6 +935,12 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
       }
       if (isRecord(answered[aggregate.id])) continue;
       const repository = indexed.get(name) === false;
+      if (moves) {
+        said.push(
+          `the server answers ${name} without its aggregate ${aggregate.id}, and ${kit.version} gives it the class ${provider.class ?? '(none)'}: it is answered as the new version says only after the upgrade.`,
+        );
+        continue;
+      }
       findings.push({
         severity: 'error',
         check: 'page-providers',
@@ -860,10 +961,18 @@ function namedProviders(kit) {
   for (const [place, content] of kit.files)
     walk(content, (value) => {
       if (!isRecord(value) || typeof value.pageProvider !== 'string') return;
-      const entry = named.get(value.pageProvider) ?? { files: new Set(), parameters: undefined };
+      const entry = named.get(value.pageProvider) ?? {
+        files: new Set(),
+        parameters: undefined,
+        literal: true,
+      };
       entry.files.add(`bundle/agentic-ui-config/${place}`);
-      if (entry.parameters === undefined && Array.isArray(value.parameters))
-        entry.parameters = value.parameters.filter((each) => typeof each === 'string');
+      if (entry.parameters === undefined && Array.isArray(value.parameters)) {
+        entry.parameters = value.parameters;
+        entry.literal = value.parameters.every(
+          (each) => typeof each === 'string' && !each.includes('{'),
+        );
+      }
       named.set(value.pageProvider, entry);
     });
   return named;
@@ -921,7 +1030,16 @@ async function workflows({ nuxeo, kit, kitModel, beforeModel, findings, said }) 
  * designer saved: one the new version would no longer accept, and one whose file the upgrade
  * changes, which the override keeps winning over.
  */
-async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, said }) {
+async function deploymentLayer({
+  nuxeo,
+  kit,
+  kitModel,
+  beforeModel,
+  model,
+  server,
+  findings,
+  said,
+}) {
   const exported = await nuxeo.get('/agentic-ui-apps/layer.json');
   if (exported.status === 404 && exported.body?.error === 'not-found') {
     said.push(
@@ -937,29 +1055,56 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
     throw new Refusal(
       `the deployment layer's export, /agentic-ui-apps/layer.json, answered ${exported.status}${nuxeoMessage(exported.body)}.`,
     );
-  const app = exported.body.apps.find((each) => isRecord(each) && each.id === server.app);
-  const files = Array.isArray(app?.files) ? app.files.filter(isRecord) : [];
-  if (files.length === 0) {
-    said.push(`the deployment layer overrides none of ${server.app ?? 'the app'}'s files.`);
+  if (server.app === undefined) {
+    said.push('the package has no app, so no layer of one is read.');
     return;
   }
-  // The content model the server has after the upgrade: its own, with the package's stand-in types.
-  const after = withPackageModel(model, kitModel.contentModel);
+  // The export lists the files whose override is in force; the app's summary also lists those
+  // with only a draft, which the layout designer saved and nobody has published.
+  const app = exported.body.apps.find((each) => isRecord(each) && each.id === server.app);
+  const versions = new Map(
+    (Array.isArray(app?.files) ? app.files.filter(isRecord) : []).map((file) => [
+      file.path,
+      file.version,
+    ]),
+  );
+  const summary = await nuxeo.get(`/agentic-ui-apps/apps/${segment(server.app)}/layer.json`);
+  if (summary.status === 200 && Array.isArray(summary.body?.files)) {
+    for (const file of summary.body.files.filter(isRecord))
+      if (!versions.has(file.path) && (file.draft !== null || Number(file.live) > 0))
+        versions.set(file.path, Number(file.live) > 0 ? Number(file.live) : null);
+  } else if (!(summary.status === 404 && summary.body?.error === 'not-found'))
+    throw new Refusal(
+      `the app's deployment layer, /agentic-ui-apps/apps/${server.app}/layer.json, answered ${summary.status}${nuxeoMessage(summary.body)}.`,
+    );
+  if (versions.size === 0) {
+    said.push(
+      `the deployment layer overrides none of ${server.app}'s files, and holds no draft of one.`,
+    );
+    return;
+  }
+  // The content model the server has after the upgrade, and what the deployment registers in code:
+  // the validator is given both, as the server gives them (NashornDeploymentValidator).
+  const after = modelAfter(model, beforeModel, kitModel);
+  const registered = await registeredIds(nuxeo);
   const definition = {
     app: kit.files.get('app.json') ?? null,
     actions: kit.files.get('actions.json') ?? null,
+    registered,
   };
-  for (const file of files) {
-    const name = layerItem(file.path);
-    if (typeof file.path !== 'string' || name === undefined)
+  for (const [path, version] of versions) {
+    const name = layerItem(path);
+    if (name === undefined)
       throw new Refusal(
-        `the deployment layer's export names ${JSON.stringify(file.path)}, which is no file of a layer.`,
+        `the deployment layer names ${JSON.stringify(path)}, which is no file of a layer.`,
       );
+    const file = { path, version };
     const state = await nuxeo.json(
-      `/agentic-ui-apps/apps/${segment(server.app)}/layer/${file.path.split('/').map(segment).join('/')}`,
+      `/agentic-ui-apps/apps/${segment(server.app)}/layer/${path.split('/').map(segment).join('/')}`,
     );
     const ours = kit.files.get(file.path);
     const packaged = isRecord(state.package) ? state.package.content : undefined;
+    const inForce = isRecord(state.live);
     if (canonical(packaged) !== canonical(ours))
       findings.push({
         severity: 'warning',
@@ -967,7 +1112,9 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
         item: name,
         what:
           `${kit.name} ${kit.version} ${packaged === undefined ? 'adds' : ours === undefined ? 'removes' : 'changes'} ${file.path}, which this server's ` +
-          `deployment layer overrides at version ${file.version}. The override keeps winning, so ${server.app}'s people see none of the kit's change.`,
+          (inForce
+            ? `deployment layer overrides at version ${state.live.version ?? file.version}. The override keeps winning, so ${server.app}'s people see none of the kit's change.`
+            : "deployment layer holds a draft of, which does not have the kit's change: approved after the upgrade, it replaces the package's file with one that lacks it."),
         steps:
           ours === undefined
             ? 'After the upgrade the override is the only version of the file: keep it, or roll it back to drop it.'
@@ -1034,20 +1181,99 @@ function layerItem(path) {
   return undefined;
 }
 
-function withPackageModel(server, own) {
-  if (!isRecord(own)) return server;
+/**
+ * The content model the server has once the upgrade is installed, `{ doctypes, facets, schemas }`
+ * as `/api/v1/config` answers it: the server's own, less the types and schemas the package as
+ * installed has and the new one has not, less the properties the new one drops from a schema it
+ * keeps and the schemas it drops from a type it keeps, with the new package's stand-in model, its
+ * `content-model.json`, over it when it ships one.
+ */
+function modelAfter(server, beforeModel, kitModel) {
+  const goneTypes = new Set(
+    [...beforeModel.doctypes]
+      .filter(([name, type]) => !type.append && !kitModel.doctypes.has(name))
+      .map(([name]) => name),
+  );
+  const goneSchemas = new Set(
+    [...beforeModel.schemas.keys()].filter((name) => !kitModel.schemas.has(name)),
+  );
+  const doctypes = {};
+  for (const [name, type] of Object.entries(server.doctypes ?? {})) {
+    if (goneTypes.has(name) || !isRecord(type)) continue;
+    const dropped = new Set([
+      ...goneSchemas,
+      ...(beforeModel.doctypes.get(name)?.schemas ?? []).filter(
+        (schema) => !(kitModel.doctypes.get(name)?.schemas ?? []).includes(schema),
+      ),
+    ]);
+    doctypes[name] = {
+      ...type,
+      schemas: (Array.isArray(type.schemas) ? type.schemas : []).filter(
+        (schema) => !dropped.has(schema),
+      ),
+    };
+  }
+  const schemas = (server.schemas ?? [])
+    .filter((schema) => !isRecord(schema) || !goneSchemas.has(schema.name))
+    .map((schema) => {
+      const was = isRecord(schema) ? beforeModel.schemas.get(schema.name) : undefined;
+      const is = isRecord(schema) ? kitModel.schemas.get(schema.name) : undefined;
+      if (!was?.properties || !is?.properties || !isRecord(schema.fields)) return schema;
+      const fields = Object.fromEntries(
+        Object.entries(schema.fields).filter(
+          ([field]) => !was.properties.has(field) || is.properties.has(field),
+        ),
+      );
+      return { ...schema, fields };
+    });
+  const facets = (server.facets ?? []).map((facet) =>
+    isRecord(facet) && Array.isArray(facet.schemas)
+      ? {
+          ...facet,
+          schemas: facet.schemas.filter(
+            (schema) => !goneSchemas.has(isRecord(schema) ? schema.name : schema),
+          ),
+        }
+      : facet,
+  );
+  const own = kitModel.contentModel;
+  if (!isRecord(own)) return { doctypes, facets, schemas };
   const byName = (mine, theirs) => {
-    const names = new Set((mine ?? []).filter(isRecord).map((each) => each.name));
-    return [
-      ...(theirs ?? []).filter((each) => !isRecord(each) || !names.has(each.name)),
-      ...(mine ?? []),
-    ];
+    const names = new Set(mine.filter(isRecord).map((each) => each.name));
+    return [...theirs.filter((each) => !isRecord(each) || !names.has(each.name)), ...mine];
   };
   return {
-    doctypes: { ...(server.doctypes ?? {}), ...(isRecord(own.doctypes) ? own.doctypes : {}) },
-    facets: byName(Array.isArray(own.facets) ? own.facets : [], server.facets),
-    schemas: byName(Array.isArray(own.schemas) ? own.schemas : [], server.schemas),
+    doctypes: { ...doctypes, ...(isRecord(own.doctypes) ? own.doctypes : {}) },
+    facets: byName(Array.isArray(own.facets) ? own.facets : [], facets),
+    schemas: byName(Array.isArray(own.schemas) ? own.schemas : [], schemas),
   };
+}
+
+/**
+ * What the deployment registers in code for its layer's files, `nuxeo.agentic.ui.layer.registered.*`
+ * (`LayerSettings` in nuxeo-agentic-core), which the server's validator is given: read from the
+ * management API's configuration, of which nothing else is kept, said or printed.
+ */
+async function registeredIds(nuxeo) {
+  const answer = await nuxeo.get('/api/v1/management/configuration');
+  if (answer.status !== 200 || !isRecord(answer.body))
+    throw new Refusal(
+      `/api/v1/management/configuration answered ${answer.status}, so the ids the deployment registers for its layer, ` +
+        "which the server's validator is given, cannot be read, and an override cannot be held to the new version as the server would hold it.",
+    );
+  const property = (name) => {
+    for (const group of ['runtimeProperties', 'configuredProperties']) {
+      const value = isRecord(answer.body[group]) ? answer.body[group][name] : undefined;
+      if (typeof value === 'string') return value;
+    }
+    return '';
+  };
+  const ids = (kind) =>
+    property(`nuxeo.agentic.ui.layer.registered.${kind}`)
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+  return { rules: ids('rules'), rowActions: ids('rowActions'), bulkActions: ids('bulkActions') };
 }
 
 // --- Vocabularies ---------------------------------------------------------------------------------
@@ -1169,7 +1395,11 @@ function diagnostics({ server, kitModel, findings, said }) {
       what: `The server's runtime reports an error, before the upgrade: ${message}`,
       steps: "Note it: after the upgrade, an error that was not here is the upgrade's.",
     });
-  if (ofApp.length === 0 && server.errors.length === 0)
+  if (!server.registryRead)
+    said.push(
+      'the app registry was not read, so what it reports about the app before the upgrade is not known.',
+    );
+  else if (ofApp.length === 0 && server.errors.length === 0)
     said.push(`the server reports no error for ${server.app ?? 'the app'}, and its runtime none.`);
 }
 
@@ -1193,8 +1423,17 @@ export function packageModel(kit) {
         readFileSync(manifest, 'utf8').replace(/\r?\n[ \t]/g, ''),
       )?.[1]
     : undefined;
+  const descriptor = join(kit.directory, 'package', 'package.xml');
   const model = {
     bundle: symbolic ?? null,
+    // The package's type, `addon` for a kit, which the package manager's listing is asked for.
+    type: isFile(descriptor)
+      ? attribute(
+          withoutCommentsOrInstructions(readFileSync(descriptor, 'utf8')),
+          'package',
+          'type',
+        )
+      : null,
     doctypes: new Map(),
     schemas: new Map(),
     lifecycles: new Map(),
@@ -1207,7 +1446,14 @@ export function packageModel(kit) {
   for (const component of kit.components) {
     const file = inBundle(component.path);
     if (file === null) continue;
-    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    const source = readFileSync(file, 'utf8');
+    const xml = componentXmlOf(source);
+    // A page provider as written, its CDATA kept: componentXmlOf blanks CDATA, where an NXQL
+    // query is often written, and a change there is a change of the page provider.
+    const written = new Map();
+    for (const kind of ['coreQueryPageProvider', 'genericPageProvider'])
+      for (const { attributes, whole } of elements(withoutCommentsOrInstructions(source), kind))
+        if (attributes.name) written.set(attributes.name, whole.replace(/\s+/g, ' ').trim());
     for (const [, tag, body] of xml.matchAll(
       new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g'),
     )) {
@@ -1226,6 +1472,8 @@ export function packageModel(kit) {
         for (const { attributes, inner } of elements(body, 'doctype')) {
           if (!attributes.name) continue;
           model.doctypes.set(attributes.name, {
+            // `append` adds to a type of the platform's, such as File, which the package does not own.
+            append: attributes.append === 'true',
             schemas: [...inner.matchAll(new RegExp(`<schema${TAG}`, 'g'))]
               .map(([, each]) => attributesOf(each).name)
               .filter(Boolean),
@@ -1264,7 +1512,8 @@ export function packageModel(kit) {
           for (const { attributes, whole, inner } of elements(body, kind)) {
             if (!attributes.name) continue;
             model.pageProviders.set(attributes.name, {
-              xml: whole.replace(/\s+/g, ' ').trim(),
+              xml: written.get(attributes.name) ?? whole.replace(/\s+/g, ' ').trim(),
+              class: attributes.class ?? null,
               aggregates: [...inner.matchAll(new RegExp(`<aggregate${TAG}`, 'g'))]
                 .map(([, each]) => attributesOf(each))
                 .filter((each) => each.id)
@@ -1340,10 +1589,51 @@ function elements(xml, name) {
 }
 
 /**
- * A schema's properties, the elements directly under `<xs:schema>`, each with its type as written:
- * its `type`, with the definition of a type the schema names itself, or what it holds inline.
+ * A schema's properties, the elements directly under `<xs:schema>`, each with what it holds:
+ * `base`, its type with the constraints set aside (`xs:string`, `list of xs:string`, `complex`),
+ * whether it names the type, defines it inline or names a type the schema defines; `values`, the
+ * enumeration a restriction allows, or `null`; and `text`, everything written about its type, so
+ * that a change of a constraint alone is seen too.
  */
 function xsdProperties(source) {
+  const xml = withoutCdata(withoutCommentsOrInstructions(source));
+  const prefix = /<([\w.-]+:)?schema\b/.exec(xml)?.[1] ?? '';
+  const written = xsdTypes(source);
+  const simple = (inner) => {
+    const list = new RegExp(`<${prefix}list${TAG}`).exec(inner);
+    if (list)
+      return {
+        base: `list of ${attributesOf(list[1]).itemType ?? 'an inline type'}`,
+        values: null,
+      };
+    const restriction = new RegExp(`<${prefix}restriction${TAG}`).exec(inner);
+    const values = [...inner.matchAll(new RegExp(`<${prefix}enumeration${TAG}`, 'g'))]
+      .map(([, tag]) => attributesOf(tag).value)
+      .filter((value) => value !== undefined);
+    return {
+      base: attributesOf(restriction?.[1] ?? '').base ?? 'a simple type',
+      values: values.length > 0 ? values : null,
+    };
+  };
+  const properties = new Map();
+  for (const [name, { type, inner, named }] of written) {
+    let held;
+    if (named !== undefined)
+      held = named.kind === 'complexType' ? { base: 'complex', values: null } : simple(named.inner);
+    else if (type !== undefined) held = { base: type, values: null };
+    else if (new RegExp(`<${prefix}complexType\\b`).test(inner))
+      held = { base: 'complex', values: null };
+    else held = simple(inner);
+    properties.set(name, {
+      ...held,
+      text: `${type ?? ''} ${named?.whole ?? inner}`.replace(/\s+/g, ' ').trim(),
+    });
+  }
+  return properties;
+}
+
+/** Each top-level element of a schema: its `type`, what it holds inline, and the type it names. */
+function xsdTypes(source) {
   const xml = withoutCdata(withoutCommentsOrInstructions(source));
   const schema =
     /<(?:[\w.-]+:)?schema\b[^>]*>([\s\S]*)<\/(?:[\w.-]+:)?schema[ \t\r\n]*>/.exec(xml)?.[1] ?? '';
@@ -1362,22 +1652,21 @@ function xsdProperties(source) {
   const named = new Map(
     top
       .filter((each) => each.kind !== 'element' && each.attributes.name && !nested(each))
-      .map((each) => [each.attributes.name, each.whole.replace(/\s+/g, ' ')]),
+      .map((each) => [each.attributes.name, each]),
   );
-  const properties = new Map();
+  const elementsOf = new Map();
   for (const element of top.filter(
     (each) => each.kind === 'element' && each.attributes.name && !nested(each),
   )) {
     const type = element.attributes.type;
-    const local = type?.slice(type.indexOf(':') + 1);
-    properties.set(
-      element.attributes.name,
-      type
-        ? `${type}${named.has(local) ? ` = ${named.get(local)}` : ''}`
-        : element.inner.replace(/\s+/g, ' ').trim(),
-    );
+    // A type of the schema's own namespace, not one of XML Schema's, such as xs:string.
+    const own =
+      type !== undefined && !type.startsWith(prefix || '\0')
+        ? named.get(type.slice(type.indexOf(':') + 1))
+        : undefined;
+    elementsOf.set(element.attributes.name, { type, inner: element.inner, named: own });
   }
-  return properties;
+  return elementsOf;
 }
 
 /** The `id` column of a CSV file, as Nuxeo reads a directory's data file. */
@@ -1494,19 +1783,19 @@ function walk(value, visit) {
 }
 
 /**
- * One path segment, encoded, as the Builder MCP server's `segment`: `.` and `..` are refused, not
- * encoded, since a URL parser reads them, and their percent-encoded spellings, as moves up the path.
+ * One path segment: letters, digits, `_`, `.` and `-`, and not `.` or `..`, which a URL parser
+ * reads as moves up the path. Anything else, a slash or a percent sign above all, is refused rather
+ * than encoded, so that no name from a package or from an answer can reshape an address.
  */
 function segment(value) {
   if (
     typeof value !== 'string' ||
-    value === '' ||
+    !/^[A-Za-z0-9_.-]+$/.test(value) ||
     value === '.' ||
-    value === '..' ||
-    /%2e/i.test(value)
+    value === '..'
   )
-    throw new Refusal(`"${value}" is not a name this asks the server for.`);
-  return encodeURIComponent(value);
+    throw new Refusal(`${JSON.stringify(value)} is not a name this asks the server for.`);
+  return value;
 }
 
 function nuxeoMessage(body) {

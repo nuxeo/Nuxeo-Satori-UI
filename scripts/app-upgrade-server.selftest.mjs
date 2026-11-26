@@ -42,7 +42,7 @@ import { fileURLToPath } from 'node:url';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(REPO, 'scripts', 'app-upgrade-check.mjs');
 const DEMO = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
-const { guardedFetch, READS } = await import('./app-upgrade-server.mjs');
+const { guardedFetch } = await import('./app-upgrade-server.mjs');
 
 const VERSION = /version="([^"]+)">/.exec(
   readFileSync(join(DEMO, 'package', 'package.xml'), 'utf8'),
@@ -62,6 +62,36 @@ const APP = 'payers-claims';
 const USER = 'upgrade-check-admin';
 // Made here, at each run, so that no credential is written in the repository.
 const PASSWORD = randomBytes(18).toString('base64url');
+const ENCODED = Buffer.from(`${USER}:${PASSWORD}`).toString('base64');
+/**
+ * What a read-only check of an upgrade may ask the stand-in for, written here from the addresses
+ * the docs list, apart from the module's own list: a request for anything else fails the control.
+ */
+const ALLOWED = [
+  '/api/v1/me',
+  '/api/v1/management/distribution',
+  '/api/v1/management/page-providers',
+  '/api/v1/management/configuration',
+  '/api/v1/config/types',
+  '/api/v1/config/facets',
+  '/api/v1/config/schemas',
+  /\/api\/v1\/config\/schemas\/[A-Za-z0-9_.-]+/,
+  '/api/v1/search/lang/NXQL/execute',
+  /\/api\/v1\/search\/pp\/[A-Za-z0-9_.-]+(?:\/execute)?/,
+  '/api/v1/workflowModel',
+  /\/api\/v1\/directory\/[A-Za-z0-9_.-]+/,
+  '/agentic-ui-apps/apps.json',
+  '/agentic-ui-apps/layer.json',
+  /\/agentic-ui-apps\/apps\/payers-claims\/layer\.json/,
+  /\/agentic-ui-apps\/apps\/payers-claims\/layer\/(?:layouts\/[A-Za-z0-9_-]+\/(?:view|edit|create)\.layout|queues\/[A-Za-z0-9_.-]+)\.json/,
+  '/agentic-ui-config/layouts.json',
+  /\/agentic-ui-config\/layouts\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.layout\.json/,
+  '/site/connectClient/packages/local',
+].map((path) =>
+  typeof path === 'string'
+    ? new RegExp(`^/nuxeo${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+    : new RegExp(`^/nuxeo${path.source}$`),
+);
 const MODEL_ID = '0b9ad9a5-6d5e-4b8a-9c41-5b1f3a1e2c77';
 
 const ROOT = 'bundle/agentic-ui-config';
@@ -114,6 +144,8 @@ function serverFor(installed, change = () => undefined) {
     directories: { PayersClaimDecision: ['approve', 'deny'] },
     layer: null,
     layerFiles: {},
+    // The server's runtime properties, as /management/configuration answers them.
+    properties: {},
   };
   change(state);
   return state;
@@ -213,7 +245,9 @@ function answer(state, url) {
   }
   if (path === '/api/v1/search/lang/NXQL/execute') {
     const query = url.searchParams.get('query') ?? '';
-    const found = state.counts.find(([pattern]) => pattern.test(query));
+    const found = state.counts.find(([pattern]) =>
+      typeof pattern === 'function' ? pattern(query) : pattern.test(query),
+    );
     if (found && found[1] === 'fail')
       return json({ 'entity-type': 'exception', status: 500, message: 'all shards failed' }, 500);
     return json({
@@ -224,6 +258,31 @@ function answer(state, url) {
     });
   }
   if (path === '/api/v1/management/page-providers') return json(state.pageProviderList);
+  if (path === '/api/v1/management/configuration')
+    return json({
+      'entity-type': 'configuration',
+      configuredProperties: { 'nuxeo.db.password': '***' },
+      runtimeProperties: state.properties,
+    });
+  if ((match = /^\/agentic-ui-apps\/apps\/([^/]+)\/layer\.json$/.exec(decoded))) {
+    if (state.layer === null)
+      return json(
+        { error: 'not-found', message: 'The deployment layer is switched off on this server.' },
+        404,
+      );
+    return json({
+      format: 'nuxeo-agentic-ui-layer/1',
+      app: match[1],
+      files: Object.entries(state.layerFiles).map(([path, file]) => ({
+        path,
+        revision: 1,
+        live: file.live?.version ?? 0,
+        draft: file.draft
+          ? { savedBy: file.draft.savedBy, savedAt: file.draft.savedAt, submitted: false }
+          : null,
+      })),
+    });
+  }
   if ((match = /^\/api\/v1\/search\/pp\/([^/]+)(\/execute)?$/.exec(decoded))) {
     const provider = state.pageProviders[match[1]];
     if (!match[2])
@@ -387,6 +446,22 @@ const pendingChanged = (directory) =>
     "AND claim:status IN ('inReview', 'pended')",
     "AND claim:status IN ('pended', 'inReview')",
   );
+/** The pending claims' query written in CDATA, as it is, or changed inside the CDATA. */
+const pendingInCdata = (changed) => (directory) =>
+  edit(
+    directory,
+    MODEL,
+    "ecm:primaryType = 'Claim' AND claim:status IN ('inReview', 'pended')",
+    `<![CDATA[ecm:primaryType = 'Claim' AND claim:status IN (${changed ? "'pended', 'inReview'" : "'inReview', 'pended'"})]]>`,
+  );
+/** A page provider with no aggregate and no parameter, as it is, or changed. */
+const allMembers = (changed) => (directory) =>
+  edit(
+    directory,
+    MODEL,
+    "    <!-- The Member page's claims card",
+    `    <coreQueryPageProvider name="payers_all_members">\n      <pattern>SELECT * FROM Document WHERE ecm:primaryType = 'Member'${changed ? ' AND ecm:isTrashed = 0' : ''}</pattern>\n    </coreQueryPageProvider>\n    <!-- The Member page's claims card`,
+  );
 /** The route model's zip, rebuilt with other bytes. */
 const zipChanged = (directory) => {
   const path = join(directory, ...ZIP.split('/'));
@@ -425,31 +500,37 @@ const bothAggregates = {
   claim_adjuster_agg: { id: 'claim_adjuster_agg', buckets: [] },
 };
 
-/** A deployment layer that overrides the my-claims queue with `live`, and a draft. */
-function layerWith(state, packaged, { live, draft = null, packageChanged = false }) {
+/**
+ * A deployment layer that overrides `path`, the my-claims queue unless another is named, with
+ * `live`, and a draft. With `live` null the file has a draft only, which the export, as
+ * `LayerService.export` writes it, leaves out, and the app's summary lists.
+ */
+function layerWith(
+  state,
+  packaged,
+  { live, draft = null, packageChanged = false, path = 'queues/my-claims.json' },
+) {
   state.layer = {
     format: 'nuxeo-agentic-ui-layer/1',
-    apps: [
-      {
-        id: APP,
-        files: [
-          {
-            path: 'queues/my-claims.json',
-            version: 3,
-            sha256: 'a',
-            packageSha256: 'b',
-            served: true,
-          },
-        ],
-      },
-    ],
+    apps:
+      live === null
+        ? []
+        : [
+            {
+              id: APP,
+              files: [{ path, version: 3, sha256: 'a', packageSha256: 'b', served: true }],
+            },
+          ],
   };
-  state.layerFiles['queues/my-claims.json'] = {
+  state.layerFiles[path] = {
     format: 'nuxeo-agentic-ui-layer/1',
     app: APP,
-    path: 'queues/my-claims.json',
-    package: { sha256: 'b', content: packaged },
-    live: { version: 3, kind: 'publish', content: live, sha256: 'a', packageSha256: 'b' },
+    path,
+    package: packaged === null ? null : { sha256: 'b', content: packaged },
+    live:
+      live === null
+        ? null
+        : { version: 3, kind: 'publish', content: live, sha256: 'a', packageSha256: 'b' },
     draft:
       draft === null
         ? null
@@ -518,7 +599,17 @@ async function control(
     );
     const wrong = [];
     if (result.status !== exit) wrong.push(`exit ${result.status}, not ${exit}`);
-    if (result.output.includes(PASSWORD)) wrong.push('the password is in what it printed');
+    for (const secret of [PASSWORD, ENCODED, encodeURIComponent(PASSWORD)])
+      if (result.output.includes(secret)) wrong.push('the credentials are in what it printed');
+    if (stand.holder.seen.some((each) => each.url.includes(PASSWORD) || each.url.includes(ENCODED)))
+      wrong.push('the credentials are in a request address');
+    // Held to a list written here, not to the module's own READS, which would be the check
+    // judging itself.
+    const outside = stand.holder.seen.filter(
+      (each) => !ALLOWED.some((path) => path.test(new URL(each.url, 'http://stand-in').pathname)),
+    );
+    if (outside.length > 0)
+      wrong.push(`the stand-in was asked for ${outside.map((each) => each.url).join(', ')}`);
     const notGet = stand.holder.seen.filter((each) => each.method !== 'GET');
     if (notGet.length > 0)
       wrong.push(
@@ -562,13 +653,13 @@ async function control(
           wrong.push(
             `findings it should not have: ${report.findings.map((each) => `${each.severity} ${each.check} ${each.item}`).join('; ')}`,
           );
-        if (
-          !report.reads.every(
-            (each) =>
-              each.method === 'GET' && READS.some((path) => path.test(each.path.split('?')[0])),
-          )
-        )
-          wrong.push('its report lists a read that is not a GET of an address it reads');
+        // What it says it read must be what the stand-in saw, one for one.
+        const said = report.reads.map((each) => `${each.method} /nuxeo${each.path}`).sort();
+        const seen = stand.holder.seen.map((each) => `${each.method} ${each.url}`).sort();
+        if (JSON.stringify(said) !== JSON.stringify(seen))
+          wrong.push(
+            `its report's ${said.length} reads are not the ${seen.length} the stand-in saw`,
+          );
       }
     }
     if (wrong.length > 0)
@@ -623,6 +714,16 @@ const itself = (scratch) => {
     [
       "the package manager's install link",
       'http://127.0.0.1:9/nuxeo/site/connectClient/install/start/x-1.0.0',
+      {},
+    ],
+    [
+      'an encoded slash that a decoding proxy would climb with',
+      'http://127.0.0.1:9/nuxeo/api/v1/search/pp/..%2F..%2F..%2F..%2Fsite%2FconnectClient%2Funinstall%2Fstart%2Fx-1.0.0',
+      {},
+    ],
+    [
+      'an encoded slash into the automation API',
+      'http://127.0.0.1:9/nuxeo/api/v1/directory/..%2F..%2Fautomation%2FDocument.Delete',
       {},
     ],
     [
@@ -717,10 +818,79 @@ try {
       state.counts.push([/ecm:primaryType IN \('Member'\)/, 4], [/ecm:primaryType = 'Member'$/, 4]);
     },
     exit: 1,
-    findings: [
-      ['error', 'records', 'schema legacynote', 'carry the schema legacynote'],
-      ['error', 'records', 'type Member', 'no longer carries the schema legacynote'],
-    ],
+    findings: [['error', 'records', 'schema legacynote', 'carry the schema legacynote']],
+  });
+  await control('a type that stops carrying a schema the package keeps: an error', stand, {
+    packages: upgrade(undefined, (directory) =>
+      edit(
+        directory,
+        MODEL,
+        '      <schema name="dublincore" />\n      <schema name="member" />',
+        '      <schema name="dublincore" />',
+      ),
+    ),
+    server: (state) => state.counts.push([/ecm:primaryType = 'Member'$/, 4]),
+    exit: 1,
+    findings: [['error', 'records', 'type Member', 'no longer carries the schema member']],
+  });
+  await control('a platform type the package stops appending to: no type removed, kept', stand, {
+    // The offline half reads an appended type as the package's own, and asks for a note, which
+    // this one gives so that the server half is what is held.
+    packages: upgrade(
+      (directory) =>
+        edit(
+          directory,
+          MODEL,
+          '    <doctype name="Claim" extends="Document">',
+          '    <doctype name="File" append="true">\n      <facet name="Versionable" />\n    </doctype>\n    <doctype name="Claim" extends="Document">',
+        ),
+      (directory) =>
+        notes(directory, [{ version: MINOR, item: 'type File', note: 'No longer appended to.' }]),
+    ),
+    server: (state) => state.counts.push([/ecm:primaryType = 'File'/, 9]),
+    exit: 0,
+    none: true,
+  });
+  await control('an enumeration widened: the same type, nothing counted, kept', stand, {
+    packages: upgrade(undefined, (directory) =>
+      edit(
+        directory,
+        CLAIM_SCHEMA,
+        '<xs:enumeration value="paid" />',
+        '<xs:enumeration value="paid" />\n        <xs:enumeration value="closed" />',
+      ),
+    ),
+    server: (state) => state.counts.push([/claim:status/, 30]),
+    exit: 0,
+    none: true,
+    says: ['no enumeration is narrowed'],
+  });
+  await control('an enumeration narrowed, with values it no longer allows: a warning', stand, {
+    packages: upgrade(undefined, (directory) =>
+      edit(directory, CLAIM_SCHEMA, '        <xs:enumeration value="paid" />\n', ''),
+    ),
+    server: (state) => state.counts.push([/claim:status IN \('paid'\)/, 3]),
+    exit: 0,
+    findings: [['warning', 'records', 'property claim:status', '(paid)']],
+  });
+  await control("a lifecycle the new version changes: held to the new version's states", stand, {
+    packages: upgrade(undefined, (directory) =>
+      edit(
+        directory,
+        MODEL,
+        /<state name="pended"[\s\S]*?<\/state>\n/.exec(
+          readFileSync(join(directory, ...MODEL.split('/')), 'utf8'),
+        )[0],
+        '',
+      ),
+    ),
+    server: (state) =>
+      state.counts.push([
+        (query) => /ecm:currentLifeCycleState NOT IN/.test(query) && !query.includes("'pended'"),
+        2,
+      ]),
+    exit: 1,
+    findings: [['error', 'records', 'lifecycle Claim', 'does not have']],
   });
   await control('a property removed, with values: an error', stand, {
     packages: upgrade(withLegacyCode, (directory) =>
@@ -798,6 +968,70 @@ try {
       ],
     },
   );
+  await control(
+    'a page provider changed inside its CDATA, answered without an aggregate: an error',
+    stand,
+    {
+      packages: upgrade(pendingInCdata(false), pendingInCdata(true)),
+      server: (state) => pending(state, { claim_status_agg: bothAggregates.claim_status_agg }),
+      exit: 1,
+      findings: [
+        ['error', 'page-providers', 'page-provider payers_pending_claims', 'claim_adjuster_agg'],
+      ],
+    },
+  );
+  await control('a page provider with no aggregate, changed and not answered: an error', stand, {
+    packages: upgrade(allMembers(false), allMembers(true)),
+    server: (state) =>
+      (state.pageProviders.payers_all_members = {
+        definition: {
+          name: 'payers_all_members',
+          pattern: "SELECT * FROM Document WHERE ecm:primaryType = 'Member'",
+        },
+        execute: json({ message: 'the repository refused the query' }, 500),
+      }),
+    exit: 1,
+    findings: [
+      ['error', 'page-providers', 'page-provider payers_all_members', 'refused the query'],
+    ],
+  });
+  await control(
+    'a page provider moved to the index by the new version: said, not an error',
+    stand,
+    {
+      packages: upgrade(
+        (directory) =>
+          edit(
+            directory,
+            MODEL,
+            '<genericPageProvider name="payers_pending_claims"\n        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">',
+            '<genericPageProvider name="payers_pending_claims"\n        class="org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider">',
+          ),
+        undefined,
+      ),
+      server: (state) =>
+        pending(state, { claim_status_agg: bothAggregates.claim_status_agg }, { indexed: false }),
+      exit: 0,
+      none: true,
+      says: ['is answered as the new version says only after the upgrade'],
+    },
+  );
+  await control("a related list's page provider, filled from its record: not run, kept", stand, {
+    packages: upgrade(undefined, (directory) =>
+      edit(directory, MODEL, 'claim:member = ?\n', 'claim:member = ? AND ecm:isTrashed = 0\n'),
+    ),
+    server: (state) =>
+      (state.pageProviders.member_claims = {
+        definition: {
+          name: 'member_claims',
+          pattern: 'SELECT * FROM Document WHERE claim:member = ?',
+        },
+      }),
+    exit: 0,
+    none: true,
+    says: ['member_claims is given a parameter filled from a record, so it was not run'],
+    requests: (seen) => !seen.some((each) => each.url.includes('/member_claims/execute')),
+  });
   await control('a page provider changed, not answered at all: an error', stand, {
     packages: upgrade(undefined, pendingChanged),
     server: (state) => pending(state, {}, { status: 500 }),
@@ -880,6 +1114,58 @@ try {
     exit: 0,
     findings: [['warning', 'layer', 'queue my-claims', 'another version of the kit']],
   });
+  await control(
+    'an override of a type the upgrade removes, which fits the server now: an error',
+    stand,
+    {
+      packages: upgrade(withLegacyType, (directory) =>
+        notes(directory, [{ version: MINOR, item: 'type PayersLegacyNote', note: 'Gone.' }]),
+      ),
+      server: (state) => {
+        state.model.doctypes.PayersLegacyNote = {
+          parent: 'Document',
+          facets: [],
+          schemas: ['dublincore'],
+        };
+        layerWith(state, null, {
+          path: 'layouts/PayersLegacyNote/view.layout.json',
+          live: {
+            version: 2,
+            columns: 1,
+            cards: [{ id: 'note', label: 'Note', fields: ['dc:title'] }],
+          },
+        });
+      },
+      exit: 1,
+      findings: [['error', 'layer', 'layout PayersLegacyNote/view', 'is not in the content model']],
+    },
+  );
+  await control(
+    'a draft of a file with no override in force, which the export does not list: a warning',
+    stand,
+    {
+      packages: upgrade(),
+      server: (state, installed) =>
+        layerWith(state, queueOf(installed), {
+          live: null,
+          draft: { ...queueOf(installed), rowActions: ['payers.claim.gone'] },
+        }),
+      exit: 0,
+      findings: [['warning', 'layer', 'queue my-claims', 'saved by designer-one']],
+    },
+  );
+  await control('an override naming a row action the deployment registers: fits, kept', stand, {
+    packages: upgrade(),
+    server: (state, installed) => {
+      state.properties['nuxeo.agentic.ui.layer.registered.rowActions'] =
+        'deployment.flag, other.one';
+      layerWith(state, queueOf(installed), {
+        live: { ...queueOf(installed), rowActions: ['deployment.flag'] },
+      });
+    },
+    exit: 0,
+    none: true,
+  });
 
   // Vocabularies.
   await control("a vocabulary's new entry, which the server does not load: an error", stand, {
@@ -887,6 +1173,24 @@ try {
     exit: 1,
     findings: [['error', 'vocabularies', 'vocabulary PayersClaimDecision', 'refer']],
   });
+  await control(
+    "a vocabulary loaded again at each start, with an administrator's entry: a warning, and no error for the new one",
+    stand,
+    {
+      packages: upgrade(undefined, (directory) => {
+        csvChanged(directory);
+        edit(
+          directory,
+          'bundle/OSGI-INF/payers-claims-demo-workflow.xml',
+          '<createTablePolicy>on_missing_columns</createTablePolicy>',
+          '<createTablePolicy>always</createTablePolicy>',
+        );
+      }),
+      server: (state) => (state.directories.PayersClaimDecision = ['approve', 'deny', 'escalate']),
+      exit: 0,
+      findings: [['warning', 'vocabularies', 'vocabulary PayersClaimDecision', 'escalate']],
+    },
+  );
 
   // What the server already says.
   await control(
@@ -977,6 +1281,31 @@ try {
       (state.registry = [{ id: APP, bundle: BUNDLE, content: { id: APP, packageVersion: OLDER } }]),
     exit: 2,
     says: ['the app registry says', 'is not known'],
+  });
+  await control('two versions of the kit running at once: refused', stand, {
+    packages: upgrade(),
+    server: (state, installed) =>
+      state.packages.push({ id: `${NAME}-${OLDER}`, state: 'running' }) && versionOf(installed),
+    exit: 2,
+    says: ['running at once'],
+  });
+  await control(
+    'a version in a state the check does not know, such as an install in progress: refused',
+    stand,
+    {
+      packages: upgrade(),
+      server: (state) =>
+        state.packages.push({ id: `${NAME}-${MINOR}`, state: 'installation in progress' }),
+      exit: 2,
+      says: ['in a state this does not know'],
+    },
+  );
+  await control("Node told to use the environment's proxy: refused, nothing sent", stand, {
+    packages: upgrade(),
+    env: { NODE_USE_ENV_PROXY: '1' },
+    exit: 2,
+    says: ["environment's proxy"],
+    requests: (seen) => seen.length === 0,
   });
   await control('the version installed waits for a restart: refused', stand, {
     packages: upgrade(),
