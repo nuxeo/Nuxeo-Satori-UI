@@ -497,13 +497,10 @@ function packageRows(html, name) {
     if (!id.startsWith(`${name}-`)) continue;
     const version = id.slice(name.length + 1);
     if (!parseVersion(version)) continue;
-    const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(([, cell]) =>
-      cell
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .trim()
-        .toLowerCase(),
+    // Only cells that hold words and nothing else: the state is one, written bare, `<td>running</td>`.
+    // Nothing is stripped from the page, which is read and never shown or written anywhere.
+    const cells = [...row.matchAll(/<td\b[^>]*>\s*([A-Za-z][A-Za-z ]*?)\s*<\/td>/g)].map(
+      ([, cell]) => cell.toLowerCase(),
     );
     const state = cells.find((cell) =>
       [
