@@ -1917,12 +1917,18 @@ dialog stays open with the user's input.
 
 **Labels.** A field's `label` is shown verbatim; else its `labelKey` if it translates; else the
 key `layout.field.<prefix>:<field>`; else a readable form of the field name (`billedAmount` →
-"Billed amount"). Generated section headings look up `layout.schema.<schema>` first. So a manifest
-`labels` entry renames a generated label with no layout file at all:
+"Billed amount"). Generated section headings look up `layout.schema.<schema>` first, keyed by the
+schema's name, not its prefix (`layout.schema.workorder` for a schema `workorder` whose prefix is
+`wo`), else the schema's name made readable (`acmeproduct` → "Acmeproduct"). So a manifest `labels`
+entry renames a generated label with no layout file at all:
 
 ```json
 { "labels": { "layout.field.claim:memberId": "Member ID", "layout.schema.claim": "Claim details" } }
 ```
+
+A business app's package sets the same keys in its `labels/<lang>.json`
+([app-definition-v2.md](business-apps/app-definition-v2.md), section 7), and the manifest's still
+win over it.
 
 **Shipping one.** Put the file in your configuration package's bundle and contribute it from the
 component that `<require>`s `org.nuxeo.agentic.ui.config.defaults`:

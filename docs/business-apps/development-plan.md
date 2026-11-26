@@ -236,7 +236,7 @@ Payers model.
 **Done when:**
 
 - a presales engineer rebuilds the Member page from an empty package in one day or less (the first
-  half of the acceptance test);
+  half of the acceptance test), run as [acceptance-tests.md](acceptance-tests.md)'s test A;
 - the kit's demo script passes end to end.
 
 **Needs:** the Payers model (phase 0).
@@ -269,7 +269,8 @@ Payers model.
 **Done when:**
 
 - the plan's acceptance test passes: a presales engineer rebuilds the Member, Claim and Case screens
-  with no Angular code in two days or less, and a prospect would accept the result;
+  with no Angular code in two days or less, and a prospect would accept the result, run as
+  [acceptance-tests.md](acceptance-tests.md)'s test B, with its review form;
 - the security review of operation buttons is done.
 
 **Needs:**
@@ -321,7 +322,8 @@ faxes wait for capture, in phase 7.
 **Done when:**
 
 - someone outside the team builds a small app with the agent in a day, following the
-  [tutorial](tutorial.md) (the plan's section 7 asks for one);
+  [tutorial](tutorial.md) (the plan's section 7 asks for one), run as
+  [acceptance-tests.md](acceptance-tests.md)'s test C;
 - every write by the agent passes validation;
 - an agent asked to use an unregistered ID is refused.
 
@@ -394,7 +396,7 @@ be confirmed account by account in phase 0.
 **Done when:**
 
 - a presales engineer rebuilds the product and asset pages in two days or less (the plan's second
-  acceptance test);
+  acceptance test), run as [acceptance-tests.md](acceptance-tests.md)'s test D;
 - a library of 100,000 synthetic assets stays within the performance budget
   ([performance-budget.md](performance-budget.md));
 - the share links' security review is done.

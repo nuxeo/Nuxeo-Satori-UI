@@ -234,7 +234,7 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 **Not run yet.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. `nuxeoctl
 mp-install` refuses while the server runs, and the server is the container's main process, so a
 one-off script installs it when the container next starts, as the kits' READMEs do. Install the
-add-on with the brand assets kit 0.2.0, which depends on it, in one restart.
+add-on with the brand assets kit 0.2.1, which depends on it, in one restart.
 
 **1. Build both,** from the repository's root:
 
@@ -253,11 +253,11 @@ docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.1.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.1.0.zip /tmp/brand-assets-demo-0.2.0.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.1.0.zip /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
