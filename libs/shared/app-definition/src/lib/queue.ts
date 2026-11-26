@@ -25,7 +25,14 @@ const QUEUE_KEYS = [
   'bulkActions',
   'visibleWhen',
 ];
-const FACET_KEYS = ['aggregate', 'label', 'labelKey'];
+const FACET_KEYS = ['aggregate', 'label', 'labelKey', 'widget'];
+
+/**
+ * The widgets a facet's buckets may be shown through (app-definition-v2.md, section 4): a
+ * `document-link`, for an aggregate on a reference, whose buckets are records' ids, shown by their
+ * records' titles. Without one, a bucket shows its key as the server returns it.
+ */
+export const FACET_WIDGETS: readonly string[] = ['document-link'];
 
 /** The keys each part of a queue may hold, which its JSON Schema must list too. */
 export const QUEUE_V2_KEYS = { queue: QUEUE_KEYS, facet: FACET_KEYS } as const;
@@ -63,6 +70,19 @@ function facets(c: Checker, value: unknown): void {
     }
     c.unknownKeys(facet, FACET_KEYS, at);
     c.label(facet, at);
+    if ('widget' in facet) {
+      const widget = facet['widget'];
+      if (typeof widget !== 'string')
+        c.add(join(at, 'widget'), 'structure', 'a widget is named by its ID');
+      else if (!Object.hasOwn(c.registries.widgets, widget))
+        c.add(join(at, 'widget'), 'unknown', `the widget "${widget}" is not registered`);
+      else if (!FACET_WIDGETS.includes(widget))
+        c.add(
+          join(at, 'widget'),
+          'parameter',
+          `a facet shows its buckets as the server returns them, or through ${FACET_WIDGETS.map((each) => `"${each}"`).join(' or ')}, not "${widget}"`,
+        );
+    }
     if (typeof facet['aggregate'] !== 'string' || !NAME.test(facet['aggregate']))
       c.add(
         join(at, 'aggregate'),

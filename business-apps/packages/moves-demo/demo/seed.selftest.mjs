@@ -271,7 +271,7 @@ function standIn({
             ? {}
             : {
                 dmg_state_agg: { buckets: buckets(found, 'dmg:state') },
-                dmg_moveNumber_agg: { buckets: buckets(found, 'dmg:moveNumber') },
+                dmg_move_agg: { buckets: buckets(found, 'dmg:move') },
               };
         }
         const answer = { ...page(found, index), ...(aggregations ? { aggregations } : {}) };
@@ -635,7 +635,7 @@ await against({ noAggregates: true }, async ({ run }) => {
   expect(
     status === 1 &&
       /answers no aggregate dmg_state_agg/.test(output) &&
-      /answers no aggregate dmg_moveNumber_agg/.test(output),
+      /answers no aggregate dmg_move_agg/.test(output),
     "open claims answered with no aggregate fail the run: the queue's facets would not show",
     output,
   );

@@ -240,7 +240,11 @@ describe('a queue', () => {
   it("passes a sound one, with the platform's row and bulk actions", () => {
     const sound = queue({
       parameters: ['Claim', 30, true],
-      facets: [{ aggregate: 'claim_type_agg', labelKey: 'payers.facet.type' }],
+      facets: [
+        { aggregate: 'claim_type_agg', labelKey: 'payers.facet.type' },
+        // An aggregate on a reference, its buckets shown by their records' titles.
+        { aggregate: 'claim_member_agg', label: 'Member', widget: 'document-link' },
+      ],
       rowActions: ['app.rowActions.download'],
       bulkActions: ['app.bulkActions.downloadZip'],
       visibleWhen: 'app.rules.isAdministrator',
@@ -272,6 +276,43 @@ describe('a queue', () => {
       input: queue({ facets: [{ aggregate: '1st' }] }),
       found: [
         `facets[0].aggregate: needs the name of one of the page provider's aggregates [structure]`,
+      ],
+    },
+    {
+      what: "a facet's buckets through a widget that does not show them",
+      input: queue({ facets: [{ aggregate: 'claim_adjuster_agg', widget: 'user' }] }),
+      found: [
+        'facets[0].widget: a facet shows its buckets as the server returns them, or through "document-link", not "user" [parameter]',
+      ],
+    },
+    {
+      what: "a facet's buckets through a widget nobody registered, or no widget's name",
+      input: queue({
+        facets: [
+          { aggregate: 'claim_member_agg', widget: 'record-title' },
+          { aggregate: 'claim_type_agg', widget: ['document-link'] },
+        ],
+      }),
+      found: [
+        'facets[0].widget: the widget "record-title" is not registered [unknown]',
+        'facets[1].widget: a widget is named by its ID [structure]',
+      ],
+    },
+    {
+      what: 'a sort on a reference a column shows through show',
+      input: queue({
+        columns: [
+          'claim:number',
+          {
+            field: 'claim:member',
+            widget: 'document-link',
+            parameters: { types: ['Member'], show: 'member:plan' },
+          },
+        ],
+        sort: [{ field: 'claim:member', order: 'asc' }],
+      }),
+      found: [
+        `sort[0].field: a column shows claim:member through "show", so the records cannot be sorted by it: they would be ordered by the linked record's stored id [parameter]`,
       ],
     },
     {

@@ -130,6 +130,21 @@ way.
     bindings are then the only control, and a binding cannot check parameters.
   - **P3, the parity plan's decision,** is followed as it stands: a per-deployment allow-list.
 
+- **4, a rule over two dates, a linked record's property, and a facet's records (26 November
+  2026).** Built on decision 4's settled shape, for the moves kit's build
+  ([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8 feedback", items 2 to
+  4). One rule joins the registered set, `app.rules.dateAfter`, a rule on two of the record's
+  values and a number of days, in code and reviewed with this pull request
+  ([layout-v2.md](layout-v2.md), section 5). A rule reading a computation was asked for "if it
+  fits decision 4's shape" and is not built: it would let rules and computations nest in each
+  other, which is the expression language the decision refused, and section 5 says why. `show` on
+  `document-link` (section 12) and a facet's `"widget": "document-link"`
+  ([app-definition-v2.md](app-definition-v2.md), section 4) are widgets' parameters, not rules or
+  computations: they read the linked records through the REST API as the reader. The open security
+  review of decision 4's set, item 4 above, covers the new rule ([security-reviews.md](security-reviews.md)); it waits until the app is
+  finished, as every security review does. What changes if the review goes another way: the rule
+  is unregistered, and the moves kit's late-filing banner goes, a minor version below 1.0.0.
+
 - **B and E, the app registry's first version (24 November 2026).** Built against the
   recommendations: `nuxeo-agentic-core` carries the registry, as a runtime essential (B), and it
   serves app definitions after sign-in, to the groups each app's `app.json` names (E). Tenants are
