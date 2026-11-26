@@ -141,7 +141,7 @@ way.
   `document-link` (section 12) and a facet's `"widget": "document-link"`
   ([app-definition-v2.md](app-definition-v2.md), section 4) are widgets' parameters, not rules or
   computations: they read the linked records through the REST API as the reader. The open security
-  review of decision 4's set, item 4 above, covers the new rule; it waits until the app is
+  review of decision 4's set, item 4 above, covers the new rule ([security-reviews.md](security-reviews.md)); it waits until the app is
   finished, as every security review does. What changes if the review goes another way: the rule
   is unregistered, and the moves kit's late-filing banner goes, a minor version below 1.0.0.
 
