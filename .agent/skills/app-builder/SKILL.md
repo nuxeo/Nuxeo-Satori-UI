@@ -303,7 +303,8 @@ Then call `preview_package` with the package folder, as `validate_package`. Read
 
 - **`served`**: false when the pipeline refused the package; its findings are in `validation`.
 - **`open` and `pages`**: the home, each queue, the tasks page, under `http://localhost:4200/#/`. A
-  record page opens on a record of its type: from a queue, a search, or `#/doc/<id>`.
+  record page opens on a record of its type: from a queue, a search, or `#/doc/<id>`. Each layout
+  is named by its mode: the record page, its Properties panel, the Edit form, the Create form.
 - **`notServed`**: what the dev server cannot show, and why: `app.json`, `actions.json`, `modules/`,
   `assets/`.
 - **`devServer`**: whether it answers every file as written. Tell the person when it is not

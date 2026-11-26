@@ -255,7 +255,9 @@ as dev mode would on a server:
    to do. Nothing answering means it is not running.
 5. **It answers with the addresses:** the home, each queue and the tasks page, under
    `<DEV_SERVER_URL>/#/`. A record page opens on a record of its type, which the tool does not look
-   up, since it reads no record: open one from a queue or a search.
+   up, since it reads no record: open one from a queue or a search. Each layout is named by what it
+   draws, by its mode: the record page (`view`), its Properties panel (`metadata`), the Edit form
+   (`edit`) or the Create form (`create`).
 
 The app still signs in to the Nuxeo server the dev server proxies to
 (`apps/nuxeo-ui/proxy.conf.json`), and draws what that server holds: the types, page providers,
