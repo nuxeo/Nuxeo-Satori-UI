@@ -196,6 +196,28 @@ describe('lab mode: reading what each app loaded', () => {
     ]);
     // A layout Web UI asked for and did not get shows nothing.
     expect(view).toEqual(expect.objectContaining({ status: 404, mode: 'view', fields: [] }));
+    // The attachments widget names no property: listed, not held.
+    expect(metadata.unbound).toEqual(['nuxeo-document-attachments']);
+  });
+
+  it('reads every property a widget names, and one it names in an `xpath`', () => {
+    const [layout] = webUiLayout(
+      WEB_UI_LAYOUT.replace(
+        '<nuxeo-document-attachments role="widget" document="[[document]]"></nuxeo-document-attachments>',
+        `<div role="widget"><label>Insurer</label><div>[[document.properties.member:insurer]] ([[document.properties.member:plan]])</div></div>
+    <nuxeo-document-blob role="widget" document="[[document]]" xpath="member:scan"></nuxeo-document-blob>`,
+      ),
+    );
+    expect(layout.fields.map((field) => field.xpath)).toEqual([
+      'dc:title',
+      'dc:expired',
+      'member:email',
+      'member:ssn',
+      'member:insurer',
+      'member:plan',
+      'member:scan',
+    ]);
+    expect(layout.unbound).toEqual([]);
   });
 
   it("reads nothing of a layout Web UI was refused, whatever the answer's body holds", () => {
@@ -420,10 +442,7 @@ describe('lab mode: the request-log rule', () => {
 
   it('compares nothing when what either app showed could not be read, rather than holding less', () => {
     for (const [web, app] of [
-      [
-        webUi({ unreadable: ['its layout /x was loaded, and its answer could not be read: gone'] }),
-        newApp(['member:email']),
-      ],
+      [webUi({ unreadable: ['its layout /x could not be read: gone'] }), newApp(['member:email'])],
       [webUi(), newApp(['member:email'], { unreadable: ['its page could not be read: gone'] })],
     ] as const) {
       const comparison = compareDocument(DOCUMENT, web, app);
@@ -442,6 +461,7 @@ describe('lab mode: the request-log rule', () => {
   it('lists the enrichers, page providers, other endpoints and refused requests side by side', () => {
     const listing = compareDocument(DOCUMENT, webUi(), newApp(['member:email'])).listing.join('\n');
     expect(listing).toContain("The document's enrichers, asked by both: permissions");
+    expect(listing).toContain('a field naming no property, not held: nuxeo-document-attachments');
     expect(listing).toContain("The document's enrichers, by Web UI only: breadcrumb, hasContent");
     expect(listing).toContain("The document's enrichers, by the new app only: acls");
     expect(listing).toContain(
@@ -459,8 +479,54 @@ describe('lab mode: the request-log rule', () => {
     const comparison = compareDocument(DOCUMENT, webUi({ layouts: [] }), newApp([]));
     expect(comparison.checks[1].findings).toEqual([]);
     expect(comparison.listing).toContain(
-      "Web UI has no document layout for Member on this server: its page shows none of the document's own properties, so the rule holds none of them",
+      "Web UI has no document layout for Member on this server, so the rule holds none of the document's properties: what Web UI's page shows outside its layouts, such as its info rows, it does not hold yet",
     );
+  });
+
+  it('compares nothing while a page was still sending, or a layout could not be read', () => {
+    for (const [web, app] of [
+      [webUi({ unsettled: 'the page was still sending after 60 s' }), newApp(['member:email'])],
+      [webUi(), newApp(['member:email'], { unsettled: 'the page did not load within 60 s' })],
+      [
+        webUi({
+          layouts: [
+            ...webUiLayout(),
+            {
+              path: '/nuxeo/ui/document/member/nuxeo-member-edit-layout.html',
+              status: 0,
+              mode: 'edit',
+              fields: [],
+              unreadable: 'net::ERR_FAILED',
+            },
+          ],
+        }),
+        newApp(['member:email']),
+      ],
+    ] as const) {
+      const comparison = compareDocument(DOCUMENT, web, app);
+      expect(comparison.checks.map((check) => check.status)).toEqual(['not run', 'not run']);
+      expect(comparison.checks[1].reason).toMatch(
+        /^Not compared, because lab mode could not read all/,
+      );
+    }
+  });
+
+  it("does not take a form's layout file as one the document's page can show", () => {
+    const form = appLayouts(
+      [
+        {
+          path: '/agentic-ui-config/layouts/Member/edit.layout.json',
+          status: 200,
+          body: Buffer.from(
+            JSON.stringify({ version: 1, sections: [{ id: 'f', fields: ['member:email'] }] }),
+          ),
+        },
+      ],
+      'Member',
+    );
+    expect(findingsOf(webUi(), newApp([], { layouts: form }))).toEqual([
+      expect.stringContaining('Web UI shows member:email'),
+    ]);
   });
 });
 
@@ -478,9 +544,30 @@ describe("lab mode: the rows the new app's pages draw themselves", () => {
       [...new Set([...rows, 'dc:title', 'note:mime_type'])].sort(),
     );
     expect(panel).toContain('readonly format = input(');
-    expect(
-      read('libs/features/document-detail/src/lib/document-detail/document-detail.html'),
-    ).toContain('[format]="isNoteDocument() ? noteFormatDisplay() : \'\'"');
+    const page = read('libs/features/document-detail/src/lib/document-detail/document-detail.html');
+    expect(page).toContain('[format]="isNoteDocument() ? noteFormatDisplay() : \'\'"');
+
+    // Each row is drawn: the computed value that reads it is used in the panel's template.
+    const template = read(
+      'libs/shared/satori-components/src/lib/properties-panel/properties-panel.component.html',
+    );
+    const computedOf = (xpath: string): string | undefined =>
+      [...panel.matchAll(/readonly (\w+) = computed\(([\s\S]*?)\n {2}\}?\)?;/g)].find((match) =>
+        match[2].includes(`props()['${xpath}']`),
+      )?.[1];
+    for (const row of rows) {
+      const name = computedOf(row);
+      expect(name, `${row} is read by a computed value`).toBeDefined();
+      expect(template, `${row} is drawn by ${name}()`).toContain(`${name}()`);
+    }
+    expect(template).toContain('{{ doc.title }}');
+    expect(template).toContain('format()');
+
+    // Lab mode takes the page for the document page by its header, drawn once the document is.
+    expect(page.indexOf('class="detail-header"')).toBeGreaterThan(
+      page.indexOf('} @else if (doc()) {'),
+    );
+    expect(page.indexOf('} @else if (doc()) {')).toBeGreaterThan(page.indexOf('@if (loading())'));
   });
 
   it("is Browse's info panel, less its State row, which shows dc:nature under another name", () => {
@@ -501,5 +588,8 @@ describe("lab mode: the rows the new app's pages draw themselves", () => {
       [...new Set([...rows, 'dc:title', 'nxtag:tags'])].sort(),
     );
     expect(DRAWN_BY_THE_PAGE.browse.has('dc:nature')).toBe(false);
+    // Lab mode takes the page for Browse by the button that opens its info panel.
+    expect(html).toContain('class="panel-toggle-btn"');
+    expect(html).toContain('(click)="togglePanel()"');
   });
 });

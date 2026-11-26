@@ -71,7 +71,7 @@ export function checkModel(input: HarnessInput): CheckOutcome {
     findings,
     ...(labels.length > 0
       ? {
-          rest: `${labels.length} ${labels.length === 1 ? 'name rests' : 'names rest'} on the platform's own model, which only the migration server can confirm: ${listed(labels)}`,
+          rest: `${labels.length} ${labels.length === 1 ? 'name rests' : 'names rest'} on the platform's own model, which only a server can confirm, such as the migration server, in lab mode: ${listed(labels)}`,
         }
       : {}),
   };

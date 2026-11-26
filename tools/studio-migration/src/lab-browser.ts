@@ -54,6 +54,8 @@ export function refusal(method: string, url: URL): string | null {
     /^\/nuxeo\/(?:nxfile|nxbigfile|nxthumb|nxpicsfile|nxdoc)\//.test(path)
   )
     return 'a download, which the server may write to its audit log';
+  // The new app signs out of any server session as it starts; that ends a session on the server.
+  if (/^\/nuxeo\/logout\/?$/.test(path)) return 'a sign-out, which ends a session on the server';
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return null;
   const operation = /\/automation\/([^/]+)$/.exec(path)?.[1];
   let name = operation;
@@ -304,6 +306,8 @@ export async function recordApp(
     });
 
     const page = await context.newPage();
+    /** What lab mode could not read of what the app showed, which stops the comparison. */
+    const unreadable: string[] = [];
     const recorded: Promise<RecordedRequest | null>[] = [];
     const layoutFiles: Promise<LayoutFile>[] = [];
     let inFlight = 0;
@@ -334,7 +338,16 @@ export async function recordApp(
           : appLayoutMode(document.type, at.pathname);
       // A layout whose answer cannot be read is kept, said to be unreadable: dropped, it would
       // make what Web UI shows, or what the new app can show, look smaller than it is.
-      if (layout !== null && !failed)
+      if (layout !== null && failed)
+        layoutFiles.push(
+          Promise.resolve({
+            path: at.pathname,
+            status: 0,
+            body: Buffer.alloc(0),
+            unreadable: refused.get(request) ?? request.failure()?.errorText ?? 'no answer',
+          }),
+        );
+      else if (layout !== null)
         layoutFiles.push(
           (async (): Promise<LayoutFile> => {
             let status = 0;
@@ -403,12 +416,16 @@ export async function recordApp(
       } = {};
       const answer = at.pathname.startsWith('/nuxeo/api/') ? await jsonOf(response) : undefined;
       const record: RecordedRequest = { ...base, status };
+      const theDocument =
+        isObject(answer) && answer['entity-type'] === 'document' && answer['uid'] === document.uid;
+      // A read of the document answered 200 that is not the document, or not read at all, would
+      // hold the rule to no property: it stops the comparison instead.
+      if (asksForTheDocument(record, document) && status === 200 && !theDocument)
+        unreadable.push(
+          `its answer for the document, ${record.method} ${record.path}, could not be read as the document`,
+        );
       if (isObject(answer)) {
-        if (
-          asksForTheDocument(record, document) &&
-          answer['entity-type'] === 'document' &&
-          answer['uid'] === document.uid
-        )
+        if (asksForTheDocument(record, document) && theDocument)
           extra.documentProperties = Object.keys(
             isObject(answer['properties']) ? answer['properties'] : {},
           );
@@ -437,14 +454,12 @@ export async function recordApp(
         unsettled = `the page was still sending after ${settleMs / 1000} s; what it sent until then is recorded`;
     }
 
-    /** What lab mode could not read of what the app showed, which stops the comparison. */
-    const unreadable: string[] = [];
     let pageSeen: { kind: AppPage; fields: string[] } | undefined;
     if (app === 'new-app') {
       try {
         pageSeen = await page.evaluate<{ kind: AppPage; fields: string[] }>(
           `({
-            kind: document.querySelector('lib-document-detail') ? 'document' : document.querySelector('lib-browse') ? 'browse' : 'other',
+            kind: document.querySelector('lib-document-detail .detail-header') ? 'document' : document.querySelector('lib-browse .panel-toggle-btn') ? 'browse' : 'other',
             fields: [...document.querySelectorAll('[data-field]')].map((element) => element.getAttribute('data-field')).filter((field) => field && field.includes(':')),
           })`,
         );
@@ -467,9 +482,7 @@ export async function recordApp(
     const files = await Promise.all(layoutFiles);
     for (const file of files)
       if (file.unreadable !== undefined)
-        unreadable.push(
-          `its layout ${file.path} was loaded, and its answer could not be read: ${file.unreadable}`,
-        );
+        unreadable.push(`its layout ${file.path} could not be read: ${file.unreadable}`);
     return {
       app,
       url,

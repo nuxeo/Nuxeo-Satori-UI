@@ -300,6 +300,20 @@ describe('lab mode: its reads of the server', () => {
     ]);
   });
 
+  it('sends back the session the server opened, so that its reads sign in once', async () => {
+    const cookies: (string | undefined)[] = [];
+    const reads = serverReads('http://nuxeo.test:8080', 'Basic eA==', async (_url, init) => {
+      cookies.push((init.headers as Record<string, string>)['cookie']);
+      return new Response('{}', {
+        status: 200,
+        headers: { 'set-cookie': 'JSESSIONID=abc123; Path=/nuxeo; HttpOnly' },
+      });
+    });
+    await reads.get('/nuxeo/api/v1/me');
+    await reads.get('/nuxeo/api/v1/config/types');
+    expect(cookies).toEqual([undefined, 'JSESSIONID=abc123']);
+  });
+
   it('sends no header when it is given none', async () => {
     const calls: RequestInit[] = [];
     const reads = serverReads('http://app.test:4297', null, async (_url, init) => {

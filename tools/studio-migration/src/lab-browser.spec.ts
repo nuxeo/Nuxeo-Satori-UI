@@ -29,6 +29,15 @@ describe('lab mode: what it refuses to send', () => {
     expect(refusal('POST', at('/nuxeo/site/automation/Repository.Query'))).toBeNull();
   });
 
+  it('refuses a sign-out, which ends a session on the server', () => {
+    expect(refusal('GET', at('/nuxeo/logout'))).toBe(
+      'a sign-out, which ends a session on the server',
+    );
+    expect(refusal('GET', at('/nuxeo/logout/'))).toBe(
+      'a sign-out, which ends a session on the server',
+    );
+  });
+
   it('refuses every other operation, every other method, and every download', () => {
     expect(refusal('POST', at('/nuxeo/api/v1/automation/User.GetUserWorkspace'))).toBe(
       'the operation User.GetUserWorkspace, which may write',
@@ -45,6 +54,10 @@ describe('lab mode: what it refuses to send', () => {
       '/nuxeo/api/v1/id/f00d/@preview',
       '/nuxeo/nxfile/default/f00d/file:content/a.pdf',
       '/nuxeo/nxthumb/default/f00d/thumb:thumbnail/a.png',
+      '/nuxeo/nxbigfile/default/f00d/file:content/a.pdf',
+      '/nuxeo/nxpicsfile/default/f00d/Medium:content/a.png',
+      '/nuxeo/nxdoc/default/f00d/view_documents',
+      '/nuxeo/api/v1/id/f00d/@convert',
     ])
       expect(refusal('GET', at(path))).toBe(
         'a download, which the server may write to its audit log',
@@ -166,6 +179,10 @@ interface Scripted {
   readonly body?: unknown;
   /** Its answer's body cannot be read, as after the page moved on. */
   readonly bodyGone?: boolean;
+  /** It never finishes, as a request still in flight. */
+  readonly hangs?: boolean;
+  /** It fails on the network, with this error. */
+  readonly fails?: string;
 }
 
 /** What a fake browser saw: each request as it went out, and what each route did with it. */
@@ -174,6 +191,7 @@ interface Seen {
   readonly aborted: string[];
   readonly fulfilled: { url: string; body: string }[];
   readonly initScripts: string[];
+  readonly evaluated: string[];
 }
 
 /**
@@ -185,7 +203,7 @@ function fakeBrowser(
   script: readonly Scripted[],
   page: { kind: string; fields: string[] } | 'unreadable',
 ): { browser: PwBrowser; seen: Seen } {
-  const seen: Seen = { continued: [], aborted: [], fulfilled: [], initScripts: [] };
+  const seen: Seen = { continued: [], aborted: [], fulfilled: [], initScripts: [], evaluated: [] };
   const browser = {
     async newContext() {
       let handler: ((route: unknown) => Promise<void>) | undefined;
@@ -206,7 +224,8 @@ function fakeBrowser(
             on(event: string, listener: (request: unknown) => void) {
               (listeners[event] ??= []).push(listener);
             },
-            async evaluate() {
+            async evaluate(script: string) {
+              seen.evaluated.push(script);
               if (page === 'unreadable') throw new Error('Execution context was destroyed');
               return page;
             },
@@ -266,7 +285,13 @@ function fakeBrowser(
                     answer = { status: options.status, text: options.body };
                   },
                 });
-                emit(failure === null ? 'requestfinished' : 'requestfailed', request);
+                if (step.fails) {
+                  failure = step.fails;
+                  answer = null;
+                }
+                // A request that never ends keeps the page sending.
+                if (!step.hangs)
+                  emit(failure === null ? 'requestfinished' : 'requestfailed', request);
               }
             },
           };
@@ -412,7 +437,7 @@ describe('lab mode: recording an app', () => {
     );
     const recording = await recordApp(web.browser, 'web-ui', TARGET, USER, DOCUMENT, OPTIONS);
     expect(recording.unreadable).toEqual([
-      'its layout /nuxeo/ui/document/note/nuxeo-note-view-layout.html was loaded, and its answer could not be read: Response body is unavailable',
+      'its layout /nuxeo/ui/document/note/nuxeo-note-view-layout.html could not be read: Response body is unavailable',
     ]);
     expect(recording.layouts).toEqual([expect.objectContaining({ status: 200, fields: [] })]);
 
@@ -431,6 +456,88 @@ describe('lab mode: recording an app', () => {
       'its page could not be read: Execution context was destroyed',
     ]);
     expect(unread.page).toBeUndefined();
+  });
+
+  it('keeps a read of the document it could not read as the document, and a layout that failed, as unreadable', async () => {
+    const web = fakeBrowser(
+      [
+        {
+          method: 'POST',
+          url: 'http://nuxeo.test:8080/nuxeo/api/v1/automation/login',
+          body: { username: 'alice' },
+        },
+        {
+          url: 'http://nuxeo.test:8080/nuxeo/api/v1/id/f00d',
+          body: '<html>not the document</html>',
+        },
+      ],
+      { kind: 'other', fields: [] },
+    );
+    const recording = await recordApp(web.browser, 'web-ui', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(recording.unreadable).toEqual([
+      'its answer for the document, GET /nuxeo/api/v1/id/f00d, could not be read as the document',
+    ]);
+
+    const failing = fakeBrowser(
+      [
+        {
+          method: 'POST',
+          url: 'http://nuxeo.test:8080/nuxeo/api/v1/automation/login',
+          body: { username: 'alice' },
+        },
+        {
+          url: 'http://nuxeo.test:8080/nuxeo/ui/document/note/nuxeo-note-view-layout.html',
+          kind: 'xhr',
+          fails: 'net::ERR_FAILED',
+        },
+      ],
+      { kind: 'other', fields: [] },
+    );
+    const failed = await recordApp(failing.browser, 'web-ui', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(failed.unreadable).toEqual([
+      'its layout /nuxeo/ui/document/note/nuxeo-note-view-layout.html could not be read: net::ERR_FAILED',
+    ]);
+  });
+
+  it('says when the page is still sending at the end of its wait', async () => {
+    const { browser } = fakeBrowser(
+      [
+        {
+          method: 'POST',
+          url: 'http://nuxeo.test:8080/nuxeo/api/v1/automation/login',
+          body: { username: 'alice' },
+        },
+        { url: 'http://nuxeo.test:8080/nuxeo/api/v1/task', hangs: true },
+      ],
+      { kind: 'other', fields: [] },
+    );
+    const recording = await recordApp(browser, 'web-ui', TARGET, USER, DOCUMENT, {
+      ...OPTIONS,
+      settleMs: 50,
+    });
+    expect(recording.unsettled).toBe(
+      'the page was still sending after 0.05 s; what it sent until then is recorded',
+    );
+  });
+
+  it("tells the new app's pages apart by what each draws once its document is open", async () => {
+    const { browser, seen } = fakeBrowser(
+      [
+        {
+          url: 'http://app.test:4297/nuxeo/api/v1/me',
+          headers: { authorization: AUTHORIZATION },
+          body: { id: 'alice' },
+        },
+      ],
+      { kind: 'document', fields: [] },
+    );
+    await recordApp(browser, 'new-app', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(seen.evaluated[0]).toContain(
+      "document.querySelector('lib-document-detail .detail-header') ? 'document'",
+    );
+    expect(seen.evaluated[0]).toContain(
+      "document.querySelector('lib-browse .panel-toggle-btn') ? 'browse'",
+    );
   });
 
   it('puts a control into the new app alone: a property withheld from its answers, or fewer schemas asked', async () => {

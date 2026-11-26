@@ -18,7 +18,8 @@
  * Exit codes: 0, every document compared and none differs; 1, a difference, a failed check, a
  * document not compared, or something could not be read or written; 2, the command was wrong, or
  * the environment is: the credentials, Playwright, a server that does not answer as the user, or a
- * document whose requests did not all run as the user.
+ * document whose requests did not all run as the user. With `--control`, 0 once the rule reported
+ * the control's finding on a document, and 1 when it reported it on none.
  */
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -276,6 +277,9 @@ export async function lab(
     );
 
     if (compared.some((entry) => entry.comparison.identityFailed)) return 2;
+    // A control run is the control's: 0 once the rule reported it, 1 when it did not.
+    if (control)
+      return compared.some((entry) => controlReported(control, entry.comparison)) ? 0 : 1;
     const failed = [
       ...compared.flatMap((entry) => entry.comparison.checks),
       ...(halves?.checks ?? []),
@@ -441,11 +445,33 @@ export function labText(run: {
       uncompared ? `; ${uncompared} not compared, each saying why` : ''
     }`,
   );
-  if (run.control)
+  const { control } = run;
+  if (control) {
+    const reported = run.compared.filter((comparison) =>
+      controlReported(control, comparison),
+    ).length;
     lines.push(
-      differing > 0
-        ? `The control was reported on ${differing} of ${run.compared.length}.`
+      reported > 0
+        ? `The control was reported, by the finding it causes, on ${reported} of ${run.compared.length}.`
         : 'The control was reported on none: either it found nothing to break there, or the rule missed it.',
     );
+  }
   return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Whether the rule reported the finding a control causes, rather than any finding: a document can
+ * differ for another reason, which says nothing of the control.
+ */
+export function controlReported(control: LabControl, comparison: DocumentComparison): boolean {
+  const findings = comparison.checks.find((check) => check.number === 7)?.findings ?? [];
+  return control.kind === 'withhold-property'
+    ? findings.some(
+        (finding) =>
+          finding.startsWith(`Web UI shows ${control.xpath} (`) &&
+          finding.endsWith('the new app does not fetch it'),
+      )
+    : findings.some((finding) =>
+        /^Web UI asks for the document with (every schema|the schema )/.test(finding),
+      );
 }

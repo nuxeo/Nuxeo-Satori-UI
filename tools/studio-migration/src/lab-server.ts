@@ -2,7 +2,8 @@
  * What lab mode reads from the server itself, from Node, before and beside the browsers: who the
  * credentials are, each document, the platform's model for check 3, and whether the server serves
  * the Studio package and the new app its conversion. Every read is a `GET` to one origin, with no
- * redirect followed, so nothing is written and nothing is sent anywhere else.
+ * redirect followed, so nothing is written and nothing is sent anywhere else; the session the
+ * server opens is sent back, so that the reads sign in once.
  */
 import {
   PACKAGED_WIDGETS,
@@ -46,6 +47,9 @@ export function serverReads(
   fetchImpl: Fetch = (url, init) => fetch(url, init),
 ): ServerReads {
   const base = new URL(origin).origin;
+  // The session the server opens on the first read, sent back on the next, so that the reads
+  // sign in once rather than once each. Only this origin's, and kept for these reads alone.
+  const cookies = new Map<string, string>();
   return {
     origin: base,
     async get(path, headers = {}) {
@@ -62,6 +66,9 @@ export function serverReads(
             accept: 'application/json, text/html, */*',
             ...headers,
             ...(authorization === null ? {} : { authorization }),
+            ...(cookies.size > 0
+              ? { cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; ') }
+              : {}),
           },
           redirect: 'manual',
           signal: AbortSignal.timeout(READ_TIMEOUT_MS),
@@ -70,6 +77,11 @@ export function serverReads(
         throw new LabServerError(
           `${base}${url.pathname} did not answer: ${(error as Error).message}`,
         );
+      }
+      for (const set of response.headers.getSetCookie()) {
+        const pair = set.slice(0, set.includes(';') ? set.indexOf(';') : set.length);
+        const equals = pair.indexOf('=');
+        if (equals > 0) cookies.set(pair.slice(0, equals).trim(), pair.slice(equals + 1).trim());
       }
       return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
     },

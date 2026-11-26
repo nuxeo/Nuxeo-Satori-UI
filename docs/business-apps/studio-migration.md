@@ -248,9 +248,12 @@ document's page:
 1. **The document:** the new app asks for it, as Web UI does, and is answered as Web UI is.
 2. **Its schemas:** every schema Web UI asks for it with, the new app asks for too.
 3. **Its properties: every property Web UI fetches and shows, the new app fetches and can show.**
-   Web UI shows what a document layout it loaded binds outside every condition; the new app can
-   show what its page holds a field of, what a layout file it loaded lists, and what its page draws
-   itself.
+   Web UI shows what a field of a document layout it loaded names outside every condition; the new
+   app can show what its page holds a field of, what a `view` or `metadata` layout file it loaded
+   lists, and what its page draws itself.
+
+A document lab mode could not compare in full, as the user, with both pages settled and all each
+showed read, is never a pass.
 
 The enrichers, page providers and other requests are listed side by side, and held to nothing yet.
 Given a package and its conversion, lab mode also runs check 3's server half whole, on the server's

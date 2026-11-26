@@ -89,7 +89,23 @@ function recorder(
     const recording: AppRecording = {
       app,
       url: 'http://x/',
-      requests: [me, read(document, ['dc:title', 'dc:description'])],
+      // A control acts on the new app's side, as recordApp puts it there.
+      requests: [
+        me,
+        app === 'new-app' && options.control?.kind === 'withhold-property'
+          ? read(
+              document,
+              ['dc:title', 'dc:description'].filter(
+                (name) => name !== (options.control as { xpath: string }).xpath,
+              ),
+            )
+          : {
+              ...read(document, ['dc:title', 'dc:description']),
+              ...(app === 'new-app' && options.control?.kind === 'narrow-schemas'
+                ? { asks: { properties: options.control.schemas } }
+                : {}),
+            },
+      ],
       layouts:
         app === 'web-ui'
           ? [
@@ -258,26 +274,53 @@ describe('lab: the command', () => {
     expect(out.printed[0]).toContain('the new app: its page could not be read: gone');
   });
 
-  it('says, with a control, whether the rule reported it', async () => {
-    const caught = io();
-    expect(
-      await lab(
-        ['/ws/folder', '--out', fresh(), '--control', 'withhold-property=dc:description'],
-        caught,
-        deps({ record: recorder({ [FOLDER.uid]: 'browse' }) }),
-      ),
-    ).toBe(1);
-    expect(caught.printed[0]).toContain('Control: withhold-property=dc:description');
-    expect(caught.printed[0]).toContain('The control was reported on 1 of 1.');
+  it("says, with a control, whether the rule reported the control's own finding, and exits by it", async () => {
+    for (const control of ['withhold-property=dc:description', 'narrow-schemas=dublincore']) {
+      const caught = io();
+      expect(await lab([NOTE.uid, '--out', fresh(), '--control', control], caught, deps())).toBe(0);
+      expect(caught.printed[0]).toContain(`Control: ${control}`);
+      expect(caught.printed[0]).toContain(
+        'The control was reported, by the finding it causes, on 1 of 1.',
+      );
+    }
+    // A property Web UI does not show: nothing to break, so the control is reported on none.
     const missed = io();
     expect(
       await lab(
-        [NOTE.uid, '--out', fresh(), '--control', 'narrow-schemas=dublincore'],
+        [NOTE.uid, '--out', fresh(), '--control', 'withhold-property=dc:nature'],
         missed,
         deps(),
       ),
-    ).toBe(0);
+    ).toBe(1);
     expect(missed.printed[0]).toContain('The control was reported on none');
+    // A document that differs for another reason does not count as the control reported.
+    const other = io();
+    expect(
+      await lab(
+        ['/ws/folder', '--out', fresh(), '--control', 'withhold-property=dc:nature'],
+        other,
+        deps({ record: recorder({ [FOLDER.uid]: 'browse' }) }),
+      ),
+    ).toBe(1);
+    expect(other.printed[0]).toContain(' 7  What the server is asked   FAIL');
+    expect(other.printed[0]).toContain('The control was reported on none');
+    // Nor does another property the new app does not fetch, the finding of the same kind.
+    const notFetching: LabDeps['record'] = async (...args) => {
+      const recording = await recorder({})(...args);
+      return recording.app === 'new-app'
+        ? { ...recording, requests: [me, read(NOTE, ['dc:title'])] }
+        : recording;
+    };
+    const another = io();
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh(), '--control', 'withhold-property=dc:nature'],
+        another,
+        deps({ record: notFetching }),
+      ),
+    ).toBe(1);
+    expect(another.printed[0]).toContain('Web UI shows dc:description');
+    expect(another.printed[0]).toContain('The control was reported on none');
   });
 
   it('runs the server halves for a package and its conversion: check 3 whole, and says what 5, 6 and 7 need', async () => {

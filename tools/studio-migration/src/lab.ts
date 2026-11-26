@@ -28,6 +28,7 @@
 import type { CheckResult } from './harness';
 import { layoutFields } from './app-walk';
 import { inventory } from './inventory';
+import { elementsOf, parseHtml } from './markup';
 import type { StudioPackage } from './studio-package';
 
 /** The two apps lab mode opens a document in. */
@@ -79,6 +80,10 @@ export interface LoadedLayout {
   /** The mode, from its name: `view`, `metadata`, `edit`. */
   readonly mode: string;
   readonly fields: readonly { readonly xpath: string; readonly conditional: boolean }[];
+  /** Web UI: the elements of its fields that name no property, such as a viewer: not held. */
+  readonly unbound?: readonly string[];
+  /** Why what it holds could not be read, which stops the document's comparison. */
+  readonly unreadable?: string;
 }
 
 /** The new app's pages, as lab mode tells them apart. */
@@ -135,6 +140,9 @@ export const DRAWN_BY_THE_PAGE: Readonly<Record<AppPage, ReadonlySet<string>>> =
   other: new Set(),
 };
 
+/** The modes of the new app's layout files its document page shows: the record page and its panel. */
+const SHOWN_MODES: ReadonlySet<string> = new Set(['view', 'metadata']);
+
 /** The headers a request names the schemas it wants in. */
 const PROPERTY_HEADERS = ['properties', 'x-nxproperties', 'x-nxdocumentproperties'];
 /** The headers a request names a document's enrichers in. */
@@ -189,23 +197,69 @@ export function webUiLayouts(
     bundleFiles,
   };
   const read = bundleFiles.size > 0 ? inventory(pkg).layouts : [];
-  return files.flatMap((file) => {
+  return files.flatMap((file): LoadedLayout[] => {
     const mode = webUiLayoutMode(type, file.path);
     if (mode === null) return [];
     const layout = read.find((candidate) => candidate.path.endsWith(webUiLayoutPath(type, mode)));
+    // Only a layout answered 200 was given to the inventory, so another has no reading here.
+    if (!layout) return [{ path: file.path, status: file.status, mode, fields: [] }];
+    // The inventory reads a field's first binding and its conditions. A widget can name more than
+    // one property, or name it in an `xpath`, as `nuxeo-document-blob` does: each is read here,
+    // from the same widgets, in the same order, and given the conditions the inventory found.
+    const widgets = widgetProperties(file.body.toString('utf8'));
+    if (widgets.length !== layout.fields.length)
+      return [
+        {
+          path: file.path,
+          status: file.status,
+          mode,
+          fields: [],
+          unreadable: `the inventory read ${layout.fields.length} fields where it has ${widgets.length} widgets`,
+        },
+      ];
     return [
       {
         path: file.path,
         status: file.status,
         mode,
-        fields: (layout?.fields ?? []).flatMap((field) =>
-          field.binding !== null && /^[\w-]+:[\w-]+$/.test(field.binding)
-            ? [{ xpath: field.binding, conditional: field.conditions.length > 0 }]
-            : [],
+        fields: layout.fields.flatMap((field, index) =>
+          widgets[index].map((xpath) => ({ xpath, conditional: field.conditions.length > 0 })),
+        ),
+        unbound: layout.fields.flatMap((field, index) =>
+          widgets[index].length === 0 ? [field.element] : [],
         ),
       },
     ];
   });
+}
+
+/**
+ * The properties each field of a Web UI layout names, its elements marked `role="widget"` in the
+ * file's order, as the inventory finds them: every `document.properties.<prefix>:<name>` in its
+ * attributes, text and templates, and each `xpath` attribute that is a property.
+ */
+function widgetProperties(html: string): string[][] {
+  return elementsOf(parseHtml(html))
+    .filter((element) => element.getAttribute('role') === 'widget')
+    .map((widget) => {
+      const elements = [widget, ...elementsOf(widget)];
+      const texts = [
+        ...elements.flatMap((element) =>
+          Array.from(element.attributes).map((attribute) => attribute.value),
+        ),
+        widget.textContent ?? '',
+        ...elements
+          .filter((element) => element.localName === 'template')
+          .map((element) => (element as HTMLTemplateElement).content?.textContent ?? ''),
+      ].join('\n');
+      const named = [...texts.matchAll(/document\.properties\.([\w-]+:[\w-]+)/g)].map(
+        (match) => match[1],
+      );
+      const xpaths = elements
+        .map((element) => element.getAttribute('xpath') ?? '')
+        .filter((xpath) => /^[\w-]+:[\w-]+$/.test(xpath));
+      return [...new Set([...named, ...xpaths])];
+    });
 }
 
 /** The new app's layout files for the type, given as it loaded them, by the fields they list. */
@@ -310,15 +364,22 @@ export function compareDocument(
         : 'No screenshot was taken'
     }; the values are not compared yet`,
   };
-  const unread = [
-    ...(web.unreadable ?? []).map((problem) => `Web UI: ${problem}`),
-    ...(app.unreadable ?? []).map((problem) => `the new app: ${problem}`),
-  ];
+  // A page still sending, or one lab mode could not read in full, would hold the rule to less
+  // than either app showed: such a document is not compared.
+  const unread = [web, app].flatMap((recording) => [
+    ...[
+      ...(recording.unreadable ?? []),
+      ...recording.layouts.flatMap((layout) =>
+        layout.unreadable === undefined ? [] : [`its layout ${layout.path}: ${layout.unreadable}`],
+      ),
+      ...(recording.unsettled ? [recording.unsettled] : []),
+    ].map((problem) => `${APP_NAMES[recording.app]}: ${problem}`),
+  ]);
   if (identity.length > 0 || unread.length > 0) {
     const reason =
       identity.length > 0
         ? `Not compared, because not every request ran as the user: ${identity.join('; ')}`
-        : `Not compared, because lab mode could not read all each app showed: ${unread.join('; ')}`;
+        : `Not compared, because lab mode could not read all each app showed, or a page did not settle: ${unread.join('; ')}`;
     return {
       document,
       listing,
@@ -386,10 +447,11 @@ export function compareDocument(
     );
   const webFetched = fetched(webAsks);
   const appFetched = fetched(appAsks);
+  // A layout file for a form, `edit` or `create`, shows nothing on the document's page.
   const appShows = new Set([
     ...(app.page?.fields ?? []),
     ...app.layouts
-      .filter((layout) => layout.status === 200)
+      .filter((layout) => layout.status === 200 && SHOWN_MODES.has(layout.mode))
       .flatMap((layout) => layout.fields.map((field) => field.xpath)),
     ...DRAWN_BY_THE_PAGE[app.page?.kind ?? 'other'],
   ]);
@@ -467,9 +529,10 @@ function listingOf(document: LabDocument, web: AppRecording, app: AppRecording):
         : web.layouts
             .map((layout) => {
               const conditional = layout.fields.filter((field) => field.conditional).length;
+              const unbound = layout.unbound ?? [];
               return `${layoutName(layout.path)} ${layout.status}${
                 layout.status === 200
-                  ? `, binding ${layout.fields.map((field) => field.xpath).join(', ') || 'no property'}${conditional ? `, ${conditional} of them under a condition, not held` : ''}`
+                  ? `, binding ${layout.fields.map((field) => field.xpath).join(', ') || 'no property'}${conditional ? `, ${conditional} of them under a condition, not held` : ''}${unbound.length ? `; ${unbound.length === 1 ? 'a field' : `${unbound.length} fields`} naming no property, not held: ${unbound.join(', ')}` : ''}`
                   : ''
               }`;
             })
@@ -478,7 +541,7 @@ function listingOf(document: LabDocument, web: AppRecording, app: AppRecording):
   );
   if (!web.layouts.some((layout) => layout.status === 200))
     lines.push(
-      `Web UI has no document layout for ${document.type} on this server: its page shows none of the document's own properties, so the rule holds none of them`,
+      `Web UI has no document layout for ${document.type} on this server, so the rule holds none of the document's properties: what Web UI's page shows outside its layouts, such as its info rows, it does not hold yet`,
     );
   const kind = app.page?.kind ?? 'other';
   lines.push(

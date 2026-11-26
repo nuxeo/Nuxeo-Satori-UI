@@ -56,8 +56,9 @@ You need:
 command writes, in a folder outside your copy of the repository, and never commit them to it.
 
 **What the tool does with your package.** It reads it, and only reads it: it never changes the
-file, and runs nothing in it. Scripts in your layouts stay text. It has no code that talks to a
-network, and writes what it finds only into the folder you give it.
+file, and runs nothing in it. Scripts in your layouts stay text. The command talks to no network,
+and writes what it finds only into the folder you give it; only the tool's lab mode, run by the
+team on a server (section 7), talks to one.
 
 ## 2. The one command
 
