@@ -230,3 +230,28 @@
   flex-wrap: wrap;
   column-gap: 8px;
 }
+
+/* A tickable item: its tick box with the item's words, then its state, who and when, under the
+   words, past the box's 40px target. */
+.record-page__checklist-item--tickable {
+  flex-direction: column;
+  gap: 0;
+}
+
+.record-page__checklist-box {
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.record-page__checklist-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  padding-inline-start: 40px;
+  min-width: 0;
+  line-height: 1.4;
+}

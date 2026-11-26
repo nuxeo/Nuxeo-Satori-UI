@@ -751,6 +751,43 @@ describe('a checklist', () => {
       'cards[0].checklist: checklist is an object [structure]',
     ]);
   });
+
+  it('opts in to ticking with tickable, true or false, and nothing else', () => {
+    expect(messages(sound({ tickable: true }))).toEqual([]);
+    expect(messages(sound({ tickable: false }))).toEqual([]);
+    for (const tickable of ['true', 1, null, {}, []])
+      expect(messages(sound({ tickable }))).toEqual([
+        'cards[0].checklist.tickable: tickable is true or false [structure]',
+      ]);
+  });
+
+  it("refuses tickable on a card that is not a checklist's, or beside its checklist", () => {
+    const fieldsCard = { version: 2, cards: [{ id: 'c', fields: ['dc:title'], tickable: true }] };
+    expect(findings(fieldsCard)).toEqual([
+      {
+        path: 'cards[0].tickable',
+        kind: 'unknown',
+        message: '"tickable" is not a key version 2 has',
+      },
+    ]);
+    // On the checklist's card itself, rather than in its checklist: refused the same way.
+    expect(messages(card({ field: 'case:checklist', items }, { tickable: true }))).toEqual([
+      'cards[0].tickable: "tickable" is not a key version 2 has [unknown]',
+    ]);
+    for (const [content, value] of [
+      ['related', { pageProvider: 'p', columns: ['dc:title'], tickable: true }],
+      ['timeline', { tickable: true }],
+      ['comments', { tickable: true }],
+      ['external', { connector: 'core', fields: [{ name: 'policy' }], tickable: true }],
+    ] as const)
+      expect(messages({ version: 2, cards: [{ id: 'c', [content]: value }] })).toEqual([
+        `cards[0].${content}.tickable: "tickable" is not a key version 2 has [unknown]`,
+      ]);
+    // In a form, where a checklist is refused already, there is nothing to tick.
+    expect(messages(sound({ tickable: true }), 'edit')).toEqual([
+      'cards[0].checklist: a checklist belongs in view mode only [structure]',
+    ]);
+  });
 });
 
 describe('a timeline and comments', () => {

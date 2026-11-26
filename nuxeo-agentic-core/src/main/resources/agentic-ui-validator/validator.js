@@ -1583,7 +1583,7 @@ var agenticUiValidator = (function () {
     var REVIEW_KEYS = [];
     var EXTERNAL_KEYS = ["connector", "fields"];
     var EXTERNAL_FIELD_KEYS = ["name", "label", "labelKey", "widget", "parameters", "visibleWhen"];
-    var CHECKLIST_KEYS = ["field", "items"];
+    var CHECKLIST_KEYS = ["field", "items", "tickable"];
     var CHECKLIST_ITEM_KEYS = ["id", "label", "labelKey"];
     var CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
     var CONNECTOR_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -1891,6 +1891,8 @@ var agenticUiValidator = (function () {
             return;
         }
         c.unknownKeys(item, CHECKLIST_KEYS, path);
+        if ("tickable" in item && typeof item["tickable"] !== "boolean")
+            c.add(join(path, "tickable"), "structure", "tickable is true or false");
         var field = item["field"];
         if (typeof field !== "string" || !XPATH.test(field) || field.startsWith("ecm:") || field.startsWith("var:")) {
             c.add(join(path, "field"), "structure", "needs the record's property that holds its items, <prefix>:<name>, never an ecm: or var: name");

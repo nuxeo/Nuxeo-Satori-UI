@@ -351,6 +351,18 @@ describe('readRecordLayout', () => {
         },
       });
       expect(file.cards[0].checklist).toBeNull();
+      // Read-only unless the file opts in.
+      expect(file.cards[1].checklist?.tickable).toBe(false);
+    });
+
+    it('reads the opt-in to ticking, true only when the file says so', () => {
+      expect(
+        read(appeal({ field: 'case:checklist', items, tickable: true })).cards[1],
+      ).toMatchObject({ checklist: { field: 'case:checklist', tickable: true } });
+      expect(
+        read(appeal({ field: 'case:checklist', items, tickable: false })).cards[1].checklist
+          ?.tickable,
+      ).toBe(false);
     });
 
     it('leaves out only its card for a key this build lacks, in it or in an item', () => {

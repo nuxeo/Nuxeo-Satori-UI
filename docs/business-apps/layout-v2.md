@@ -208,7 +208,7 @@ rounds. `{}` turns it on; it takes no option yet:
 | `timeline`          | Or the record's history (section 7), in `view` mode only                                                                                                                                                      |
 | `comments`          | Or the record's comments (section 7), in `view` mode only                                                                                                                                                     |
 | `external`          | Or fields of a record in another system (section 7), in `view` mode only                                                                                                                                      |
-| `checklist`         | Or the items a record must have done, each done or not, with who and when (section 7), in `view` mode only                                                                                                    |
+| `checklist`         | Or the items a record must have done, each done or not, with who and when, ticked on the page where the file says so (section 7), in `view` mode only                                                         |
 
 A card has one of `fields`, `related`, `timeline`, `comments`, `external` and `checklist`.
 
@@ -535,7 +535,8 @@ package contributes, by a key the open record holds, such as a claim's number
 
 **Built on 25 November 2026, for phase 2's demo step 6** ([development plan](development-plan.md)):
 an appeal case with its checklist and timeline. A card can show the items a record must have done,
-each done or not, with who did it and when, in `view` mode:
+each done or not, with who did it and when, in `view` mode. **Since 26 November 2026,** a file may
+let the page tick them, with `"tickable": true`:
 
 ```json
 {
@@ -547,6 +548,7 @@ each done or not, with who did it and when, in `view` mode:
   },
   "checklist": {
     "field": "case:checklist",
+    "tickable": true,
     "items": [
       { "id": "medicalRecords", "labelKey": "payers.appeal.medicalRecords" },
       { "id": "reviewerAssigned", "labelKey": "payers.appeal.reviewerAssigned" },
@@ -556,10 +558,11 @@ each done or not, with who did it and when, in `view` mode:
 }
 ```
 
-| Key     | Meaning                                                                                                                                        |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field` | Required: the record's property that holds the items' state, `"<prefix>:<name>"`, never an `ecm:` or `var:` name                               |
-| `items` | Required: the items, in order, at least one: `{ "id", "label"?, "labelKey"? }`, with a `label` or a `labelKey`, and an `id` unique in the card |
+| Key        | Meaning                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field`    | Required: the record's property that holds the items' state, `"<prefix>:<name>"`, never an `ecm:` or `var:` name                               |
+| `items`    | Required: the items, in order, at least one: `{ "id", "label"?, "labelKey"? }`, with a `label` or a `labelKey`, and an `id` unique in the card |
+| `tickable` | `true` or `false`, default `false`: whether the page offers a tick box on each item, to someone the record's permissions let change it (below) |
 
 - **The file says what is required, and the record how far it has got.** The items, their order
   and their words are the file's, so every record of the type is held to the same list. The
@@ -573,11 +576,32 @@ each done or not, with who did it and when, in `view` mode:
   and when, as the `date` widget shows a day. Above the items, a count says how many are done.
 - **An entry the file does not list is not shown.** A record's entry for an item the file has
   dropped stays on the record, and the page says nothing of it.
-- **The card ticks nothing.** It is read-only: an item's state is the record's, changed wherever
-  the record is, by the Edit form, a workflow's chain or an import. Who and when are what the
-  entry holds, written by whoever wrote it; nothing here stamps them.
+- **Read-only unless the file opts in.** Without `"tickable": true` the card ticks nothing, so
+  every card written before the key stays as it was: an item's state is the record's, changed
+  wherever the record is, by the Edit form, a workflow's chain or an import.
+- **With `"tickable": true`, each item is a tick box** for someone who may write the record, as
+  the app knows it for its other editable surfaces: the record's `permissions` enricher grants
+  `Write` or `WriteProperties`, the record is neither a version nor in the trash, the page is not
+  read-only, as the layout designer's preview is, and someone is signed in. Anyone else sees the
+  read-only card. `tickable` is a checklist's key: on any other card, or in a card's other content,
+  it is a key version 2 does not have there, and refused.
+- **A tick writes the record's property,** whole, through the document update the Edit form
+  sends, `PUT /api/v1/id/{uid}`: the item's first entry gets `done` `true`, `doneBy` the signed-in
+  user's name and `doneOn` now, an instant, which the card shows on the reader's day; an item with
+  no entry gets one at the end. Unticking keeps the entry, with `done` `false`. Every other entry
+  stays as it was, in its order, among them one for an item the file no longer lists.
+- **One tick at a time.** While one is written, its item's box shows what was asked, beside a
+  spinner named "Saving", the list is marked busy, and every box says it is unavailable and asks
+  for nothing, while keeping the keyboard's focus. On success the page shows the server's answer
+  and reads the record again; on failure the card is as it was, and a toast says why, as the Edit
+  form does: the server's own words for a value it refused, that the person may not change the
+  checklist for a 403, or that it could not be saved.
+- **Who and when are written by the client.** `doneBy` and `doneOn` are what this app sends, as
+  they are what any client writing the property through the REST API sends: nothing on the server
+  stamps them, and another client may write anything there. The server's audit log, and so the
+  record's timeline, say who really changed the record and when.
 - **Not a security control,** as nothing in a layout is. The server's permissions decide who may
-  change the property, and so tick an item.
+  change the property, and so tick an item; a tick box not offered is a convenience.
 
 ## 8. What is refused, and when
 
@@ -609,8 +633,8 @@ What counts as structural:
 - a card from another system with no connector, no field, a name that is not one, or a text that
   looks like an address;
 - a checklist with no property, a property that is not one or is an `ecm:` or `var:` name, no
-  item, or an item that is not an object, has no `label` or `labelKey`, or whose `id` is missing,
-  malformed or listed twice;
+  item, a `tickable` that is not `true` or `false`, or an item that is not an object, has no
+  `label` or `labelKey`, or whose `id` is missing, malformed or listed twice;
 - a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
@@ -913,8 +937,15 @@ becomes. In version 2's terms:
   - above the items, "2 of 5 done"; then each item, in the file's order, with an icon, its words,
     "Done" or "Not done", and, for one done, who and the day. The icon is decorative: the words
     say the same;
-  - it draws the same on a read-only page, the designer's preview, since it ticks nothing anyway.
-    Not seen on a server yet: the Payers kit's appeals, its first user, are not installed.
+  - with `"tickable": true`, a tick box takes each item's icon, `nxs-checkbox` from
+    `libs/shared/satori-components`, whose owner holds its state: named by the item's words and
+    described by its state, who and when, it shows the record's state, or the one a tick is
+    writing, and a click or Space asks the page for the other. The page writes the property
+    through `BrowseService.updateDocument`, keeps what the server answered until it is given the
+    record again, which `DocumentChangesService` asks the document page for, and starts a second
+    tick from the first's. `canTick` in `record-page.ts` says who is offered one; on a read-only
+    page, the designer's preview, no one is;
+  - not seen on a server yet: the Payers kit's appeals, its first user, are not installed.
 - **The date rules read the page's clock**, `RECORD_PAGE_TODAY` and `RECORD_PAGE_TIME_ZONE` in
   `record-clock.ts`, as its computations and dates do: on the record page, its banners, cards,
   tabs, fields and a related list's columns, and in a version 2 form, its fields' rules. The page

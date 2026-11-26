@@ -1,7 +1,10 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  Injector,
   LOCALE_ID,
   computed,
   inject,
@@ -17,8 +20,12 @@ import { compute, type ComputationContext } from '@agentic-ui/shared/computation
 import {
   NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
+  NxsCheckboxComponent,
   NxsCommentsComponent,
   NxsIconComponent,
+  NxsSpinnerComponent,
+  NxsToastService,
+  provideNxsToast,
   type NxsBannerTone,
   type NxsTagStatus,
 } from '@nuxeo/satori-platform/components';
@@ -28,13 +35,21 @@ import {
   ExtensionRuleRegistry,
   type ExtensionRule,
 } from '@nuxeo/satori-platform/extensions';
-import { NuxeoDocument, renderTrustedHtml } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  BrowseService,
+  CURRENT_USERNAME,
+  DocumentChangesService,
+  NuxeoDocument,
+  canWriteDocument,
+  renderTrustedHtml,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { merge, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
+import { readValidationFailure } from '../validation-failure';
 import {
   RICH_TEXT_HTML,
   type RecordValueContext,
@@ -47,7 +62,13 @@ import {
   viewText,
 } from './record-field-view';
 import { listParameters } from './list-parameters';
-import { type RecordChecklistShown, checklistUsers, showChecklist } from './record-checklist';
+import {
+  type RecordChecklistItemShown,
+  type RecordChecklistShown,
+  checklistUsers,
+  showChecklist,
+  tickedChecklist,
+} from './record-checklist';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import {
   type Labels,
@@ -154,6 +175,25 @@ export interface RecordExternalShown {
 export interface RecordChecklistCardShown extends RecordChecklistShown {
   /** The list's name for assistive technology: the card's heading, or its id. */
   readonly label: string;
+  /**
+   * Whether each item has a tick box: the file opts in (`"tickable": true`), the page is not
+   * read-only, and the record's permissions let the signed-in user change it ({@link canTick}).
+   */
+  readonly tickable: boolean;
+  /** The item a tick is writing, and the state it asks for, while it is; `null` otherwise. */
+  readonly ticking: { readonly item: string; readonly done: boolean } | null;
+}
+
+/**
+ * Whether the signed-in user may tick a checklist's items on `document`, as the app knows it for
+ * its other editable surfaces: the record's `permissions` enricher grants `Write` or
+ * `WriteProperties` (`canWriteDocument`, which the Edit button and the note editor read), and the
+ * record is neither a version nor in the trash, as the review's pins are not offered on either. A
+ * record that came without its permissions offers no tick. Not a security control: the server's
+ * permissions decide whether the write is accepted.
+ */
+export function canTick(document: NuxeoDocument): boolean {
+  return document.isVersion !== true && document.isTrashed !== true && canWriteDocument(document);
 }
 
 export interface RecordCardShown {
@@ -224,9 +264,9 @@ function fieldShowing(
  * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
  * rounds (`lib-record-picture-review`), then the cards.
  *
- * Its fields and checklists are read-only; the comments card and the review are where a user
- * writes, and the
- * server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
+ * Its fields are read-only, and so are its checklists unless the file opts one in to ticking
+ * (`"tickable": true`), for someone the record's permissions let change it; the comments card, the
+ * review and a tickable checklist are where a user writes, and the server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
  * anyone the server lets read it, so nothing here is a security control.
  */
 @Component({
@@ -237,8 +277,10 @@ function fieldShowing(
     MatTabsModule,
     NgTemplateOutlet,
     NxsBannerComponent,
+    NxsCheckboxComponent,
     NxsCommentsComponent,
     NxsIconComponent,
+    NxsSpinnerComponent,
     RecordExternalComponent,
     RecordListComponent,
     RecordPictureReviewComponent,
@@ -249,7 +291,7 @@ function fieldShowing(
   ],
   // The records the page's `document-link` fields and its lists' cells name, read for the page's
   // life: its lists share it.
-  providers: [LinkedRecordLookup],
+  providers: [LinkedRecordLookup, provideNxsToast()],
   templateUrl: './record-page.html',
   styleUrl: './record-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -260,7 +302,7 @@ export class RecordPageComponent {
   /**
    * The page without the ways it offers to change a record: a comments card shows its thread
    * without the comment box, Reply, Edit or Delete, a review its pins without Add a pin or Close
-   * round, and a related list offers no row action. What
+   * round, a related list offers no row action, and a checklist no tick box. What
    * the layout designer previews with, so that drawing the page it is editing writes nothing. A
    * convenience, not a control: the server's permissions decide what anyone may change.
    */
@@ -278,6 +320,46 @@ export class RecordPageComponent {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly today = inject(RECORD_PAGE_TODAY);
   private readonly timeZone = inject(RECORD_PAGE_TIME_ZONE);
+  private readonly username = inject(CURRENT_USERNAME);
+  private readonly changes = inject(DocumentChangesService);
+  private readonly toast = inject(NxsToastService);
+  /** `BrowseService` is asked for at the first tick: a page that ticks nothing reads it never. */
+  private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * What a tick wrote, as the server answered it, for the record it was written to (`base`): the
+   * page shows it until it is given that record again, read anew, which the page asks for once the
+   * write succeeds. So a second tick before then starts from the first's, not from the record as
+   * it was loaded, and a page given another record forgets it.
+   */
+  private readonly written = signal<{
+    readonly base: NuxeoDocument;
+    readonly document: NuxeoDocument;
+  } | null>(null);
+
+  /** The tick being written, on which card and item, and the state it asks for; one at a time. */
+  private readonly ticking = signal<{
+    readonly card: string;
+    readonly item: string;
+    readonly done: boolean;
+  } | null>(null);
+
+  /** The record as the page shows it: as given, or as the last tick on it wrote it since. */
+  private readonly current = computed<NuxeoDocument>(() => {
+    const written = this.written();
+    const document = this.document();
+    return written !== null && written.base === document ? written.document : document;
+  });
+
+  /**
+   * Whether a checklist that opts in offers its tick boxes here: not on a read-only page, such as
+   * the designer's preview, not without a signed-in user to say who ticked, and only where the
+   * record's permissions let them change it.
+   */
+  private readonly mayTick = computed(
+    () => !this.readOnly() && this.username() !== null && canTick(this.current()),
+  );
 
   /** What the console has been told, so that a page re-rendered for a label does not repeat it. */
   private readonly told = new Set<string>();
@@ -290,7 +372,7 @@ export class RecordPageComponent {
   private readonly lookups = computed<Lookups>(
     () => {
       const layout = this.layout();
-      const document = this.document();
+      const document = this.current();
       const properties = document.properties;
       const collector = new LookupCollector();
       /** What a value shown through `widget` names. */
@@ -381,8 +463,10 @@ export class RecordPageComponent {
   readonly shown = computed<RecordPageShown>(() => {
     this.translations();
     const layout = this.layout();
-    const document = this.document();
+    const document = this.current();
     const context = this.valueContext(document, this.labels(), this.records());
+    const tickable = this.mayTick();
+    const ticking = this.ticking();
     const passes = context.rule;
     // A banner is met in place, as the page draws, so it is not announced: `announce` is `none`.
     const banners = layout.banners
@@ -432,6 +516,11 @@ export class RecordPageComponent {
                     context,
                   ),
                   label: heading ?? humanize(card.id),
+                  tickable: tickable && card.checklist.tickable,
+                  ticking:
+                    ticking !== null && ticking.card === card.id
+                      ? { item: ticking.item, done: ticking.done }
+                      : null,
                 }
               : null,
           };
@@ -464,6 +553,95 @@ export class RecordPageComponent {
       cards: cards(layout.cards),
     };
   });
+
+  /**
+   * A tick on a checklist's item, `done` the state the person asks for (layout-v2.md, section 7):
+   * the record's checklist property written whole, with the item's entry ticked by the signed-in
+   * user now, or unticked, through the document-update path the Edit form uses
+   * (`BrowseService.updateDocument`). One at a time: while it is written, every tick box on the page
+   * shows it and asks for nothing.
+   *
+   * - **On success** the page shows what the server answered, and asks for the record again
+   *   (`DocumentChangesService`), as an app action does, so its timeline and the rest follow.
+   * - **On failure** the card is as it was, and the person is told why, as the Edit form tells
+   *   them: the server's own words for a value it refused, that they may not change the record, or
+   *   that it could not be saved.
+   *
+   * Who and when are written by this client, from `CURRENT_USERNAME` and the page's clock; the
+   * server's audit log and the record's timeline say who changed the property, and when. Not a
+   * security control: the server's permissions decide whether the write is accepted.
+   */
+  protected tick(card: RecordCardShown, item: RecordChecklistItemShown, done: boolean): void {
+    const checklist = this.cardChecklist(card.id);
+    const username = this.username();
+    if (
+      this.ticking() !== null ||
+      checklist === null ||
+      !checklist.tickable ||
+      !this.mayTick() ||
+      username === null ||
+      done === item.done
+    )
+      return;
+    const base = this.document();
+    const record = this.current();
+    const value = tickedChecklist(
+      record.properties[checklist.field],
+      item.id,
+      done,
+      username,
+      this.today().toISOString(),
+    );
+    this.ticking.set({ card: card.id, item: item.id, done });
+    this.injector
+      .get(BrowseService)
+      .updateDocument(record.uid, { [checklist.field]: value })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          this.ticking.set(null);
+          const answered = updated?.properties?.[checklist.field];
+          this.written.set({
+            base,
+            document: {
+              ...record,
+              properties: {
+                ...record.properties,
+                [checklist.field]: answered === undefined ? value : answered,
+              },
+            },
+          });
+          this.changes.notify();
+        },
+        error: (failure: unknown) => {
+          this.ticking.set(null);
+          this.toast.error(this.tickFailure(failure));
+        },
+      });
+  }
+
+  /** The checklist of the card `id`, as the file has it, or `null` for a card with none. */
+  private cardChecklist(id: string): ResolvedRecordCard['checklist'] {
+    return cardsOf(this.layout()).find((card) => card.id === id)?.checklist ?? null;
+  }
+
+  /** Why a tick was not written, as the Edit form says why a save was not. */
+  private tickFailure(failure: unknown): string {
+    const refused = readValidationFailure(
+      failure,
+      this.translate.instant('document-layouts.checklist.tick-not-accepted'),
+    );
+    if (refused) {
+      const said = [...new Set(Object.values(refused))];
+      if (said.length > 0) return said.join(' ');
+    }
+    const forbidden = failure instanceof HttpErrorResponse && failure.status === 403;
+    return this.translate.instant(
+      forbidden
+        ? 'document-layouts.checklist.tick-forbidden'
+        : 'document-layouts.checklist.tick-failed',
+    );
+  }
 
   /**
    * A card's related records: the columns whose rules pass for the open record and the user, as

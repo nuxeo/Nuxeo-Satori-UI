@@ -76,7 +76,7 @@ const COMMENTS_KEYS = ['pageSize'];
 const REVIEW_KEYS: readonly string[] = [];
 const EXTERNAL_KEYS = ['connector', 'fields'];
 const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
-const CHECKLIST_KEYS = ['field', 'items'];
+const CHECKLIST_KEYS = ['field', 'items', 'tickable'];
 const CHECKLIST_ITEM_KEYS = ['id', 'label', 'labelKey'];
 
 /** A connector's id, as `nuxeo-agentic-connectors` registers one: a name, never an address. */
@@ -467,6 +467,11 @@ function addresses(c: Checker, item: Record<string, unknown>, path: string): voi
  * property's `item` subfield holds for it: a value on the record, not an entry of the file, so it
  * is unique in its checklist rather than among the file's ids. The property's own shape is the
  * content model's to check (`layout-model.ts`).
+ *
+ * `tickable`, `true` or `false`, is the file's opt-in to ticking an item on the page, for someone
+ * the record's permissions let change it. It is a checklist's key, so a card of any other kind, or
+ * its list, timeline, comments or fields from another system, that names it is refused as a key
+ * version 2 does not have there.
  */
 function checklist(c: Checker, item: unknown, path: string): void {
   if (!isRecord(item)) {
@@ -474,6 +479,8 @@ function checklist(c: Checker, item: unknown, path: string): void {
     return;
   }
   c.unknownKeys(item, CHECKLIST_KEYS, path);
+  if ('tickable' in item && typeof item['tickable'] !== 'boolean')
+    c.add(join(path, 'tickable'), 'structure', 'tickable is true or false');
   const field = item['field'];
   if (
     typeof field !== 'string' ||
