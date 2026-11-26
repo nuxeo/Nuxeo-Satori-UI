@@ -29,6 +29,14 @@
  * second run answers, writes and resolves nothing again, and that its check fails when a receipt,
  * a queue or a thread is missing.
  *
+ * Since 0.3.0 it stands in for the export-control marks too, as `nuxeo-agentic-documents` 0.3.0
+ * answers them, in miniature: a first revision's mark taken from its creator, the administrator
+ * here, with who marked it written by the server; a new revision given its predecessor's mark,
+ * whatever it was sent; a change of a mark by anyone but the administrator refused; and who marked it
+ * and when refused when written. So a pass proves, besides, that the seed marks the chains
+ * `data.mjs` marks, every revision of them, that it writes neither of the server's two, that a second
+ * run changes no mark, and that its check fails when the server does not carry one.
+ *
  * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user, a password
  * and a demo password made up for the run. Node 24 and nothing else. CI does not run it.
  *
@@ -65,6 +73,8 @@ const REVISIONS = CHAINS.reduce((count, chain) => count + chain.revisions.length
 const SERVER_GIVEN = ['docctl:number', 'docctl:revision', 'docctl:status', 'docctl:supersededBy'];
 /** What the server gives a transmittal and a review cycle: the seed names none of it. */
 const SERVER_GIVEN_TOO = [
+  'docmark:markedBy',
+  'docmark:markedAt',
   'trm:number',
   'trm:items',
   'trm:issuedBy',
@@ -100,7 +110,8 @@ function expect(condition, what, output = '') {
  * return nothing; `widenedProvider` makes one return every engineering document; `noReceiptFor`
  * leaves that recipient without a receipt, as a broken listener would; `demoPassword` is the
  * password the users the seed creates sign in with; `foreignUser` is a user of the demo's names
- * that the seed did not create.
+ * that the seed did not create; `noMarks` leaves out the 0.3.0 add-on's `export_mark` schema;
+ * `noCarry` gives a new revision no mark, as a broken listener would.
  */
 function standIn({
   user,
@@ -115,15 +126,20 @@ function standIn({
   segmentMax = Infinity,
   noReceiptFor = null,
   foreignUser = null,
+  noMarks = false,
+  noCarry = false,
 }) {
   const byPath = new Map();
   const byId = new Map();
   const counters = { DWG: 0, SPEC: 0, TR: 0 };
   const writes = [];
+  /** Each mark the stand-in changed, after the creation that set it: the document's path. */
+  const markChanges = [];
   /** Users and groups, by name: a user signs in with their password. */
   const users = new Map();
   const groups = new Map();
-  if (foreignUser) users.set(foreignUser, { properties: { username: foreignUser, company: 'Elsewhere' } });
+  if (foreignUser)
+    users.set(foreignUser, { properties: { username: foreignUser, company: 'Elsewhere' } });
   const acls = new Map();
   const add = (path, type, properties = {}) => {
     const document = {
@@ -141,17 +157,44 @@ function standIn({
   if (!noWorkspaces) add('/default-domain/workspaces', 'WorkspaceRoot');
 
   const letters = (revision) => String.fromCharCode(revision.charCodeAt(0) + 1);
+  /** As the add-on does since 0.3.0: a creator's mark taken, with who marked it, or none. */
+  const markBy = (properties, who) =>
+    properties['docmark:classification']
+      ? {
+          'docmark:classification': properties['docmark:classification'],
+          'docmark:groups': [...(properties['docmark:groups'] ?? [])],
+          'docmark:markedBy': who,
+          'docmark:markedAt': new Date().toISOString(),
+        }
+      : {
+          'docmark:classification': null,
+          'docmark:groups': null,
+          'docmark:markedBy': null,
+          'docmark:markedAt': null,
+        };
+  const MARK_KEYS = [
+    'docmark:classification',
+    'docmark:groups',
+    'docmark:markedBy',
+    'docmark:markedAt',
+  ];
   /** As the add-on does: number a first revision, or follow the one superseded. */
-  const control = (properties) => {
+  const control = (properties, who) => {
     const supersedes = properties['docctl:supersedes'];
     if (!supersedes) {
       const series = properties['docctl:series'];
       if (!(series in counters))
         return { status: 400, message: 'Choose a registered number series' };
+      if (properties['docmark:classification'] && who !== user)
+        return { status: 403, message: 'it needs the ChangeExportMark permission on its folder' };
+      const missing = (properties['docmark:groups'] ?? []).find((group) => !groups.has(group));
+      if (properties['docmark:classification'] && missing)
+        return { status: 400, message: `No group is named ${missing}` };
       counters[series]++;
       const value = oneNumber ? 1 : counters[series];
       return {
         properties: {
+          ...markBy(properties, who),
           'docctl:series': series,
           'docctl:number': `${series}-${String(value).padStart(series === 'DWG' ? 5 : 4, '0')}`,
           'docctl:revision': series === 'DWG' ? 'A' : '1',
@@ -166,9 +209,14 @@ function standIn({
     if (previous.properties['docctl:status'] !== 'current')
       return { status: 409, message: 'is not current' };
     const p = previous.properties;
+    // A new revision's mark is the one it supersedes, whatever it was sent.
+    const carried = noCarry
+      ? markBy({}, null)
+      : Object.fromEntries(MARK_KEYS.map((key) => [key, p[key] ?? null]));
     return {
       previous,
       properties: {
+        ...carried,
         'docctl:series': p['docctl:series'],
         'docctl:number': p['docctl:number'],
         'docctl:revision':
@@ -212,7 +260,8 @@ function standIn({
     const items = [];
     for (const number of own['trm:documents'] ?? []) {
       const revision = live().find(
-        (d) => d.properties['docctl:number'] === number && d.properties['docctl:status'] === 'current',
+        (d) =>
+          d.properties['docctl:number'] === number && d.properties['docctl:status'] === 'current',
       );
       if (!revision) return { status: 400, message: `No current revision of ${number}` };
       ids.push(revision.uid);
@@ -279,6 +328,8 @@ function standIn({
       return types.includes(path.slice('/config/types/'.length))
         ? answer(200, {})
         : answer(404, {});
+    if (request.method === 'GET' && path === '/config/schemas/export_mark')
+      return noMarks ? answer(404, {}) : answer(200, { name: 'export_mark', prefix: 'docmark' });
     // The people: users and groups, which only the administrator writes.
     const person = /^\/(user|group)(?:\/([^/]+))?$/.exec(path);
     if (person) {
@@ -316,7 +367,7 @@ function standIn({
         let own = properties ?? {};
         let previous = null;
         if (type === 'EngineeringDocument') {
-          const given = control(own);
+          const given = control(own, who);
           if (given.status) return answer(given.status, { message: given.message });
           own = { ...own, ...given.properties };
           previous = given.previous ?? null;
@@ -392,6 +443,23 @@ function standIn({
         writes.push({ method: 'PUT', path: document.path, sent: properties ?? {}, as: who });
         if (given.length > 0)
           return answer(400, { message: `${given.join(', ')} are given by the server` });
+        // As the add-on since 0.3.0: a mark changed by a holder of ChangeExportMark alone, the
+        // administrator here, and who marked it written by the server.
+        const sentMark = ['docmark:classification', 'docmark:groups'].filter(
+          (key) =>
+            key in (properties ?? {}) &&
+            JSON.stringify(properties[key] ?? null) !==
+              JSON.stringify(document.properties[key] ?? null),
+        );
+        if (sentMark.length > 0) {
+          if (who !== user)
+            return answer(403, { message: 'it needs the ChangeExportMark permission' });
+          const missing = (properties['docmark:groups'] ?? []).find((group) => !groups.has(group));
+          if (properties['docmark:classification'] && missing)
+            return answer(400, { message: `No group is named ${missing}` });
+          Object.assign(properties, markBy({ ...document.properties, ...properties }, who));
+          markChanges.push(document.path);
+        }
         // As the add-on: a receipt answered once, by its recipient; a thread resolved by the opener.
         if (document.type === 'TransmittalReceipt' && 'trr:status' in (properties ?? {})) {
           if (who !== document.properties['trr:recipient'])
@@ -419,7 +487,15 @@ function standIn({
     }
     return answer(404, { message: `no ${request.method} ${path}` });
   });
-  return { server, byPath, byId, writes, users, credentials: { user, password, demoPassword } };
+  return {
+    server,
+    byPath,
+    byId,
+    writes,
+    users,
+    markChanges,
+    credentials: { user, password, demoPassword },
+  };
 }
 
 /**
@@ -649,7 +725,8 @@ for (const [options, what, says] of [
   await close(older.stand);
   const foreign = await run({ foreignUser: RECIPIENT });
   expect(
-    foreign.code === 2 && foreign.output.includes(`a user ${RECIPIENT} that the seed did not create`),
+    foreign.code === 2 &&
+      foreign.output.includes(`a user ${RECIPIENT} that the seed did not create`),
     "a user of the demo's names someone else made exits 2",
     foreign.output,
   );
@@ -673,9 +750,19 @@ for (const [options, what, says] of [
     "the demo's people and groups are created",
     first.output,
   );
+  const grants = posts('/automation/Document.AddPermission').map((write) => write.sent);
   expect(
-    posts('/automation/Document.AddPermission').length === 2,
-    'both groups are given ReadWrite on the workspace',
+    grants.length === 3 &&
+      ['engineers', 'document-controllers'].every((group) =>
+        grants.some((g) => g.permission === 'ReadWrite' && g.users.includes(group)),
+      ) &&
+      grants.some(
+        (g) =>
+          g.permission === 'ChangeExportMark' &&
+          JSON.stringify(g.users) === '["document-controllers"]',
+      ),
+    'both groups are given ReadWrite on the workspace, and document controllers ChangeExportMark',
+    JSON.stringify(grants),
   );
   const issued = posts(`${SENT}/`);
   expect(
@@ -692,7 +779,11 @@ for (const [options, what, says] of [
   const named = [...issued, ...opened].filter((write) =>
     Object.keys(write.sent).some((key) => SERVER_GIVEN_TOO.includes(key)),
   );
-  expect(named.length === 0, "the seed names none of the server's properties", JSON.stringify(named));
+  expect(
+    named.length === 0,
+    "the seed names none of the server's properties",
+    JSON.stringify(named),
+  );
   const comments = stand.writes.filter((write) => write.path.endsWith('/@comment'));
   expect(
     comments.length === REVIEW.threads.length &&
@@ -738,7 +829,9 @@ for (const [options, what, says] of [
         'rvwc:status' in (write.sent ?? {}),
     ),
     'a second run issues, opens, comments, answers and resolves nothing',
-    JSON.stringify(stand.writes.filter((write) => write.method !== 'PUT' || write.path.startsWith('/user'))),
+    JSON.stringify(
+      stand.writes.filter((write) => write.method !== 'PUT' || write.path.startsWith('/user')),
+    ),
   );
   expect(
     !first.output.includes(demoPassword) && !second.output.includes(demoPassword),
@@ -773,6 +866,107 @@ for (const [options, what, says] of [
     broken.output,
   );
   await close(broken.stand);
+}
+
+// Since 0.3.0. A first run marks the chains data.mjs marks, every revision of them, through the
+// server's carrying from the first, and writes neither of the server's two; a second run changes
+// no mark; the marks' groups are created, with their members.
+{
+  const first = await run();
+  const { stand } = first;
+  expect(first.code === 0, 'the first run seeds the marks', first.output);
+  const marked = CHAINS.filter((chain) => chain.mark);
+  expect(
+    marked.length === 2,
+    'data.mjs marks two chains',
+    marked.map((chain) => chain.key).join(', '),
+  );
+  for (const chain of CHAINS) {
+    const docs = revisionsOf(chain).map((revision) =>
+      stand.byPath.get(`${HOLDER}/${revision.name}`),
+    );
+    const wrong = docs.filter((doc) =>
+      chain.mark
+        ? doc?.properties['docmark:classification'] !== chain.mark.classification ||
+          JSON.stringify(doc?.properties['docmark:groups']) !== JSON.stringify(chain.mark.groups) ||
+          !doc?.properties['docmark:markedBy']
+        : Boolean(doc?.properties['docmark:classification']),
+    );
+    expect(
+      wrong.length === 0,
+      `${chain.key} ${chain.mark ? `carries ${chain.mark.classification} on every revision` : 'is not marked'}`,
+      JSON.stringify(wrong.map((doc) => doc?.properties)),
+    );
+  }
+  expect(
+    stand.markChanges.length === 0,
+    'a first run marks each chain when it creates it, and changes none',
+  );
+  const named = stand.writes.filter((write) =>
+    ['docmark:markedBy', 'docmark:markedAt'].some((key) => key in write.sent),
+  );
+  expect(
+    named.length === 0,
+    'the seed writes neither who marked a revision nor when',
+    JSON.stringify(named),
+  );
+  for (const chain of marked)
+    for (const group of chain.mark.groups) {
+      const members = USERS.filter((person) => person.groups.includes(group)).map(
+        (person) => person.username,
+      );
+      expect(
+        members.length > 0 &&
+          members.every((name) => stand.users.get(name)?.properties.groups.includes(group)),
+        `${group} is created with its members, ${members.join(', ')}`,
+      );
+    }
+  stand.writes.length = 0;
+  const second = await run({ stand });
+  expect(
+    second.code === 0 && stand.markChanges.length === 0,
+    'a second run changes no mark',
+    second.output + JSON.stringify(stand.markChanges),
+  );
+  // A revision seeded before 0.3.0, with no mark, is given its chain's by an update.
+  const old = stand.byPath.get(`${HOLDER}/${revisionsOf(marked[0])[0].name}`);
+  for (const key of [
+    'docmark:classification',
+    'docmark:groups',
+    'docmark:markedBy',
+    'docmark:markedAt',
+  ])
+    old.properties[key] = null;
+  const third = await run({ stand });
+  expect(
+    third.code === 0 &&
+      stand.markChanges.includes(old.path) &&
+      old.properties['docmark:classification'],
+    'a revision seeded before 0.3.0 is given its mark',
+    third.output,
+  );
+  await close(stand);
+
+  const older = await run({ noMarks: true });
+  expect(
+    older.code === 2 && older.output.includes('older than 0.3.0'),
+    'the add-on before 0.3.0 exits 2, asking for 0.3.0',
+    older.output,
+  );
+  expect(older.stand.writes.length === 0, 'nothing written on the add-on before 0.3.0');
+  await close(older.stand);
+
+  expect(
+    marked.some((chain) => chain.revisions.length > 1),
+    'a marked chain has more than one revision, so that the seed shows its mark carried',
+  );
+  const uncarried = await run({ noCarry: true });
+  expect(
+    uncarried.code === 1 && uncarried.output.includes('marked nothing, not'),
+    'the check fails when the server does not carry a mark',
+    uncarried.output,
+  );
+  await close(uncarried.stand);
 }
 
 // And every name data.mjs gives is short enough for Nuxeo's default.

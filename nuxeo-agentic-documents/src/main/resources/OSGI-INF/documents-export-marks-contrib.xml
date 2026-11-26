@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.documents.marks" version="1.0">
+
+  <documentation>
+    Export-control marks, since 0.3.0. A controlled document's mark, the export_mark schema of the
+    ControlledDocument facet, prefix docmark, is a classification and the groups that may receive
+    the revision.
+
+    ChangeExportMark: the add-on's permission. Setting, changing and removing a revision's mark
+    needs it on the revision, or, for a new one, on its folder; the controlled document listener
+    checks it, writes who and when, and fires one audit entry per change, exportMarkChanged, which
+    the writer below adds to the platform's audit once its transaction has committed. Nuxeo counts
+    Everything as holding every permission, and administrators as holding them all.
+
+    The download permission: the platform's DownloadService asks every permission before it
+    streams a blob or a rendition, and refuses it with 403 when one returns false. This one refuses
+    a marked revision's files and renditions to anyone in none of its mark's groups, an
+    administrator included, and a container's renditions, but its thumbnail, when it holds a marked
+    revision. The script only hands its globals to ExportMarkDownloadPermission, which decides in
+    Java; should the class not load, the script answers false, so a broken install refuses
+    downloads rather than serving them.
+
+    The exportMark document enricher says why: the mark, and whether the reader may receive it, with
+    a reason code a client translates. It explains; the permission refuses.
+  </documentation>
+
+  <require>org.nuxeo.agentic.documents.schema</require>
+  <require>org.nuxeo.ecm.core.security.defaultPermissions</require>
+  <require>org.nuxeo.ecm.core.io.download.DownloadService</require>
+  <require>org.nuxeo.ecm.core.io.MarshallerRegistry.marshallers</require>
+
+  <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissions">
+    <permission name="ChangeExportMark" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissionsVisibility">
+    <visibility>
+      <item show="true" order="90">ChangeExportMark</item>
+    </visibility>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.io.download.DownloadService" point="permissions">
+    <permission name="agenticExportMarks">
+      <script language="JavaScript">
+        function run() {
+          try {
+            return Java.type("org.nuxeo.agentic.documents.ExportMarkDownloadPermission")
+              .allows(Document, Rendition, Reason, CurrentUser) === true;
+          } catch (e) {
+            return false;
+          }
+        }
+      </script>
+    </permission>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.io.MarshallerRegistry" point="marshallers">
+    <register class="org.nuxeo.agentic.documents.ExportMarkJsonEnricher" enable="true" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <!-- The add-on's audit entries for marks, written in the background, after the commit. -->
+    <listener name="agenticExportMarkAuditWriter" async="true" postCommit="true"
+      class="org.nuxeo.agentic.documents.ExportMarkAuditWriter">
+      <event>exportMarkChanged</event>
+    </listener>
+  </extension>
+
+</component>
