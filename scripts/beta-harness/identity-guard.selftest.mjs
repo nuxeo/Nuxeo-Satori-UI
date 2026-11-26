@@ -13,8 +13,8 @@
  *
  *   node scripts/beta-harness/identity-guard.selftest.mjs
  *
- * On Node 25, run it with `NODE_OPTIONS=--no-experimental-webstorage`. Node 25 has a built-in
- * global `localStorage` that throws when read unless Node was given `--localstorage-file`, and the
+ * On Node 25, run it with `NODE_OPTIONS=--no-experimental-webstorage`. Node 25 (measured on 25.2.0)
+ * has a built-in global `localStorage` that throws when read unless given `--localstorage-file`; the
  * fake page below reads that global on every `evaluate`, to put it back afterwards. So every
  * in-page probe fails, and the run stops on a `PreconditionError` that quotes Node's message
  * ("Cannot initialize local storage without a `--localstorage-file` path") before the summary is
@@ -805,8 +805,9 @@ for (const destination of [
     const drain = traffic.drainPendingHeaders.bind(traffic);
     let drains = 0;
     // Whether the post-probe drain was holding the delayed request's headers when it began. If
-    // not, the probe never sent that request, and this control says nothing about the drain: it
-    // fails by name rather than throwing from a microtask, which ended the run before any report.
+    // not, the probe never sent that request or no second drain ran, and this control says nothing
+    // about the drain: it fails by name rather than throwing from a microtask, which ended the run
+    // before any report.
     let heldByDrain = false;
     traffic.drainPendingHeaders = (...args) => {
       const pending = drain(...args);
