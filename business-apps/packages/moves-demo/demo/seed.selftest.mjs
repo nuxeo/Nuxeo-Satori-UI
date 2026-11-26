@@ -56,9 +56,10 @@ function expect(condition, what, output = '') {
  * there is another page; `ignoresParameter` makes a related list's page provider return every
  * record of its type, whatever it is given; `indexLag` answers the open claims with nothing for
  * that many calls, as an index that has not caught up; `noAggregates` answers them with no
- * aggregate; `meStatus` answers `/me` with that status; `noWorkspaces` leaves out
- * /default-domain/workspaces; `hangUpOnFirstWrite` drops the connection on the first create;
- * `pageSize` caps what a page holds, so paging is exercised.
+ * aggregate; `meStatus` answers `/me` with that status, and `meBody`, with 200, with that text in
+ * place of the user; `noWorkspaces` leaves out /default-domain/workspaces; `hangUpOnFirstWrite`
+ * drops the connection on the first create; `pageSize` caps what a page holds, so paging is
+ * exercised.
  */
 function standIn({
   user,
@@ -72,6 +73,7 @@ function standIn({
   indexLag = 0,
   noAggregates = false,
   meStatus = 200,
+  meBody = null,
   noWorkspaces = false,
   hangUpOnFirstWrite = false,
   pageSize = 2,
@@ -189,8 +191,12 @@ function standIn({
     const { method } = request;
     calls.push(`${method} ${path}`);
     try {
-      if (method === 'GET' && path === '/me')
-        return meStatus === 200 ? send(200, { id: user }) : send(meStatus, { message: 'no' });
+      if (method === 'GET' && path === '/me') {
+        if (meStatus !== 200) return send(meStatus, { message: 'no' });
+        if (meBody === null) return send(200, { 'entity-type': 'user', id: user });
+        response.writeHead(200, { 'Content-Type': 'text/html' });
+        return response.end(meBody);
+      }
       // A server that goes away once writing has started: the connection drops, with no answer.
       if (hangUpOnFirstWrite && method === 'POST' && path.startsWith('/path/'))
         return request.socket.destroy();
@@ -364,6 +370,24 @@ await against({ meStatus: 404 }, async ({ server, run }) => {
   expect(
     status === 2 && /answered GET \/me with HTTP 404/.test(output) && writes(server) === 0,
     'a server that does not answer /me as Nuxeo does is exit 2, with nothing written',
+    output,
+  );
+});
+await against({ meBody: '<html><body>Welcome</body></html>' }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /answered GET \/me with something that is not JSON/.test(output) &&
+      writes(server) === 0,
+    'a server that answers /me 200 with a page, not JSON, is exit 2, with nothing written',
+    output,
+  );
+});
+await against({ meBody: '{"status":"ok"}' }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 && /answered GET \/me with no user/.test(output) && writes(server) === 0,
+    'a server that answers /me 200 with JSON that is no user is exit 2, with nothing written',
     output,
   );
 });

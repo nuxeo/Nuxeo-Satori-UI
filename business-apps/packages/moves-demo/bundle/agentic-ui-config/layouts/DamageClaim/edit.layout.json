@@ -8,8 +8,8 @@
       "fields": [
         { "field": "dc:title", "labelKey": "moves.field.claimTitle", "required": true },
         { "field": "dmg:number", "required": true },
-        { "field": "dmg:move", "required": true },
-        { "field": "dmg:moveNumber", "required": true },
+        { "field": "dmg:move", "readOnlyWhen": "core.true" },
+        { "field": "dmg:moveNumber", "readOnlyWhen": "core.true" },
         { "field": "dmg:state", "required": true },
         "dmg:adjuster"
       ]
@@ -18,7 +18,7 @@
       "id": "dates",
       "labelKey": "moves.card.damageClaim.dates",
       "fields": [
-        "dmg:deliveredOn",
+        { "field": "dmg:deliveredOn", "readOnlyWhen": "core.true" },
         {
           "field": "dmg:filedOn",
           "required": true,

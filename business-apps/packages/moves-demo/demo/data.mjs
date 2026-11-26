@@ -30,7 +30,7 @@ export const FOLDERS = {
 /** The coordinators', crews' and adjusters' user names: fictional, and not created by the seed. */
 export const PEOPLE = {
   coordinators: ['avery.lane', 'jules.hart'],
-  crew: ['tomas.reyes', 'nadia.brook', 'eli.vance', 'mira.solis'],
+  crew: ['tomas.reyes', 'nadia.brook', 'ezra.lund', 'mira.solis'],
   adjusters: ['rowan.ellis', 'kai.morgan'],
 };
 
@@ -67,8 +67,8 @@ export const MOVES = [
     deliveredOn: -45,
     state: 'Delivered',
     coordinator: 'jules.hart',
-    crewLead: 'eli.vance',
-    crew: ['eli.vance', 'mira.solis'],
+    crewLead: 'ezra.lund',
+    crew: ['ezra.lund', 'mira.solis'],
     truck: 'TRK-03',
     declaredValue: 18000,
     notes: 'Boxes left packed in the garage at the destination.',
@@ -86,7 +86,7 @@ export const MOVES = [
     state: 'In transit',
     coordinator: 'avery.lane',
     crewLead: 'nadia.brook',
-    crew: ['nadia.brook', 'eli.vance'],
+    crew: ['nadia.brook', 'ezra.lund'],
     truck: 'TRK-11',
     declaredValue: 35000,
     notes: 'Long distance: one overnight stop.',
@@ -139,8 +139,8 @@ export const MOVES = [
     delivery: 3,
     state: 'Cancelled',
     coordinator: 'jules.hart',
-    crewLead: 'eli.vance',
-    crew: ['eli.vance'],
+    crewLead: 'ezra.lund',
+    crew: ['ezra.lund'],
     truck: 'TRK-11',
     declaredValue: 22000,
     notes: 'Cancelled by the customer; deposit refunded.',
@@ -176,7 +176,7 @@ export const MOVES = [
     state: 'In transit',
     coordinator: 'jules.hart',
     crewLead: 'mira.solis',
-    crew: ['mira.solis', 'eli.vance'],
+    crew: ['mira.solis', 'ezra.lund'],
     truck: 'TRK-11',
     declaredValue: 14000,
     notes: 'Truck held at the depot for a repair: delivery late.',

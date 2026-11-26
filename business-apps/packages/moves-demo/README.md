@@ -24,7 +24,9 @@ Every name in it is fictional. The log of each step, its result and each departu
   no Angular code: the claim page shows the days from delivery to filing instead, as a computed
   field (`core.dateDiff`), and the gap is a follow-up ([below](#phase-8-feedback-where-the-tools-fell-short), item 2).
 - **The claim's Edit form,** with the rule asked for in plain words: "a denial reason is required
-  when the state is Denied", as `app.rules.fieldIn`, and three more of the same kind.
+  when the state is Denied", as `app.rules.fieldIn`, two more rules of the same kind and two
+  checks across fields. The claim's move, move number and delivery day are read-only there:
+  they are copies the facet and the days to filing read (below).
 - **Two queues:** open claims, with facets on state and on move; and the moves this week.
 - **A home, a menu and labels.** Open claims by state for everyone; the moves this week for move
   coordinators; the claims waiting for review for claims adjusters.
@@ -41,23 +43,23 @@ Every name in it is fictional. The log of each step, its result and each departu
 
 ## What is in it
 
-| File                                                            | What it is                                                                               | Written by                                                   |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.1.0, two groups                               | `app-package`                                                |
-| `bundle/agentic-ui-config/layouts/Move/view.layout.json`        | The Move record page: two banners, four cards, the inventory, the claims and the history | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/MoveItem/view.layout.json`    | An inventory item's page: the item, its move, and the claims that name it                | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: a banner, five cards, the attachments and the history      | `app-layout`, then `write_package_file`                      |
-| `bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json` | The claim's Edit form, with the denial reason's rule and three more                      | `app-form`, then `write_package_file`                        |
-| `bundle/agentic-ui-config/queues/open-claims.json`              | Open claims, oldest filed first, with State and Move facets                              | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/queues/moves-this-week.json`          | Moves loading or delivering from today to seven days ahead                               | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/home.json`, `navigation.json`         | The home's three figures, and the menu: the home and the two queues                      | `write_package_file`                                         |
-| `bundle/agentic-ui-config/labels/en.json`                       | Every label key the files name, in English                                               | The generators, then `write_package_file`                    |
-| `bundle/OSGI-INF/moves-demo-config.xml`                         | The component: the four layouts, and the app with the five files the registry serves     | The generators                                               |
-| `bundle/OSGI-INF/moves-demo-model.xml`, `bundle/schemas/*.xsd`  | **The stand-in model:** three types, a search document, five page providers              | `app-model`                                                  |
-| `content-model.json`                                            | The stand-in model as a server would answer it, which the pipeline holds the kit to      | `app-model`                                                  |
-| `package/`, `bundle/META-INF/MANIFEST.MF`, `build.mjs`          | The Marketplace package, the manifest, and version 1's builder, byte for byte            | `app-package`, `app-model`                                   |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`      | The seed script, its fictional records, and its controls. Not packaged                   | By hand: the write tools write no code                       |
-| `README.md`                                                     | This file                                                                                | `app-package`, then by hand: the write tools write no README |
+| File                                                            | What it is                                                                                    | Written by                                                   |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `bundle/agentic-ui-config/app.json`                             | The app: id and address `moves`, version 0.1.0, two groups                                    | `app-package`                                                |
+| `bundle/agentic-ui-config/layouts/Move/view.layout.json`        | The Move record page: two banners, four cards, the inventory, the claims and the history      | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/MoveItem/view.layout.json`    | An inventory item's page: the item, its move, and the claims that name it                     | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json` | The Damage Claim record page: a banner, six cards, the attachments and the history among them | `app-layout`, then `write_package_file`                      |
+| `bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json` | The claim's Edit form: the denial reason's rule, two more, two checks, three read-only        | `app-form`, then `write_package_file`                        |
+| `bundle/agentic-ui-config/queues/open-claims.json`              | Open claims, oldest filed first, with State and Move facets                                   | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/queues/moves-this-week.json`          | Moves loading or delivering from today to seven days ahead, both days included                | `app-queue`, then `write_package_file`                       |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`         | The home's three figures, and the menu: the home and the two queues                           | `write_package_file`                                         |
+| `bundle/agentic-ui-config/labels/en.json`                       | Every label key the files name, in English                                                    | The generators, then `write_package_file`                    |
+| `bundle/OSGI-INF/moves-demo-config.xml`                         | The component: the four layouts, and the app with the five files the registry serves          | The generators                                               |
+| `bundle/OSGI-INF/moves-demo-model.xml`, `bundle/schemas/*.xsd`  | **The stand-in model:** three types, a search document, five page providers                   | `app-model`                                                  |
+| `content-model.json`                                            | The stand-in model as a server would answer it, which the pipeline holds the kit to           | `app-model`                                                  |
+| `package/`, `bundle/META-INF/MANIFEST.MF`, `build.mjs`          | The Marketplace package, the manifest, and version 1's builder, byte for byte                 | `app-package`, `app-model`                                   |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`      | The seed script, its fictional records, and its controls. Not packaged                        | By hand: the write tools write no code                       |
+| `README.md`                                                     | This file                                                                                     | `app-package`, then by hand: the write tools write no README |
 
 - **No hand edit to a package file.** Every file under `bundle/`, `package/`, `build.mjs` and
   `content-model.json` was written by `apply_generator`, `write_package_file` or
@@ -108,7 +110,8 @@ a component of its own, `moves-demo-model.xml`, as the Payers kit does.
 | `moves_open_claims` | Nothing      | Claims `Filed` or `In review`, oldest filed first, with the aggregates `dmg_state_agg` and `dmg_moveNumber_agg` | The search index |
 | `moves_this_week`   | Nothing      | Moves not cancelled that load or deliver from `NOW('-P1D')` to `NOW('P7D')`, by load date                       | The repository   |
 
-- **"This week" is the seven days from today,** not the calendar week: NXQL's `NOW()` takes an
+- **"This week" is today and the seven days after it,** eight days, not the calendar week: NXQL's
+  `NOW()` takes an
   offset from now, not the start of a week. A day stored as midnight is in it from that day to
   seven days ahead.
 - **`NOW()` in a `BETWEEN` is a syntax error** on this Nuxeo: `BETWEEN NOW('-P1D') AND NOW('P7D')`
@@ -183,7 +186,11 @@ bullet, mirrored. 6 minutes.
 
 ### Step 2. Write the files, through the write tools only (05:55, 5 minutes)
 
-Three writes, each answering `written: true`, and two refused on purpose.
+Three writes, each answering `written: true`, and two refused on purpose. **A departure:** the
+skill says never to invent an id, and the first refusal wrote one, `app.rules.dateAfter`, as a
+negative control of the write tools, as the contracts kit's run did with `app.rules.statusIs`. It
+shows that an unregistered rule is refused at write time and the package left as it was; it is not
+the evidence that no rule fits, which is the registry (`PACKAGED_REGISTRIES`, item 2 below).
 
 | Call                                                                                                                                                                                                                                                                                                                                                                                            | Answer                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -197,7 +204,8 @@ The edits, written with `write_package_file` from layout-v2.md and app-definitio
 
 - **The record pages,** from each generator's one card: the move in four cards (the move, the
   route and dates, the crew, the valuation) with its inventory and claims as related lists, given
-  the move's `ecm:uuid`, and the history; the claim in five cards and the history; the item in one
+  the move's `ecm:uuid`, and the history; the claim in five cards and the history, six in all; the
+  item in one
   card and the claims that name it. Widgets a person would pick: `status-badge` with a tone for each
   state, `currency` in USD, `date`, `user` (the crew is a list of users), `phone`, `email`,
   `long-text`, and `document-link` for the four links, which the generator could not choose
@@ -213,6 +221,8 @@ The edits, written with `write_package_file` from layout-v2.md and app-definitio
   also requires the decision day once the claim is `Approved`, `Denied` or `Paid`, and the amount
   approved once `Approved` or `Paid`, with checks that the amount approved is at most the amount
   claimed (`core.atMost`) and that the claim was not filed before delivery (`core.notBefore`).
+  After the review (below), the move, its number and the delivery day, which are copies, were made
+  read-only there with `readOnlyWhen` `core.true`, so a typed value cannot part them from the move.
 - **The queues' widgets and facets,** the home and the menu, which have no generator.
 
 ### Step 3. Check them: every write already did (05:59, 3 minutes)
@@ -220,8 +230,8 @@ The edits, written with `write_package_file` from layout-v2.md and app-definitio
 | Check                                                                                                                                                                                                   | Result                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `npm run app-package -- business-apps/packages/moves-demo --platform 0.2.0 --model business-apps/packages/moves-demo/content-model.json`                                                                | Passed: 4 layouts held to the model, 10 files passed, sha256 `b79723fa…a15fc`, the last write's                                      |
-| The same without `--model`, as CI runs it                                                                                                                                                               | Passed, held to the package's own `content-model.json`, the same SHA-256                                                             |
-| `validate_package`                                                                                                                                                                                      | `passed: true`, `asCi: true`, no finding, the same SHA-256                                                                           |
+| The same without `--model`, as CI runs it                                                                                                                                                               | Passed, the same SHA-256. Not more evidence: a kit with a stand-in model is held to its own `content-model.json` either way          |
+| `validate_package`                                                                                                                                                                                      | `passed: true`, `asCi: true`, no finding, the same SHA-256: the same check again, as the MCP server runs it                          |
 | By hand, what the pipeline does not check (skill, step 3): every property a queue, a related list, a sort, a rule, a computation or a check names, against the type of the file or of its page provider | 100 references, none missing. Seen failing: with `dmg:adjustor` in a queue column and `moveitem:rooms` in a related list, both named |
 | The pipeline on that broken copy                                                                                                                                                                        | **Passed:** it does not check queue or related-list columns (item 8 below)                                                           |
 
@@ -249,13 +259,15 @@ installed anywhere: the orchestrator installs it.
 ### The seed (06:07, 7 minutes)
 
 Written by hand: the write tools refuse `demo/*.mjs`, as code. On the contracts kit's model. Its
-controls, `node business-apps/packages/moves-demo/demo/seed.selftest.mjs`, **30 of 30 passed**.
-Broken on purpose thirteen ways, one at a time, each turned at least one control red: no check for
+controls, `node business-apps/packages/moves-demo/demo/seed.selftest.mjs`, **32 of 32 passed**
+(30 before the review added two for `/me`). Broken on purpose fifteen ways, one at a time, each
+turned at least one control red: no check for
 a record that does not belong, no order check, no write over an existing record, no emptied
 denial reason, a claim's attachments written over, no wait for the search index, no check of the
 facets, a claim linked to its move by number instead of id, no parameter given to a related
-list's page provider, the Basic header printed, no `/me` precondition, no type precondition, and
-any trashed name like a record's restored.
+list's page provider, the Basic header printed, no `/me` precondition, no check that `/me`
+answers a user, an answer that is not JSON not taken as a precondition, no type precondition,
+and any trashed name like a record's restored.
 
 Two of the REST API's answers the stand-in copies were read from the local Nuxeo, read-only: a
 page provider with a `?` is given its value as `queryParams`, and answers 400 without one; and a
@@ -271,6 +283,28 @@ that spec failed for this kit, naming `layout.schema.move`, `layout.schema.movei
 `layout.schema.damageclaim`. One `write_package_file` of `labels/en.json` with the three texts
 answered `written: true`, and the spec passed; the kit was added to its list of kits found.
 
+The release candidate, `node scripts/release-candidate.mjs --since origin/staging/enterprise-grade-app`,
+assembled whole with this kit among the five, new and held to nothing: its stage 3, the kits as a
+set, compared 27 of its names with the other kits' and found no clash. Before the merge it was
+refused, for the other four kits: the branch's copies were a patch version behind staging's.
+
+### The independent review (07:40, 15 minutes)
+
+A reviewer agent, given the request, the skill and the documents and not this log, read the kit,
+ran the pipeline, the controls and a property check of its own, and found nothing blocking. What
+it found, and what was done:
+
+| Finding                                                                                                           | Done                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| The branch changes a generator, which the skill says not to                                                       | Kept, as item 1 below says, and flagged in the pull request for the generator's owner                                                           |
+| The administrator guide's groups table leaves out `moves`                                                         | Added, with the seed's creating no group                                                                                                        |
+| The server validator's parity corpus (`KIT_NAMES` in `server-validator-build.mjs`) lists the four other kits only | Added, the corpus written again with `npm run app-definition:server-validator`; `DeploymentValidatorParityTest` passed with Maven, and its spec |
+| The Edit form lets a person type the copies, `dmg:moveNumber` and `dmg:deliveredOn`, apart from `dmg:move`        | The three made read-only with `readOnlyWhen` `core.true`, through `write_package_file`: `written: true`                                         |
+| Two rows of step 3 repeat the first on the same model; the `dateAfter` refusal is self-confirming                 | Said so, above                                                                                                                                  |
+| Counts: "three more" rules, "five cards" counted twice, "seven days", "must count"                                | Corrected                                                                                                                                       |
+| The seed's `/me` precondition caught an error status only: a 200 page exited 1, and any JSON passed               | `/me` must answer a user, and an answer that is not JSON is a precondition; two controls more, each seen failing with its check removed         |
+| One crew member's user name was a well-known video game character's                                               | Renamed `ezra.lund`                                                                                                                             |
+
 ## Building it
 
 ```bash
@@ -278,7 +312,7 @@ npm run app-package -- business-apps/packages/moves-demo --platform 0.2.0
 ```
 
 It writes `dist/moves-demo-0.1.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model: sha256 `690b2b54…5348` after the last write, on 26 November 2026.
+ships a stand-in model: sha256 `d417d693…e0ac` after the last write, on 26 November 2026.
 
 ## Installing it on a local Nuxeo
 
@@ -365,14 +399,15 @@ node business-apps/packages/moves-demo/demo/seed.mjs
 - **It checks what it wrote:** the five page providers must return every seeded record that
   belongs in them and none that does not, in their order, the related lists given each move's and
   item's id; the open claims are asked again until the search index agrees, up to
-  `NUXEO_INDEX_WAIT_MS` (15 seconds by default), and their two facets must count the seeded open
+  `NUXEO_INDEX_WAIT_MS` (15 seconds by default), and their two facets must count at least the seeded open
   claims.
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default.
   `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met, before
-  anything is written: no credentials, no server, or one that does not answer `/me` as Nuxeo does,
+  anything is written: no credentials, no server, or one that answers `/me` with an error, with
+  something that is not JSON, or with no user,
   credentials refused, any of the three types missing, or no `/default-domain/workspaces`.
 - **Its controls** run it against a stand-in for the REST API: they prove the script, not the
-  server. CI does not run them. 30 controls, each behaviour above among them, and a last one that
+  server. CI does not run them. 32 controls, each behaviour above among them, and a last one that
   no run, the refused ones included, prints a password or its Basic header.
 
 It prints the home, the two queues, a delivered move, the late claim and the denied claim, on the
@@ -442,7 +477,11 @@ kit; the rest are follow-up candidates.
     `app-model` writes the schema and `app-layout` a card's label: each kit adds it by hand, and
     only a unit test outside the pipeline, `kit-schema-labels.spec.ts`, asks for it, so the write
     tools passed this kit without it until staging's spec was merged in.
-16. **What went well:** every write answered with the files it changed and the pipeline's own
+16. **Two lists of kits are kept by hand, and leave a new one out in silence:** the server
+    validator's parity corpus, `KIT_NAMES` in `server-validator-build.mjs`, and the administrator
+    guide's tables. The release candidate and CI read `business-apps/packages/` instead. Neither
+    the skill nor a check says to add a kit to them; the review found both.
+17. **What went well:** every write answered with the files it changed and the pipeline's own
     lines; each refusal named the file, the place and the reason, and left the package as it was;
     the demo-kit order in the skill worked first time in one call; and `app-model --aggregates`
     wrote the facets' page provider, the part the facilities kit wrote by hand.

@@ -218,8 +218,9 @@ async function seed() {
 
 /** The server answers, the credentials are accepted, the package's types are installed. */
 async function preflight() {
+  let me;
   try {
-    await call('GET', '/me');
+    me = await call('GET', '/me');
   } catch (error) {
     if (error instanceof HttpError && error.status === 401)
       throw new Precondition(`${SERVER} refused NUXEO_USER and NUXEO_PASS (HTTP 401).`);
@@ -230,6 +231,11 @@ async function preflight() {
       );
     throw error;
   }
+  // Nuxeo answers /me with the user signed in, an object with its id.
+  if (typeof me?.id !== 'string' || me.id === '')
+    throw new Precondition(
+      `${SERVER} answered GET /me with no user: is NUXEO_URL a Nuxeo server's address?`,
+    );
   for (const type of TYPES)
     if ((await find(`/config/types/${type}`)) === null)
       throw new Precondition(
@@ -496,5 +502,11 @@ async function call(method, path, { json } = {}) {
     }
     throw new HttpError(response.status, method, path, detail);
   }
-  return text ? JSON.parse(text) : null;
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    const notJson = `${SERVER} answered ${method} ${path} with something that is not JSON.`;
+    if (preflighting) throw new Precondition(`${notJson} Is NUXEO_URL a Nuxeo server's address?`);
+    throw new Error(notJson);
+  }
 }
