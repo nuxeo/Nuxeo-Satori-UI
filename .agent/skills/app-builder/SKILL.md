@@ -19,13 +19,13 @@ is the worked example.
 
 ## What exists today, and what does not
 
-| Step                         | How                                                                   | State                                                                 |
-| ---------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                           | Built: 11 read-only tools                                             |
-| 2. Write the files           | `apply_generator`, `write_package_file` and `apply_package_changes`   | Built: each writes only what passes the pipeline, as CI runs it       |
-| 3. Check them                | Each write checks first; `npm run app-package` with the model as well | Built: the pipeline's steps 1 to 6. The write tools take no model yet |
-| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running               | Built, on the local dev server. Not `app.json` or actions             |
-| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes               | **Not built in the MCP server.** The tag path has never run           |
+| Step                         | How                                                                                        | State                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                                                | Built: 11 read-only tools                                             |
+| 2. Write the files           | `apply_generator`, `write_package_file`, `remove_package_file` and `apply_package_changes` | Built: each writes only what passes the pipeline, as CI runs it       |
+| 3. Check them                | Each write checks first; `npm run app-package` with the model as well                      | Built: the pipeline's steps 1 to 6. The write tools take no model yet |
+| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running                                    | Built, on the local dev server. Not `app.json` or actions             |
+| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes                                    | **Not built in the MCP server.** The tag path has never run           |
 
 Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
 step as done that this table says is not built.
@@ -80,6 +80,18 @@ shows nothing.
   second ago may not be listed yet.
 - **An operation the server has is not one a package may name.** The deployment's allow-list says
   which, and the pipeline refuses every operation it is not given one for.
+- **When the server cannot be read,** because `NUXEO_USER` and `NUXEO_PASS` are not in the MCP
+  server's environment, every server read refuses at once. Never sign in with an account of your
+  own choosing, and never put one in a file: tell the person, and ask them to export the two
+  before the server starts, or to go on without them. Without them, for a demo kit with a
+  stand-in model only:
+  - read the other kits' own models with `package`, `{ "package": "business-apps/packages/moves-demo" }`,
+    so that a type, a prefix or a page provider you choose is not one another kit has;
+  - every write compares the kit's names with the other kits' in its folder, as the release
+    candidate does (step 3), so a queue id, an address, a page provider or a label key another kit
+    has is refused at the write, naming the kit;
+  - say in the reply what the server reads would have added: the server's own names, which a
+    stand-in's could shadow, and the NXQL tried read-only.
 
 The generators and the pipeline also take the model as a file. The write tools read one inside
 the repository only, so export a customer's into the checkout's `tmp/`, which git ignores, and
@@ -98,8 +110,15 @@ are given, and the write tools write only what passes the pipeline.
 | To write                                              | Call                                                                            |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------- |
 | one file of the app definition, whole                 | `write_package_file`, `{ "package", "path", "content" }`                        |
+| one file of the app definition taken out              | `remove_package_file`, `{ "package", "path" }`, then `app-registry` for you     |
 | what a generator writes                               | `apply_generator`, `{ "package", "generator", "options" }`                      |
 | several steps that would each be refused on their own | `apply_package_changes`, `{ "package", "changes": [...] }`, all written or none |
+
+A change of `apply_package_changes` is `{ "kind": "write", "path", "content" }`,
+`{ "kind": "remove", "path" }` or `{ "kind": "generator", "generator", "options" }`. **To give a
+file another name,** such as a queue another id, remove the old one, write the new one and every
+file that named the old (the menu, the home), then `app-registry`, in one call: never delete a file
+with your own file tools.
 
 Each makes the change to a staging copy, runs the pipeline's steps 1 to 6 on it as CI does, and
 writes to the package only when there is no finding. Read the answer every time:
@@ -119,9 +138,10 @@ The package is one folder directly inside `business-apps/packages/`, or inside t
 server's `BUILDER_PACKAGE_ROOTS` names. `write_package_file` writes `app.json`, `home.json`,
 `navigation.json`, `actions.json`, `queues/<id>.json`, `labels/<language>.json`,
 `tasks/<workflow>.<step>.layout.json` and `layouts/<Type>/<mode>.layout.json`, under
-`bundle/agentic-ui-config/`, each a JSON object of `"version": 2`. The generators write the rest:
-`build.mjs`, `package.xml`, the manifest and the component, byte for byte where the pipeline
-requires it. The options are those of the generator's schema, by name, as `npx nx g` takes them;
+`bundle/agentic-ui-config/`, each a JSON object of `"version": 2`; `remove_package_file` takes any
+of them out but `app.json`. The generators write the rest: `build.mjs`, `package.xml`, the
+manifest, the component, the stand-in model and the kit's connectors, byte for byte where the
+pipeline requires it. The options are those of the generator's schema, by name, as `npx nx g` takes them;
 the tool gives `package` (and `app-package`'s name and directory) from its `package` argument.
 `modelServer` is refused: a generator would send the credentials to the address it is given.
 
@@ -132,7 +152,8 @@ the package, so its order is:
 
 1. `app-package` without `type`;
 2. `app-model` with `properties` for each type, then with `pageProvider` for each page provider,
-   with `aggregates` for one whose queue has facets or whose home counts buckets;
+   with `aggregates` for one whose queue has facets or whose home counts buckets; a type with no
+   schema of its own (`schemaless`) and a folder (`folder`, `subtypes`) after the types they offer;
 3. `app-layout` and `app-form`, each given the kit's own model,
    `"model": "business-apps/packages/<name>/content-model.json"`;
 4. `app-queue`, `app-action`, and the home and the menu with `write_package_file`, then `app-registry`, in one call.
@@ -231,6 +252,45 @@ What each writes, and what it leaves to you:
   property and the type's search document, so a queue's facets and a home's figures can name them.
   It writes `content-model.json` beside `bundle/`: give that to the other generators until a server
   has the package. The pipeline holds a package that ships a stand-in model to it by default.
+  `--buckets` is how many buckets each aggregate answers, ten unless given: give more for a facet
+  on a team larger than ten. And what a kit's model needs besides flat properties:
+  - **A checklist,** for a checklist card: a property of the type `checklist`, such as
+    `steps:checklist` in `--properties`, the list of entries the card reads (`item`, `done`,
+    `doneBy`, `doneOn`). Never write that schema by hand.
+  - **Facets,** `--facets=Versionable` with `--properties` when the type is first written, or
+    alone to add to a type the kit has. Nuxeo's own that bring no schema need nothing more
+    (`Versionable` brings `uid` too); an add-on's, such as `Signable`, must be described by a
+    content model: `--model`, a model exported into the checkout's `tmp/` from a server with the
+    add-on, or the kit's own when it has the facet already. One neither describes is refused:
+    tell the person.
+  - **A type with no schema of its own,** its properties all a facet's: `--schemaless` with
+    `--facets`.
+  - **A folder whose Create menu offers the kit's types,** such as a register: `--folder` with
+    `--subtypes=Case,Request`, each a type of the kit's model or one of Nuxeo's, written first.
+    `--subtypes` alone adds to a folder the kit has.
+  - Written again with `--force`, a type keeps the facets and schemas it was given.
+
+- **`app-connector`, for a card of another system's fields:** a connector of the kit's own, which
+  an `external` card names (`layout-v2.md`, section 7). It writes
+  `connectors/<package>-connectors-config.xml` beside `bundle/`, never in it: the connectors
+  add-on has no Marketplace package yet, so a bundle carrying it would leave it pending on a
+  server without the add-on. `--id`, `--type` (the types it reads a key from), `--key` (the
+  property holding the key), `--path` (`/claims/{key}`) and `--fields`
+  (`paidAmount=/payment/amount,...`). It writes no address and no credential: each is a server
+  setting it names, `nuxeo.agentic.connectors.<id>.address` and `.token`, which a person sets on
+  the server. The pipeline then holds each `external` card naming it to its fields and types, and
+  the connector to the add-on's rules and the model. A card on a connector the server registers,
+  not the kit, is held to it only with `npm run app-package -- ... --registered <file>` (step 3).
+
+  ```jsonc
+  // apply_generator: the connector, then the card that reads it, with write_package_file
+  { "package": "business-apps/packages/acme-claims", "generator": "app-connector",
+    "options": { "id": "acme.claimPayments", "type": "Claim", "key": "claim:number",
+                 "path": "/claims/{key}", "fields": "paymentStatus=/payment/status,paidAmount=/payment/amount" } }
+  // in layouts/Claim/view.layout.json
+  { "id": "payment", "labelKey": "acme.card.payment",
+    "external": { "connector": "acme.claimPayments", "fields": ["paymentStatus", "paidAmount"] } }
+  ```
 
   ```jsonc
   // Two changes of one apply_package_changes call, after app-package and before app-layout
@@ -254,6 +314,16 @@ Then edit what the generators wrote, with `write_package_file`, as the person as
   with a rule from `PACKAGED_REGISTRIES` in `libs/shared/app-definition`. `required` and
   `readOnlyWhen` are for forms: write the form with `app-form` first. If no rule says it, tell the
   person; do not invent one.
+- **A checklist card,** `{ "id", "labelKey", "checklist": { "field", "items": [...], "tickable"? } }`
+  (`layout-v2.md`, section 7): `field` is a `checklist` property `app-model` wrote, the items are
+  the file's, each `{ "id", "label" or "labelKey" }`, and `tickable: true` offers a tick box to
+  whoever may write the record. The pipeline refuses one on a property that is not a list of
+  those entries.
+- **A capture,** `"capture": { "property": "files:files", "findBy": ["claim:number"] }` at the
+  top of a `view` layout (`layout-v2.md`, section 2, "Capture"): photos from a phone, filed on the
+  record. `property` is a list of files of the type, which `app-model --attachments` gives it, and
+  `findBy` the text properties a typed or scanned number is looked up in. The phone's location is
+  taken out of each photo unless `keepLocation` says to keep it: ask the person before keeping it.
 - **Sensitive fields.** Ask before showing an identifier such as a social security number. Hiding a
   field with a rule is a convenience, not a control: the server still returns it to anyone who may
   read the record.
@@ -276,7 +346,8 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   a package on a customer's server no model, so a field the type does not have and a widget that
   does not fit its property both pass them. With `--model` or `--model-server`, the command above
   refuses them. For a customer's package, both must pass before you say anything works.
-- **`validate_package` checks a package as it is,** such as one a person changed by hand.
+- **`validate_package` checks a package as it is,** such as one a person changed by hand: give it
+  `package`, as the write tools take it (`directory`, its older name, works too).
 - **Every `labelKey` needs a text,** in the package's `labels/en.json` or the platform's catalogue:
   the pipeline refuses one with neither, naming the key and the file. Write the text in the same
   call as the key: `apply_package_changes`, the labels first.
@@ -293,6 +364,15 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   from every kit folder, and give the kit its rows in `docs/business-apps/administrator-guide.md`:
   section 1's table of packages, the table of the app registry's groups, and a link to its README.
   `kit-lists.spec.ts`, in `libs/shared/app-definition`, fails a kit missing from either.
+- **Every write compares the kit's names with the other kits',** in the folder the package is in,
+  as the release candidate's stage 3 does: the package's name, the app's id and address, its
+  queues, its actions, what its components register, its connectors and its own label keys. A
+  clash is a finding `[clash]` naming the other kit. Give the name another value; never change
+  the other kit.
+- **A connector the kit does not contribute** is the server's: an `external` card naming one is
+  held to its form only, unless the pipeline is given what the server registers,
+  `--registered <file>` (`{ "connectors": { "<id>": ["<field>", ...] } }`), as the connectors
+  README's demo has one. The write tools take no such file.
 - **The allow-list is the deployment's.** A package with an operation passes only against the
   allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
   which CI gives the pipeline. A package with none is refused at write time for every operation:
@@ -309,9 +389,10 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
   a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
   and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
-  `app-model` writes it, they are held to that type, given a model), the properties a rule or a
-  computation names, and a vocabulary widget's directory against its property's. Check those by
-  reading the server.
+  `app-model` writes it, they are held to that type, given a model), what a table's or a related
+  list's column computes, and a vocabulary widget's directory against its property's. Check those
+  by reading the server. Given a model, the properties a rule, a computation or a check names are
+  held to the type, as fields are.
 
 ## 4. Preview in dev mode, as far as it goes
 
@@ -392,4 +473,5 @@ what is left for the person.
 - Change the generators, the validator or the pipeline to make a package pass. A refusal is the
   answer; fix the package.
 - Write a package any way but the write tools, or write its `deployment/` allow-list, its assets
-  or its code.
+  or its code. A kit's `demo/` seed is code: a person, or another agent, writes it.
+- Install a connector, or set its address or its credential: the server's, a person's.
