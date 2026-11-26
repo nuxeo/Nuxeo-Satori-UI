@@ -353,6 +353,100 @@
           </p>
         </section>
 
+        @for (list of actionLists; track list) {
+          @let texts = actionTexts[list];
+          <section class="layout-designer__card" [attr.data-part]="list">
+            <h3 class="layout-designer__card-heading">{{ texts.heading | translate }}</h3>
+            <p class="layout-designer__message">{{ texts.hint | translate }}</p>
+            <ol class="layout-designer__fields" [attr.data-list]="list">
+              @for (action of actions()[list]; track $index; let first = $first, last = $last) {
+                @let name = actionName(list, action);
+                <li
+                  class="layout-designer__field"
+                  [attr.data-action-id]="name"
+                  [attr.data-from]="action.source"
+                >
+                  <span class="layout-designer__field-name">
+                    <code>{{ name }}</code>
+                    <span class="layout-designer__field-note">
+                      @switch (action.source) {
+                        @case ('registered') {
+                          {{ 'layout-designer.queue.action-registered' | translate }}
+                        }
+                        @case ('app') {
+                          {{ 'layout-designer.queue.action-app' | translate }}
+                        }
+                        @default {
+                          {{ 'layout-designer.queue.action-unknown' | translate }}
+                        }
+                      }
+                    </span>
+                  </span>
+                  <span class="layout-designer__field-actions">
+                    <nxs-icon-button
+                      icon="arrow_up"
+                      data-action="up"
+                      [disabled]="first"
+                      [label]="texts.up | translate: { action: name }"
+                      (press)="move(list, action.index, -1)"
+                    />
+                    <nxs-icon-button
+                      icon="arrow_down"
+                      data-action="down"
+                      [disabled]="last"
+                      [label]="texts.down | translate: { action: name }"
+                      (press)="move(list, action.index, 1)"
+                    />
+                    <nxs-icon-button
+                      icon="trash"
+                      data-action="remove"
+                      [label]="texts.remove | translate: { action: name }"
+                      (press)="remove(list, action.index)"
+                    />
+                  </span>
+                </li>
+              } @empty {
+                <li class="layout-designer__field layout-designer__field--none">
+                  {{ texts.none | translate }}
+                </li>
+              }
+            </ol>
+            <div class="layout-designer__add">
+              <nxs-select
+                appearance="fill"
+                [attr.data-picker]="'add-' + list"
+                [label]="texts.add | translate"
+                [placeholder]="'layout-designer.queue.add-action-choose' | translate"
+                [options]="offeredOptions()[list]"
+                [value]="toAdd()[list]"
+                (valueChange)="choose(list, $event)"
+              />
+              <nxs-button
+                appearance="outlined"
+                [attr.data-action]="'add-' + list"
+                [disabled]="toAdd()[list] === ''"
+                (press)="add(list)"
+              >
+                {{ 'layout-designer.add-button' | translate }}
+              </nxs-button>
+            </div>
+            <p class="layout-designer__message" data-offered>
+              @switch (packageActions().state) {
+                @case ('reading') {
+                  {{ 'layout-designer.queue.actions-offered-reading' | translate }}
+                }
+                @default {
+                  @if (offersAppActions()) {
+                    {{ 'layout-designer.queue.actions-offered-all' | translate }}
+                  } @else {
+                    {{ 'layout-designer.queue.actions-offered-registered' | translate }}
+                  }
+                }
+              }
+            </p>
+          </section>
+        }
+
         <section class="layout-designer__validation" aria-labelledby="queue-designer-validation">
           <h3 class="layout-designer__card-heading" id="queue-designer-validation">
             {{ 'layout-designer.validation' | translate }}

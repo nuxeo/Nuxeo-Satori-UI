@@ -312,6 +312,230 @@ describe('QueueDesignerPageComponent', () => {
     expect('facets' in (page.file() ?? {})).toBe(false);
   });
 
+  describe('its row and bulk actions', () => {
+    /** The choices a list's picker offers, by value, the empty choice left out. */
+    const offeredIn = (list: string): string[] =>
+      [...root().querySelectorAll<HTMLOptionElement>(`[data-picker="add-${list}"] option`)]
+        .map((option) => option.value)
+        .filter((value) => value !== '');
+
+    /** Chooses `id` in the list's picker, as a person does, and presses its Add. */
+    const addThrough = async (list: string, id: string): Promise<void> => {
+      const select = root().querySelector<HTMLSelectElement>(`[data-picker="add-${list}"] select`);
+      if (!select) throw new Error(`no picker for ${list}`);
+      select.value = id;
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      button(`[data-action="add-${list}"]`).click();
+      await settle();
+    };
+
+    const named = (list: string): (string | undefined)[] =>
+      [...root().querySelectorAll<HTMLElement>(`[data-list="${list}"] [data-action-id]`)].map(
+        (entry) => entry.dataset['actionId'],
+      );
+
+    it('offers those this build registers, and chooses, orders and removes them, in the file alone', async () => {
+      await open();
+      expect(offeredIn('rowActions')).toEqual([
+        'app.rowActions.download',
+        'app.rowActions.rename',
+        'app.rowActions.copyTo',
+        'app.rowActions.moveTo',
+        'app.rowActions.delete',
+      ]);
+      expect(offeredIn('bulkActions')).toEqual([
+        'app.bulkActions.downloadZip',
+        'app.bulkActions.addToCollection',
+        'app.bulkActions.compare',
+        'app.bulkActions.addToClipboard',
+        'app.bulkActions.publish',
+        'app.bulkActions.delete',
+      ]);
+      expect(root().querySelector('[data-part="rowActions"]')?.textContent).toContain(
+        'No row action.',
+      );
+
+      await addThrough('rowActions', 'app.rowActions.download');
+      await addThrough('rowActions', 'app.rowActions.rename');
+      await addThrough('bulkActions', 'app.bulkActions.downloadZip');
+      expect(named('rowActions')).toEqual(['app.rowActions.download', 'app.rowActions.rename']);
+      // One named is no longer offered: a list names an action once.
+      expect(offeredIn('rowActions')).not.toContain('app.rowActions.download');
+      // Each is written where the queue format lists its key, after the facets.
+      expect(Object.keys(page.file() ?? {})).toEqual([
+        'version',
+        'labelKey',
+        'pageProvider',
+        'columns',
+        'sort',
+        'facets',
+        'pageSize',
+        'rowActions',
+        'bulkActions',
+      ]);
+      expect(
+        root().querySelector('[data-action-id="app.rowActions.download"]')?.textContent,
+      ).toContain('registered by this build');
+
+      button('[data-action-id="app.rowActions.rename"] [data-action="up"]').click();
+      await settle();
+      expect(page.file()?.['rowActions']).toEqual([
+        'app.rowActions.rename',
+        'app.rowActions.download',
+      ]);
+      expect(page.findings()).toEqual([]);
+      expect(page.saveState()).toBe('saveable');
+      // The preview is given the file as edited, read-only: it offers and runs none of them.
+      expect(stub()?.content()).toBe(page.file());
+      expect(stub()?.readOnly()).toBe(true);
+
+      button('[data-action-id="app.rowActions.rename"] [data-action="remove"]').click();
+      button('[data-action-id="app.bulkActions.downloadZip"] [data-action="remove"]').click();
+      await settle();
+      button('[data-action-id="app.rowActions.download"] [data-action="remove"]').click();
+      await settle();
+      // A list left empty is taken out, as a queue with no action writes none.
+      expect(page.file()).toEqual(RENEWALS);
+      expect(page.changed()).toBe(false);
+    });
+
+    it("says that only the registered ones are offered without the app's actions.json", async () => {
+      await open({ ...RENEWALS, rowActions: ['contracts.contract.renew'] });
+      expect(
+        root().querySelector('[data-part="rowActions"] [data-offered]')?.textContent,
+      ).toContain('Offered: only the actions this build registers.');
+      expect(offeredIn('rowActions')).not.toContain('contracts.contract.renew');
+      // The app's own action, named, is unknown here, and the validator refuses it, as said above.
+      expect(
+        root()
+          .querySelector('[data-action-id="contracts.contract.renew"]')
+          ?.getAttribute('data-from'),
+      ).toBe('unknown');
+      expect(page.saveState()).toBe('refused');
+      expect(root().querySelector('[data-actions]')?.textContent).toContain(
+        'No actions.json with actions is served for the app open',
+      );
+    });
+
+    it("offers the app's own once its actions.json is read, each where its on shows it", async () => {
+      actions.next({ state: 'reading' });
+      await open();
+      expect(
+        root().querySelector('[data-part="rowActions"] [data-offered]')?.textContent,
+      ).toContain("The app's own are offered once its actions.json has been read.");
+      expect(offeredIn('rowActions')).not.toContain('contracts.contract.renew');
+      actions.next({
+        state: 'read',
+        value: {
+          version: 2,
+          actions: [
+            { id: 'contracts.contract.renew', label: 'Renew', on: ['record', 'row'] },
+            { id: 'contracts.contract.close', label: 'Close', on: ['bulk'] },
+            { id: 'contracts.contract.archive', label: 'Archive' },
+          ],
+        },
+      });
+      await settle();
+      expect(offeredIn('rowActions').at(-1)).toBe('contracts.contract.renew');
+      expect(offeredIn('bulkActions').at(-1)).toBe('contracts.contract.close');
+      // An action on the record alone shows on no row, and in no bulk.
+      expect([...offeredIn('rowActions'), ...offeredIn('bulkActions')]).not.toContain(
+        'contracts.contract.archive',
+      );
+      const renew = [
+        ...root().querySelectorAll<HTMLOptionElement>('[data-picker="add-rowActions"] option'),
+      ].find((option) => option.value === 'contracts.contract.renew');
+      expect(renew?.textContent?.trim()).toBe("contracts.contract.renew, the app's own");
+      expect(
+        root().querySelector('[data-part="rowActions"] [data-offered]')?.textContent,
+      ).toContain("then the app's own");
+
+      await addThrough('rowActions', 'contracts.contract.renew');
+      expect(page.file()?.['rowActions']).toEqual(['contracts.contract.renew']);
+      expect(
+        root().querySelector('[data-action-id="contracts.contract.renew"]')?.textContent,
+      ).toContain("the app's own, from its actions.json");
+      expect(page.findings()).toEqual([]);
+      expect(page.saveState()).toBe('saveable');
+    });
+
+    it('refuses an unknown action: never offered nor added, and the validator refuses one named', async () => {
+      await open();
+      page.choose('rowActions', 'acme.made.up');
+      page.add('rowActions');
+      page.choose('bulkActions', 'app.rowActions.download');
+      page.add('bulkActions');
+      await settle();
+      expect(page.file()).toEqual(RENEWALS);
+
+      await open(
+        { ...RENEWALS, bulkActions: ['acme.made.up', 'app.bulkActions.compare'] },
+        'other',
+      );
+      const unknown = root().querySelector('[data-action-id="acme.made.up"]');
+      expect(unknown?.getAttribute('data-from')).toBe('unknown');
+      expect(unknown?.textContent).toContain(
+        "unknown: neither registered by this build nor among the app's own actions",
+      );
+      expect(page.findings()).toEqual([
+        {
+          path: 'bulkActions[0]',
+          kind: 'unknown',
+          message: 'the bulk action "acme.made.up" is not registered',
+        },
+      ]);
+      expect(page.saveState()).toBe('refused');
+      expect(root().querySelector('.layout-designer__findings')?.textContent).toContain(
+        'bulkActions[0]',
+      );
+      button('[data-action-id="acme.made.up"] [data-action="remove"]').click();
+      await settle();
+      expect(page.findings()).toEqual([]);
+      expect(page.saveState()).toBe('saveable');
+    });
+
+    it('names each button apart, by its list and its action, and moves the focus with it', async () => {
+      await open({
+        ...RENEWALS,
+        rowActions: ['app.rowActions.download', 'app.rowActions.rename'],
+        bulkActions: ['app.bulkActions.downloadZip'],
+      });
+      const label = (selector: string): string | null | undefined =>
+        root().querySelector(`${selector} button`)?.getAttribute('aria-label');
+      expect(label('[data-action-id="app.rowActions.download"] [data-action="up"]')).toBe(
+        'Move the row action app.rowActions.download up',
+      );
+      expect(label('[data-action-id="app.rowActions.download"] [data-action="down"]')).toBe(
+        'Move the row action app.rowActions.download down',
+      );
+      expect(label('[data-action-id="app.rowActions.rename"] [data-action="remove"]')).toBe(
+        'Remove the row action app.rowActions.rename',
+      );
+      expect(label('[data-action-id="app.bulkActions.downloadZip"] [data-action="remove"]')).toBe(
+        'Remove the bulk action app.bulkActions.downloadZip',
+      );
+      const focused = (): string => {
+        const element = document.activeElement as HTMLElement | null;
+        const control = element?.closest<HTMLElement>('[data-action],[data-picker]');
+        return `${element?.closest('[data-action-id]')?.getAttribute('data-action-id') ?? ''}:${control?.dataset['action'] ?? control?.dataset['picker'] ?? ''}`;
+      };
+      button('[data-action-id="app.rowActions.download"] [data-action="down"]').click();
+      await settle();
+      // Moved last, its Down is off, so the focus is on its Up.
+      expect(focused()).toBe('app.rowActions.download:up');
+      button('[data-action-id="app.rowActions.rename"] [data-action="remove"]').click();
+      await settle();
+      expect(focused()).toBe('app.rowActions.download:remove');
+      button('[data-action-id="app.bulkActions.downloadZip"] [data-action="remove"]').click();
+      await settle();
+      expect(focused()).toBe(':add-bulkActions');
+      expect(document.activeElement).toBeInstanceOf(HTMLSelectElement);
+      await addThrough('bulkActions', 'app.bulkActions.compare');
+      expect(focused()).toBe('app.bulkActions.compare:remove');
+    });
+  });
+
   describe('saving', () => {
     it('downloads a queue the validator finds nothing in, as the package holds it', async () => {
       await open();
@@ -320,7 +544,25 @@ describe('QueueDesignerPageComponent', () => {
       expect(root().querySelector('[data-verdict="none"]')).not.toBeNull();
       button('[data-action="download"]').click();
       expect(clicked).toEqual([{ download: 'up-for-renewal.json' }]);
-      expect(await blobText(created[0])).toBe(`${JSON.stringify(page.file(), null, 2)}\n`);
+      // As the repository's Prettier lays the file out: on one line what fits in 100 columns.
+      expect(await blobText(created[0])).toBe(
+        [
+          '{',
+          '  "version": 2,',
+          '  "labelKey": "contracts.queue.up-for-renewal",',
+          '  "pageProvider": "contracts_up_for_renewal",',
+          '  "columns": [',
+          '    "contract:number",',
+          '    { "field": "contract:end", "widget": "relative-date" },',
+          '    { "field": "dc:title", "labelKey": "contracts.field.title" }',
+          '  ],',
+          '  "sort": [{ "field": "contract:end", "order": "asc" }],',
+          '  "facets": [{ "aggregate": "contract_status", "label": "Status" }],',
+          '  "pageSize": 50',
+          '}',
+          '',
+        ].join('\n'),
+      );
     });
 
     it('refuses to save a queue the validator refuses, whatever calls it', async () => {
@@ -583,10 +825,11 @@ describe('QueueDesignerPageComponent', () => {
   });
 
   it("keeps the queue's keyboard contract: each control's element, name, state, value and order", async () => {
-    // A sort with no order, so that the order picker offers its "none" too.
+    // A sort with no order, so that the order picker offers its "none" too; and a row action.
     await open({
       ...RENEWALS,
       sort: [{ field: 'contract:end', order: 'asc' }, { field: 'dc:title' }],
+      rowActions: ['app.rowActions.download'],
     });
     button('[data-column="dc:title"] [data-action="hide"]').click();
     await settle();
@@ -632,6 +875,13 @@ describe('QueueDesignerPageComponent', () => {
       'input "Name of the facet contract_status" = "Status"',
       'input "Label key of the facet contract_status" = ""',
       'input "Add a facet: an aggregate\'s ID" = ""',
+      'button "Add" disabled',
+      'button "Move the row action app.rowActions.download up" disabled',
+      'button "Move the row action app.rowActions.download down" disabled',
+      'button "Remove the row action app.rowActions.download"',
+      'select "Add a row action" [*Choose an action | app.rowActions.rename, registered by this build | app.rowActions.copyTo, registered by this build | app.rowActions.moveTo, registered by this build | app.rowActions.delete, registered by this build]',
+      'button "Add" disabled',
+      'select "Add a bulk action" [*Choose an action | app.bulkActions.downloadZip, registered by this build | app.bulkActions.addToCollection, registered by this build | app.bulkActions.compare, registered by this build | app.bulkActions.addToClipboard, registered by this build | app.bulkActions.publish, registered by this build | app.bulkActions.delete, registered by this build]',
       'button "Add" disabled',
       'button "Download up-for-renewal.json"',
       'button "Undo every change"',
