@@ -796,13 +796,18 @@ for (const destination of [
     };
     const drain = traffic.drainPendingHeaders.bind(traffic);
     let drains = 0;
+    // Whether the post-probe drain was holding the delayed request's headers when it began. If
+    // not, the probe never sent that request, and this control says nothing about the drain: it
+    // fails by name rather than throwing from a microtask, which ended the run before any report.
+    let heldByDrain = false;
     traffic.drainPendingHeaders = (...args) => {
       const pending = drain(...args);
       if (++drains === 2) {
+        heldByDrain = typeof releaseHeaders === 'function' && traffic.pendingHeaders.size > 0;
         // Navigate only after the post-probe drain starts waiting for real request headers.
         queueMicrotask(() => {
           page.state.url = destination;
-          releaseHeaders({ authorization: H });
+          releaseHeaders?.({ authorization: H });
         });
       }
       return pending;
@@ -815,8 +820,9 @@ for (const destination of [
     control(
       staysOnApp ? 'positive' : 'negative',
       `navigation to ${destination} during the post-probe header drain ${staysOnApp ? 'preserves' : 'rejects'} ${typeof policy === 'string' ? 'an established identity' : 'sign-in recognition'}`,
-      staysOnApp ? report.ok : !report.ok && /page left/.test(report.problem ?? ''),
-      report,
+      heldByDrain &&
+        (staysOnApp ? report.ok : !report.ok && /page left/.test(report.problem ?? '')),
+      { heldByDrain, report },
     );
   }
 }
