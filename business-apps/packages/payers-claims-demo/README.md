@@ -17,7 +17,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 - **A stand-in model,** until the presales Payers model arrives: the types, schemas and page
   providers those files name, and since 0.4.0 a claim lifecycle. It is fictional, and replaced
   whole when theirs comes.
-- **A seed script** writes a few members, with their claims and cases, and the four people who
+- **A seed script** writes a few members, with their claims and cases, and the six people who
   work them, in the groups the files' rules name. Run it twice and nothing is added the second
   time.
 - **The demo script,** phase 1's five steps, as a steps file of the beta harness:
@@ -680,7 +680,7 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   | User           | Groups                                   | Works                                     |
   | -------------- | ---------------------------------------- | ----------------------------------------- |
   | `dana.lee`     | `claims-adjusters`                       | Most of the claims                        |
-  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | One pended claim                          |
+  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | Two claims, one pended and one denied     |
   | `riley.brooks` | `member-services`                        | Two cases                                 |
   | `sam.patel`    | `member-services`                        | The two appeals, and the appeals demo     |
   | `alex.rivera`  | `claims-adjusters`                       | The workflow demo's claims, as adjuster   |
