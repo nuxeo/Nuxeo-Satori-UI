@@ -245,7 +245,7 @@ seeded upstream folders  →  our app catalogue  →  manifest `labels`
 ### D2 — Follow the Hyland CIC file layout, not Web UI's
 
 Web UI uses `i18n/messages.json` + `messages-<locale>.json` with a build-time merge script
-(`scripts/merge-messages.js`) and a `crowdin-conf.yml` full of `translation_replace` locale
+(`nuxeo-web-ui/scripts/merge-messages.js`, in that repository) and a `crowdin-conf.yml` full of `translation_replace` locale
 renames. That is a Polymer-era convention carried forward, and the Hyland standard has since
 converged on something different:
 
