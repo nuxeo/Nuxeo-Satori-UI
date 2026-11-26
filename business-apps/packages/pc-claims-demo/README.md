@@ -196,10 +196,11 @@ The claim's attachments are `files:files`, which `app-model --attachments` gave 
 
 ## How it was built: the log
 
-Run on 26 November 2026, from 20:03 to @@END@@ IST, in a worktree of `staging/enterprise-grade-app`
-at `cc9afbb66`, on Node 24.22.1 (Node 25.2.0 for `npm ci`, a departure: step 0), as the skill's agent. The agent spoke to
-the Builder MCP server over stdio, as Claude Code does once the server is registered, through a
-small client of its own outside the repository, as the contracts and moves kits' runs did:
+Run on 26 November 2026, from 20:03 to 21:16 IST, before the pull request, in a worktree of
+`staging/enterprise-grade-app` at `cc9afbb66`, on Node 24.22.1 (Node 25.2.0 for `npm ci`, a
+departure: step 0), as the skill's agent. The agent spoke to the Builder MCP server over stdio,
+as Claude Code does once the server is registered, through a small client of its own outside the
+repository, as the contracts and moves kits' runs did:
 registering the server with `claude mcp add-json` changes the person's own Claude configuration,
 which was not asked for. **Nothing was written to any Nuxeo, and nothing was read from one** (step
 1). The times are the agent's, from its commands' timestamps.
@@ -347,11 +348,11 @@ instead of its id.
   found no clash, and Maven's packages and tests passed, before the review's edits below. Nothing
   was signed, tagged or published.
 
-### The gate, the pre-PR review and the independent review (20:40, @@REVIEWMIN@@ minutes)
+### The gate, the pre-PR review and the independent review (20:40, 33 minutes)
 
 - **The gate,** `npm run beta:gate -- --base origin/staging/enterprise-grade-app --gates
 lockfile,guardrails,sanitizer-audit,lint,test,spec-types,api-surface,reference-drift,published-links,module-boundaries,agent-mirror`:
-  11 of 11 passed at 20:43, in 2.5 minutes, and @@GATE2@@ after the review's edits.
+  11 of 11 passed at 20:43, in 2.5 minutes, and 11 of 11 again at 21:13, in 5 minutes, after the review's edits.
 - **`node scripts/pre-pr-review.mjs --base origin/staging/enterprise-grade-app`:** no mechanisable
   defect, on 8 changed files. Its skill's judgement classes, worked by hand, renamed one control
   that claimed more than it checked: "no address and no credential" became "writes no address,
