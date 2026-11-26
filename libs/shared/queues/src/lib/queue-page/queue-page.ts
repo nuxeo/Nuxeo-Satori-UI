@@ -14,7 +14,13 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { RecordListComponent, type RecordListEntry } from '@agentic-ui/shared/document-layouts';
+import {
+  LinkedRecordLookup,
+  NO_RECORDS,
+  RecordListComponent,
+  isDocumentId,
+  type RecordListEntry,
+} from '@agentic-ui/shared/document-layouts';
 import {
   NxsBannerComponent,
   NxsConfirmDialogComponent,
@@ -81,6 +87,11 @@ interface DrawnFacet {
   readonly label: string;
   readonly buckets: readonly {
     readonly key: string;
+    /**
+     * What the bucket shows: its key, or for a `document-link` facet the title of the record its
+     * key names, and the key where that record cannot be read.
+     */
+    readonly text: string;
     readonly count: string | null;
     readonly chosen: boolean;
   }[];
@@ -157,6 +168,9 @@ function warn(message: string): void {
   templateUrl: './queue-page.html',
   styleUrl: './queue-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // The queue's own lookup of linked records, for as long as it is drawn: its facets and its list
+  // share it, so a record both name is read once.
+  providers: [LinkedRecordLookup],
 })
 export class QueuePageComponent {
   /** The queue's id, from the address: `/queues/<id>`. */
@@ -177,6 +191,7 @@ export class QueuePageComponent {
   readonly readOnly = input(false);
 
   private readonly queues = inject(QueueService);
+  private readonly linkedRecords = inject(LinkedRecordLookup);
   private readonly rules = inject(ExtensionRuleRegistry);
   private readonly slots = inject(ExtensionSlotRegistry);
   private readonly extensions = inject(AppExtensionsService);
@@ -296,12 +311,46 @@ export class QueuePageComponent {
     computation: () => [],
   });
 
+  /**
+   * The records the buckets of the `document-link` facets name, by id, each id once: the keys of
+   * every such facet's buckets that are documents' ids, chosen ones included.
+   */
+  private readonly bucketIds = computed<readonly string[]>(
+    () => {
+      const queue = this.queue();
+      const aggregations = this.aggregations();
+      if (queue === null || aggregations === undefined) return [];
+      const chosen = this.chosen();
+      const ids = queue.facets
+        .filter((facet) => facet.widget === 'document-link')
+        .flatMap((facet) => {
+          const read = facetBuckets(aggregations, facet.aggregate, chosen[facet.aggregate] ?? []);
+          return read.kind === 'buckets' ? read.buckets.map((bucket) => bucket.key) : [];
+        })
+        .filter(isDocumentId);
+      return [...new Set(ids)].sort();
+    },
+    { equal: (a, b) => a.length === b.length && a.every((id, index) => id === b[index]) },
+  );
+
+  /**
+   * Those records, read in one search through the page's lookup, which its list shares, as the
+   * reader: a record the list's `document-link` cells name too is read once. Every id a set adds
+   * is asked for in one request; a bucket shows its key until its record is read, and where it
+   * cannot be.
+   */
+  private readonly bucketRecords = toSignal(
+    toObservable(this.bucketIds).pipe(switchMap((ids) => this.linkedRecords.records(ids))),
+    { initialValue: NO_RECORDS },
+  );
+
   protected readonly facets = computed<readonly DrawnFacet[]>(() => {
     this.translations();
     const queue = this.queue();
     const aggregations = this.aggregations();
     if (queue === null || aggregations === undefined) return [];
     const chosen = this.chosen();
+    const records = this.bucketRecords();
     const drawn: DrawnFacet[] = [];
     queue.facets.forEach((facet, index) => {
       const keys = chosen[facet.aggregate] ?? [];
@@ -315,6 +364,10 @@ export class QueuePageComponent {
         label: this.text(facet.label, facet.labelKey) || facet.labelKey || facet.aggregate,
         buckets: read.buckets.map((bucket) => ({
           key: bucket.key,
+          text:
+            facet.widget === 'document-link'
+              ? (records.get(bucket.key)?.title ?? bucket.key)
+              : bucket.key,
           count: bucket.count === null ? null : this.format(bucket.count),
           chosen: keys.includes(bucket.key),
         })),

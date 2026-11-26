@@ -768,10 +768,10 @@ describe("a document-link's show", () => {
   it('is for a page only, never a form, whose picker chooses a record by its title', () => {
     for (const mode of ['edit', 'create'] as const)
       expect(messages(withFields(npi()), mode)).toEqual([
-        'cards[0].fields[0].parameters.show: "show" shows a property of the linked record on a page only: a form\'s picker chooses a record by its title [parameter]',
+        `cards[0].fields[0].parameters.show: "show" shows a property of the linked record on a page only: a form's picker chooses a record by its title [parameter]`,
       ]);
     expect(validateTaskForm(withFields(npi())).map((finding) => finding.message)).toContain(
-      '"show" shows a property of the linked record on a page only: a form\'s picker chooses a record by its title',
+      `"show" shows a property of the linked record on a page only: a form's picker chooses a record by its title`,
     );
   });
 
@@ -782,13 +782,13 @@ describe("a document-link's show", () => {
       parameters: { columns: [{ ...npi(), field: 'claim:provider' }] },
     };
     expect(messages(withFields(table))).toEqual([
-      'cards[0].fields[0].parameters.columns[0].parameters.show: "show" is not for a table\'s column: a reference inside a complex value [parameter]',
+      `cards[0].fields[0].parameters.columns[0].parameters.show: "show" is not for a table's column: a reference inside a complex value [parameter]`,
     ]);
   });
 
   it('refuses a sort on a reference a column shows through it; a plain document-link sorts as before', () => {
     expect(messages(related(['claim:number', npi()], byProvider))).toEqual([
-      'cards[0].related.sort[0].field: a column shows claim:provider through "show", so the records cannot be sorted by it: they would be ordered by the linked record\'s stored id [parameter]',
+      `cards[0].related.sort[0].field: a column shows claim:provider through "show", so the records cannot be sorted by it: they would be ordered by the linked record's stored id [parameter]`,
     ]);
     expect(messages(related(['claim:number', link({ types: ['Provider'] })], byProvider))).toEqual(
       [],
