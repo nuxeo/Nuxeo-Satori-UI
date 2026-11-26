@@ -2953,8 +2953,6 @@
       "zoom-out": "Zoom out",
       "enhanced-viewer-unavailable": "We couldn’t open the enhanced viewer.",
       "enhanced-viewer-recovery-help": "Try again, or use the standard preview if one is available for this document.",
-      "viewer-help": "Having trouble with the enhanced viewer? Try again or open the standard preview.",
-      "viewer-options": "Viewer options",
       "connecting-enhanced-viewer": "Connecting to the enhanced viewer…",
       "standard-preview-notice": "Standard preview — annotation tools are unavailable here.",
       "retry-enhanced-viewer": "Try again",

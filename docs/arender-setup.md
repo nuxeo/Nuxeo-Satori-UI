@@ -351,10 +351,9 @@ their editor. This does not require a registered NEV `documentView` component.
 ### Recovering when the enhanced viewer does not open
 
 The View tab (when opted into NEV) and Annotations tab expose recovery controls outside the
-embedded viewer under **Viewer options**. This section is collapsed when a viewer URL is
-available, so normal viewing does not display troubleshooting guidance. It opens automatically
-while requesting a URL, when no URL is available, or when using the standard preview. If NEV
-shows an error inside its frame, users can expand **Viewer options** to access the controls.
+embedded viewer only while requesting a URL, when no URL is available, or when using the
+standard preview. Once a viewer URL is available, normal NEV viewing shows no additional
+Satori recovery bar, help message, or Viewer options control.
 **Try again** requests a fresh previewer URL for the current document and
 recreates the viewer. Connection and URL-resolution attempts time out after 15 seconds so that
 a stalled request does not leave retry disabled indefinitely. This timeout does not measure
@@ -366,9 +365,10 @@ The user's fallback choice is reset when another document is opened. **Try again
 from the standard preview to NEV.
 
 These controls do not infer authentication success or document-rendering success from an iframe
-load event. NEV can show its own error page inside a cross-origin frame; the recovery controls
-remain accessible outside that frame. This does not bypass authentication, permissions, or
-browser certificate checks.
+load event. NEV can show its own error page inside a cross-origin frame after returning a URL;
+Satori cannot detect that error and does not display recovery controls for it. Reopen the document
+or reload the page to request another launch in that case. This does not bypass authentication,
+permissions, or browser certificate checks.
 
 For deployments that expose the viewer's bare root URL, the reverse proxy can serve a friendly
 landing page for `GET /` and `HEAD /` with no query string. Link that page to Satori and explain

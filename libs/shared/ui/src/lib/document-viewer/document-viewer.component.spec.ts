@@ -53,7 +53,7 @@ describe('DocumentViewerComponent', () => {
       component.retryARenderClicked.subscribe(retry);
       render();
       expect(fixture.nativeElement.querySelector('.viewer-placeholder')).not.toBeNull();
-      expect(fixture.nativeElement.querySelector('details.viewer-options').open).toBe(true);
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
       fixture.nativeElement.querySelector('.open-standard-preview').click();
       render();
       expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
@@ -64,7 +64,7 @@ describe('DocumentViewerComponent', () => {
     });
 
     it.each([false, true])(
-      'collapses recovery help with a NEV URL (Annotations=%s) and keeps actions available',
+      'shows NEV without recovery UI when a URL is available (Annotations=%s)',
       (annotations) => {
         fixture.componentRef.setInput('annotationsTab', annotations);
         fixture.componentRef.setInput('preferARender', !annotations);
@@ -76,39 +76,44 @@ describe('DocumentViewerComponent', () => {
         );
         render();
         expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
-        const options: HTMLDetailsElement =
-          fixture.nativeElement.querySelector('details.viewer-options');
-        expect(options.open).toBe(false);
-        options.querySelector('summary')?.click();
-        expect(options.open).toBe(true);
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
+        expect(fixture.nativeElement.querySelector('details, summary')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.open-standard-preview')).toBeNull();
+        fixture.componentRef.setInput('arenderUrl', null);
+        render();
         fixture.nativeElement.querySelector('.open-standard-preview').click();
         render();
-        expect(options.open).toBe(true);
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
         expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
         fixture.componentRef.setInput('viewerDocUid', 'doc-2');
+        fixture.componentRef.setInput(
+          'arenderUrl',
+          TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
+            'https://nev.example/?documentId=doc-2',
+          ),
+        );
         render();
         expect(component.standardPreview()).toBe(false);
         expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
-        expect(options.open).toBe(false);
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
       },
     );
 
     it('disables retry while connecting but still lets the user open the standard preview', () => {
       fixture.componentRef.setInput('arenderLoading', true);
       render();
-      expect(fixture.nativeElement.querySelector('details.viewer-options').open).toBe(true);
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
       expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer').disabled).toBe(true);
       fixture.nativeElement.querySelector('.open-standard-preview').click();
       render();
       expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
     });
 
-    it('collapses connection guidance when a URL arrives and expands it again if unavailable', () => {
+    it('removes connection guidance when a URL arrives and restores it if unavailable', () => {
       fixture.componentRef.setInput('arenderLoading', true);
       render();
-      const options: HTMLDetailsElement =
-        fixture.nativeElement.querySelector('details.viewer-options');
-      expect(options.open).toBe(true);
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
       fixture.componentRef.setInput('arenderLoading', false);
       fixture.componentRef.setInput(
         'arenderUrl',
@@ -117,10 +122,10 @@ describe('DocumentViewerComponent', () => {
         ),
       );
       render();
-      expect(options.open).toBe(false);
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
       fixture.componentRef.setInput('arenderUrl', null);
       render();
-      expect(options.open).toBe(true);
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
     });
 
     it('does not offer a standard preview when no native content is available', () => {
