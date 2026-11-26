@@ -570,21 +570,10 @@ decision G, are not built: the registry knows groups only
 
 ### Security reviews pending
 
-- **The asset rights add-on:** "Needs its security review before anyone relies on it"
-  ([assets README](../../nuxeo-agentic-assets/README.md)).
-- **The connectors:** "The plan's phase 7 is not done until its security review is"
-  ([connectors README](../../nuxeo-agentic-connectors/README.md)).
-- **The operation buttons' allow-list:** pull request #717 lists what its security review must
-  check.
-- **The deployment layer:** pull request #720 was held for an independent security review; the
-  [layout designer README](../../libs/features/layout-designer/README.md) lists what it must
-  cover.
-- **The share links:** the [assets README](../../nuxeo-agentic-assets/README.md#for-the-security-review)
-  lists what their security review must cover.
-- **The disposition review:** deferred until the app is finished; the
-  [records add-on's README](../../nuxeo-agentic-records/README.md#security-notes-for-the-review)
-  lists what it does and what it guards, for the review.
-- **The registered computations and rules:** decision 4.
+Every security review waits until the app is finished, as decided on 26 November 2026. The
+[register](security-reviews.md) lists each one: what it covers, where its notes for the reviewer
+are, and the decision it rests on. Until a review is done, nothing it covers is to be relied on
+outside a development or demonstration server.
 
 ### Installed or shown only on a local server, or nowhere
 
@@ -592,25 +581,27 @@ decision G, are not built: the registry knows groups only
   - `nuxeo-agentic-ui` built from the staging branch, with the app registry and the operation
     buttons' allow-list in `nxserver/config/`;
   - `nuxeo-agentic-assets` 0.1.0, with the brand assets kit 0.2.0;
-  - Payers 0.6.0, with its seed and the demo users;
+  - Payers 0.6.1, with its seed and the demo users;
   - contracts 0.2.1;
   - moves 0.1.0;
   - `nuxeo-agentic-documents` 0.1.0, with the controlled documents kit 0.1.0.
 
   Earlier, Payers 0.3.0 to 0.4.1 and the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs). On 26 November
-  2026, through the development server:
-  - the Payers demo's steps files passed 40 of 40;
-  - the appeals' passed 43 of 43;
-  - the operation buttons' passed 31 of 32: the one failure was the steps file reading the button's
-    text rather than its accessible name, fixed with 0.6.1;
-  - the claims review workflow's passed 27 of 32: the supervisor's Approve failed on the step's
-    missing variables facet, which Payers 0.6.1 fixes.
+  2026, through the development server, on Payers 0.6.1, every Payers steps file passed:
+  - the demo's, 40 of 40;
+  - the claims review workflow's, 43 of 43, four runs in a row;
+  - the appeals', 43 of 43;
+  - the operation buttons', 32 of 32.
+
+  The moves and controlled documents seeds ran there, the second checking the server's numbering
+  and supersession.
 
 - **On no server:** the connectors; the deployment layer, which `nuxeo-agentic-ui` holds switched
-  off; `nuxeo-agentic-assets` 0.2.0 and its share links; Payers 0.6.1; brand assets 0.2.1 to
-  0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs only in
-  its tests; every kit's removal.
+  off; `nuxeo-agentic-assets` 0.2.0 and its share links, left off the local server because a share
+  link is reached without signing in; brand assets 0.2.1 to 0.2.3; the facilities and records kits;
+  `nuxeo-agentic-records`, whose disposition runs only in its tests, and which needs
+  `nuxeo-retention` from the Marketplace; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push
