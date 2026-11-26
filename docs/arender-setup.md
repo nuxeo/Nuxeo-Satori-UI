@@ -351,7 +351,11 @@ their editor. This does not require a registered NEV `documentView` component.
 ### Recovering when the enhanced viewer does not open
 
 The View tab (when opted into NEV) and Annotations tab expose recovery controls outside the
-embedded viewer. **Try again** requests a fresh previewer URL for the current document and
+embedded viewer under **Viewer options**. This section is collapsed when a viewer URL is
+available, so normal viewing does not display troubleshooting guidance. It opens automatically
+while requesting a URL, when no URL is available, or when using the standard preview. If NEV
+shows an error inside its frame, users can expand **Viewer options** to access the controls.
+**Try again** requests a fresh previewer URL for the current document and
 recreates the viewer. Connection and URL-resolution attempts time out after 15 seconds so that
 a stalled request does not leave retry disabled indefinitely. This timeout does not measure
 document conversion or rendering inside NEV.

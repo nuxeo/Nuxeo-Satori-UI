@@ -1,37 +1,43 @@
 <div class="viewer-panel">
   @if (enhancedViewerRequested()) {
-    <div class="viewer-recovery">
-      <span>
-        @if (standardPreview()) {
-          {{ 'shared-ui.document-viewer.standard-preview-notice' | translate }}
-        } @else if (arenderLoading()) {
-          {{ 'shared-ui.document-viewer.connecting-enhanced-viewer' | translate }}
-        } @else if (!arenderAvailable()) {
-          {{ 'shared-ui.document-viewer.enhanced-viewer-unavailable' | translate }}
-        } @else {
-          {{ 'shared-ui.document-viewer.viewer-help' | translate }}
-        }
-      </span>
-      <button
-        mat-button
-        type="button"
-        class="retry-enhanced-viewer"
-        [disabled]="arenderLoading()"
-        (click)="retryARender()"
-      >
-        {{ 'shared-ui.document-viewer.retry-enhanced-viewer' | translate }}
-      </button>
-      @if (!standardPreview() && contentType() !== 'none') {
+    <details
+      class="viewer-options"
+      [open]="standardPreview() || arenderLoading() || !arenderAvailable()"
+    >
+      <summary>{{ 'shared-ui.document-viewer.viewer-options' | translate }}</summary>
+      <div class="viewer-recovery">
+        <span>
+          @if (standardPreview()) {
+            {{ 'shared-ui.document-viewer.standard-preview-notice' | translate }}
+          } @else if (arenderLoading()) {
+            {{ 'shared-ui.document-viewer.connecting-enhanced-viewer' | translate }}
+          } @else if (!arenderAvailable()) {
+            {{ 'shared-ui.document-viewer.enhanced-viewer-unavailable' | translate }}
+          } @else {
+            {{ 'shared-ui.document-viewer.viewer-help' | translate }}
+          }
+        </span>
         <button
           mat-button
           type="button"
-          class="open-standard-preview"
-          (click)="standardPreview.set(true)"
+          class="retry-enhanced-viewer"
+          [disabled]="arenderLoading()"
+          (click)="retryARender()"
         >
-          {{ 'shared-ui.document-viewer.open-standard-preview' | translate }}
+          {{ 'shared-ui.document-viewer.retry-enhanced-viewer' | translate }}
         </button>
-      }
-    </div>
+        @if (!standardPreview() && contentType() !== 'none') {
+          <button
+            mat-button
+            type="button"
+            class="open-standard-preview"
+            (click)="standardPreview.set(true)"
+          >
+            {{ 'shared-ui.document-viewer.open-standard-preview' | translate }}
+          </button>
+        }
+      </div>
+    </details>
   }
   <!-- Content area -->
   <div class="viewer-content" [class.fit-real]="fitMode() === 'real' && contentType() === 'image'">

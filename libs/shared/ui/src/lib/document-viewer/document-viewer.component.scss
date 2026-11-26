@@ -23,6 +23,22 @@
 }
 
 /* ─── Content area ─── */
+.viewer-options {
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  summary {
+    padding: 8px 16px;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: -2px;
+    }
+  }
+}
+
 .viewer-recovery {
   display: flex;
   flex-wrap: wrap;
@@ -31,7 +47,6 @@
   padding: 8px 16px;
   color: var(--mat-sys-on-surface);
   background: var(--mat-sys-surface);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
 
   span {
     flex: 1 1 240px;

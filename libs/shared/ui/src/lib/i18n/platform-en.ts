@@ -910,6 +910,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "shared-ui.document-viewer.video-info": "Video Info",
   "shared-ui.document-viewer.video-metadata-region": "Video metadata",
   "shared-ui.document-viewer.viewer-help": "Having trouble with the enhanced viewer? Try again or open the standard preview.",
+  "shared-ui.document-viewer.viewer-options": "Viewer options",
   "shared-ui.document-viewer.weight": "Weight",
   "shared-ui.document-viewer.zoom-in": "Zoom in",
   "shared-ui.document-viewer.zoom-out": "Zoom out",

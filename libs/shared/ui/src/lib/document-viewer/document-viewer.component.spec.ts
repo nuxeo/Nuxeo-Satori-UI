@@ -53,6 +53,7 @@ describe('DocumentViewerComponent', () => {
       component.retryARenderClicked.subscribe(retry);
       render();
       expect(fixture.nativeElement.querySelector('.viewer-placeholder')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('details.viewer-options').open).toBe(true);
       fixture.nativeElement.querySelector('.open-standard-preview').click();
       render();
       expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
@@ -62,7 +63,53 @@ describe('DocumentViewerComponent', () => {
       expect(component.standardPreview()).toBe(false);
     });
 
-    it('keeps recovery controls outside a loaded NEV frame and resets the fallback for another document', () => {
+    it.each([false, true])(
+      'collapses recovery help with a NEV URL (Annotations=%s) and keeps actions available',
+      (annotations) => {
+        fixture.componentRef.setInput('annotationsTab', annotations);
+        fixture.componentRef.setInput('preferARender', !annotations);
+        fixture.componentRef.setInput(
+          'arenderUrl',
+          TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
+            'https://nev.example/?documentId=doc-1',
+          ),
+        );
+        render();
+        expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
+        const options: HTMLDetailsElement =
+          fixture.nativeElement.querySelector('details.viewer-options');
+        expect(options.open).toBe(false);
+        options.querySelector('summary')?.click();
+        expect(options.open).toBe(true);
+        fixture.nativeElement.querySelector('.open-standard-preview').click();
+        render();
+        expect(options.open).toBe(true);
+        expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
+        fixture.componentRef.setInput('viewerDocUid', 'doc-2');
+        render();
+        expect(component.standardPreview()).toBe(false);
+        expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
+        expect(options.open).toBe(false);
+      },
+    );
+
+    it('disables retry while connecting but still lets the user open the standard preview', () => {
+      fixture.componentRef.setInput('arenderLoading', true);
+      render();
+      expect(fixture.nativeElement.querySelector('details.viewer-options').open).toBe(true);
+      expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer').disabled).toBe(true);
+      fixture.nativeElement.querySelector('.open-standard-preview').click();
+      render();
+      expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
+    });
+
+    it('collapses connection guidance when a URL arrives and expands it again if unavailable', () => {
+      fixture.componentRef.setInput('arenderLoading', true);
+      render();
+      const options: HTMLDetailsElement =
+        fixture.nativeElement.querySelector('details.viewer-options');
+      expect(options.open).toBe(true);
+      fixture.componentRef.setInput('arenderLoading', false);
       fixture.componentRef.setInput(
         'arenderUrl',
         TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
@@ -70,23 +117,10 @@ describe('DocumentViewerComponent', () => {
         ),
       );
       render();
-      expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
-      fixture.nativeElement.querySelector('.open-standard-preview').click();
+      expect(options.open).toBe(false);
+      fixture.componentRef.setInput('arenderUrl', null);
       render();
-      expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
-      fixture.componentRef.setInput('viewerDocUid', 'doc-2');
-      render();
-      expect(component.standardPreview()).toBe(false);
-      expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
-    });
-
-    it('disables retry while connecting but still lets the user open the standard preview', () => {
-      fixture.componentRef.setInput('arenderLoading', true);
-      render();
-      expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer').disabled).toBe(true);
-      fixture.nativeElement.querySelector('.open-standard-preview').click();
-      render();
-      expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
+      expect(options.open).toBe(true);
     });
 
     it('does not offer a standard preview when no native content is available', () => {
