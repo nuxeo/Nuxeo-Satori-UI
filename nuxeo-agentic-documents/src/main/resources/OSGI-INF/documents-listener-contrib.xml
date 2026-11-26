@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.documents.listener" version="1.0">
+
+  <documentation>
+    The controlled document listener, synchronous, in the transaction of the change that fires it:
+    numbers a first revision on creation; gives a new revision its predecessor's number and the
+    next revision, and marks the predecessor superseded, linked both ways; refuses any other change
+    to the docctl properties, a copy of a controlled document, and a restore that would change
+    them. Every refusal marks the transaction for rollback.
+  </documentation>
+
+  <require>org.nuxeo.agentic.documents</require>
+  <require>org.nuxeo.agentic.documents.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="controlledDocumentListener" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.documents.ControlledDocumentListener">
+      <event>aboutToCreate</event>
+      <event>documentCreated</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToCopy</event>
+      <event>beforeRestoringDocument</event>
+    </listener>
+  </extension>
+
+</component>

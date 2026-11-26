@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.controlled-documents-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+  <!-- By hand: the ControlledDocument facet and its controlled_document schema (docctl:) are
+       nuxeo-agentic-documents', which the package depends on. -->
+  <require>org.nuxeo.agentic.documents.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="engdoc" prefix="engdoc" src="schemas/engdoc.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. By hand: the
+         ControlledDocument facet, so that the add-on numbers each document and makes a new
+         revision supersede the one it names. -->
+    <doctype name="EngineeringDocument" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="engdoc" />
+      <facet name="ControlledDocument" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="EngineeringDocument">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="controlled_documents_current">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'EngineeringDocument' AND (docctl:status = 'current')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <!-- By hand: by number, the order a register is read in. -->
+      <sort column="docctl:number" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_revisions">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'EngineeringDocument' AND (docctl:number = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:created" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="controlled_documents_superseded">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'EngineeringDocument' AND (docctl:status = 'superseded')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:modified" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

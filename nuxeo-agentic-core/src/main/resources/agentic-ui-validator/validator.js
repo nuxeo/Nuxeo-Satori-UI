@@ -1495,6 +1495,22 @@ var agenticUiValidator = (function () {
                 card2["fields"].forEach(function (entry2, inner) { return field(entry2, join(fields, inner), ofType); });
             });
         };
+        if (Array.isArray(file["banners"])) {
+            file["banners"].forEach(function (banner, index) {
+                var name = isRecord(banner) && isRecord(banner["link"]) ? banner["link"]["field"] : null;
+                if (typeof name !== "string" || !XPATH.test(name))
+                    return;
+                var at2 = join(join(join("banners", index), "link"), "field");
+                var property = properties.get(name);
+                if (!property) {
+                    add(at2, "unknown", whyMissing(model, type, name));
+                    return;
+                }
+                var shown2 = propertyTypeOf(property);
+                if (shown2 !== "string")
+                    add(at2, "parameter", "a banner links one record, by a string property holding its id, and \"".concat(name, "\" is a ").concat(shown2, " property"));
+            });
+        }
         cards(file["cards"], "cards");
         if (Array.isArray(file["tabs"])) {
             file["tabs"].forEach(function (tab, index) {
@@ -1581,7 +1597,8 @@ var agenticUiValidator = (function () {
         "cards",
         "tabs"
     ];
-    var BANNER_KEYS = ["id", "label", "labelKey", "tone", "visibleWhen"];
+    var BANNER_KEYS = ["id", "label", "labelKey", "tone", "visibleWhen", "link"];
+    var BANNER_LINK_KEYS = ["field"];
     var BANNER_TONES = ["info", "warning", "negative"];
     var TAB_KEYS = ["id", "label", "labelKey", "visibleWhen", "cards"];
     var CARD_CONTENTS = [
@@ -1775,7 +1792,20 @@ var agenticUiValidator = (function () {
                 c.add(join(path, "tone"), "structure", "tone is one of ".concat(BANNER_TONES.join(", ")));
             if ("visibleWhen" in item)
                 c.rule(item["visibleWhen"], join(path, "visibleWhen"));
+            if ("link" in item)
+                bannerLink(c, item["link"], join(path, "link"));
         });
+    }
+    function bannerLink(c, item, path) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", 'a link is { "field": "<prefix>:<name>" }');
+            return;
+        }
+        c.unknownKeys(item, BANNER_LINK_KEYS, path);
+        var field = item["field"];
+        if (typeof field !== "string" || !XPATH.test(field) || field.startsWith("ecm:") || field.startsWith("var:")) {
+            c.add(join(path, "field"), "structure", "needs the record's property that holds the linked record's id, <prefix>:<name>, never an ecm: or var: name");
+        }
     }
     function review(c, item) {
         if (!isRecord(item)) {

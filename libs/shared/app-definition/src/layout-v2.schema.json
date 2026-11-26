@@ -103,6 +103,9 @@
         },
         "visibleWhen": {
           "$ref": "#/$defs/rule"
+        },
+        "link": {
+          "$ref": "#/$defs/bannerLink"
         }
       },
       "description": "A message about the record, above its cards. It needs a label or a labelKey.",
@@ -114,6 +117,18 @@
           "required": ["labelKey"]
         }
       ]
+    },
+    "bannerLink": {
+      "type": "object",
+      "required": ["field"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/xpath",
+          "description": "A property of the open record holding a record's id. The banner shows that record by its title, as a document-link does, and opens it."
+        }
+      },
+      "description": "The record the banner links to."
     },
     "tab": {
       "type": "object",

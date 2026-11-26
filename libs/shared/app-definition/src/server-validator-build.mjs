@@ -222,6 +222,7 @@ const KITS = join(REPO, 'business-apps', 'packages');
 const KIT_NAMES = [
   'brand-assets-demo',
   'contracts-demo',
+  'controlled-documents-demo',
   'facilities-demo',
   'moves-demo',
   'payers-claims-demo',
