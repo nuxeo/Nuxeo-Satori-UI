@@ -14,8 +14,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * the 11.5 artifacts this module builds against declare it with {@code javax} ones, and the 2025
  * artifacts are not on the public repository. The module's {@code pom.xml} keeps this package out of
  * the jar, so the server's own interface is the one {@code PanelTokenAuthenticator} implements at run
- * time; {@code PlatformInterfaceCopyTest} holds this copy to the 2025 signatures, as read from the
- * 2025.10.18 jar with {@code javap}, and the jar's contents to the exclusion.
+ * time; {@code PanelTokenAuthenticatorTest} holds this copy to the 2025 signatures, as read from the
+ * 2025.10.18 jar with {@code javap}; the Marketplace workflow checks the built jar holds no copy.
  */
 public interface NuxeoAuthenticationPlugin {
 

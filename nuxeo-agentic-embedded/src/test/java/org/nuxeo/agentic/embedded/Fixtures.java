@@ -222,8 +222,11 @@ final class Fixtures {
             this.clock = clock;
         }
 
+        /** The hosts the server registers, whose HS256 keys are no panel's key. */
+        java.util.function.Supplier<java.util.Collection<Host>> hosts = () -> List.of(host());
+
         private PanelTokenCodec codec() {
-            return new PanelTokenCodec(settings(properties), clock);
+            return new PanelTokenCodec(settings(properties), clock, hosts);
         }
 
         @Override

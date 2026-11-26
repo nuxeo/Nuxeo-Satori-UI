@@ -56,22 +56,31 @@ such a token in on any path its audience allows. A panel's token signed by that 
 accepted in all three places, and only the first is the REST API. So the exchange is the add-on's,
 shaped as RFC 8693, its token is signed with a key of the add-on's own, which nothing else of the
 platform verifies, and the add-on's authenticator is the only one that signs it in, in the REST API's
-chain. The signing is still the platform's library's, `java-jwt` in `nxserver/lib`.
+chains. The signing is still the platform's library's, `java-jwt` in `nxserver/lib`. A token key
+equal to `nuxeo.jwt.secret`, or to a host's HS256 assertion key, signs and verifies nothing.
 
-The cost is the REST API's chain, which the platform replaces whole: the add-on contributes it again,
-as `nuxeo-rest-api-server` has it on LTS 2025.10.18, with its own plugin last
-(`embedded-panels-auth-contrib.xml`). An upgrade that changes the platform's chain must be followed
-there; `EmbeddedXmlTest` holds the contribution to the 2025.10.18 chain. And the plugin's interface,
-`NuxeoAuthenticationPlugin`, has Jakarta servlet types on LTS 2025 and `javax` ones in the 11.5
-artifacts the module builds against: the module compiles against a copy of the 2025 interface, kept
-out of its jar, which `PanelTokenAuthenticatorTest` holds to the 2025 signatures.
+The cost is the REST API's two chains, `RestAPI` and `Automation`, which the platform replaces whole:
+the add-on contributes both again, as LTS 2025.10.18 resolves them (`nuxeo-platform-login-token` sets
+both, after `nuxeo-automation-server` and `nuxeo-rest-api-server`), with its own plugin last
+(`embedded-panels-auth-contrib.xml`), and requires all three. Both, because the platform takes the
+first chain whose pattern matches the request's address, in no set order, and an operation's address
+on the REST API matches both. The `Automation` chain's pattern also matches the old
+`/nuxeo/site/automation/` and any address with "automation" in it; the authenticator signs a panel's
+token in only below `api/v1/`, as the guard says. An upgrade that changes either chain, and any
+configuration of a server's that replaces one, must list `AGENTIC_EMBEDDED_AUTH`: the component logs
+an error at start when either chain the server resolves lacks it, and `EmbeddedXmlTest` holds the
+contribution to the 2025.10.18 chains. And the plugin's interface, `NuxeoAuthenticationPlugin`, has
+Jakarta servlet types on LTS 2025 and `javax` ones in the 11.5 artifacts the module builds against:
+the module compiles against a copy of the 2025 interface, kept out of its jar, which
+`PanelTokenAuthenticatorTest` holds to the 2025 signatures and the Marketplace workflow checks the jar
+for.
 
 Checked against the local LTS 2025.10.18 server's own jars, not by a run: the OAuth 2.0 provider's
-token endpoint and its JWT bearer grant (`NuxeoOAuth2Servlet`); the REST API's chain
-(`nuxeo-rest-api-server`, `OSGI-INF/auth-contrib.xml`), which the platform matches against the
-request's address, `(.*)/api/v.*`; that a stateless plugin keeps no session for the identity it gives
-(`NuxeoAuthenticationFilter.needSessionSaving`); and that `/nuxeo/api/v1/` is forwarded to
-`/site/api/v1/` (the API forward servlet), where the authentication filter runs.
+token endpoint and its JWT bearer grant (`NuxeoOAuth2Servlet`); the two chains and their patterns,
+`(.*)/api/v.*` and `(.*)/automation.*`, matched against the request's address; that a stateless plugin
+keeps no session for the identity it gives (`NuxeoAuthenticationFilter.needSessionSaving`); and that
+`/nuxeo/api/v1/` is forwarded to `/site/api/v1/` (the API forward servlet), where the authentication
+filter runs.
 
 ## The contribution
 
@@ -114,12 +123,12 @@ tokens at once.
 
 ## The server's settings
 
-| Setting                                    | Or, in the environment              | What                                                                                                                                                  |
-| ------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nuxeo.agentic.embedded.<id>.clientSecret` | `NUXEO_EMBEDDED_<ID>_CLIENT_SECRET` | The secret the host authenticates with: 32 to 512 letters, digits, `.`, `_`, `~` or `-`                                                               |
-| `nuxeo.agentic.embedded.<id>.assertionKey` | `NUXEO_EMBEDDED_<ID>_ASSERTION_KEY` | For HS256, the shared key, at least 32 bytes; for RS256 (2048 bits or more) and ES256 (P-256), the public key, X.509 in base64                        |
-| `nuxeo.agentic.embedded.audience`          |                                     | The `aud` a host's assertions must name, and a panel's token names: this server. `nuxeo.url` when unset                                               |
-| `nuxeo.agentic.embedded.tokenSecret`       | `NUXEO_EMBEDDED_TOKEN_SECRET`       | The key a panel's token is signed with, HS256: at least 32 bytes, the same on every node, never `nuxeo.jwt.secret`'s value. Unset, no token is issued |
+| Setting                                    | Or, in the environment              | What                                                                                                                                                                                             |
+| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `nuxeo.agentic.embedded.<id>.clientSecret` | `NUXEO_EMBEDDED_<ID>_CLIENT_SECRET` | The secret the host authenticates with: 32 to 512 letters, digits, `.`, `_`, `~` or `-`                                                                                                          |
+| `nuxeo.agentic.embedded.<id>.assertionKey` | `NUXEO_EMBEDDED_<ID>_ASSERTION_KEY` | For HS256, the shared key, at least 32 bytes; for RS256 (2048 bits or more) and ES256 (P-256), the public key, X.509 in base64                                                                   |
+| `nuxeo.agentic.embedded.audience`          |                                     | The `aud` a host's assertions must name, and a panel's token names: this server. `nuxeo.url` when unset                                                                                          |
+| `nuxeo.agentic.embedded.tokenSecret`       | `NUXEO_EMBEDDED_TOKEN_SECRET`       | The key a panel's token is signed with, HS256: at least 32 bytes, the same on every node; never `nuxeo.jwt.secret`'s value nor a host's HS256 key, which sign nothing. Unset, no token is issued |
 
 `<ID>` is the id in capitals, with dashes as underscores. The names follow from the id and from
 nothing else, so a contribution cannot have another of the server's settings used as a host's key.
@@ -176,7 +185,7 @@ Every answer has `Cache-Control: no-store`. A refusal is RFC 6749, section 5.2's
 
 `PanelTokenFilter`, on `/api/*` and on `/site/*` for a request and a forward, holds every request
 that carries a token whose claims name a host to `PanelTokenGuard`, before the REST API serves it,
-whether or not the token's signature is good; and `PanelTokenAuthenticator`, in the REST API's chain,
+whether or not the token's signature is good; and `PanelTokenAuthenticator`, in the REST API's chains,
 signs the token's user in only when the same rule lets the request through, so that either one
 alone keeps a panel's token to it:
 
@@ -213,9 +222,9 @@ read, so that the panel says it is refused.
 | `src/main/java/org/nuxeo/agentic/embedded/`                    | The bundle: the descriptor and its checks (`Host.of`), the exchange, the token's codec, the guard, the scope, the servlet, the filter, the authenticator, and the platform's services behind three interfaces |
 | `src/main/java/org/nuxeo/ecm/platform/ui/web/auth/interfaces/` | A compile-time copy of LTS 2025's `NuxeoAuthenticationPlugin`, with Jakarta types, kept out of the jar                                                                                                        |
 | `src/main/resources/OSGI-INF/embedded-panels-service.xml`      | The component `org.nuxeo.agentic.embedded`, its service and its `hosts` extension point                                                                                                                       |
-| `src/main/resources/OSGI-INF/embedded-panels-auth-contrib.xml` | The authenticator, the REST API's chain with it last, and the panel's files at `/nuxeo/agentic-ui/embedded/` open to a page signed in to nothing                                                              |
+| `src/main/resources/OSGI-INF/embedded-panels-auth-contrib.xml` | The authenticator, the REST API's two chains with it last, and the panel's files at `/nuxeo/agentic-ui/embedded/` open to a page signed in to nothing                                                         |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`          | The servlet at `/agentic-embedded/*`, and the filter on `/api/*` and `/site/*`                                                                                                                                |
-| `src/test/java/`                                               | 82 tests, with no Nuxeo runtime                                                                                                                                                                               |
+| `src/test/java/`                                               | 87 tests, with no Nuxeo runtime                                                                                                                                                                               |
 | `demo/demo.mjs`                                                | For development only: a stand-in Nuxeo, mirroring this add-on where the panel meets it, and a fictional CRM, `demo/crm/`, that embeds the panel                                                               |
 | `demo/Claim.view.layout.json`                                  | The demo's claim page: a claim card, a card from the core system and a notes card                                                                                                                             |
 
@@ -228,7 +237,7 @@ serves it.
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
-mvn -B -f nuxeo-agentic-embedded/pom.xml verify    # 82 tests
+mvn -B -f nuxeo-agentic-embedded/pom.xml verify    # 87 tests
 ```
 
 The root `pom.xml` lists the module. **It has no Marketplace package yet**, which a release needs.
@@ -258,14 +267,15 @@ to be relied on outside a development or demonstration server. What a review mus
   key, and their rotation. Prefer RS256 or ES256, so that the server holds only a public key.
 - **The token key.** Whoever holds `nuxeo.agentic.embedded.tokenSecret` can sign a panel's token for
   any user. Check where it is kept, that it is long and random, the same on every node, held by no
-  other system, and never the value of `nuxeo.jwt.secret`, whose tokens the platform accepts beyond
-  the REST API.
+  other system. The add-on refuses a key equal to `nuxeo.jwt.secret`, whose tokens the platform
+  accepts beyond the REST API, or to a host's HS256 assertion key, which that host holds; it cannot
+  tell a key some other system holds.
 - **Where the token signs anyone in.** Only the add-on's authenticator verifies it, and only the REST
-  API's chain holds the authenticator; the filter and the authenticator apply the same rule, so
-  either keeps the token to its scope. Check, on the deployed server, the REST API's chain as the
-  platform resolves it, with the add-on's contribution over the platform's (an upgrade that changes
-  the platform's chain must be followed), the filter's mapping in `web.xml`, and the paths
-  `PanelScope` allows against the REST API of the version deployed.
+  API's two chains hold the authenticator; the filter and the authenticator apply the same rule, so
+  either keeps the token to its scope. Check, on the deployed server, the two chains as the platform
+  resolves them, with the add-on's contribution over the platform's (an upgrade that changes either
+  must be followed, and the start's log says when one lacks the plugin), the filter's mapping in
+  `web.xml`, and the paths `PanelScope` allows against the REST API of the version deployed.
 - **Bundle contributions only.** The server refuses a host from a bundle; a Marketplace package can
   still write a file into `nxserver/config/` when it is installed, as for the operations allow-list.
   Check what each package installs there.
@@ -284,7 +294,7 @@ to be relied on outside a development or demonstration server. What a review mus
 
 ## Not done, and not checked
 
-- **On a server: nothing.** The filter's place in the deployed `web.xml`, the chain the platform
+- **On a server: nothing.** The filter's place in the deployed `web.xml`, the chains the platform
   resolves with the add-on's contribution, the authenticator loaded against the platform's own
   interface, the audit entries and the key-value store's behaviour are Nuxeo's documented behaviour,
   checked against the 2025.10.18 jars' bytecode where they could be, not by a run. The add-on is

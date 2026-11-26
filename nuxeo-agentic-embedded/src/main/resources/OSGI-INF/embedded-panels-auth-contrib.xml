@@ -1,8 +1,14 @@
 <?xml version="1.0"?>
 <component name="org.nuxeo.agentic.embedded.authentication.contrib">
 
-  <!-- After the REST API's own chain, which the specific chain below replaces. -->
+  <!--
+    After every component of the platform's that sets the two chains below, since the platform
+    replaces a specific chain whole and the last contribution wins: nuxeo-automation-server's,
+    nuxeo-rest-api-server's, and nuxeo-platform-login-token's, which sets both again.
+  -->
+  <require>org.nuxeo.ecm.automation.server.auth.config</require>
   <require>org.nuxeo.ecm.restapi.server.auth.config</require>
+  <require>org.nuxeo.ecm.login.token.authentication.contrib</require>
 
   <!--
     The panel's authenticator: it signs in the user of a panel's token, a JWT signed with the add-on's
@@ -18,14 +24,32 @@
   </extension>
 
   <!--
-    The REST API's chain, as nuxeo-rest-api-server's OSGI-INF/auth-contrib.xml has it on LTS
-    2025.10.18, with the panel's authenticator last: the platform replaces a specific chain whole, so
-    this is the only way to add a plugin to it. An upgrade that changes the platform's chain must be
-    followed here; EmbeddedXmlTest holds this one to the 2025.10.18 chain plus the panel's. The
-    panel's token is then signed in on the REST API and nowhere else.
+    The REST API's two chains, as LTS 2025.10.18 resolves them (nuxeo-platform-login-token's
+    OSGI-INF/token-authentication-contrib.xml), with the panel's authenticator last. Both, because
+    the platform picks the first chain whose pattern matches the request's address, in no set order,
+    and /nuxeo/api/v1/automation/<id> matches the Automation chain's as well as the REST API's.
+
+    The Automation chain's pattern also matches /nuxeo/site/automation/ and any address with
+    "automation" in it: the authenticator signs a panel's token in only on a path below api/v1/, as
+    the guard says (PanelTokenGuard), so nowhere else. An upgrade that changes either chain, and any
+    configuration that replaces one, must list AGENTIC_EMBEDDED_AUTH; the component logs an error at
+    start when either chain the server resolves lacks it. EmbeddedXmlTest holds these to the
+    2025.10.18 chains.
   -->
   <extension point="specificChains"
              target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <specificAuthenticationChain name="Automation">
+      <urlPatterns>
+        <url>(.*)/automation.*</url>
+      </urlPatterns>
+      <replacementChain>
+        <plugin>AUTOMATION_BASIC_AUTH</plugin>
+        <plugin>TOKEN_AUTH</plugin>
+        <plugin>OAUTH2_AUTH</plugin>
+        <plugin>JWT_AUTH</plugin>
+        <plugin>AGENTIC_EMBEDDED_AUTH</plugin>
+      </replacementChain>
+    </specificAuthenticationChain>
     <specificAuthenticationChain name="RestAPI">
       <urlPatterns>
         <url>(.*)/api/v.*</url>

@@ -70,6 +70,21 @@ class PanelTokenGuardTest {
     }
 
     @Test
+    void aTokenKeyAnotherHolderHasVerifiesNothing() {
+        assertTrue(check("GET", DOCUMENT).passes());
+        tokens.properties.put("nuxeo.jwt.secret", Fixtures.TOKEN_SECRET);
+        assertRefused(check("GET", DOCUMENT), 401);
+        tokens.properties.remove("nuxeo.jwt.secret");
+        tokens.properties.put(Fixtures.host().assertionKeyProperty(), Fixtures.TOKEN_SECRET);
+        assertRefused(check("GET", DOCUMENT), 401);
+        // An RS256 host's key is a public key: no one signs with it.
+        HostDescriptor rs256 = Fixtures.descriptor();
+        rs256.algorithm = "RS256";
+        tokens.hosts = () -> List.of(Host.of(rs256));
+        assertTrue(check("GET", DOCUMENT).passes());
+    }
+
+    @Test
     void aTokenWhoseHeaderNamesAnotherAlgorithmIsRefusedWhateverItsSignature() {
         // An HS256 signature with the add-on's key, under a header that says HS512: only the header tells.
         Base64.Encoder url = Base64.getUrlEncoder().withoutPadding();

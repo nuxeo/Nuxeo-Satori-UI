@@ -323,7 +323,7 @@ way.
   secret and key in the server's settings. The token is a JWT signed with a key of the add-on's own,
   not the platform's `nuxeo.jwt.secret`, whose tokens the platform also takes at its JWT
   authenticator and its OAuth 2.0 provider's JWT bearer grant; the add-on's own authenticator signs
-  the user in with it, in the REST API's chain alone, which the add-on contributes again with it, and
+  the user in with it, in the REST API's two chains alone, which the add-on contributes again with it, and
   the add-on's filter and that authenticator hold it to its host's origins and to reads; each exchange
   is audited. The panel, `<nuxeo-record-panel>`, is
   the layout engine's record page in a shadow root, given its token by `postMessage`. An add-on of
@@ -336,8 +336,8 @@ way.
     `embedded/v1/` files and the frontend module's build of them; nothing else uses either.
   - **Exchange through Nuxeo's OAuth 2.0 provider,** should the platform gain a token exchange whose
     tokens carry a scope it enforces: the add-on's servlet, `TokenExchange`, its codec and its
-    authenticator go, the host's contribution becomes the provider's client, and the REST API's chain
-    goes back to the platform's. The panel does not change.
+    authenticator go, the host's contribution becomes the provider's client, and the REST API's chains
+    go back to the platform's. The panel does not change.
   - **The platform's own JWT, with an audience the platform holds to a path:** not built, since the
     provider's JWT bearer grant takes any token of the platform's JWT service and answers an access
     token with no scope; it would be possible only once that grant checks a token's audience.

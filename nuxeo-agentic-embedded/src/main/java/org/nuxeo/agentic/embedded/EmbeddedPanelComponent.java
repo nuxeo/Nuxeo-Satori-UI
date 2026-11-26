@@ -121,12 +121,28 @@ public class EmbeddedPanelComponent extends DefaultComponent implements Embedded
         }
     }
 
+    /** After the platform's authentication service, the default's 1000, whose chains it reads. */
+    @Override
+    public int getApplicationStartedOrder() {
+        return 2000;
+    }
+
     @Override
     public void start(ComponentContext context) {
         EmbeddedSettings settings = new EmbeddedSettings(Framework::getProperty, System::getenv);
         Clock clock = Clock.systemUTC();
-        start(settings, new KeyValueReplayGuard(), new PlatformUserDirectory(), new PanelTokenCodec(settings, clock),
-                new PlatformExchangeAudit(), clock);
+        start(settings, new KeyValueReplayGuard(), new PlatformUserDirectory(),
+                new PanelTokenCodec(settings, clock, hosts::values), new PlatformExchangeAudit(), clock);
+        Object service = Framework.getRuntime() == null ? null
+                : Framework.getRuntime().getComponent(AuthenticationChains.SERVICE);
+        if (service != null) {
+            List<String> lacking = AuthenticationChains.lacking(service);
+            if (!lacking.isEmpty()) {
+                log.error("Embedded panels: the server's authentication chains {} do not hold {}, so no panel's token "
+                        + "signs anyone in through them: a configuration that replaces the RestAPI or the Automation "
+                        + "chain must list it", lacking, PanelTokenAuthenticator.NAME);
+            }
+        }
     }
 
     /** Package-private for tests. */

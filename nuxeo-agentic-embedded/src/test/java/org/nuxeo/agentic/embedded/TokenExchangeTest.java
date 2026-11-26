@@ -367,6 +367,19 @@ class TokenExchangeTest {
     }
 
     @Test
+    void aTokenKeyAnotherHolderHasIssuesNothing() {
+        // The platform's own JWT key: its JWT authenticator and its OAuth 2.0 provider take what it signs.
+        properties.put("nuxeo.jwt.secret", Fixtures.TOKEN_SECRET);
+        assertRefused(exchange(valid("crm-user-17", "a-1")), 503, "server_error");
+        properties.remove("nuxeo.jwt.secret");
+        // A host's HS256 assertion key: that host could sign a token for anyone.
+        properties.put(Fixtures.host().assertionKeyProperty(), Fixtures.TOKEN_SECRET);
+        String assertion = Fixtures.assertion("crm-user-17", "a-2").sign(Algorithm.HMAC256(Fixtures.TOKEN_SECRET));
+        assertRefused(exchange(assertion), 503, "server_error");
+        assertTrue(tokens.issued.isEmpty());
+    }
+
+    @Test
     void aServerWithNoTokenKeyOrAShortOneIssuesNothing() {
         properties.remove(EmbeddedSettings.TOKEN_SECRET);
         assertRefused(exchange(valid("crm-user-17", "a-1")), 503, "server_error");

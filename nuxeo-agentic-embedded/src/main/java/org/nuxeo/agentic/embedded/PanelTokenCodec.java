@@ -2,10 +2,12 @@ package org.nuxeo.agentic.embedded;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -38,13 +40,23 @@ public final class PanelTokenCodec implements TokenCodec {
 
     private static final String ALGORITHM = "HS256";
 
+    /** The platform's own JWT key, which the panel's must never be. */
+    static final String PLATFORM_JWT_SECRET = "nuxeo.jwt.secret";
+
     private final EmbeddedSettings settings;
 
     private final Clock clock;
 
-    public PanelTokenCodec(EmbeddedSettings settings, Clock clock) {
+    private final Supplier<Collection<Host>> hosts;
+
+    /**
+     * @param hosts the registered hosts: a key one of them signs its HS256 assertions with is no
+     *            panel's key, or that host could sign a token for anyone
+     */
+    public PanelTokenCodec(EmbeddedSettings settings, Clock clock, Supplier<Collection<Host>> hosts) {
         this.settings = settings;
         this.clock = clock;
+        this.hosts = hosts;
     }
 
     @Override
@@ -52,9 +64,10 @@ public final class PanelTokenCodec implements TokenCodec {
         Algorithm algorithm = algorithm();
         String audience = settings.audience();
         if (algorithm == null || audience == null) {
-            throw new TokenException("no token key or no audience is set: set "
-                    + EmbeddedSettings.TOKEN_SECRET + ", at least " + AssertionVerifier.MIN_HMAC_KEY_BYTES
-                    + " bytes, and " + EmbeddedSettings.AUDIENCE + " or nuxeo.url", null);
+            throw new TokenException("no usable token key or no audience is set: set " + EmbeddedSettings.TOKEN_SECRET
+                    + ", at least " + AssertionVerifier.MIN_HMAC_KEY_BYTES + " bytes of its own, not "
+                    + PLATFORM_JWT_SECRET + "'s value nor a host's assertion key, and " + EmbeddedSettings.AUDIENCE
+                    + " or nuxeo.url", null);
         }
         return JWT.create()
                   .withIssuer(ISSUER)
@@ -104,10 +117,21 @@ public final class PanelTokenCodec implements TokenCodec {
         return claims;
     }
 
+    /**
+     * The key's algorithm, or {@code null}, which issues and verifies nothing: for no key, a short
+     * one, or one another holder has. The platform's {@code nuxeo.jwt.secret} signs tokens its JWT
+     * authenticator and its OAuth 2.0 provider take; a host's HS256 assertion key is the host's too.
+     */
     private Algorithm algorithm() {
         String key = settings.tokenKey();
-        if (key == null || key.getBytes(StandardCharsets.UTF_8).length < AssertionVerifier.MIN_HMAC_KEY_BYTES) {
+        if (key == null || key.getBytes(StandardCharsets.UTF_8).length < AssertionVerifier.MIN_HMAC_KEY_BYTES
+                || key.equals(settings.property(PLATFORM_JWT_SECRET))) {
             return null;
+        }
+        for (Host host : hosts.get()) {
+            if (host.algorithm() == Host.Algorithm.HS256 && key.equals(settings.assertionKey(host))) {
+                return null;
+            }
         }
         return Algorithm.HMAC256(key.getBytes(StandardCharsets.UTF_8));
     }
