@@ -108,8 +108,8 @@
             <property name="size">10</property>
           </properties>
         </aggregate>
-        <aggregate id="dmg_moveNumber_agg" type="terms" parameter="dmg:moveNumber">
-          <field schema="damageclaim_search" name="dmg_moveNumber_agg" />
+        <aggregate id="dmg_move_agg" type="terms" parameter="dmg:move">
+          <field schema="damageclaim_search" name="dmg_move_agg" />
           <properties>
             <property name="size">10</property>
           </properties>

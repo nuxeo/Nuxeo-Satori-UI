@@ -46,7 +46,18 @@ import {
   documentNavigationUrl,
   resultWindow,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { catchError, forkJoin, map, merge, of, startWith, switchMap, tap } from 'rxjs';
+import {
+  type Observable,
+  catchError,
+  filter,
+  forkJoin,
+  map,
+  merge,
+  of,
+  startWith,
+  switchMap,
+  tap,
+} from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
@@ -54,11 +65,21 @@ import type { LayoutFieldType } from '../layout.model';
 import {
   type RecordValueContext,
   type RecordValueView,
+  showLinkedProperty,
   showValue,
   viewText,
 } from './record-field-view';
+import type { LinkedProperty } from './linked-record';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
-import { type RecordListEntry, type RecordPropertyField, ruleRefusal } from './record-layout';
+import {
+  type RecordListEntry,
+  type RecordPropertyField,
+  columnKey,
+  linkedTypesOf,
+  ruleRefusal,
+  showKey,
+  showOf,
+} from './record-layout';
 import {
   LookupCollector,
   NO_LABELS,
@@ -67,8 +88,10 @@ import {
   linkedRecordLookup,
   namesOf,
   readLabels,
-  recordIdsOf,
   recordLookups,
+  recordReadOf,
+  type RecordRead,
+  sameIds,
   sameLookups,
 } from './record-lookups';
 import { WIDGETS_SHOWN_AS_VERSION_1, widgetAccepts, widgetPropertyType } from './widget-support';
@@ -291,6 +314,57 @@ export class RecordListComponent {
     }),
   );
 
+  /**
+   * What each column with a `show` reads of the records it links to, by the column's place, from
+   * its types' definitions (layout-v2.md, section 12): `null` until they are read, which a list
+   * with none has at once.
+   */
+  private readonly shows = toSignal(
+    toObservable(this.shownColumns).pipe(
+      switchMap((columns): Observable<ReadonlyMap<string, LinkedProperty | null>> => {
+        const linked = columns.filter((column) => showOf(column) !== null);
+        if (linked.length === 0) return of(new Map());
+        return forkJoin(
+          linked.map((column) =>
+            this.layouts.linkedProperty(linkedTypesOf(column), showOf(column) as string),
+          ),
+        ).pipe(
+          map((read) => new Map(linked.map((column, index) => [showKey(column), read[index]]))),
+        );
+      }),
+    ),
+    { initialValue: null },
+  );
+
+  /**
+   * What a column with a `show` shows, once its types are read: `undefined` until then, and `null`
+   * where none of them has the property, or it is itself a reference, and the column is left out.
+   */
+  private linkedOf(column: RecordPropertyField): LinkedProperty | null | undefined {
+    const linked = this.shows()?.get(showKey(column));
+    if (linked === undefined) return undefined;
+    if (linked === null) {
+      this.tell(
+        `${column.place}: none of the types it links to has ${showOf(column)}, or their schemas could not be read; that column left out`,
+      );
+      return null;
+    }
+    if (linked.definition.documentReference) {
+      this.tell(
+        `${column.place}: ${showOf(column)} is itself a reference, and would show another record's stored id; that column left out`,
+      );
+      return null;
+    }
+    return linked;
+  }
+
+  /** The columns drawn: those shown, but a `show` that cannot be. */
+  private readonly drawnColumns = computed(() =>
+    this.shownColumns().filter(
+      (column) => showOf(column) === null || this.linkedOf(column) !== null,
+    ),
+  );
+
   private readonly request = computed<ListRequest | null>(
     () => {
       const parameters = this.parameters();
@@ -356,8 +430,13 @@ export class RecordListComponent {
       const state = this.state();
       const collector = new LookupCollector();
       if (state.status !== 'loaded') return collector.lookups();
+      const columns = this.drawnColumns();
+      for (const column of columns) {
+        const linked = showOf(column) === null ? null : this.linkedOf(column);
+        if (linked) collector.schema(linked.schema);
+      }
       for (const row of state.page.entries) {
-        for (const column of this.shownColumns()) {
+        for (const column of columns) {
           const definition = this.definitionOf(state, row, column);
           if (!definition) continue;
           collector.value(
@@ -382,11 +461,31 @@ export class RecordListComponent {
 
   /**
    * The records the page's `document-link` cells name: one request for the ids each page adds, so
-   * a page read before, or another order of the same rows, asks for nothing.
+   * a page read before, or another order of the same rows, asks for nothing. With the schemas its
+   * columns' `show` read, once those are known, so that a record is read once with them.
    */
+  private readonly recordRead = recordReadOf(this.lookups);
+
+  /** Whether every column's `show` is known: its types read for these columns. */
+  private readonly showsKnown = computed(() => {
+    const shows = this.shows();
+    return (
+      shows !== null &&
+      this.shownColumns().every((column) => showOf(column) === null || shows.has(showKey(column)))
+    );
+  });
+
   private readonly records = toSignal(
-    toObservable(recordIdsOf(this.lookups)).pipe(
-      switchMap((ids) => this.linkedRecords.records(ids)),
+    toObservable(
+      computed(() => (this.showsKnown() ? this.recordRead() : null), {
+        equal: (a, b) =>
+          a === b ||
+          (a !== null && b !== null && sameIds(a.ids, b.ids) && sameIds(a.schemas, b.schemas)),
+      }),
+    ).pipe(
+      // Until they are, the records read so far stay shown, and nothing is asked for.
+      filter((read): read is RecordRead => read !== null),
+      switchMap((read) => this.linkedRecords.records(read.ids, read.schemas)),
     ),
     { initialValue: NO_RECORDS },
   );
@@ -477,10 +576,12 @@ export class RecordListComponent {
     this.translations();
     const state = this.state();
     const context = this.valueContext();
-    return this.shownColumns().map((column) => ({
-      key: column.xpath,
+    return this.drawnColumns().map((column) => ({
+      key: columnKey(column),
       label: layoutLabelText(this.translate, column.label) ?? column.xpath,
-      sortable: state.status === 'loaded' && this.sortable(state, column),
+      // A linked record's property is not this list's to sort by (layout-v2.md, section 12).
+      sortable:
+        state.status === 'loaded' && showOf(column) === null && this.sortable(state, column),
       text: (row: NuxeoDocument) =>
         state.status === 'loaded'
           ? viewText(this.cell(state, row, column, context), context.flagText)
@@ -644,6 +745,17 @@ export class RecordListComponent {
   ): RecordValueView {
     const definition = this.definitionOf(state, row, column);
     if (!definition) return { kind: 'empty' };
+    const show = showOf(column);
+    if (show !== null) {
+      const linked = this.linkedOf(column);
+      if (linked === undefined) return { kind: 'records', records: [] };
+      if (linked === null) return { kind: 'empty' };
+      return showLinkedProperty(
+        row.properties[column.xpath],
+        { xpath: show, definition: linked.definition },
+        context,
+      );
+    }
     const label = layoutLabelText(this.translate, column.label) ?? column.xpath;
     return showValue(
       {

@@ -10,6 +10,9 @@
  * - **A checklist's property** is on the type, a list of complex values, with the subfields
  *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
  * - **A banner's link** names a string property of the type, which holds the linked record's id.
+ * - **A `document-link`'s `show`**, in a card's field or a related list's column, names a property
+ *   of every type its `types` lists ({@link linkedShowFindings}): the linked records' types, which
+ *   the file says, though a related list's own type it does not.
  * - **A review**, and **share links**, are for a type with the `picture` schema and without the
  *   `video` one, the records whose page shows a picture.
  *
@@ -18,8 +21,11 @@
  * checks have: an entry that is malformed already has a finding, and is passed over here.
  *
  * Not checked against the model: a related list's columns, which are the listed records' and not
- * this type's; the properties a computation, a rule or a widget parameter names; and a vocabulary
- * widget's `directory` against the one the property is bound to.
+ * this type's, but for their `show`; the properties a computation, a rule or a widget parameter
+ * names, `show` excepted; and a vocabulary widget's `directory` against the one the property is
+ * bound to. Nor whether a `document-link`'s property, or the one its `show` names, is a document
+ * reference: the model reader does not read resolvers. The record page refuses a `show` naming a
+ * reference, which it can tell from the linked type's schema.
  *
  * Stricter than the record page in two places, as the pipeline is meant to be: a column whose
  * widget does not show its subfield is refused here, where the page shows the value itself; and a
@@ -58,6 +64,42 @@ interface Scope {
   readonly label: (name: string) => string;
   /** Why the name is not found. */
   readonly missing: (name: string) => string;
+}
+
+/**
+ * A `document-link` entry's `show` held to the content model (layout-v2.md, section 12): the
+ * property it names is one of every type its `types` lists, on the type or a facet it declares,
+ * since the linked record may be of any of them. An `unknown` finding for each type that lacks it,
+ * and for one the model does not have. An entry with no `show`, or whose `show` or `types` is
+ * malformed and has its finding already, has none here.
+ */
+export function linkedShowFindings(entry: unknown, path: string, model: ContentModel): Finding[] {
+  if (!isRecord(entry) || entry['widget'] !== 'document-link') return [];
+  const parameters = entry['parameters'];
+  if (!isRecord(parameters)) return [];
+  const { show, types } = parameters;
+  if (typeof show !== 'string' || !XPATH.test(show) || !Array.isArray(types)) return [];
+  const at = join(join(path, 'parameters'), 'show');
+  return types.flatMap((linked): Finding[] => {
+    if (typeof linked !== 'string' || linked === '') return [];
+    if (!propertiesOf(model, linked))
+      return [
+        {
+          path: at,
+          kind: 'unknown',
+          message: `the type "${linked}" that "types" lists is not in the content model, so "${show}" cannot be found on it`,
+        },
+      ];
+    return propertiesOf(model, linked)?.has(show)
+      ? []
+      : [
+          {
+            path: at,
+            kind: 'unknown',
+            message: `${whyMissing(model, linked, show)}, one of the types the field links to`,
+          },
+        ];
+  });
 }
 
 export function againstModel(
@@ -105,6 +147,7 @@ export function againstModel(
   };
 
   const field = (entry: unknown, path: string, scope: Scope): void => {
+    if (scope === ofType) findings.push(...linkedShowFindings(entry, path, model));
     let name: unknown;
     let at = path;
     let widget: unknown;
@@ -196,7 +239,18 @@ export function againstModel(
     list.forEach((card, index) => {
       if (isRecord(card) && isRecord(card['checklist']))
         checklist(card['checklist'], join(join(path, index), 'checklist'));
-      // A card of related records lists other records, whose type this file does not say.
+      // A card of related records lists other records, whose type this file does not say: only
+      // what a column's `show` names is checked, against the types the column says it links to.
+      if (
+        isRecord(card) &&
+        isRecord(card['related']) &&
+        Array.isArray(card['related']['columns'])
+      ) {
+        const columns = join(join(join(path, index), 'related'), 'columns');
+        card['related']['columns'].forEach((column, inner) =>
+          findings.push(...linkedShowFindings(column, join(columns, inner), model)),
+        );
+      }
       if (!isRecord(card) || !Array.isArray(card['fields'])) return;
       const fields = join(join(path, index), 'fields');
       card['fields'].forEach((entry, inner) => field(entry, join(fields, inner), ofType));

@@ -83,45 +83,6 @@ describe('the proposal and the validator agree', () => {
   });
 });
 
-describe('the proposed examples are refused until they are built', () => {
-  // A block fenced "```json proposed <widget>.<parameter>" is a proposal not yet built, such as
-  // layout-v2.md's section 12: the validator refuses it today, and for that widget's parameter
-  // alone. The day it is accepted, the proposal is built: make the block a plain ```json example,
-  // which the test above then holds to no finding, and settle its section. When no proposed block
-  // is left, delete this describe, whose first test would fail.
-  const proposed = [
-    ...proposal.matchAll(/```json proposed ([a-z-]+)\.([A-Za-z]+)\n([\s\S]*?)```/g),
-  ].map(([, widget, parameter, body]) => ({ widget, parameter, example: JSON.parse(body) }));
-
-  it('finds them', () => {
-    expect(proposed.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('leaves no json block out: each is an example or a labelled proposal', () => {
-    // A block fenced "```json proposed" with no label, or a mistyped one, matches neither pattern,
-    // and no test would read it.
-    const fences = [...proposal.matchAll(/```json[^\n]*\n/g)].length;
-    const examples = [...proposal.matchAll(/```json\n/g)].length;
-    expect(fences).toBe(examples + proposed.length);
-  });
-
-  proposed.forEach(({ widget, parameter, example }, index) => {
-    it(`proposed example ${index + 1} is refused, for ${widget}'s "${parameter}" alone`, () => {
-      // Wrapped as the examples above are: a file, a card, or a field.
-      const file =
-        'version' in example
-          ? example
-          : 'related' in example || 'fields' in example
-            ? { version: 2, columns: 2, cards: [example] }
-            : withFields(example);
-      const found = messages(file);
-      expect(found.length).toBeGreaterThan(0);
-      const refusal = `.parameters.${parameter}: the widget "${widget}" has no parameter "${parameter}" [parameter]`;
-      for (const message of found) expect(message.endsWith(refusal)).toBe(true);
-    });
-  });
-});
-
 describe('a sound file', () => {
   it('has no finding, in every mode it suits', () => {
     expect(messages(sound())).toEqual([]);
@@ -706,6 +667,132 @@ describe('the date rules', () => {
     expect(rule({ type: 'app.rules.datePassed', parameters: [computed] })).toEqual([
       'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.datePassed" takes a property or a date here, as "2026-12-01" or an ISO 8601 date and time with its zone [parameter]',
     ]);
+  });
+
+  describe('dateAfter', () => {
+    const after = (...parameters: unknown[]) => rule({ type: 'app.rules.dateAfter', parameters });
+    const filed = { field: 'dmg:filedOn' };
+    const delivered = { field: 'dmg:deliveredOn' };
+
+    it('takes two dates, either of them "today", and a whole number of days', () => {
+      expect(after(filed, delivered, 30)).toEqual([]);
+      expect(after('today', delivered, 0)).toEqual([]);
+      expect(after(filed, 'today', 36500)).toEqual([]);
+      expect(after('2026-12-01', '2026-11-01T09:30:00Z', 7)).toEqual([]);
+    });
+
+    it('refuses a date that is not one, a computation, or "today" written otherwise', () => {
+      const refused = (index: number) =>
+        `cards[0].fields[0].visibleWhen.parameters[${index}]: the rule "app.rules.dateAfter" takes a property, a date, as "2026-12-01" or an ISO 8601 date and time with its zone, or "today" here [parameter]`;
+      const computed = {
+        computed: { type: 'core.dateDiff', parameters: [filed, delivered, 'days'] },
+      };
+      for (const date of ['Today', 'now', '2026-13-01', '2026-12-01T09:30:00', 30, computed]) {
+        expect(after(date, delivered, 30)).toEqual([refused(0)]);
+        expect(after(filed, date, 30)).toEqual([refused(1)]);
+      }
+    });
+
+    it('refuses days out of range, and any other number of parameters', () => {
+      for (const days of [-1, 36501, '30', 1.5, null])
+        expect(after(filed, delivered, days)).toEqual([
+          'cards[0].fields[0].visibleWhen.parameters[2]: the rule "app.rules.dateAfter" takes a whole number of days from 0 to 36500 here [parameter]',
+        ]);
+      for (const parameters of [
+        [filed, delivered],
+        [filed, delivered, 30, 1],
+      ])
+        expect(after(...parameters)).toEqual([
+          `cards[0].fields[0].visibleWhen.parameters: the rule "app.rules.dateAfter" takes 3 parameters, not ${parameters.length} [parameter]`,
+        ]);
+    });
+  });
+});
+
+describe("a document-link's show", () => {
+  const link = (parameters: Record<string, unknown>, more: Record<string, unknown> = {}) => ({
+    field: 'claim:provider',
+    widget: 'document-link',
+    parameters,
+    ...more,
+  });
+  const npi = (more: Record<string, unknown> = {}) =>
+    link({ types: ['Provider'], show: 'provider:npi' }, more);
+  const related = (columns: unknown[], sort: unknown[] = []) => ({
+    version: 2,
+    cards: [
+      {
+        id: 'claims',
+        label: 'Claims',
+        related: {
+          pageProvider: 'member_claims',
+          parameters: [{ field: 'ecm:uuid' }],
+          columns,
+          sort,
+        },
+      },
+    ],
+  });
+  const byProvider = [{ field: 'claim:provider', order: 'asc' }];
+
+  it('shows a property of the linked record on a page: a field, or a list column', () => {
+    expect(messages(withFields(npi({ id: 'providerNpi' })))).toEqual([]);
+    expect(messages(withFields(link({ types: ['Provider', 'Clinic'], show: 'dc:title' })))).toEqual(
+      [],
+    );
+    // A list column, beside a plain one over the same reference.
+    expect(messages(related(['claim:number', link({ types: ['Provider'] }), npi()]))).toEqual([]);
+  });
+
+  it('names a property of the linked record, neither ecm: nor var:', () => {
+    for (const show of [
+      'ecm:uuid',
+      'var:comment',
+      'npi',
+      'provider:npi/x',
+      '',
+      5,
+      ['provider:npi'],
+    ])
+      expect(messages(withFields(link({ types: ['Provider'], show })))).toEqual([
+        'cards[0].fields[0].parameters.show: show must be a property of the linked record, <prefix>:<name>, neither ecm: nor var: [parameter]',
+      ]);
+  });
+
+  it('needs the types it links to, whose schemas hold the property', () => {
+    expect(messages(withFields(link({ show: 'provider:npi' })))).toEqual([
+      'cards[0].fields[0].parameters.show: "show" needs "types", the types of the records it links to, whose schemas hold the property it shows [parameter]',
+    ]);
+  });
+
+  it('is for a page only, never a form, whose picker chooses a record by its title', () => {
+    for (const mode of ['edit', 'create'] as const)
+      expect(messages(withFields(npi()), mode)).toEqual([
+        `cards[0].fields[0].parameters.show: "show" shows a property of the linked record on a page only: a form's picker chooses a record by its title [parameter]`,
+      ]);
+    expect(validateTaskForm(withFields(npi())).map((finding) => finding.message)).toContain(
+      `"show" shows a property of the linked record on a page only: a form's picker chooses a record by its title`,
+    );
+  });
+
+  it("is not for a table's column, a reference inside a complex value", () => {
+    const table = {
+      field: 'claim:lines',
+      widget: 'table',
+      parameters: { columns: [{ ...npi(), field: 'claim:provider' }] },
+    };
+    expect(messages(withFields(table))).toEqual([
+      `cards[0].fields[0].parameters.columns[0].parameters.show: "show" is not for a table's column: a reference inside a complex value [parameter]`,
+    ]);
+  });
+
+  it('refuses a sort on a reference a column shows through it; a plain document-link sorts as before', () => {
+    expect(messages(related(['claim:number', npi()], byProvider))).toEqual([
+      `cards[0].related.sort[0].field: a column shows claim:provider through "show", so the records cannot be sorted by it: they would be ordered by the linked record's stored id [parameter]`,
+    ]);
+    expect(messages(related(['claim:number', link({ types: ['Provider'] })], byProvider))).toEqual(
+      [],
+    );
   });
 });
 

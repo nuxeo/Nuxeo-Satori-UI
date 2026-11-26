@@ -260,6 +260,7 @@ var agenticUiValidator = (function () {
             return key;
         }).join(", "), " a tone that is not one of ").concat(TONES.join(", "));
     };
+    var linkedProperty = function (value) { return typeof value === "string" && XPATH.test(value) && !value.startsWith("ecm:") && !value.startsWith("var:") ? null : "must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:"; };
     var columns = function (value) { return Array.isArray(value) && value.length > 0 ? null : "must be a list of field entries"; };
     var PACKAGED_WIDGETS = {
         text: { accepts: ["string"], parameters: {} },
@@ -281,7 +282,10 @@ var agenticUiValidator = (function () {
             parameters: { directory: text },
             required: ["directory"]
         },
-        "document-link": { accepts: ["string", "string[]"], parameters: { types: textList } },
+        "document-link": {
+            accepts: ["string", "string[]"],
+            parameters: { types: textList, show: linkedProperty }
+        },
         chips: { accepts: ["string[]"], parameters: {} },
         "status-badge": { accepts: ["string"], parameters: { tones: tones }, required: ["tones"] },
         table: { accepts: ["complex[]"], parameters: { columns: columns }, required: ["columns"] },
@@ -316,7 +320,8 @@ var agenticUiValidator = (function () {
         "app.rules.inState": { parameters: ["text"], rest: "text" },
         "app.rules.inGroup": { parameters: ["text"], rest: "text" },
         "app.rules.datePassed": { parameters: ["date"] },
-        "app.rules.dateWithin": { parameters: ["date", "days"] }
+        "app.rules.dateWithin": { parameters: ["date", "days"] },
+        "app.rules.dateAfter": { parameters: ["dateOrToday", "dateOrToday", "days"] }
     };
     var APP_RULES = Object.fromEntries([
         "app.rules.canWrite",
@@ -353,7 +358,8 @@ var agenticUiValidator = (function () {
         "app.rules.inState",
         "app.rules.inGroup",
         "app.rules.datePassed",
-        "app.rules.dateWithin"
+        "app.rules.dateWithin",
+        "app.rules.dateAfter"
     ].map(function (id) {
         var _a;
         return [id, (_a = APP_RULE_SIGNATURES[id]) != null ? _a : { parameters: [] }];
@@ -1036,6 +1042,15 @@ var agenticUiValidator = (function () {
                         add(path, "parameter", "".concat(owner, " takes \"days\", \"months\" or \"years\" here"));
                     }
                     return;
+                case "dateOrToday":
+                    if (item === "today")
+                        return;
+                    if (!isFieldReference(item) && !isDateText(item)) {
+                        add(path, "parameter", "".concat(owner, " takes a property, a date, as \"2026-12-01\" or an ISO 8601 date and time with its zone, or \"today\" here"));
+                        return;
+                    }
+                    parameter("date", item, path, owner);
+                    return;
                 case "date":
                     if (isFieldReference(item)) {
                         value(item, path);
@@ -1129,8 +1144,18 @@ var agenticUiValidator = (function () {
             else
                 signed(registries.checks[type], parameters2, join(path, "parameters"), "the check \"".concat(type, "\""));
         };
-        var widget = function (entry2, path, form2) {
+        var linkedShow = function (given, path, form2, inTable) {
+            var at2 = join(join(path, "parameters"), "show");
+            if (form2)
+                add(at2, "parameter", "\"show\" shows a property of the linked record on a page only: a form's picker chooses a record by its title");
+            else if (inTable)
+                add(at2, "parameter", "\"show\" is not for a table's column: a reference inside a complex value");
+            else if (!Object.hasOwn(given, "types"))
+                add(at2, "parameter", '"show" needs "types", the types of the records it links to, whose schemas hold the property it shows');
+        };
+        var widget = function (entry2, path, form2, inTable) {
             var e_20, _h, e_21, _j;
+            if (inTable === void 0) { inTable = false; }
             var _a;
             var id = entry2["widget"];
             var parameters2 = entry2["parameters"];
@@ -1165,6 +1190,8 @@ var agenticUiValidator = (function () {
                         add(join(join(path, "parameters"), name), "parameter", "".concat(name, " ").concat(problem));
                     else if (isFieldReference(setting))
                         variable(setting.field, join(join(join(path, "parameters"), name), "field"));
+                    else if (id === "document-link" && name === "show")
+                        linkedShow(given, path, form2, inTable);
                 }
             }
             catch (e_20_1) { e_20 = { error: e_20_1 }; }
@@ -1189,14 +1216,15 @@ var agenticUiValidator = (function () {
                 finally { if (e_21) throw e_21.error; }
             }
             if (id === "table" && Array.isArray(given["columns"])) {
-                given["columns"].forEach(function (column, index) { return field(column, join(join(join(path, "parameters"), "columns"), index), form2, false); });
+                given["columns"].forEach(function (column, index) { return field(column, join(join(join(path, "parameters"), "columns"), index), form2, false, true); });
             }
         };
-        var field = function (entry2, path, form2, inForm) {
+        var field = function (entry2, path, form2, inForm, inTable) {
             if (inForm === void 0) { inForm = form2; }
-            return nested(path, function () { return fieldAt(entry2, path, form2, inForm); });
+            if (inTable === void 0) { inTable = false; }
+            return nested(path, function () { return fieldAt(entry2, path, form2, inForm, inTable); });
         };
-        var fieldAt = function (entry2, path, form2, inForm) {
+        var fieldAt = function (entry2, path, form2, inForm, inTable) {
             var e_22, _h;
             if (typeof entry2 === "string") {
                 if (!XPATH.test(entry2))
@@ -1234,7 +1262,7 @@ var agenticUiValidator = (function () {
             }
             if ("id" in entry2)
                 claim(entry2["id"], join(path, "id"));
-            widget(entry2, path, form2);
+            widget(entry2, path, form2, inTable);
             if ("visibleWhen" in entry2)
                 rule(entry2["visibleWhen"], join(path, "visibleWhen"));
             var editable = typeof entry2["field"] === "string" && entry2["field"].startsWith(VARIABLE);
@@ -1308,6 +1336,7 @@ var agenticUiValidator = (function () {
                 add(join(path, "columns"), "structure", "needs a list of columns");
             else
                 columns2.forEach(function (column, index) { return field(column, join(join(path, "columns"), index), false); });
+            var shownThrough = new Set((Array.isArray(columns2) ? columns2 : []).flatMap(function (column) { return isRecord(column) && typeof column["field"] === "string" && column["widget"] === "document-link" && isRecord(column["parameters"]) && "show" in column["parameters"] ? [column["field"]] : []; }));
             if ("sort" in item) {
                 var sort = item["sort"];
                 if (!Array.isArray(sort))
@@ -1322,6 +1351,9 @@ var agenticUiValidator = (function () {
                         }
                         else if ("order" in entry2 && entry2["order"] !== "asc" && entry2["order"] !== "desc") {
                             add(join(at2, "order"), "structure", 'order is "asc" or "desc"');
+                        }
+                        else if (shownThrough.has(entry2["field"])) {
+                            add(join(at2, "field"), "parameter", "a column shows ".concat(entry2["field"], " through \"show\", so the records cannot be sorted by it: they would be ordered by the linked record's stored id"));
                         }
                         else
                             variable(entry2["field"], join(at2, "field"));
@@ -1359,6 +1391,37 @@ var agenticUiValidator = (function () {
         doneBy: "string",
         doneOn: "date"
     };
+    function linkedShowFindings(entry2, path, model) {
+        if (!isRecord(entry2) || entry2["widget"] !== "document-link")
+            return [];
+        var parameters2 = entry2["parameters"];
+        if (!isRecord(parameters2))
+            return [];
+        var show = parameters2.show, types = parameters2.types;
+        if (typeof show !== "string" || !XPATH.test(show) || !Array.isArray(types))
+            return [];
+        var at2 = join(join(path, "parameters"), "show");
+        return types.flatMap(function (linked) {
+            var _a;
+            if (typeof linked !== "string" || linked === "")
+                return [];
+            if (!propertiesOf(model, linked))
+                return [
+                    {
+                        path: at2,
+                        kind: "unknown",
+                        message: "the type \"".concat(linked, "\" that \"types\" lists is not in the content model, so \"").concat(show, "\" cannot be found on it")
+                    }
+                ];
+            return ((_a = propertiesOf(model, linked)) == null ? void 0 : _a.has(show)) ? [] : [
+                {
+                    path: at2,
+                    kind: "unknown",
+                    message: "".concat(whyMissing(model, linked, show), ", one of the types the field links to")
+                }
+            ];
+        });
+    }
     function againstModel(file, type, model, registries) {
         var findings = [];
         var add = function (path, kind, message2) {
@@ -1391,6 +1454,8 @@ var agenticUiValidator = (function () {
         };
         var field = function (entry2, path, scope) {
             var e_23, _h;
+            if (scope === ofType)
+                findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(entry2, path, model)), false));
             var name;
             var at2 = path;
             var widget;
@@ -1489,6 +1554,10 @@ var agenticUiValidator = (function () {
             list.forEach(function (card2, index) {
                 if (isRecord(card2) && isRecord(card2["checklist"]))
                     checklist2(card2["checklist"], join(join(path, index), "checklist"));
+                if (isRecord(card2) && isRecord(card2["related"]) && Array.isArray(card2["related"]["columns"])) {
+                    var columns2_1 = join(join(join(path, index), "related"), "columns");
+                    card2["related"]["columns"].forEach(function (column, inner) { return findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(column, join(columns2_1, inner), model)), false)); });
+                }
                 if (!isRecord(card2) || !Array.isArray(card2["fields"]))
                     return;
                 var fields = join(join(path, index), "fields");
@@ -2736,7 +2805,8 @@ var agenticUiValidator = (function () {
         "bulkActions",
         "visibleWhen"
     ];
-    var FACET_KEYS = ["aggregate", "label", "labelKey"];
+    var FACET_KEYS = ["aggregate", "label", "labelKey", "widget"];
+    var FACET_WIDGETS = ["document-link"];
     function validateQueue(content, options) {
         if (options === void 0) { options = {}; }
         var _a;
@@ -2770,6 +2840,15 @@ var agenticUiValidator = (function () {
             }
             c.unknownKeys(facet, FACET_KEYS, at2);
             c.label(facet, at2);
+            if ("widget" in facet) {
+                var widget = facet["widget"];
+                if (typeof widget !== "string")
+                    c.add(join(at2, "widget"), "structure", "a widget is named by its ID");
+                else if (!Object.hasOwn(c.registries.widgets, widget))
+                    c.add(join(at2, "widget"), "unknown", "the widget \"".concat(widget, "\" is not registered"));
+                else if (!FACET_WIDGETS.includes(widget))
+                    c.add(join(at2, "widget"), "parameter", "a facet shows its buckets as the server returns them, or through ".concat(FACET_WIDGETS.map(function (each) { return "\"".concat(each, "\""); }).join(" or "), ", not \"").concat(widget, "\""));
+            }
             if (typeof facet["aggregate"] !== "string" || !NAME.test(facet["aggregate"]))
                 c.add(join(at2, "aggregate"), "structure", "needs the name of one of the page provider's aggregates");
         });

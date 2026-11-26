@@ -800,6 +800,7 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.inState`              | The focused document's lifecycle state is one of the `parameters`                    |
 | `app.rules.datePassed`           | A date, named first, is before today                                                 |
 | `app.rules.dateWithin`           | A date, named first, is today or within the number of days named second              |
+| `app.rules.dateAfter`            | A date, named first, is more than the number of days named third after the second    |
 
 `app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
@@ -855,6 +856,17 @@ neither rule. No date, or a value that is not one, passes neither rule, nor does
 out of range. The layout validator refuses a number of days out of range, and in place of the date a
 literal that is not one, such as `"2026-13-01"`, or a computation.
 
+`app.rules.dateAfter` compares two dates, each read as the two above read one, and passes when the
+first is more than a whole number of days, from 0 to 36500, after the second:
+`{ "type": "app.rules.dateAfter", "parameters": [{ "field": "dmg:filedOn" }, { "field": "dmg:deliveredOn" }, 30] }`
+passes for a claim filed on the 31st day after its delivery or later, and not on the 30th. Either
+date may be the literal `"today"`, the reader's day as above, so `["today", { "field": "dmg:deliveredOn" }, 30]`
+passes once the delivery is more than thirty days past, and `[{ "field": "dc:expired" }, "today", 30]`
+while the date is more than thirty days ahead. Only the literal is today: a property holding the
+text `"today"` names no date. No date on either side, a zone the browser cannot read, or a number of
+days out of range, and it does not pass; the layout validator refuses the last, and in place of a
+date anything but a property, a literal date or `"today"`.
+
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
 when you navigate away, so all of them answer `false` everywhere else — with two
@@ -862,7 +874,8 @@ exceptions, both of the `rowActions` slot (section 10a): browse's row menu and a
 list of related records resolve it with each row's document in focus, for that slot only. `app.rules.fieldIn` with a literal first
 parameter is not a rule about the document: it reads none, so it answers the same on
 every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. So are
-`app.rules.datePassed` and `app.rules.dateWithin` with a literal date: they read only the clock. In particular the two
+`app.rules.datePassed`, `app.rules.dateWithin` and `app.rules.dateAfter` with literal dates and
+`"today"`: they read only the clock. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
 columns by type, because a list has no single focused document. An earlier
 version of this document described the first five as functional with no caveat

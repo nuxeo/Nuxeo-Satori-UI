@@ -39,6 +39,11 @@ export interface QueueFacet {
   readonly aggregate: string;
   readonly label: string | null;
   readonly labelKey: string | null;
+  /**
+   * `document-link` for an aggregate on a reference: each bucket, a record's id, shown by that
+   * record's title (app-definition-v2.md, section 4). `null`, a bucket shows its key.
+   */
+  readonly widget: 'document-link' | null;
 }
 
 export interface QueueFile {
@@ -158,7 +163,12 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
       return;
     }
     shown.add(aggregate);
-    facets.push({ aggregate, label: text(facet['label']), labelKey: text(facet['labelKey']) });
+    facets.push({
+      aggregate,
+      label: text(facet['label']),
+      labelKey: text(facet['labelKey']),
+      widget: facet['widget'] === 'document-link' ? 'document-link' : null,
+    });
   });
 
   const bulkActions = ((file['bulkActions'] as unknown[] | undefined) ?? []).filter(

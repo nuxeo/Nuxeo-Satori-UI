@@ -9,11 +9,18 @@ import {
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { daysFromToday } from './date-rules';
+import { TODAY, daysBetween, daysFromToday } from './date-rules';
 import type { ExtensionRuleContext, ExtensionRuleEvaluator } from './extension-rules';
 
-/** The furthest `app.rules.dateWithin` looks ahead: a hundred years, as the validator allows. */
+/**
+ * The furthest `app.rules.dateWithin` looks ahead, and the most days `app.rules.dateAfter` counts:
+ * a hundred years, as the validator allows.
+ */
 const MAX_DAYS_AHEAD = 36500;
+
+/** A whole number of days from 0 to {@link MAX_DAYS_AHEAD}, as the date rules take one. */
+const isDays = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 0 && (value as number) <= MAX_DAYS_AHEAD;
 
 /** No document in focus is not "not trashed" — both trash rules deny on `null`. */
 function isTrashedDocument(document: NuxeoDocument | null): boolean {
@@ -40,6 +47,15 @@ function fieldOf(parameter: unknown): string | null {
 function subjectOf(document: NuxeoDocument | null, parameter: unknown): unknown {
   const field = fieldOf(parameter);
   return field !== null ? document?.properties?.[field] : parameter;
+}
+
+/**
+ * What `app.rules.dateAfter` reads for one of its dates: the literal `"today"` as the reader's own
+ * day, and anything else as the other date rules read it. Only the literal is today: a property
+ * whose value is the text `"today"` names no date.
+ */
+function dateOrToday(document: NuxeoDocument | null, parameter: unknown): unknown {
+  return parameter === 'today' ? TODAY : subjectOf(document, parameter);
 }
 
 /**
@@ -167,10 +183,30 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    */
   'app.rules.dateWithin': (context, parameters) => {
     const [subject, ahead] = parameters;
-    if (!(Number.isInteger(ahead) && (ahead as number) >= 0 && (ahead as number) <= MAX_DAYS_AHEAD))
-      return false;
+    if (!isDays(ahead)) return false;
     const days = daysFromContextToday(context, subjectOf(context.document, subject));
-    return days !== null && days >= 0 && days <= (ahead as number);
+    return days !== null && days >= 0 && days <= ahead;
+  },
+  /**
+   * The first date is more than `days` days after the second (layout-v2.md, section 5):
+   * `[{ "field": "dmg:filedOn" }, { "field": "dmg:deliveredOn" }, 30]` passes for a claim filed on
+   * the 31st day after its delivery or later, and not on the 30th. Either date may be `"today"`, the
+   * reader's day, so `["today", { "field": "dmg:deliveredOn" }, 30]` passes once the delivery is
+   * more than thirty days past, and `[{ "field": "dc:expired" }, "today", 30]` while the date is
+   * more than thirty days ahead. Each date is read as the other date rules read one; no date, a
+   * value that is not one, or a number of days that is not a whole number from 0 to 36500, and the
+   * rule does not pass. With `0` it passes when the first date is after the second at all.
+   */
+  'app.rules.dateAfter': (context, parameters) => {
+    const [later, earlier, days] = parameters;
+    if (!isDays(days)) return false;
+    const between = daysBetween(
+      dateOrToday(context.document, later),
+      dateOrToday(context.document, earlier),
+      context.today ?? new Date(),
+      context.timeZone,
+    );
+    return between !== null && between > days;
   },
   /** The focused record's lifecycle state is one of `parameters`, matched exactly. */
   'app.rules.inState': (context, parameters) => {

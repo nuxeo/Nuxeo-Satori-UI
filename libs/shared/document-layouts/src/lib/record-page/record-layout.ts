@@ -45,6 +45,43 @@ export interface RecordPropertyField extends RecordFieldBase {
   readonly xpath: string;
 }
 
+/**
+ * The property of the linked record a `document-link` field shows in place of its title, its
+ * `show` (layout-v2.md, section 12), or `null` for one that shows the title, and for any other
+ * widget. The validator has refused a `show` that is not `<prefix>:<name>`.
+ */
+export function showOf(field: Pick<RecordFieldBase, 'widget' | 'parameters'>): string | null {
+  const show = field.parameters['show'];
+  return field.widget === 'document-link' && typeof show === 'string' ? show : null;
+}
+
+/** The types a `document-link` field says it links to, its `types`, as texts. */
+export function linkedTypesOf(field: Pick<RecordFieldBase, 'parameters'>): string[] {
+  const types = field.parameters['types'];
+  return Array.isArray(types)
+    ? types.filter((type): type is string => typeof type === 'string')
+    : [];
+}
+
+/**
+ * What a `show` is read for: the field's place, its `show` and its types. A page drawn anew with
+ * another file, as the designer's preview is on every edit, keeps the reads of the file before
+ * until those of the new one arrive, and a key that names the whole entry never pairs one file's
+ * `show` with what another's read.
+ */
+export function showKey(field: Pick<RecordFieldBase, 'place' | 'widget' | 'parameters'>): string {
+  return JSON.stringify([field.place, showOf(field), linkedTypesOf(field)]);
+}
+
+/**
+ * What a list keys a column by: its property, and for one with `show`, the shown property too, so
+ * that a column showing a linked record's title and one showing its property stand side by side.
+ */
+export function columnKey(column: RecordPropertyField): string {
+  const show = showOf(column);
+  return show === null ? column.xpath : `${column.xpath}/${show}`;
+}
+
 /** A field showing what a registered computation works out from the record. */
 export interface RecordComputedField extends RecordFieldBase {
   readonly kind: 'computed';
@@ -522,12 +559,14 @@ function readField(reading: EntryReading, entry: unknown, place: string): Record
   };
   if (typeof entry['field'] === 'string') {
     const xpath = entry['field'];
-    const name = xpath.slice(xpath.indexOf(':') + 1);
+    // A linked record's property is labelled as that property, not as the reference holding it.
+    const labelled = showOf(common) ?? xpath;
+    const name = labelled.slice(labelled.indexOf(':') + 1);
     return [
       {
         kind: 'property',
         xpath,
-        label: labelOf(entry, [fieldLabelKey(xpath)], humanize(name)),
+        label: labelOf(entry, [fieldLabelKey(labelled)], humanize(name)),
         ...common,
       },
     ];
@@ -577,11 +616,15 @@ export function readRecordList(
           return [];
         }
         // A column is its property's, for sorting as for drawing: a second one would be the same.
-        if (shown.has(column.xpath)) {
-          problems.push(`${at} shows ${column.xpath} again; that column left out`);
+        // One showing a linked record's property is that property's too (`columnKey`).
+        const key = columnKey(column);
+        if (shown.has(key)) {
+          const what =
+            showOf(column) === null ? column.xpath : `${showOf(column)} of ${column.xpath}`;
+          problems.push(`${at} shows ${what} again; that column left out`);
           return [];
         }
-        shown.add(column.xpath);
+        shown.add(key);
         return [column];
       });
     },
@@ -590,12 +633,24 @@ export function readRecordList(
     problems.push(`${owner} has no column this build can show; left out`);
     return null;
   }
+  // A reference a column shows through `show` would order the records by the linked record's
+  // stored id: the validator refuses such a key, and one that reaches here is left out of the order.
+  const linked = new Set(
+    columns.filter((column) => showOf(column) !== null).map((column) => column.xpath),
+  );
   const sort = (Array.isArray(raw['sort']) ? raw['sort'] : [])
     .filter(isRecord)
     .map((key): RecordListSort => ({
       field: String(key['field']),
       order: key['order'] === 'desc' ? 'desc' : 'asc',
-    }));
+    }))
+    .filter((key, index) => {
+      if (!linked.has(key.field)) return true;
+      problems.push(
+        `${inside(place, `sort[${index}]`)} orders by ${key.field}, which a column shows through "show"; that key left out of the order`,
+      );
+      return false;
+    });
   const rowActions = (Array.isArray(raw['rowActions']) ? raw['rowActions'] : []).filter(
     (id: unknown, index): id is string =>
       typeof id === 'string' && !reading.leftOut.has(inside(place, `rowActions[${index}]`)),

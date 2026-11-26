@@ -31,7 +31,7 @@
                       class="queue-facet__bucket"
                       [checked]="bucket.chosen"
                       (change)="toggle(facet.aggregate, bucket.key)"
-                      >{{ bucket.key }}
+                      >{{ bucket.text }}
                       @if (bucket.count !== null) {
                         <span class="queue-facet__count"> ({{ bucket.count }})</span>
                       }

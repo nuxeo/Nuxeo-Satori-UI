@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: moves-demo
 Bundle-SymbolicName: nuxeo.config.moves-demo;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.2.0
 Nuxeo-Component: OSGI-INF/moves-demo-model.xml,OSGI-INF/moves-demo-config.xml

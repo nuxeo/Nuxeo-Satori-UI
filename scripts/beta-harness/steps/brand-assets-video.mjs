@@ -14,9 +14,9 @@
  *      is refused, and the page says the server's reason, asked after the 403, with no player and
  *      nothing tried instead.
  *   3. The REST API called directly, outside the app: the no-Print video's original refused,
- *      through `@blob` and `/nxfile/`; a transcoded video served by its name through `@rendition`,
- *      and refused through `@blob`, which the policy does not list, to everyone, the cleared video
- *      included; the cleared video's original served.
+ *      through `@blob` and `/nxfile/`, and through `Video.Slice`, which reads it; a transcoded
+ *      video served by its conversion's name, through `@rendition` and at its place through
+ *      `@blob` alike; the cleared video's original served.
  *   4. The library lists the videos with the pictures, its Type facet counts them from the
  *      aggregate, and choosing AcmeVideo narrows it to them on the server.
  *
@@ -29,8 +29,8 @@
  *
  * What it needs, and refuses to run without (exit 2):
  *
- * - `nuxeo-agentic-assets` and the kit, version 0.2.3 or later, installed on the Nuxeo the app
- *   talks to, and the kit seeded with `demo/seed.mjs`, today: the videos' rights run.
+ * - `nuxeo-agentic-assets` 0.3.0 or later and the kit 0.2.4 or later installed on the Nuxeo the
+ *   app talks to, and the kit seeded with `demo/seed.mjs`, today: the videos' rights run.
  * - The dev server serving the kit's video layout through `npm run config:dev` (the kit's README,
  *   "Seeing it under nx serve"), and the library queue.
  * - `NUXEO_USER` and `NUXEO_PASS`: anyone who may read the kit's workspace. `NUXEO_URL`, default
@@ -40,13 +40,15 @@
  *
  * Load-bearing checks: the player's blob URL and the browser's reading of it as a video; the
  * facts and storyboard as the server holds them; the 403 on the no-Print original, in the app and
- * called directly, and the page's reason, the code the enricher gives after the 403; a transcoded
- * video served by its name and refused through `@blob`; the library's Type facet and its narrowing.
+ * called directly and through `Video.Slice`, and the page's reason, the code the enricher gives
+ * after the 403; a transcoded video served by its name and at its place alike; the library's Type
+ * facet and its narrowing.
  * Negative ones: the cleared video's original served, its page with no refusal, and no Nuxeo
  * address on any `<video>` or `<img>`.
  *
- * Not covered, and said in notes: the add-on's paths beyond the download endpoints (its README,
- * "What it does not cover"); the layouts come from `config:dev`, not the package.
+ * Not covered, and said in notes: the add-on's paths beyond the download endpoints and the
+ * `Video.*` operations (its README, "What it does not cover"); the layouts come from `config:dev`,
+ * not the package.
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -69,7 +71,7 @@ export const serverRun = {
   runAs: { users: [], who: "anyone who may read the kit's workspace" },
   signsInAs: [],
   needs: [
-    'nuxeo-agentic-assets and the kit 0.2.3 or later installed, and the kit seeded on the day of the demo',
+    'nuxeo-agentic-assets 0.3.0 and the kit 0.2.4 or later installed, and the kit seeded on the day of the demo',
     "the dev server with `npm run config:dev` serving the kit's video layout and library queue",
     'ffmpeg on the server for the transcoded web cut and the storyboard; without it the run checks the originals',
   ],
@@ -94,6 +96,17 @@ const deferred = () => undefined;
 const unread = () => null;
 
 const kitFile = (path) => JSON.parse(readFileSync(join(CONFIG, path), 'utf8'));
+
+/**
+ * The conversions the kit's video policy covers by E-commerce, read from the kit's own file, not
+ * from the server: the web cut, which both seeded videos' channels hold.
+ */
+const WEB_CUT = [
+  ...readFileSync(
+    join(KIT, 'bundle', 'OSGI-INF', 'brand-assets-demo-video-rights.xml'),
+    'utf8',
+  ).matchAll(/<rendition name="([^"]+)" channel="E-commerce" \/>/g),
+].map((match) => match[1]);
 
 /** A JSON value with its object keys sorted, so two parses compare as text. */
 function canonical(value) {
@@ -153,10 +166,16 @@ export default async function run(page, h) {
   const basic = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 
   /** A GET of Nuxeo itself, as any client of the REST API sends one: its status, type and size. */
-  const direct = async (path, headers = {}) => {
+  const direct = async (path, headers = {}, body = undefined) => {
     try {
       const response = await fetch(`${NUXEO}/nuxeo${path}`, {
-        headers: { Authorization: basic, ...headers },
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          Authorization: basic,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...headers,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
         redirect: 'manual',
         signal: AbortSignal.timeout(30_000),
       });
@@ -178,7 +197,7 @@ export default async function run(page, h) {
   h.requirePrecondition(
     "the kit's video type is installed",
     type?.status === 200,
-    `GET /api/v1/config/types/AcmeVideo answered ${type?.status ?? 'nothing'}: install the kit 0.2.3 or later (its README)`,
+    `GET /api/v1/config/types/AcmeVideo answered ${type?.status ?? 'nothing'}: install the kit 0.2.4 or later (its README)`,
   );
 
   const readVideo = async (video) =>
@@ -203,7 +222,14 @@ export default async function run(page, h) {
   h.requirePrecondition(
     "nuxeo-agentic-assets is installed and the kit's video policy is in force",
     VIDEOS.every((video) => rightsOf(video)?.type === 'AcmeVideo'),
-    'the assetRights enricher answered nothing for an AcmeVideo: install nuxeo-agentic-assets and the kit at 0.2.3 or later',
+    'the assetRights enricher answered nothing for an AcmeVideo: install nuxeo-agentic-assets and the kit at 0.2.4 or later',
+  );
+  h.requirePrecondition(
+    "nuxeo-agentic-assets 0.3.0 or later: the enricher explains a video's storyboard as one use",
+    VIDEOS.every(
+      (video) => rightsOf(video)?.uses?.some((use) => use.use === 'storyboard') === true,
+    ),
+    'no storyboard use in the assetRights explanation: install nuxeo-agentic-assets 0.3.0 and the kit 0.2.4 or later',
   );
   h.requirePrecondition(
     `the seed's rights still hold on the server's day: ${NO_PRINT.id} running with no Print channel, ${CLEARED.id} running with Print`,
@@ -475,6 +501,17 @@ export default async function run(page, h) {
       `GET ${path}: ${answer?.status ?? 'no answer'}`,
     );
   }
+  // Video.Slice reads the original when given no xpath: refused before it reads, ffmpeg or not.
+  const slice = await direct(
+    '/api/v1/automation/Video.Slice',
+    {},
+    { input: `doc:${noPrintUid}`, params: {} },
+  );
+  h.check(
+    `${NO_PRINT.id}, its original through Video.Slice: 403, decided as its download`,
+    slice?.status === 403,
+    `POST /api/v1/automation/Video.Slice: ${slice?.status ?? 'no answer'}`,
+  );
   const original = await direct(`/api/v1/id/${clearedUid}/@blob/file:content`);
   h.check(
     `${CLEARED.id}, cleared everywhere, its original: served, as WebM`,
@@ -482,25 +519,43 @@ export default async function run(page, h) {
     `${original?.status}, ${original?.type}`,
   );
   if (transcodes) {
+    const transcodedChecks = [];
     for (const video of VIDEOS) {
       const uid = seeded.get(video.id).uid;
-      const byPlace = await direct(`/api/v1/id/${uid}/@blob/vid:transcodedVideos/0/content`);
-      h.check(
-        `${video.id}, its transcoded video through @blob: 403, to everyone, as the kit's policy does not list it`,
-        byPlace?.status === 403,
-        String(byPlace?.status),
-      );
-      const name = made.get(video.id).transcoded[0];
+      made.get(video.id).transcoded.forEach((name, place) => {
+        transcodedChecks.push({ video, uid, name, place });
+      });
+    }
+    for (const { video, uid, name, place } of transcodedChecks) {
+      // The kit's policy covers its web cut by E-commerce, which both videos hold; a conversion it
+      // does not name is refused, by its name and at its place alike.
+      const served = WEB_CUT.includes(name);
+      const expected = served ? 200 : 403;
       const byName = await direct(`/api/v1/id/${uid}/@rendition/${encodeURIComponent(name)}`);
       h.check(
-        `${video.id}, the same by its name, @rendition/${name}: served, covered by E-commerce`,
-        byName?.status === 200 && byName.type.startsWith('video/') && byName.bytes.length > 0,
+        `${video.id}, ${name} by its name, @rendition: ${served ? 'served, covered by E-commerce' : '403, not listed'}`,
+        byName?.status === expected &&
+          (!served || (byName.type.startsWith('video/') && byName.bytes.length > 0)),
         `${byName?.status}, ${byName?.type}`,
       );
+      const byPlace = await direct(`/api/v1/id/${uid}/@blob/vid:transcodedVideos/${place}/content`);
+      h.check(
+        `${video.id}, ${name} at its place, @blob/vid:transcodedVideos/${place}/content: ${expected}, as by its name`,
+        byPlace?.status === expected && (!served || byPlace.bytes.length > 0),
+        `${byPlace?.status}, ${byPlace?.type}`,
+      );
     }
+    h.check(
+      `each video has a conversion the kit covers, ${WEB_CUT.join(' or ')}, checked at its place`,
+      WEB_CUT.length > 0 &&
+        VIDEOS.every((video) =>
+          made.get(video.id).transcoded.some((name) => WEB_CUT.includes(name)),
+        ),
+      VIDEOS.map((video) => `${video.id}: ${made.get(video.id).transcoded.join(', ')}`).join('; '),
+    );
   } else {
     h.note(
-      'no transcoded video on this server: their service by name and refusal through @blob are not called',
+      'no transcoded video on this server: their service by name and at their places is not called',
     );
   }
   const me = json(await direct('/api/v1/me'));

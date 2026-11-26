@@ -1,6 +1,6 @@
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { daysFromToday } from './date-rules';
+import { TODAY, daysBetween, daysFromToday } from './date-rules';
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import { EMPTY_EXTENSION_RULE_CONTEXT, type ExtensionRuleContext } from './extension-rules';
 
@@ -71,6 +71,57 @@ describe('daysFromToday', () => {
     ])
       expect(daysFromToday(value, noon, 'UTC')).toBeNull();
     expect(daysFromToday('2026-11-24', new Date(Number.NaN), 'UTC')).toBeNull();
+  });
+});
+
+describe('daysBetween', () => {
+  const noon = new Date('2026-11-24T12:00:00Z');
+
+  it('counts the days from one date to another, each read as daysFromToday reads it', () => {
+    for (const zone of [EAST, WEST, 'UTC']) {
+      expect(daysBetween('2026-12-24', '2026-11-24', noon, zone)).toBe(30);
+      expect(daysBetween('2026-11-24T00:00:00.000Z', '2026-12-24', noon, zone)).toBe(-30);
+      expect(daysBetween('2026-11-24', '2026-11-24T00:00:00Z', noon, zone)).toBe(0);
+    }
+    // Across a leap day, and a year.
+    expect(daysBetween('2028-03-01', '2028-02-28', noon, 'UTC')).toBe(2);
+    expect(daysBetween('2027-01-01', '2026-01-01', noon, 'UTC')).toBe(365);
+  });
+
+  it("reads an instant on the reader's own day, and counts days, not hours", () => {
+    // 20:00 UTC on the 24th is the 25th in the east and the 24th in the west.
+    expect(daysBetween('2026-11-24T20:00:00Z', '2026-11-24', noon, EAST)).toBe(1);
+    expect(daysBetween('2026-11-24T20:00:00Z', '2026-11-24', noon, WEST)).toBe(0);
+    // An hour apart across the reader's midnight is a day; twenty hours within it is none.
+    expect(daysBetween('2026-11-25T05:30:00Z', '2026-11-25T04:30:00Z', noon, WEST)).toBe(1);
+    expect(daysBetween('2026-11-24T23:00:00Z', '2026-11-24T03:00:00Z', noon, 'UTC')).toBe(0);
+  });
+
+  it("reads TODAY as the reader's day, on either side", () => {
+    expect(daysBetween(TODAY, '2026-10-25', noon, 'UTC')).toBe(30);
+    expect(daysBetween('2026-12-24', TODAY, noon, 'UTC')).toBe(30);
+    expect(daysBetween(TODAY, TODAY, noon, 'UTC')).toBe(0);
+    // 20:00 UTC on the 24th is already the 25th in the east.
+    const late = new Date('2026-11-24T20:00:00Z');
+    expect(daysBetween(TODAY, '2026-11-24', late, EAST)).toBe(1);
+    expect(daysBetween(TODAY, '2026-11-24', late, WEST)).toBe(0);
+  });
+
+  it('finds no count where either is not a date, the text "today" among them', () => {
+    for (const value of [
+      'today',
+      '2023-02-29',
+      '2026-11-24T12:00:00',
+      '',
+      null,
+      5,
+      { field: 'x' },
+    ]) {
+      expect(daysBetween(value, '2026-11-24', noon, 'UTC')).toBeNull();
+      expect(daysBetween('2026-11-24', value, noon, 'UTC')).toBeNull();
+    }
+    expect(daysBetween(TODAY, '2026-11-24', new Date(Number.NaN), 'UTC')).toBeNull();
+    expect(daysBetween('2026-11-25', '2026-11-24', noon, 'Not/AZone')).toBeNull();
   });
 });
 
@@ -155,6 +206,78 @@ describe('the date rules, read against the clock', () => {
   it('read a literal date as it is, with nothing in focus', () => {
     expect(evaluate('app.rules.datePassed', on(null), storedDay(-20, true))).toBe(true);
     expect(evaluate('app.rules.dateWithin', on(null), storedDay(6, true), 7)).toBe(true);
+    expect(evaluate('app.rules.dateAfter', on(null), 'today', storedDay(-8, true), 7)).toBe(true);
+  });
+});
+
+describe('app.rules.dateAfter', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  /** A damage claim, filed and delivered on these days. */
+  const claim = (filedOn: unknown, deliveredOn: unknown): NuxeoDocument => ({
+    uid: 'c1',
+    title: 'Piano lid scratched',
+    type: 'DamageClaim',
+    path: '/c1',
+    lastModified: '2026-11-24T00:00:00.000Z',
+    properties: { 'dmg:filedOn': filedOn, 'dmg:deliveredOn': deliveredOn },
+  });
+  const filedOn = { field: 'dmg:filedOn' };
+  const deliveredOn = { field: 'dmg:deliveredOn' };
+  const after = (context: ExtensionRuleContext, ...parameters: unknown[]) =>
+    evaluate('app.rules.dateAfter', context, ...parameters);
+  const late = (filed: unknown, delivered: unknown, ...days: unknown[]) =>
+    after(on(claim(filed, delivered)), filedOn, deliveredOn, ...(days.length > 0 ? days : [30]));
+
+  it('passes when the first date is more than the days after the second, not on the last day', () => {
+    expect(late('2026-11-24T00:00:00.000Z', '2026-10-24T00:00:00.000Z')).toBe(true); // 31 days
+    expect(late('2026-11-23T00:00:00.000Z', '2026-10-24T00:00:00.000Z')).toBe(false); // 30
+    expect(late('2026-11-24', '2026-11-24')).toBe(false);
+    // Filed before delivery, which the Edit form's check refuses, is never late.
+    expect(late('2026-10-01', '2026-11-24')).toBe(false);
+  });
+
+  it('with 0 days, passes when the first date is after the second at all', () => {
+    expect(late('2026-11-25', '2026-11-24', 0)).toBe(true);
+    expect(late('2026-11-24', '2026-11-24', 0)).toBe(false);
+  });
+
+  it('reads "today" as the reader\'s day, for a date an offset in the past or ahead', () => {
+    expect(after(on(claim(null, storedDay(-31))), 'today', deliveredOn, 30)).toBe(true);
+    expect(after(on(claim(null, storedDay(-30))), 'today', deliveredOn, 30)).toBe(false);
+    expect(after(on(claim(storedDay(31, true), null)), filedOn, 'today', 30)).toBe(true);
+    expect(after(on(claim(storedDay(30, true), null)), filedOn, 'today', 30)).toBe(false);
+  });
+
+  it("reads the context's today and zone, as the other date rules do", () => {
+    const record = claim(null, '2027-02-01');
+    const march = { ...on(record), today: new Date('2027-03-10T12:00:00Z'), timeZone: 'UTC' };
+    expect(after(on(record), 'today', deliveredOn, 30)).toBe(false);
+    expect(after(march, 'today', deliveredOn, 30)).toBe(true);
+    expect(after({ ...march, timeZone: 'Not/AZone' }, 'today', deliveredOn, 30)).toBe(false);
+  });
+
+  it('does not pass with no date, a property holding the text "today", or a computation', () => {
+    expect(late(null, '2026-01-01')).toBe(false);
+    expect(late('2026-11-24', '')).toBe(false);
+    expect(late('2026-11-24', 'today')).toBe(false);
+    expect(late('today', '2026-01-01')).toBe(false);
+    const computed = { computed: { type: 'core.template', parameters: ['2026-01-01'] } };
+    expect(after(on(claim('2026-11-24', null)), filedOn, computed, 30)).toBe(false);
+    expect(after(on(null), filedOn, deliveredOn, 30)).toBe(false);
+  });
+
+  it('does not pass on days the validator refuses', () => {
+    for (const days of [-1, 36501, 1.5, '30', null, undefined])
+      expect(late('2026-11-24', '2000-01-01', days)).toBe(false);
+    // And with none at all.
+    expect(after(on(claim('2026-11-24', '2000-01-01')), filedOn, deliveredOn)).toBe(false);
+    expect(late('2126-11-24', '2000-01-01', 36500)).toBe(true);
   });
 });
 
