@@ -533,6 +533,15 @@ Admin console operations (users, groups, system info).
 
 ---
 
+## DiagnosticsService (`libs/features/administration/src/lib/admin-diagnostics-page/diagnostics.service.ts`)
+
+The diagnostics page's report: `load()` reads `GET /nuxeo/agentic-ui-apps/diagnostics.json`, which
+the server answers administrators alone (403 otherwise), and fails with `DiagnosticsFormatError` on
+an answer of another format. Read only. `supportText(report)` in `diagnostics-report.ts` is the
+page's "copy for support" text. See `docs/api-integrations.md`, section 44.
+
+---
+
 ## AppConfigService (`libs/shared/app-config/src/lib/app-config.service.ts`)
 
 Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo/satori-platform/app-config`.

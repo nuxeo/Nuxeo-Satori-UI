@@ -56,9 +56,16 @@
             />
           }
           @if (report.packages.entries.length > 0) {
-            <div class="diagnostics__table-wrap">
+            <!-- Scrolls on its own on a narrow screen, so it takes the focus, to be scrolled
+                 with the keyboard (axe, scrollable-region-focusable). -->
+            <div
+              class="diagnostics__table-wrap"
+              role="region"
+              tabindex="0"
+              aria-labelledby="diagnostics-packages-caption"
+            >
               <table class="diagnostics__table" data-diagnostics-packages>
-                <caption class="diagnostics__caption">
+                <caption id="diagnostics-packages-caption" class="diagnostics__caption">
                   {{
                     'admin.diagnostics.packages.caption' | translate
                   }}
@@ -219,9 +226,16 @@
           @if (report.diagnostics.length === 0) {
             <p data-diagnostics-no-errors>{{ 'admin.diagnostics.errors.none' | translate }}</p>
           } @else {
-            <div class="diagnostics__table-wrap">
+            <!-- Scrolls on its own on a narrow screen, so it takes the focus, to be scrolled
+                 with the keyboard (axe, scrollable-region-focusable). -->
+            <div
+              class="diagnostics__table-wrap"
+              role="region"
+              tabindex="0"
+              aria-labelledby="diagnostics-errors-caption"
+            >
               <table class="diagnostics__table" data-diagnostics-errors>
-                <caption class="diagnostics__caption">
+                <caption id="diagnostics-errors-caption" class="diagnostics__caption">
                   {{
                     'admin.diagnostics.errors.caption' | translate
                   }}
