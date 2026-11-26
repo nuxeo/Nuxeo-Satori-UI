@@ -433,7 +433,7 @@ These sit inside the [development plan](development-plan.md):
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
 
-**Where M4 stands, 25 November 2026:**
+**Where M4 stands, 26 November 2026:**
 
 - **Built:** the first piece of the self-service migration, for a customer running it on their own
   package: `migrate <package.zip> --out <new-directory>` runs the inventory, the conversion, the
@@ -443,11 +443,21 @@ These sit inside the [development plan](development-plan.md):
   package, and names the checks whose server half still needs the lab server, and why. With
   `--from`, it carries an earlier run's decisions, before the checks, so that they count. A
   [guide](studio-migration-guide.md) is written for the customer.
-- **Not yet:** the upload, which validates a package sent to a service and returns its report;
-  many packages in one run; the support playbook. A customer runs the command on a copy of this
-  repository, which needs `npm ci`, and with it a read token for the Hyland packages on GitHub
-  Packages.
-- **Not checked:** on a real package. It was run on the made-up packages only.
+- **Built:** many packages in one run. `migrate` given several packages, or a folder of them, runs
+  each as it runs one, into a folder of its own, isolated, so that one package's failure or finding
+  changes nothing for another, and writes a summary of each package's result, its constructs by
+  outcome and its report. It exits as the worst of them, runs the same package once, gives two
+  files of one name two folders, and with `--from` an earlier run of several carries each
+  package's decisions by its bytes. One package file runs as before, byte for byte.
+- **Built:** the [support playbook](studio-migration-support.md), for a support engineer: how to
+  read the report and the decisions file, every finding the tool can print with who acts on it,
+  escalation, reproducing a customer's run safely, and lab mode. A test fails when the tool gains
+  a finding the playbook does not hold.
+- **Not yet:** the upload, which validates a package sent to a service and returns its report. A
+  customer runs the command on a copy of this repository, which needs `npm ci`, and with it a read
+  token for the Hyland packages on GitHub Packages.
+- **Not checked:** on a real package, or by a support engineer on a real case. It was run on the
+  made-up packages only.
 
 **Where the report stands, 24 November 2026:**
 
