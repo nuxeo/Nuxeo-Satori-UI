@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<!-- What a kit and a server give the add-on, for the tests: an inbox type and its item type, a
+     record type with attachments and one without, two profiles, a scripted provider the tests
+     answer for, and the add-on's key/value store in memory. Every name and value is fictional. -->
+<component name="org.nuxeo.agentic.capture.test.contrib">
+
+  <require>org.nuxeo.agentic.capture</require>
+  <require>org.nuxeo.agentic.capture.schema</require>
+  <require>org.nuxeo.agentic.capture.providers</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <extension target="org.nuxeo.runtime.kv.KeyValueService" point="configuration">
+    <store name="agentic-capture" class="org.nuxeo.runtime.kv.MemKeyValueStore" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="testclaim" prefix="tclaim" src="schemas/testclaim.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- A claim, as the P&C kit's: a record page with attachments. -->
+    <doctype name="TestClaim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <schema name="testclaim" />
+    </doctype>
+    <!-- A record with no attachments: nothing is filed on it. -->
+    <doctype name="TestNote" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="testclaim" />
+    </doctype>
+    <!-- A piece of mail: its file, and the add-on's facet. -->
+    <doctype name="TestMail" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <facet name="CaptureItem" />
+    </doctype>
+    <doctype name="TestInbox" extends="Folder">
+      <subtypes>
+        <type>TestMail</type>
+      </subtypes>
+    </doctype>
+    <doctype name="TestNoteInbox" extends="Folder">
+      <subtypes>
+        <type>TestMail</type>
+      </subtypes>
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.agentic.capture" point="providers">
+    <provider id="scripted" class="org.nuxeo.agentic.capture.ScriptedProvider" />
+  </extension>
+
+  <extension target="org.nuxeo.agentic.capture" point="profiles">
+    <profile id="test-mail">
+      <inboxType>TestInbox</inboxType>
+      <itemType>TestMail</itemType>
+      <recordType>TestClaim</recordType>
+      <recordPath>/desk</recordPath>
+      <threshold>0.85</threshold>
+      <class name="claimLetter" label="Claim letter">
+        <description>A letter about an existing claim</description>
+        <keyword>claim number</keyword>
+        <keyword>policy number</keyword>
+        <keyword>date of loss</keyword>
+        <field name="claimNumber" label="Claim number" match="tclaim:number" format="PC-[0-9]{5}" />
+        <field name="policyNumber" label="Policy number" />
+        <field name="lossDate" label="Date of loss" format="[0-9]{4}-[0-9]{2}-[0-9]{2}" />
+        <field name="sender" label="From" />
+      </class>
+      <class name="invoice" label="Invoice">
+        <keyword>invoice number</keyword>
+        <keyword>amount due</keyword>
+        <field name="invoiceNumber" label="Invoice number" />
+      </class>
+    </profile>
+    <profile id="test-notes">
+      <inboxType>TestNoteInbox</inboxType>
+      <itemType>TestMail</itemType>
+      <recordType>TestNote</recordType>
+      <class name="claimLetter" label="Claim letter">
+        <keyword>claim number</keyword>
+        <field name="claimNumber" label="Claim number" match="tclaim:number" />
+      </class>
+    </profile>
+  </extension>
+
+</component>
