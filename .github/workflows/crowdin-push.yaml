@@ -27,6 +27,11 @@ on:
       # yet started nothing. Crowdin then held stale context until some later catalogue change or a
       # manual run — and stale context is worse than none, because a translator believes it.
       - 'libs/**/i18n/en.context.json'
+      # Each business app's English labels, the third source in `crowdin-conf.yml`. A kit's labels
+      # change in its own pull request, so without this a new or reworded label would wait for the
+      # next change to the app's catalogue before translators saw it. `crowdin-sources.selftest.mjs`
+      # holds every source in the config to a glob here.
+      - 'business-apps/packages/*/bundle/agentic-ui-config/labels/en.json'
   workflow_dispatch:
     inputs:
       dry_run:

@@ -10,7 +10,9 @@
  * appear in the application. It will not: `export_only_approved: 'true'` means an unapproved
  * translation is never exported. That single misreading is what these controls exist for.
  */
-import { formatProgress } from './crowdin-status.mjs';
+import { resolve } from 'node:path';
+
+import { formatProgress, formatReport } from './crowdin-status.mjs';
 
 const failures = [];
 let passed = 0;
@@ -93,6 +95,26 @@ says(
   [row('fr', 12, 90)],
   /fr\s+approved\s+12%\s+translated\s+90%/,
 );
+
+// The whole report carries the repository's coverage under Crowdin's progress, so that what is
+// approved there and what has reached the repository are read together. Asserted on the real
+// checkout, whose kits and languages `coverage.selftest.mjs` holds.
+{
+  const report = formatReport({
+    projectId: '160',
+    project: { name: 'Nuxeo Satori', sourceLanguageId: 'en' },
+    rows: [row('es', 99), row('nb', 0)],
+    sourceFiles: ['/apps/nuxeo-ui/public/i18n/en.json'],
+    root: resolve(import.meta.dirname, '..', '..'),
+  });
+  const crowdinAt = report.search(/es\s+approved\s+99%/);
+  const repositoryAt = report.indexOf('Translation coverage in this repository');
+  if (crowdinAt !== -1 && repositoryAt > crowdinAt) passed += 1;
+  else failures.push(`the report holds Crowdin's progress, then the repository's coverage\n      got: ${report}`);
+  if (/Kits — business-apps\/packages\/<kit>\/bundle\/agentic-ui-config\/labels/.test(report))
+    passed += 1;
+  else failures.push(`the report's repository half covers the kits\n      got: ${report}`);
+}
 
 console.log(`crowdin-status selftest: ${passed + failures.length} controls.`);
 if (failures.length) {

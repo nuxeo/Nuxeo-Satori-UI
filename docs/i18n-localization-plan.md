@@ -842,6 +842,17 @@ at `'true'` (D8g) nothing unapproved reaches the application either way.
 Hebrew, Italian, Spanish and Swedish were added to the target, and **five of the ten ship**:
 `en`, `fr`, `de`, `ja`, `nl`.
 
+**Extended, 27 November 2026,** by the business apps' plan, whose phase 7 asks for "Spanish and
+the Nordic languages" ([development-plan.md](business-apps/development-plan.md)): Danish, Finnish and
+Norwegian Bokmål, `da`, `fi` and `nb`, join the target, thirteen languages in all. All three are at
+step 1, registered in `register-locale-data.ts`, and none is a Crowdin target yet. Norwegian Bokmål
+is `nb` in the app whichever of Crowdin's two Norwegians the project targets: `crowdin-conf.yml`
+maps "Norwegian" (`no`) to `nb`, and "Norwegian Bokmal" is `nb` already. The same change makes
+each business app's `labels/en.json` a Crowdin source, written back as `labels/<language>.json`
+beside it, and adds the repository's coverage of every language to the Crowdin Status report
+(`npm run i18n:coverage`). What a Crowdin manager and a developer each do to add a language is in
+the business apps' administrator's guide, section 4, "Languages".
+
 The useful part of this decision is not the list — it is which touchpoints a language may appear
 in before it has translations. Of the six (five from D8e, plus the one NXSAT-733 added), they
 split cleanly:

@@ -20,9 +20,15 @@
  * exported, so a language at 100% translated and 0% approved pulls back exactly nothing. Reading
  * the translated column alone would predict a working locale and be wrong about every string in
  * it. Both are printed, approved first.
+ *
+ * Then what has reached the repository (`coverage.mjs`, also `npm run i18n:coverage` on its own):
+ * a language approved on Crowdin and absent here is waiting for a pull, and what is here is what
+ * the app and the kits show. Read from the checkout, so it needs no credential.
  */
 
 import { fileURLToPath } from 'node:url';
+
+import { formatCoverage, measureCoverage } from './coverage.mjs';
 
 const API = `${process.env['CROWDIN_BASE_URL'] ?? 'https://hyland.api.crowdin.com'}/api/v2`;
 
@@ -84,6 +90,21 @@ export function formatProgress(rows) {
   return `${lines.join('\n')}\n\n${summary}`;
 }
 
+/**
+ * The whole report: the project, its languages' progress, then the repository's coverage of the
+ * checkout at `root`. Pure but for reading `root`, so the controls can assert both halves are in it.
+ */
+export function formatReport({ projectId, project, rows, sourceFiles, root }) {
+  return (
+    `Crowdin project ${projectId} — ${project.name}\n` +
+    `  source language  ${project.sourceLanguageId}\n` +
+    `  target languages ${rows.length}\n` +
+    `  source files     ${sourceFiles.length}${sourceFiles.length ? `: ${sourceFiles.join(', ')}` : ''}\n\n` +
+    formatProgress(rows) +
+    `\n\n${formatCoverage(measureCoverage(root))}`
+  );
+}
+
 async function main() {
   const projectId = process.env['CROWDIN_PROJECT_ID'];
   const token = process.env['CROWDIN_PERSONAL_TOKEN'];
@@ -102,14 +123,13 @@ async function main() {
 
   const files = await crowdin(`/projects/${projectId}/files?limit=500`, token);
 
-  const report =
-    `Crowdin project ${projectId} — ${project.name}\n` +
-    `  source language  ${project.sourceLanguageId}\n` +
-    `  target languages ${rows.length}\n` +
-    `  source files     ${files.data.length}${
-      files.data.length ? `: ${files.data.map(({ data }) => data.path).join(', ')}` : ''
-    }\n\n` +
-    formatProgress(rows);
+  const report = formatReport({
+    projectId,
+    project,
+    rows,
+    sourceFiles: files.data.map(({ data }) => data.path),
+    root: fileURLToPath(new URL('../..', import.meta.url)),
+  });
 
   console.log(report);
 

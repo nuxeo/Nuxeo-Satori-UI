@@ -226,6 +226,68 @@ describe('the checks across files', () => {
     expect(show(validateFile({ kind: 'home' }, home, empty))).toEqual([]);
   });
 
+  describe("a language's labels", () => {
+    const english: PackageContext = {
+      assets: new Set(),
+      labels: new Set(['payers.app.claims', 'payers.queue.mine']),
+    };
+    const french = (labels: Record<string, string>) => ({ version: 2, labels });
+
+    it('accept a subset of English, since each key left out falls back to English', () => {
+      const file: PackageFile = { kind: 'labels', locale: 'fr' };
+      expect(
+        show(validateFile(file, french({ 'payers.app.claims': 'Sinistres' }), english)),
+      ).toEqual([]);
+      // Every key, and none at all, are subsets too.
+      expect(
+        show(
+          validateFile(
+            file,
+            french({ 'payers.app.claims': 'Sinistres', 'payers.queue.mine': 'Mes sinistres' }),
+            english,
+          ),
+        ),
+      ).toEqual([]);
+      expect(show(validateFile(file, french({}), english))).toEqual([]);
+    });
+
+    it('refuse a key English lacks, by its key', () => {
+      const file: PackageFile = { kind: 'labels', locale: 'nb' };
+      expect(
+        show(
+          validateFile(
+            file,
+            french({ 'payers.app.claims': 'Krav', 'payers.app.claimz': 'Krav' }),
+            english,
+          ),
+        ),
+      ).toEqual([
+        `labels["payers.app.claimz"]: labels/en.json has no text for "payers.app.claimz": a language's labels give a text only to a key English has [unknown]`,
+      ]);
+    });
+
+    it('hold a regional English to English too, and English itself to nothing', () => {
+      const extra = french({ 'payers.app.claimz': 'Claims' });
+      expect(show(validateFile({ kind: 'labels', locale: 'en-GB' }, extra, english))).toHaveLength(
+        1,
+      );
+      expect(show(validateFile({ kind: 'labels', locale: 'en' }, extra, english))).toEqual([]);
+    });
+
+    it('refuse every key where the package has no English labels', () => {
+      const none: PackageContext = { assets: new Set(), labels: new Set() };
+      expect(
+        show(validateFile({ kind: 'labels', locale: 'es' }, french({ a: 'A' }), none)),
+      ).toHaveLength(1);
+    });
+
+    it('are not held to English when read without their package', () => {
+      expect(
+        show(validateFile({ kind: 'labels', locale: 'es' }, french({ a: 'A' }), empty)),
+      ).toEqual([]);
+    });
+  });
+
   it('refuse a file whose name does not say what it needs to', () => {
     const queueFile = queue([]);
     expect(show(validateFile({ kind: 'queue', id: 'open claims' }, queueFile, empty))).toEqual([

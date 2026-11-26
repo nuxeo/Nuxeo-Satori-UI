@@ -3871,6 +3871,58 @@ expectRed(
   /cannot segment into entries/,
 );
 
+// A kit's labels are a source too, rooted at `/business-apps/packages/`, and each entry may hold a
+// flow mapping of its own: the Norwegian mapping. The segmenter read `{[^{}]*}`, so the inner
+// mapping counted as an entry and the one around it as none; the count check then failed a
+// correct file. Both shapes together, as `crowdin-conf.yml` writes them.
+const KIT_LABELS = '/business-apps/packages/*/bundle/agentic-ui-config/labels/en.json';
+const withNorwegian = (entry) =>
+  entry.replace(
+    `      'update_option': 'update_without_changes',\n`,
+    `      'update_option': 'update_without_changes',\n` +
+      `      'languages_mapping': { 'two_letters_code': { 'no': 'nb' } },\n`,
+  );
+const CROWDIN_WITH_KITS = {
+  ...CROWDIN,
+  'crowdin-conf.yml': crowdinConf([
+    withNorwegian(CROWDIN_ENTRY('/apps/*/public/i18n/en.json')),
+    withNorwegian(CROWDIN_ENTRY('/libs/**/i18n/en.json')),
+    withNorwegian(CROWDIN_ENTRY(KIT_LABELS)),
+  ]),
+  'business-apps/packages/acme-demo/bundle/agentic-ui-config/labels/en.json':
+    '{ "version": 2, "labels": { "acme.app": "Acme" } }\n',
+};
+expectGreen(
+  "a kit's labels as a source, each entry mapping Norwegian",
+  'checkCrowdinConfig',
+  CROWDIN_WITH_KITS,
+);
+// The negative half of the same: the kit pattern is held to match a file like every other.
+expectRed(
+  "a kit's labels pattern that matches no kit",
+  'checkCrowdinConfig',
+  CROWDIN_WITH_KITS,
+  (write, git) =>
+    git(['rm', '--quiet', 'business-apps/packages/acme-demo/bundle/agentic-ui-config/labels/en.json']),
+  /declares the source `\/business-apps\/packages\/\*\/bundle\/agentic-ui-config\/labels\/en\.json` and nothing matches it/,
+);
+// And the root is still a short list: a wider one reaches `node_modules`.
+expectRed(
+  'a source rooted outside apps, libs and the kits',
+  'checkCrowdinConfig',
+  CROWDIN_WITH_KITS,
+  (write) =>
+    write(
+      'crowdin-conf.yml',
+      crowdinConf([
+        withNorwegian(CROWDIN_ENTRY('/apps/*/public/i18n/en.json')),
+        withNorwegian(CROWDIN_ENTRY('/libs/**/i18n/en.json')),
+        withNorwegian(CROWDIN_ENTRY('/business-apps/**/labels/en.json')),
+      ]),
+    ),
+  /`\/business-apps\/\*\*\/labels\/en\.json`, which is not rooted at \/apps\/, \/libs\/ or \/business-apps\/packages\//,
+);
+
 /* ---------------- checkNoReviewCorpusChurn ---------------- */
 
 /**

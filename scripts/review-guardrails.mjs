@@ -6114,7 +6114,29 @@ function checkStorybookSatoriCatalogues() {
 function crowdinFileEntries(body) {
   const list = /'?files'?\s*:\s*\[([\s\S]*)\]/.exec(body);
   if (!list) return null;
-  const entries = [...list[1].matchAll(/\{[^{}]*\}/g)].map(([entry]) => entry);
+  // Each TOP-LEVEL `{ … }`, read by depth and outside quotes, so that an entry holding a flow
+  // mapping of its own — `'languages_mapping': { 'two_letters_code': { 'no': 'nb' } }` — is one
+  // entry. A `[^{}]*` match read the innermost mapping as an entry and lost the one around it,
+  // and the count check in `checkCrowdinConfig` then failed a correct file.
+  const entries = [];
+  const text = list[1];
+  let depth = 0;
+  let quote = null;
+  let start = -1;
+  for (let at = 0; at < text.length; at += 1) {
+    const ch = text[at];
+    if (quote !== null) {
+      if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === '{') {
+      if (depth === 0) start = at;
+      depth += 1;
+    } else if (ch === '}' && depth > 0) {
+      depth -= 1;
+      if (depth === 0) entries.push(text.slice(start, at + 1));
+    }
+  }
   return entries.length > 0 ? entries : null;
 }
 
@@ -6634,9 +6656,12 @@ function checkCrowdinConfig() {
   // What is never allowed is a ROOT that could reach `node_modules`, where the 48 upstream
   // catalogues live. `apps/` and `libs/` sit beside it, so neither can.
   for (const source of sources) {
-    if (!/^\/(apps|libs)\//.test(source)) {
+    // `/business-apps/packages/` too: each kit keeps its labels there (app-definition-v2.md,
+    // section 7), and it sits beside `node_modules` exactly as the other two do.
+    if (!/^\/(apps|libs|business-apps\/packages)\//.test(source)) {
       fail(
-        `${config} declares the source \`${source}\`, which is not rooted at /apps/ or /libs/.\n` +
+        `${config} declares the source \`${source}\`, which is not rooted at /apps/, /libs/ or ` +
+          '/business-apps/packages/.\n' +
           '    With `base_path: "."` any wider root reaches `node_modules` — 48 upstream ' +
           'catalogues at the same relative shape, which would bill the translation crew for ' +
           "another team's strings.",
@@ -6674,8 +6699,11 @@ function checkCrowdinConfig() {
         .replace(/\u0000/g, '.*')}$`,
     );
     return (
-      [...walk('apps', (path) => regex.test(path)), ...walk('libs', (path) => regex.test(path))]
-        .length > 0
+      [
+        ...walk('apps', (path) => regex.test(path)),
+        ...walk('libs', (path) => regex.test(path)),
+        ...walk('business-apps/packages', (path) => regex.test(path)),
+      ].length > 0
     );
   };
   for (const source of sources.filter((source) => !matches(source))) {
