@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "pc-claims.queue.open-property-claims",
+  "pageProvider": "pc_open_claims",
+  "columns": [
+    "pclaim:number",
+    { "field": "dc:title", "labelKey": "pc-claims.field.claimTitle" },
+    {
+      "id": "holder",
+      "field": "pclaim:policy",
+      "widget": "document-link",
+      "parameters": { "types": ["PropertyPolicy"], "show": "ppolicy:holder" }
+    },
+    "pclaim:cause",
+    {
+      "field": "pclaim:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Reported": "info",
+          "Investigating": "warning",
+          "Approved": "positive",
+          "Denied": "negative",
+          "Closed": "neutral"
+        }
+      }
+    },
+    { "field": "pclaim:reportedOn", "widget": "relative-date" },
+    { "field": "pclaim:reserve", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "pclaim:adjuster", "widget": "user" }
+  ],
+  "sort": [{ "field": "pclaim:reportedOn", "order": "asc" }],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "pclaim_status_agg", "labelKey": "pc-claims.facet.status" },
+    { "aggregate": "pclaim_cause_agg", "labelKey": "pc-claims.facet.cause" },
+    { "aggregate": "pclaim_adjuster_agg", "labelKey": "pc-claims.facet.adjuster" }
+  ]
+}

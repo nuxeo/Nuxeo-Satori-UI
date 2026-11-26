@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.pc-claims-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="propertypolicy" prefix="ppolicy" src="schemas/propertypolicy.xsd" />
+    <schema name="propertyclaim" prefix="pclaim" src="schemas/propertyclaim.xsd" />
+    <schema name="propertyclaim_search" prefix="pclaimsearch" src="schemas/propertyclaimsearch.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="PropertyPolicy" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="propertypolicy" />
+    </doctype>
+    <!-- Not a folder, and holds no file of its own: its attachments are files:files. So it
+         opens as a record page. -->
+    <doctype name="PropertyClaim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <schema name="propertyclaim" />
+    </doctype>
+    <!-- The search document of PropertyClaim's page providers of the search index, as DefaultSearch
+         is default_search's. Never saved: it holds the buckets a queue's facets send back. No
+         folder lists it among its subtypes, and it is hidden from navigation. -->
+    <doctype name="PropertyClaimSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="propertyclaim_search" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="PropertyPolicy">default</type>
+    </types>
+    <types>
+      <type name="PropertyClaim">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <genericPageProvider name="pc_open_claims"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>PropertyClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'PropertyClaim' AND (pclaim:status IN ('Reported', 'Investigating', 'Approved'))
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="pclaim_status_agg" type="terms" parameter="pclaim:status">
+          <field schema="propertyclaim_search" name="pclaim_status_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="pclaim_cause_agg" type="terms" parameter="pclaim:cause">
+          <field schema="propertyclaim_search" name="pclaim_cause_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="pclaim_adjuster_agg" type="terms" parameter="pclaim:adjuster">
+          <field schema="propertyclaim_search" name="pclaim_adjuster_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="pclaim:reportedOn" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+    <coreQueryPageProvider name="pc_high_reserve_claims">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'PropertyClaim' AND (pclaim:reserve &gt; 50000 AND pclaim:status IN ('Reported', 'Investigating', 'Approved'))
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="pclaim:reserve" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="pc_policy_claims">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'PropertyClaim' AND (pclaim:policy = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="pclaim:lossDate" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>
