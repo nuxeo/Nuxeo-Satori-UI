@@ -88,6 +88,11 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   numbered from the platform's sequencer, and a new revision superseding the one before it in the
   same transaction (phase 8), with its kit,
   [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md).
+- [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md): the e-signature step, provider-neutral,
+  with a stand-in provider and no vendor chosen (decision H): a record's file sent to named signers,
+  the provider's callback authenticated and taken once, and the signed file filed on the record as
+  a new version with the provider's evidence (phase 7), with its kit,
+  [onboarding and disputes](../../business-apps/packages/onboarding-demo/README.md).
 - [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md): the disposition review, on the
   platform's retention module: the records due held in a run, approved by two people other than
   its starter, deleted, and a certificate kept; the audit export a records specialist reviews, and

@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Signature, tests
+Bundle-SymbolicName: org.nuxeo.agentic.signature.test;singleton:=true
+Bundle-Version: 0.0.0
+Bundle-Vendor: Hyland Software

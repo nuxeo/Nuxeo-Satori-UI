@@ -1,0 +1,58 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "case",
+      "labelKey": "onboarding.card.onboardingCase.case",
+      "fields": [
+        { "field": "dc:title", "labelKey": "onboarding.field.caseTitle", "required": true },
+        { "field": "onb:number", "required": true },
+        { "field": "onb:customer", "required": true },
+        {
+          "field": "onb:customerType",
+          "widget": "status-badge",
+          "parameters": { "tones": { "Individual": "neutral", "Business": "info" } }
+        },
+        "onb:country",
+        "onb:product",
+        {
+          "field": "onb:status",
+          "required": true,
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Open": "info",
+              "KYC review": "warning",
+              "Awaiting signature": "warning",
+              "Approved": "positive",
+              "Declined": "negative"
+            }
+          }
+        },
+        {
+          "field": "onb:riskRating",
+          "required": true,
+          "widget": "status-badge",
+          "parameters": { "tones": { "Low": "positive", "Medium": "warning", "High": "negative" } }
+        },
+        "onb:openedOn",
+        { "field": "onb:officer", "widget": "user" }
+      ]
+    },
+    {
+      "id": "notes",
+      "labelKey": "onboarding.card.onboardingCase.notes",
+      "fields": [
+        {
+          "field": "onb:notes",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "onb:status" }, "Declined"]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A signature request (sigreq:), the SignatureRequest facet's schema. The requester gives the first
+  four properties when creating it; every other one is the server's, written when the file is sent
+  and when the provider's callback says how it ended, and refused from anyone else
+  (SignatureRequestListener). The requester may set status to cancelled while it is sent.
+-->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/signature_request/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/schemas/agentic/signature_request/"
+  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/">
+
+  <xs:include schemaLocation="core-types.xsd" />
+
+  <!-- Given by the requester. -->
+
+  <!-- The record whose file is signed, by its id: a live document with the Signable facet. -->
+  <xs:element name="document">
+    <xs:simpleType>
+      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />
+    </xs:simpleType>
+  </xs:element>
+  <!-- Which of its files: an attachment's file name, as files:files lists it; none for file:content. -->
+  <xs:element name="fileName" type="xs:string" />
+  <!-- Who signs, in order: one to ten, each a name and an email address, each address once. -->
+  <xs:element name="signers" type="nxs:signers" />
+  <xs:complexType name="signers">
+    <xs:sequence>
+      <xs:element name="signer" type="nxs:signer" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="signer">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" />
+      <xs:element name="email" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+  <!-- What the signers are told, beside the request's title. -->
+  <xs:element name="message" type="xs:string" />
+
+  <!-- The server's. -->
+
+  <!-- sent, then signed, declined or cancelled. -->
+  <xs:element name="status" type="xs:string" />
+  <!-- The provider the file went to, by the id its callback path names, and its envelope's id there. -->
+  <xs:element name="provider" type="xs:string" />
+  <xs:element name="envelope" type="xs:string" />
+  <!-- Where on the record the file was: file:content, or files:files/<n>/file. -->
+  <xs:element name="file" type="xs:string" />
+  <xs:element name="sentFileName" type="xs:string" />
+  <!-- The SHA-256 of the bytes sent, in lower-case hexadecimal. -->
+  <xs:element name="sentDigest" type="xs:string" />
+  <xs:element name="requestedBy" type="xs:string" />
+  <xs:element name="requestedAt" type="xs:dateTime" />
+  <xs:element name="completedAt" type="xs:dateTime" />
+  <!-- What the provider said a signer gave as the reason, when one declined. -->
+  <xs:element name="declineReason" type="xs:string" />
+  <xs:element name="cancelledBy" type="xs:string" />
+  <!-- The signed file and the provider's evidence, as they came back, with their SHA-256. -->
+  <xs:element name="signedFile" type="nxs:content" />
+  <xs:element name="signedDigest" type="xs:string" />
+  <xs:element name="evidence" type="nxs:content" />
+  <xs:element name="evidenceDigest" type="xs:string" />
+  <!-- The record's version that holds the signed file, by its id. -->
+  <xs:element name="signedVersion" type="xs:string" />
+  <!-- The provider's id of the callback that ended it. -->
+  <xs:element name="event" type="xs:string" />
+</xs:schema>

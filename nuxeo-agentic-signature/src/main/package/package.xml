@@ -1,0 +1,19 @@
+<package type="addon" name="nuxeo-agentic-signature" version="@signature.package.version@">
+  <title>Nuxeo Satori e-signature: a record's file signed through a provider, the signed file filed</title>
+  <description>
+    <p>The e-signature step's server add-on, provider-neutral. A signature request, a document whose type carries the SignatureRequest facet, names a record whose type carries the Signable facet, one of its files and one to ten signers by name and email: when it is created, by someone who may write the record, the file is sent to the e-signature provider the server configures, and the record is marked out for signature.</p>
+    <p>The provider's callback, at /nuxeo/agentic-signature/callback/, is authenticated by the provider's own scheme, its signature compared in constant time, refused when stale or already received, and only then read: it marks the request signed or declined. On signed, the signed file and the provider's evidence are fetched from the provider with the server's credential, and filed on the record as a new major version, the evidence with it.</p>
+    <p>Provider credentials are server settings only, never in a document or a log. A stand-in provider, for demonstrations, talks to a stand-in service; no vendor is chosen. It adds no Automation operation.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <require-terms-and-conditions-acceptance>false</require-terms-and-conditions-acceptance>
+  <license>Apache License, Version 2.0</license>
+  <license-url>http://www.apache.org/licenses/LICENSE-2.0</license-url>
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <visibility>PRIVATE</visibility>
+</package>
