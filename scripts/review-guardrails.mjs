@@ -12497,9 +12497,10 @@ function templateTags(body) {
  *
  * `checkAdoptedPatternsNotBypassed` could not have caught the layout designer drawing its buttons,
  * fields and selects with Material: it guards the Satori entry points behind adopted primitives,
- * and none of these is one — Satori has no text field or select, and its important, tonal icon and
- * split buttons are not adopted — so there was nothing adopted to bypass, and until `nxs-button`, `nxs-icon-button`, `nxs-text-field` and `nxs-select` existed
- * there was nothing to use instead. Now there is, and a library listed in `NXS_CONTROL_FEATURES`
+ * and no button, field or select is adopted. Satori has no text field or select, and its
+ * important, tonal icon and split buttons are not adopted, so there was nothing to bypass; and
+ * until `nxs-button`, `nxs-icon-button`, `nxs-text-field` and `nxs-select` existed there was
+ * nothing to use instead. Now there is, and a library listed in `NXS_CONTROL_FEATURES`
  * is held to them: none of its shipped `.ts` imports one of `NXS_CONTROL_ENTRY_POINTS` (a subpath,
  * a re-export, a type-only or a dynamic import included), and none of its templates uses
  * Material's selectors for them — `<mat-form-field>`, `mat-stroked-button`, `[matButton]`,

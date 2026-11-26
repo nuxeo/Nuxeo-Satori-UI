@@ -35,7 +35,7 @@ import {
   type NxsConfirmDialogData,
   type NxsSelectOption,
 } from '@nuxeo/satori-platform/components';
-import { type Observable, map, merge, of, switchMap } from 'rxjs';
+import { type Observable, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
 import { LayerPanelComponent } from '../layer/layer-panel';
@@ -129,29 +129,14 @@ export class QueueDesignerPageComponent {
   private readonly registered = this.service.queueRegistered();
 
   /**
-   * Ticks when the language or its catalogue changes, so that labels looked up with `instant` in a
-   * `computed` follow it as the template's `translate` pipe does. ngx-translate 18 reads its
-   * catalogue from signals, so such a `computed` follows it without this too; the tick keeps that
-   * true on the service's documented events rather than on how it stores its catalogue.
-   */
-  private readonly translationTick = toSignal(
-    merge(
-      this.translate.onLangChange,
-      this.translate.onTranslationChange,
-      this.translate.onFallbackLangChange,
-    ).pipe(map((_, index) => index)),
-    { initialValue: -1 },
-  );
-
-  /**
    * The orders a sort may have: ascending or descending, and, for a sort that has none yet, none,
-   * which the page provider's own order then decides.
+   * which the page provider's own order then decides. `instant` in a `computed` follows the
+   * language and the catalogue, as ngx-translate's own `translate()` signal does.
    */
   protected readonly orderOptions = computed<{
     readonly unset: readonly NxsSelectOption[];
     readonly set: readonly NxsSelectOption[];
   }>(() => {
-    this.translationTick();
     const option = (value: string, key: string): NxsSelectOption => ({
       value,
       label: this.translate.instant(`layout-designer.queue.order-${key}`),

@@ -41,7 +41,7 @@ import {
   type NxsSelectOption,
 } from '@nuxeo/satori-platform/components';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
-import { type Observable, combineLatest, map, merge, of, switchMap } from 'rxjs';
+import { type Observable, combineLatest, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
 import { LayerPanelComponent } from '../layer/layer-panel';
@@ -194,21 +194,6 @@ export class LayoutDesignerPageComponent {
   /** What a file may name, read once: the rules and row actions register before a page shows. */
   private readonly registries = this.service.registries();
 
-  /**
-   * Ticks when the language or its catalogue changes, so that labels looked up with `instant` in a
-   * `computed` follow it as the template's `translate` pipe does. ngx-translate 18 reads its
-   * catalogue from signals, so such a `computed` follows it without this too; the tick keeps that
-   * true on the service's documented events rather than on how it stores its catalogue.
-   */
-  private readonly translationTick = toSignal(
-    merge(
-      this.translate.onLangChange,
-      this.translate.onTranslationChange,
-      this.translate.onFallbackLangChange,
-    ).pipe(map((_, index) => index)),
-    { initialValue: -1 },
-  );
-
   readonly files = toSignal(this.service.files(), { initialValue: { state: 'reading' } });
   readonly model = toSignal(this.service.model(), { initialValue: { state: 'reading' } });
 
@@ -231,10 +216,13 @@ export class LayoutDesignerPageComponent {
     }));
   });
 
-  /** The picker's choices: each type's three files, under the type, named as the picker names them. */
-  protected readonly typeOptions = computed<readonly NxsSelectGroup[]>(() => {
-    this.translationTick();
-    return this.choices().map((group) => ({
+  /**
+   * The picker's choices: each type's three files, under the type, named as the picker names them.
+   * `instant` in a `computed` follows the language and the catalogue, as ngx-translate's own
+   * `translate()` signal does, so the names change with them as the template's pipe did.
+   */
+  protected readonly typeOptions = computed<readonly NxsSelectGroup[]>(() =>
+    this.choices().map((group) => ({
       label: group.type,
       options: group.choices.map((choice) => ({
         value: choice.key,
@@ -243,17 +231,16 @@ export class LayoutDesignerPageComponent {
           { type: choice.type, mode: this.modeName(choice.mode) },
         ),
       })),
-    }));
-  });
+    })),
+  );
 
   /** What a form's field may be: not required, always required, or required while a rule passes. */
-  protected readonly requiredOptions = computed<readonly NxsSelectOption[]>(() => {
-    this.translationTick();
-    return (['no', 'always', 'rule'] as const).map((choice) => ({
+  protected readonly requiredOptions = computed<readonly NxsSelectOption[]>(() =>
+    (['no', 'always', 'rule'] as const).map((choice) => ({
       value: choice,
       label: this.translate.instant(`layout-designer.required-${choice}`),
-    }));
-  });
+    })),
+  );
 
   /**
    * The file open, or being opened. Set again to the same file, it is read again: so that a file
