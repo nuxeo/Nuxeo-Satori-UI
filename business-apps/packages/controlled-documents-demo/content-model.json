@@ -3,7 +3,14 @@
     "EngineeringDocument": {
       "parent": "Document",
       "facets": ["ControlledDocument"],
-      "schemas": ["common", "dublincore", "engdoc", "controlled_document", "controlled_review"]
+      "schemas": [
+        "common",
+        "dublincore",
+        "engdoc",
+        "controlled_document",
+        "controlled_review",
+        "export_mark"
+      ]
     },
     "Transmittal": {
       "parent": "Document",
@@ -57,6 +64,17 @@
                 "comments": "long"
               }
             }
+          }
+        },
+        {
+          "name": "export_mark",
+          "prefix": "docmark",
+          "@prefix": "docmark",
+          "fields": {
+            "classification": "string",
+            "groups": "string[]",
+            "markedBy": "string",
+            "markedAt": "date"
           }
         }
       ]
@@ -224,6 +242,17 @@
             "comments": "long"
           }
         }
+      }
+    },
+    {
+      "name": "export_mark",
+      "prefix": "docmark",
+      "@prefix": "docmark",
+      "fields": {
+        "classification": "string",
+        "groups": "string[]",
+        "markedBy": "string",
+        "markedAt": "date"
       }
     },
     {

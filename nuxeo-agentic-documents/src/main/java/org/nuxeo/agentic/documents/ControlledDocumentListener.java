@@ -5,6 +5,12 @@ package org.nuxeo.agentic.documents;
 
 import static org.nuxeo.agentic.documents.ControlledDocuments.CURRENT;
 import static org.nuxeo.agentic.documents.ControlledDocuments.FACET;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_CLASSIFICATION;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_GROUPS;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_MARKED_AT;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_MARKED_BY;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_PROPERTIES;
+import static org.nuxeo.agentic.documents.ControlledDocuments.MARK_SCHEMA;
 import static org.nuxeo.agentic.documents.ControlledDocuments.NUMBER;
 import static org.nuxeo.agentic.documents.ControlledDocuments.PROPERTIES;
 import static org.nuxeo.agentic.documents.ControlledDocuments.REVIEW_CYCLES;
@@ -20,9 +26,12 @@ import static org.nuxeo.agentic.documents.ControlledDocuments.isControlled;
 import static org.nuxeo.agentic.documents.ControlledDocuments.isDocumentId;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.TimeZone;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -31,6 +40,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentNotFoundException;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
+import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.event.CoreEventConstants;
@@ -69,6 +79,14 @@ import org.nuxeo.runtime.api.Framework;
  * <li><strong>{@code beforeRestoringDocument}:</strong> a version is restored only when its six
  * properties are the live document's, so a superseded revision is never made current again.</li>
  * </ul>
+ *
+ * <p>And, since 0.3.0, the export-control mark ({@link ExportMarks}): a first revision's creator may
+ * mark it when they hold {@value ExportMarks#PERMISSION} where they create it; a new revision takes
+ * the mark of the one it supersedes, whatever its creator wrote; any later change of a mark, its
+ * removal included, needs the permission on the revision; the server writes who and when, and each
+ * one is audited ({@link ExportMarkAudit}). Who may change a mark is decided by where the revision
+ * is, so a marked revision is placed elsewhere, by a move or by its next revision created in another
+ * folder, only by a holder of the permission on it and on the folder it goes to.
  */
 public class ControlledDocumentListener implements EventListener {
 
@@ -104,8 +122,9 @@ public class ControlledDocumentListener implements EventListener {
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
                 case DocumentEventTypes.ABOUT_TO_COPY -> aboutToCopy(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_RESTORE -> beforeRestore(context, doc);
+                case DocumentEventTypes.ABOUT_TO_MOVE -> aboutToMove(context, doc);
                 default -> {
-                    // Not one of ours: the contribution lists the five above.
+                    // Not one of ours: the contribution lists the six above.
                 }
             }
         } catch (NuxeoException e) {
@@ -129,6 +148,7 @@ public class ControlledDocumentListener implements EventListener {
         }
         String supersedes = value(doc, SUPERSEDES);
         if (supersedes == null) {
+            markFirstRevision(context, doc);
             NumberSeries series = registered(value(doc, SERIES), "Choose a registered number series in "
                     + SERIES + " for a new controlled document");
             doc.setPropertyValue(SERIES, series.id());
@@ -137,7 +157,16 @@ public class ControlledDocumentListener implements EventListener {
             // Blank or empty as written, it is written empty: every property is the server's own.
             doc.setPropertyValue(SUPERSEDES, null);
         } else {
+            // Before the revision it supersedes is first read: its mark is then read after any change
+            // of it this could cross has committed, and no change of it starts until this one ends.
+            if (isDocumentId(supersedes) && !service().enterMark(supersedes)) {
+                throw conflict("The export-control mark of the revision it supersedes, " + supersedes
+                        + ", is being changed at this moment; try again");
+            }
             DocumentModel previous = predecessor(context.getCoreSession(), doc, supersedes);
+            carryMark(previous, doc);
+            placedWithItsMark(context.getCoreSession(), previous, previous.getParentRef(), doc.getParentRef(),
+                    "create its next revision in another folder");
             NumberSeries series = registered(value(previous, SERIES),
                     "The revision it supersedes is in a series no longer registered");
             String revision = series.revisions().next(value(previous, REVISION));
@@ -163,11 +192,21 @@ public class ControlledDocumentListener implements EventListener {
             return;
         }
         String supersedes = value(doc, SUPERSEDES);
+        ExportMarks.Mark mark = ExportMarks.read(doc);
         if (supersedes == null) {
+            ExportMarkAudit.fire(context.getCoreSession(), context.getPrincipal(), doc,
+                    ExportMarkAudit.change(ExportMarks.Mark.NONE, mark), ExportMarks.Mark.NONE, mark, null);
             return;
         }
         CoreSession session = context.getCoreSession();
         DocumentModel previous = predecessor(session, doc, supersedes);
+        if (!ExportMarks.read(previous).equals(mark)) {
+            throw conflict("The new revision's export-control mark is not the one it supersedes");
+        }
+        if (mark.isMarked()) {
+            ExportMarkAudit.fire(session, context.getPrincipal(), doc, ExportMarkAudit.CARRIED, ExportMarks.Mark.NONE,
+                    mark, previous.getId());
+        }
         if (!Objects.equals(value(previous, NUMBER), value(doc, NUMBER))) {
             throw conflict("The new revision's number is not the one it supersedes");
         }
@@ -267,6 +306,187 @@ public class ControlledDocumentListener implements EventListener {
                 && !isReviewRecord(previous, doc, changed)) {
             throw invalid(REVIEW_CYCLES + " is written by the server when a review cycle closes, and not changed");
         }
+        changeMark(context, previous, doc);
+    }
+
+    // ------------------------------------------------------------------ the export-control mark
+
+    /**
+     * A first revision's mark, as its creator wrote it: checked, and written as the server keeps it,
+     * with who and when, or none. Marking needs {@value ExportMarks#PERMISSION} on the folder the
+     * revision is created in, which it inherits from.
+     */
+    private static void markFirstRevision(DocumentEventContext context, DocumentModel doc) {
+        ExportMarks.Mark mark = ExportMarks.read(doc);
+        checkMark(mark);
+        if (mark.isMarked()) {
+            CoreSession session = context.getCoreSession();
+            if (doc.getParentRef() == null || !session.hasPermission(doc.getParentRef(), ExportMarks.PERMISSION)) {
+                throw forbidden("You may not mark a new revision for export control here: it needs the "
+                        + ExportMarks.PERMISSION + " permission on its folder");
+            }
+        }
+        writeMark(doc, mark, mark.isMarked() ? Refusal.actingUser(context.getPrincipal(), null) : null,
+                mark.isMarked() ? now() : null);
+    }
+
+    /** A new revision's mark is the one it supersedes, as stored, whatever its creator wrote. */
+    private static void carryMark(DocumentModel previous, DocumentModel doc) {
+        ExportMarks.Mark mark = ExportMarks.read(previous);
+        Serializable at = previous.hasSchema(MARK_SCHEMA) ? previous.getPropertyValue(MARK_MARKED_AT) : null;
+        writeMark(doc, mark, mark.isMarked() ? Stored.text(previous, MARK_SCHEMA, MARK_MARKED_BY) : null,
+                mark.isMarked() && at instanceof Calendar calendar ? calendar : null);
+    }
+
+    /**
+     * A save that changes the mark's classification or groups: checked, the permission held on the
+     * revision, the revision's fence taken, and the mark written as the server keeps it, with who
+     * and when, and audited. Who and when alone are the server's, and not changed.
+     */
+    private static void changeMark(DocumentEventContext context, DocumentModel previous, DocumentModel doc) {
+        if (!doc.hasFacet(FACET) || !doc.hasSchema(MARK_SCHEMA)) {
+            return;
+        }
+        List<String> changed = Stored.changes(previous, doc, MARK_SCHEMA, MARK_PROPERTIES);
+        if (changed.isEmpty()) {
+            return;
+        }
+        ExportMarks.Mark before = ExportMarks.read(previous);
+        ExportMarks.Mark after = ExportMarks.read(doc);
+        if (before.equals(after)) {
+            if (changed.contains(MARK_MARKED_BY) || changed.contains(MARK_MARKED_AT)) {
+                throw invalid(MARK_MARKED_BY + " and " + MARK_MARKED_AT + " are given by the server, and not changed");
+            }
+            // The same mark written back with blanks or padding: kept as stored, and no change.
+            restoreMark(previous, doc);
+            return;
+        }
+        if (doc.isProxy() || doc.isVersion()) {
+            throw invalid("An export-control mark is changed on the revision itself, not through a proxy or a "
+                    + "version");
+        }
+        checkMark(after);
+        CoreSession session = context.getCoreSession();
+        if (!session.hasPermission(doc.getRef(), ExportMarks.PERMISSION)) {
+            throw forbidden("You may not " + (after.isMarked() ? "change" : "remove") + " this revision's "
+                    + "export-control mark: it needs the " + ExportMarks.PERMISSION + " permission");
+        }
+        if (!service().changeMark(doc.getId())) {
+            throw conflict("This revision's export-control mark is being read by a new revision or a transmittal, "
+                    + "or changed by someone else, at this moment; try again");
+        }
+        writeMark(doc, after, Refusal.actingUser(context.getPrincipal(), null), now());
+        ExportMarkAudit.fire(session, context.getPrincipal(), doc, ExportMarkAudit.change(before, after), before,
+                after, null);
+    }
+
+    /**
+     * Who may change a mark is decided by where the revision is: a marked revision, or the next
+     * revision of one, goes to another folder only when the person holds {@value ExportMarks#PERMISSION}
+     * on the revision and on that folder, 403 otherwise. In its own folder, or unmarked, nothing is
+     * asked.
+     */
+    private static void placedWithItsMark(CoreSession session, DocumentModel revision, DocumentRef from,
+            DocumentRef to, String what) {
+        if (!ExportMarks.read(revision).isMarked() || sameFolder(session, from, to)) {
+            return;
+        }
+        if (to == null || !session.hasPermission(revision.getRef(), ExportMarks.PERMISSION)
+                || !session.hasPermission(to, ExportMarks.PERMISSION)) {
+            throw forbidden("You may not " + what + ": who may change a revision's export-control mark is "
+                    + "decided by where it is, so it needs the " + ExportMarks.PERMISSION
+                    + " permission on the revision and on the folder it goes to");
+        }
+    }
+
+    /** Whether two references name the same folder, read with a privileged session. */
+    private static boolean sameFolder(CoreSession session, DocumentRef from, DocumentRef to) {
+        if (from == null || to == null) {
+            return false;
+        }
+        String a = idOf(session, from);
+        return a != null && a.equals(idOf(session, to));
+    }
+
+    private static String idOf(CoreSession session, DocumentRef ref) {
+        return CoreInstance.doPrivileged(session, (CoreSession s) -> s.exists(ref) ? s.getDocument(ref).getId() : null);
+    }
+
+    /**
+     * A move of a marked revision, or of a folder holding one, read with a privileged session since
+     * the move takes what the person may not read too: only by a holder of
+     * {@value ExportMarks#PERMISSION} on it and on the folder it goes to. A rename in place moves
+     * nothing: the trash renames a document so before it trashes it, naming its folder, and
+     * {@code CoreSession.move} with no destination, which the platform renames in its own folder,
+     * fires the event with none.
+     */
+    private void aboutToMove(DocumentEventContext context, DocumentModel doc) {
+        CoreSession session = context.getCoreSession();
+        DocumentRef to = context.getProperty(CoreEventConstants.DESTINATION_REF) instanceof DocumentRef ref ? ref
+                : null;
+        if (doc.isProxy() || doc.isVersion() || to == null) {
+            return;
+        }
+        if (isControlled(doc)) {
+            placedWithItsMark(session, doc, doc.getParentRef(), to, "move this marked revision");
+            return;
+        }
+        if (doc.isFolder() && !sameFolder(session, doc.getParentRef(), to) && holdsMarked(session, doc)
+                && (!session.hasPermission(doc.getRef(), ExportMarks.PERMISSION)
+                        || !session.hasPermission(to, ExportMarks.PERMISSION))) {
+            throw forbidden("You may not move this folder: it holds revisions with an export-control mark, and "
+                    + "who may change a mark is decided by where the revision is, so it needs the "
+                    + ExportMarks.PERMISSION + " permission on the folder and on the folder it goes to");
+        }
+    }
+
+    /** Whether anything below a folder is a marked controlled document, read with a privileged session. */
+    private static boolean holdsMarked(CoreSession session, DocumentModel folder) {
+        String id = folder.getId();
+        if (!isDocumentId(id)) {
+            return true;
+        }
+        String query = "SELECT ecm:uuid FROM Document WHERE ecm:ancestorId = '" + id + "' AND ecm:mixinType = '"
+                + FACET + "' AND " + MARK_CLASSIFICATION + " IS NOT NULL AND ecm:isProxy = 0";
+        return CoreInstance.doPrivileged(session, (CoreSession privileged) -> !privileged.queryProjection(query, 1, 0)
+                .isEmpty());
+    }
+
+    /** What is wrong with a mark written, refused; and each of its groups held to the user directory. */
+    private static void checkMark(ExportMarks.Mark mark) {
+        String problem = ExportMarks.problem(mark);
+        if (problem != null) {
+            throw invalid(problem);
+        }
+        if (mark.isMarked()) {
+            String missing = ExportMarks.missingGroup(mark);
+            if (missing != null) {
+                throw invalid("No group is named " + missing + ": an export-control mark names groups the "
+                        + "server has");
+            }
+        }
+    }
+
+    /** The mark written as the server keeps it: none, or its classification and groups, with who and when. */
+    private static void writeMark(DocumentModel doc, ExportMarks.Mark mark, String by, Calendar at) {
+        if (!doc.hasSchema(MARK_SCHEMA)) {
+            return;
+        }
+        doc.setPropertyValue(MARK_CLASSIFICATION, mark.isMarked() ? mark.classification() : null);
+        doc.setPropertyValue(MARK_GROUPS, mark.isMarked() ? (Serializable) List.copyOf(mark.groups()) : null);
+        doc.setPropertyValue(MARK_MARKED_BY, by);
+        doc.setPropertyValue(MARK_MARKED_AT, at);
+    }
+
+    /** The mark's four properties put back as the revision stores them. */
+    private static void restoreMark(DocumentModel previous, DocumentModel doc) {
+        for (String property : MARK_PROPERTIES) {
+            doc.setPropertyValue(property, previous.getPropertyValue(property));
+        }
+    }
+
+    private static Calendar now() {
+        return Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.ROOT);
     }
 
     /**
@@ -369,6 +589,7 @@ public class ControlledDocumentListener implements EventListener {
 
     private static final List<Guarded> GUARDED = List.of(new Guarded(FACET, SCHEMA, PROPERTIES),
             new Guarded(FACET, REVIEW_SCHEMA, List.of(REVIEW_CYCLES)),
+            new Guarded(FACET, MARK_SCHEMA, MARK_PROPERTIES),
             new Guarded(ControlledDocuments.TRANSMITTAL_FACET, ControlledDocuments.TRANSMITTAL_SCHEMA,
                     ControlledDocuments.TRANSMITTAL_PROPERTIES),
             new Guarded(ControlledDocuments.RECEIPT_FACET, ControlledDocuments.RECEIPT_SCHEMA,

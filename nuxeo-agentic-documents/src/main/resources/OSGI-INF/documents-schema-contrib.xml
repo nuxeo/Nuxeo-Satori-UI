@@ -3,8 +3,9 @@
 
   <documentation>
     The add-on's schemas and facets. A kit's document type is controlled by carrying the
-    ControlledDocument facet, which brings the controlled_document schema, prefix docctl, and the
-    controlled_review schema, prefix docrev, the review cycles closed on the revision. A kit's
+    ControlledDocument facet, which brings the controlled_document schema, prefix docctl, the
+    controlled_review schema, prefix docrev, the review cycles closed on the revision, and, since
+    0.3.0, the export_mark schema, prefix docmark, the revision's export-control mark. A kit's
     transmittal type carries Transmittal (transmittal, trm), its receipt type TransmittalReceipt
     (transmittal_receipt, trr), and its review cycle type ReviewCycle (review_cycle, rvw).
     ReviewComment (review_comment, rvwc) is given by the server to each of Nuxeo's own comments
@@ -20,12 +21,14 @@
     <schema name="transmittal_receipt" prefix="trr" src="schemas/transmittal_receipt.xsd" />
     <schema name="review_cycle" prefix="rvw" src="schemas/review_cycle.xsd" />
     <schema name="review_comment" prefix="rvwc" src="schemas/review_comment.xsd" />
+    <schema name="export_mark" prefix="docmark" src="schemas/export_mark.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
     <facet name="ControlledDocument">
       <schema name="controlled_document" />
       <schema name="controlled_review" />
+      <schema name="export_mark" />
     </facet>
     <facet name="Transmittal">
       <schema name="transmittal" />

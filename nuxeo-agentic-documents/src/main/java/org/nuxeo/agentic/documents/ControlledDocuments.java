@@ -65,6 +65,32 @@ public final class ControlledDocuments {
     /** Each closed cycle: {@code cycle}, {@code closedBy}, {@code closedAt}, {@code comments}. */
     public static final String REVIEW_CYCLES = REVIEW_PREFIX + ":cycles";
 
+    // ------------------------------------------------------------------ the export-control mark
+
+    /**
+     * The controlled document's third schema, prefix {@value #MARK_PREFIX}, since 0.3.0: the
+     * revision's export-control mark ({@link ExportMarks}).
+     */
+    public static final String MARK_SCHEMA = "export_mark";
+
+    public static final String MARK_PREFIX = "docmark";
+
+    /** Written by a holder of {@value ExportMarks#PERMISSION}: the classification, such as {@code EC-2}. */
+    public static final String MARK_CLASSIFICATION = MARK_PREFIX + ":classification";
+
+    /** Written with it: the groups that may receive the revision, a member of any one of them. */
+    public static final String MARK_GROUPS = MARK_PREFIX + ":groups";
+
+    /** The server's: who last set, changed or removed the mark. */
+    public static final String MARK_MARKED_BY = MARK_PREFIX + ":markedBy";
+
+    /** The server's: when. */
+    public static final String MARK_MARKED_AT = MARK_PREFIX + ":markedAt";
+
+    /** Every property of the mark's schema, in the order a refusal names them. */
+    public static final List<String> MARK_PROPERTIES = List.of(MARK_CLASSIFICATION, MARK_GROUPS, MARK_MARKED_BY,
+            MARK_MARKED_AT);
+
     // ------------------------------------------------------------------ transmittals
 
     /** The facet a kit's transmittal type carries. */

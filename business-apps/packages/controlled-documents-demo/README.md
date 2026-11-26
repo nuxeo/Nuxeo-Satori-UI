@@ -2,10 +2,12 @@
 
 The controlled documents starter kit, for phase 8 of the
 [development plan](../../../docs/business-apps/development-plan.md): an engineering register whose
-numbers, revisions and supersession are the server's, and, since version 0.2.0, its transmittals and
-review cycles, from [`nuxeo-agentic-documents`](../../../nuxeo-agentic-documents/README.md) 0.2.0,
-which the package depends on. It shows demo steps 1 to 3, inside the server: an engineer issues a
-transmittal, its recipient comments and returns it, and the new revision supersedes the old one.
+numbers, revisions and supersession are the server's, since version 0.2.0 its transmittals and
+review cycles, and, since 0.3.0, its export-control marks, from
+[`nuxeo-agentic-documents`](../../../nuxeo-agentic-documents/README.md) 0.3.0, which the package
+depends on. It shows demo steps 1 to 3, inside the server: an engineer issues a transmittal, its
+recipient comments and returns it, and the new revision supersedes the old one; and a marked
+drawing refused to anyone outside its mark's groups.
 Outside users, and the portal they would sign in to, are decision C's and not built: here a
 transmittal goes to named people with an account on the server. Every name in it is fictional.
 
@@ -15,6 +17,13 @@ transmittal goes to named people with an account on the server. Every name in it
   it is, the other revisions of its number, its review cycles, and its history. On a superseded
   revision, a banner above the cards says so and links to the revision that superseded it, by its
   title.
+- **Export-control marks, since 0.3.0:** on a marked revision's page, a banner for its mark, EC-1
+  or EC-2, both fictional, and the mark on its Control card, with the groups that may receive it and
+  who marked it. The platform's download endpoints refuse the revision's files and renditions, and
+  the server a transmittal of it, to anyone in none of those groups; the transmittal's Create form shows the server's reason and
+  stays open. A new revision carries its predecessor's mark. Document controllers hold the add-on's
+  `ChangeExportMark` on the workspace, so they set and change marks; engineers do not, nor move a
+  marked drawing to another folder, or create its next revision in one.
 - **Transmittals, since 0.2.0:** a Create form, in the transmittals register, that issues one; its
   record page, with the documents as issued and each recipient's answer; and each recipient's
   receipt, with an Edit form to acknowledge it, or return it with a comment.
@@ -34,51 +43,55 @@ transmittal goes to named people with an account on the server. Every name in it
   `ReviewCycle`, each with the add-on's facet and no schema of its own, the `TransmittalRegister`
   folder, three vocabularies and nine page providers. Fictional, and replaced whole when a real
   one comes.
-- **A seed script,** with its controls, which writes five documents, nine revisions in all, through
-  the server's numbering alone; and, since 0.2.0, the demo's three people and their groups, a
-  transmittal issued to two of them, one of whom has acknowledged it, and a review cycle with a
-  resolved thread and an open one.
-- **A steps file,** `scripts/beta-harness/steps/controlled-documents-transmittals.mjs`, for demo
-  steps 1 to 3, written and not yet run.
-- **Not installed anywhere at 0.2.0.** Version 0.1.0 is installed on the local Docker Nuxeo; the
-  package passes the pipeline; installing 0.2.0 with the add-on, and seeding it, are for the
-  orchestrator (below).
+- **A seed script,** with its controls, which writes five documents, ten revisions in all since
+  0.3.0, through the server's numbering alone; since 0.2.0, the demo's three people and their
+  groups, a transmittal issued to two of them, one of whom has acknowledged it, and a review cycle
+  with a resolved thread and an open one; and, since 0.3.0, two fictional marks, EC-2 on the
+  single-line diagram, carried from its revision A to B, and EC-1 on the commissioning procedure,
+  with their groups, `ec2-cleared` and `ec1-cleared`.
+- **Two steps files,** `scripts/beta-harness/steps/controlled-documents-transmittals.mjs`, for demo
+  steps 1 to 3, and, since 0.3.0, `controlled-documents-export-marks.mjs`, for the marks: each
+  written and not yet run.
+- **Not installed anywhere at 0.2.0 or 0.3.0.** Version 0.1.0 is installed on the local Docker
+  Nuxeo; the package passes the pipeline; installing 0.3.0 with the add-on, and seeding it, are for
+  the orchestrator (below).
 
 ## What is in it
 
-| File                                                                                       | What it is                                                                                                               |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                                                        | The app: id and address `controlled-documents`, its name, version, platform range and two groups                         |
-| `bundle/agentic-ui-config/layouts/EngineeringDocument/view.layout.json`                    | The record page: the superseded banner, the Control and Document cards, the revisions, the review cycles and the history |
-| `bundle/agentic-ui-config/layouts/Transmittal/view.layout.json`, `create.layout.json`      | A transmittal's record page, and its Create form                                                                         |
-| `bundle/agentic-ui-config/layouts/TransmittalReceipt/view.layout.json`, `edit.layout.json` | A receipt's page, and the Edit form its recipient answers with                                                           |
-| `bundle/agentic-ui-config/layouts/ReviewCycle/view.layout.json`, `edit.layout.json`        | A review cycle's page, and the Edit form its opener closes it with                                                       |
-| `bundle/agentic-ui-config/queues/current.json`, `awaiting-me.json`, `transmittals.json`    | The three queues                                                                                                         |
-| `bundle/agentic-ui-config/home.json`, `navigation.json`                                    | The home's five figures, and the menu                                                                                    |
-| `bundle/agentic-ui-config/labels/en.json`                                                  | Its labels, in English: every key the files above name                                                                   |
-| `bundle/OSGI-INF/controlled-documents-demo-config.xml`                                     | The component that contributes the layouts and the app                                                                   |
-| `bundle/OSGI-INF/controlled-documents-demo-model.xml`, `bundle/schemas/`, `bundle/data/`   | **The stand-in model:** the types, the schema, their lifecycle, nine page providers and three vocabularies               |
-| `bundle/OSGI-INF/controlled-documents-demo-series.xml`                                     | The three number series, for the add-on                                                                                  |
-| `content-model.json`                                                                       | The model as the server would answer it, with the add-on's facets and schemas, for the pipeline                          |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                 | The seed script, its fictional register and people, and its controls. Not packaged                                       |
-| `package/package.xml`                                                                      | The Marketplace package: it depends on `nuxeo-agentic-ui` 2026.0.2 and `nuxeo-agentic-documents` 0.2.0                   |
-| `build.mjs`                                                                                | Version 1's builder: the generator's, byte for byte                                                                      |
+| File                                                                                       | What it is                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                                                        | The app: id and address `controlled-documents`, its name, version, platform range and two groups                                          |
+| `bundle/agentic-ui-config/layouts/EngineeringDocument/view.layout.json`                    | The record page: the superseded and export-mark banners, the Control and Document cards, the revisions, the review cycles and the history |
+| `bundle/agentic-ui-config/layouts/Transmittal/view.layout.json`, `create.layout.json`      | A transmittal's record page, and its Create form                                                                                          |
+| `bundle/agentic-ui-config/layouts/TransmittalReceipt/view.layout.json`, `edit.layout.json` | A receipt's page, and the Edit form its recipient answers with                                                                            |
+| `bundle/agentic-ui-config/layouts/ReviewCycle/view.layout.json`, `edit.layout.json`        | A review cycle's page, and the Edit form its opener closes it with                                                                        |
+| `bundle/agentic-ui-config/queues/current.json`, `awaiting-me.json`, `transmittals.json`    | The three queues                                                                                                                          |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`                                    | The home's five figures, and the menu                                                                                                     |
+| `bundle/agentic-ui-config/labels/en.json`                                                  | Its labels, in English: every key the files above name                                                                                    |
+| `bundle/OSGI-INF/controlled-documents-demo-config.xml`                                     | The component that contributes the layouts and the app                                                                                    |
+| `bundle/OSGI-INF/controlled-documents-demo-model.xml`, `bundle/schemas/`, `bundle/data/`   | **The stand-in model:** the types, the schema, their lifecycle, nine page providers and three vocabularies                                |
+| `bundle/OSGI-INF/controlled-documents-demo-series.xml`                                     | The three number series, for the add-on                                                                                                   |
+| `content-model.json`                                                                       | The model as the server would answer it, with the add-on's facets and schemas, for the pipeline                                           |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                 | The seed script, its fictional register and people, and its controls. Not packaged                                                        |
+| `package/package.xml`                                                                      | The Marketplace package: it depends on `nuxeo-agentic-ui` 2026.0.2 and `nuxeo-agentic-documents` 0.3.0                                    |
+| `build.mjs`                                                                                | Version 1's builder: the generator's, byte for byte                                                                                       |
 
-One version in three places: 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
+One version in three places: 0.3.0, in `package.xml`, `app.json`'s `packageVersion` and the
 manifest's `Bundle-Version`.
 
 ## The record pages
 
 ### An engineering document
 
-| Card                     | Shows                                                                                                                                                                                                                 |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The `superseded` banner  | Only while `docctl:status` is `superseded`: "This revision is superseded. Work from the current revision:", and the successor's title, which opens it                                                                 |
-| Control                  | Number, revision, status as a badge (`current` positive, `superseded` warning), series, the revisions it supersedes and is superseded by, each by its title, linked, and, since 0.2.0, the review cycles closed on it |
-| Document                 | Title, category, discipline, project, issued for, originator (by name), issued on, description                                                                                                                        |
-| Revisions of this number | Every live revision with this one's number, newest first, from `controlled_documents_revisions`                                                                                                                       |
-| Review cycles            | Since 0.2.0, the document's review-cycle card: every cycle on this revision, newest first, open or closed, by whom, and how many threads, from `controlled_documents_review_cycles`; a row opens the cycle            |
-| History                  | The record's audit                                                                                                                                                                                                    |
+| Card                     | Shows                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The `superseded` banner  | Only while `docctl:status` is `superseded`: "This revision is superseded. Work from the current revision:", and the successor's title, which opens it                                                                                                                                                                                                                                                                                                                             |
+| The export-mark banners  | Since 0.3.0, `export-mark-ec1` while `docmark:classification` is `EC-1`, warning, and `export-mark-ec2` while it is `EC-2`, negative: "Export controlled, EC-2 (fictional). Only members of a group its mark names, on the Control card, may download this revision, have its renditions or be sent it in a transmittal: the server's download endpoints and its transmittals refuse anyone else." A classification of another name shows the Control card's field, and no banner |
+| Control                  | Number, revision, status as a badge (`current` positive, `superseded` warning), series, the revisions it supersedes and is superseded by, each by its title, linked; since 0.3.0, the export-control mark as a badge, the groups that may receive it, who marked it and when; and, since 0.2.0, the review cycles closed on it                                                                                                                                                    |
+| Document                 | Title, category, discipline, project, issued for, originator (by name), issued on, description                                                                                                                                                                                                                                                                                                                                                                                    |
+| Revisions of this number | Every live revision with this one's number, newest first, from `controlled_documents_revisions`                                                                                                                                                                                                                                                                                                                                                                                   |
+| Review cycles            | Since 0.2.0, the document's review-cycle card: every cycle on this revision, newest first, open or closed, by whom, and how many threads, from `controlled_documents_review_cycles`; a row opens the cycle                                                                                                                                                                                                                                                                        |
+| History                  | The record's audit                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 **The banner's link is a small addition to layout version 2,** since a banner held text only: a
 banner may name, in `link`, a property of the open record that holds a record's id, and the page
@@ -91,12 +104,12 @@ scrolled past the banner.
 
 ### A transmittal, and its receipts
 
-| Page or form         | Shows                                                                                                                                                                                                                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transmittal          | The number, subject, purpose (from `ControlledDocumentsPurpose`), due day, who issued it and when, and the message; the documents as issued, number, revision and title, and the revisions sent, each by its title, linked; the Recipients card, each receipt's recipient, answer as a badge, comment and day; its comments; its history |
-| Create a transmittal | Subject, purpose, due day, the documents by number (`DWG-00001`; an id works too), the recipients by user name, and a message. Offered by the Create menu of the transmittals register, a `TransmittalRegister`, whose one subtype it is                                                                                                 |
-| Receipt              | A banner while it awaits, linking to the transmittal; what was sent, to whom, by whom and when due; the answer as a badge, the comment and the day; its history                                                                                                                                                                          |
-| Answer a receipt     | The answer, from `ControlledDocumentsAnswer`, Acknowledged or Returned with comments, and the comment, required with a return. The record's Edit, for anyone the receipt's permissions let write it                                                                                                                                      |
+| Page or form         | Shows                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transmittal          | The number, subject, purpose (from `ControlledDocumentsPurpose`), due day, who issued it and when, and the message; the documents as issued, number, revision and title, and the revisions sent, each by its title, linked; the Recipients card, each receipt's recipient, answer as a badge, comment and day; its comments; its history                                                              |
+| Create a transmittal | Subject, purpose, due day, the documents by number (`DWG-00001`; an id works too), the recipients by user name, and a message. Offered by the Create menu of the transmittals register, a `TransmittalRegister`, whose one subtype it is. Since 0.3.0, a recipient a document's mark excludes: the server refuses the transmittal, and the form shows its reason, naming who and what, and stays open |
+| Receipt              | A banner while it awaits, linking to the transmittal; what was sent, to whom, by whom and when due; the answer as a badge, the comment and the day; its history                                                                                                                                                                                                                                       |
+| Answer a receipt     | The answer, from `ControlledDocumentsAnswer`, Acknowledged or Returned with comments, and the comment, required with a return. The record's Edit, for anyone the receipt's permissions let write it                                                                                                                                                                                                   |
 
 ### A review cycle
 
@@ -106,7 +119,9 @@ scrolled past the banner.
 | Close the cycle | One field, the cycle's state, from `ControlledDocumentsCycleStatus`: Closed, saved, closes it, and the server refuses it while a thread is open, or from anyone but its opener                                                                                                           |
 
 **Nothing on a page is a control.** The banners, badges and the Edit forms read and write what the
-server checks. Whether anyone may read a transmittal, a receipt, a cycle or a revision, or write
+server checks. An export-mark banner says what the server refuses; the server's download
+permission is what refuses, and a reader outside the mark's groups still reads the page, as the
+folders' permissions allow. Whether anyone may read a transmittal, a receipt, a cycle or a revision, or write
 one, is the server's permissions'; who may answer a receipt, comment in a cycle, resolve a thread
 or close a cycle is the add-on's ([its README](../../../nuxeo-agentic-documents/README.md)).
 
@@ -117,13 +132,13 @@ platform's, and is not built. The steps file resolves over the REST API.
 
 ## The stand-in model
 
-| Type                  | Schemas (prefix)                                                                                                                 | Facet                | What its own schema holds                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
-| `EngineeringDocument` | `common`, `dublincore`, `engdoc` (`engdoc`), and the facet's `controlled_document` (`docctl`) and `controlled_review` (`docrev`) | `ControlledDocument` | `discipline`, `category`, `project`, `originator`, `purpose`, `issuedOn`. Its title is `dc:title` |
-| `Transmittal`         | `common`, `dublincore`, and the facet's `transmittal` (`trm`)                                                                    | `Transmittal`        | None: its subject is `dc:title`, its message `dc:description`                                     |
-| `TransmittalReceipt`  | `common`, `dublincore`, and the facet's `transmittal_receipt` (`trr`)                                                            | `TransmittalReceipt` | None. `HiddenInCreation`: the server creates each one                                             |
-| `ReviewCycle`         | `common`, `dublincore`, and the facet's `review_cycle` (`rvw`)                                                                   | `ReviewCycle`        | None                                                                                              |
-| `TransmittalRegister` | A folder                                                                                                                         |                      | Its one subtype is `Transmittal`, so its Create menu offers it                                    |
+| Type                  | Schemas (prefix)                                                                                                                                                          | Facet                | What its own schema holds                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
+| `EngineeringDocument` | `common`, `dublincore`, `engdoc` (`engdoc`), and the facet's `controlled_document` (`docctl`), `controlled_review` (`docrev`) and, since 0.3.0, `export_mark` (`docmark`) | `ControlledDocument` | `discipline`, `category`, `project`, `originator`, `purpose`, `issuedOn`. Its title is `dc:title` |
+| `Transmittal`         | `common`, `dublincore`, and the facet's `transmittal` (`trm`)                                                                                                             | `Transmittal`        | None: its subject is `dc:title`, its message `dc:description`                                     |
+| `TransmittalReceipt`  | `common`, `dublincore`, and the facet's `transmittal_receipt` (`trr`)                                                                                                     | `TransmittalReceipt` | None. `HiddenInCreation`: the server creates each one                                             |
+| `ReviewCycle`         | `common`, `dublincore`, and the facet's `review_cycle` (`rvw`)                                                                                                            | `ReviewCycle`        | None                                                                                              |
+| `TransmittalRegister` | A folder                                                                                                                                                                  |                      | Its one subtype is `Transmittal`, so its Create menu offers it                                    |
 
 - **The add-on's properties are the server's to write,** but what a creator or a recipient names:
   a new document its series, or the revision it supersedes; a transmittal its documents,
@@ -211,16 +226,24 @@ person writes on the forms); the queues' widgets and `$currentUser`; the documen
 card and its record of closed cycles; the series for transmittals; the labels, the home and the
 menu; the seed, its data and its controls.
 
+Version 0.3.0, by hand, since no generator writes a banner, a facet's schema or a seed: the
+add-on's `export_mark` schema in `content-model.json`, on the `ControlledDocument` facet and the
+type; the record page's two export-mark banners and the Control card's four mark fields; their
+labels; the dependency on `nuxeo-agentic-documents` 0.3.0; and the seed, its data and its controls:
+the marks' groups and members, document controllers' `ChangeExportMark`, the single-line diagram's
+revision B, and the two marks.
+
 ## Checking it
 
-| Check                                                                                                                       | Result                                                                                                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run app-package -- business-apps/packages/controlled-documents-demo --platform 0.2.0 --previous <0.1.0, from staging>` | Passed, 26 November 2026: 14 files, 7 layouts held to the package's own `content-model.json`, "69 changes, which need a patch version. 0.2.0 raises the minor", the zip built and verified |
-| `npm run app-upgrade -- --since origin/staging/enterprise-grade-app`                                                        | Every configuration kept, 0.2.0 held to 0.1.0                                                                                                                                              |
-| `node business-apps/packages/controlled-documents-demo/demo/seed.selftest.mjs`                                              | 48 of 48 controls passed. Broken on purpose sixteen ways, one at a time, each turned a control red                                                                                         |
+| Check                                                                                                                       | Result                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run app-package -- business-apps/packages/controlled-documents-demo --platform 0.2.0 --previous <0.1.0, from staging>` | Passed, 26 November 2026: 14 files, 7 layouts held to the package's own `content-model.json`, "69 changes, which need a patch version. 0.2.0 raises the minor", the zip built and verified                                                                                                                                                                          |
+| The same, for 0.3.0, `--previous <0.2.0, from staging>`                                                                     | Passed, 26 November 2026: 14 files, 7 layouts held to the content model, "9 changes, which need a patch version. 0.3.0 raises the minor", the zip built and verified. Refused, as it must be, with the export-mark schema taken out of `content-model.json` (the Control card's four `docmark:` fields not the type's), and with the version held at 0.2.0 (step 3) |
+| `npm run app-upgrade -- --since origin/staging/enterprise-grade-app`                                                        | Every configuration kept, 0.3.0 held to 0.2.0                                                                                                                                                                                                                                                                                                                       |
+| `node business-apps/packages/controlled-documents-demo/demo/seed.selftest.mjs`                                              | 65 of 65 controls passed. Broken on purpose twenty ways, one at a time, each turned a control red                                                                                                                                                                                                                                                                   |
 
-**Not seen on a server or in a browser.** No server has the add-on or the kit at 0.2.0, so the
-pages have not been drawn with them, and the steps file has not run.
+**Not seen on a server or in a browser.** No server has the add-on or the kit at 0.2.0 or 0.3.0,
+so the pages have not been drawn with them, and neither steps file has run.
 
 The seed's sixteen breakages: 0.1.0's seven (a number of its own written on creation; a `docctl:`
 property written on an update; a chain continued over someone else's supersession; two chains
@@ -228,7 +251,9 @@ sharing a number not seen; the page providers not asked; the password printed; a
 taken for no precondition), and 0.2.0's nine: an answer sent as the administrator; a resolution sent
 as the administrator; the transmittal issued as the administrator; a number written on the
 transmittal; an answer sent again on every run; the demo password printed; the receipts not
-checked; a user someone else made taken over; the threads not checked.
+checked; a user someone else made taken over; the threads not checked. And 0.3.0's four: the marks
+not checked (a server that carries no mark let through); the marks not written; who marked a
+revision written by the seed; document controllers not given `ChangeExportMark`.
 
 ## Installing it on a local Nuxeo
 
@@ -249,16 +274,21 @@ With `NUXEO_USER` and `NUXEO_PASS` exported for an administrator, and
 node business-apps/packages/controlled-documents-demo/demo/seed.mjs
 ```
 
-It creates the groups `document-controllers` and `engineers`, and three people:
+It creates the groups `document-controllers` and `engineers`, and, since 0.3.0, `ec1-cleared` and
+`ec2-cleared`, the fictional marks' groups, and three people:
 
-| User    | Groups                              | In the demo                                                                     |
-| ------- | ----------------------------------- | ------------------------------------------------------------------------------- |
-| `avega` | `document-controllers`, `engineers` | The engineer: issues the transmittals, a reviewer of the seeded cycle           |
-| `kosei` | `engineers`                         | The recipient: has acknowledged the seeded transmittal; opened the seeded cycle |
-| `mlind` | `engineers`                         | A recipient whose receipt awaits; a reviewer whose thread is open               |
+| User    | Groups                                                            | In the demo                                                                                              |
+| ------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `avega` | `document-controllers`, `engineers`, `ec1-cleared`, `ec2-cleared` | The engineer: issues the transmittals, a reviewer of the seeded cycle; marks drawings                    |
+| `kosei` | `engineers`, `ec2-cleared`                                        | The recipient: has acknowledged the seeded transmittal; opened the seeded cycle; receives EC-2, not EC-1 |
+| `mlind` | `engineers`, `ec1-cleared`                                        | A recipient whose receipt awaits; a reviewer whose thread is open; receives EC-1, not EC-2               |
 
 Both groups get `ReadWrite` on the workspace, so everyone may read and write the register, the
-transmittals and the cycles; the add-on decides who answers, comments, resolves and closes. It
+transmittals and the cycles; the add-on decides who answers, comments, resolves and closes. Since
+0.3.0, document controllers get the add-on's `ChangeExportMark` on it too, and the single-line
+diagram is marked EC-2 for `ec2-cleared`, both its revisions, and the commissioning procedure EC-1
+for `ec1-cleared`; the seed writes each mark on the chain's first revision, as the administrator,
+and the server carries it. A revision seeded before 0.3.0 is given its chain's mark by an update. It
 prints the home, the queue, a superseded revision and its current one, the transmittal and the
 review cycle. A user or a group of those names that the seed did not create stops it, before
 anything is written.
@@ -285,6 +315,19 @@ NUXEO_USER=avega NUXEO_PASS="$CONTROLLED_DOCUMENTS_DEMO_PASSWORD" npm run beta:e
 
 Its header says what it checks, what it needs, and what it does not cover. It runs on a drawing of
 its own each time, so the seeded register reads the same afterwards.
+
+### The export-control marks, as a steps file
+
+```bash
+NUXEO_USER=avega NUXEO_PASS="$CONTROLLED_DOCUMENTS_DEMO_PASSWORD" npm run beta:evidence -- controlled-documents-export-marks
+```
+
+On a drawing of its own, marked EC-2 by the engineer: its rendition refused to `mlind` and served
+to `kosei`; a transmittal of it to `mlind` refused in the app's Create form, with the server's
+reason, and over the REST API, and issued to `kosei`; its revision B carrying EC-2; `kosei`'s change
+and removal of the mark refused; the engineer's change to EC-1 made, and in B's history; and each
+page's banner. The kit's stand-in type holds no file, so no file is downloaded: the add-on's tests
+hold that.
 
 ### By hand
 
@@ -319,5 +362,6 @@ its own each time, so the seeded register reads the same afterwards.
 - **A create form for a new revision,** naming the one it supersedes, so that step 3 runs in the
   app rather than through the REST API; nor one for a review cycle.
 - **Resolving a thread in the app,** above; reminders of what awaits or is late.
-- **Export-control marks**, the rest of phase 8's document control.
+- **A form to mark a revision.** Marks are written over the REST API, as the seed and the steps
+  file write them; the record page shows them, and no Edit form of the kit's writes them.
 - **Files.** The stand-in type holds none; a real register's revisions carry their drawings.
