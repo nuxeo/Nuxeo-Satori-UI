@@ -188,6 +188,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           'queues/open-appeals.json',
           'queues/pending-determination.json',
           'queues/unassigned-claims.json',
+          'tasks/PayersAppealReview.decide.layout.json',
           'tasks/PayersClaimReview.determine.layout.json',
           'tasks/PayersClaimReview.supervisorApproval.layout.json',
           'tasks/claimReview.check.layout.json',

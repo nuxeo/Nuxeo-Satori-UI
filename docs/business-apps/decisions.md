@@ -102,6 +102,19 @@ way.
   and member services' write on cases, a minor version below 1.0.0. Decision 3 is not touched: a
   tick runs no chain and no button.
 
+- **2, the Payers kit's appeal review workflow (26 November 2026).** Built against the same
+  recommendation: the kit's version 0.7.0 adds a second route model, `PayersAppealReview`, with
+  its task form, variables, chains, filter and vocabulary, an appeal's decision, `case:decision`,
+  and to the claims review a start that reopens a denied claim, for the system an overturned
+  appeal's chain runs as and an administrator only. A member services specialist upholds or
+  overturns an appeal's denial; overturning reopens the claim for a new determination, and either
+  decision writes the checklist's decision letter item. A steps file covers it, and the claims
+  review's steps file now covers Send back
+  ([the kit's README](../../business-apps/packages/payers-claims-demo/README.md#the-appeal-review-workflow)).
+  If decision 2 goes the other way, the kit drops the appeal review with the claims review, and
+  `case:decision`, a minor version below 1.0.0. Decision 3 is not touched: the decision is a task
+  of the route model, and runs no button.
+
 - **3, operation buttons (25 November 2026).** Built against the recommendation, "Yes, through a
   per-deployment allow-list (parity decision 3)": configuration may bind a button to an Automation
   chain or operation, and only one the server's own allow-list holds

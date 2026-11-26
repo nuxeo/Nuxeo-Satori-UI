@@ -7,6 +7,10 @@
  *   2. The supervisor approves it, and the claim moves to Approved.
  *   3. Deny another claim without a reason: the field rule stops it.
  *
+ * Between the second and the third, the supervisor sends another claim's determination back, in
+ * their task form: the route model's `sendBack` transition returns the claim to its adjuster's
+ * determination, still in review, and its history says so; the adjuster then determines it again.
+ *
  * Each step is done in the app, in the Tasks page's task panel, through the step's task form
  * (`bundle/agentic-ui-config/tasks/`), and its outcome is read back from the server: the claim's
  * lifecycle state and `claim:status`, which the kit keeps as one, and the tasks open on it. Then,
@@ -19,7 +23,7 @@
  *   none of the history of a claim sent to a supervisor, which the claim of step 1 has.
  *
  * The amounts are the run's, and the threshold is read from the route model's own condition, so a
- * model whose threshold moved fails here, at the boundary. Each run writes three claims of its own
+ * model whose threshold moved fails here, at the boundary. Each run writes four claims of its own
  * to the seeded claims folder, numbered for the run and marked `MARKER`. They hold no member, no
  * provider, and none of phase 1's adjusters, and the run ends with each one approved or denied, so
  * none is in what phase 1's demo counts. A run that stopped part way leaves claims in review, which
@@ -47,13 +51,15 @@
  * state and status, with no task left and the record page showing it; step 3's form refusing to
  * send the denial, the task still open and the claim still in review; the server leaving a claim
  * denied with no reason in review, with its determination open again, and denying it with one;
- * the claim at the threshold approved with no supervisor. Negative ones: the adjuster's
- * determination not approving the claim over the threshold, the denial with no reason not denying
- * it (in the form and on the server), and no supervisor for the claim at the threshold.
+ * the claim at the threshold approved with no supervisor; the claim sent back in review, with its
+ * supervisor's approval ended, a determination open again for its adjuster, and "Sent back to the
+ * adjuster" in its history, by the supervisor. Negative ones: the adjuster's determination not
+ * approving the claim over the threshold, the denial with no reason not denying it (in the form and
+ * on the server), no supervisor for the claim at the threshold, and the claim sent back not
+ * approved by the supervisor's action.
  *
- * Not covered, and said in notes: the supervisor sending a claim back, the server's own install of
- * the task forms (the dev server serves them from `config:dev`), and who may follow the lifecycle's
- * transitions outside the workflow.
+ * Not covered, and said in notes: the server's own install of the task forms (the dev server serves
+ * them from `config:dev`), and who may follow the lifecycle's transitions outside the workflow.
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -333,7 +339,7 @@ export default async function run(page, h) {
   );
 
   // ── Set up: the run's claims, each with the workflow started ───────────────────────────────
-  await h.step('Set up: three claims of the run, each with the claims review workflow started');
+  await h.step('Set up: four claims of the run, each with the claims review workflow started');
   // An earlier run's claims, put away first: their workflows cancelled, and the claims trashed.
   const leftovers = await asAdjuster('POST', '/automation/Repository.Query', {
     params: {
@@ -378,6 +384,8 @@ export default async function run(page, h) {
       allowedAmount: THRESHOLD,
     },
     denied: { number: `CLAIM-WF-${runId}-3`, billedAmount: 2310 },
+    // Over the threshold too, for the supervisor to send back.
+    sentBack: { number: `CLAIM-WF-${runId}-4`, billedAmount: 6180, allowedAmount: 6000 },
   };
   const read = (claim) =>
     asAdjuster('GET', `/id/${claim.uid}`).then(({ body }) => ({
@@ -603,6 +611,90 @@ export default async function run(page, h) {
     String(shownStatus),
   );
   await h.screenshot('claim-approved', page.locator('.record-page__card').first());
+
+  // ── Send back: the supervisor returns a determination to the adjuster ──────────────────────
+  await h.step('The supervisor sends a determination back: the claim returns to the adjuster');
+  // Still the supervisor in the browser, as step 2 declared. The adjuster's determination is made
+  // through the REST API, as theirs, so that a supervisor's approval opens on a second claim.
+  const sentBackDetermined = await asAdjuster('PUT', `/task/${claims.sentBack.task?.id}/submit`, {
+    'entity-type': 'task',
+    id: claims.sentBack.task?.id,
+    variables: { decision: 'approve', allowedAmount: claims.sentBack.allowedAmount },
+  });
+  const sendBackTask = await until(() => taskOn(claims.sentBack, SUPERVISOR));
+  h.check(
+    `the adjuster's approval of ${claims.sentBack.number}, billed $${claims.sentBack.billedAmount}, opens a supervisor's approval`,
+    sentBackDetermined.status === 200 && sendBackTask !== null,
+    JSON.stringify({ answered: sentBackDetermined.status, task: sendBackTask?.id ?? null }),
+  );
+  await h.goTo(`/#/tasks/${sendBackTask?.id}`);
+  await formSettled(page);
+  await h.screenshot('supervisor-send-back');
+  await act(page, 'Send back');
+  // The determination the route model's sendBack transition opens again: a new task, the
+  // adjuster's, on the same claim.
+  const determinedAgain = await until(async () => {
+    const task = await taskOn(claims.sentBack, DETERMINE);
+    return task && task.id !== claims.sentBack.task?.id ? task : null;
+  });
+  const sentBackOpen = await openTasks(claims.sentBack);
+  h.check(
+    "the supervisor's approval is ended, and no other approval is open",
+    Array.isArray(sentBackOpen) &&
+      !sentBackOpen.some((task) => task.id === sendBackTask?.id || task.nodeName === SUPERVISOR),
+    JSON.stringify(sentBackOpen?.map((task) => [task.id, task.nodeName]) ?? 'not read'),
+  );
+  h.check(
+    `the claim returns to the adjuster's determination: a new one is open, for user:${adjuster}`,
+    determinedAgain !== null && actorsOf(determinedAgain).includes(`user:${adjuster}`),
+    JSON.stringify({ id: determinedAgain?.id ?? null, actors: actorsOf(determinedAgain) }),
+  );
+  const sentBackNow = await read(claims.sentBack);
+  h.check(
+    'the claim stays in review, its lifecycle state and claim:status both, not approved by the supervisor',
+    sentBackNow.state === 'inReview' && sentBackNow.status === 'inReview',
+    JSON.stringify(sentBackNow),
+  );
+  const sentBackWorkflow = await asAdjuster('GET', `/workflow/${claims.sentBack.workflow}`);
+  h.check(
+    "the claim's workflow, read by its id, still runs",
+    sentBackWorkflow.status === 200 && sentBackWorkflow.body?.state === 'running',
+    `GET /workflow answered ${sentBackWorkflow.status}, ${sentBackWorkflow.body?.state}`,
+  );
+  // The history the route model's chains write: sent to a supervisor, then sent back, by them.
+  const sentBackHistory = await until(async () => {
+    const entries =
+      (await asAdjuster('GET', `/id/${claims.sentBack.uid}/@audit`)).body?.entries ?? [];
+    return entries.some((entry) => entry.eventId === 'Sent back to the adjuster') ? entries : null;
+  });
+  const sentBackEntry = (sentBackHistory ?? []).find(
+    (entry) => entry.eventId === 'Sent back to the adjuster',
+  );
+  h.check(
+    `the claim's history says so: "Sent back to the adjuster", "${supervisor} sent the determination back.", after "Sent to a supervisor"`,
+    sentBackEntry?.comment === `${supervisor} sent the determination back.` &&
+      (sentBackHistory ?? []).some((entry) => entry.eventId === 'Sent to a supervisor'),
+    JSON.stringify((sentBackHistory ?? []).map((entry) => [entry.eventId, entry.comment ?? null])),
+  );
+  await h.screenshot('determination-sent-back');
+  // The adjuster determines it again, through the REST API: denied, so the run leaves no claim in
+  // review for phase 1's demo to count.
+  const deniedAgain = await asAdjuster('PUT', `/task/${determinedAgain?.id}/submit`, {
+    'entity-type': 'task',
+    id: determinedAgain?.id,
+    variables: { decision: 'deny', denialReason: 'Sent back, then denied (fictional).' },
+  });
+  const sentBackDenied = await until(async () => {
+    const now = await read(claims.sentBack);
+    return now.state === 'denied' ? now : null;
+  });
+  h.check(
+    'the determination opened again decides the claim: the adjuster denies it, and no task is left',
+    deniedAgain.status === 200 &&
+      sentBackDenied?.status === 'denied' &&
+      (await noTaskOpen(claims.sentBack)),
+    JSON.stringify({ answered: deniedAgain.status, claim: sentBackDenied }),
+  );
   // The browser's cookie jar is the identity guard's to judge: a cookie the supervisor's session
   // picked up would answer the next step boundary as them.
   await page.context().clearCookies();
@@ -747,10 +839,6 @@ export default async function run(page, h) {
   await h.step('Health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
   h.note(
-    "not run: a supervisor sending a determination back, which the route model's sendBack " +
-      'transition does, to the adjuster',
-  );
-  h.note(
     "the server's own install is not what the app read: under the dev server the task forms come " +
       'from config:dev, which only the app registry serves from a package',
   );
@@ -759,7 +847,7 @@ export default async function run(page, h) {
       'claim may follow approve through the API, and hiding a button is not a control',
   );
   h.note(
-    `the run's claims stay on the server, approved or denied, marked "${MARKER}": the next run ` +
-      'trashes them',
+    `the run's four claims stay on the server, approved or denied, marked "${MARKER}": the next ` +
+      'run trashes them',
   );
 }

@@ -44,6 +44,17 @@
     </xs:simpleType>
   </xs:element>
 
+  <!-- Since 0.7.0, an appeal's decision, which its review writes when it decides it: the denial
+       upheld, or overturned and the claim reopened. None until then, and none on a grievance. -->
+  <xs:element name="decision">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="upheld" />
+        <xs:enumeration value="overturned" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
   <xs:element name="received" type="xs:date" />
   <xs:element name="due" type="xs:date" />
   <!-- The case specialist's user name. -->

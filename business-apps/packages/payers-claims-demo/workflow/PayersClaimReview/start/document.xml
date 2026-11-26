@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Start: a submitted claim is put in review, through the Payers lifecycle's review transition,
-     and goes to the adjuster. A claim that is not submitted is not determined: the workflow ends,
-     with the refusal in the claim's history. So a claim is determined once, and a second workflow
-     started on a claim whose first one runs, past the availability filter, changes nothing. The
-     first transition that holds is the one followed. -->
+     and goes to the adjuster. Since 0.7.0 a denied claim is reopened, through its reopen
+     transition, and goes to the adjuster for a new determination: an appeal's review starts it so
+     when it overturns the denial (../../PayersAppealReview/decide/document.xml), and the
+     availability filter lets only an administrator, or the system an appeal's chain runs as, start
+     it on a denied claim. Any other claim is not determined: the workflow ends, with the refusal in
+     the claim's history. So a claim is determined once a review, and a second workflow started on
+     a claim whose first one runs, past the availability filter, changes nothing. The first
+     transition that holds is the one followed. -->
 <document repository="default" id="start">
   <system>
     <type>RouteNode</type>
@@ -33,8 +37,15 @@
         <targetId><![CDATA[determine]]></targetId>
       </transition>
       <transition>
+        <name><![CDATA[reopen]]></name>
+        <label><![CDATA[Reopen a denied claim]]></label>
+        <condition><![CDATA[Document.lifeCycle == "denied"]]></condition>
+        <chain><![CDATA[PayersClaimReview.Reopen]]></chain>
+        <targetId><![CDATA[determine]]></targetId>
+      </transition>
+      <transition>
         <name><![CDATA[notSubmitted]]></name>
-        <label><![CDATA[Refused: the claim is not submitted]]></label>
+        <label><![CDATA[Refused: the claim is neither submitted nor denied]]></label>
         <condition><![CDATA[true]]></condition>
         <chain><![CDATA[PayersClaimReview.RefuseStart]]></chain>
         <targetId><![CDATA[end]]></targetId>

@@ -7,11 +7,11 @@
  *
  * - JSON, XML, XSD and the manifest, anywhere in the bundle;
  * - CSV under `data/vocabularies/`: a vocabulary's rows, which a directory contribution names;
- * - the route model's zip, at the one path the kit's workflow component names
- *   (`workflow/route-model.mjs`, `ZIP_PATH`), and only when every entry it holds is itself data:
- *   a folder, the `.nuxeo-archive` marker, or an XML, JSON, properties or CSV file. A zip it
- *   cannot read, a zip anywhere else, and an entry of any other kind, a script, a class, a jar or
- *   another zip, are code.
+ * - a route model's zip, at a path the kit's workflow component names for one of its models
+ *   (`workflow/route-model.mjs`, `ZIP_PATHS`: the claims review's, and since 0.7.0 the appeal
+ *   review's), and only when every entry it holds is itself data: a folder, the `.nuxeo-archive`
+ *   marker, or an XML, JSON, properties or CSV file. A zip it cannot read, a zip anywhere else, and
+ *   an entry of any other kind, a script, a class, a jar or another zip, are code.
  *
  * The route model's XML does hold MVEL, its transitions' conditions, as every route model does,
  * and the components hold their chains: that is the model's configuration, read by the server, as
@@ -70,10 +70,11 @@ function entryIsCode(name) {
 
 /**
  * Every file of the bundle at `bundle` that is not data, as its path from `from`, and every entry
- * of the route model's zip that is not, as `<zip>!<entry>`. Empty when the bundle holds data only.
- * `zipPath` is the route model's zip, relative to the bundle.
+ * of a route model's zip that is not, as `<zip>!<entry>`. Empty when the bundle holds data only.
+ * `zipPaths` are the route models' zips, relative to the bundle: one path, or a list of them.
  */
-export function codeIn(bundle, zipPath, from = bundle) {
+export function codeIn(bundle, zipPaths, from = bundle) {
+  const models = new Set([zipPaths].flat());
   const code = [];
   const walk = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -91,7 +92,7 @@ export function codeIn(bundle, zipPath, from = bundle) {
       const extension = extname(entry.name);
       if (DATA.has(extension) || inBundle === MANIFEST) continue;
       if (extension === '.csv' && inBundle.startsWith(VOCABULARIES)) continue;
-      if (extension === '.zip' && inBundle === zipPath) {
+      if (extension === '.zip' && models.has(inBundle)) {
         const names = zipEntryNames(readFileSync(path));
         if (names === null) code.push(`${shown} (not a zip this reads)`);
         else

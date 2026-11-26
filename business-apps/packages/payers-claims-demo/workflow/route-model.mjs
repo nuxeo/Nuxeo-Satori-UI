@@ -1,5 +1,6 @@
 /**
- * The claims review workflow's route model, as source and as the zip Nuxeo imports.
+ * The kit's route models, the claims review workflow's and, since 0.7.0, the appeal review's, as
+ * source and as the zips Nuxeo imports.
  *
  * Nuxeo 2025 imports a route model from a zip that a bundle names at the routing service's
  * `routeModelImporter` point (`<template-resource id path>`), as nuxeo-routing-default does for
@@ -16,10 +17,10 @@
  * - leaves a model of that name alone when the zip's MD5 digest is the one it recorded for it, and
  *   otherwise removes it, keeping its ACL, and imports the zip again.
  *
- * So the zip here is written from `workflow/PayersClaimReview/`, the reviewed source, the same bytes
- * every time: entries in code point order, stored rather than deflated so that no zlib version can
- * change them, and every timestamp 1980-01-01. The model is imported again on a server only when its
- * source changes.
+ * So each zip here is written from its model's folder, `workflow/<model>/`, the reviewed source, the
+ * same bytes every time: entries in code point order, stored rather than deflated so that no zlib
+ * version can change them, and every timestamp 1980-01-01. A model is imported again on a server
+ * only when its source changes, and each model's zip holds that model alone.
  *
  * Node 24 and nothing else.
  */
@@ -30,12 +31,24 @@ import { fileURLToPath } from 'node:url';
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const KIT = join(HERE, '..');
 export const BUNDLE = join(KIT, 'bundle');
-/** The model's name: its folder's, the zip's, and a task's `workflowModelName`. */
-export const MODEL = 'PayersClaimReview';
-export const SOURCE = join(HERE, MODEL);
-/** Where the bundle carries it, as the workflow component's `template-resource` names it. */
-export const ZIP_PATH = `data/${MODEL}.zip`;
-export const ZIP = join(BUNDLE, ...ZIP_PATH.split('/'));
+/**
+ * The kit's route models, by name: each one's folder's, its zip's, and a task's
+ * `workflowModelName`. The claims review's, and since 0.7.0 the appeal review's.
+ */
+export const MODELS = ['PayersClaimReview', 'PayersAppealReview'];
+/** A model's source: its document export, one folder per document. */
+export const sourceOf = (model) => join(HERE, model);
+/** Where the bundle carries a model, as the workflow component's `template-resource` names it. */
+export const zipPathOf = (model) => `data/${model}.zip`;
+export const zipOf = (model) => join(BUNDLE, ...zipPathOf(model).split('/'));
+/** Every model's zip, relative to the bundle: what the bundle holds as route models, and only that. */
+export const ZIP_PATHS = MODELS.map(zipPathOf);
+
+/** The claims review's, by the names its callers have read since 0.4.0. */
+export const MODEL = MODELS[0];
+export const SOURCE = sourceOf(MODEL);
+export const ZIP_PATH = zipPathOf(MODEL);
+export const ZIP = zipOf(MODEL);
 /** The marker `ExportedZipImporter` requires, an empty entry at the zip's root. */
 export const MARKER = '.nuxeo-archive';
 /** The one file a folder of a document export holds. */

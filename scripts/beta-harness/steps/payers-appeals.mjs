@@ -87,7 +87,7 @@ const {
   readAppealChecklist,
   readOpenAppeals,
 } = await import(join(KIT, 'demo', 'appeals.mjs'));
-const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
+const { ZIP_PATHS: ROUTE_MODEL_ZIPS } = await import(join(KIT, 'workflow', 'route-model.mjs'));
 
 /**
  * What a server run of this file needs, for the release candidate's list of demo steps
@@ -657,10 +657,10 @@ export default async function run(page, h) {
       resolve(REPO, servedLayout.source) === join(CONFIG, CASE_LAYOUT),
     `served from ${servedLayout.source}`,
   );
-  const code = codeIn(join(KIT, 'bundle'), ROUTE_MODEL_ZIP, KIT);
+  const code = codeIn(join(KIT, 'bundle'), ROUTE_MODEL_ZIPS, KIT);
   h.check(
     "the kit's bundle holds no code: JSON, XML, XSD, its manifest, vocabularies' CSV and the " +
-      "route model's zip of XML documents only",
+      "route models' zips of XML documents only",
     code.length === 0,
     `code in the bundle: ${code.join(', ')}`,
   );

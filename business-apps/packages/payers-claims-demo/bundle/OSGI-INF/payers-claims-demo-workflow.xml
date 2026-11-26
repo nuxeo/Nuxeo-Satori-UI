@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <!--
-  The claims review workflow, PayersClaimReview, contributed the way Nuxeo 2025's own models are:
+  The claims review workflow, PayersClaimReview, and since 0.7.0 the appeal review workflow,
+  PayersAppealReview, contributed the way Nuxeo 2025's own models are:
   nuxeo-routing-default's bundle contributes SerialDocumentReview and ParallelDocumentReview to the
   routing service's routeModelImporter point as zips of a document export, with the variable
   schemas, facets, chains and availability filter its nodes name, all in one component.
@@ -9,10 +10,17 @@
   each zip to RouteModelsZipImporter, which imports it under the route models' folder when no model
   of its name is there, and replaces the model when the zip's MD5 digest differs from the one it
   recorded. So a model changes on the server only with its zip's bytes, and build-route-model.mjs
-  writes the zip reproducibly from workflow/PayersClaimReview/, the reviewed source.
+  writes each zip reproducibly from its model's folder, workflow/<model>/, the reviewed source.
 
-  The lifecycle the chains follow, payersClaim, and what keeps claim:status in step with it, are
-  the stand-in model's (payers-claims-demo-model.xml). Fictional, like the rest of the kit.
+  The lifecycle the claims review's chains follow, payersClaim, and what keeps claim:status in step
+  with it, are the stand-in model's (payers-claims-demo-model.xml). An appeal is a Case of that
+  model, which the appeal review's chains write: its state, its decision and its checklist's
+  decision letter item. Fictional, like the rest of the kit.
+
+  Every chain a route node names runs as the system, not as the person who completed the task:
+  Nuxeo resumes a workflow in an unrestricted session (DocumentRoutingServiceImpl's
+  CompleteTaskRunner, read from the 2025.10.18 jars). So the chains name that person as
+  nodeLastActor, and an overturned appeal's chain may reopen a claim its specialist may only read.
 -->
 <component name="nuxeo.config.payers-claims-demo.workflow" version="1.0">
   <!-- Registers after the platform's own components, as a Studio project's bundle does. The models
@@ -29,6 +37,11 @@
     <schema name="var_PayersClaimReview_supervisorApproval"
       prefix="var_PayersClaimReview_supervisorApproval" override="true"
       src="schemas/var_PayersClaimReview_supervisorApproval.xsd" />
+    <!-- Since 0.7.0, the appeal review's: its own, and its decision step's. -->
+    <schema name="var_PayersAppealReview" prefix="var_PayersAppealReview" override="true"
+      src="schemas/var_PayersAppealReview.xsd" />
+    <schema name="var_PayersAppealReview_decide" prefix="var_PayersAppealReview_decide"
+      override="true" src="schemas/var_PayersAppealReview_decide.xsd" />
   </extension>
 
   <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
@@ -41,6 +54,12 @@
     <facet name="facet-var_PayersClaimReview_supervisorApproval">
       <schema name="var_PayersClaimReview_supervisorApproval" />
     </facet>
+    <facet name="facet-var_PayersAppealReview">
+      <schema name="var_PayersAppealReview" />
+    </facet>
+    <facet name="facet-var_PayersAppealReview_decide">
+      <schema name="var_PayersAppealReview_decide" />
+    </facet>
   </extension>
 
   <!-- The decisions the determination's form picks from: the ids its var:decision may hold. -->
@@ -50,6 +69,13 @@
       <createTablePolicy>on_missing_columns</createTablePolicy>
       <table>payers_vocabulary_PayersClaimDecision</table>
       <dataFile>data/vocabularies/PayersClaimDecision.csv</dataFile>
+    </directory>
+    <!-- Since 0.7.0: the decisions an appeal's decision picks from, the ids its var:decision holds. -->
+    <directory name="PayersAppealDecision" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>payers_vocabulary_PayersAppealDecision</table>
+      <dataFile>data/vocabularies/PayersAppealDecision.csv</dataFile>
     </directory>
   </extension>
 
@@ -64,13 +90,30 @@
       </operation>
     </chain>
 
-    <!-- Not started: the claim is not submitted, so it is in review, held or decided already. -->
+    <!-- Since 0.7.0, started on a denied claim, as an overturned appeal starts it: the claim is
+         reopened, back in review, for its adjuster's new determination. Only the system, which an
+         appeal's chain runs as, and an administrator may start it on a denied claim, by the
+         availability filter below. -->
+    <chain id="PayersClaimReview.Reopen">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.FollowLifecycleTransition">
+        <param type="string" name="value">reopen</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Claim reopened</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">The denied claim is reopened, and its determination is open again.</param>
+      </operation>
+    </chain>
+
+    <!-- Not started: the claim is neither submitted nor denied, so it is in review, held, approved or
+         paid already. -->
     <chain id="PayersClaimReview.RefuseStart">
       <operation id="Context.FetchDocument" />
       <operation id="Audit.LogEvent">
         <param type="string" name="event">Review refused</param>
         <param type="string" name="category">Claim review</param>
-        <param type="string" name="comment">Only a submitted claim is reviewed. The claim is unchanged, and this workflow ends.</param>
+        <param type="string" name="comment">Only a submitted claim, or a denied one an appeal reopens, is reviewed. The claim is unchanged, and this workflow ends.</param>
       </operation>
     </chain>
 
@@ -180,6 +223,209 @@
     </chain>
   </extension>
 
+  <!-- Since 0.7.0, the appeal review's chains. Each runs on the appeal, a Case, the one document
+       its workflow was started on, as the system: the specialist who decided is nodeLastActor. -->
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="chains">
+    <!-- Start: an open appeal goes into review. -->
+    <chain id="PayersAppealReview.Review">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">case:state</param>
+        <param type="serializable" name="value">inReview</param>
+        <param type="boolean" name="save">true</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal review started</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">The appeal is in review, for its specialist to uphold or overturn the denial.</param>
+      </operation>
+    </chain>
+
+    <!-- Start: an appeal already in review stays as it is. Nothing on the case is written. -->
+    <chain id="PayersAppealReview.ReviewUnderWay">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal review started</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">The appeal was already in review. Its specialist upholds or overturns the denial.</param>
+      </operation>
+    </chain>
+
+    <!-- Not started: a grievance, an appeal decided or closed, or one with no claim. -->
+    <chain id="PayersAppealReview.RefuseStart">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal review refused</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">Only an appeal not yet decided, against a claim, is reviewed. The case is unchanged, and this workflow ends.</param>
+      </operation>
+    </chain>
+
+    <!-- Another review decided the appeal first: this one changes nothing, and ends. -->
+    <chain id="PayersAppealReview.RefuseDecided">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal review ended</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">The appeal was already decided, by another review. The case is unchanged, and this review ends.</param>
+      </operation>
+    </chain>
+
+    <!-- Decision refused: the case is left as it is, and the decision opens again. Recorded in the
+         case's history, so a refusal a client never showed is still seen. -->
+    <chain id="PayersAppealReview.RefuseDecision">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal decision refused</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">A decision needs its rationale. The case is unchanged, and its decision is open again.</param>
+      </operation>
+    </chain>
+    <chain id="PayersAppealReview.RefuseUndecided">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal decision refused</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">A decision upholds or overturns the denial. The case is unchanged, and its decision is open again.</param>
+      </operation>
+    </chain>
+
+    <!-- Upheld: the appeal is decided, the denial stands, and the claim is not touched. -->
+    <chain id="PayersAppealReview.Uphold">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">case:state</param>
+        <param type="serializable" name="value">decided</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">case:decision</param>
+        <param type="serializable" name="value">upheld</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <!-- The decision letter item, as a tick on the Case page writes one (layout-v2.md, section
+           7): the item's first entry, the one the page reads, ticked in place where the checklist
+           has one, or else an entry added at the end. -->
+      <operation id="Context.SetVar">
+        <param type="string" name="name">decisionLetterAt</param>
+        <param type="object" name="value">expr:Document["case:checklist"] == null ? -1 : (item in Document["case:checklist"]).indexOf("decisionLetter")</param>
+      </operation>
+      <operation id="RunOperation">
+        <param type="string" name="id">expr:decisionLetterAt == -1 ? "PayersAppealReview.AddDecisionLetter" : "PayersAppealReview.TickDecisionLetter"</param>
+      </operation>
+      <operation id="Document.Save" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal upheld</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} upheld the denial: @{NodeVariables["rationale"]}</param>
+      </operation>
+      <operation id="Context.SetWorkflowVar">
+        <param type="string" name="name">decidedBy</param>
+        <param type="object" name="value">expr:nodeLastActor</param>
+      </operation>
+    </chain>
+
+    <!-- Overturned: the appeal is decided, and, when its claim is denied, the claim's review starts
+         again, whose start reopens it for its adjuster's new determination (PayersClaimReview's
+         start node). A claim that is not denied, never denied or since reopened, is left as it is,
+         and its history says so: no review is started on it, which on a submitted claim would
+         be an ordinary one, and on one in review a second. -->
+    <chain id="PayersAppealReview.Overturn">
+      <operation id="Context.FetchDocument" />
+      <operation id="Context.SetVar">
+        <param type="string" name="name">appeal</param>
+        <param type="object" name="value">expr:Document["case:number"]</param>
+      </operation>
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">case:state</param>
+        <param type="serializable" name="value">decided</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">case:decision</param>
+        <param type="serializable" name="value">overturned</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <operation id="Context.SetVar">
+        <param type="string" name="name">decisionLetterAt</param>
+        <param type="object" name="value">expr:Document["case:checklist"] == null ? -1 : (item in Document["case:checklist"]).indexOf("decisionLetter")</param>
+      </operation>
+      <operation id="RunOperation">
+        <param type="string" name="id">expr:decisionLetterAt == -1 ? "PayersAppealReview.AddDecisionLetter" : "PayersAppealReview.TickDecisionLetter"</param>
+      </operation>
+      <operation id="Document.Save" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal overturned</param>
+        <param type="string" name="category">Appeal review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} overturned the denial: @{NodeVariables["rationale"]}</param>
+      </operation>
+      <operation id="Context.SetWorkflowVar">
+        <param type="string" name="name">decidedBy</param>
+        <param type="object" name="value">expr:nodeLastActor</param>
+      </operation>
+      <!-- The claim the appeal is against, by its id, which case:claim holds. -->
+      <operation id="Repository.GetDocument">
+        <param type="document" name="value">expr:Document["case:claim"]</param>
+      </operation>
+      <operation id="RunOperation">
+        <param type="string" name="id">expr:Document.lifeCycle == "denied" ? "PayersAppealReview.ReopenClaim" : "PayersAppealReview.LeaveClaim"</param>
+      </operation>
+    </chain>
+
+    <!-- An overturned appeal's denied claim: its review starts again, as the system this chain runs
+         as, which the claims review's filter lets start it on a denied claim. -->
+    <chain id="PayersAppealReview.ReopenClaim">
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Denial overturned</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} overturned the denial on appeal @{appeal}. The claim is reopened for a new determination.</param>
+      </operation>
+      <operation id="Context.StartWorkflow">
+        <param type="string" name="id">PayersClaimReview</param>
+        <param type="boolean" name="start">true</param>
+      </operation>
+    </chain>
+
+    <!-- An overturned appeal's claim that is not denied: left as it is, and said so. -->
+    <chain id="PayersAppealReview.LeaveClaim">
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Appeal overturned, claim not reopened</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} overturned a denial on appeal @{appeal}. The claim is not denied, so it is not reopened.</param>
+      </operation>
+    </chain>
+
+    <!-- The decision letter item, when the checklist has no entry for it: one added at the end,
+         done, by the specialist, on the server's day. -->
+    <chain id="PayersAppealReview.AddDecisionLetter">
+      <operation id="Document.AddItemToListProperty">
+        <param type="string" name="xpath">case:checklist</param>
+        <param type="string" name="complexJsonProperties">expr:[{"item": "decisionLetter", "done": true, "doneBy": "@{nodeLastActor}", "doneOn": "@{CurrentDate.format("yyyy-MM-dd")}"}]</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+    </chain>
+
+    <!-- The decision letter item, when the checklist has an entry for it: its first, ticked in
+         place, every other entry as it was. -->
+    <chain id="PayersAppealReview.TickDecisionLetter">
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">expr:"case:checklist/" + decisionLetterAt + "/done"</param>
+        <param type="serializable" name="value">true</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">expr:"case:checklist/" + decisionLetterAt + "/doneBy"</param>
+        <param type="serializable" name="value">expr:nodeLastActor</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">expr:"case:checklist/" + decisionLetterAt + "/doneOn"</param>
+        <param type="serializable" name="value">expr:CurrentDate.format("yyyy-MM-dd")</param>
+        <param type="boolean" name="save">false</param>
+      </operation>
+    </chain>
+  </extension>
+
   <!-- Who may start it, and on what: someone who may change a claim, on a submitted claim, which
        starting it puts in review, so a claim whose review runs is not offered a second one.
        Checked by the routing service when a workflow is started through the REST API
@@ -192,14 +438,38 @@
         <type>Claim</type>
         <condition>#{currentDocument.currentLifeCycleState == 'submitted'}</condition>
       </rule>
+      <!-- Since 0.7.0, a denied claim, which the start node reopens: for Everything only, which no
+           demo group holds, so for an administrator and for the system an overturned appeal's
+           chain runs as, which Context.StartWorkflow checks this filter with
+           (StartWorkflowOperation, canCreateInstance). An adjuster is not offered it. -->
+      <rule grant="true">
+        <permission>Everything</permission>
+        <type>Claim</type>
+        <condition>#{currentDocument.currentLifeCycleState == 'denied'}</condition>
+      </rule>
+      <rule grant="false">
+        <condition>document.isImmutable()</condition>
+      </rule>
+    </filter>
+    <!-- Since 0.7.0, the appeal review: someone who may change a case, on an appeal not yet
+         decided, open or in review. Its start node refuses any other case, and one with no claim,
+         for a start that skips this filter. A case's property is read by its prefix, as the
+         platform's own filters read dc:modified (DocumentModelResolver). -->
+    <filter id="filter@PayersAppealReview">
+      <rule grant="true">
+        <permission>ReadWrite</permission>
+        <type>Case</type>
+        <condition>#{currentDocument.case.category == 'appeal' and (currentDocument.case.state == 'open' or currentDocument.case.state == 'inReview')}</condition>
+      </rule>
       <rule grant="false">
         <condition>document.isImmutable()</condition>
       </rule>
     </filter>
   </extension>
 
-  <!-- The model: build-route-model.mjs writes the zip from workflow/PayersClaimReview/. -->
+  <!-- The models: build-route-model.mjs writes each zip from its folder, workflow/<model>/. -->
   <extension target="org.nuxeo.ecm.platform.routing.service" point="routeModelImporter">
     <template-resource id="PayersClaimReview" path="data/PayersClaimReview.zip" />
+    <template-resource id="PayersAppealReview" path="data/PayersAppealReview.zip" />
   </extension>
 </component>
