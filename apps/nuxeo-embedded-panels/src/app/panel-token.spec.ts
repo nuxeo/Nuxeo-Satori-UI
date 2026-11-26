@@ -35,7 +35,8 @@ describe('the token on the wire', () => {
   afterEach(() => backend.verify());
 
   it('signs a request to the server REST API, in a header, with no browser credentials', () => {
-    http.get(`${SERVER.origin}/nuxeo/api/v1/id/abc`).subscribe();
+    // Asked for with the browser's credentials, as a library might: the interceptor sends none.
+    http.get(`${SERVER.origin}/nuxeo/api/v1/id/abc`, { withCredentials: true }).subscribe();
     const request = backend.expectOne(`${SERVER.origin}/nuxeo/api/v1/id/abc`).request;
     expect(request.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
     expect(request.withCredentials).toBe(false);
@@ -49,7 +50,7 @@ describe('the token on the wire', () => {
       `${SERVER.origin}/nuxeo/agentic-embedded/v1/hosts/crm`,
       `${SERVER.base}i18n/en.json`,
     ]) {
-      http.get(url).subscribe();
+      http.get(url, { withCredentials: true }).subscribe();
       const request = backend.expectOne(url).request;
       expect(request.headers.has('Authorization'), url).toBe(false);
       expect(request.withCredentials, url).toBe(false);

@@ -11,7 +11,7 @@
  * ## Against a stand-in, not the add-on
  *
  * The local Nuxeo is read-only here and has no `nuxeo-agentic-embedded`, so this runs against the
- * demo's stand-in (`apps/nuxeo-embedded-panels/demo/demo.mjs`), which this file starts itself:
+ * demo's stand-in (`nuxeo-agentic-embedded/demo/demo.mjs`), which this file starts itself:
  * a stand-in Nuxeo that serves the panel's built files, the host's origins, the exchange, a claim,
  * its type, its layout and `Connector.Read`; and a fictional CRM. The stand-in mirrors the add-on's
  * rules where the panel meets them, and **is not the add-on**: what proves the exchange and the
@@ -30,9 +30,14 @@
  * - Step 4: the CRM's loud heading styles do not reach the panel's headings; the CRM's own elements
  *   keep them; the page's root element is left as it was.
  * - Step 5: a frame of another origin on the page posts a token to the panel, with the panel's own
- *   id, and the panel never uses it.
+ *   id, and the panel never uses it. Seen failing: with the panel's origin and source checks taken
+ *   out, the panel sent the frame's token.
  * - Step 6: the same page on an origin the host does not name: the panel refuses to draw, asks for
- *   no token, and reads nothing.
+ *   no token, and reads nothing. Two layers hold it, and this step passes while either does: the
+ *   server answers that page's lookup of the host's origins with a 404, and the panel checks its
+ *   page's origin against the origins it is given. With the panel's check taken out the step stayed
+ *   green, on the server's 404; the panel's own check is `record-panel.component.spec.ts`'s
+ *   "refuses a page the configuration does not name", which goes red without it.
  * - Step 7: a token the server refuses as expired is replaced through the handshake, and the
  *   record is drawn with the fresh one.
  *
@@ -53,7 +58,7 @@
  * Ports 18093 and 18094 on the loopback interface must be free.
  */
 
-import { startDemo } from '../../../apps/nuxeo-embedded-panels/demo/demo.mjs';
+import { startDemo } from '../../../nuxeo-agentic-embedded/demo/demo.mjs';
 
 /** No Nuxeo, so no credentials: the stand-in signs nobody in with them. */
 export const skipHttpCredentials = true;

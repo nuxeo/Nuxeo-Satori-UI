@@ -198,9 +198,13 @@ read, so that the panel says it is refused.
 | `src/main/resources/OSGI-INF/embedded-panels-auth-contrib.xml` | The panel's files at `/nuxeo/agentic-ui/embedded/` open to a page signed in to nothing                                                                                 |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`          | The servlet at `/agentic-embedded/*`, and the filter on `/api/*` and `/site/*`                                                                                         |
 | `src/test/java/`                                               | 67 tests, with no Nuxeo runtime                                                                                                                                        |
+| `demo/demo.mjs`                                                | For development only: a stand-in Nuxeo, mirroring this add-on where the panel meets it, and a fictional CRM, `demo/crm/`, that embeds the panel                        |
+| `demo/Claim.view.layout.json`                                  | The demo's claim page: a claim card, a card from the core system and a notes card                                                                                      |
 
 The panel's files are `apps/nuxeo-embedded-panels`, built by the frontend module and served by
-`nuxeo-agentic-ui-package` at `/nuxeo/agentic-ui/embedded/v1/`.
+`nuxeo-agentic-ui-package` at `/nuxeo/agentic-ui/embedded/v1/`. The demo is described in
+[embedded-panels.md](../docs/business-apps/embedded-panels.md#the-demo); nothing builds, packages or
+serves it.
 
 ## Building it
 

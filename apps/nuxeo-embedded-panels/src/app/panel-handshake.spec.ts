@@ -1,5 +1,6 @@
 import {
   MAX_TOKEN_LENGTH,
+  type MessageWindow,
   TOKEN,
   isJwtShaped,
   messageTargets,
@@ -66,17 +67,17 @@ describe('the handshake: a token only from the host page, for this panel', () =>
 
 describe('where the panel posts', () => {
   it('posts to its own page at its own origin, and to a parent only at the host origins', () => {
-    const own = { location: { origin: 'https://crm.example.com' } } as unknown as Window;
-    (own as unknown as { parent: Window }).parent = own;
+    const own: MessageWindow = { location: { origin: 'https://crm.example.com' }, parent: null };
+    own.parent = own;
     expect(messageTargets(own, expected.origins)).toEqual([
       { target: own, origin: 'https://crm.example.com' },
     ]);
 
-    const parent = {} as Window;
-    const framed = {
-      location: { origin: 'https://crm.example.com' },
-      parent,
-    } as unknown as Window;
+    const parent: MessageWindow = {
+      location: { origin: 'https://shell.example.com' },
+      parent: null,
+    };
+    const framed: MessageWindow = { location: { origin: 'https://crm.example.com' }, parent };
     expect(
       messageTargets(framed, new Set(['https://crm.example.com', 'https://shell.example.com'])),
     ).toEqual([

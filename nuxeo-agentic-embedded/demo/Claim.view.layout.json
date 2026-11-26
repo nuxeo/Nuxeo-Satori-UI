@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "$schema": "../../libs/shared/app-definition/src/layout-v2.schema.json",
   "version": 2,
   "columns": 2,
   "cards": [

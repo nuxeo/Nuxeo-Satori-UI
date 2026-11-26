@@ -56,17 +56,17 @@
     }
     @default {
       <div class="record-panel__waiting">
-        <nxs-spinner
-          diameter="32"
-          [label]="
-            (current.status === 'loading'
-              ? 'embedded-panels.loading'
-              : current.status === 'signing-in'
-                ? 'embedded-panels.signing-in'
-                : 'embedded-panels.starting'
-            ) | translate
-          "
-        />
+        @switch (current.status) {
+          @case ('loading') {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.loading' | translate" />
+          }
+          @case ('signing-in') {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.signing-in' | translate" />
+          }
+          @default {
+            <nxs-spinner diameter="32" [label]="'embedded-panels.starting' | translate" />
+          }
+        }
       </div>
     }
   }

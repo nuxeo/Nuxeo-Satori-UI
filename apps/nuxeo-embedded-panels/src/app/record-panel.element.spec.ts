@@ -22,10 +22,12 @@ describe('<nuxeo-record-panel>', () => {
   });
 
   it('reads the record, the host and the cards from its attributes, and never a token', () => {
-    const observed = (customElements.get(PANEL_TAG) as unknown as { observedAttributes: string[] })
-      .observedAttributes;
+    const defined = customElements.get(PANEL_TAG);
+    const observed: unknown = defined ? Reflect.get(defined, 'observedAttributes') : undefined;
     expect(observed).toEqual(['record-id', 'host', 'cards']);
-    expect(observed.some((name) => /token|secret|auth/i.test(name))).toBe(false);
+    expect(
+      Array.isArray(observed) && observed.some((name) => /token|secret|auth/i.test(String(name))),
+    ).toBe(false);
   });
 
   it('reads the cards an attribute names, ids only', () => {

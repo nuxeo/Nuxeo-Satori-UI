@@ -68,17 +68,24 @@ export function tokenFromMessage(message: ReceivedMessage, expected: Expected): 
   return isJwtShaped(data['token']) ? data['token'] : null;
 }
 
+/** What {@link messageTargets} reads of a window: its origin, and its parent. */
+export interface MessageWindow {
+  readonly location: { readonly origin: string };
+  parent: MessageWindow | null;
+}
+
 /**
  * Where the panel's messages go: its page, at its own origin; and its parent, at each of the host's
  * origins, when the page is framed, so that only a parent on one of them receives it.
  */
-export function messageTargets(
-  view: Window,
+export function messageTargets<W extends MessageWindow>(
+  view: W,
   origins: ReadonlySet<string>,
-): readonly { readonly target: Window; readonly origin: string }[] {
+): readonly { readonly target: W; readonly origin: string }[] {
   const targets = [{ target: view, origin: view.location.origin }];
-  if (view.parent && view.parent !== view) {
-    for (const origin of origins) targets.push({ target: view.parent, origin });
+  const parent = view.parent as W | null;
+  if (parent && parent !== view) {
+    for (const origin of origins) targets.push({ target: parent, origin });
   }
   return targets;
 }

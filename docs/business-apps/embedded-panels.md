@@ -147,11 +147,11 @@ set its secrets, and let its pages reach the server with the platform's own CORS
 ## The demo
 
 Development only: a fictional CRM page and a stand-in Nuxeo server, in
-`apps/nuxeo-embedded-panels/demo/`, which nothing builds, packages or serves.
+`nuxeo-agentic-embedded/demo/`, which nothing builds, packages or serves.
 
 ```bash
 npx nx build nuxeo-embedded-panels
-node apps/nuxeo-embedded-panels/demo/demo.mjs
+node nuxeo-agentic-embedded/demo/demo.mjs
 # http://localhost:8094/   the CRM, on an origin the host names: the claim's panel
 # http://127.0.0.1:8094/   the same page, on one it does not: refused
 EVIDENCE_HEADLESS=1 npm run beta:evidence -- embedded-panels   # the steps file, on ports 18093 and 18094

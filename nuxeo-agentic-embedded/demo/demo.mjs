@@ -5,7 +5,7 @@
  * **Everything here is fictional:** the CRM, its user, the claim, the payment and the policy.
  *
  *   npx nx build nuxeo-embedded-panels
- *   node apps/nuxeo-embedded-panels/demo/demo.mjs [--nuxeo-port 8093] [--crm-port 8094]
+ *   node nuxeo-agentic-embedded/demo/demo.mjs [--nuxeo-port 8093] [--crm-port 8094]
  *
  * then open http://localhost:8094/ (the CRM, an origin the stand-in's host names) and
  * http://127.0.0.1:8094/ (the same page on an origin it does not name, which the panel refuses).
@@ -36,7 +36,7 @@ import { createServer } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 
 const HERE = import.meta.dirname;
-const ROOT = resolve(HERE, '..', '..', '..');
+const ROOT = resolve(HERE, '..', '..');
 const PANEL_DIST = join(ROOT, 'dist', 'nuxeo-embedded-panels', 'browser');
 
 export const HOST_ID = 'crm';
