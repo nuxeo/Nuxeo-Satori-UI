@@ -9,11 +9,11 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsConfirmDialogComponent,
   NxsSpinnerComponent,
   type NxsConfirmDialogData,
@@ -59,7 +59,7 @@ export interface LayerComparison {
 @Component({
   selector: 'lib-layer-panel',
   standalone: true,
-  imports: [MatButtonModule, NxsBannerComponent, NxsSpinnerComponent, TranslatePipe],
+  imports: [NxsBannerComponent, NxsButtonComponent, NxsSpinnerComponent, TranslatePipe],
   templateUrl: './layer-panel.html',
   styleUrl: './layer-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

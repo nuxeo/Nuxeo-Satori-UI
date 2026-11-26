@@ -1,0 +1,74 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ButtonStories from './button.stories';
+
+<Meta of={ButtonStories} name="Overview" />
+
+# Button
+
+The button is a button with text: Angular Material's button, as a native `<button>`, in your
+theme's colours. Use it for an action a page offers — Open, Add, Download — and `nxs-icon-button`
+for one that is only an icon.
+
+## Key features
+
+- **Three appearances.** `filled` for the one action a region recommends, `outlined` for the others
+  beside it, and `text`, the default and the quietest, for an action in a list or a row.
+- **A native button.** Enter and Space press it, a disabled one is skipped by Tab, and it is of
+  `type="button"` unless you say otherwise, so inside a form it submits nothing by accident.
+- **`press`, never while disabled.** One output for a click, Enter or Space.
+- **A name of its own where the text is not enough.** `label` replaces the text as the accessible
+  name: a "Show" beside each of several fields reads as "Show member:phone again".
+- **An optional icon** before the text, decorative because the text names the button.
+
+## Demo showcase
+
+<Canvas of={ButtonStories.Appearances} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsButtonComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-button appearance="filled" icon="download" [disabled]="!saveable()" (press)="download()">
+  {{ 'acme.designer.download' | translate }}
+</nxs-button>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+The text is the content, already translated: the library ships no translations for the text you
+give it. Every input is optional. It needs no providers, and has no registered ID: place it in a
+template by its selector.
+
+## Examples
+
+### Named apart from its text
+
+<Canvas of={ButtonStories.NamedApart} />
+
+### Disabled
+
+<Canvas of={ButtonStories.Disabled} />
+
+### The keyboard
+
+<Canvas of={ButtonStories.KeyboardContract} />
+
+## Accessibility
+
+- **Role and name.** It is a native `button`, named by its text, or by `label` when that is set. A
+  `label` of only spaces or zero-width characters leaves the text as the name. Keep the visible text
+  inside the `label`, as "Show member:phone again" keeps "Show", so that a user who says what they
+  see to speech recognition reaches it.
+- **Keyboard.** Tab reaches it, and Enter and Space press it, as any native button. Disabled, it is
+  a native disabled button: Tab skips it and nothing presses it.
+- **Focus.** It keeps the focus when pressed. A host that moves the focus afterwards — to the field
+  it moved, say — finds the native `button` inside the element and focuses that.
+- **Icon.** The icon is hidden from assistive technology; the text says what the button does.

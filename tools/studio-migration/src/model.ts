@@ -6,7 +6,7 @@
  * vocabulary and page provider of a conversion against the model. The package's own part of it is
  * here, in the package, and is checked without a server. The platform's part, Dublin Core and the
  * stock types, vocabularies and page providers, is the server's to say: what rests on it is
- * listed, and checking it waits for the migration server.
+ * listed, and lab mode confirms it on a server (`lab-server.ts`).
  *
  * Read as data: the XML is parsed, and nothing in it is run. A file that cannot be read leaves its
  * part of the model out and is listed in `problems`, each of which check 3 reports as a finding,
