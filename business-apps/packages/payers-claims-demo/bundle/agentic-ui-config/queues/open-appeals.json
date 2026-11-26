@@ -5,49 +5,21 @@
   "pageProvider": "payers_open_appeals",
   "columns": [
     "case:number",
-    {
-      "field": "case:member",
-      "widget": "document-link"
-    },
-    {
-      "field": "case:claim",
-      "widget": "document-link"
-    },
+    { "field": "case:member", "widget": "document-link" },
+    { "field": "case:claim", "widget": "document-link" },
     {
       "field": "case:state",
       "widget": "status-badge",
-      "parameters": {
-        "tones": {
-          "open": "info",
-          "inReview": "warning"
-        }
-      }
+      "parameters": { "tones": { "open": "info", "inReview": "warning" } }
     },
-    {
-      "field": "case:assignee",
-      "widget": "user"
-    },
-    {
-      "field": "case:due",
-      "widget": "date"
-    }
+    { "field": "case:assignee", "widget": "user" },
+    { "field": "case:due", "widget": "date" }
   ],
-  "sort": [
-    {
-      "field": "case:due",
-      "order": "asc"
-    }
-  ],
+  "sort": [{ "field": "case:due", "order": "asc" }],
   "pageSize": 50,
   "facets": [
-    {
-      "aggregate": "case_state_agg",
-      "labelKey": "payers.facet.caseState"
-    },
-    {
-      "aggregate": "case_assignee_agg",
-      "labelKey": "payers.facet.assignee"
-    }
+    { "aggregate": "case_state_agg", "labelKey": "payers.facet.caseState" },
+    { "aggregate": "case_assignee_agg", "labelKey": "payers.facet.assignee" }
   ],
   "visibleWhen": {
     "type": "app.rules.inGroup",
