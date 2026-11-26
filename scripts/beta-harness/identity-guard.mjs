@@ -1244,18 +1244,23 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
 
     /**
      * @param {string} at where in the run, e.g. `at the start` or `after step 3`
-     * @param {{ app?: boolean }} [options] `app: false` before the page has loaded the app
+     * @param {{ app?: boolean, api?: boolean }} [options] `app: false` before the page has loaded
+     *   the app; `api: false` only where no result can come through `page.request` and the API
+     *   channel is checked at the boundaries either side: inside a cross-user `h.login()`, after
+     *   its boot navigation (see there)
      */
-    verify(at, { app = true } = {}) {
+    verify(at, { app = true, api = true } = {}) {
       const run = async () => {
         const mark = foreignApiOrigins.sent.length;
-        const reports = [await checkRequestIdentity(page.request, meUrl, username, 'page.request')];
+        const reports = api
+          ? [await checkRequestIdentity(page.request, meUrl, username, 'page.request')]
+          : [];
         if (app) {
           reports.push(
             await checkPageIdentity(page, policy, appOrigin, { fetchImpl, foreignApiOrigins }),
           );
         }
-        const appReport = reports[1];
+        const appReport = reports.find((r) => r.channel === 'app');
         // Seen signed in as the run's user without `h.login()` (a form sign-in): required from now.
         if (appReport?.ok && appReport.state === 'authenticated' && 'unsigned' in policy) {
           // Unless the sign-in left traffic the restart below would strand unjudged. This is a

@@ -113,9 +113,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * @param {StepRecord} step
    * @param {string} at
    */
-  async function verifyIdentity(step, at) {
+  async function verifyIdentity(step, at, options) {
     if (!identity) return;
-    const entry = await identity.verify(at);
+    const entry = await identity.verify(at, options);
     if (entry.ok) return;
     const detail = entry.reports
       .filter((r) => !r.ok)
@@ -160,15 +160,17 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * @param {string} [where] distinguishes a second verification of the same transition, e.g.
    *   `h.login()`'s boot navigation; it becomes part of the `at` label so the manifest does not
    *   carry two checks a reviewer cannot tell apart
+   * @param {{ api?: boolean }} [options] passed to `identity.verify`: `api: false` only where no
+   *   result can come through `page.request` and the boundaries either side check it
    */
-  async function verifyBeforeTransition(what, where) {
+  async function verifyBeforeTransition(what, where, options) {
     if (!identity) return;
     const onApp = page.url().startsWith(baseUrl);
     const required = 'user' in identity.appPolicy;
     if (!onApp && !required) return;
     const step = ensureStep();
     const at = `before ${what} at step ${step.index}${where ? `, ${where}` : ''}`;
-    await verifyIdentity(step, at);
+    await verifyIdentity(step, at, options);
     // After the verification, so a request that finished during it has been judged on its merits
     // rather than refused for being slow, and so an outgoing session that is already stray is
     // reported as that rather than as a timing problem. Only while a session is required: the
@@ -665,7 +667,16 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // Only when a session was in place: the run's first login boots a genuinely signed-out
       // page, whose requests carry no header by right and have no outgoing identity to be held
       // against.
-      if (replacing) await verifyBeforeTransition('h.login()', 'after its boot navigation');
+      //
+      // The app's traffic only, not `page.request`'s. `page.request` shares the browser's cookie
+      // jar, and the boot just ran the app as the outgoing session: when that was another user
+      // (`h.signedInAs`), Nuxeo's session cookie for them is in the jar, and `page.request` runs
+      // as them until the cookies are cleared below. Nothing of the steps file's runs in between,
+      // so no result can come through it, and the API channel is checked at the boundaries either
+      // side: `before h.login()`, above, and the next step's, after the reload. Asking it here
+      // refused every cross-user re-login (payers-claims-workflow's step 5, 26 November 2026).
+      if (replacing)
+        await verifyBeforeTransition('h.login()', 'after its boot navigation', { api: false });
 
       const session = {
         kind: 'basic',
@@ -734,8 +745,12 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         if (traffic && 'drainPendingHeaders' in traffic) {
           const { unreadRequests } = await traffic.drainPendingHeaders();
           if (unreadRequests.length > 0) {
-            const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
-            const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+            const listed = unreadRequests
+              .slice(0, 3)
+              .map((r) => `${r.method} ${r.path}`)
+              .join(', ');
+            const suffix =
+              unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
             const problem =
               `h.login() cannot complete: ${unreadRequests.length} request(s) completed but their headers ` +
               `remain unread at the identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`;
@@ -759,7 +774,10 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         // Check for stray requests against the captured outgoing session (traffic already drained above)
         const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
         if (stray.length) {
-          const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+          const listed = stray
+            .slice(0, 3)
+            .map((r) => `${r.method} ${r.path}`)
+            .join(', ');
           const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
           const problem =
             `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +

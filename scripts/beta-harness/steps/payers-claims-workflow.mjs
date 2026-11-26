@@ -510,6 +510,11 @@ export default async function run(page, h) {
   // every frame's Nuxeo request given the supervisor's header until the reload commits, then the
   // app's own header, from the session it restored. The REST reads below are Node's, as the
   // adjuster or the supervisor, and share no cookie with the browser.
+  //
+  // Off the adjuster's task first, still as the adjuster: the switch reloads the page where it
+  // is, and on the adjuster's determination the app then asks Nuxeo for that task as the
+  // supervisor, who may not read it, a 403 in the console (on the local server, 26 November 2026).
+  await h.goTo('/#/home');
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(deferred);
   await h.signedInAs(supervisor, "the supervisor approves the adjuster's determination");
   const supervisorBasic = Buffer.from(`${supervisor}:${demoPassword}`).toString('base64');
