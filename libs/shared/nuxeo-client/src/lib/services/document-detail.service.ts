@@ -1,7 +1,13 @@
-import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpContext,
+  HttpEventType,
+  HttpParams,
+  type HttpResponse,
+} from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, forkJoin, of, map, catchError, throwError } from 'rxjs';
-import { expand, reduce, switchMap } from 'rxjs/operators';
+import { expand, filter, reduce, switchMap, tap } from 'rxjs/operators';
 
 import { CURRENT_USERNAME } from '../current-user.token';
 import {
@@ -757,18 +763,46 @@ export class DocumentDetailService {
 
   // ── Attachments ──
 
-  uploadAttachment(uid: string, file: File): Observable<unknown> {
+  /**
+   * Adds `file` to the document's list of files through `Blob.AttachOnDocument`, saved at once:
+   * the Attachments panel's upload, into `files:files`, and the capture page's, into the property
+   * its layout names (`options.xpath`). Nuxeo appends a `{ file }` entry to a list of complex
+   * values and a blob to a list of blobs, and checks the user's permission to write the document.
+   *
+   * Given `options.onUploadPercent`, it is told how much of the file has been sent, 0 to 100, as
+   * the browser reports it, and 100 once the server has answered. Errors with the server's answer.
+   */
+  uploadAttachment(
+    uid: string,
+    file: File,
+    options: {
+      readonly xpath?: string;
+      readonly onUploadPercent?: (percent: number) => void;
+    } = {},
+  ): Observable<unknown> {
     const params = JSON.stringify({
-      params: { document: uid, save: 'true', xpath: 'files:files' },
+      params: { document: uid, save: 'true', xpath: options.xpath ?? 'files:files' },
     });
     const formData = new FormData();
     formData.append('request', new Blob([params], { type: 'application/json' }));
     formData.append('file', file);
-    return this.http.post(
-      this.api.apiUrl('/nuxeo/api/v1/automation/Blob.AttachOnDocument'),
-      formData,
-      { responseType: 'blob' },
-    );
+    const url = this.api.apiUrl('/nuxeo/api/v1/automation/Blob.AttachOnDocument');
+    const onUploadPercent = options.onUploadPercent;
+    if (!onUploadPercent) return this.http.post(url, formData, { responseType: 'blob' });
+    return this.http
+      .post(url, formData, { responseType: 'blob', reportProgress: true, observe: 'events' })
+      .pipe(
+        tap((event) => {
+          if (event.type === HttpEventType.UploadProgress) {
+            const total = event.total && event.total > 0 ? event.total : file.size;
+            onUploadPercent(
+              total > 0 ? Math.min(100, Math.round((event.loaded * 100) / total)) : 0,
+            );
+          } else if (event.type === HttpEventType.Response) onUploadPercent(100);
+        }),
+        filter((event) => event.type === HttpEventType.Response),
+        map((event) => (event as HttpResponse<Blob>).body),
+      );
   }
 
   removeAttachment(uid: string, index: number): Observable<NuxeoDocument> {

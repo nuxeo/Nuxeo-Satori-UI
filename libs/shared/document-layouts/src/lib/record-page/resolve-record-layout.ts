@@ -10,6 +10,7 @@ import { prefixOfXpath } from '../resolve-layout';
 import {
   propertiesReadBy,
   type RecordBannerEntry,
+  type RecordCapture,
   type RecordCardEntry,
   type RecordChecklistEntry,
   type RecordComputedField,
@@ -61,6 +62,11 @@ export interface ResolvedRecordLayout {
   readonly review: boolean;
   /** Whether the page lists the picture's share links: only ever with a `picture` preview. */
   readonly shareLinks: boolean;
+  /**
+   * Photos from a phone, filed on the record: the file's `capture` when its property is a list of
+   * files on the record's type, its `findBy` cut to the texts on it; `null` otherwise.
+   */
+  readonly capture: RecordCapture | null;
   readonly tabs: readonly ResolvedRecordTab[] | null;
   readonly cards: readonly ResolvedRecordCard[];
   /**
@@ -128,7 +134,8 @@ export function propertyDefinitions(
 
 /**
  * The schemas a document's facets add that the record page needs read: those whose properties a
- * field shows, a computation reads, a checklist holds or a banner links by. As
+ * field shows, a computation reads, a checklist holds, a banner links by or a capture adds photos
+ * to and finds the record by. As
  * `facetSchemasToRead` does for version 1, a facet schema
  * nothing names is not read, and one a field names is read even where the panel presents it.
  */
@@ -146,6 +153,9 @@ export function recordFacetSchemasToRead(
   for (const card of cardsOf(file)) if (card.checklist) read.add(card.checklist.field);
   // A banner's link is held to its property's definition, which a facet's schema may hold.
   for (const banner of file.banners) if (banner.link !== null) read.add(banner.link);
+  // So are a capture's property and the texts it finds the record by.
+  if (file.capture)
+    for (const name of [file.capture.property, ...file.capture.findBy]) read.add(name);
   const named = new Set([...read].map(prefixOfXpath));
   return documentSchemas.filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
 }
@@ -311,6 +321,7 @@ export function resolveRecordLayout(
       "shareLinks: share links serve a picture's views, and this record shows none; left out",
     );
   }
+  const capture = file.capture ? resolveCapture(file.capture, properties, notes) : null;
   return {
     layout: {
       type: type.name,
@@ -319,6 +330,7 @@ export function resolveRecordLayout(
       preview,
       review,
       shareLinks,
+      capture,
       tabs,
       cards: tabs ? [] : cards(file.cards),
       properties,
@@ -326,4 +338,40 @@ export function resolveRecordLayout(
     skipped,
     notes,
   };
+}
+
+/**
+ * A file's capture held to the record's type, as the pipeline holds it given the content model: its
+ * property a list of files the record has, and each of `findBy` a text of it. A property the type
+ * lacks, or that holds no list of files, leaves the capture out; a `findBy` property that is not a
+ * text of the type is left out alone.
+ */
+export function resolveCapture(
+  capture: RecordCapture,
+  properties: ReadonlyMap<string, LayoutFieldType>,
+  notes: string[] = [],
+): RecordCapture | null {
+  const definition = properties.get(capture.property);
+  if (!definition) {
+    notes.push(`capture: "${capture.property}" is not a property of this record; left out`);
+    return null;
+  }
+  const holdsFiles =
+    definition.type === 'blob[]' ||
+    (definition.type === 'complex[]' &&
+      (definition.fields === undefined ||
+        Object.keys(definition.fields).length === 0 ||
+        definition.fields['file']?.type === 'blob'));
+  if (!holdsFiles) {
+    notes.push(
+      `capture: "${capture.property}" is a ${definition.type} property, and photos are added to a list of files; left out`,
+    );
+    return null;
+  }
+  const findBy = capture.findBy.filter((name) => {
+    if (properties.get(name)?.type === 'string') return true;
+    notes.push(`capture.findBy: "${name}" is not a text of this record; left out`);
+    return false;
+  });
+  return { ...capture, findBy };
 }

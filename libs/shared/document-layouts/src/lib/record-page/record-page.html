@@ -24,6 +24,15 @@
       }
     </div>
   }
+  @if (captureLink(); as capture) {
+    <!-- Photos from a phone, filed on the record (layout-v2.md, section 2, "Capture"). -->
+    <p class="record-page__capture">
+      <a class="record-page__capture-link" routerLink="/capture" [queryParams]="capture">
+        <nxs-icon name="camera" />
+        {{ 'document-layouts.capture.link' | translate }}
+      </a>
+    </p>
+  }
   <!-- A record whose file is its content shows it first, above the cards (layout-v2.md, section 11). -->
   @if (layout().preview === 'picture') {
     <section

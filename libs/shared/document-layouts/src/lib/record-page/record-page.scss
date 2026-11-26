@@ -137,6 +137,20 @@
   color: var(--mat-sys-primary);
 }
 
+/* The link to the capture page, above the cards: its icon and its words on one line. */
+.record-page__capture {
+  margin: 0 0 16px;
+}
+
+.record-page__capture-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--mat-sys-primary);
+  --nxs-icon-size: 20px;
+}
+
 /* A record the reader may not read, or that no longer exists: neutral, as an empty value is, and
    never styled as an error. A colour graded for text (AGENTS/08-bug-patterns.md, pattern 22). */
 .record-page__unavailable {

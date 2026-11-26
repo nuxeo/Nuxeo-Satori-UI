@@ -69,13 +69,14 @@ import {
   linkedRecordsQuery,
   readLinkedRecords,
 } from './record-page/linked-record';
-import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
+import { RecordCapture, RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
 import {
   RecordPreview,
   ResolvedRecordLayout,
   SkippedRecordField,
   propertyDefinitions,
   recordFacetSchemasToRead,
+  resolveCapture,
   resolveRecordLayout,
 } from './record-page/resolve-record-layout';
 
@@ -372,6 +373,50 @@ export class DocumentLayoutService {
             )
           : of(null),
       ),
+    );
+  }
+
+  /**
+   * How photos from a phone are filed on `document` (layout-v2.md, section 2, "Capture"): its
+   * type's `view` file's `capture`, held to the type's properties and the document's own schemas,
+   * as its record page holds it. `null` when the type has no `view` file, when its file is refused
+   * or has no capture, when the capture names no list of files of the record, or when the type's
+   * schemas cannot be read. What was left out is told to the console. Never errors.
+   */
+  captureFor(document: NuxeoDocument): Observable<RecordCapture | null> {
+    return this.typeCapture(
+      document.type,
+      readDocumentSchemas('schemas' in document ? document.schemas : undefined),
+    );
+  }
+
+  /**
+   * The types photos from a phone are filed on, each with its capture: every type `layouts.json`
+   * lists a `view` file for whose file has one, held to the type's own schemas, in the order the
+   * index lists them. What the capture page looks a typed or scanned number up in. A facet's
+   * schema is not read here, since no record is open: a `findBy` property only a facet holds is
+   * left out. Empty when the index cannot be read. Never errors.
+   */
+  captureTypes(): Observable<
+    readonly { readonly type: string; readonly capture: RecordCapture }[]
+  > {
+    return this.index().pipe(
+      switchMap((index) => {
+        const types = [
+          ...new Set(
+            index.entries.filter((entry) => entry.mode === 'view').map((entry) => entry.type),
+          ),
+        ];
+        if (types.length === 0) return of([]);
+        return forkJoin(types.map((type) => this.typeCapture(type, []))).pipe(
+          map((captures) =>
+            types.flatMap((type, at) => {
+              const capture = captures[at];
+              return capture ? [{ type, capture }] : [];
+            }),
+          ),
+        );
+      }),
     );
   }
 
@@ -709,6 +754,41 @@ export class DocumentLayoutService {
             ...notes.map((note) => `${definition.name}/view layout: ${note}`),
           ],
         };
+      }),
+    );
+  }
+
+  /** A type's capture, held to its schemas and those of `documentSchemas`: see `captureFor`. */
+  private typeCapture(
+    type: string,
+    documentSchemas: readonly DocumentSchemaRef[],
+  ): Observable<RecordCapture | null> {
+    return this.recordFile(type).pipe(
+      switchMap((file) => {
+        const capture = file?.capture;
+        if (!file || !capture) return of(null);
+        return this.documentType(type).pipe(
+          switchMap((definition) => {
+            if (!definition) return of(null);
+            const wanted = recordFacetSchemasToRead(definition, documentSchemas, file);
+            const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
+              ? forkJoin(wanted.map(({ name }) => this.schema(name)))
+              : of([]);
+            return reads.pipe(
+              map((read) => {
+                const facets = read.filter((schema): schema is DocumentTypeSchema => !!schema);
+                const notes: string[] = [];
+                const resolved = resolveCapture(
+                  capture,
+                  propertyDefinitions([...definition.schemas, ...facets]),
+                  notes,
+                );
+                for (const note of notes) warn(`${type}/view layout: ${note}`);
+                return resolved;
+              }),
+            );
+          }),
+        );
       }),
     );
   }

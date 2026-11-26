@@ -21,6 +21,7 @@ no expression language and no code in configuration.
   - the record's timeline and its comments;
   - a checklist of the items a record must have done, from configuration;
   - banners above the cards, each shown by a rule, such as a picture's rights ending;
+  - photos taken on a phone, filed on the record (section 2, "Capture");
   - in forms, fields that are required or read-only by rule, and checks across fields.
 - **Version 1 files keep working**, unchanged. A file says which version it is, and nothing turns
   a version 1 file into a version 2 one.
@@ -75,6 +76,7 @@ kit's own schemas a heading in its labels (app-definition-v2.md, section 7).
 | `banners`    | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
 | `review`     | A picture's review: pins on the picture, in rounds (below). `view` mode only                   |
 | `shareLinks` | A picture's share links for people outside, with their downloads (below). `view` mode only     |
+| `capture`    | Photos taken on a phone, filed on the record (below). `view` mode only                         |
 | `cards`      | The cards, in order                                                                            |
 | `tabs`       | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
 | `$schema`    | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
@@ -287,6 +289,55 @@ a last day. `{}` turns them on; they take no option yet:
   and what, the latest 200 at most, and nothing about who opened it.
 - **On a page drawn read-only,** as the layout designer's preview is, the links and the log are
   listed, with no new link and no Revoke.
+
+### Capture
+
+A record that takes photos from a phone, such as a damage claim a driver photographs the damage
+for, says where the photos go: the capture page, `/#/capture`, files each one on the record, as
+the document page's Attachments panel adds a file, and the record page links to that page:
+
+```json
+{
+  "version": 2,
+  "capture": { "property": "files:files", "findBy": ["dmg:number", "dmg:moveNumber"] },
+  "cards": [{ "id": "claim", "labelKey": "moves.card.damageClaim.claim", "fields": ["dmg:number"] }]
+}
+```
+
+| Key            | Meaning                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `property`     | Required: the property each photo is added to, a list of files: `files:files`, as a `File` has, or a list of blobs        |
+| `findBy`       | Optional: 1 to 5 text properties a number typed, pasted or scanned on the capture page is looked up in                    |
+| `keepLocation` | Optional: `true` keeps where each photo was taken in it. Default `false`: the page takes the location out before it sends |
+
+- **Where it goes.** Each photo is uploaded through `Blob.AttachOnDocument` into `property`, saved,
+  with the person's own credentials, as the Attachments panel uploads into `files:files`. Nuxeo adds
+  a `{ "file" }` entry to a list of complex values, and a blob to a list of blobs. Given the content
+  model, the pipeline refuses a property that is not a list of files of the type, a single blob
+  among them, which each photo would replace; without it, the record page leaves the capture out of
+  a record whose type has no such list.
+- **How the record is found.** By its id, or a link to its page, pasted or scanned; by the record
+  page's link, which names it; or by a number, looked up in the properties `findBy` names, of every
+  type whose file has a capture, as typed and in capitals, each a query value, never in the query's
+  text. Several records with the number are listed to choose from. Given the content model, each
+  of `findBy` is held to a text property of the type. Without `findBy`, a record of the type is
+  found by its id or its link only.
+- **The photos.** From the phone's camera, through the browser's file input with
+  `capture="environment"`, or from its photos; at most 20 at a filing. Each one larger than 3,072
+  pixels on its longest side is drawn down to it, and each is turned upright as its EXIF
+  orientation says. A JPEG small enough goes as it came, its picture byte for byte.
+- **Where it was taken is taken out,** unless `keepLocation` says to keep it: from a JPEG, EXIF's
+  GPS block and the camera maker's notes, every XMP and IPTC segment, and anything after the
+  picture's end, as a gain map is; the rest of its EXIF stays, the time it was taken among it. A
+  picture in another format, whose metadata the page does not read, is drawn anew as a JPEG, which
+  carries none. What is sent is read back first, and a photo still seen to carry a location, or
+  that may, is not sent.
+- **A note** typed beside the photos is filed after them, in the same property, as a text file
+  that names the photos it goes with.
+- **What the page offers is not the control.** The record page links to the capture page for a
+  reader the record's `permissions` let write it, as the Attachments panel offers its upload, and
+  the capture page refuses a record they may not write before any photo is taken. Nuxeo checks the
+  permission on every upload, and a 403 stops the filing with the reason.
 
 ### Cards
 

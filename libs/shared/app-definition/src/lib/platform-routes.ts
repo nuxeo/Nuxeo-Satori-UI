@@ -16,6 +16,7 @@ export const PLATFORM_ROUTES: readonly string[] = [
   'administration',
   'browse',
   'browse-adf-hx',
+  'capture',
   'clipboard',
   'collections',
   'contracts',

@@ -47,6 +47,13 @@ export const routes: Routes = [
         path: 'browse',
         loadChildren: () => import('@agentic-ui/feature-browse').then((m) => m.browseRoutes),
       },
+      // The phone capture page (docs/business-apps/development-plan.md, phase 8): photos filed on a
+      // record where its layout's `capture` says (layout-v2.md, section 2, "Capture"). Inside the
+      // shell, so that its sign-in, its idle timeout and its menu apply on a phone as anywhere.
+      {
+        path: 'capture',
+        loadChildren: () => import('@agentic-ui/feature-capture').then((m) => m.captureRoutes),
+      },
       {
         path: 'contracts',
         component: ContractsPageComponent,

@@ -61,6 +61,7 @@ const FILE_KEYS = [
   'banners',
   'review',
   'shareLinks',
+  'capture',
   'cards',
   'tabs',
 ];
@@ -90,6 +91,14 @@ const REVIEW_KEYS: readonly string[] = [];
  * section 2, "Share links"). The server, `nuxeo-agentic-assets`, holds every rule of a link.
  */
 const SHARE_LINKS_KEYS: readonly string[] = [];
+/**
+ * Photos from a phone filed on the record (layout-v2.md, section 2, "Capture"): the property they
+ * are added to, the properties a typed or scanned number is looked up in, and whether the photos
+ * keep where they were taken.
+ */
+const CAPTURE_KEYS = ['property', 'findBy', 'keepLocation'];
+/** How many properties a capture looks a number up in, at most: one query asks them all. */
+export const CAPTURE_FIND_BY_MAX = 5;
 const EXTERNAL_KEYS = ['connector', 'fields'];
 const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
 const CHECKLIST_KEYS = ['field', 'items', 'tickable'];
@@ -115,6 +124,7 @@ export const LAYOUT_V2_KEYS = {
   bannerLink: BANNER_LINK_KEYS,
   review: REVIEW_KEYS,
   shareLinks: SHARE_LINKS_KEYS,
+  capture: CAPTURE_KEYS,
   tab: TAB_KEYS,
   card: CARD_KEYS,
   field: FIELD_KEYS,
@@ -265,6 +275,10 @@ function layout(
     if (!view) c.add('shareLinks', 'structure', 'share links belong in view mode only');
     else shareLinks(c, file['shareLinks']);
   }
+  if ('capture' in file) {
+    if (!view) c.add('capture', 'structure', 'capture belongs in view mode only');
+    else capture(c, file['capture']);
+  }
   const hasCards = 'cards' in file;
   const hasTabs = 'tabs' in file;
   if (hasCards === hasTabs) c.add('', 'structure', 'a file has "cards" or "tabs", one of the two');
@@ -370,6 +384,63 @@ function shareLinks(c: Checker, item: unknown): void {
     return;
   }
   c.unknownKeys(item, SHARE_LINKS_KEYS, 'shareLinks');
+}
+
+/** A property of the record's own, `<prefix>:<name>`: never an `ecm:` or a `var:` name. */
+function ownProperty(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    XPATH.test(value) &&
+    !value.startsWith('ecm:') &&
+    !value.startsWith('var:')
+  );
+}
+
+/**
+ * Photos from a phone, filed on the record (layout-v2.md, section 2, "Capture"): the capture page
+ * adds each one to `property`, as the document page's Attachments panel adds a file to
+ * `files:files`, and finds the record by a number typed or scanned in the properties `findBy`
+ * names. Given the content model, `property` is held to a list of files and each of `findBy` to a
+ * text (`layout-model.ts`). Turning capture on is not a control: the server decides who may add a
+ * file to the record.
+ */
+function capture(c: Checker, item: unknown): void {
+  if (!isRecord(item)) {
+    c.add('capture', 'structure', 'capture is an object: { "property": "<prefix>:<name>" }');
+    return;
+  }
+  c.unknownKeys(item, CAPTURE_KEYS, 'capture');
+  if (!ownProperty(item['property']))
+    c.add(
+      join('capture', 'property'),
+      'structure',
+      'needs the property the photos are added to, <prefix>:<name>, such as files:files, never an ecm: or var: name',
+    );
+  if ('findBy' in item) {
+    const findBy = item['findBy'];
+    if (!Array.isArray(findBy) || findBy.length === 0 || findBy.length > CAPTURE_FIND_BY_MAX)
+      c.add(
+        join('capture', 'findBy'),
+        'structure',
+        `findBy is a list of 1 to ${CAPTURE_FIND_BY_MAX} properties a typed or scanned number is looked up in`,
+      );
+    else {
+      const seen = new Set<unknown>();
+      findBy.forEach((name, index) => {
+        const at = join(join('capture', 'findBy'), index);
+        if (!ownProperty(name))
+          c.add(
+            at,
+            'structure',
+            'needs a property of the record, <prefix>:<name>, never an ecm: or var: name',
+          );
+        else if (seen.has(name)) c.add(at, 'structure', `"${name}" is listed twice`);
+        seen.add(name);
+      });
+    }
+  }
+  if ('keepLocation' in item && typeof item['keepLocation'] !== 'boolean')
+    c.add(join('capture', 'keepLocation'), 'structure', 'keepLocation is true or false');
 }
 
 /** A card's related records: a list of records from a page provider (layout-v2.md, section 7). */

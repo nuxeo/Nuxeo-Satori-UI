@@ -1,0 +1,351 @@
+@let current = chosen();
+@let found = lookup();
+@let state = filing();
+<div class="capture">
+  <h1 class="capture__title">{{ 'capture.title' | translate }}</h1>
+  <p class="capture__intro">{{ 'capture.intro' | translate }}</p>
+
+  <!-- What the page says as it moves on: what was found, added, removed or filed. -->
+  <p class="cdk-visually-hidden" role="status" aria-live="polite">{{ announcement() }}</p>
+
+  <section class="capture__section" aria-labelledby="capture-record-heading">
+    <h2
+      #recordHeading
+      id="capture-record-heading"
+      class="capture__heading"
+      tabindex="-1"
+      data-capture-record-heading
+    >
+      {{ 'capture.record.heading' | translate }}
+    </h2>
+
+    @switch (current.status) {
+      @case ('loading') {
+        <nxs-spinner diameter="32" [label]="'capture.record.loading' | translate" />
+      }
+      @case ('failed') {
+        <nxs-error-state
+          [status]="current.error"
+          [heading]="'capture.record.failed' | translate"
+          [headingLevel]="3"
+          [retryable]="current.error === 500"
+          (retry)="retryRecord()"
+        />
+        <nxs-button appearance="outlined" (press)="another()">
+          {{ 'capture.record.another' | translate }}
+        </nxs-button>
+      }
+      @case ('chosen') {
+        <div class="capture__record" data-capture-record>
+          <p class="capture__record-title">{{ current.record.title }}</p>
+          @if (current.record.number) {
+            <p class="capture__record-number">
+              {{ 'capture.record.number' | translate: { number: current.record.number } }}
+            </p>
+          }
+          @if (!current.record.capture) {
+            <nxs-banner
+              tone="error"
+              data-capture-refusal="no-capture"
+              [message]="'capture.record.no-capture' | translate"
+            />
+          } @else if (!current.record.writable) {
+            <nxs-banner
+              tone="error"
+              data-capture-refusal="read-only"
+              [message]="
+                'capture.record.read-only'
+                  | translate: { record: current.record.number ?? current.record.title }
+              "
+            />
+          }
+          <div class="capture__actions">
+            <nxs-button appearance="outlined" [disabled]="filingNow()" (press)="another()">
+              {{ 'capture.record.another' | translate }}
+            </nxs-button>
+            <a class="capture__open" [routerLink]="['/doc', current.record.uid]">
+              {{ 'capture.record.open' | translate }}
+            </a>
+          </div>
+        </div>
+      }
+      @default {
+        <form class="capture__find" role="search" (submit)="find($event)">
+          <nxs-text-field
+            class="capture__code"
+            autocomplete="off"
+            [label]="'capture.find.label' | translate"
+            [(value)]="code"
+          />
+          <nxs-button appearance="filled" type="submit" icon="search">
+            {{ 'capture.find.submit' | translate }}
+          </nxs-button>
+        </form>
+        <p class="capture__hint">{{ 'capture.find.hint' | translate }}</p>
+        @switch (found.status) {
+          @case ('finding') {
+            <nxs-spinner diameter="32" [label]="'capture.find.finding' | translate" />
+          }
+          @case ('none') {
+            <p class="capture__message" data-capture-find="none">
+              {{ 'capture.find.none' | translate: { code: found.code } }}
+            </p>
+          }
+          @case ('too-many') {
+            <p class="capture__message" data-capture-find="too-many">
+              {{ 'capture.find.too-many' | translate: { code: found.code } }}
+            </p>
+          }
+          @case ('empty') {
+            <p class="capture__message" role="alert" data-capture-find="empty">
+              {{ 'capture.find.empty' | translate }}
+            </p>
+          }
+          @case ('too-long') {
+            <p class="capture__message" role="alert" data-capture-find="too-long">
+              {{ 'capture.find.too-long' | translate }}
+            </p>
+          }
+          @case ('failed') {
+            <nxs-error-state
+              [status]="found.error"
+              [heading]="'capture.find.failed' | translate"
+              [headingLevel]="3"
+              [retryable]="found.error === 500"
+              (retry)="find()"
+            />
+          }
+          @case ('choices') {
+            <!-- role="list": a list styled with no markers loses its role in Safari. -->
+            <ul
+              class="capture__choices"
+              role="list"
+              [attr.aria-label]="'capture.find.choices-label' | translate: { code: found.code }"
+            >
+              @for (choice of found.choices; track choice.uid) {
+                <li class="capture__choice">
+                  <span class="capture__choice-title">{{ choice.title }}</span>
+                  @if (choice.number) {
+                    <span class="capture__choice-number">{{ choice.number }}</span>
+                  }
+                  <nxs-button
+                    appearance="outlined"
+                    [label]="
+                      'capture.find.choose' | translate: { record: choice.number ?? choice.title }
+                    "
+                    (press)="choose(choice.uid)"
+                  >
+                    {{ 'capture.find.choose-short' | translate }}
+                  </nxs-button>
+                </li>
+              }
+            </ul>
+          }
+        }
+      }
+    }
+  </section>
+
+  @if (target(); as filingOn) {
+    <section class="capture__section" aria-labelledby="capture-photos-heading">
+      <h2 id="capture-photos-heading" class="capture__heading">
+        {{ 'capture.photos.heading' | translate }}
+      </h2>
+      <div class="capture__actions">
+        <nxs-button
+          appearance="filled"
+          icon="camera"
+          [disabled]="filingNow() || photos.room() === 0"
+          (press)="takePhoto()"
+        >
+          {{ 'capture.photos.take' | translate }}
+        </nxs-button>
+        <nxs-button
+          appearance="outlined"
+          icon="image"
+          [disabled]="filingNow() || photos.room() === 0"
+          (press)="choosePhotos()"
+        >
+          {{ 'capture.photos.choose' | translate }}
+        </nxs-button>
+        <!-- The browser's own: the phone's camera opens with capture="environment". Pressed through
+             the buttons above, which name them, so they are hidden from everyone. -->
+        <input
+          #camera
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          data-capture-input="camera"
+          (change)="added($event)"
+        />
+        <input
+          #gallery
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          data-capture-input="gallery"
+          (change)="added($event)"
+        />
+      </div>
+      <p class="capture__hint" data-capture-location>
+        {{
+          (filingOn.capture?.keepLocation
+            ? 'capture.photos.location-kept'
+            : 'capture.photos.location-removed'
+          ) | translate
+        }}
+      </p>
+
+      @if (photos.items().length === 0) {
+        <p class="capture__message">{{ 'capture.photos.none' | translate }}</p>
+      } @else {
+        <ul
+          class="capture__photos"
+          role="list"
+          [attr.aria-label]="'capture.photos.list' | translate"
+        >
+          @for (photo of photos.items(); track photo.id) {
+            @let position = $index + 1;
+            <li class="capture__photo" [attr.data-state]="photo.state" data-capture-photo>
+              <div class="capture__thumb">
+                @if (photo.preview) {
+                  <img
+                    class="capture__image"
+                    [src]="photo.preview"
+                    [alt]="'capture.photos.photo' | translate: { position: position }"
+                  />
+                } @else if (photo.state === 'preparing') {
+                  <nxs-spinner diameter="24" />
+                } @else {
+                  <nxs-icon name="image" />
+                }
+              </div>
+              <div class="capture__photo-body">
+                <span class="capture__photo-name">
+                  {{ 'capture.photos.photo' | translate: { position: position } }}
+                </span>
+                <span class="capture__photo-state" data-capture-photo-state>
+                  @switch (photo.state) {
+                    @case ('preparing') {
+                      {{ 'capture.photos.state.preparing' | translate }}
+                    }
+                    @case ('ready') {
+                      {{
+                        'capture.photos.state.ready'
+                          | translate: { size: sizeOf(photo.prepared?.file?.size ?? 0) }
+                      }}
+                    }
+                    @case ('waiting') {
+                      {{ 'capture.photos.state.waiting' | translate }}
+                    }
+                    @case ('uploading') {
+                      {{ 'capture.photos.state.uploading' | translate: { percent: photo.percent } }}
+                    }
+                    @case ('retrying') {
+                      {{ 'capture.photos.state.retrying' | translate }}
+                    }
+                    @case ('done') {
+                      {{ 'capture.photos.state.done' | translate }}
+                    }
+                    @case ('refused') {
+                      {{ 'capture.photos.refused.' + photo.refusal | translate }}
+                    }
+                    @case ('failed') {
+                      {{ 'capture.photos.failed.' + photo.failure | translate }}
+                    }
+                  }
+                </span>
+                @if (photo.state === 'uploading') {
+                  <mat-progress-bar
+                    class="capture__bar"
+                    mode="determinate"
+                    [value]="photo.percent"
+                    [attr.aria-label]="
+                      'capture.photos.progress' | translate: { position: position }
+                    "
+                  />
+                }
+              </div>
+              @if (isRemovable(photo)) {
+                <nxs-icon-button
+                  class="capture__remove"
+                  icon="trash"
+                  [label]="'capture.photos.remove' | translate: { position: position }"
+                  (press)="remove(photo, position)"
+                />
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="capture__section" aria-labelledby="capture-filing-heading">
+      <h2 id="capture-filing-heading" class="capture__heading">
+        {{ 'capture.filing.heading' | translate }}
+      </h2>
+      <nxs-text-field
+        class="capture__note"
+        multiline
+        rows="3"
+        [label]="'capture.note.label' | translate"
+        [disabled]="filingNow()"
+        [(value)]="note"
+      />
+      <p class="capture__hint">{{ 'capture.note.hint' | translate }}</p>
+      @if (noteState() === 'failed') {
+        <p class="capture__message" data-capture-note="failed">
+          {{ 'capture.note.failed.' + noteFailure() | translate }}
+        </p>
+      }
+      <div class="capture__actions">
+        <nxs-button appearance="filled" icon="upload" [disabled]="!canFile()" (press)="file()">
+          {{ 'capture.filing.file' | translate }}
+        </nxs-button>
+      </div>
+
+      <div #result class="capture__result" tabindex="-1" data-capture-result>
+        @switch (state.status) {
+          @case ('filing') {
+            <nxs-spinner diameter="24" [label]="'capture.filing.filing' | translate" />
+          }
+          @case ('done') {
+            <nxs-banner
+              tone="info"
+              data-capture-done
+              [message]="
+                (state.note ? 'capture.filing.done-note' : 'capture.filing.done')
+                  | translate: { count: state.photos }
+              "
+            />
+            <div class="capture__actions">
+              <nxs-button appearance="filled" icon="camera" (press)="more()">
+                {{ 'capture.filing.more-button' | translate }}
+              </nxs-button>
+              <a class="capture__open" [routerLink]="['/doc', filingOn.uid]">
+                {{ 'capture.record.open' | translate }}
+              </a>
+            </div>
+          }
+          @case ('partly') {
+            <nxs-banner
+              tone="warning"
+              data-capture-partly
+              [message]="'capture.filing.partly' | translate: { count: state.failed }"
+            />
+          }
+          @case ('stopped') {
+            <nxs-banner
+              tone="error"
+              [attr.data-capture-stopped]="state.failure"
+              [message]="'capture.filing.stopped.' + state.failure | translate"
+              [actions]="state.failure === 'connection' ? retryActions() : []"
+            />
+          }
+        }
+      </div>
+    </section>
+  }
+</div>

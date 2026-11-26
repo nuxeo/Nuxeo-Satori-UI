@@ -15,6 +15,9 @@
  *   the file says, though a related list's own type it does not.
  * - **A review**, and **share links**, are for a type with the `picture` schema and without the
  *   `video` one, the records whose page shows a picture.
+ * - **A capture's property** is a list of files on the type: a list of complex values with a
+ *   `file` subfield that is a blob, as `files:files` is, or a list of blobs. Each property its
+ *   `findBy` names is a single text on the type.
  *
  * Each finding is `unknown` or `parameter`, never `structure`, so that the app, loading a file
  * tolerantly, would leave out the field it is in and show the rest. It runs once the file's own
@@ -318,6 +321,55 @@ export function againstModel(
         `share links serve a picture's views, and the type "${type}" has the "video" schema: its record page keeps its player, not its picture`,
       );
   }
+  /**
+   * A capture adds each photo to its property, as `Blob.AttachOnDocument` adds a file to a list:
+   * a `{ "file": <blob> }` entry to a list of complex values, a blob to a list of blobs. A single
+   * blob would be replaced by each photo in turn. A number is looked up as one text.
+   */
+  const capture = (entry: Record<string, unknown>): void => {
+    const name = entry['property'];
+    // A malformed name has its finding already.
+    if (typeof name === 'string' && XPATH.test(name)) {
+      const at = join('capture', 'property');
+      const property = properties.get(name);
+      if (!property) add(at, 'unknown', whyMissing(model, type, name));
+      else {
+        const shown = propertyTypeOf(property);
+        const file = property.fields?.get('file');
+        // With no subfields read, as for a table, a list of complex values is taken as written.
+        const read = (property.fields?.size ?? 0) > 0;
+        if (shown === 'complex[]') {
+          if (read && (!file || propertyTypeOf(file) !== 'blob'))
+            add(
+              at,
+              'parameter',
+              `a capture adds each photo to a list of files, and the entries of "${name}" have no "file" subfield that is a blob`,
+            );
+        } else if (shown !== 'blob[]')
+          add(
+            at,
+            'parameter',
+            `a capture adds each photo to a list of files, and "${name}" is a ${shown} property`,
+          );
+      }
+    }
+    const findBy = entry['findBy'];
+    if (!Array.isArray(findBy)) return;
+    findBy.forEach((each, index) => {
+      // A malformed name has its finding already.
+      if (typeof each !== 'string' || !XPATH.test(each)) return;
+      const at = join(join('capture', 'findBy'), index);
+      const property = properties.get(each);
+      if (!property) add(at, 'unknown', whyMissing(model, type, each));
+      else if (propertyTypeOf(property) !== 'string')
+        add(
+          at,
+          'parameter',
+          `a capture looks a number up in a text, and "${each}" is a ${propertyTypeOf(property)} property`,
+        );
+    });
+  };
+  if (isRecord(file['capture'])) capture(file['capture']);
   return findings;
 }
 

@@ -626,6 +626,75 @@ describe('share links', () => {
   });
 });
 
+describe('capture', () => {
+  const captured = (capture: unknown) => ({
+    version: 2,
+    capture,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('names the property photos are added to, and may name where a number is looked up', () => {
+    expect(messages(captured({ property: 'files:files' }))).toEqual([]);
+    expect(
+      messages(
+        captured({
+          property: 'files:files',
+          findBy: ['dmg:number', 'dmg:moveNumber'],
+          keepLocation: true,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('is refused outside view mode, and in a task form', () => {
+    for (const mode of ['metadata', 'edit', 'create'] as const) {
+      expect(messages(captured({ property: 'files:files' }), mode)).toEqual([
+        'capture: capture belongs in view mode only [structure]',
+      ]);
+    }
+    expect(
+      validateTaskForm(captured({ property: 'files:files' })).map((finding) => finding.message),
+    ).toEqual(['capture belongs in view mode only']);
+  });
+
+  it('is refused as anything but an object, or with no property, or one not of the record', () => {
+    for (const shape of [true, 'files:files', [], null])
+      expect(messages(captured(shape))).toEqual([
+        'capture: capture is an object: { "property": "<prefix>:<name>" } [structure]',
+      ]);
+    for (const property of [undefined, '', 'files', 'ecm:uuid', 'var:photos', 7])
+      expect(messages(captured({ property }))).toEqual([
+        'capture.property: needs the property the photos are added to, <prefix>:<name>, such as files:files, never an ecm: or var: name [structure]',
+      ]);
+  });
+
+  it('refuses a findBy that is not a short list of distinct properties of the record', () => {
+    const findBy = (value: unknown) =>
+      messages(captured({ property: 'files:files', findBy: value }));
+    const list =
+      'capture.findBy: findBy is a list of 1 to 5 properties a typed or scanned number is looked up in [structure]';
+    expect(findBy([])).toEqual([list]);
+    expect(findBy('dmg:number')).toEqual([list]);
+    expect(findBy(['a:a', 'a:b', 'a:c', 'a:d', 'a:e', 'a:f'])).toEqual([list]);
+    expect(findBy(['dmg:number', 'ecm:name'])).toEqual([
+      'capture.findBy[1]: needs a property of the record, <prefix>:<name>, never an ecm: or var: name [structure]',
+    ]);
+    expect(findBy(['dmg:number', 'dmg:number'])).toEqual([
+      'capture.findBy[1]: "dmg:number" is listed twice [structure]',
+    ]);
+  });
+
+  it('takes keepLocation as true or false, and an option it does not have is unknown', () => {
+    expect(messages(captured({ property: 'files:files', keepLocation: 'yes' }))).toEqual([
+      'capture.keepLocation: keepLocation is true or false [structure]',
+    ]);
+    // Unknown, not structure: the app, loading the file tolerantly, leaves the capture out alone.
+    expect(messages(captured({ property: 'files:files', maxEdge: 2048 }))).toEqual([
+      'capture.maxEdge: "maxEdge" is not a key version 2 has [unknown]',
+    ]);
+  });
+});
+
 describe('the date rules', () => {
   const rule = (visibleWhen: unknown) =>
     messages({ version: 2, cards: [{ id: 'c', fields: [{ field: 'dc:title', visibleWhen }] }] });

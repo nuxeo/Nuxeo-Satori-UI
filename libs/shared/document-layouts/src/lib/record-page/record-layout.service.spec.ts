@@ -492,6 +492,121 @@ describe('DocumentLayoutService: record pages', () => {
   });
 });
 
+describe('DocumentLayoutService: photos from a phone', () => {
+  let http: HttpTestingController;
+  let service: DocumentLayoutService;
+  let warnings: string[];
+  const CAPTURED = {
+    ...VIEW,
+    capture: { property: 'files:files', findBy: ['claim:number', 'claim:amount'] },
+  };
+  const WITH_FILES = {
+    ...CLAIM,
+    schemas: [
+      ...CLAIM.schemas,
+      { name: 'files', fields: { files: { type: 'complex[]', fields: { file: 'blob' } } } },
+    ],
+  };
+
+  beforeEach(() => {
+    warnings = [];
+    vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
+      warnings.push(String(message)),
+    );
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
+        { provide: NUXEO_API_ORIGIN, useValue: '' },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    service = TestBed.inject(DocumentLayoutService);
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  const claim = {
+    uid: 'c1',
+    title: 'C',
+    type: 'Claim',
+    path: '/c1',
+    lastModified: '',
+    properties: {},
+  };
+
+  it("reads a record's capture from its type's view file, held to the type's properties", async () => {
+    const capture = firstValueFrom(service.captureFor(claim));
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(CAPTURED));
+    http.expectOne(CLAIM_TYPE).flush(WITH_FILES);
+    expect(await capture).toEqual({
+      property: 'files:files',
+      findBy: ['claim:number'],
+      keepLocation: false,
+    });
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout: capture.findBy: "claim:amount" is not a text of this record; left out',
+    ]);
+  });
+
+  it('has none for a type with no view file, asking nothing more than the index', async () => {
+    const none = firstValueFrom(service.captureFor(claim));
+    http.expectOne(INDEX).flush(index('Claim/metadata'));
+    expect(await none).toBeNull();
+  });
+
+  it('has none for a type whose view file has no capture, asking nothing of the type', async () => {
+    const none = firstValueFrom(service.captureFor(claim));
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectNone(CLAIM_TYPE);
+    expect(await none).toBeNull();
+  });
+
+  it('has none when the type lacks the property photos are added to', async () => {
+    const capture = firstValueFrom(service.captureFor(claim));
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(CAPTURED));
+    http.expectOne(CLAIM_TYPE).flush(CLAIM);
+    expect(await capture).toBeNull();
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout: capture: "files:files" is not a property of this record; left out',
+    ]);
+  });
+
+  it('lists every type whose view file captures photos, for the lookup of a number', async () => {
+    const types = firstValueFrom(service.captureTypes());
+    http.expectOne(INDEX).flush({
+      ...index('Claim/view', 'Claim/edit', 'Note/view'),
+    });
+    http.expectOne(VIEW_FILE).flush(envelope(CAPTURED));
+    http
+      .expectOne('/nuxeo/agentic-ui-config/layouts/Note/view.layout.json')
+      .flush({ ...envelope(VIEW), type: 'Note' });
+    http.expectOne(CLAIM_TYPE).flush(WITH_FILES);
+    http
+      .match('/nuxeo/api/v1/config/types/Note')
+      .forEach((request) => request.flush({ ...CLAIM, name: 'Note' }));
+    expect(await types).toEqual([
+      {
+        type: 'Claim',
+        capture: { property: 'files:files', findBy: ['claim:number'], keepLocation: false },
+      },
+    ]);
+  });
+
+  it('lists none when the index cannot be read', async () => {
+    const types = firstValueFrom(service.captureTypes());
+    http.expectOne(INDEX).flush('', { status: 500, statusText: 'Server Error' });
+    expect(await types).toEqual([]);
+  });
+});
+
 describe('principalName', () => {
   it.each([
     ['user', { properties: { firstName: 'Jane', lastName: 'Doe' } }, 'Jane Doe'],

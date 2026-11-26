@@ -1286,11 +1286,14 @@ describe('entryOf', () => {
     // And the share links.
     ['shareLinks', 'shareLinks'],
     ['shareLinks.maxDays', 'shareLinks'],
+    // And the capture.
+    ['capture', 'capture'],
+    ['capture.findBy[1]', 'capture'],
   ])('%s is about %s', (path, entry) => {
     expect(entryOf(path)).toBe(entry);
   });
 
-  it.each(['', 'columns', '$schema', 'reviewer', 'shareLinksAll'])(
+  it.each(['', 'columns', '$schema', 'reviewer', 'shareLinksAll', 'captured'])(
     '"%s" is about the file as a whole',
     (path) => {
       expect(entryOf(path)).toBeNull();
@@ -1359,6 +1362,49 @@ describe('the share links, as the app reads them', () => {
   it('refuses the file for share links that are not an object, as for a review', () => {
     expect(readRecordLayout(page({ shareLinks: true }), { rules: known })).toEqual({
       invalid: 'shareLinks: shareLinks is an object: {} turns them on',
+    });
+  });
+});
+
+describe('the capture, as the app reads it', () => {
+  const page = (extra: Record<string, unknown>) => ({
+    version: 2,
+    ...extra,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('reads the property, the findBy and keepLocation, which is false unless said', () => {
+    expect(read(page({ capture: { property: 'files:files' } })).capture).toEqual({
+      property: 'files:files',
+      findBy: [],
+      keepLocation: false,
+    });
+    expect(
+      read(
+        page({ capture: { property: 'files:files', findBy: ['dmg:number'], keepLocation: true } }),
+      ).capture,
+    ).toEqual({ property: 'files:files', findBy: ['dmg:number'], keepLocation: true });
+    expect(read(page({})).capture).toBeNull();
+  });
+
+  it('leaves out a capture with an option this build does not have, and keeps the rest', () => {
+    const file = read(
+      page({ capture: { property: 'files:files', maxEdge: 2048 }, shareLinks: {} }),
+    );
+    expect(file.capture).toBeNull();
+    expect(file.shareLinks).toBe(true);
+    expect(file.cards.map((card) => card.id)).toEqual(['c']);
+    expect(file.problems).toEqual([
+      'capture.maxEdge: "maxEdge" is not a key version 2 has; capture left out',
+    ]);
+  });
+
+  it('refuses the file for a capture with no property, as for a banner with a bad link', () => {
+    expect(
+      readRecordLayout(page({ capture: { findBy: ['dmg:number'] } }), { rules: known }),
+    ).toEqual({
+      invalid:
+        'capture.property: needs the property the photos are added to, <prefix>:<name>, such as files:files, never an ecm: or var: name',
     });
   });
 });
