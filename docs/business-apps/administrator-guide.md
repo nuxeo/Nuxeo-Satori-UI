@@ -21,6 +21,7 @@ wait for a security review, and some are built on open decisions
 | `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.1.0` | 0.2.1                 | 0.1.0 on the local server; 0.1.1 to 0.2.1 nowhere |
 | `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                               | 0.2.1                 | Nowhere                                           |
 | `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.1                 | Nowhere                                           |
+| `moves-demo`               | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.0                 | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -31,8 +32,9 @@ anywhere"), the [connectors README](../../nuxeo-agentic-connectors/README.md) ("
 installed on any server yet"), and the kits' READMEs:
 [Payers](../../business-apps/packages/payers-claims-demo/README.md),
 [brand assets](../../business-apps/packages/brand-assets-demo/README.md),
-[contracts](../../business-apps/packages/contracts-demo/README.md) and
-[facilities](../../business-apps/packages/facilities-demo/README.md).
+[contracts](../../business-apps/packages/contracts-demo/README.md),
+[facilities](../../business-apps/packages/facilities-demo/README.md) and
+[moves](../../business-apps/packages/moves-demo/README.md).
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.
@@ -356,11 +358,12 @@ groups give them, and gets every diagnostic.
 | `brand-assets`                  | `brand-team`, `creative-review`                             |
 | `contracts`, at `contract-desk` | `contract-managers`, `legal-reviewers`                      |
 | `facilities`                    | `facilities-coordinators`, `facilities-technicians`         |
+| `moves`                         | `move-coordinators`, `move-claims-adjusters`                |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
-- **Create the groups yourself.** The contracts and brand assets seeds create no user and no group;
-  the Payers seed creates its fictional demo people and its groups, for a demo server.
+- **Create the groups yourself.** The contracts, brand assets and moves seeds create no user and no
+  group; the Payers seed creates its fictional demo people and its groups, for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
 - **Anonymous:** on a server that defines an anonymous user, a request with no credentials is
@@ -426,13 +429,14 @@ made before still open. Nor has the Admin Center's install path been rehearsed
 ## 6. Removing a kit safely
 
 **Not run yet,** for any kit (each kit's README, "Removing it"). The steps follow the Payers
-kit's install, which was run; the contracts and facilities kits were never installed.
+kit's install, which was run; the contracts, facilities and moves kits were never installed.
 
 1. **Delete the kit's documents first, and empty them from the trash.** A document whose type is
    gone cannot be read, and breaks the folder and the searches that hold it. Do the same before you
    replace a kit's stand-in model. The seeded workspaces:
-   `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets` and
-   `/default-domain/workspaces/contracts-demo`. The facilities kit has no seed.
+   `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
+   `/default-domain/workspaces/contracts-demo` and `/default-domain/workspaces/moves-demo`. The
+   facilities kit has no seed.
 2. **For the Payers kit from 0.4.0, cancel its workflows and delete its route model:** as an
    administrator, `DELETE /nuxeo/api/v1/workflow/<id>` for each instance
    `GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists, then the model
@@ -547,8 +551,8 @@ decision G, are not built: the registry knows groups only
   Payers kit 0.3.0; the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs).
 - **On no server:** `nuxeo-agentic-assets`; the connectors; the deployment layer; the operation
-  buttons; Payers 0.4.0 to 0.5.1; brand assets 0.1.1 to 0.2.1; the contracts and facilities kits;
-  every kit's removal.
+  buttons; Payers 0.4.0 to 0.5.1; brand assets 0.1.1 to 0.2.1; the contracts, facilities and
+  moves kits; every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push

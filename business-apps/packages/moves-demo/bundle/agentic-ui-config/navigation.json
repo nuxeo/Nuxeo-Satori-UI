@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "moves.nav.home", "icon": "home", "page": "home" },
+    { "id": "open-claims", "icon": "inbox", "queue": "open-claims" },
+    { "id": "moves-this-week", "icon": "calendar", "queue": "moves-this-week" }
+  ]
+}

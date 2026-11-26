@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.moves-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="move" prefix="move" src="schemas/move.xsd" />
+    <schema name="moveitem" prefix="moveitem" src="schemas/moveitem.xsd" />
+    <schema name="damageclaim" prefix="dmg" src="schemas/damageclaim.xsd" />
+    <schema name="damageclaim_search" prefix="dmgsearch" src="schemas/damageclaimsearch.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="Move" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="move" />
+    </doctype>
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="MoveItem" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="moveitem" />
+    </doctype>
+    <!-- Not a folder, and holds no file of its own: its attachments are files:files. So it
+         opens as a record page. -->
+    <doctype name="DamageClaim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <schema name="damageclaim" />
+    </doctype>
+    <!-- The search document of DamageClaim's page providers of the search index, as DefaultSearch
+         is default_search's. Never saved: it holds the buckets a queue's facets send back. No
+         folder lists it among its subtypes, and it is hidden from navigation. -->
+    <doctype name="DamageClaimSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="damageclaim_search" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="Move">default</type>
+    </types>
+    <types>
+      <type name="MoveItem">default</type>
+    </types>
+    <types>
+      <type name="DamageClaim">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="moves_move_items">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'MoveItem' AND (moveitem:move = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="moveitem:tag" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="moves_move_claims">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'DamageClaim' AND (dmg:move = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dmg:filedOn" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="moves_item_claims">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'DamageClaim' AND (dmg:items/* = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dmg:filedOn" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <genericPageProvider name="moves_open_claims"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>DamageClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'DamageClaim' AND (dmg:state IN ('Filed', 'In review'))
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="dmg_state_agg" type="terms" parameter="dmg:state">
+          <field schema="damageclaim_search" name="dmg_state_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="dmg_moveNumber_agg" type="terms" parameter="dmg:moveNumber">
+          <field schema="damageclaim_search" name="dmg_moveNumber_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="dmg:filedOn" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+    <coreQueryPageProvider name="moves_this_week">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Move' AND (move:state &lt;&gt; 'Cancelled' AND ((move:loadDate &gt;= NOW('-P1D') AND move:loadDate &lt;= NOW('P7D')) OR (move:deliveryDate &gt;= NOW('-P1D') AND move:deliveryDate &lt;= NOW('P7D'))))
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="move:loadDate" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>
