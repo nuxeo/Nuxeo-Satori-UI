@@ -2,7 +2,10 @@ import { formatFiles, type Tree } from '@nx/devkit';
 
 import { NUXEO_SCHEMAS, TYPE } from '../app-layout/generator';
 import {
+  addLabels,
   attribute,
+  contributeApp,
+  humanize,
   isRecord,
   listOption,
   markupOnly,
@@ -586,6 +589,10 @@ const FILES = { name: 'files', fields: { files: { type: 'complex[]', fields: { f
  *   `npm run app-package:model` exports, so that `app-layout`, `app-form` and the pipeline's
  *   `--model` can be given it before any server has the package. A server's own export replaces it
  *   once the package is installed.
+ * - **The schema's heading in the Properties panel,** `layout.schema.<schema>` in `labels/en.json`,
+ *   the type's name made readable, "Damage claim": without it the panel heads the section with the
+ *   schema's name, "Damageclaim", and `kit-schema-labels.spec.ts` fails the kit. A text there
+ *   already is kept.
  *
  * Nothing here is installed. Installing the package into a Nuxeo is the person's decision.
  */
@@ -958,6 +965,18 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     written.push(modelJson);
   }
 
+  // The heading of the schema's section in the Properties panel, which a type with no `metadata`
+  // layout generates: `layout.schema.<schema>`, by the schema's name, else the name made readable,
+  // "Damageclaim" (layout-v2.md, section 1). From the type's name; a text the kit gave is kept.
+  const heading = `layout.schema.${schema}`;
+  const keptHeading =
+    properties.length > 0 && addLabels(tree, pkg, { [heading]: humanize(type) }).length > 0;
+  if (properties.length > 0) {
+    written.push(`${pkg.config}/labels/en.json`);
+    // labels/en.json is a file the app registry serves: named, if the component contributes the app.
+    contributeApp(tree, pkg, { create: false });
+  }
+
   await formatFiles(tree);
 
   return () => {
@@ -968,6 +987,7 @@ Wrote the stand-in model, for a demo:
 
   Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : `${type}, unchanged`}
   Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
+${properties.length > 0 ? `  Heading:        ${heading} in labels/en.json, the Properties panel's heading for the schema${keptHeading ? ', its text kept as labels/en.json had it' : `, "${humanize(type)}"`}\n` : ''}
 ${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}
 Lay the type out against the content model beside it:
 

@@ -97,7 +97,7 @@ are given, and the write tools write only what passes the pipeline.
 Each makes the change to a staging copy, runs the pipeline's steps 1 to 6 on it as CI does, and
 writes to the package only when there is no finding. Read the answer every time:
 
-- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed).
+- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed). Read its `warnings`, when there are any, and fix what they name: no check refuses it, but the package is not done.
 - **`written: false`:** nothing was written. `validation.findings` and `validation.refusedAt` say
   why. Fix what they name and write again. An id the platform or the package does not register (a
   widget, a rule, an operation the allow-list does not name) is refused here, at write time: never
@@ -273,7 +273,10 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **Name each of the kit's own schemas for the Properties panel:** `layout.schema.<schema>`, by the
   schema's name, not its prefix, in `labels/en.json`. For a type with no `metadata` layout the panel
   heads each schema's section with it, else with the name made readable, `acmeproduct` as
-  "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
+  "Acmeproduct". `app-model` writes it for each type it writes, from the type's name, "Damage
+  claim"; change the text with `write_package_file` if the person names the schema otherwise. The
+  pipeline does not ask for it, but a write that leaves one of a kit's schemas without it answers
+  `written: true` with `warnings` naming the key; `kit-schema-labels.spec.ts`, in
   `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
 - **A new kit under `business-apps/packages/` joins two lists outside its folder.** Run
   `npm run app-definition:server-validator`, which rebuilds the server validator's parity corpus

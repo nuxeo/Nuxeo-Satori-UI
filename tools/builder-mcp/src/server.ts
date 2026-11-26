@@ -416,6 +416,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     ' the pipeline passes with no finding; otherwise written is false, the answer holds the' +
     ' findings and the step that refused it, and the package is unchanged. An id the platform or' +
     ' the package does not register, such as a widget, a rule or an operation, is refused so.' +
+    ' A written answer may hold warnings: what the package still lacks that no check refuses, such' +
+    " as a demo kit's schema with no Properties heading, layout.schema.<schema>, in labels/en.json." +
     ' Nothing is published, and no code of the package runs.';
 
   server.registerTool(

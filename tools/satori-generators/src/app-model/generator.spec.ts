@@ -121,6 +121,40 @@ describe('app-model generator', () => {
     expect(model.schemas.get('dublincore')?.properties.get('title')?.type).toBe('string');
   });
 
+  describe("names the schema's section of the Properties panel", () => {
+    const labels = () =>
+      JSON.parse(read(tree, `${ROOT}/bundle/agentic-ui-config/labels/en.json`)).labels as Record<
+        string,
+        string
+      >;
+
+    it('in labels/en.json, layout.schema.<schema>, from the type, as kit-schema-labels.spec.ts asks', async () => {
+      await generate({ type: 'DamageClaim', properties: 'number' });
+      // By the schema's name, not its prefix: the panel heads the section from it.
+      expect(labels()['layout.schema.damageclaim']).toBe('Damage claim');
+      await generate({ type: 'MoveItem', schema: 'move_item', prefix: 'mi', properties: 'tag' });
+      expect(labels()['layout.schema.move_item']).toBe('Move item');
+      expect(labels()['layout.schema.mi']).toBeUndefined();
+    });
+
+    it('keeps a text the kit gave it, written again with --force', async () => {
+      await contract();
+      const file = `${ROOT}/bundle/agentic-ui-config/labels/en.json`;
+      const written = JSON.parse(read(tree, file));
+      written.labels['layout.schema.contract'] = 'Agreement';
+      tree.write(file, JSON.stringify(written));
+      await generate({ properties: 'number', force: true });
+      expect(labels()['layout.schema.contract']).toBe('Agreement');
+    });
+
+    it('writes none for a page provider alone', async () => {
+      await contract();
+      const before = read(tree, `${ROOT}/bundle/agentic-ui-config/labels/en.json`);
+      await generate({ pageProvider: 'acme_contracts' });
+      expect(read(tree, `${ROOT}/bundle/agentic-ui-config/labels/en.json`)).toBe(before);
+    });
+  });
+
   it("gives a new type Nuxeo's files schema with --attachments, and keeps it with --force", async () => {
     await generate({ properties: 'number, status=Open|Closed', attachments: true });
     expect(read(tree, MODEL)).toContain(

@@ -9,7 +9,7 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
@@ -23,6 +23,12 @@
         "{workspaceRoot}/tools/satori-generators/src/**/*",
         "{workspaceRoot}/business-apps/packages/payers-claims-demo/**/*",
         "{workspaceRoot}/business-apps/packages/contracts-demo/**/*",
+        "{workspaceRoot}/business-apps/packages/moves-demo/**/*",
+        "{workspaceRoot}/business-apps/packages/*/content-model.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/app.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/labels/en.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/layouts/*/metadata.layout.json",
+        "{workspaceRoot}/libs/shared/document-layouts/src/lib/resolve-layout.ts",
         "{workspaceRoot}/libs/platform/package.json"
       ],
       "options": { "reportsDirectory": "coverage/tools/builder-mcp" }

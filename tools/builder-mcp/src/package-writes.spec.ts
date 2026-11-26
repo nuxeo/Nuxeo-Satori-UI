@@ -456,6 +456,19 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect((await validatePackage({ directory: root }, { roots: [packages] })).passed).toBe(true);
     });
 
+    it("warns, and still writes, when a kit's schema has no Properties heading", async () => {
+      const root = kit('moves-demo', 'no-heading');
+      const content = edited(root, LABELS, '"layout.schema.move": "Move",', '');
+      const result = await writeFile(root, LABELS, content);
+      expect(result.written, JSON.stringify(result.validation?.stderr)).toBe(true);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings?.[0]).toContain('has no text for layout.schema.move,');
+      // Written back, the heading is there and nothing is said.
+      const again = await writeFile(root, LABELS, read(join(KITS, 'moves-demo'), LABELS));
+      expect(again.written).toBe(true);
+      expect(again.warnings).toBeUndefined();
+    });
+
     it('answers a write of what the file already holds with nothing to write', async () => {
       const root = kit('contracts-demo', 'same-write');
       const result = await writeFile(root, LABELS, read(root, LABELS));

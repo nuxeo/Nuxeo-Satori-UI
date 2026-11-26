@@ -199,7 +199,10 @@ What each does:
 
 The answer holds `written`; `changes`, each file `created`, `updated` or `removed`; `validation`,
 the pipeline's answer, naming the package rather than its copy; `generatorOutput`, what each
-generator printed, such as what to run next; and a `note`. One write runs at a time in a server,
+generator printed, such as what to run next; once written, `warnings`, when there is one, for
+what no check refuses and the package still lacks: each of a demo kit's own schemas with no
+Properties heading, `layout.schema.<schema>`, in `labels/en.json`, which
+`kit-schema-labels.spec.ts` asks of every kit (`src/schema-headings.ts`); and a `note`. One write runs at a time in a server,
 and one commit at a time in a package. "As CI does" is on the files the package holds here: a
 local file git ignores is checked here too, and CI, which checks out only what is committed, is
 the stricter.
