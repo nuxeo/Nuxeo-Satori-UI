@@ -165,6 +165,15 @@ jobs:
           mvn verify -pl nuxeo-agentic-connectors -am -B -nsu --no-transfer-progress
           ls nuxeo-agentic-connectors/target/nuxeo-agentic-connectors-*.jar
 
+      # The e-signature step's add-on, likewise its own package. Its tests start a Nuxeo runtime,
+      # call the stand-in provider over the loopback interface, and run the stand-in service,
+      # demo/esign-stand-in.mjs, with the Node this job set up; its zip is not uploaded or published.
+      - name: Build and test the e-signature add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-signature -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-signature/target/nuxeo-agentic-signature-*.zip
+          node nuxeo-agentic-signature/demo/esign-stand-in.selftest.mjs
+
       # Embedded panels' token exchange (decision F), an add-on of its own with no Marketplace
       # package yet: its jar, after its tests, with no Nuxeo runtime. The jar must not carry the
       # compile-time copy of the platform's authentication plugin interface.

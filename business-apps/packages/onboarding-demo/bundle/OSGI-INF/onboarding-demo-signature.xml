@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN, written by hand: what app-model cannot write, apart from the model component it
+  writes, so that app-model may write that one again. The README's log says why each is by hand.
+
+  - The onboarding case's KYC checklist, a complex property, onboarding_kyc (kyc:).
+  - The e-signature step, on nuxeo-agentic-signature, which the package depends on: the case gets
+    the add-on's Signable facet, so one of its attachments may be sent for signature, and keeps
+    versions, Versionable and uid, so the signed file is filed on it as a new version.
+    ESignatureRequest is the kit's signature request, the add-on's SignatureRequest facet and no
+    schema of the kit's: created, it is sent; the add-on writes the rest.
+  - Two folders whose Create menu offers the kit's types: an onboarding register, for cases and
+    their signature requests, and a disputes register.
+
+  Fictional, like the kit. Replaced with the stand-in model when a real one arrives.
+-->
+<component name="nuxeo.config.onboarding-demo.signature" version="1.0">
+  <require>nuxeo.config.onboarding-demo.model</require>
+  <!-- The Signable and SignatureRequest facets, and their schemas: nuxeo-agentic-signature's. -->
+  <require>org.nuxeo.agentic.signature.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="onboarding_kyc" prefix="kyc" src="schemas/onboarding_kyc.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Added to the stand-in model's type: the checklist, versions, and the add-on's facet. -->
+    <doctype name="OnboardingCase" append="true">
+      <schema name="uid" />
+      <schema name="onboarding_kyc" />
+      <facet name="Versionable" />
+      <facet name="Signable" />
+    </doctype>
+    <!-- Not a folder and holds no file of its own, so it opens as a record page: the signed file
+         and the evidence are sigreq: properties, which the add-on writes. -->
+    <doctype name="ESignatureRequest" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <facet name="SignatureRequest" />
+    </doctype>
+    <doctype name="OnboardingRegister" extends="Folder">
+      <subtypes>
+        <type>OnboardingCase</type>
+        <type>ESignatureRequest</type>
+      </subtypes>
+    </doctype>
+    <doctype name="DisputeRegister" extends="Folder">
+      <subtypes>
+        <type>DisputeCase</type>
+      </subtypes>
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="ESignatureRequest">default</type>
+      <type name="OnboardingRegister">default</type>
+      <type name="DisputeRegister">default</type>
+    </types>
+  </extension>
+</component>

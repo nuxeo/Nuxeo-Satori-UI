@@ -1,0 +1,56 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "onboarding.home.title",
+  "cards": [
+    {
+      "id": "open-cases",
+      "labelKey": "onboarding.home.openCases",
+      "kpi": { "pageProvider": "onboarding_open_cases", "aggregate": "onb_status_agg" },
+      "queue": "open-cases",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["onboarding-officers", "kyc-analysts"]
+      }
+    },
+    {
+      "id": "kyc-review",
+      "labelKey": "onboarding.home.kycReview",
+      "kpi": {
+        "pageProvider": "onboarding_open_cases",
+        "aggregate": "onb_status_agg",
+        "bucket": "KYC review"
+      },
+      "queue": "open-cases",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["kyc-analysts"] }
+    },
+    {
+      "id": "high-risk",
+      "labelKey": "onboarding.home.highRisk",
+      "kpi": {
+        "pageProvider": "onboarding_open_cases",
+        "aggregate": "onb_riskRating_agg",
+        "bucket": "High"
+      },
+      "queue": "open-cases",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["onboarding-officers", "kyc-analysts"]
+      }
+    },
+    {
+      "id": "awaiting-signature",
+      "labelKey": "onboarding.home.awaitingSignature",
+      "kpi": { "pageProvider": "onboarding_awaiting_signature" },
+      "queue": "awaiting-signature",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["onboarding-officers"] }
+    },
+    {
+      "id": "open-disputes",
+      "labelKey": "onboarding.home.openDisputes",
+      "kpi": { "pageProvider": "onboarding_open_disputes", "aggregate": "dsp_reason_agg" },
+      "queue": "open-disputes",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["dispute-analysts"] }
+    }
+  ]
+}

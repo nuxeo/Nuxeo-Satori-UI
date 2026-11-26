@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "request",
+      "labelKey": "onboarding.card.eSignatureRequest.send",
+      "fields": [
+        { "field": "dc:title", "labelKey": "onboarding.field.requestTitle", "required": true },
+        {
+          "field": "sigreq:document",
+          "required": true,
+          "widget": "document-link",
+          "parameters": { "types": ["OnboardingCase"] }
+        },
+        { "field": "sigreq:fileName", "labelKey": "onboarding.field.fileToSign", "required": true },
+        {
+          "field": "sigreq:signers",
+          "required": true,
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "sigreq:name", "labelKey": "onboarding.field.signerName" },
+              {
+                "field": "sigreq:email",
+                "labelKey": "onboarding.field.signerEmail",
+                "widget": "email"
+              }
+            ]
+          }
+        },
+        { "field": "sigreq:message", "widget": "long-text" }
+      ]
+    }
+  ]
+}

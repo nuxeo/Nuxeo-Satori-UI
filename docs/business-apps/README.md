@@ -91,6 +91,11 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   numbered from the platform's sequencer, and a new revision superseding the one before it in the
   same transaction (phase 8), with its kit,
   [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md).
+- [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md): the e-signature step, provider-neutral,
+  with a stand-in provider and no vendor chosen (decision H): a record's file sent to named signers,
+  the provider's callback authenticated and taken once, and the signed file filed on the record as
+  a new version with the provider's evidence (phase 7), with its kit,
+  [onboarding and disputes](../../business-apps/packages/onboarding-demo/README.md).
 - [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md): the token exchange of
   embedded panels, a host's signed assertion of its user for a short-lived token of the add-on's
   own, signed in on the REST API alone and held to its host's origins and to reads (phase 7,

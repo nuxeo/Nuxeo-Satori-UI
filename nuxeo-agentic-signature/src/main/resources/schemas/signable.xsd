@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A record that can be sent for signature (sgn:), the Signable facet's schema. Every property is the
+  server's: written when one of its files is sent, and when the request ends, and refused from
+  anyone else. The version filed when it is signed holds the signed file and, here, the provider's
+  evidence.
+-->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/signable/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/schemas/agentic/signable/">
+
+  <xs:include schemaLocation="core-types.xsd" />
+
+  <xs:simpleType name="names">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- sent, signed, declined or cancelled: its latest request's. None before the first. -->
+  <xs:element name="status" type="xs:string" />
+  <!-- Its latest request, by id. -->
+  <xs:element name="request" type="xs:string" />
+  <!-- The signers' names, as the request named them. Not their addresses. -->
+  <xs:element name="signers" type="nxs:names" />
+  <xs:element name="sentAt" type="xs:dateTime" />
+  <xs:element name="completedAt" type="xs:dateTime" />
+  <!-- While it is out: where the file sent is, and the platform's digest of it, which may not change. -->
+  <xs:element name="file" type="xs:string" />
+  <xs:element name="fileDigest" type="xs:string" />
+  <!-- The provider's evidence of the signing, kept with the version that holds the signed file. -->
+  <xs:element name="evidence" type="nxs:content" />
+</xs:schema>

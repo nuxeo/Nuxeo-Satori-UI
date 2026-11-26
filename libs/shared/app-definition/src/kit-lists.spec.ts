@@ -100,6 +100,7 @@ describe('every list of kits kept outside the kits', () => {
         'contracts-demo',
         'facilities-demo',
         'moves-demo',
+        'onboarding-demo',
         'payers-claims-demo',
         'pc-claims-demo',
       ]),
