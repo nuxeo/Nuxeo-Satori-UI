@@ -17,7 +17,10 @@ final class Disposition {
 
     static final String CERTIFICATE_TYPE = "DispositionCertificate";
 
-    static final Set<String> TYPES = Set.of(RUNS_TYPE, RUN_TYPE, REQUEST_TYPE, CERTIFICATE_TYPE);
+    /** An audit export, filed by a person in the same folder: what happened to a folder's records over a period. */
+    static final String EXPORT_TYPE = "RecordsAuditExport";
+
+    static final Set<String> TYPES = Set.of(RUNS_TYPE, RUN_TYPE, REQUEST_TYPE, CERTIFICATE_TYPE, EXPORT_TYPE);
 
     /** The schemas no one but the add-on writes, by type. */
     static final String RUNS_SCHEMA = "disposition_runs";
@@ -28,11 +31,16 @@ final class Disposition {
 
     static final String CERTIFICATE_SCHEMA = "disposition_certificate";
 
+    static final String EXPORT_SCHEMA = "records_audit_export";
+
     // --- Its permissions ----------------------------------------------------------------------------
 
     static final String START_PERMISSION = "StartDisposition";
 
     static final String APPROVE_PERMISSION = "ApproveDisposition";
+
+    /** Filing an audit export in the folder: a strong permission, for the few records specialists. */
+    static final String EXPORT_PERMISSION = "ExportRecordsAudit";
 
     /** How many different people approve a run before it is disposed of, none of them its starter. */
     static final int APPROVALS_REQUIRED = 2;
@@ -131,7 +139,45 @@ final class Disposition {
 
     static final String FILE_CONTENT = "file:content";
 
+    /** The attachments, where an export keeps its JSON beside its CSV. */
+    static final String FILES = "files:files";
+
     static final String TITLE = "dc:title";
+
+    // An audit export's: the filer writes the scope, the period and a comment; the server the rest.
+
+    static final String EXPORT_PATH = "rexp:path";
+
+    static final String EXPORT_FROM = "rexp:from";
+
+    static final String EXPORT_TO = "rexp:to";
+
+    static final String EXPORT_COMMENT = "rexp:comment";
+
+    static final String EXPORT_BY = "rexp:by";
+
+    static final String EXPORT_AT = "rexp:at";
+
+    static final String EXPORT_STATE = "rexp:state";
+
+    static final String EXPORT_GENERATED_AT = "rexp:generatedAt";
+
+    static final String EXPORT_ENTRY_COUNT = "rexp:entryCount";
+
+    static final String EXPORT_OMITTED_COUNT = "rexp:omittedCount";
+
+    static final String EXPORT_CSV_SHA256 = "rexp:csvSha256";
+
+    static final String EXPORT_JSON_SHA256 = "rexp:jsonSha256";
+
+    static final String EXPORT_FAILURE = "rexp:failure";
+
+    /** An export's states: written in the background once filed, then done, or failed with nothing kept. */
+    static final String EXPORT_PENDING = "pending";
+
+    static final String EXPORT_DONE = "done";
+
+    static final String EXPORT_FAILED = "failed";
 
     /** A request's comment, at most. */
     static final int MAX_COMMENT = 2000;

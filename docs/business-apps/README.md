@@ -89,7 +89,8 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md).
 - [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md): the disposition review, on the
   platform's retention module: the records due held in a run, approved by two people other than
-  its starter, deleted, and a certificate kept (phase 9), with its kit,
+  its starter, deleted, and a certificate kept; the audit export a records specialist reviews, and
+  access logging (phase 9), with its kit,
   [records](../../business-apps/packages/records-demo/README.md).
 
 ## Facts that hold

@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "records.queue.audit-exports",
+  "pageProvider": "records_audit_exports",
+  "columns": ["dc:title", "rexp:path", "rexp:state", "rexp:at", "rexp:entryCount"],
+  "sort": [{ "field": "rexp:at", "order": "desc" }],
+  "pageSize": 50
+}

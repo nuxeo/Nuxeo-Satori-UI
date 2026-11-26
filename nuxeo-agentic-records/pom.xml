@@ -26,7 +26,7 @@
       nuxeo-agentic-ui. The manifest's Bundle-Version repeats it, and BundleTest refuses a build
       where the two differ.
     -->
-    <records.package.version>0.1.0</records.package.version>
+    <records.package.version>0.2.0</records.package.version>
 
     <!--
       The retention module the add-on reads, as Nuxeo publishes it for LTS 2025: its jar is on the
@@ -104,11 +104,44 @@
       <artifactId>log4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!--
+      The platform's audit, which the audit export reads: AuditReader, LogEntry and the query builder
+      the audit takes. Its LTS 2025 classes keep these names beside their new ones, and the add-on
+      reaches the 2025 ones that differ through AuditAccess.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The REST API's JSON writer for a document, which access logging extends to log a view. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-io</artifactId>
+      <scope>provided</scope>
+    </dependency>
 
     <!-- Nuxeo's own test framework: a repository, its events, its security and its transactions. -->
     <dependency>
       <groupId>org.nuxeo.ecm.core</groupId>
       <artifactId>nuxeo-core-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The platform's audit in the tests: its service, its listener and its store, an H2 database. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -168,6 +201,7 @@
                     <include name="schemas/*.xsd" />
                     <include name="OSGI-INF/retention-core-types.xml" />
                     <include name="OSGI-INF/retention-security.xml" />
+                    <include name="OSGI-INF/retention-audit.xml" />
                     <include name="directories/retention_end.csv" />
                   </patternset>
                 </unzip>

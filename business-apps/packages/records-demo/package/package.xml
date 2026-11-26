@@ -1,7 +1,7 @@
-<package type="addon" name="records-demo" version="0.1.0">
+<package type="addon" name="records-demo" version="0.1.1">
   <title>Records</title>
   <description>
-    <p>The Records app definition, a Nuxeo Satori business app: the disposition review of nuxeo-agentic-records, its queue of runs awaiting approval, a run's page and a certificate's page.</p>
+    <p>The Records app definition, a Nuxeo Satori business app: the disposition review of nuxeo-agentic-records, its queue of runs awaiting approval, a run's page and a certificate's page; the audit exports a records specialist files, and their page; and a records file's page with its history.</p>
   </description>
   <vendor>Nuxeo</vendor>
   <installer restart="true" />
@@ -12,7 +12,7 @@
   </target-platform>
   <dependencies>
     <package>nuxeo-agentic-ui:2026.0.2</package>
-    <package>nuxeo-agentic-records:0.1.0</package>
+    <package>nuxeo-agentic-records:0.2.0</package>
   </dependencies>
   <visibility>PRIVATE</visibility>
 </package>

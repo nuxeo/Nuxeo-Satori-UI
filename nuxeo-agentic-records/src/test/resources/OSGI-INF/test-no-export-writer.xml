@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- For AuditExportGenerationTest: the background writer of audit exports switched off, so that the
+     test writes a filed export itself, once, twice, or with an audit that fails. -->
+<component name="org.nuxeo.agentic.records.test.no-export-writer">
+
+  <require>org.nuxeo.agentic.records.audit</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticRecordsAuditExport" enabled="false" />
+  </extension>
+
+</component>

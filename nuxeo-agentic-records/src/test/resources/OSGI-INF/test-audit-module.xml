@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!--
+  The retention module's audited events, for the tests: nuxeo-retention 2025.4.66 contributes them in
+  its OSGI-INF/retention-audit.xml, to LTS 2025's audit; this is the same list, to the 11.5 audit the
+  tests run. Its classes, which fire them, are never loaded, so a test fires retentionRuleAttached
+  itself. RetentionModelTest holds this list to the module's file.
+-->
+<component name="org.nuxeo.agentic.records.test.audit-module">
+
+  <require>org.nuxeo.ecm.platform.audit.service.NXAuditEventsService</require>
+
+  <extension target="org.nuxeo.ecm.platform.audit.service.NXAuditEventsService" point="event">
+    <event name="retentionRuleAttached" />
+    <event name="afterSetRetention" merge="true" />
+    <event name="afterExtendRetention" merge="true" />
+    <event name="afterUnsetRetention" />
+  </extension>
+
+</component>
