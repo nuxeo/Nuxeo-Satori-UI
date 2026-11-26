@@ -18,29 +18,36 @@
  *   an argument it does not take;
  * - **`--preview` (exit 0), with no kit type on the server:** the six pictures as `Picture`s under
  *   the workspace's `preview` folder, with Dublin Core's properties and its marker only;
- * - **seeded (exit 0):** twenty documents and six pictures on an empty server, all of them under
- *   the kit's workspace and marked, nothing else new, and every write of every run to the
- *   workspace or a document in it, beside a sibling workspace whose name begins as its; the second
- *   run creating and uploading nothing; a record trashed at its place restored, not created again;
+ * - **seeded (exit 0):** twenty-two documents, six pictures and two videos on an empty server, all
+ *   of them under the kit's workspace and marked, nothing else new, and every write of every run to
+ *   the workspace or a document in it, beside a sibling workspace whose name begins as its; each
+ *   video uploaded as WebM with its committed bytes, as an `AcmeVideo`; the second run creating and
+ *   uploading nothing; a record trashed at its place restored, not created again;
+ * - **what the server made of the videos:** said, not checked: on a server without ffmpeg, that it
+ *   transcoded nothing and the page plays the original; on one with it, what it made;
  * - **with the rights add-on:** an original the kit's own rights policy refuses to read back, with
  *   403 and a rights reason from the `assetRights` enricher, uploaded again, and only those (exit
  *   0); a 403 the rights do not explain, and any other failure to read one back, stops the run
  *   (exit 1);
  * - **a check that fails (exit 1):** each page provider answering wrong in its own way (a filled
  *   shot listed as missing, the products out of order, another product's asset, a library bucket
- *   counting short), and pictures whose views are never made;
- * - **the pictures and the data:** each PNG well formed, of its size, and the same bytes twice; the
- *   shot list consistent with the pictures; and one asset in each rights window the banners show.
+ *   counting short, a library without its videos, a Type bucket counting short), pictures whose
+ *   views are never made, and a video Nuxeo does not take for a Video;
+ * - **the pictures, the videos and the data:** each PNG well formed, of its size, and the same bytes
+ *   twice; each video a WebM file of a few kilobytes, one long enough for a storyboard and one not,
+ *   one whose original the kit's rights refuse and one they serve; the shot list consistent with
+ *   the pictures; and one asset in each rights window the banners show.
  *
  * Exit codes: 0, every control held; 1, one did not.
  */
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 
-import { ASSETS, MARKER, PRODUCTS, SHOTS, WORKSPACE, shotName } from './data.mjs';
+import { ASSETS, MARKER, PRODUCTS, SHOTS, VIDEOS, WORKSPACE, shotName } from './data.mjs';
 import { crc32, picturePng } from './png.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +55,12 @@ const SEED = join(HERE, 'seed.mjs');
 const USER = 'selftest';
 const SECRET = 'selftest-secret';
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
-const KIT_TYPES = ['AcmeAsset', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch'];
+const KIT_TYPES = ['AcmeAsset', 'AcmeVideo', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch'];
+/** Each video's committed file. */
+const videoBytes = (video) => readFileSync(join(HERE, 'videos', video.video.file));
+/** What one run writes on an empty server, and the files it uploads. */
+const DOCUMENTS = 1 + 3 + PRODUCTS.length + ASSETS.length + VIDEOS.length + SHOTS.length;
+const FILES = ASSETS.length + VIDEOS.length;
 
 const failures = [];
 let held = 0;
@@ -65,9 +77,13 @@ function control(name, condition, detail = '') {
  * one page provider answer wrong, so that the check meant to see it is seen failing:
  * `missing-shots` lists a filled shot as missing, `products-order` lists the products in the wrong
  * order, `cross-product` lists another product's asset, and `short-bucket` counts a library bucket
- * one short. `originalStatus` answers a read of a document's original with that status instead of
- * its bytes, as `nuxeo-agentic-assets` refuses one with 403 under the kit's rights policy, and
- * `originalReason` is the reason its `assetRights` enricher then gives, or `null` for none.
+ * one short, `no-videos` leaves the videos out of the library, `short-type` counts its Type bucket
+ * of videos one short, and `not-a-video` gives a video no `Video` facet. `originalStatus` answers a
+ * read of a document's original with that status instead of its bytes, as `nuxeo-agentic-assets`
+ * refuses one with 403 under the kit's rights policy, and `originalReason` is the reason its
+ * `assetRights` enricher then gives, or `null` for none. `transcodes` makes each video's facts,
+ * transcoded videos and storyboard, as a server with ffmpeg does; without it, as on the local
+ * Nuxeo, none.
  */
 function standIn({
   installed = true,
@@ -75,6 +91,7 @@ function standIn({
   fault = null,
   originalStatus = () => 200,
   originalReason = () => null,
+  transcodes = false,
 } = {}) {
   const docs = new Map();
   const batches = new Map();
@@ -97,14 +114,30 @@ function standIn({
   const byUid = (uid) => [...docs.values()].find((doc) => doc.uid === uid);
   /** The types with the `Picture` facet, which Nuxeo makes views for. */
   const pictures = ['AcmeAsset', 'Picture'];
+  /** The types with the `Video` facet, which Nuxeo reads, transcodes and storyboards with ffmpeg. */
+  const videos = ['AcmeVideo', 'Video'];
   const view = (doc) => {
     const out = structuredClone(doc);
+    delete out.blob;
+    if (pictures.includes(doc.type)) out.facets = ['Picture', 'Versionable'];
+    if (videos.includes(doc.type))
+      out.facets = fault === 'not-a-video' ? ['Versionable'] : ['Video', 'HasStoryboard'];
     if (pictures.includes(doc.type) && doc.blob && viewsMade)
       out.properties['picture:views'] = [{ title: 'Medium', width: 800, height: 1000 }];
     else if (pictures.includes(doc.type)) out.properties['picture:views'] = [];
+    if (videos.includes(doc.type) && doc.blob) {
+      out.properties['vid:info'] = transcodes
+        ? { duration: 12, width: 160, height: 90, format: 'matroska,webm' }
+        : { duration: null, width: null, height: null, format: null };
+      out.properties['vid:transcodedVideos'] = transcodes
+        ? [{ name: 'MP4 480p' }, { name: 'WebM 480p' }]
+        : [];
+      out.properties['vid:storyboard'] = transcodes ? Array.from({ length: 9 }, () => ({})) : [];
+    }
     if (doc.blob)
       out.properties['file:content'] = {
         name: doc.blob.name,
+        'mime-type': doc.blob.type,
         length: String(doc.blob.bytes.length),
       };
     return out;
@@ -183,7 +216,11 @@ function standIn({
     }
     if (req.method === 'POST' && /^\/upload\/[^/]+\/0$/.test(path)) {
       const batchId = path.split('/')[2];
-      batches.set(batchId, { name: decodeURIComponent(req.headers['x-file-name']), bytes: body });
+      batches.set(batchId, {
+        name: decodeURIComponent(req.headers['x-file-name']),
+        type: req.headers['x-file-type'],
+        bytes: body,
+      });
       return send(201, { uploaded: 'true' });
     }
     if (req.method === 'POST' && path === '/automation/Document.Untrash') {
@@ -223,7 +260,8 @@ function standIn({
           ),
         );
       if (name === 'acme_asset_library') {
-        const assets = live('AcmeAsset');
+        // ecm:primaryType IN ('AcmeAsset', 'AcmeVideo'), as the stand-in model's library asks.
+        const assets = [...live('AcmeAsset'), ...(fault === 'no-videos' ? [] : live('AcmeVideo'))];
         const today = new Date().toISOString().slice(0, 10);
         const days = (day) => Math.round((Date.parse(day) - Date.parse(today)) / 86_400_000);
         const bucket = (doc) => {
@@ -235,12 +273,15 @@ function standIn({
           for (const doc of assets) counts.set(key(doc), (counts.get(key(doc)) ?? 0) + 1);
           if (fault === 'short-bucket' && counts.has('Cleared'))
             counts.set('Cleared', counts.get('Cleared') - 1);
+          if (fault === 'short-type' && counts.has('AcmeVideo'))
+            counts.set('AcmeVideo', counts.get('AcmeVideo') - 1);
           return { buckets: [...counts].map(([k, docCount]) => ({ key: k, docCount })) };
         };
         return page(assets, {
           acme_rights_agg: terms(bucket),
           acme_shot_agg: terms((doc) => prop(doc, 'acmeasset:shot')),
           acme_product_agg: terms((doc) => prop(doc, 'acmeasset:product')),
+          acme_type_agg: terms((doc) => doc.type),
         });
       }
       return send(404);
@@ -359,13 +400,44 @@ const othersOf = (stand) =>
     console.error(`seed selftest: the seed did not seed the stand-in:\n${first.output}`);
     process.exit(1);
   }
-  const expected = 1 + 3 + PRODUCTS.length + ASSETS.length + SHOTS.length;
+  const expected = DOCUMENTS;
   control(
-    `an empty server: ${expected} documents created, ${ASSETS.length} pictures uploaded`,
+    `an empty server: ${expected} documents created, ${FILES} files uploaded`,
     first.output.includes(
-      `Done: ${expected} created, 0 updated, 0 restored from the trash, ${ASSETS.length} picture(s) uploaded`,
+      `Done: ${expected} created, 0 updated, 0 restored from the trash, ${FILES} file(s) uploaded`,
     ),
     first.output.split('\n').find((line) => line.startsWith('Done')),
+  );
+  const videoAt = (video) => stand.docs.get(`${ROOT}/assets/${video.id}`);
+  control(
+    "each video an AcmeVideo in the assets folder, uploaded as WebM with its committed file's bytes",
+    VIDEOS.every((video) => {
+      const doc = videoAt(video);
+      return (
+        doc?.type === 'AcmeVideo' &&
+        doc.blob?.name === video.video.file &&
+        doc.blob?.type === 'video/webm' &&
+        doc.blob.bytes.equals(videoBytes(video)) &&
+        JSON.stringify(doc.properties['acmeasset:channels']) === JSON.stringify(video.channels) &&
+        doc.properties['dc:title'] === video.title
+      );
+    }),
+    JSON.stringify(VIDEOS.map((video) => [videoAt(video)?.type, videoAt(video)?.blob?.type])),
+  );
+  control(
+    'the pictures uploaded as PNG',
+    ASSETS.every(
+      (asset) => stand.docs.get(`${ROOT}/assets/${asset.id}`)?.blob?.type === 'image/png',
+    ),
+  );
+  control(
+    'on a server without ffmpeg, it says of each video that the server transcoded nothing',
+    VIDEOS.every((video) =>
+      first.output.includes(
+        `video    ${video.id}: the server has read no facts, transcoded nothing and made no storyboard yet. Without ffmpeg on the server it never will: its page plays the original.`,
+      ),
+    ),
+    first.output,
   );
   control(
     'every document it wrote is in its workspace and carries its marker, and nothing else is new',
@@ -400,7 +472,7 @@ const othersOf = (stand) =>
   control(
     'a second run: nothing created and no picture uploaded again',
     second.output.includes(
-      `Done: 0 created, ${expected} updated, 0 restored from the trash, 0 picture(s) uploaded`,
+      `Done: 0 created, ${expected} updated, 0 restored from the trash, 0 file(s) uploaded`,
     ),
     second.output.split('\n').find((line) => line.startsWith('Done')),
   );
@@ -414,7 +486,7 @@ const othersOf = (stand) =>
     'a trashed record at its place: restored, and nothing created',
     third.code === 0 &&
       third.output.includes(
-        `Done: 0 created, ${expected} updated, 1 restored from the trash, 0 picture(s) uploaded`,
+        `Done: 0 created, ${expected} updated, 1 restored from the trash, 0 file(s) uploaded`,
       ) &&
       assetAt(ASSETS[0].id).isTrashed === false &&
       ours(stand).length === expected,
@@ -430,11 +502,12 @@ const othersOf = (stand) =>
 
 // ── With the rights add-on: the originals the kit's own policy refuses ───────────────────────────
 {
-  // The kit's policy refuses an asset's original, to every user, when its channels hold no Print
-  // or its rights have ended (bundle/OSGI-INF/brand-assets-demo-rights.xml).
-  const refused = ASSETS.filter(
-    (asset) => !asset.channels.includes('Print') || asset.rightsEndInDays < 0,
-  ).map((asset) => asset.id);
+  // The kit's policies refuse an asset's original, a picture's or a video's, to every user, when its
+  // channels hold no Print or its rights have ended (bundle/OSGI-INF/brand-assets-demo-rights.xml
+  // and brand-assets-demo-video-rights.xml).
+  const refused = [...ASSETS, ...VIDEOS]
+    .filter((asset) => !asset.channels.includes('Print') || asset.rightsEndInDays < 0)
+    .map((asset) => asset.id);
   const idOf = (doc) => doc.path.slice(doc.path.lastIndexOf('/') + 1);
   const stand = standIn({
     originalStatus: (doc) => (refused.includes(idOf(doc)) ? 403 : 200),
@@ -442,10 +515,13 @@ const othersOf = (stand) =>
   });
   const first = await runSeed(stand);
   const second = await runSeed(stand);
-  const expected = 1 + 3 + PRODUCTS.length + ASSETS.length + SHOTS.length;
+  const expected = DOCUMENTS;
   control(
-    'refused originals: the data has some, and some it serves',
-    refused.length > 0 && refused.length < ASSETS.length,
+    'refused originals: the data has some, and some it serves, of the pictures and of the videos',
+    refused.length > 0 &&
+      refused.length < ASSETS.length + VIDEOS.length &&
+      VIDEOS.some((video) => refused.includes(video.id)) &&
+      VIDEOS.some((video) => !refused.includes(video.id)),
     refused.join(', '),
   );
   control(
@@ -456,7 +532,7 @@ const othersOf = (stand) =>
   control(
     'refused originals: the second run uploads again exactly the pictures it could not read back',
     second.output.includes(
-      `Done: 0 created, ${expected} updated, 0 restored from the trash, ${refused.length} picture(s) uploaded`,
+      `Done: 0 created, ${expected} updated, 0 restored from the trash, ${refused.length} file(s) uploaded`,
     ) &&
       refused.every((id) =>
         second.output.includes(`assets/${id}: its original cannot be read back`),
@@ -499,10 +575,11 @@ const othersOf = (stand) =>
   control('--preview with no kit type: exit 0', run.code === 0, `${run.code}: ${run.output}`);
   const preview = [...stand.docs.values()].filter((doc) => doc.path.startsWith(`${ROOT}/preview/`));
   control(
-    `--preview: ${ASSETS.length} Pictures under the workspace's preview folder, and nothing else`,
+    `--preview: ${ASSETS.length} Pictures under the workspace's preview folder, no video, and nothing else`,
     preview.length === ASSETS.length &&
       preview.every((doc) => doc.type === 'Picture') &&
-      ours(stand).length === 2 + ASSETS.length,
+      ours(stand).length === 2 + ASSETS.length &&
+      [...stand.docs.values()].every((doc) => !['AcmeVideo', 'Video'].includes(doc.type)),
   );
   control(
     "--preview: each with its title, rights end and marker, and none of the kit's own properties",
@@ -536,6 +613,17 @@ for (const [fault, name, said] of [
     'a library bucket counting fewer than seeded',
     'acme_rights_agg: Cleared counts',
   ],
+  [
+    'no-videos',
+    'a library that leaves out the videos',
+    `acme_asset_library leaves out ${VIDEOS.map((video) => video.id).join(', ')}`,
+  ],
+  [
+    'short-type',
+    'a Type bucket counting fewer videos than seeded',
+    'acme_type_agg: AcmeVideo counts',
+  ],
+  ['not-a-video', 'a video Nuxeo does not take for a Video', 'no Video facet, so it is no Video'],
 ]) {
   const stand = standIn({ fault });
   const run = await runSeed(stand);
@@ -548,6 +636,61 @@ for (const [fault, name, said] of [
   control('no picture views: exit 1', run.code === 1, `${run.code}: ${run.output}`);
   control('no picture views: said', run.output.includes('no picture views yet'), run.output);
 }
+
+// ── What a server with ffmpeg made of the videos ──────────────────────────────────────────────
+{
+  const stand = standIn({ transcodes: true });
+  const run = await runSeed(stand);
+  control('a server that transcodes: exit 0', run.code === 0, `${run.code}: ${run.output}`);
+  control(
+    'a server that transcodes: it says what the server made of each video',
+    VIDEOS.every((video) =>
+      run.output.includes(
+        `video    ${video.id}: its facts read; transcoded: MP4 480p, WebM 480p; storyboard: 9 frame(s)`,
+      ),
+    ),
+    run.output,
+  );
+}
+
+// ── The videos ────────────────────────────────────────────────────────────────────────────────
+for (const video of VIDEOS) {
+  const bytes = videoBytes(video);
+  // EBML's magic, then a DocType element (0x4282) naming "webm": a WebM file, not another kind.
+  control(`${video.id}: an EBML file`, bytes.subarray(0, 4).toString('hex') === '1a45dfa3');
+  const docType = bytes.indexOf(Buffer.from([0x42, 0x82]));
+  control(
+    `${video.id}: its DocType is webm`,
+    docType > 0 &&
+      docType < 64 &&
+      bytes.subarray(docType + 3, docType + 7).toString('ascii') === 'webm',
+  );
+  control(
+    `${video.id}: a few kilobytes, not a film downloaded`,
+    bytes.length > 0 && bytes.length <= 16 * 1024,
+    `${bytes.length} bytes`,
+  );
+  control(`${video.id}: a video's MIME type`, video.video.mimeType === 'video/webm');
+  control(
+    `${video.id}: a product of the kit`,
+    PRODUCTS.some((each) => each.style === video.product),
+  );
+}
+control(
+  "one video long enough for Nuxeo's storyboard, which it makes from 10 seconds, and one not",
+  VIDEOS.some((video) => video.video.seconds >= 10) &&
+    VIDEOS.some((video) => video.video.seconds < 10),
+);
+control(
+  "one video whose original the kit's rights refuse, for lack of Print, and one they serve, both running",
+  VIDEOS.some((video) => !video.channels.includes('Print')) &&
+    VIDEOS.some((video) => video.channels.includes('Print')) &&
+    VIDEOS.every((video) => video.rightsEndInDays >= 41),
+);
+control(
+  'no video and picture share an id, the place the seed writes each at',
+  new Set([...ASSETS, ...VIDEOS].map((each) => each.id)).size === ASSETS.length + VIDEOS.length,
+);
 
 // ── The pictures and the data ─────────────────────────────────────────────────────────────────
 for (const asset of ASSETS) {

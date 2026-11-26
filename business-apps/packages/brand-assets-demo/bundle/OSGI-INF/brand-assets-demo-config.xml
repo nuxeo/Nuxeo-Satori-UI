@@ -6,8 +6,10 @@
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
     <!-- Version 2 layouts sit where version 1's do (docs/business-apps/layout-v2.md, section 1).
          An asset holds a file, and has the picture schema, so its record page shows its picture
-         views first, under its banners. A product and a shot hold no file. -->
+         views first, under its banners. A video asset has the video schema, so its record page
+         shows its player, its facts and its storyboard first. A product and a shot hold no file. -->
     <layout type="AcmeAsset" mode="view" src="agentic-ui-config/layouts/AcmeAsset/view.layout.json" />
+    <layout type="AcmeVideo" mode="view" src="agentic-ui-config/layouts/AcmeVideo/view.layout.json" />
     <layout type="AcmeProduct" mode="view" src="agentic-ui-config/layouts/AcmeProduct/view.layout.json" />
     <layout type="AcmeShot" mode="view" src="agentic-ui-config/layouts/AcmeShot/view.layout.json" />
   </extension>

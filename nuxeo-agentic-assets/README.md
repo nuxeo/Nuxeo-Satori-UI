@@ -157,6 +157,18 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
 - **Publishing and share links** are the rest of the plan's rights and sharing add-on: not built.
 - **Regions, embargoes and the asset's lifecycle state,** which the prototype also weighs, are not
   read: the kit's stand-in model has regions as free text and no asset lifecycle.
+- **A video's transcoded files by their conversion's name, at their place.** A transcoded video
+  asked for through `@rendition/<name>` is decided by that name, as a policy lists it. The same
+  file at `vid:transcodedVideos/<n>/content`, through `@blob`, `/nxfile/` or `@preview`, is named by
+  its place only, as any other blob is: unlike `picture:views/<n>/content`, whose title names the
+  view, nothing maps a place to its conversion's `vid:transcodedVideos/<n>/name`. Nuxeo LTS 2025
+  appends each conversion there as it finishes, two at a time on the `videoConversion` queue, and
+  moves a re-made one to the end, so a place names no particular conversion; a policy that lists
+  places ties a channel to whichever ended up there. The brand kit lists none, so those places are
+  refused to everyone, and its storyboard frames, `vid:storyboard/<n>/content`, by place, nine of
+  them. The video operations of `nuxeo-platform-video` (`Video.Slice`, `Video.SliceInParts`,
+  `Video.Concat`, `Video.AddWatermark`, `Video.ExtractClosedCaptions`) return a document's video
+  without the download service, as the other operations above do.
 
 ## The policy
 
@@ -216,13 +228,16 @@ runtime: documents are proxies that answer only what the code reads.
 | `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets |
 | `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                    |
 | `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                 |
+| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided, and what is refused by place                              |
 | `BundleTest`                   | The manifest's components, their classes, and the package's version                                                                      |
 
 Every guard was seen failing: each of 28 breakages, one at a time (a use not listed let through,
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
 print view given another channel, a version read by its own fields, a container's renditions
 served, a nested collection not looked for, a proxy's live fields written, and the others), turned
-the tests red, and the build unbroken was green. **What the tests cannot reach:** the privileged
+the tests red, and the build unbroken was green. `KitVideoPolicyTest`, added with the kit's videos
+and with no change to the add-on's code, went red with the kit's `MP4 480p` given the Print channel
+and with a transcoded video listed by its place. **What the tests cannot reach:** the privileged
 lookup of a version's live document and the container query run against fakes here; the query's
 text is held exactly, but neither has run on a repository.
 
@@ -234,7 +249,7 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 **Not run yet.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. `nuxeoctl
 mp-install` refuses while the server runs, and the server is the container's main process, so a
 one-off script installs it when the container next starts, as the kits' READMEs do. Install the
-add-on with the brand assets kit 0.2.1, which depends on it, in one restart.
+add-on with the brand assets kit 0.2.2, which depends on it, in one restart.
 
 **1. Build both,** from the repository's root:
 
@@ -253,11 +268,11 @@ docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.1.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.2.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.1.0.zip /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.1.0.zip /tmp/brand-assets-demo-0.2.2.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash

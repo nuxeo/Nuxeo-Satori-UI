@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!-- The kit's rights policy for its videos, for nuxeo-agentic-assets: which channel covers each
+     use of an AcmeVideo, as the prototype's video renditions table says, on the stand-in model's
+     fields. The original is the master, for print; the web cut is the platform's transcoded
+     videos, for e-commerce; the still frames Nuxeo takes from it are previews. The server refuses
+     a use whose channel the asset's acmeasset:channels does not hold, or any but a preview once
+     the day in dc:expired has passed, and any use not listed here.
+
+     A component of its own, beside the pictures' (brand-assets-demo-rights.xml), so that each can
+     be replaced alone. -->
+<component name="nuxeo.config.brand-assets-demo.video-rights">
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.agentic.assets.rights" point="policies">
+    <policy type="AcmeVideo">
+      <rightsEnd xpath="dc:expired" />
+      <channels xpath="acmeasset:channels" />
+      <!-- The original file, as the prototype's "Original": print. -->
+      <original channel="Print" />
+      <!-- The transcoded videos, by their renditions' names: Nuxeo LTS 2025's automatic video
+           conversions, the web cut. The asset page asks for them so, through @rendition. Their
+           files at vid:transcodedVideos/<n>/content are not listed, so they are refused there to
+           everyone: a place names no conversion, since Nuxeo appends each one as it finishes, and
+           a channel listed by place would cover whichever conversion ended up there. -->
+      <rendition name="MP4 480p" channel="E-commerce" />
+      <rendition name="WebM 480p" channel="E-commerce" />
+      <!-- The still frames: the poster views Nuxeo makes from the video, the thumbnail the lists
+           show, and the storyboard's frames, by place, as many as Nuxeo LTS 2025 makes: 9. -->
+      <view name="Small" preview="true" />
+      <view name="StaticPlayerView" preview="true" />
+      <rendition name="thumbnail" preview="true" />
+      <blob xpath="vid:storyboard/0/content" preview="true" />
+      <blob xpath="vid:storyboard/1/content" preview="true" />
+      <blob xpath="vid:storyboard/2/content" preview="true" />
+      <blob xpath="vid:storyboard/3/content" preview="true" />
+      <blob xpath="vid:storyboard/4/content" preview="true" />
+      <blob xpath="vid:storyboard/5/content" preview="true" />
+      <blob xpath="vid:storyboard/6/content" preview="true" />
+      <blob xpath="vid:storyboard/7/content" preview="true" />
+      <blob xpath="vid:storyboard/8/content" preview="true" />
+    </policy>
+  </extension>
+
+</component>

@@ -1,10 +1,10 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.1 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.2 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
-no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
-downloaded.
+no real brand, product, studio or person. The pictures are drawn by the seed, and the two videos
+generated from a test pattern, not photographed, filmed or downloaded.
 
 ## The short version
 
@@ -13,7 +13,11 @@ downloaded.
   while its rights end within 30 days, one once they have ended
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), "Banners"). Its rights end on
   `dc:expired`.
-- **Rights the server enforces:** the kit's rights policy for `AcmeAsset`, which the assets
+- **An asset page for videos, from 0.2.2:** a video is an asset of the kit's own type,
+  `AcmeVideo`, which extends Video, so its record page shows its player, the facts Nuxeo read of
+  it and its storyboard first, under the same banners (below, "The videos"). The player plays the
+  server's transcoded web cut where it made one, else the original.
+- **Rights the server enforces:** the kit's rights policies for `AcmeAsset` and `AcmeVideo`, which the assets
   module's server add-on, [`nuxeo-agentic-assets`](../../../nuxeo-agentic-assets/README.md),
   enforces for every user at the platform's download endpoints: a print view or rendition refused to an asset whose channels hold no
   Print, every use but a preview refused once its rights have ended, and the server's reason on
@@ -25,28 +29,30 @@ downloaded.
   own: [`scripts/beta-harness/steps/brand-assets-review.mjs`](../../../scripts/beta-harness/steps/brand-assets-review.mjs).
 - **A product page:** a product's details, its shots, and the shots its shot list still misses,
   each a related list over a page provider.
-- **Two queues, a menu and labels:** the asset library, with three facets from its page provider's
-  aggregates (Rights, Shot and Product), and the products.
+- **Two queues, a menu and labels:** the asset library, pictures and videos, with four facets
+  from its page provider's aggregates (Rights, Shot, Product and Type), and the products.
 - **A stand-in model,** until a brand team's own arrives: the types, schemas and page providers
   those files name. It is fictional, and replaced whole when theirs comes.
 - **A performance budget at 100,000 assets,** for the library and the asset page, checked against
   a stand-in for the server rather than a seeded one:
   [performance-budget.md](../../../docs/business-apps/performance-budget.md), and
   `npm run beta:asset-performance`. It does not measure the server's own query time.
-- **A seed script** writes two products, six pictures and the products' shot list into the kit's
-  own workspace, and nowhere else. Run it twice and nothing is added the second time. With
+- **A seed script** writes two products, six pictures, two videos and the products' shot list into
+  the kit's own workspace, and nowhere else. Run it twice and nothing is added the second time. With
   `--preview`, before the package is installed, it writes the six pictures as the platform's own
   `Picture`, for a look at the asset page in dev mode.
-- **The demo script,** as two steps files of the beta harness:
-  [`brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs), and the
+- **The demo script,** as steps files of the beta harness:
+  [`brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs), the
   plan's demo step 2,
-  [`brand-assets-rights.mjs`](../../../scripts/beta-harness/steps/brand-assets-rights.mjs).
+  [`brand-assets-rights.mjs`](../../../scripts/beta-harness/steps/brand-assets-rights.mjs), and
+  the videos, [`brand-assets-video.mjs`](../../../scripts/beta-harness/steps/brand-assets-video.mjs).
 - **On no shared server.** The package is built and checked by the pipeline. When its first
   checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
-  there; 0.1.1 and 0.2.0 are installed nowhere. The product page, the queues and the demo script have not run
-  on a shared server.
+  there; 0.2.0 is installed there with the add-on, by its install log; 0.1.1, 0.2.1 and 0.2.2 are
+  installed nowhere, so no video page has run on a server. The product page, the queues and the
+  demo script have not run on a shared server.
 
 ## What is in it
 
@@ -56,15 +62,18 @@ downloaded.
 | `bundle/agentic-ui-config/layouts/AcmeAsset/view.layout.json`   | The asset page: two rights banners, the picture as a review, the asset, its rights and its history |
 | `bundle/agentic-ui-config/layouts/AcmeProduct/view.layout.json` | The product page: the product, its missing shots and its shots                                     |
 | `bundle/agentic-ui-config/layouts/AcmeShot/view.layout.json`    | A shot of the shot list, which a missing shot's row opens                                          |
-| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, the rights that end soonest first, with three facets                            |
+| `bundle/agentic-ui-config/layouts/AcmeVideo/view.layout.json`   | The video page: the same banners and cards, under the video, its facts and storyboard              |
+| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, pictures and videos, the rights that end soonest first, with four facets        |
 | `bundle/agentic-ui-config/queues/products.json`                 | The products, the next launch first                                                                |
 | `bundle/agentic-ui-config/navigation.json`                      | The menu: the two queues                                                                           |
 | `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels                     |
-| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                                       |
+| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the four layouts and the app                                        |
 | `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                 |
 | `bundle/OSGI-INF/brand-assets-demo-rights.xml`                  | The rights policy for `AcmeAsset`, which `nuxeo-agentic-assets` enforces                           |
+| `bundle/OSGI-INF/brand-assets-demo-video-rights.xml`            | The rights policy for `AcmeVideo`, which `nuxeo-agentic-assets` enforces                           |
 | `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                   |
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                    |
+| `demo/videos/*.webm`                                            | The two videos, a few kilobytes each, generated (below, "The videos"). Not packaged                |
 | `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged                    |
 | `package/package.xml`                                           | The Marketplace package: name, version, and what it depends on                                     |
 | `build.mjs`                                                     | Version 1's builder: the generator's, byte for byte                                                |
@@ -110,24 +119,88 @@ asked of the add-on's `assetRights` enricher after the 403. No view is hidden or
 asked for, and the server decides. The Annotations tab's viewer asks for the original, which the
 server refuses on assets 503 and 505.
 
+## The videos
+
+From 0.2.2, a video is an asset with its own page, as a picture is: an `AcmeVideo`, which extends
+the platform's `Video`, with the same `acmeasset` schema as a picture asset, so that the library
+lists both with the same columns and facets.
+
+- **Its page,** `layouts/AcmeVideo/view.layout.json`, has a picture asset's banners and cards, the
+  video's card headed "Video", and no review: a review is drawn on a picture, and the pipeline
+  refuses one for a type with the `video` schema. Above the cards, the record page draws the
+  video's player, the facts Nuxeo read of it and its storyboard, for any record with the `video`
+  schema ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11, "A video's record
+  page shows its player first"). That is platform code, generic, and not this kit's.
+- **What it plays:** the server's transcoded videos, the platform's automatic `MP4 480p` and
+  `WebM 480p`, where it made them, else the original. Each file is fetched through the app and
+  played from a blob URL, a transcoded one asked for by its rendition's name.
+
+**Its rights** are `bundle/OSGI-INF/brand-assets-demo-video-rights.xml`, a component of its own
+beside the pictures', as the prototype's video renditions table has them:
+
+| Use                                                                                         | Covered by |
+| ------------------------------------------------------------------------------------------- | ---------- |
+| The original file (`file:content`): the master                                              | Print      |
+| The `MP4 480p` and `WebM 480p` renditions: the web cut                                      | E-commerce |
+| `Small` and `StaticPlayerView`, the frames Nuxeo takes from it, and the `thumbnail`         | A preview  |
+| `vid:storyboard/0/content` to `vid:storyboard/8/content`, the storyboard's nine frames      | A preview  |
+| A transcoded video's file at its place, `vid:transcodedVideos/<n>/content`, or another file | Not listed |
+
+A transcoded video is listed by its rendition's name only. Nuxeo appends each conversion to
+`vid:transcodedVideos` as it finishes, two at a time, so a place names no particular one, and
+`nuxeo-agentic-assets` names a file there by its place, not by its conversion's name, as it names a
+picture view by its title. A channel listed by place would cover whichever conversion ended up
+there; listing none refuses them there to everyone, and the page asks for them by name, through
+`@rendition`, where the policy decides. A storyboard frame past the ninth, which a server
+configured for more makes, is refused too. `nuxeo-agentic-assets`'s `KitVideoPolicyTest` reads
+this file and holds each of these decisions.
+
+- **The seeded videos:** asset 511, _Into the Hills, campaign film_, 12 seconds, holds E-commerce
+  and Social, so its original is refused and its web cut served; asset 512, _Trailhead Rain
+  Jacket, Moss, turntable_, 4 seconds, is cleared everywhere. Nuxeo makes a storyboard for a video
+  of 10 seconds or more, so 511 has one where the server transcodes, and 512 never does.
+- **The files,** `demo/videos/ast-511.webm` and `ast-512.webm`, 4,762 and 1,978 bytes, VP8 in WebM
+  with no sound, were generated by ffmpeg 8.1.2 from its own test sources, not filmed or
+  downloaded, with this command for 511, and the same with `size=90x120`, `duration=4`, the Moss
+  colours `0xd6e2cd` and `0x4a663e`, a 40 by 70 box moving as `25+12*sin(t*3)` and no ground, for 512. The same ffmpeg writes the same bytes again:
+
+```bash
+ffmpeg -f lavfi -i "color=c=0xf6dec4:size=160x90:rate=5:duration=12[bg];color=c=0xb05c28:size=30x28:rate=5[box];[bg][box]overlay=x='8+t*9':y=46:shortest=1,drawbox=x=0:y=74:w=160:h=16:color=0x8a4a22:t=fill" -c:v libvpx -b:v 8k -crf 50 -qmin 20 -qmax 63 -g 60 -auto-alt-ref 0 -an -map_metadata -1 -fflags +bitexact -flags +bitexact ast-511.webm
+```
+
+- **When the server cannot transcode.** Nuxeo reads a video's facts with ffprobe, and transcodes
+  it and makes its storyboard with ffmpeg. The local Nuxeo has neither: `docker exec nuxeo which
+ffmpeg` finds none, and its log says at each start that `ffmpeg` and `ffprobe` are not available,
+  so `ffmpeg-info`, `ffmpeg-tomp4`, `ffmpeg-towebm` and `ffmpeg-screenshot` are not. There, the
+  seed writes the videos all the same, checks that each is a Video to Nuxeo, and says that the
+  server read no facts, transcoded nothing and made no storyboard; each page plays the original,
+  and says the server has read none of its facts and made no storyboard. So on such a server asset
+  511's page shows the server's refusal of its original, with its reason, and plays nothing, and
+  asset 512's plays its original.
+
 ## The stand-in model
 
 A brand team's model has not arrived. Until one does, the package carries a fictional one, in a
 component of its own so that it can be replaced whole: `brand-assets-demo-model.xml` and
 `bundle/schemas/`.
 
-| Type              | Schema (prefix)                    | What it holds                                                                                                                                                    |
-| ----------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AcmeAsset`       | `acmeasset`, on a Picture          | `product` (a style number), `colorway`, `shot`, `campaign`, `credit`, `channels`, `regions`. Its rights end on `dc:expired`, and `dc:rights` says who holds them |
-| `AcmeProduct`     | `acmeproduct`                      | `style`, such as `AO-3101`, `season`, `colorways`, `channels`, `launch`. Its name is its `dc:title`                                                              |
-| `AcmeShot`        | `acmeshot`                         | One shot a product needs: `product` (its style), `colorway`, `shot`, `due`, and `asset`, the id of the asset that fills it, empty while it is missing            |
-| `AcmeAssetSearch` | `acme_asset_search` (`acmesearch`) | The library's search document, never saved: `acme_rights_agg`, `acme_shot_agg` and `acme_product_agg`, the facets the library sends back. Hidden                 |
+| Type              | Schema (prefix)                    | What it holds                                                                                                                                                     |
+| ----------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AcmeAsset`       | `acmeasset`, on a Picture          | `product` (a style number), `colorway`, `shot`, `campaign`, `credit`, `channels`, `regions`. Its rights end on `dc:expired`, and `dc:rights` says who holds them  |
+| `AcmeVideo`       | `acmeasset`, on a Video            | The same as a picture asset, on a video: Nuxeo reads its facts, transcodes it and makes its storyboard, with ffmpeg                                               |
+| `AcmeProduct`     | `acmeproduct`                      | `style`, such as `AO-3101`, `season`, `colorways`, `channels`, `launch`. Its name is its `dc:title`                                                               |
+| `AcmeShot`        | `acmeshot`                         | One shot a product needs: `product` (its style), `colorway`, `shot`, `due`, and `asset`, the id of the asset that fills it, empty while it is missing             |
+| `AcmeAssetSearch` | `acme_asset_search` (`acmesearch`) | The library's search document, never saved: `acme_rights_agg`, `acme_shot_agg`, `acme_product_agg` and `acme_type_agg`, the facets the library sends back. Hidden |
 
 - **An asset is a Picture.** `AcmeAsset` extends `Picture`, so it has Picture's schemas and its
   `Picture` facet: Nuxeo makes its picture views as it does a Picture's, and the document page asks
   for the record again while they are being made, as it does for any record with that facet
   (layout-v2.md, section 11). A type of its own, not the platform's `Picture`, so that the kit's
   layout is drawn for the kit's assets only.
+- **A video asset is a Video.** `AcmeVideo` extends `Video`, so it has Video's schemas and its
+  `Video` facet, which declares the `picture` schema too, for its still frames: Nuxeo reads,
+  transcodes and storyboards it as it does a Video, where it has ffmpeg, and its record page shows
+  its player, not its picture.
 - **Its rights end on `dc:expired`,** Dublin Core's day after which a document is no longer to be
   used. The asset page's two banners read it through `app.rules.datePassed` and
   `app.rules.dateWithin`, the app's own list of expired documents reads it
@@ -148,12 +221,12 @@ component of its own so that it can be replaced whole: `brand-assets-demo-model.
   model's on a shared server, as plain names such as `Asset` would. A brand team's model sets its
   own.
 
-| Page provider                | Given                    | Returns                                                                                                            |
-| ---------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `acme_products`              | Nothing                  | Every product, the next launch first                                                                               |
-| `acme_product_assets`        | A product's style number | The product's assets, by title                                                                                     |
-| `acme_product_missing_shots` | A product's style number | The product's shots that no asset fills, the soonest due first                                                     |
-| `acme_asset_library`         | Nothing                  | Every asset, the rights that end soonest first. Aggregates: `acme_rights_agg`, `acme_shot_agg`, `acme_product_agg` |
+| Page provider                | Given                    | Returns                                                                                                                                                   |
+| ---------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `acme_products`              | Nothing                  | Every product, the next launch first                                                                                                                      |
+| `acme_product_assets`        | A product's style number | The product's assets, by title                                                                                                                            |
+| `acme_product_missing_shots` | A product's style number | The product's shots that no asset fills, the soonest due first                                                                                            |
+| `acme_asset_library`         | Nothing                  | Every asset, a picture or a video, the rights that end soonest first. Aggregates: `acme_rights_agg`, `acme_shot_agg`, `acme_product_agg`, `acme_type_agg` |
 
 Each binds what it is given as a quoted literal, and leaves out versions, proxies and trashed
 records.
@@ -169,6 +242,12 @@ records.
   date is in no bucket.
 - **The library is sorted by `dc:expired`,** not by title: the index maps `dc:title` as analysed
   text, which sorts by one of each title's words.
+- **The Type facet is a `terms` aggregate** over `ecm:primaryType`, which the index maps as a
+  keyword; it was run against the local OpenSearch, read only. A bucket shows its key as the server
+  returns it, so its buckets read `AcmeAsset`, the pictures, and `AcmeVideo`: a facet's bucket has
+  no label of its own yet (`libs/shared/queues/README.md`).
+- **The product page's shots are pictures:** `acme_product_assets` still asks for `AcmeAsset`
+  records only, so a product's video is in the library, not among its shots.
 
 ## Building it
 
@@ -176,7 +255,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.1.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.2.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -218,11 +297,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.2.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.2.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -261,9 +340,9 @@ export NUXEO_USER=<user> NUXEO_PASS=<password>
 node business-apps/packages/brand-assets-demo/demo/seed.mjs
 ```
 
-- **What it writes:** two products, six pictures and eight shots, under
-  `/default-domain/workspaces/acme-brand-assets`, in the folders `products`, `assets` and `shots`.
-  Two of the shots are missing, one per product.
+- **What it writes:** two products, six pictures, two videos and eight shots, under
+  `/default-domain/workspaces/acme-brand-assets`, in the folders `products`, `assets`, which holds
+  the pictures and the videos, and `shots`. Two of the shots are missing, one per product.
 - **Only there, and only its own.** Every document it writes carries `data.mjs`'s marker as its
   `dc:source`. Before anything is written it reads every place it would write, and a document there
   without the marker, or of another type, stops the run with exit 2, untouched. It creates no user
@@ -272,13 +351,18 @@ node business-apps/packages/brand-assets-demo/demo/seed.mjs
   warning banner; one's ended 10 days ago; the others are clear. Run it again on the day of a demo.
 - **Safe to run twice.** A record already there is put back to `data.mjs`'s values, dates
   included, and a trashed one at its place is restored. A picture already holding the same bytes is
-  not uploaded again. With `nuxeo-agentic-assets` installed, the kit's own rights refuse the
-  originals of assets 503 and 505 to every user, the seed's included: it cannot read them back to
-  compare, so it says so and uploads those two again, and Nuxeo makes their views again.
+  not uploaded again, nor a video. With `nuxeo-agentic-assets` installed, the kit's own rights
+  refuse the originals of assets 503, 505 and 511 to every user, the seed's included: it cannot
+  read them back to compare, so it says so and uploads those three again, and Nuxeo makes their
+  views again, and transcodes the video again where it can.
 - **It checks what it wrote:** last, that Nuxeo made each picture's views, which proves
-  `AcmeAsset` is a Picture to it, and that the four page providers return what it seeded, the
-  library's aggregates included. Views and the index come a moment after the repository, so the
-  checks are asked again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
+  `AcmeAsset` is a Picture to it, that each video has the `Video` facet, which proves `AcmeVideo`
+  is a Video to it, and that the four page providers return what it seeded, the library's
+  aggregates included. Views and the index come a moment after the repository, so the checks are
+  asked again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
+- **It says what the server made of the videos,** and does not check it: their facts, their
+  transcoded videos and their storyboards, which Nuxeo makes with ffmpeg a while after the upload,
+  or, on a server without it, none (above, "The videos").
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default.
   `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met: no
   credentials, no server, credentials refused, the package not installed, no
@@ -299,7 +383,7 @@ which `npm run config:dev` writes. This serves the kit's layouts, menu, queues a
 from the repository's root:
 
 ```bash
-C=business-apps/packages/brand-assets-demo/bundle/agentic-ui-config && npm run config:dev -- --layout AcmeAsset/view=$C/layouts/AcmeAsset/view.layout.json --layout AcmeProduct/view=$C/layouts/AcmeProduct/view.layout.json --layout AcmeShot/view=$C/layouts/AcmeShot/view.layout.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/library.json --queue $C/queues/products.json
+C=business-apps/packages/brand-assets-demo/bundle/agentic-ui-config && npm run config:dev -- --layout AcmeAsset/view=$C/layouts/AcmeAsset/view.layout.json --layout AcmeVideo/view=$C/layouts/AcmeVideo/view.layout.json --layout AcmeProduct/view=$C/layouts/AcmeProduct/view.layout.json --layout AcmeShot/view=$C/layouts/AcmeShot/view.layout.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/library.json --queue $C/queues/products.json
 ```
 
 Then start the dev server, or restart it: it serves only the files that were there when it
@@ -377,7 +461,34 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-de
 `APP_URL` names the dev server if it is not on `http://localhost:4200`. The evidence goes to
 `~/Desktop/agentic-ui-evidence/beta/brand-assets-demo/`, outside the repository. **Not run end to
 end:** on the local server, before it had the package, it stopped at its first precondition, with
-exit 2, as it should. This README records no run since 0.1.0 was installed there.
+exit 2, as it should. This README records no run since 0.1.0 was installed there. From 0.2.2 the
+library it counts holds the two videos too.
+
+### The videos
+
+As a steps file of its own,
+[`brand-assets-video.mjs`](../../../scripts/beta-harness/steps/brand-assets-video.mjs), which needs
+the kit 0.2.2 and `nuxeo-agentic-assets` installed, and reads what the server made of the videos
+to check the branch it is on, and says which:
+
+1. the cleared video's page: its player plays it from a blob URL, the transcoded web cut where the
+   server made one, else the original, and the browser reads it as a video of its length; its
+   facts, or the page's word that the server read none; its storyboard, whose last frame moves the
+   player, or the page's word that the server made none;
+2. the video with no Print channel: its web cut plays where the server transcoded it; where it did
+   not, its original is refused with 403, and the page says the server's reason;
+3. the REST API called directly: that original refused through `@blob` and `/nxfile/`, the cleared
+   video's served; where the server transcoded them, each video's transcoded file refused at its
+   place in `vid:transcodedVideos` and served by its name through `@rendition`;
+4. the library: both videos listed among the pictures, the Type facet counting them, and narrowed
+   to them on the server.
+
+```bash
+NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-video
+```
+
+**Not run:** no server has the kit 0.2.2. On the local Nuxeo, which has 0.2.0, it stops at its
+first precondition, the `AcmeVideo` type, with exit 2.
 
 ### The review: phase 5's demo step 4
 
@@ -424,10 +535,20 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   `kit-schema-labels.spec.ts` in `libs/shared/document-layouts` fails a kit that leaves one out.
   Held to 0.2.0 on the staging branch with `--previous`: three labels added, a patch. Not seen on a
   server yet.
-- **The rights policy,** `brand-assets-demo-rights.xml`, is read by `nuxeo-agentic-assets`'s own
-  tests, through XMap as the runtime reads a contribution, and decides the demo's uses as this
-  README's table says; giving `OriginalJpeg` another channel turns them red.
-- **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in.
+- **0.2.2 adds the videos.** Held to 0.2.1 on the staging branch with `--previous`, and its four
+  layouts to its content model: two labels and a layout added, the library changed, and the
+  manifest, the configuration and stand-in model, the search schema and the new video rights
+  component to judge, a patch; the upgrade check keeps every configuration. `content-model.json`'s
+  `AcmeVideo` is the local Nuxeo 2025.10.18's `Video`, exported read-only with
+  `npm run app-package:model`, its facets and schemas, `video` and `files` among them, as it
+  answered them, with `acmeasset` added. Not installed on a server: no video page has run on one.
+- **The rights policies,** `brand-assets-demo-rights.xml` and `brand-assets-demo-video-rights.xml`,
+  are read by `nuxeo-agentic-assets`'s own tests, through XMap as the runtime reads a
+  contribution, and decide the demo's uses as this README's tables say; giving `OriginalJpeg`
+  another channel turns them red, and so does giving `MP4 480p` the Print channel, or listing a
+  transcoded video by its place.
+- **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in: 107 of them, the
+  videos' among them, each of those seen failing with its guard broken on purpose.
 - **On the local Nuxeo 2025.10.18, before it had the package:** the seed stops with exit 2 and writes
   nothing; `--preview` wrote the six pictures into the kit's workspace, twice, the second time
   updating and uploading nothing, and Nuxeo made each one's views. In headless Chromium, under the
@@ -440,15 +561,24 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1 and 0.2.0 are not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
-  the review was seen with its layout from `config:dev`, and the product page, the queues, the full
-  seed and the demo have not run on a shared server.
+- **Versions 0.1.1, 0.2.1 and 0.2.2 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a
+  local server, not a shared one: the review was seen with its layout from `config:dev`, and the
+  product page, the queues, the full seed and the demo have not run on a shared server. No video
+  page has run on a server, and the videos' steps file has not run past its first precondition.
+- **The videos are not transcoded on the local server,** which has no ffmpeg: there a video's page
+  plays its original, reads no facts and shows no storyboard, and the transcoded web cut, its
+  refusal by place and its service by name, and the storyboard have not been seen on a server.
+- **A video is fetched whole before it plays:** there is no streaming, so a long original is a long
+  wait, and the page offers no choice among a video's transcoded files: it plays the first the
+  browser can.
+- **A transcoded video's rights are by name only:** at its place in `vid:transcodedVideos` it is
+  refused to everyone, and a storyboard frame past the ninth too (above, "The videos").
 - **A reference shows its stored value:** a shot's asset is its document id, until the
   `document-link` widget has its lookup, and an asset's product is its style number, not a link to
   the product.
 - **The library is a list, not a grid of previews,** as the prototype draws it: a queue's cells are
   one line of text.
-- **No home, no video and no share links:** each is out of this version's scope. A
+- **No home and no share links:** each is out of this version's scope. A
   banner is not a control: refusing a download whose rights have ended is the server's, which
   `nuxeo-agentic-assets` does at the platform's download endpoints, not installed yet, and waiting
   for its security review.
