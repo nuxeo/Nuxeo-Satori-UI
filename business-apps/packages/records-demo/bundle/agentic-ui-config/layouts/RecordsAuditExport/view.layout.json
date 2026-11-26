@@ -51,13 +51,7 @@
         {
           "field": "rexp:state",
           "widget": "status-badge",
-          "parameters": {
-            "tones": {
-              "pending": "info",
-              "done": "positive",
-              "failed": "negative"
-            }
-          }
+          "parameters": { "tones": { "pending": "info", "done": "positive", "failed": "negative" } }
         },
         { "field": "rexp:generatedAt", "widget": "date", "parameters": { "format": "long" } },
         { "field": "rexp:entryCount", "widget": "number" },

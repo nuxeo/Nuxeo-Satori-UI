@@ -10,13 +10,7 @@
         "rfile:reference",
         "rfile:series",
         "rfile:office",
-        {
-          "field": "rfile:closed",
-          "widget": "date",
-          "parameters": {
-            "format": "long"
-          }
-        }
+        { "field": "rfile:closed", "widget": "date", "parameters": { "format": "long" } }
       ]
     },
     {
@@ -52,14 +46,8 @@
       "id": "reads",
       "labelKey": "records.card.recordsFile.reads",
       "span": 2,
-      "visibleWhen": {
-        "type": "app.rules.inGroup",
-        "parameters": ["records-managers"]
-      },
-      "timeline": {
-        "events": ["recordViewed", "download"],
-        "pageSize": 20
-      }
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["records-managers"] },
+      "timeline": { "events": ["recordViewed", "download"], "pageSize": 20 }
     }
   ]
 }
