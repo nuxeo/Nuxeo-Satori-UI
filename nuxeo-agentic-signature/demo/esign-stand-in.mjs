@@ -44,10 +44,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The hex HMAC-SHA256 of `<t>.<body>` under the secret: what a callback's signature is. */
 export function sign(secret, time, body) {
-  return createHmac('sha256', secret)
-    .update(`${time}.`)
-    .update(body)
-    .digest('hex');
+  return createHmac('sha256', secret).update(`${time}.`).update(body).digest('hex');
 }
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -67,7 +64,14 @@ function same(a, b) {
  * The service, not started: `apiKey`, `secret`, `callbackUrl`, and for the selftest a `log`, a
  * clock `now` (milliseconds) and the `post` callbacks are sent with.
  */
-export function createServer({ apiKey, secret, callbackUrl, log = console.log, now = Date.now, post = postJson }) {
+export function createServer({
+  apiKey,
+  secret,
+  callbackUrl,
+  log = console.log,
+  now = Date.now,
+  post = postJson,
+}) {
   if (!apiKey || !apiKey.trim()) throw new Error('STANDIN_API_KEY is required');
   if (!secret || secret.length < MIN_SECRET)
     throw new Error(`STANDIN_CALLBACK_SECRET is required, ${MIN_SECRET} characters at least`);
@@ -141,7 +145,8 @@ export function createServer({ apiKey, secret, callbackUrl, log = console.log, n
       response.end(text);
       log(`${method} ${path} ${status}`);
     };
-    if (!same(request.headers['authorization'] ?? '', `Bearer ${apiKey}`)) return answer(401, { error: 'unauthorized' });
+    if (!same(request.headers['authorization'] ?? '', `Bearer ${apiKey}`))
+      return answer(401, { error: 'unauthorized' });
     if (body === null) return answer(413, { error: 'too large' });
     if (method === 'POST' && path === '/envelopes') {
       let sent;
@@ -152,14 +157,19 @@ export function createServer({ apiKey, secret, callbackUrl, log = console.log, n
       }
       const document = sent?.document ?? {};
       const signers = Array.isArray(sent?.signers) ? sent.signers : [];
-      const content = typeof document.content === 'string' ? Buffer.from(document.content, 'base64') : Buffer.alloc(0);
+      const content =
+        typeof document.content === 'string'
+          ? Buffer.from(document.content, 'base64')
+          : Buffer.alloc(0);
       if (
         content.length === 0 ||
         content.length > MAX_FILE ||
         document.sha256 !== sha256(content) ||
         signers.length < 1 ||
         signers.length > 10 ||
-        !signers.every((s) => typeof s?.name === 'string' && s.name.trim() && EMAIL.test(String(s?.email ?? '')))
+        !signers.every(
+          (s) => typeof s?.name === 'string' && s.name.trim() && EMAIL.test(String(s?.email ?? '')),
+        )
       )
         return answer(400, { error: 'not an envelope this service takes' });
       const id = `env_${randomBytes(9).toString('hex')}`;
@@ -186,7 +196,9 @@ export function createServer({ apiKey, secret, callbackUrl, log = console.log, n
     if (method === 'GET' && action === undefined)
       return answer(200, { id: envelope.id, status: envelope.status, subject: envelope.subject });
     if (method === 'GET' && action === 'result')
-      return envelope.status === 'signed' ? answer(200, result(envelope)) : answer(409, { error: envelope.status });
+      return envelope.status === 'signed'
+        ? answer(200, result(envelope))
+        : answer(409, { error: envelope.status });
     if (method === 'DELETE' && action === undefined) {
       if (envelope.status !== 'sent') return answer(409, { error: envelope.status });
       envelope.status = 'voided';
@@ -204,7 +216,11 @@ export function createServer({ apiKey, secret, callbackUrl, log = console.log, n
       }
       envelope.status = action === 'sign' ? 'signed' : 'declined';
       envelope.completedAt = now();
-      const sent = await callback(envelope, `envelope.${envelope.status}`, typeof reason === 'string' ? reason : undefined);
+      const sent = await callback(
+        envelope,
+        `envelope.${envelope.status}`,
+        typeof reason === 'string' ? reason : undefined,
+      );
       return answer(200, { envelope: envelope.id, status: envelope.status, callback: sent });
     }
     return answer(405, { error: 'method not allowed' });
@@ -257,7 +273,9 @@ async function main(args) {
   const host = option('--host', '127.0.0.1');
   const apiKey = process.env['STANDIN_API_KEY'] ?? '';
   if (!apiKey.trim()) {
-    console.error('STANDIN_API_KEY is required: the key the Nuxeo server sends. Make one up for the demo.');
+    console.error(
+      'STANDIN_API_KEY is required: the key the Nuxeo server sends. Make one up for the demo.',
+    );
     process.exit(2);
   }
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -274,7 +292,9 @@ async function main(args) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(args[0] === 'decline' && args[2] ? { reason: args.slice(2).join(' ') } : {}),
+      body: JSON.stringify(
+        args[0] === 'decline' && args[2] ? { reason: args.slice(2).join(' ') } : {},
+      ),
       redirect: 'manual',
     }).catch(() => null);
     if (!response) {
@@ -287,15 +307,20 @@ async function main(args) {
   }
   const secret = process.env['STANDIN_CALLBACK_SECRET'] ?? '';
   if (secret.length < MIN_SECRET) {
-    console.error(`STANDIN_CALLBACK_SECRET is required, ${MIN_SECRET} characters at least: the secret the Nuxeo server checks callbacks with.`);
+    console.error(
+      `STANDIN_CALLBACK_SECRET is required, ${MIN_SECRET} characters at least: the secret the Nuxeo server checks callbacks with.`,
+    );
     process.exit(2);
   }
   const callbackUrl =
-    process.env['NUXEO_CALLBACK_URL'] || 'http://localhost:8080/nuxeo/agentic-signature/callback/standin';
+    process.env['NUXEO_CALLBACK_URL'] ||
+    'http://localhost:8080/nuxeo/agentic-signature/callback/standin';
   const server = createServer({ apiKey, secret, callbackUrl });
   server.listen(port, host, () => {
     const { port: bound } = server.address();
-    console.log(`The stand-in e-signature service answers on http://${host}:${bound}/envelopes, and calls back ${callbackUrl}`);
+    console.log(
+      `The stand-in e-signature service answers on http://${host}:${bound}/envelopes, and calls back ${callbackUrl}`,
+    );
   });
 }
 

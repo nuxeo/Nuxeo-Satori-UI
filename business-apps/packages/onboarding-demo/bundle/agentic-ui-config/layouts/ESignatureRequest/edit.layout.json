@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "cancel",
+      "labelKey": "onboarding.card.eSignatureRequest.cancel",
+      "fields": [
+        {
+          "field": "sigreq:status",
+          "labelKey": "onboarding.field.cancelStatus",
+          "required": true,
+          "widget": "status-badge",
+          "parameters": { "tones": { "sent": "warning", "cancelled": "neutral" } },
+          "readOnlyWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "sigreq:status" }, "sent"] }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

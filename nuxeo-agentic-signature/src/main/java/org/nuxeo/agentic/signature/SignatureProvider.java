@@ -63,6 +63,17 @@ public interface SignatureProvider {
     /** The signed file and the provider's evidence, for an envelope its service says is signed. */
     SignedResult fetchSigned(String envelope);
 
+    /** Where an envelope is, as the provider's service says, asked with the server's credential. */
+    enum EnvelopeStatus {
+        OUT, SIGNED, DECLINED, VOIDED
+    }
+
+    /**
+     * An envelope's status, as its service says: so that a callback, even one signed with the
+     * secret, ends nothing the service does not confirm.
+     */
+    EnvelopeStatus status(String envelope);
+
     /** Void an envelope at the provider, for a request cancelled or never saved. */
     void cancel(String envelope);
 }

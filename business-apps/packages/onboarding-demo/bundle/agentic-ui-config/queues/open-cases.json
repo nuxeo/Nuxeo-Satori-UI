@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "onboarding.queue.open-cases",
+  "pageProvider": "onboarding_open_cases",
+  "columns": [
+    "onb:number",
+    { "field": "dc:title", "labelKey": "onboarding.field.caseTitle" },
+    "onb:customer",
+    {
+      "field": "onb:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Open": "info",
+          "KYC review": "warning",
+          "Awaiting signature": "warning",
+          "Approved": "positive",
+          "Declined": "negative"
+        }
+      }
+    },
+    {
+      "field": "onb:riskRating",
+      "widget": "status-badge",
+      "parameters": { "tones": { "Low": "positive", "Medium": "warning", "High": "negative" } }
+    },
+    { "field": "onb:openedOn", "widget": "relative-date" },
+    { "field": "onb:officer", "widget": "user" }
+  ],
+  "sort": [{ "field": "onb:openedOn", "order": "asc" }],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "onb_status_agg", "labelKey": "onboarding.facet.status" },
+    { "aggregate": "onb_riskRating_agg", "labelKey": "onboarding.facet.riskRating" }
+  ]
+}

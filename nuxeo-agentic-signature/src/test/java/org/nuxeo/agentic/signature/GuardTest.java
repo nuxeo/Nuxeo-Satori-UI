@@ -215,8 +215,10 @@ public class GuardTest {
         assertArrayEquals(PDF, Desk.bytes((Blob) Desk.stored(repository, caseId).getPropertyValue(
                 "files:files/0/file")));
         // Once it has ended, it may change.
-        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.declined",
-                text(Desk.stored(repository, requestId), Signatures.ENVELOPE), null));
+        String envelope = text(Desk.stored(repository, requestId), Signatures.ENVELOPE);
+        stub.declare(envelope, "declined");
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.declined", envelope,
+                null));
         Desk.inTransactionAs(repository, ALICE, s -> {
             DocumentModel record = s.getDocument(new IdRef(caseId));
             record.setPropertyValue("files:files/0/file", (Serializable) Desk.pdf("agreement-2.pdf", PDF));

@@ -251,6 +251,10 @@ final class CallbackEndpoint {
         if (event.outcome() == Outcome.SIGNED) {
             signed(system, providerId, provider, event, request);
         } else {
+            // A decline files nothing, and ends the request all the same: the service must say so too.
+            if (provider.status(event.envelope()) != SignatureProvider.EnvelopeStatus.DECLINED) {
+                throw new SignatureProviderException(SignatureProviderException.Kind.NOT_DECLINED);
+            }
             declined(system, event, request);
         }
         String recordId = text(request, DOCUMENT);

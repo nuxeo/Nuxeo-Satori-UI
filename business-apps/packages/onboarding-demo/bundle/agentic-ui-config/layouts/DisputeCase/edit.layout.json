@@ -1,0 +1,87 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "dispute",
+      "labelKey": "onboarding.card.disputeCase.dispute",
+      "fields": [
+        { "field": "dc:title", "labelKey": "onboarding.field.disputeTitle", "required": true },
+        { "field": "dsp:number", "required": true },
+        { "field": "dsp:customer", "required": true },
+        "dsp:account",
+        {
+          "field": "dsp:amount",
+          "required": true,
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "dsp:reason",
+          "required": true,
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Unauthorised": "negative",
+              "Not received": "warning",
+              "Duplicate": "info",
+              "Defective": "warning",
+              "Other": "neutral"
+            }
+          }
+        },
+        {
+          "field": "dsp:status",
+          "required": true,
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Open": "info",
+              "Investigating": "warning",
+              "Resolved for customer": "positive",
+              "Resolved for bank": "neutral",
+              "Closed": "neutral"
+            }
+          }
+        },
+        { "field": "dsp:analyst", "widget": "user" }
+      ]
+    },
+    {
+      "id": "dates",
+      "labelKey": "onboarding.card.disputeCase.dates",
+      "fields": [
+        "dsp:openedOn",
+        {
+          "field": "dsp:dueOn",
+          "checks": [
+            {
+              "type": "core.notBefore",
+              "parameters": [{ "field": "dsp:openedOn" }],
+              "labelKey": "onboarding.check.dueBeforeOpened"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resolution",
+      "labelKey": "onboarding.card.disputeCase.resolution",
+      "fields": [
+        {
+          "field": "dsp:resolution",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [
+              { "field": "dsp:status" },
+              "Resolved for customer",
+              "Resolved for bank",
+              "Closed"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

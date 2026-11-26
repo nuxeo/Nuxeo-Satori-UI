@@ -130,6 +130,7 @@ public class CallbackTest {
 
     @Test
     public void declinedEndsTheRequestWithTheReasonAndFilesNothing() {
+        stub.declare(envelope, "declined");
         assertEquals(CallbackEndpoint.RECEIVED,
                 Desk.callback(repository, "evt_1", "envelope.declined", envelope, "Wrong address\u0007 on page 2"));
         DocumentModel request = Desk.stored(repository, requestId);
@@ -141,9 +142,24 @@ public class CallbackTest {
         assertEquals(Signatures.DECLINED, text(record, Signatures.SGN_STATUS));
         assertArrayEquals(PDF, Desk.bytes((Blob) record.getPropertyValue("files:files/1/file")));
         assertEquals(List.of(), Desk.versions(repository, caseId));
-        assertEquals(List.of(), stub.requests);
+        // Confirmed with the service, with the server's key, and nothing fetched.
+        assertEquals(List.of("GET /envelopes/" + envelope), stub.requests);
         // No longer out: it may be sent again.
         Desk.send(repository, ALICE, caseId, "agreement.pdf");
+    }
+
+    /** Signed with the secret, and not what the service says: a decline needs the service's word too. */
+    @Test
+    public void aDeclineTheServiceDoesNotConfirmEndsNothing() {
+        unchanged(Desk.callback(repository, "evt_1", "envelope.declined", envelope, null),
+                CallbackEndpoint.PROVIDER_FAILED);
+        stub.declare(envelope, "signed");
+        unchanged(Desk.callback(repository, "evt_1", "envelope.declined", envelope, null),
+                CallbackEndpoint.PROVIDER_FAILED);
+        // Its id was not kept: once the service says so, the provider's retry ends it.
+        stub.declare(envelope, "declined");
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.callback(repository, "evt_1", "envelope.declined", envelope,
+                null));
     }
 
     @Test

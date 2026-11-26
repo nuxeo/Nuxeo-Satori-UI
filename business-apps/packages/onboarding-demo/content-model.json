@@ -1,0 +1,254 @@
+{
+  "doctypes": {
+    "OnboardingCase": {
+      "parent": "Document",
+      "facets": ["Versionable", "Signable"],
+      "schemas": [
+        "common",
+        "dublincore",
+        "files",
+        "onboarding",
+        "uid",
+        "onboarding_kyc",
+        "signable"
+      ]
+    },
+    "DisputeCase": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "files", "dispute"]
+    },
+    "ESignatureRequest": {
+      "parent": "Document",
+      "facets": ["SignatureRequest"],
+      "schemas": ["common", "dublincore", "signature_request"]
+    },
+    "OnboardingRegister": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore"]
+    },
+    "DisputeRegister": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore"]
+    }
+  },
+  "facets": [
+    {
+      "name": "Signable",
+      "schemas": [
+        {
+          "name": "signable",
+          "prefix": "sgn",
+          "@prefix": "sgn",
+          "fields": {
+            "status": "string",
+            "request": "string",
+            "signers": "string[]",
+            "sentAt": "date",
+            "completedAt": "date",
+            "file": "string",
+            "fileDigest": "string",
+            "evidence": "blob"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SignatureRequest",
+      "schemas": [
+        {
+          "name": "signature_request",
+          "prefix": "sigreq",
+          "@prefix": "sigreq",
+          "fields": {
+            "document": "string",
+            "fileName": "string",
+            "signers": {
+              "type": "complex[]",
+              "fields": {
+                "name": "string",
+                "email": "string"
+              }
+            },
+            "message": "string",
+            "status": "string",
+            "provider": "string",
+            "envelope": "string",
+            "file": "string",
+            "sentFileName": "string",
+            "sentDigest": "string",
+            "requestedBy": "string",
+            "requestedAt": "date",
+            "completedAt": "date",
+            "declineReason": "string",
+            "cancelledBy": "string",
+            "signedFile": "blob",
+            "signedDigest": "string",
+            "evidence": "blob",
+            "evidenceDigest": "string",
+            "signedVersion": "string",
+            "event": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Versionable",
+      "schemas": []
+    }
+  ],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "onboarding",
+      "prefix": "onb",
+      "@prefix": "onb",
+      "fields": {
+        "number": "string",
+        "customer": "string",
+        "customerType": "string",
+        "country": "string",
+        "product": "string",
+        "status": "string",
+        "riskRating": "string",
+        "openedOn": "date",
+        "officer": "string",
+        "notes": "string"
+      }
+    },
+    {
+      "name": "dispute",
+      "prefix": "dsp",
+      "@prefix": "dsp",
+      "fields": {
+        "number": "string",
+        "customer": "string",
+        "account": "string",
+        "amount": "double",
+        "reason": "string",
+        "status": "string",
+        "openedOn": "date",
+        "dueOn": "date",
+        "analyst": "string",
+        "resolution": "string"
+      }
+    },
+    {
+      "name": "uid",
+      "fields": {
+        "uid": "string",
+        "major_version": "long",
+        "minor_version": "long"
+      }
+    },
+    {
+      "name": "onboarding_kyc",
+      "prefix": "kyc",
+      "@prefix": "kyc",
+      "fields": {
+        "checklist": {
+          "type": "complex[]",
+          "fields": {
+            "item": "string",
+            "done": "boolean",
+            "doneBy": "string",
+            "doneOn": "date"
+          }
+        }
+      }
+    },
+    {
+      "name": "signable",
+      "prefix": "sgn",
+      "@prefix": "sgn",
+      "fields": {
+        "status": "string",
+        "request": "string",
+        "signers": "string[]",
+        "sentAt": "date",
+        "completedAt": "date",
+        "file": "string",
+        "fileDigest": "string",
+        "evidence": "blob"
+      }
+    },
+    {
+      "name": "signature_request",
+      "prefix": "sigreq",
+      "@prefix": "sigreq",
+      "fields": {
+        "document": "string",
+        "fileName": "string",
+        "signers": {
+          "type": "complex[]",
+          "fields": {
+            "name": "string",
+            "email": "string"
+          }
+        },
+        "message": "string",
+        "status": "string",
+        "provider": "string",
+        "envelope": "string",
+        "file": "string",
+        "sentFileName": "string",
+        "sentDigest": "string",
+        "requestedBy": "string",
+        "requestedAt": "date",
+        "completedAt": "date",
+        "declineReason": "string",
+        "cancelledBy": "string",
+        "signedFile": "blob",
+        "signedDigest": "string",
+        "evidence": "blob",
+        "evidenceDigest": "string",
+        "signedVersion": "string",
+        "event": "string"
+      }
+    }
+  ]
+}

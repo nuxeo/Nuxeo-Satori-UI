@@ -1,0 +1,116 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "overdue",
+      "tone": "negative",
+      "labelKey": "onboarding.banner.dispute.overdue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.datePassed", "parameters": [{ "field": "dsp:dueOn" }] },
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dsp:status" }, "Open", "Investigating"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "due-soon",
+      "tone": "warning",
+      "labelKey": "onboarding.banner.dispute.dueSoon",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.dateWithin", "parameters": [{ "field": "dsp:dueOn" }, 5] },
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dsp:status" }, "Open", "Investigating"]
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "dispute",
+      "labelKey": "onboarding.card.disputeCase.dispute",
+      "fields": [
+        "dsp:number",
+        { "field": "dc:title", "labelKey": "onboarding.field.disputeTitle" },
+        "dsp:customer",
+        "dsp:account",
+        { "field": "dsp:amount", "widget": "currency", "parameters": { "currency": "USD" } },
+        {
+          "field": "dsp:reason",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Unauthorised": "negative",
+              "Not received": "warning",
+              "Duplicate": "info",
+              "Defective": "warning",
+              "Other": "neutral"
+            }
+          }
+        },
+        {
+          "field": "dsp:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Open": "info",
+              "Investigating": "warning",
+              "Resolved for customer": "positive",
+              "Resolved for bank": "neutral",
+              "Closed": "neutral"
+            }
+          }
+        },
+        { "field": "dsp:analyst", "widget": "user" }
+      ]
+    },
+    {
+      "id": "dates",
+      "labelKey": "onboarding.card.disputeCase.dates",
+      "fields": [
+        { "field": "dsp:openedOn", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "dsp:dueOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysOpen",
+          "widget": "number",
+          "labelKey": "onboarding.field.daysOpen",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "dsp:openedOn" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "dsp:status" }, "Open", "Investigating"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "resolution",
+      "labelKey": "onboarding.card.disputeCase.resolution",
+      "span": 2,
+      "fields": [{ "field": "dsp:resolution", "widget": "long-text" }]
+    },
+    {
+      "id": "attachments",
+      "labelKey": "onboarding.card.disputeCase.attachments",
+      "span": 2,
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "onboarding.card.disputeCase.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

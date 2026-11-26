@@ -53,6 +53,9 @@ final class StandInStub implements AutoCloseable {
 
     private final Map<String, Sent> envelopes = new ConcurrentHashMap<>();
 
+    /** Each envelope's status as the service says it, "sent" until a test declares another. */
+    private final Map<String, String> statuses = new ConcurrentHashMap<>();
+
     final List<String> requests = Collections.synchronizedList(new ArrayList<>());
 
     final List<String> voided = Collections.synchronizedList(new ArrayList<>());
@@ -69,6 +72,11 @@ final class StandInStub implements AutoCloseable {
 
     String address() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    /** What the service says of an envelope from now on: what its signer did, as a test plays it. */
+    void declare(String id, String status) {
+        statuses.put(id, status);
     }
 
     Sent envelope(String id) {
@@ -109,6 +117,11 @@ final class StandInStub implements AutoCloseable {
         // "", "envelopes", id[, "result"]
         if (parts.length >= 3 && "envelopes".equals(parts[1])) {
             Sent sent = envelopes.get(parts[2]);
+            if ("GET".equals(method) && parts.length == 3) {
+                answer(exchange, sent == null ? 404 : 200, sent == null ? "{\"error\":\"not found\"}"
+                        : "{\"id\":\"" + sent.id() + "\",\"status\":\"" + statuses.getOrDefault(sent.id(), "sent") + "\"}");
+                return;
+            }
             if ("DELETE".equals(method) && parts.length == 3) {
                 voided.add(parts[2]);
                 answer(exchange, sent == null ? 404 : 204, null);

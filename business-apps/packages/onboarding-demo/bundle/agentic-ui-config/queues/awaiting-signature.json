@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "onboarding.queue.awaiting-signature",
+  "pageProvider": "onboarding_awaiting_signature",
+  "columns": [
+    { "field": "dc:title", "labelKey": "onboarding.field.requestTitle" },
+    { "field": "sigreq:document", "widget": "document-link" },
+    "sigreq:sentFileName",
+    { "field": "sigreq:requestedBy", "widget": "user" },
+    { "field": "sigreq:requestedAt", "widget": "relative-date" }
+  ],
+  "sort": [{ "field": "sigreq:requestedAt", "order": "asc" }],
+  "pageSize": 50
+}

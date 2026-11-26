@@ -282,6 +282,28 @@ public class StandInProvider implements SignatureProvider {
     }
 
     @Override
+    public EnvelopeStatus status(String envelope) {
+        Answer answer = call(HttpRequest.newBuilder(target(envelopePath(envelope))).GET());
+        if (answer.status() == 404) {
+            throw new SignatureProviderException(Kind.NOT_FOUND);
+        }
+        if (answer.status() != 200) {
+            throw refused(answer.status());
+        }
+        JsonNode found = answer.json();
+        if (!envelope.equals(found.path("id").asText(null))) {
+            throw new SignatureProviderException(Kind.UNREADABLE);
+        }
+        return switch (found.path("status").asText("")) {
+            case "sent" -> EnvelopeStatus.OUT;
+            case "signed" -> EnvelopeStatus.SIGNED;
+            case "declined" -> EnvelopeStatus.DECLINED;
+            case "voided" -> EnvelopeStatus.VOIDED;
+            default -> throw new SignatureProviderException(Kind.UNREADABLE);
+        };
+    }
+
+    @Override
     public void cancel(String envelope) {
         Answer answer = call(HttpRequest.newBuilder(target(envelopePath(envelope))).DELETE());
         if (answer.status() != 200 && answer.status() != 204 && answer.status() != 404) {

@@ -167,6 +167,7 @@ public class StandInServiceTest {
         assertTrue(provider.configured());
         String envelope = provider.send(envelope());
         assertTrue(envelope, Signatures.EXTERNAL_ID.matcher(envelope).matches());
+        assertEquals(SignatureProvider.EnvelopeStatus.OUT, provider.status(envelope));
         // Not signed yet: the service says so, and the provider files nothing.
         SignatureProviderException early = assertThrows(SignatureProviderException.class,
                 () -> provider.fetchSigned(envelope));
@@ -180,6 +181,7 @@ public class StandInServiceTest {
         assertEquals(Outcome.SIGNED, event.outcome());
         assertTrue(Duration.between(event.timestamp(), Instant.now()).abs().getSeconds() < 30);
 
+        assertEquals(SignatureProvider.EnvelopeStatus.SIGNED, provider.status(envelope));
         SignedResult result = provider.fetchSigned(envelope);
         assertEquals("application/pdf", result.mimeType());
         assertArrayEquals(Desk.PDF, java.util.Arrays.copyOf(result.content(), Desk.PDF.length));
@@ -196,9 +198,11 @@ public class StandInServiceTest {
         CallbackEvent event = provider.authenticate(callbacks.poll(10, TimeUnit.SECONDS));
         assertEquals(Outcome.DECLINED, event.outcome());
         assertEquals("The address is wrong", event.reason());
+        assertEquals(SignatureProvider.EnvelopeStatus.DECLINED, provider.status(declined));
 
         String voided = provider.send(envelope());
         provider.cancel(voided);
+        assertEquals(SignatureProvider.EnvelopeStatus.VOIDED, provider.status(voided));
         assertEquals(409, act(voided, "sign"));
 
         // A callback the service signed with another secret is not the provider's.
