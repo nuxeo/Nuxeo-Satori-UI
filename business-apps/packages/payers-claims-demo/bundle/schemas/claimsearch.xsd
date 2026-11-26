@@ -20,7 +20,7 @@
   <xs:element name="claim_adjuster_agg" type="nxs:stringList" />
   <!-- Since 0.6.0, the open-appeals queue's: the case states chosen in its State facet, and the
        case specialists chosen in its Assigned to facet. The schema keeps its name, which the
-       search document type names, so a server upgraded from 0.5.0 keeps both. -->
+       search document type names, so a server upgraded from 0.5.1 keeps both. -->
   <xs:element name="case_state_agg" type="nxs:stringList" />
   <xs:element name="case_assignee_agg" type="nxs:stringList" />
 </xs:schema>

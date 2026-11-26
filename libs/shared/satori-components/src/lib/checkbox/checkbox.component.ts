@@ -11,8 +11,9 @@ import { MAT_CHECKBOX_DEFAULT_OPTIONS, MatCheckboxModule } from '@angular/materi
 /**
  * A tick box whose state its owner holds. It shows `checked`, and a click on it or on its words, or
  * Space while it has the focus, asks for the other state through `checkedChange`, without changing
- * what it shows: it changes only when the owner sets `checked`. So a state that is saved first, and
- * may be refused, is never shown before it is, and a refusal leaves the box as it was.
+ * what it shows: it changes only when the owner sets `checked`. So the owner decides what it shows
+ * while a change is saved, and a refused change leaves the box as the owner says, with nothing in
+ * it to undo.
  *
  * Its words are its content, which names it for assistive technology:
  * `<nxs-checkbox [checked]="done()">Medical records received</nxs-checkbox>`.

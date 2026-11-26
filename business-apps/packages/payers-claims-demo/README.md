@@ -932,7 +932,7 @@ form's, not a button or a chain ([decisions.md](../../../docs/business-apps/deci
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 7), by someone who may change
   the case: member services, by the seed's permissions. A tick writes `case:checklist` through the
   document update the Edit form sends, the item's entry done, `doneBy` the person signed in and
-  `doneOn` now; unticking keeps the entry, not done. Who and when are what the app sends: the
+  `doneOn` today, a day as the seed writes one; unticking keeps the entry, not done. Who and when are what the app sends: the
   case's audit, and its timeline, say who really changed it. Not a security control: the server's
   permissions decide, and a claims adjuster, who may not change a case, sees no tick box.
 - **Since 0.6.0, the open appeals have a queue,** `queues/open-appeals.json`, on member services'
@@ -960,7 +960,7 @@ The demo, run as the appeals' specialist, `sam.patel`, who changes one thing, a 
    with neither the decided appeal nor the open grievance; its State facet counts them, and narrowed
    to one state on the server it keeps that state's appeal only;
 7. a tick: on CASE-2041 the specialist ticks the provider's statement, which has no entry; the
-   server holds it done, by `sam.patel`, now, with every other entry as the seed wrote it, the
+   server holds it done, by `sam.patel`, today, with every other entry as the seed wrote it, the
    case's audit names `sam.patel` as who changed it, and the page shows it done, by Sam Patel,
    today. Unticked, the entry stays, not done, and the page shows neither who nor when. Then the
    checklist the seed wrote is put back, through the REST API, and checked.

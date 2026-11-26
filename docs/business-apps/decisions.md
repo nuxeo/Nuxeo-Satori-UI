@@ -63,6 +63,7 @@ way.
   the other way, the kit drops the Case page's two cards, their labels, `case:checklist` and the
   seed's second appeal, a minor version below 1.0.0, since a property and labels are removed.
   Decision 3 stays open: the checklist is read-only, and ticks no item through a button or a chain.
+  Since 0.6.0 it ticks through a document update, the next note.
 
 - **2, the Payers kit's open appeals, and its checklist ticked (26 November 2026).** Built against
   the same recommendation: the kit's version 0.6.0 adds an open-appeals queue, with its page

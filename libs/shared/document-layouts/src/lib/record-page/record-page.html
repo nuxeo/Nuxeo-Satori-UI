@@ -140,12 +140,12 @@
                 @if (checklist.tickable) {
                   <!-- A tick box named by the item's words, which shows the record's state, or the
                        one a tick is writing, and is described by the state, who and when below. -->
-                  @let detail = 'record-checklist-' + card.id + '-' + item.id;
+                  @let detail = detailId(card.id, item.id);
                   @let writing = checklist.ticking?.item === item.id;
                   <nxs-checkbox
                     class="record-page__checklist-box"
                     [checked]="writing ? checklist.ticking!.done : item.done"
-                    [disabled]="checklist.ticking !== null"
+                    [disabled]="checklist.busy"
                     [describedBy]="detail"
                     (checkedChange)="tick(card, item, $event)"
                     ><span class="record-page__checklist-label">{{

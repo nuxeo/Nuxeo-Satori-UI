@@ -82,7 +82,9 @@ function expect(condition, what, output = '') {
  * and status had come apart would. `workflowModel: false` answers as version 0.3.0, which has no
  * claims review workflow, `caseChecklist: false` as version 0.4.0, whose case schema has no
  * checklist, and `openAppeals: false` as version 0.5.1, whose queues' search document has no field
- * for the open-appeals queue's facets; `checklistDrift` answers the case of that number, read back by its id, with its first
+ * for the open-appeals queue's facets, and `openAppealsDrift` answers that page provider wrongly:
+ * `'decided'` with every appeal, the decided one among them, and `'grievance'` with every case
+ * not decided, grievances among them; `checklistDrift` answers the case of that number, read back by its id, with its first
  * checklist entry not done, as a server that had dropped what was written would.
  */
 function standIn({
@@ -92,6 +94,7 @@ function standIn({
   workflowModel = true,
   caseChecklist = true,
   openAppeals = true,
+  openAppealsDrift = null,
   checklistDrift = null,
   statusOnly = null,
   noAggregations = false,
@@ -232,8 +235,9 @@ function standIn({
       live().filter(
         (d) =>
           d.type === 'Case' &&
-          d.properties['case:category'] === 'appeal' &&
-          ['open', 'inReview'].includes(d.properties['case:state']),
+          (openAppealsDrift === 'grievance' || d.properties['case:category'] === 'appeal') &&
+          (openAppealsDrift === 'decided' ||
+            ['open', 'inReview'].includes(d.properties['case:state'])),
       ),
   };
   /** A terms aggregate over the records found, as the search index answers it. */
@@ -890,7 +894,23 @@ await against({ openAppeals: false }, async ({ server, run }) => {
   );
 });
 // The open appeals the seed checks: the appeals not decided, and neither the decided one nor a
-// grievance, however open.
+// grievance, however open. A queue that holds either fails the run, naming it.
+await against({ openAppealsDrift: 'decided' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /payers_open_appeals holds CASE-2043, which it should not/.test(output),
+    'an open-appeals queue that holds the decided appeal fails the run',
+    output,
+  );
+});
+await against({ openAppealsDrift: 'grievance' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /payers_open_appeals holds CASE-2042, which it should not/.test(output),
+    'an open-appeals queue that holds an open grievance fails the run',
+    output,
+  );
+});
 await against({}, async ({ server, run }) => {
   const first = await run();
   const held = (number) =>

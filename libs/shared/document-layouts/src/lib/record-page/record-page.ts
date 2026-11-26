@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -180,8 +180,33 @@ export interface RecordChecklistCardShown extends RecordChecklistShown {
    * read-only, and the record's permissions let the signed-in user change it ({@link canTick}).
    */
   readonly tickable: boolean;
-  /** The item a tick is writing, and the state it asks for, while it is; `null` otherwise. */
+  /** The item a tick on this card is writing, and the state it asks for, while it is; `null` otherwise. */
   readonly ticking: { readonly item: string; readonly done: boolean } | null;
+  /** Whether a tick is being written anywhere on the page, which every tick box waits for. */
+  readonly busy: boolean;
+}
+
+/**
+ * Whether what a tick wrote, `written`, is to be shown rather than the record the page is given,
+ * `document`: the same record, and newer by the server's modification stamps, as when the page is
+ * given the record read before a second tick's answer; or, with no stamp to tell them apart, until
+ * the page is given the record again.
+ */
+function showsWritten(
+  written: { readonly base: NuxeoDocument; readonly document: NuxeoDocument },
+  document: NuxeoDocument,
+): boolean {
+  if (written.document.uid !== document.uid) return false;
+  const wrote = Date.parse(written.document.lastModified ?? '');
+  const given = Date.parse(document.lastModified ?? '');
+  if (!Number.isNaN(wrote) && !Number.isNaN(given) && wrote !== given) return wrote > given;
+  return written.base === document;
+}
+
+/** The id of a checklist item's state, who and when, which its tick box is described by. */
+export function checklistDetailId(card: string, item: string): string {
+  // A colon is in no card's or item's id, so no two pairs give the same id.
+  return `record-checklist:${card}:${item}`;
 }
 
 /**
@@ -310,6 +335,7 @@ export class RecordPageComponent {
 
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+  protected readonly detailId = checklistDetailId;
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly linkedRecords = inject(LinkedRecordLookup);
@@ -328,10 +354,11 @@ export class RecordPageComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   /**
-   * What a tick wrote, as the server answered it, for the record it was written to (`base`): the
-   * page shows it until it is given that record again, read anew, which the page asks for once the
-   * write succeeds. So a second tick before then starts from the first's, not from the record as
-   * it was loaded, and a page given another record forgets it.
+   * What a tick wrote, as the server answered it, over the record the page was given when it
+   * answered (`base`): the page shows it while it is newer than the record it is given
+   * ({@link showsWritten}), which the page asks for again once the write succeeds. So a second tick
+   * before then starts from the first's, not from the record as it was loaded, a record read before
+   * the second answer does not hide it, and a page given another record forgets it.
    */
   private readonly written = signal<{
     readonly base: NuxeoDocument;
@@ -349,7 +376,7 @@ export class RecordPageComponent {
   private readonly current = computed<NuxeoDocument>(() => {
     const written = this.written();
     const document = this.document();
-    return written !== null && written.base === document ? written.document : document;
+    return written !== null && showsWritten(written, document) ? written.document : document;
   });
 
   /**
@@ -521,6 +548,7 @@ export class RecordPageComponent {
                     ticking !== null && ticking.card === card.id
                       ? { item: ticking.item, done: ticking.done }
                       : null,
+                  busy: ticking !== null,
                 }
               : null,
           };
@@ -557,9 +585,9 @@ export class RecordPageComponent {
   /**
    * A tick on a checklist's item, `done` the state the person asks for (layout-v2.md, section 7):
    * the record's checklist property written whole, with the item's entry ticked by the signed-in
-   * user now, or unticked, through the document-update path the Edit form uses
-   * (`BrowseService.updateDocument`). One at a time: while it is written, every tick box on the page
-   * shows it and asks for nothing.
+   * user today, or unticked, through the document-update path the Edit form uses
+   * (`BrowseService.updateDocument`). One at a time: while it is written, its box shows it, and
+   * every tick box on the page asks for nothing.
    *
    * - **On success** the page shows what the server answered, and asks for the record again
    *   (`DocumentChangesService`), as an app action does, so its timeline and the rest follow.
@@ -567,8 +595,14 @@ export class RecordPageComponent {
    *   them: the server's own words for a value it refused, that they may not change the record, or
    *   that it could not be saved.
    *
-   * Who and when are written by this client, from `CURRENT_USERNAME` and the page's clock; the
-   * server's audit log and the record's timeline say who changed the property, and when. Not a
+   * Who and when are written by this client, from `CURRENT_USERNAME` and the page's clock: `doneOn`
+   * is a calendar day, as the schema's `date` holds one, the ticker's day where the page shows its
+   * days (`RECORD_PAGE_TIME_ZONE`), written at its UTC midnight as the platform's other day writers
+   * write one (AGENTS/08-bug-patterns.md, pattern 29). The server's audit log and the record's
+   * timeline say who changed the property, and exactly when.
+   *
+   * The list is written whole from the page's copy, as the Edit form writes it, with no change
+   * token: a tick written by someone else since the page read the record is replaced. Not a
    * security control: the server's permissions decide whether the write is accepted.
    */
   protected tick(card: RecordCardShown, item: RecordChecklistItemShown, done: boolean): void {
@@ -583,14 +617,14 @@ export class RecordPageComponent {
       done === item.done
     )
       return;
-    const base = this.document();
     const record = this.current();
+    const day = formatDate(this.today(), 'yyyy-MM-dd', 'en-US', this.timeZone);
     const value = tickedChecklist(
       record.properties[checklist.field],
       item.id,
       done,
       username,
-      this.today().toISOString(),
+      `${day}T00:00:00.000Z`,
     );
     this.ticking.set({ card: card.id, item: item.id, done });
     this.injector
@@ -600,17 +634,23 @@ export class RecordPageComponent {
       .subscribe({
         next: (updated) => {
           this.ticking.set(null);
-          const answered = updated?.properties?.[checklist.field];
-          this.written.set({
-            base,
-            document: {
-              ...record,
-              properties: {
-                ...record.properties,
-                [checklist.field]: answered === undefined ? value : answered,
+          // Over the record as the page has it now, which a reload may have replaced since the
+          // tick began: its enrichers stay, and the property and the stamp are the answer's.
+          const given = this.document();
+          if (given.uid === record.uid) {
+            const answered = updated?.properties?.[checklist.field];
+            this.written.set({
+              base: given,
+              document: {
+                ...given,
+                lastModified: updated?.lastModified ?? given.lastModified,
+                properties: {
+                  ...given.properties,
+                  [checklist.field]: answered === undefined ? value : answered,
+                },
               },
-            },
-          });
+            });
+          }
           this.changes.notify();
         },
         error: (failure: unknown) => {

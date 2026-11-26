@@ -8,13 +8,14 @@ import * as CheckboxStories from './checkbox.stories';
 
 The checkbox is a tick box whose state you hold. It shows what you give it in `checked`, and a click
 or Space asks you for the other state through `checkedChange`. It does not tick itself: you set
-`checked` once the change holds. Use it where ticking saves something that can be refused, so the
-box never shows a state the server has not accepted.
+`checked`, to the state asked for while it is saved, or once the server accepts it. Use it where
+ticking saves something that can be refused, so that a refusal leaves the box as you say, with
+nothing in it to undo.
 
 ## Key features
 
 - **Owned state.** A click asks; it changes nothing until you set `checked`. A refused save leaves
-  the box as it was, with nothing to undo.
+  the box as you set it, with nothing to undo.
 - **Named by its words.** Its content is its label, and its accessible name. Clicking the words
   ticks it too.
 - **Disabled without losing focus.** `disabled` keeps it in the tab order, announced as unavailable,
@@ -38,7 +39,8 @@ export const usageHtml = `<nxs-checkbox
   [disabled]="saving()"
   [describedBy]="'meta-' + item.id"
   (checkedChange)="save(item, $event)"
->{{ item.label }}</nxs-checkbox>`;
+  >{{ item.label }}</nxs-checkbox
+>`;
 
 <Source
   language="html"
@@ -46,8 +48,8 @@ export const usageHtml = `<nxs-checkbox
   code={usageHtml}
 />
 
-Every input is optional. Set `checked` in `save` once the server accepts the change. It needs no
-providers.
+Every input is optional. In `save`, set `checked` to the state asked for, or wait until the server
+accepts it; either way, set it back if the server refuses. It needs no providers.
 
 ## Examples
 

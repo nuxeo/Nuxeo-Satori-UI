@@ -272,7 +272,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
   });
 
   describe('ticking and unticking', () => {
-    it('ticks an item: its entry written done, by the signed-in user, now, through the document update', async () => {
+    it('ticks an item: its entry written done, by the signed-in user, today, through the document update', async () => {
       await render();
       box('medicalRecords').click();
       await settle();
@@ -285,7 +285,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
             item: 'medicalRecords',
             done: true,
             doneBy: 'sam.patel',
-            doneOn: '2026-11-25T20:00:00.000Z',
+            doneOn: '2026-11-26T00:00:00.000Z',
           },
           HELD[2],
         ],
@@ -307,7 +307,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
       expect(box('medicalRecords').checked).toBe(true);
       expect(part('medicalRecords', 'state')).toBe('Done');
       expect(part('medicalRecords', 'by')).toBe('Sam Patel');
-      // An instant, shown on the reader's day: at +13:00 it is already the 26th.
+      // The ticker's day where the page shows its days: at +13:00 it is already the 26th.
       expect(part('medicalRecords', 'on')).toBe('November 26, 2026');
       expect(
         root()
@@ -363,7 +363,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
           item: 'decisionLetter',
           done: true,
           doneBy: 'sam.patel',
-          doneOn: '2026-11-25T20:00:00.000Z',
+          doneOn: '2026-11-26T00:00:00.000Z',
         },
       ]);
     });
@@ -396,6 +396,141 @@ describe('RecordPageComponent: ticking a checklist item', () => {
       await settle();
       expect(updateDocument).toHaveBeenCalledTimes(1);
       expect(box('decisionLetter').checked).toBe(false);
+    });
+
+    /** What the write `call` sent as the checklist. */
+    const sentAt = (call: number): unknown[] =>
+      (updateDocument.mock.calls[call][1] as Record<string, unknown>)[
+        'case:checklist'
+      ] as unknown[];
+
+    it("keeps a second tick's answer over the record read before it, and starts a third from it", async () => {
+      await render();
+      box('medicalRecords').click();
+      await settle();
+      const first = '2026-11-25T20:00:01.000Z';
+      writes[0].next(appeal({ lastModified: first, properties: { 'case:checklist': sentAt(0) } }));
+      await settle();
+      // Unticked again before the page is given the record the first tick asked for.
+      box('medicalRecords').click();
+      await settle();
+      expect(sentAt(1)).toEqual([
+        HELD[0],
+        expect.objectContaining({ item: 'medicalRecords', done: false }),
+        HELD[2],
+      ]);
+      // That record arrives, read after the first tick and before the second, then the answer.
+      fixture.componentRef.setInput(
+        'document',
+        appeal({
+          lastModified: first,
+          properties: { 'case:number': 'CASE-2041', 'case:checklist': sentAt(0) },
+        }),
+      );
+      await settle();
+      writes[1].next(
+        appeal({
+          lastModified: '2026-11-25T20:00:02.000Z',
+          properties: { 'case:checklist': sentAt(1) },
+        }),
+      );
+      await settle();
+      expect(box('medicalRecords').checked).toBe(false);
+      expect(part('medicalRecords', 'state')).toBe('Not done');
+
+      // A third tick starts from the second's answer, not from the record read before it.
+      box('decisionLetter').click();
+      await settle();
+      expect(sentAt(2)).toEqual([
+        HELD[0],
+        expect.objectContaining({ item: 'medicalRecords', done: false }),
+        HELD[2],
+        expect.objectContaining({ item: 'decisionLetter', done: true }),
+      ]);
+    });
+
+    it('keeps the answer over a record read before it that arrives after it, until a newer one', async () => {
+      await render();
+      box('medicalRecords').click();
+      await settle();
+      writes[0].next(
+        appeal({
+          lastModified: '2026-11-25T20:00:02.000Z',
+          properties: { 'case:checklist': sentAt(0) },
+        }),
+      );
+      await settle();
+      // A reload asked for before the write, so older than its answer, lands after it.
+      fixture.componentRef.setInput(
+        'document',
+        appeal({ lastModified: '2026-11-25T19:00:00.000Z' }),
+      );
+      await settle();
+      expect(box('medicalRecords').checked).toBe(true);
+      // One read after it is the page's again.
+      fixture.componentRef.setInput(
+        'document',
+        appeal({
+          lastModified: '2026-11-25T20:00:03.000Z',
+          properties: { 'case:number': 'CASE-2041', 'case:checklist': [] },
+        }),
+      );
+      await settle();
+      expect(boxes().map((input) => input.checked)).toEqual([false, false, false]);
+    });
+
+    it('drops an answer for a record the page no longer shows', async () => {
+      await render();
+      box('medicalRecords').click();
+      await settle();
+      fixture.componentRef.setInput(
+        'document',
+        appeal({
+          uid: 'case-2043',
+          properties: { 'case:number': 'CASE-2043', 'case:checklist': [] },
+        }),
+      );
+      await settle();
+      writes[0].next(appeal({ properties: { 'case:checklist': sentAt(0) } }));
+      await settle();
+      expect(boxes().map((input) => input.checked)).toEqual([false, false, false]);
+      // The record it wrote has changed all the same, and the page says so.
+      expect(notified).toBe(1);
+    });
+
+    it("waits on every card's boxes while one card's tick is written", async () => {
+      await render(appeal(), {
+        version: 2,
+        cards: [
+          ...page(true).cards,
+          {
+            id: 'closing',
+            label: 'Closing',
+            checklist: {
+              field: 'case:checklist',
+              tickable: true,
+              items: [{ id: 'decisionLetter', label: 'Decision letter sent' }],
+            },
+          },
+        ],
+      });
+      const closing = (): HTMLInputElement =>
+        root().querySelector<HTMLInputElement>('[data-card-id="closing"] input[type="checkbox"]')!;
+      expect(closing().hasAttribute('aria-disabled')).toBe(false);
+      box('medicalRecords').click();
+      await settle();
+      expect(closing().getAttribute('aria-disabled')).toBe('true');
+      // Busy is the card being written: the other card's list is not.
+      expect(root().querySelector('[data-card-id="closing"] ul')?.hasAttribute('aria-busy')).toBe(
+        false,
+      );
+      closing().click();
+      await settle();
+      expect(updateDocument).toHaveBeenCalledTimes(1);
+      // The two cards' descriptions do not share an id.
+      expect(closing().getAttribute('aria-describedby')).not.toBe(
+        box('decisionLetter').getAttribute('aria-describedby'),
+      );
     });
   });
 

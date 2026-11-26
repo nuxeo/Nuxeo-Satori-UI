@@ -581,7 +581,7 @@
         "tickable": {
           "type": "boolean",
           "default": false,
-          "description": "Whether the page offers a tick box on each item to someone the record's permissions let change it. A tick writes the item's entry: done, the signed-in user's name as doneBy and now as doneOn, written by the client; unticking keeps the entry with done false. The server's audit log and the record's timeline say who really changed it. Not a security control: the server's permissions decide."
+          "description": "Whether the page offers a tick box on each item to someone the record's permissions let change it. A tick writes the item's entry: done, the signed-in user's name as doneBy and today as doneOn, a calendar day, written by the client; unticking keeps the entry with done false. The server's audit log and the record's timeline say who really changed it. Not a security control: the server's permissions decide."
         },
         "field": {
           "$ref": "#/$defs/xpath",

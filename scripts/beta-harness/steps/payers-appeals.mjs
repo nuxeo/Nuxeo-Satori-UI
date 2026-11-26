@@ -27,7 +27,7 @@
  *      them, and narrowed to one state on the server, it keeps that state's appeal only.
  *   7. Ticking an item, version 0.6.0's `"tickable": true` on the Case page: the specialist, who
  *      may change cases, ticks an item on the appeal under way; the server holds it done, by them,
- *      now, and every other entry as it was, and its audit says who changed the case; the page
+ *      today, and every other entry as it was, and its audit says who changed the case; the page
  *      says so. Unticked, the entry stays, not done. Then the checklist the seed wrote is put back.
  *
  * The rows, names and days it expects are read from the kit's own files: `demo/data.mjs` for the
@@ -53,7 +53,7 @@
  * entries against the server's audit, in order; the decided appeal's items the same as the one
  * under way's; the served Case layout the kit's file; the open appeals' rows against the seed and
  * the server's own answer, in order, the home's figure and the facet's counts, and the narrowed
- * rows; the tick's entry on the server, done, by the specialist, now, the audit's author of the
+ * rows; the tick's entry on the server, done, by the specialist, today, the audit's author of the
  * change, and the card drawn from it; the untick's entry kept, not done. Negative ones: no one and
  * no day on an item not done, one of whose entries still names both and two of which have no entry
  * at all; no checklist on a grievance, whose timeline still draws; when the case's audit holds an
@@ -795,11 +795,11 @@ export default async function run(page, h) {
     (each) => !(UNDER_WAY.checklist ?? []).some((entry) => entry.item === each.id),
   );
   const seeded = (UNDER_WAY.checklist ?? []).map(entryOf);
-  const heldNow = async () =>
-    ((await read(`/id/${caseUid}`))?.properties?.[CHECKLIST.field] ?? null)?.map?.((entry) => ({
-      ...entryOf(entry),
-      doneOnInstant: entry?.doneOn ?? null,
-    })) ?? null;
+  /** The case's checklist as the server holds it now, each entry's day as the seed writes one. */
+  const heldNow = async () => {
+    const held = (await read(`/id/${caseUid}`))?.properties?.[CHECKLIST.field];
+    return Array.isArray(held) ? held.map(entryOf) : null;
+  };
   await h.goToDoc(caseUid);
   await caseSettled(page, ['case', 'checklist', 'history']);
   const boxes = await page
@@ -828,131 +828,130 @@ export default async function run(page, h) {
     `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"] input[type="checkbox"]`,
   );
   const tickedAt = Date.now();
-  const putTick = page
-    .waitForResponse(
-      (response) =>
-        response.request().method() === 'PUT' && response.url().includes(`/api/v1/id/${caseUid}`),
-      { timeout: 15_000 },
-    )
-    .catch(unread);
-  await box.click({ timeout: 10_000 }).catch(deferred);
-  const tickAnswer = await putTick;
-  await page
-    .waitForSelector(
-      `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="true"]`,
-      { timeout: 15_000 },
-    )
-    .catch(deferred);
-  const afterTick = await heldNow();
-  const tickEntry = afterTick?.find((entry) => entry.item === item?.id);
-  const tickedOn = Date.parse(tickEntry?.doneOnInstant ?? '');
-  h.check(
-    `the tick is written: ${item?.id} done, by ${APPEALS_SPECIALIST}, now, and every other entry as the seed wrote it`,
-    tickAnswer?.status() === 200 &&
-      tickEntry?.done === true &&
-      tickEntry?.doneBy === APPEALS_SPECIALIST &&
-      tickedOn >= tickedAt - 120_000 &&
-      tickedOn <= Date.now() + 120_000 &&
-      sameJson(
-        afterTick
-          .filter((entry) => entry.item !== item?.id)
-          .map(({ doneOnInstant, ...entry }) => entry),
-        seeded,
-      ),
-    `PUT ${tickAnswer?.status() ?? 'not seen'}; held ${JSON.stringify(afterTick)}`,
-  );
-  const tickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
-  const today = new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(
-    new Date(tickEntry?.doneOnInstant ?? 0),
-  );
-  h.check(
-    `the page shows it done, by ${nameOf(APPEALS_SPECIALIST)}, on ${today}`,
-    tickedRow?.done === 'true' &&
-      tickedRow?.state === 'Done' &&
-      tickedRow?.by === nameOf(APPEALS_SPECIALIST) &&
-      tickedRow?.on === today,
-    JSON.stringify(tickedRow),
-  );
-  // Who really changed it is the server's to say: its audit of the case, newest first.
-  let author = null;
-  for (let attempt = 0; attempt < 10 && author === null; attempt++) {
-    const entries =
-      (
-        await page.request
-          .get(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}/@audit`, {
-            params: new URLSearchParams([
-              ['pageSize', '5'],
-              ['sortBy', 'eventDate'],
-              ['sortOrder', 'desc'],
-              ['eventId', 'documentModified'],
-            ]),
-          })
-          .then((r) => (r.ok() ? r.json() : null))
-          .catch(unread)
-      )?.entries ?? [];
-    author = entries.find((entry) => Date.parse(entry.eventDate ?? '') >= tickedAt - 5_000) ?? null;
-    if (author === null) await page.waitForTimeout(1000);
-  }
-  h.check(
-    `the server's audit says ${APPEALS_SPECIALIST} changed the case, whatever doneBy says`,
-    author?.principalName === APPEALS_SPECIALIST,
-    JSON.stringify(author),
-  );
-  await h.screenshot('appeal-item-ticked', page.locator('[data-card-id="checklist"]'));
+  /** A day, `YYYY-MM-DD`, as this machine's zone has it: the browser's, which writes the tick's. */
+  const localDay = (ms) => new Intl.DateTimeFormat('en-CA', { dateStyle: 'short' }).format(ms);
+  const whenPut = () =>
+    page
+      .waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' && response.url().includes(`/api/v1/id/${caseUid}`),
+        { timeout: 15_000 },
+      )
+      .catch(unread);
+  // Whatever happens in between, the checklist the seed wrote is put back, last.
+  try {
+    const putTick = whenPut();
+    await box.click({ timeout: 10_000 }).catch(deferred);
+    const tickAnswer = await putTick;
+    await page
+      .waitForSelector(
+        `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="true"]`,
+        { timeout: 15_000 },
+      )
+      .catch(deferred);
+    const afterTick = await heldNow();
+    const tickEntry = afterTick?.find((entry) => entry.item === item?.id);
+    // The ticker's day, as the seed writes a day: a midnight crossed during the click is either.
+    const days = new Set([localDay(tickedAt), localDay(Date.now())]);
+    h.check(
+      `the tick is written: ${item?.id} done, by ${APPEALS_SPECIALIST}, today, and every other entry as the seed wrote it`,
+      tickAnswer?.status() === 200 &&
+        tickEntry?.done === true &&
+        tickEntry?.doneBy === APPEALS_SPECIALIST &&
+        days.has(tickEntry?.doneOn) &&
+        sameJson(
+          afterTick.filter((entry) => entry.item !== item?.id),
+          seeded,
+        ),
+      `PUT ${tickAnswer?.status() ?? 'not seen'}; held ${JSON.stringify(afterTick)}; today ${[...days].join(' or ')}`,
+    );
+    const tickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
+    const shownDay = typeof tickEntry?.doneOn === 'string' ? longDay(tickEntry.doneOn) : null;
+    h.check(
+      `the page shows it done, by ${nameOf(APPEALS_SPECIALIST)}, on ${shownDay}`,
+      shownDay !== null &&
+        tickedRow?.done === 'true' &&
+        tickedRow?.state === 'Done' &&
+        tickedRow?.by === nameOf(APPEALS_SPECIALIST) &&
+        tickedRow?.on === shownDay,
+      JSON.stringify(tickedRow),
+    );
+    // Who changed the case is the server's to record: its audit of the case, newest first.
+    let author = null;
+    for (let attempt = 0; attempt < 10 && author === null; attempt++) {
+      const entries =
+        (
+          await page.request
+            .get(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}/@audit`, {
+              params: new URLSearchParams([
+                ['pageSize', '5'],
+                ['sortBy', 'eventDate'],
+                ['sortOrder', 'desc'],
+                ['eventId', 'documentModified'],
+              ]),
+            })
+            .then((r) => (r.ok() ? r.json() : null))
+            .catch(unread)
+        )?.entries ?? [];
+      author =
+        entries.find((entry) => Date.parse(entry.eventDate ?? '') >= tickedAt - 5_000) ?? null;
+      if (author === null) await page.waitForTimeout(1000);
+    }
+    h.check(
+      `the server's audit records the change to the case, by ${APPEALS_SPECIALIST}`,
+      author?.principalName === APPEALS_SPECIALIST,
+      JSON.stringify(author),
+    );
+    await h.screenshot('appeal-item-ticked', page.locator('[data-card-id="checklist"]'));
 
-  const putUntick = page
-    .waitForResponse(
-      (response) =>
-        response.request().method() === 'PUT' && response.url().includes(`/api/v1/id/${caseUid}`),
-      { timeout: 15_000 },
-    )
-    .catch(unread);
-  await box.click({ timeout: 10_000 }).catch(deferred);
-  const untickAnswer = await putUntick;
-  await page
-    .waitForSelector(
-      `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="false"]`,
-      { timeout: 15_000 },
-    )
-    .catch(deferred);
-  const afterUntick = await heldNow();
-  const untickEntry = afterUntick?.find((entry) => entry.item === item?.id);
-  const untickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
-  h.check(
-    `unticked, the entry stays, not done, and the page shows ${item?.id} not done, with no one and no day`,
-    untickAnswer?.status() === 200 &&
-      untickEntry?.done === false &&
-      untickEntry?.doneBy === APPEALS_SPECIALIST &&
-      untickedRow?.state === 'Not done' &&
-      untickedRow?.by === null &&
-      untickedRow?.on === null,
-    `held ${JSON.stringify(untickEntry)}; drawn ${JSON.stringify(untickedRow)}`,
-  );
-
-  // Put back as the seed wrote it, so that the next run's preconditions hold.
-  const putBack = await page.request
-    .put(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}`, {
-      data: {
-        'entity-type': 'document',
-        properties: {
-          [CHECKLIST.field]: (UNDER_WAY.checklist ?? []).map(
-            ({ item: id, done, doneBy, doneOn }) => ({
-              item: id,
-              done,
-              doneBy: doneBy ?? null,
-              doneOn: doneOn ?? null,
-            }),
-          ),
+    const putUntick = whenPut();
+    await box.click({ timeout: 10_000 }).catch(deferred);
+    const untickAnswer = await putUntick;
+    await page
+      .waitForSelector(
+        `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="false"]`,
+        { timeout: 15_000 },
+      )
+      .catch(deferred);
+    const afterUntick = await heldNow();
+    const untickEntry = afterUntick?.find((entry) => entry.item === item?.id);
+    const untickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
+    h.check(
+      `unticked, the entry stays, not done, and the page shows ${item?.id} not done, with no one and no day`,
+      untickAnswer?.status() === 200 &&
+        untickEntry?.done === false &&
+        untickEntry?.doneBy === APPEALS_SPECIALIST &&
+        untickedRow?.state === 'Not done' &&
+        untickedRow?.by === null &&
+        untickedRow?.on === null,
+      `held ${JSON.stringify(untickEntry)}; drawn ${JSON.stringify(untickedRow)}`,
+    );
+  } finally {
+    // Put back as the seed wrote it, so that the next run's preconditions hold.
+    const putBack = await page.request
+      .put(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}`, {
+        data: {
+          'entity-type': 'document',
+          properties: {
+            [CHECKLIST.field]: (UNDER_WAY.checklist ?? []).map(
+              ({ item: id, done, doneBy, doneOn }) => ({
+                item: id,
+                done,
+                doneBy: doneBy ?? null,
+                doneOn: doneOn ?? null,
+              }),
+            ),
+          },
         },
-      },
-    })
-    .catch(unread);
-  const restored = (await heldNow())?.map(({ doneOnInstant, ...entry }) => entry) ?? null;
-  h.check(
-    `${UNDER_WAY.number}'s checklist is put back as the seed wrote it`,
-    putBack?.ok() === true && sameJson(restored, seeded),
-    `PUT ${putBack?.status() ?? 'failed'}; held ${JSON.stringify(restored)}. Run demo/seed.mjs to put it back`,
-  );
+      })
+      .catch(unread);
+    const restored = await heldNow();
+    h.check(
+      `${UNDER_WAY.number}'s checklist is put back as the seed wrote it`,
+      putBack?.ok() === true && sameJson(restored, seeded),
+      `PUT ${putBack?.status() ?? 'failed'}; held ${JSON.stringify(restored)}. Run demo/seed.mjs to put it back`,
+    );
+  }
 
   // ── Health ─────────────────────────────────────────────────────────────────────────────────
   await h.step('Health');

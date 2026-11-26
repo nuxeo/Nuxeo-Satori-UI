@@ -587,19 +587,27 @@ let the page tick them, with `"tickable": true`:
   it is a key version 2 does not have there, and refused.
 - **A tick writes the record's property,** whole, through the document update the Edit form
   sends, `PUT /api/v1/id/{uid}`: the item's first entry gets `done` `true`, `doneBy` the signed-in
-  user's name and `doneOn` now, an instant, which the card shows on the reader's day; an item with
-  no entry gets one at the end. Unticking keeps the entry, with `done` `false`. Every other entry
-  stays as it was, in its order, among them one for an item the file no longer lists.
-- **One tick at a time.** While one is written, its item's box shows what was asked, beside a
-  spinner named "Saving", the list is marked busy, and every box says it is unavailable and asks
-  for nothing, while keeping the keyboard's focus. On success the page shows the server's answer
-  and reads the record again; on failure the card is as it was, and a toast says why, as the Edit
-  form does: the server's own words for a value it refused, that the person may not change the
-  checklist for a 403, or that it could not be saved.
+  user's name and `doneOn` today, a calendar day as the property's `date` holds one: the ticker's
+  day where the page shows its days, written at its UTC midnight, as the platform's other day
+  writers write one ([pattern 29](../../AGENTS/08-bug-patterns.md)), so the card and the Edit form
+  show the same day. An item with no entry gets one at the end. Unticking keeps the entry, with
+  `done` `false`. Every other entry stays as it was, in its order, among them one for an item the
+  file no longer lists.
+- **One tick at a time, on the whole page.** While one is written, its item's box shows what was
+  asked, beside a spinner named "Saving", its list is marked busy, and every tick box on the page,
+  on any card, says it is unavailable and asks for nothing, while keeping the keyboard's focus. On
+  success the page shows the server's answer and reads the record again, and keeps the answer over
+  a record read before it, by the server's modification stamps; on failure the card is as it was,
+  and a toast says why, as the Edit form does: the server's own words for a value it refused, that
+  the person may not change the checklist for a 403, or that it could not be saved.
+- **Two people ticking at once can lose a tick.** The list is written whole from the page's copy,
+  as the Edit form writes it, with no change token: a tick someone else wrote since the page read
+  the record is replaced, and the page reads the record again only after its own write. Sending
+  Nuxeo's change token, and saying "changed since" on its refusal, is not built.
 - **Who and when are written by the client.** `doneBy` and `doneOn` are what this app sends, as
   they are what any client writing the property through the REST API sends: nothing on the server
   stamps them, and another client may write anything there. The server's audit log, and so the
-  record's timeline, say who really changed the record and when.
+  record's timeline, say who really changed the record, and exactly when.
 - **Not a security control,** as nothing in a layout is. The server's permissions decide who may
   change the property, and so tick an item; a tick box not offered is a convenience.
 
