@@ -128,7 +128,8 @@ export function propertyDefinitions(
 
 /**
  * The schemas a document's facets add that the record page needs read: those whose properties a
- * field shows or a computation reads. As `facetSchemasToRead` does for version 1, a facet schema
+ * field shows, a computation reads, a checklist holds or a banner links by. As
+ * `facetSchemasToRead` does for version 1, a facet schema
  * nothing names is not read, and one a field names is read even where the panel presents it.
  */
 export function recordFacetSchemasToRead(
@@ -143,6 +144,8 @@ export function recordFacetSchemasToRead(
     else propertiesReadBy(field.computed, read);
   }
   for (const card of cardsOf(file)) if (card.checklist) read.add(card.checklist.field);
+  // A banner's link is held to its property's definition, which a facet's schema may hold.
+  for (const banner of file.banners) if (banner.link !== null) read.add(banner.link);
   const named = new Set([...read].map(prefixOfXpath));
   return documentSchemas.filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
 }
@@ -281,6 +284,19 @@ export function resolveRecordLayout(
         .map((tab) => ({ ...tab, cards: cards(tab.cards) }))
         .filter((tab) => tab.cards.length > 0)
     : null;
+  // A banner links one record by a text property of the type holding its id. A link the type
+  // cannot hold is left out, with the banner still shown: its message stands without it.
+  const banners = file.banners.map((banner): RecordBannerEntry => {
+    if (banner.link === null) return banner;
+    const definition = properties.get(banner.link);
+    if (definition && definition.type === 'string') return banner;
+    notes.push(
+      definition
+        ? `${banner.place}.link: "${banner.link}" is a ${definition.type} property, and a banner links one record; the banner shows without its link`
+        : `${banner.place}.link: "${banner.link}" is not a property of ${type.name}; the banner shows without its link`,
+    );
+    return { ...banner, link: null };
+  });
   // A review is drawn on the picture, so a record that shows none has nothing to review.
   const review = file.review && preview === 'picture';
   if (file.review && !review) {
@@ -299,7 +315,7 @@ export function resolveRecordLayout(
     layout: {
       type: type.name,
       columns: file.columns,
-      banners: file.banners,
+      banners,
       preview,
       review,
       shareLinks,

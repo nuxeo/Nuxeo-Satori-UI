@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!-- What a server and a kit give the add-on, for the tests: the sequencer as Nuxeo LTS 2025 sets it,
+     counting in the SQL key/value store on the repository's database as the local server does,
+     two number series, and two document types, one controlled and one not. -->
+<component name="org.nuxeo.agentic.documents.test.contrib">
+
+  <require>org.nuxeo.agentic.documents</require>
+  <require>org.nuxeo.agentic.documents.schema</require>
+  <require>org.nuxeo.ecm.core.uidgen.UIDGeneratorService</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <!-- As nxserver/config/sql-kvstore-config.xml on the local server, on H2. The server links it to
+       the repository's database; the store takes a connection of its own either way, outside the
+       caller's transaction, so a database of its own here changes nothing the tests assert. -->
+  <extension target="org.nuxeo.runtime.datasource" point="datasources">
+    <datasource name="jdbc/keyvaluestore" driverClassName="org.h2.Driver" maxTotal="40" minTotal="1"
+      maxWaitMillis="10000">
+      <property name="url">jdbc:h2:mem:agentic-documents-kv;DB_CLOSE_DELAY=-1</property>
+      <property name="username">sa</property>
+      <property name="password"></property>
+    </datasource>
+  </extension>
+  <extension target="org.nuxeo.runtime.kv.KeyValueService" point="configuration">
+    <store name="sequence" class="org.nuxeo.ecm.core.storage.sql.kv.SQLKeyValueStore">
+      <property name="datasource">jdbc/keyvaluestore</property>
+      <property name="table">kv</property>
+    </store>
+    <!-- Where the supersession claims go: on the server, the default store, the same SQL one. -->
+    <store name="agentic-documents" class="org.nuxeo.ecm.core.storage.sql.kv.SQLKeyValueStore">
+      <property name="datasource">jdbc/keyvaluestore</property>
+      <property name="table">kvdocuments</property>
+    </store>
+  </extension>
+
+  <!-- As nxserver/config/uidsequencer-config.xml on the local server. default="true" makes it the
+       default on 11.5's component too, which picks the default by that flag, not by the name. -->
+  <extension target="org.nuxeo.ecm.core.uidgen.UIDGeneratorService" point="sequencers">
+    <sequencer name="default" class="org.nuxeo.ecm.core.uidgen.KeyValueStoreUIDSequencer" default="true" />
+  </extension>
+
+  <extension target="org.nuxeo.agentic.documents" point="series">
+    <series id="DWG" digits="5" />
+    <series id="SPEC" digits="3" revisions="numbers" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <doctype name="ControlledDrawing" extends="File">
+      <facet name="ControlledDocument" />
+    </doctype>
+    <doctype name="ControlledSpec" extends="File">
+      <facet name="ControlledDocument" />
+    </doctype>
+  </extension>
+
+</component>

@@ -129,6 +129,14 @@ jobs:
           mvn package -pl nuxeo-agentic-assets -am -B -nsu --no-transfer-progress
           ls nuxeo-agentic-assets/target/nuxeo-agentic-assets-*.zip
 
+      # The document control module's add-on, likewise its own package. Its tests start a Nuxeo
+      # runtime and repository (VCS on H2) in the build's JVM, the concurrency test among them, so
+      # it takes a minute or two more than the others; its zip is not uploaded or published.
+      - name: Build and test the document control add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-documents -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-documents/target/nuxeo-agentic-documents-*.zip
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:

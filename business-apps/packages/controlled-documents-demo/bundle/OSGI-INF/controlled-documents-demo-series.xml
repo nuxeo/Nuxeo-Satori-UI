@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- The kit's number series, for nuxeo-agentic-documents: drawings, DWG-00001 and on, revised A,
+     B, C; specifications, SPEC-0001 and on, revised 1, 2, 3. A new engineering document names
+     its series in docctl:series, and the server gives it the series' next number, never one
+     given before. A new revision names in docctl:supersedes the revision it supersedes, and takes
+     that revision's series and number. -->
+<component name="nuxeo.config.controlled-documents-demo.series">
+
+  <require>org.nuxeo.agentic.documents</require>
+
+  <extension target="org.nuxeo.agentic.documents" point="series">
+    <series id="DWG" digits="5" revisions="letters" />
+    <series id="SPEC" digits="4" revisions="numbers" />
+  </extension>
+
+</component>

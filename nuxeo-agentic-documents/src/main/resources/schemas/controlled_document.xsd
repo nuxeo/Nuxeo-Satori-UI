@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- The ControlledDocument facet's schema, prefix docctl. Every property is the server's to write:
+     a creator chooses the series of a new document, or names in supersedes the revision a new one
+     supersedes, and the add-on's listener gives the rest and refuses any other change. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/controlled_document"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/controlled_document">
+
+  <!-- The number series: a registered series' id, such as DWG. -->
+  <xs:element name="series" type="xs:string" />
+  <!-- The document number, the series' id and the sequencer's value: DWG-00042. -->
+  <xs:element name="number" type="xs:string" />
+  <!-- The revision: A, B, C ..., or 1, 2, 3 ..., as the series writes them. -->
+  <xs:element name="revision" type="xs:string" />
+  <!-- current or superseded. -->
+  <xs:element name="status" type="xs:string" />
+  <!-- The id of the revision this one supersedes; empty for a first revision. -->
+  <xs:element name="supersedes" type="xs:string" />
+  <!-- The id of the revision that superseded this one; empty while it is current. -->
+  <xs:element name="supersededBy" type="xs:string" />
+
+</xs:schema>

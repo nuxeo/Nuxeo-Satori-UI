@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import {
@@ -19,6 +19,7 @@ import {
   NxsBannerComponent,
   NxsCommentsComponent,
   NxsIconComponent,
+  type NxsBannerAction,
   type NxsBannerTone,
   type NxsTagStatus,
 } from '@nuxeo/satori-platform/components';
@@ -105,8 +106,18 @@ export interface RecordBannerShown {
     readonly message: string;
     readonly tone: NxsBannerTone;
     readonly announce: 'none';
+    /**
+     * Its link, as the banner's one action: the linked record's title, which opens it. Disabled,
+     * as "Unavailable", for a record the reader may not read or that no longer exists, and on a
+     * page drawn read-only. Empty for a banner that links nowhere, whose property holds no id, or
+     * whose record is still being read.
+     */
+    readonly actions: readonly NxsBannerAction[];
   };
 }
+
+/** The class a banner's link carries, for the page's styling and a test to find it by. */
+export const BANNER_LINK_CLASS = 'record-page__banner-link';
 
 /** One field as the page shows it. */
 export interface RecordFieldShown {
@@ -284,6 +295,7 @@ export class RecordPageComponent {
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly linkedRecords = inject(LinkedRecordLookup);
+  private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly rules = inject(ExtensionRuleRegistry);
@@ -352,6 +364,12 @@ export class RecordPageComponent {
         if (definition && !fieldShowing(layout, xpath))
           named(null, {}, definition, properties[xpath]);
       }
+      // The record each banner links to, named as a `document-link` field names it, whether or
+      // not the banner's rule passes yet: as a field's, it is read once for the page.
+      for (const banner of layout.banners) {
+        if (banner.link !== null)
+          named('document-link', {}, { type: 'string' }, properties[banner.link]);
+      }
       // Who did each item a checklist shows done, named as a `user` field names them.
       for (const card of cardsOf(layout)) {
         if (!card.checklist) continue;
@@ -406,6 +424,7 @@ export class RecordPageComponent {
           message: this.text(banner.label) ?? humanize(banner.id),
           tone: BANNER_TONE[banner.tone],
           announce: 'none',
+          actions: this.bannerLink(banner.link, document, context),
         },
       }));
     const cards = (list: readonly ResolvedRecordCard[]): RecordCardShown[] =>
@@ -477,6 +496,37 @@ export class RecordPageComponent {
       cards: cards(layout.cards),
     };
   });
+
+  /**
+   * A banner's link, as its one action: the record the property names, by its title, as a
+   * `document-link` shows it, opened through the router as a row of a list opens its record. A
+   * value that is not a document's id is never asked for, and shows as unavailable; one still
+   * being read shows nothing yet.
+   */
+  private bannerLink(
+    xpath: string | null,
+    document: NuxeoDocument,
+    context: RecordValueContext,
+  ): readonly NxsBannerAction[] {
+    if (xpath === null) return [];
+    const value = document.properties[xpath];
+    if (typeof value !== 'string' || value.trim() === '') return [];
+    const record = context.record(value);
+    if (record === null) return [];
+    const url = record.url;
+    return [
+      {
+        label: record.text,
+        icon: 'arrow_forward',
+        emphasis: 'outlined',
+        cssClass: BANNER_LINK_CLASS,
+        disabled: url === null || this.readOnly(),
+        press: () => {
+          if (url !== null && !this.readOnly()) void this.router.navigateByUrl(url);
+        },
+      },
+    ];
+  }
 
   /**
    * A card's related records: the columns whose rules pass for the open record and the user, as

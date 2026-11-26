@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "controlled-documents.home.title",
+  "cards": [
+    {
+      "id": "current",
+      "labelKey": "controlled-documents.home.current",
+      "kpi": { "pageProvider": "controlled_documents_current" },
+      "queue": "current"
+    },
+    {
+      "id": "superseded",
+      "labelKey": "controlled-documents.home.superseded",
+      "kpi": { "pageProvider": "controlled_documents_superseded" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["document-controllers"] }
+    }
+  ]
+}

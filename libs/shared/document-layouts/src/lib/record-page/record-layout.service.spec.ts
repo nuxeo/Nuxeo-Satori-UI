@@ -361,6 +361,7 @@ describe('DocumentLayoutService: record pages', () => {
         label: { literal: 'Rights ending', keys: [], fallback: 'Rights ending' },
         tone: 'warning',
         visibleWhen: banners[0].visibleWhen,
+        link: null,
       },
       {
         id: 'notice',
@@ -368,6 +369,7 @@ describe('DocumentLayoutService: record pages', () => {
         label: { keys: ['acme.asset.notice'], fallback: 'Notice' },
         tone: 'info',
         visibleWhen: null,
+        link: null,
       },
     ]);
     expect(warnings).toEqual([
