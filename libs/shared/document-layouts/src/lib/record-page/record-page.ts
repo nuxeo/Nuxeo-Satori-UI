@@ -76,6 +76,7 @@ import {
 import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
 import { RecordPictureViewsComponent } from './record-picture-views';
+import { RECORD_VIDEO_ID, RecordVideoComponent } from './record-video';
 import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
 import {
@@ -222,7 +223,8 @@ function fieldShowing(
  * a checklist: the items the file requires, each done or not by the record's own property, with who
  * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
  * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
- * rounds (`lib-record-picture-review`), then the cards.
+ * rounds (`lib-record-picture-review`), or, for a video, its player, its facts and its storyboard
+ * (`lib-record-video`, through `nxs.components.recordVideo`), then the cards.
  *
  * Its fields and checklists are read-only; the comments card and the review are where a user
  * writes, and the
@@ -244,6 +246,7 @@ function fieldShowing(
     RecordPictureReviewComponent,
     RecordPictureViewsComponent,
     RecordTimelineComponent,
+    RecordVideoComponent,
     RouterLink,
     TranslatePipe,
   ],
@@ -268,6 +271,12 @@ export class RecordPageComponent {
 
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+  protected readonly videoId = RECORD_VIDEO_ID;
+  /** What a video's player is given, through `nxs.components.recordVideo`. */
+  protected readonly videoInputs = computed(() => ({
+    document: this.document(),
+    stateHeadingLevel: 3,
+  }));
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly linkedRecords = inject(LinkedRecordLookup);

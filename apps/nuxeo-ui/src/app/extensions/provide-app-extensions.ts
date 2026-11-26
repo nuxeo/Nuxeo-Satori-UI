@@ -27,7 +27,11 @@ import {
   type ExtensionActionHandler,
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { TaskFormComponent } from '@agentic-ui/shared/document-layouts';
+import {
+  RECORD_VIDEO_ID,
+  RecordVideoComponent,
+  TaskFormComponent,
+} from '@agentic-ui/shared/document-layouts';
 import {
   NXS_ASSET_FACETS_DRAWER_ID,
   NXS_ASSET_GRID_ID,
@@ -230,6 +234,12 @@ function provideAppContributions(): EnvironmentProviders {
         // that use the same viewer — so re-registering it replaces the strip in all of them.
         // Inputs only, so the viewer passes `seekHandler` rather than binding `seek`.
         [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
+
+        // A video on its record page: its player, its facts and its storyboard (layout-v2.md,
+        // section 11). The record page renders it through this ID and falls back to the packaged
+        // component, so a customer library can replace the player. Inputs only: `document` and
+        // `stateHeadingLevel`. By class, for the reason `NXS_TASK_FORM_ID` is.
+        [RECORD_VIDEO_ID]: RecordVideoComponent,
 
         // The cards of the asset search screen's grid view. `/documents` renders them through this
         // ID, so a customer library can replace the card without touching the search around it.

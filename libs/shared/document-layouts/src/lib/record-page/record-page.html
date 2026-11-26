@@ -38,6 +38,22 @@
         <lib-record-picture-views [document]="document()" [stateHeadingLevel]="3" />
       }
     </section>
+  } @else if (layout().preview === 'video') {
+    <section
+      class="record-page__card record-page__preview"
+      data-preview="video"
+      [attr.aria-label]="'document-layouts.video.label' | translate"
+    >
+      <!-- Through its ID, so that a customer library can replace the player. -->
+      <lib-extension-outlet
+        #videoOutlet
+        [componentId]="videoId"
+        [componentInputs]="videoInputs()"
+      />
+      @if (videoOutlet.unresolved()) {
+        <lib-record-video [document]="document()" [stateHeadingLevel]="3" />
+      }
+    </section>
   }
   @if (page.tabs) {
     <mat-tab-group

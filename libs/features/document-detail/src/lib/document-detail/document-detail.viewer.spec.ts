@@ -402,6 +402,20 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   });
 
   describe('server storyboard', () => {
+    /**
+     * A video's files are held back while its type's layout is read, since its record page's
+     * player would fetch its own (layout-v2.md, section 11): the index answers 404 here, so the
+     * type has no record page and the packaged viewer's files load.
+     */
+    async function buildVideo(initial: NuxeoDocument): Promise<void> {
+      await build(initial);
+      http
+        .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+        .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
     function videoDoc(storyboard: Array<Record<string, unknown>>, uid = 'doc-1'): NuxeoDocument {
       return doc({
         uid,
@@ -420,7 +434,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     }
 
     it('renders one frame per server storyboard entry, in order, with its timecode', async () => {
-      await build(
+      await buildVideo(
         videoDoc([
           { timecode: 0, comment: 'Opening', content: { viewUrl: '/nuxeo/sb0' } },
           { timecode: 12.5, comment: 'Middle', content: { data: '/nuxeo/sb1' } },
@@ -436,7 +450,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     });
 
     it('also publishes the video dimensions and duration alongside the frames', async () => {
-      await build(videoDoc([{ timecode: 0, comment: '', content: { data: '/nuxeo/sb0' } }]));
+      await buildVideo(videoDoc([{ timecode: 0, comment: '', content: { data: '/nuxeo/sb0' } }]));
 
       expect(component.videoInfo()).toMatchObject({
         duration: 42,
@@ -448,7 +462,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
     it('falls back to the stored thumbnail URL when the xpath fetch is rejected', async () => {
       mockDetailService.fetchBlobByXpath.mockReturnValue(throwError(() => new Error('404')));
-      await build(
+      await buildVideo(
         videoDoc([
           { timecode: 0, comment: 'A', content: { viewUrl: 'http://nuxeo:8080/nuxeo/sb0?x=1' } },
         ]),
@@ -470,7 +484,9 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
      */
     it('fetches each storyboard frame once even though two callers ask for it', async () => {
       mockDetailService.fetchBlobByXpath.mockReturnValue(throwError(() => new Error('404')));
-      await build(videoDoc([{ timecode: 0, comment: 'A', content: { viewUrl: '/nuxeo/sb0' } }]));
+      await buildVideo(
+        videoDoc([{ timecode: 0, comment: 'A', content: { viewUrl: '/nuxeo/sb0' } }]),
+      );
 
       expect(http.match('/nuxeo/sb0')).toHaveLength(1);
     });
@@ -484,7 +500,9 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
      */
     it('does not release the guard when the previous document answers late', async () => {
       mockDetailService.fetchBlobByXpath.mockReturnValue(throwError(() => new Error('404')));
-      await build(videoDoc([{ timecode: 0, comment: 'A', content: { viewUrl: '/nuxeo/sb-1' } }]));
+      await buildVideo(
+        videoDoc([{ timecode: 0, comment: 'A', content: { viewUrl: '/nuxeo/sb-1' } }]),
+      );
 
       const staleFrames = http.match('/nuxeo/sb-1');
       expect(staleFrames).toHaveLength(1);
@@ -510,7 +528,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
     it('produces no frames when neither the xpath nor a stored URL yields one', async () => {
       mockDetailService.fetchBlobByXpath.mockReturnValue(throwError(() => new Error('404')));
-      await build(videoDoc([{ timecode: 0, comment: '', content: {} }]));
+      await buildVideo(videoDoc([{ timecode: 0, comment: '', content: {} }]));
 
       expect(component.storyboard()).toEqual([]);
     });
@@ -521,7 +539,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         call += 1;
         return call === 1 ? throwError(() => new Error('404')) : of(new Blob(['thumb']));
       });
-      await build(
+      await buildVideo(
         videoDoc([
           { timecode: 0, comment: 'gone', content: {} },
           { timecode: 5, comment: 'kept', content: { data: '/nuxeo/sb1' } },

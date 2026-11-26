@@ -4427,6 +4427,7 @@ class DocumentDetailService {
     fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>;
+    fetchRendition(uid: string, name: string): Observable<Blob>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
     getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>;

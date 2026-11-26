@@ -27,6 +27,7 @@ import type { LinkedRecord } from './linked-record';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
+import { RECORD_VIDEO_ID } from './record-video';
 import { RECORD_TIMELINE_AUDIT_DELAY } from './record-clock';
 import { RecordTimelineComponent } from './record-timeline';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
@@ -226,6 +227,17 @@ class OverriddenBannerComponent {
   readonly announce = input('');
 }
 
+/** What a customer's own video player might be: it says which inputs reached it. */
+@Component({
+  selector: 'lib-test-overridden-video',
+  standalone: true,
+  template: '<p class="test-video">{{ document()?.uid }} at level {{ stateHeadingLevel() }}</p>',
+})
+class OverriddenVideoComponent {
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly stateHeadingLevel = input(0);
+}
+
 describe('RecordPageComponent', () => {
   let fixture: ComponentFixture<RecordPageComponent>;
   let rules: { memberServices: boolean; canSeeService: boolean };
@@ -258,6 +270,8 @@ describe('RecordPageComponent', () => {
     fetchBlobByXpath: ReturnType<typeof vi.fn>;
     /** A picture's review: its annotations on the views. */
     getAnnotationDocuments: ReturnType<typeof vi.fn>;
+    /** A video's transcoded files, which a page with the video's preview fetches by name. */
+    fetchRendition: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -269,6 +283,7 @@ describe('RecordPageComponent', () => {
       createComment: vi.fn(),
       fetchBlobByXpath: vi.fn(() => new Subject()),
       getAnnotationDocuments: vi.fn(() => of([])),
+      fetchRendition: vi.fn(() => new Subject()),
     };
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
@@ -1763,6 +1778,59 @@ describe('RecordPageComponent', () => {
       expect(documents.fetchBlobByXpath).toHaveBeenCalledWith('m1', 'picture:views/0/content');
       expect(preview?.querySelector('lib-record-picture-review')).toBeNull();
       expect(documents.getAnnotationDocuments).not.toHaveBeenCalled();
+    });
+
+    /** A video record, as Nuxeo 2025 writes one: two transcoded files and what it read of them. */
+    const filmed = () =>
+      member({
+        'file:content': { name: 'film.webm', 'mime-type': 'video/webm', digest: 'o' },
+        'vid:transcodedVideos': [
+          { name: 'MP4 480p', content: { 'mime-type': 'video/mp4', digest: 'm' }, info: {} },
+        ],
+        'vid:info': { duration: 12, width: 160, height: 90, format: 'matroska,webm' },
+        'dc:expired': storedDay(3),
+      });
+
+    it("draws a video's player first when the layout says so, under the banners and above the cards", async () => {
+      fixture.destroy();
+      fixture = TestBed.createComponent(RecordPageComponent);
+      fixture.componentRef.setInput('document', filmed());
+      fixture.componentRef.setInput('layout', { ...layoutOf(RIGHTS), preview: 'video' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      // The outlet finds nothing registered, and the page draws its own player in its place.
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      const preview = root.querySelector('[data-preview="video"]');
+      expect(preview?.querySelector('lib-record-video')).not.toBeNull();
+      expect(preview?.getAttribute('aria-label')).toBe('Video');
+      expect(preview?.previousElementSibling?.classList.contains('record-page__banners')).toBe(
+        true,
+      );
+      expect(preview?.nextElementSibling?.classList.contains('record-page__grid')).toBe(true);
+      expect(documents.fetchRendition).toHaveBeenCalledWith('m1', 'MP4 480p');
+      // A video is not a picture: neither its views nor a review are drawn.
+      expect(root.querySelector('[data-preview="picture"]')).toBeNull();
+      expect(root.querySelector('lib-record-picture-views')).toBeNull();
+    });
+
+    it('draws it through its ID, so that an override of it reaches the record page', async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [RECORD_VIDEO_ID]: OverriddenVideoComponent,
+      });
+      fixture.destroy();
+      fixture = TestBed.createComponent(RecordPageComponent);
+      fixture.componentRef.setInput('document', filmed());
+      fixture.componentRef.setInput('layout', { ...layoutOf(RIGHTS), preview: 'video' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const preview = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-preview="video"]',
+      );
+      expect(preview?.querySelector('lib-record-video')).toBeNull();
+      expect(preview?.querySelector('.test-video')?.textContent?.trim()).toBe('m1 at level 3');
+      expect(documents.fetchRendition).not.toHaveBeenCalled();
     });
 
     it('draws the picture as a review when the layout has one, its offers held back on a read-only page', async () => {

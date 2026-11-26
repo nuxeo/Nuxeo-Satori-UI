@@ -1120,6 +1120,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.taskForm`              | A task's own form inside that panel, from its step's `tasks/<workflow>.<step>.layout.json`; given `task`, `disabled` and `onForm`, to hand its form back |
 | `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
 | `nxs.components.storyboard`            | The strip of frames under a video that seeks it, wherever the document viewer shows a video — the document page's View tab and the asset screens         |
+| `nxs.components.recordVideo`           | A video's player, facts and storyboard on its record page, for the `video` schema; given `document` and `stateHeadingLevel`                              |
 | `nxs.components.assetGrid`             | The cards of the asset search screen's grid view at `/documents`: thumbnail, name, type pill and the selection checkbox                                  |
 | `nxs.components.assetFacetsDrawer`     | The faceted filter panel inside the assets drawer: full-text box, a collapsible group per facet with its counts, and reset / save-as / search            |
 
@@ -1953,7 +1954,9 @@ What a layout file does **not** do:
   is read only as version 2, since version 1 has no `view` mode, and a `documentView` entry
   (section 9a) still takes the tab first. A record with a file or a note keeps its own View tab,
   but for a Picture, or any record with the `picture` schema, whose record page shows its picture
-  views above its cards (layout-v2.md, section 11). A file for any mode other than `view`,
+  views above its cards, and a Video, or any record with the `video` schema, whose record page
+  shows its player, its facts and its storyboard there, through `nxs.components.recordVideo`
+  (layout-v2.md, section 11). A file for any mode other than `view`,
   `metadata`, `edit` and `create` is served but not rendered.
 - **An `edit` or `create` file may be version 2 too.** The form then draws only what the file
   lists, with no Dublin Core fields of its own: its cards, each widget as its field's input,

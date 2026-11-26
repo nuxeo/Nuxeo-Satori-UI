@@ -1,0 +1,114 @@
+@let rendition = selected();
+@if (renditions().length === 0) {
+  <!-- No transcoded video and no original: nothing to play. -->
+  <nxs-empty-state
+    icon="movie"
+    [heading]="'document-layouts.video.none' | translate"
+    [headingLevel]="stateHeadingLevel()"
+  />
+} @else if (rendition === null) {
+  <!-- Every file was tried, and this browser decoded none. -->
+  <nxs-empty-state
+    class="record-video__unplayable"
+    icon="movie"
+    [heading]="'document-layouts.video.unplayable' | translate"
+    [headingLevel]="stateHeadingLevel()"
+  />
+} @else {
+  @let name =
+    rendition.kind === 'original'
+      ? ('document-layouts.video.original' | translate)
+      : rendition.name;
+  <figure class="record-video__figure" [attr.data-rendition]="rendition.name ?? 'original'">
+    <div class="record-video__frame" [attr.aria-busy]="videoUrl() === null && failure() === null">
+      @if (videoUrl(); as url) {
+        <video
+          #player
+          class="record-video__player"
+          controls
+          preload="metadata"
+          [src]="url"
+          [attr.aria-label]="
+            'document-layouts.video.player'
+              | translate: { title: document().title, rendition: name }
+          "
+          (timeupdate)="moved()"
+          (seeked)="moved()"
+          (error)="undecodable($event)"
+        ></video>
+      } @else if (refusal(); as refused) {
+        <!-- The server's rights refused this file: their reason, never the client's guess. -->
+        <nxs-banner
+          class="record-video__refusal"
+          tone="error"
+          announce="alert"
+          [attr.data-refusal]="refused.reason"
+          [message]="refused.key | translate: refused.params"
+        />
+      } @else if (failure(); as status) {
+        <nxs-error-state
+          [status]="status"
+          [heading]="'document-layouts.video.failed' | translate"
+          [headingLevel]="stateHeadingLevel()"
+          [retryable]="status === 500"
+          (retry)="retry()"
+        />
+      } @else {
+        <nxs-spinner diameter="32" [label]="'document-layouts.video.loading' | translate" />
+      }
+    </div>
+    <figcaption class="record-video__caption">{{ caption(rendition, name) }}</figcaption>
+  </figure>
+  @if (videoUrl() !== null && storyboard().length > 0) {
+    <!-- Through its ID, so that an override of the strip reaches the record page too. Only with
+         the player: its frames seek it. -->
+    <div class="record-video__storyboard">
+      <lib-extension-outlet
+        #storyboardOutlet
+        [componentId]="storyboardId"
+        [componentInputs]="storyboardInputs()"
+      />
+      @if (storyboardOutlet.unresolved()) {
+        <nxs-storyboard
+          [items]="storyboard()"
+          [label]="'document-layouts.video.storyboard' | translate"
+          [activeTimecode]="activeTimecode()"
+          (seek)="seekTo($event)"
+        />
+      }
+    </div>
+  }
+}
+@if (renditions().length > 0) {
+  @if (facts(); as known) {
+    <dl class="record-video__facts">
+      @if (known.duration !== null) {
+        <div class="record-video__fact" data-fact="duration">
+          <dt>{{ 'document-layouts.video.duration' | translate }}</dt>
+          <dd>{{ duration(known.duration) }}</dd>
+        </div>
+      }
+      @if (size(known.width, known.height); as dimensions) {
+        <div class="record-video__fact" data-fact="frame-size">
+          <dt>{{ 'document-layouts.video.frame-size' | translate }}</dt>
+          <dd>{{ dimensions }}</dd>
+        </div>
+      }
+      @if (known.format; as format) {
+        <div class="record-video__fact" data-fact="format">
+          <dt>{{ 'document-layouts.video.format' | translate }}</dt>
+          <dd>{{ format }}</dd>
+        </div>
+      }
+    </dl>
+  } @else {
+    <p class="record-video__note" data-note="facts">
+      {{ 'document-layouts.video.facts-none' | translate }}
+    </p>
+  }
+  @if (frames().length === 0) {
+    <p class="record-video__note" data-note="storyboard">
+      {{ 'document-layouts.video.storyboard-none' | translate }}
+    </p>
+  }
+}

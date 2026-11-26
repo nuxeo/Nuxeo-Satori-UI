@@ -29,6 +29,14 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Added (`@nuxeo-satori/platform/nuxeo-client`) — a rendition by its name
+
+`DocumentDetailService.fetchRendition(uid, name)` reads a document's rendition by its name, such
+as a video's `MP4 480p`, through the REST API's rendition adapter, the name sent as one encoded path
+segment; an empty name, `.` or `..` errors without a request. The record page's video player asks
+for a transcoded video so, by the name a rights policy lists it by
+(docs/business-apps/layout-v2.md, section 11). Additive: no existing call changes.
+
 ### Added (`@nuxeo-satori/platform/nuxeo-client`, `@nuxeo-satori/platform/ui`) — what a queue needs
 
 For the queue page of the business apps (docs/business-apps/app-definition-v2.md, section 4).
