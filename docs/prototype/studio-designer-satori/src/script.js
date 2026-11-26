@@ -92,7 +92,7 @@ const route=()=>(location.hash.replace('#/','')||'overview');
 function nav(){const cur=route().split('/')[0],cur2=cur==='item'?{nav:'navigation',tabs:'tabs',actions:'actions'}[route().split('/')[1]]:cur;
  $('#nav').innerHTML=AREAS.map(g=>`<h3>${g[0]}</h3>`+g[1].map(a=>`<a href="#/${a[0]}" ${a[0]===cur2?'aria-current="page"':''}>${ic(a[2])}${a[1]}</a>`).join('')).join('')+`<div class="navfoot">Target: Nuxeo Platform LTS 2025<br>Live config: v${S.version}</div>`;
  $('#pnav').innerHTML=`<div class="app-ic">${ic('nuxeo')}</div>`+[['home','Home'],['folder','Browse'],['tasks','Tasks'],['search','Search']].map(x=>`<button aria-label="${x[1]} (not part of this prototype)" data-act="stub" title="${x[1]}">${ic(x[0])}</button>`).join('')+`<button aria-current="page" aria-label="Studio" title="Studio" data-act="home">${ic('settings')}</button><span class="sp"></span><span class="avatar" aria-label="Signed in as Priya Shah">PS</span>`}
-function render(){const r=route(),k=r.split('/')[0],f=R[k]||R.overview;nav();
+function render(){const r=route(),k=r.split('/')[0],f=Object.hasOwn(R,k)?R[k]:R.overview;nav();
  $('#crumb').textContent='Administration / Studio / '+(k==='item'?TITLES[{nav:'navigation',tabs:'tabs',actions:'actions'}[r.split('/')[1]]]+' / '+(S.lists[r.split('/')[1]]?.[+r.split('/')[2]]?.id||''):(TITLES[k]||'Overview'));
  const ban=S.conflict?`<div class="banner err" role="alert">${ic('sync_problem')}<span>${esc(S.conflict)} published version ${S.version+1} while you were editing. Review the differences before publishing.</span><button data-act="ack">Dismiss</button></div>`:'';
  $('#main').innerHTML=ban+f(r);const h=$('#main h1');h&&(h.tabIndex=-1,h.focus());pill();pvUpdate()}
