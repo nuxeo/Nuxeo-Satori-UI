@@ -214,6 +214,11 @@ npm run beta:identity-guard-selftest     # offline: the judgement and the step w
 APP_URL=… npm run beta:identity-guard-controls   # live, needs a guest-enabled Nuxeo
 ```
 
+On Node 25, run the selftest with `NODE_OPTIONS=--no-experimental-webstorage`. Without the flag,
+its fake page reads Node 25's built-in `localStorage`, which throws unless Node was given
+`--localstorage-file`, and the run stops on a `PreconditionError` that quotes that message. That is
+the selftest, not the guard.
+
 The live controls run `fixtures/identity-guard/control.steps.mjs` through the real runner three
 times: no fault must pass; credentials dropped mid-run, and a guest cookie adopted mid-run, must
 each end `precondition-not-met` while every check of the steps' own passes — without the guard

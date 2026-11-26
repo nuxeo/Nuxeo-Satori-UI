@@ -12,6 +12,14 @@
  * which would make it an always-red gate that gets bypassed.
  *
  *   node scripts/beta-harness/identity-guard.selftest.mjs
+ *
+ * On Node 25, run it with `NODE_OPTIONS=--no-experimental-webstorage`. Node 25 has a built-in
+ * global `localStorage` that throws when read unless Node was given `--localstorage-file`, and the
+ * fake page below reads that global on every `evaluate`, to put it back afterwards. So every
+ * in-page probe fails, and the run stops on a `PreconditionError` that quotes Node's message
+ * ("Cannot initialize local storage without a `--localstorage-file` path") before the summary is
+ * printed. That is the test, not the guard. Node 24, which `.nvmrc` pins and CI runs, has no such
+ * global.
  */
 
 import { createHelpers, PreconditionError } from './helpers.mjs';
