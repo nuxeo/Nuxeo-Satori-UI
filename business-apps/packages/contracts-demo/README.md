@@ -12,8 +12,10 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 
 - **A contract record page,** and an edit form with the field rule asked for in plain words: "the
   termination reason is required when the status is Terminated".
-- **A queue,** contracts up for renewal: active contracts that end within 90 days, or have ended
-  and are still active, soonest first.
+- **A queue,** "Up for renewal or overdue": active contracts that end within 90 days, or have
+  ended and are still active, soonest first. Named so since 0.2.1: under "Up for renewal" alone, a
+  browser walkthrough found CTR-1007, ended ten days before, and flagged it. The ended
+  ones are there on purpose, first, and the record page tells the two apart with its banners.
 - **A home, a menu and labels:** the renewals figure, which links to the queue, for everyone the
   app is for; the active contracts for contract managers; the terminated ones for legal reviewers.
 - **An `app.json` that names its own groups,** `contract-managers` and `legal-reviewers`, and a
@@ -48,7 +50,7 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 
 - **No `actions.json`.** Nothing in the app reads one yet, and none was asked for.
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
-- **One version in three places:** 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
+- **One version in three places:** 0.2.1, in `package.xml`, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`.
 - **Its address is `contract-desk`,** not its id: `contracts` is the platform's own page,
   `/contracts`, the component showcase (`PLATFORM_ROUTES` in `libs/shared/app-definition`). 0.1.0
@@ -249,7 +251,7 @@ repository. Seeing all of this live needs the package installed and seeded, next
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0
 ```
 
-It writes `dist/contracts-demo-0.2.0.zip`, with no note. Held to its content model:
+It writes `dist/contracts-demo-0.2.1.zip`, with no note. Held to its content model:
 
 ```bash
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0 --model business-apps/packages/contracts-demo/content-model.json
@@ -268,6 +270,9 @@ npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0 --
 
 From 0.1.0 it writes `dist/contracts-demo-0.2.0.changes.md`: the address changed, which is
 breaking, and the component, which is to judge, so 0.2.0, a minor. 0.1.1 is refused at step 3.
+From 0.2.0, `dist/contracts-demo-0.2.1.changes.md`: 3 changes, the queue's and the home figure's
+names changed and `layout.schema.contract`, the Properties panel's heading for the schema, added,
+which need a patch.
 
 ## Installing it on a local Nuxeo
 
@@ -283,11 +288,11 @@ starts, and removes itself. `nuxeoctl mp-install` refuses while the server runs,
 the container's main process.
 
 ```bash
-docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.2.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.2.0.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.2.1.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
 ```
 
 ```bash
@@ -315,7 +320,7 @@ docker cp /tmp/zz-contracts-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/
 
 A rebuild of a version already installed is skipped as unchanged: in the one-off script, run
 `nuxeoctl mp-remove contracts-demo --accept=true` before `mp-install`. Do the same on a server with
-0.1.0 installed: remove `contracts-demo`, then install `contracts-demo-0.2.0.zip`, in one script.
+0.1.0 installed: remove `contracts-demo`, then install `contracts-demo-0.2.1.zip`, in one script.
 
 ### Removing it
 
@@ -357,23 +362,32 @@ node business-apps/packages/contracts-demo/demo/seed.mjs
   and two trashed copies of one stop the run; a place holding a document of another type stops the
   run, untouched.
 - **It checks what it wrote:** last, the three page providers must return every seeded contract
-  that belongs in them and none that does not, the renewals in the order of their end dates. A
-  contract the seed did not write may be there too.
+  that belongs in them and none that does not, the renewals in the order of their end dates, the
+  ended CTR-1007 among them. A contract the seed did not write may be there too. At the end it
+  prints a link to one contract up for renewal and one overdue.
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default.
   `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met, before
   anything is written: no credentials, no server, or one that does not answer `/me` as Nuxeo does,
   credentials refused, the package not installed, or no `/default-domain/workspaces`.
 - **Its controls,** `node business-apps/packages/contracts-demo/demo/seed.selftest.mjs`, run it
   against a stand-in for the REST API: they prove the script, not the server. CI does not run them.
-  23 controls, each behaviour above among them, and a last one that no run, the refused ones
+  25 controls, each behaviour above among them, and a last one that no run, the refused ones
   included, prints a password or its Basic header. Each was seen failing: with the seed broken one
   way at a time (no check for a contract that does not belong, no write over an existing one, no
   emptied termination reason, no `/default-domain/workspaces` or `/me` precondition, the header or
   the refused password printed, any trashed name like a contract's restored, no order check), each
   of the nine turned at least one control red.
+- **Two controls since 0.2.1.** The seed already failed a renewals page provider that leaves out
+  the ended contracts, since its data expects CTR-1007 there; one control now proves it, and that
+  the run names CTR-1007 alone. The other reads the kit's files rather than the script: the
+  queue's name, its home card's and its menu entry's, each read as the app reads it, a `label`
+  first, else its `labelKey`'s text, the menu entry's else the queue's, must say "overdue" while
+  the data expects an ended contract in the queue. Each went red when broken on purpose: the
+  seed's check for a missing renewal turned off, the names put back to "Up for renewal", and the
+  queue's `labelKey` pointed at another key.
 
-It prints the home, the queue and two record pages, on the app at `APP_URL`
-(`http://localhost:4200` by default).
+It prints the home, the queue and three record pages, one up for renewal, one overdue and one
+terminated, on the app at `APP_URL` (`http://localhost:4200` by default).
 
 ### Seeing it under `nx serve`, and "Switch app"
 
