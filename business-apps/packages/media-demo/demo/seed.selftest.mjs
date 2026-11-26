@@ -11,6 +11,7 @@
  * which is the add-on's as its own tests hold it.
  */
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,7 +31,8 @@ import {
 import { basic, kitPolicy, startStandIn } from './stand-in.mjs';
 
 const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
-const PASSWORD = 'not-a-real-password-for-the-stand-in';
+/** The stand-in's one password, made for each run: no credential is written in the repository. */
+const PASSWORD = randomBytes(18).toString('base64url');
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 let failures = 0;
 
