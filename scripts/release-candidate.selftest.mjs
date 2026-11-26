@@ -29,8 +29,8 @@
  *   signed is taken, with what its signature records; refused are a kit with no signature, one
  *   signed by a key no trusted signer has, one signed from a commit not merged, one changed at the
  *   same version since it was signed, and another version's signature under this version's name.
- *   What is merged, in a repository of its own: HEAD's history, `origin/main`'s and a staging
- *   branch's, not a feature branch's. The command refuses neither `--signatures` nor
+ *   What is merged, in a repository of its own: HEAD's history and `origin/main`'s, not a staging
+ *   branch's or a feature branch's. The command refuses neither `--signatures` nor
  *   `--unsigned-kits`, both, a `--signatures` that is no folder, trusted signers that name no
  *   signer, and `--trusted-signers` without `--signatures`, each with exit 2 having written
  *   nothing; and, on the pinned Node with Maven on the PATH, it refuses at stage 2 a candidate
@@ -798,9 +798,9 @@ function runTimeSigner(id) {
 }
 
 /**
- * `inProtectedHistory`, in a repository of its own: a commit on HEAD, on `origin/main` and on a
- * staging branch is merged; one on a feature branch, local or remote, is not, nor is one git does
- * not have.
+ * `inProtectedHistory`, in a repository of its own: a commit on HEAD and on `origin/main` is
+ * merged; one on a staging branch, which no ruleset protects, or on a feature branch, local or
+ * remote, is not, nor is one git does not have.
  */
 function theProtectedHistory() {
   const repo = join(scratch, 'history');
@@ -830,15 +830,20 @@ function theProtectedHistory() {
   git(['update-ref', 'refs/remotes/origin/feature/unmerged', feature]);
   git(['update-ref', 'refs/heads/feature', feature]);
   check(
-    "a signed commit in HEAD's history, on origin/main or on a staging branch is merged",
-    [head, main, staging].every((sha) => inProtectedHistory(sha, repo)),
-    JSON.stringify({ head, main, staging }),
+    "a signed commit in HEAD's history or on origin/main is merged",
+    [head, main].every((sha) => inProtectedHistory(sha, repo)),
+    JSON.stringify({ head, main }),
     false,
   );
   check(
     'refused: a signed commit only on a feature branch, local or remote, as merged',
     !inProtectedHistory(feature, repo),
     feature,
+  );
+  check(
+    'refused: a signed commit only on a staging branch, which no ruleset protects, as merged',
+    !inProtectedHistory(staging, repo),
+    staging,
   );
   check(
     'refused: a signed commit git does not have, as merged',
@@ -908,7 +913,7 @@ function theSignatures() {
   check(
     "refused: a kit signed from a commit that is not in the candidate's history",
     !unmerged.ok &&
-      /which is neither in this candidate's history nor on a protected branch/.test(
+      /which is neither in this candidate's history nor on origin\/main/.test(
         unmerged.problems.join(' '),
       ),
     JSON.stringify(unmerged),

@@ -671,12 +671,16 @@ export function readKit(zip, scratch) {
   };
 }
 
-/** The branches a signed commit may be on, as this clone has them: what is merged, and nothing else. */
-export const PROTECTED_BRANCHES = /^refs\/remotes\/origin\/(main|staging\/.+|integration\/.+)$/;
+/**
+ * The branch beyond `HEAD` a signed commit may be on, as this clone has it: `main`, which a ruleset
+ * protects, with a pull request for every change. No ruleset covers `staging/*`, nor every
+ * `integration/*`, so anyone who can push could make one, and a commit there is not merged.
+ */
+export const PROTECTED_BRANCHES = /^refs\/remotes\/origin\/main$/;
 
 /**
- * Whether `commit` is in the history the candidate is built from, `HEAD`, or of a protected branch
- * this clone has: a commit tagged on `main` is not in a staging branch's history, and is merged.
+ * Whether `commit` is in the history the candidate is built from, `HEAD`, or of `origin/main`: a
+ * commit tagged on `main` is not in a staging branch's history, and is merged.
  * `commit` is a full commit id, as `verifySignature` takes one; one git does not have is in none.
  */
 export function inProtectedHistory(commit, cwd) {
@@ -719,7 +723,7 @@ export function kitSignature({
       signature,
       ok: false,
       problems: [
-        `${basename(zip)} was signed from ${verified.record.commit}, which is neither in this candidate's history nor on a protected branch: a tag on a commit that was never merged.`,
+        `${basename(zip)} was signed from ${verified.record.commit}, which is neither in this candidate's history nor on origin/main: a tag on a commit that was never merged.`,
       ],
     };
   return { signature, ...verified };

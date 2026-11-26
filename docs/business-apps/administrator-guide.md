@@ -183,7 +183,7 @@ holds the zip to its own `package.xml`, and the signer to the repository's trust
 ```bash
 gh attestation download /tmp/payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
   --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1
-mv sha256:*.jsonl /tmp/payers-claims-demo-0.7.0.zip.sig.json
+mv "sha256:$(sha256sum /tmp/payers-claims-demo-0.7.0.zip | cut -d' ' -f1).jsonl" /tmp/payers-claims-demo-0.7.0.zip.sig.json
 npm run app-package:signature -- verify /tmp/payers-claims-demo-0.7.0.zip \
   --name payers-claims-demo --version 0.7.0
 ```

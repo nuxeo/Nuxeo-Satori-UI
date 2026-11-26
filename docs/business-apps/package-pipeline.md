@@ -546,10 +546,11 @@ npm run app-package:signature -- verify business-apps/packages/payers-claims-dem
   --trusted-signers /tmp/signers.json
 # A tag's signature, beside its zip, against the repository's trusted signers.
 npm run app-package:signature -- verify payers-claims-demo-0.7.0.zip --name payers-claims-demo --version 0.7.0
-# Once the run's artifact has expired: the repository's attestations of the zip, renamed.
+# Once the run's artifact has expired: the repository's attestations of the zip, renamed. gh
+# names the file for the zip's digest, `sha256-<digest>.jsonl` on Windows.
 gh attestation download payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
   --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1
-mv sha256:*.jsonl payers-claims-demo-0.7.0.zip.sig.json
+mv "sha256:$(sha256sum payers-claims-demo-0.7.0.zip | cut -d' ' -f1).jsonl" payers-claims-demo-0.7.0.zip.sig.json
 ```
 
 It exits 0 when the zip is verified, 1 when it is refused, with each reason, and 2 when the command
@@ -653,7 +654,7 @@ checking the identity, the runner or the signer, 1 each. The release candidate's
   check take as they take the first. A tag's run takes the workflow as
   the tagged commit has it, so a tag on a commit that changed the workflow signs with that change.
   The release candidate refuses a signature from a commit that neither its history nor a
-  protected branch holds (section 11); a publish and an administrator's check do not;
+  `origin/main` holds (section 11); a publish and an administrator's check do not;
 - a key the team holds, in a cloud KMS, if a customer's policy asks for one: the trusted signers
   take an Ed25519 key already, and nothing else of it is built;
 - the release candidate's workflow giving `--signatures`, which waits for a kit to be signed;
@@ -1092,8 +1093,10 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
   (section 9.1). Stage 2 holds each kit's zip to its own, against
   `business-apps/trusted-signers.json` or `--trusted-signers`: a kit with no signature, signed by
   no trusted signer, whose signature is over other bytes or for another version, or was made from a
-  commit neither the candidate's history nor a protected branch the clone has holds (`main`,
-  `staging/*`, `integration/*`), a tag on a commit never merged, refuses the candidate. The build
+  commit neither the candidate's history nor `origin/main` holds, a tag on a commit never merged,
+  refuses the candidate. `main` is the one branch beyond the candidate's own that counts: a ruleset
+  protects it, and none covers `staging/*`, so a commit there is merged only into the branch the
+  candidate is built from. The build
   is reproducible, so a kit unchanged since its tag has the digest its signature names, and the
   signature verified is written beside the zip in `kits/`. A keyless signature is checked with
   `gh attestation verify`, which reads Sigstore's trusted root over the network unless
@@ -1220,8 +1223,8 @@ push to a `staging/**` branch.
 - a kit the pipeline built and a run-time key signed is taken; refused are one with no signature,
   one signed by a key no trusted signer has, one signed from a commit not in the candidate's
   history, one changed at the same version since it was signed, and another version's signature
-  under its name; a signed commit in HEAD's history, on `origin/main` or on a staging branch
-  taken as merged, and one only on a feature branch, or one git does not have, refused, in a
+  under its name; a signed commit in HEAD's history or on `origin/main` taken as merged, and one
+  only on a staging branch, on a feature branch, or one git does not have, refused, in a
   repository of the control's own; and the command's neither `--signatures` nor
   `--unsigned-kits`, both, a `--signatures` that is no folder, trusted signers that name no
   signer, and `--trusted-signers` without `--signatures`, each exit 2. On the pinned Node with Maven, the command itself, given an empty `--signatures`, is

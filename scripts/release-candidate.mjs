@@ -27,8 +27,8 @@
  *      `--trusted-signers`: a kit unsigned, signed by no trusted signer, or signed over other bytes
  *      or for another version refuses the candidate. `--trusted-root` is Sigstore's trusted root for
  *      `gh attestation verify`, for a keyless signature checked offline. A signature made from a
- *      commit that neither the candidate's history nor a protected branch this clone has holds,
- *      `main`, `staging/*` or `integration/*`, is refused too (`inProtectedHistory`). The verified
+ *      commit that neither the candidate's history nor `origin/main`, which a ruleset protects,
+ *      holds is refused too (`inProtectedHistory`). The verified
  *      signature is written beside the kit's zip. `--unsigned-kits` takes kits with no signature
  *      instead, as every kit is until its first tag, and the manifest and the release note say so;
  *      one of the two must be given.
