@@ -83,13 +83,15 @@ function decoded(text: string): string {
   });
 }
 
-/** An element's text as the server reads it: CDATA as written, the rest decoded; trimmed. */
+/**
+ * An element's text as the server reads it: CDATA as written, the rest decoded; trimmed. It is
+ * read only from elements that hold text alone, such as `<pattern>` or `<pageSize>`, so nothing in
+ * it is markup to take out.
+ */
 function textOf(inner: string): string {
   return inner
     .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
-    .map((part) =>
-      part.startsWith('<![CDATA[') ? part.slice(9, -3) : decoded(part.replace(/<[^>]*>/g, '')),
-    )
+    .map((part) => (part.startsWith('<![CDATA[') ? part.slice(9, -3) : decoded(part)))
     .join('')
     .trim();
 }

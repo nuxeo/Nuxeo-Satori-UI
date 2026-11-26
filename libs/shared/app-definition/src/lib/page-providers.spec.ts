@@ -12,6 +12,20 @@ const KITS = join(import.meta.dirname, '..', '..', '..', '..', '..', 'business-a
 const read = (...path: string[]): unknown => JSON.parse(readFileSync(join(KITS, ...path), 'utf8'));
 const CONFIG = ['bundle', 'agentic-ui-config'];
 
+/** XML with each comment taken out whole, one after the other, as a reader skips them. */
+function withoutComments(xml: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const start = xml.indexOf('<!--', at);
+    if (start === -1) return out + xml.slice(at);
+    out += xml.slice(at, start);
+    const end = xml.indexOf('-->', start + 4);
+    if (end === -1) return out;
+    at = end + 3;
+  }
+}
+
 function modelOf(kit: string): ContentModel {
   const reading = readContentModel(read(kit, 'content-model.json'));
   if (!reading.model) throw new Error(`${kit}: ${reading.problems.join('; ')}`);
@@ -288,7 +302,7 @@ describe("nxqlProblems: what in a page provider's NXQL Nuxeo refuses, as far as 
       const components = join(KITS, kit, 'bundle', 'OSGI-INF');
       if (!existsSync(components)) continue;
       for (const file of readdirSync(components).filter((name) => name.endsWith('.xml'))) {
-        const xml = readFileSync(join(components, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+        const xml = withoutComments(readFileSync(join(components, file), 'utf8'));
         for (const [, element, text] of xml.matchAll(
           /<(pattern|fixedPart)[^>]*>([\s\S]*?)<\/\1>/g,
         )) {
