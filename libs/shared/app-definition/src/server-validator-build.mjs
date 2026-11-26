@@ -225,6 +225,7 @@ const KIT_NAMES = [
   'facilities-demo',
   'moves-demo',
   'payers-claims-demo',
+  'records-demo',
 ];
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));

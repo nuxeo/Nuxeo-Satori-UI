@@ -12,16 +12,18 @@ wait for a security review, and some are built on open decisions
 
 ## 1. What there is to install
 
-| Package                    | What it is                                                                                                                                  | Depends on                                                | On staging            | Installed so far                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------- | ------------------------------------------------- |
-| `nuxeo-agentic-ui`         | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                   | 2026.0.2 once stamped | Earlier builds, on the local server only          |
-| `nuxeo-agentic-assets`     | An asset's rights, enforced on the server at the platform's download endpoints                                                              | Nothing                                                   | 0.1.0                 | Nowhere                                           |
-| `nuxeo-agentic-connectors` | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                | 2026.0.2-SNAPSHOT     | Nowhere                                           |
-| `payers-claims-demo`       | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                               | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
-| `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.1.0` | 0.2.1                 | 0.1.0 on the local server; 0.1.1 to 0.2.1 nowhere |
-| `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                               | 0.2.1                 | Nowhere                                           |
-| `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.1                 | Nowhere                                           |
-| `moves-demo`               | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                               | 0.1.0                 | Nowhere                                           |
+| Package                    | What it is                                                                                                                                  | Depends on                                                  | On staging            | Installed so far                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| `nuxeo-agentic-ui`         | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                     | 2026.0.2 once stamped | Earlier builds, on the local server only          |
+| `nuxeo-agentic-assets`     | An asset's rights, enforced on the server at the platform's download endpoints, and an asset's share links                                  | Nothing                                                     | 0.2.0                 | Nowhere                                           |
+| `nuxeo-agentic-connectors` | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                  | 2026.0.2-SNAPSHOT     | Nowhere                                           |
+| `payers-claims-demo`       | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                                 | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
+| `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`   | 0.2.2                 | 0.1.0 on the local server; 0.1.1 to 0.2.2 nowhere |
+| `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                 | 0.2.1                 | Nowhere                                           |
+| `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                 | 0.1.1                 | Nowhere                                           |
+| `moves-demo`               | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                 | 0.1.0                 | Nowhere                                           |
+| `nuxeo-agentic-records`    | The disposition review, on the platform's retention module: runs, two approvals other than the starter's, deletion and a certificate        | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package | 0.1.0                 | Nowhere                                           |
+| `records-demo`             | The records kit: runs awaiting approval, a run's page, a certificate's page                                                                 | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.1.0`  | 0.1.0                 | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -33,8 +35,11 @@ installed on any server yet"), and the kits' READMEs:
 [Payers](../../business-apps/packages/payers-claims-demo/README.md),
 [brand assets](../../business-apps/packages/brand-assets-demo/README.md),
 [contracts](../../business-apps/packages/contracts-demo/README.md),
-[facilities](../../business-apps/packages/facilities-demo/README.md) and
-[moves](../../business-apps/packages/moves-demo/README.md).
+[facilities](../../business-apps/packages/facilities-demo/README.md),
+[moves](../../business-apps/packages/moves-demo/README.md) and
+[records](../../business-apps/packages/records-demo/README.md), with the
+[records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed on any
+server").
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.
@@ -94,6 +99,10 @@ The order the [demo server](../../business-apps/demo-server/README.md) installs 
    after the packages it depends on, in one `nuxeoctl mp-install --accept=true`. Today only the
    brand assets kit needs the assets add-on; name the add-on before the kit
    ([brand assets README](../../business-apps/packages/brand-assets-demo/README.md#installing-it-on-a-local-nuxeo)).
+   The records kit needs `nuxeo-agentic-records`, which needs Nuxeo's own retention module,
+   `nuxeo-retention`, from Nuxeo's Marketplace for a registered server, at a version for the
+   server's LTS 2025: install the module, then the add-on, then the kit
+   ([records kit README](../../business-apps/packages/records-demo/README.md#installing-it-on-a-server-of-your-own)).
 2. **The connectors bundle, only where a kit contributes a connector.** It has no package: its jar
    goes into `nxserver/bundles/` ([connectors README](../../nuxeo-agentic-connectors/README.md),
    "Installing it"). No kit contributes one yet: the Payers kit's opt-in is described and "not
@@ -182,18 +191,19 @@ Two places, both the server's and never a package's:
 
 ### The properties
 
-| Property                                                                                                                             | Default                                   | What it does                                                                                                                                                                                                                      | Security note                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `nuxeo.agentic.ui.layer.enabled`                                                                                                     | Off; on only when `true`                  | The deployment layer ([below](#the-deployment-layer)). Off, every layer address answers an administrator 404, and the registry serves each package's files; the stored layer is kept, and applies again when it is turned back on | It changes an app for every user of it, from an administrator's screen. Its security review is pending |
-| `nuxeo.agentic.ui.layer.selfApproval`                                                                                                | Off                                       | On, the administrator who wrote or submitted a draft may approve it. Off, a second administrator approves                                                                                                                         | Turn it on only on a server with one administrator                                                     |
-| `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions`, `.bulkActions`                                                             | Empty                                     | The IDs the deployment registers in its own code beyond the platform's, separated by commas. A layer file that names such an ID not listed here is refused                                                                        | None                                                                                                   |
-| The address property a connector names, `nuxeo.agentic.connectors.<id>.<name>`                                                       | Unset: the call answers 503, nothing sent | The other system's address: `https`, a host, no user, query or fragment                                                                                                                                                           | Never in a contribution, a document, a layout or a request. The connectors' security review is pending |
-| The credential a connector names: the property `nuxeo.agentic.connectors.<id>.<name>`, or the variable `NUXEO_CONNECTOR_<ID>_<NAME>` | Unset: 503, nothing sent                  | Sent in the one header the connector names. The property is read first, then the environment                                                                                                                                      | Never logged, never in an answer. Keep it where only the Nuxeo user reads it                           |
-| `nuxeo.agentic.connectors.<id>.http.allowed`                                                                                         | Unset: `https` only                       | `true` lets that connector call a plain `http` address                                                                                                                                                                            | For a demo server only                                                                                 |
-| `nuxeo.agentic.ui.config.dev`                                                                                                        | Off; on only when `true`                  | Reads a directory of configuration fragments on every request, after every package's                                                                                                                                              | "Never set it in production." The server log warns `DEVELOPMENT OVERRIDES ARE ACTIVE` at start         |
-| `nuxeo.agentic.ui.config.dev.dir`                                                                                                    | `${nuxeo.data.dir}/agentic-ui-config-dev` | That directory. Set alone, it does nothing                                                                                                                                                                                        | As above                                                                                               |
-| `nuxeo.agentic.ui.url`                                                                                                               | Unset                                     | Notification emails' document links. Unset, `agentic-ui/#/doc/<id>` under `nuxeo.url`; set, `#/doc/<id>`, for the notification template in `nuxeo-conf/` to put after it                                                          | A development setting: its sample sets `http://localhost:4200`                                         |
-| `nuxeo.agentic.share.groups`                                                                                                         | **Pending**: not merged                   | [Below](#share-links-pending)                                                                                                                                                                                                     | Pending                                                                                                |
+| Property                                                                                                                             | Default                                   | What it does                                                                                                                                                                                                                      | Security note                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `nuxeo.agentic.ui.layer.enabled`                                                                                                     | Off; on only when `true`                  | The deployment layer ([below](#the-deployment-layer)). Off, every layer address answers an administrator 404, and the registry serves each package's files; the stored layer is kept, and applies again when it is turned back on | It changes an app for every user of it, from an administrator's screen. Its security review is pending                  |
+| `nuxeo.agentic.ui.layer.selfApproval`                                                                                                | Off                                       | On, the administrator who wrote or submitted a draft may approve it. Off, a second administrator approves                                                                                                                         | Turn it on only on a server with one administrator                                                                      |
+| `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions`, `.bulkActions`                                                             | Empty                                     | The IDs the deployment registers in its own code beyond the platform's, separated by commas. A layer file that names such an ID not listed here is refused                                                                        | None                                                                                                                    |
+| The address property a connector names, `nuxeo.agentic.connectors.<id>.<name>`                                                       | Unset: the call answers 503, nothing sent | The other system's address: `https`, a host, no user, query or fragment                                                                                                                                                           | Never in a contribution, a document, a layout or a request. The connectors' security review is pending                  |
+| The credential a connector names: the property `nuxeo.agentic.connectors.<id>.<name>`, or the variable `NUXEO_CONNECTOR_<ID>_<NAME>` | Unset: 503, nothing sent                  | Sent in the one header the connector names. The property is read first, then the environment                                                                                                                                      | Never logged, never in an answer. Keep it where only the Nuxeo user reads it                                            |
+| `nuxeo.agentic.connectors.<id>.http.allowed`                                                                                         | Unset: `https` only                       | `true` lets that connector call a plain `http` address                                                                                                                                                                            | For a demo server only                                                                                                  |
+| `nuxeo.agentic.ui.config.dev`                                                                                                        | Off; on only when `true`                  | Reads a directory of configuration fragments on every request, after every package's                                                                                                                                              | "Never set it in production." The server log warns `DEVELOPMENT OVERRIDES ARE ACTIVE` at start                          |
+| `nuxeo.agentic.ui.config.dev.dir`                                                                                                    | `${nuxeo.data.dir}/agentic-ui-config-dev` | That directory. Set alone, it does nothing                                                                                                                                                                                        | As above                                                                                                                |
+| `nuxeo.agentic.ui.url`                                                                                                               | Unset                                     | Notification emails' document links. Unset, `agentic-ui/#/doc/<id>` under `nuxeo.url`; set, `#/doc/<id>`, for the notification template in `nuxeo-conf/` to put after it                                                          | A development setting: its sample sets `http://localhost:4200`                                                          |
+| `nuxeo.agentic.records.disposition.maxRecords`                                                                                       | 200                                       | The most records one disposition run holds, 1 to 1000, so that its disposal is one transaction of a bounded size                                                                                                                  |
+| `nuxeo.agentic.share.groups`                                                                                                         | Unset: administrators only                | The groups whose members may make share links, besides administrators, separated by commas ([below](#share-links))                                                                                                                | A link gives whoever holds it some of an asset's pictures, with no sign-in. The share links' security review is pending |
 
 Sources, row by row:
 [`LayerSettings.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerSettings.java)
@@ -206,7 +216,9 @@ and the [connectors README](../../nuxeo-agentic-connectors/README.md);
 and [extension-reference.md](../extension-reference.md), "The fast loop while you are tuning a
 value";
 [`AgenticNotificationDocumentIdCodec.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/url/codec/AgenticNotificationDocumentIdCodec.java)
-and [`45-agentic-ui-url.sample.conf`](../../nuxeo-conf/45-agentic-ui-url.sample.conf). The layer's
+and [`45-agentic-ui-url.sample.conf`](../../nuxeo-conf/45-agentic-ui-url.sample.conf);
+[`Disposition.java`](../../nuxeo-agentic-records/src/main/java/org/nuxeo/agentic/records/Disposition.java),
+where a value out of range is the default. The layer's
 two switches use Java's `Boolean.parseBoolean`, so `TRUE` counts too; `http.allowed` counts only
 `true`.
 
@@ -371,12 +383,16 @@ Read from each kit's `bundle/agentic-ui-config/app.json`.
   ([`auth-config-agentic.xml`](../../nuxeo-agentic-core/src/main/resources/OSGI-INF/auth-config-agentic.xml)).
 - **Decision E is open.**
 
-### Share links (pending)
+### Share links
 
-Not merged. Pull request #722, held for its security review, proposes share links in
-`nuxeo-agentic-assets` 0.2.0, and a property, `nuxeo.agentic.share.groups`: the groups whose
-members may make share links, separated by commas, besides administrators. Unset or empty, only
-administrators may (`ShareLinkService.java` on that branch). It may change before it lands.
+`nuxeo-agentic-assets` 0.2.0 adds share links, and a property, `nuxeo.agentic.share.groups`: the
+groups whose members may make share links, separated by commas, besides administrators. Unset or
+empty, only administrators may
+([`ShareLinkService.java`](../../nuxeo-agentic-assets/src/main/java/org/nuxeo/agentic/assets/share/ShareLinkService.java)).
+A link is served at `/nuxeo/agentic-share/` to whoever holds it, with no sign-in; what must stand
+in front of that path before anyone outside the company has a link is in the
+[assets README](../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo). The brand
+assets kit turns them on from 0.2.2. Installed nowhere yet.
 
 ### What everyone reads before sign-in
 
@@ -435,15 +451,19 @@ kit's install, which was run; the contracts, facilities and moves kits were neve
    gone cannot be read, and breaks the folder and the searches that hold it. Do the same before you
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
-   `/default-domain/workspaces/contracts-demo` and `/default-domain/workspaces/moves-demo`. The
-   facilities kit has no seed.
+   `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo` and
+   `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
+   and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
+   module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
+   has no seed.
 2. **For the Payers kit from 0.4.0, cancel its workflows and delete its route model:** as an
    administrator, `DELETE /nuxeo/api/v1/workflow/<id>` for each instance
    `GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists, then the model
    `PayersClaimReview` under the route models' folder
    ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#removing-it)).
 3. **Remove what depends on a package before the package:** the brand assets kit before
-   `nuxeo-agentic-assets`, and every kit before `nuxeo-agentic-ui`. With the assets add-on gone,
+   `nuxeo-agentic-assets`, the records kit before `nuxeo-agentic-records`, and every kit before
+   `nuxeo-agentic-ui`. With the assets add-on gone,
    no download is refused for rights ([assets README](../../nuxeo-agentic-assets/README.md)).
 4. **Remove the package** with `nuxeoctl mp-remove <kit> --accept=true`, the server stopped: on
    Docker, in a one-off script, as for the install.
@@ -490,21 +510,22 @@ Read from [`demo-server-plan.mjs`](../../scripts/demo-server-plan.mjs), which al
 
 ## 8. Logs and diagnostics
 
-| Where                                                                  | What it holds                                                                                                              | Source                                                                                                                                 |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| An install script's log, `/var/log/nuxeo/<name>-install.log`           | What `nuxeoctl mp-install` installed or refused                                                                            | The kits' READMEs; the demo server's `demo-server-install.log`                                                                         |
-| `server.log`, `Component Loading Status`                               | A component pending or missing. Nuxeo leaves a component whose requirement is missing unstarted, so it contributes nothing | The kits' READMEs; [package-pipeline.md](package-pipeline.md), section 10                                                              |
-| `server.log`, `Agentic UI configuration:`                              | The configuration's diagnostics; `the DEPLOYMENT LAYER IS ON` and `DEVELOPMENT OVERRIDES ARE ACTIVE` at start              | [`AgenticUiConfigComponent.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AgenticUiConfigComponent.java)       |
-| `server.log`, `Agentic UI allow-list:`                                 | Each entry allowed, removed or refused                                                                                     | [`OperationAllowListComponent.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/OperationAllowListComponent.java) |
-| `server.log`, `Agentic UI app registry:`                               | What the registry left out, such as an action the allow-list does not hold                                                 | [`AppRegistryEndpoint.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AppRegistryEndpoint.java)                 |
-| `server.log`, `Agentic UI action run:` and `Agentic UI action refused` | Each button run, and each refusal with who asked                                                                           | [`AppActionRunner.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AppActionRunner.java)                         |
-| `server.log`, `Agentic UI deployment layer:`                           | Each change, at `INFO`; each refused change, at `WARN`, with who asked; a failure to read or write the layer, at `ERROR`   | [`LayerService.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerService.java)                               |
-| `server.log`, `Asset rights:`                                          | A policy's mistakes as it registers; each refused download, at `INFO`                                                      | [assets README](../../nuxeo-agentic-assets/README.md)                                                                                  |
-| `server.log`, `Connector <id>:` and `A connector contributed by`       | A connector not registered, an address or credential missing, a call refused or failed; never the key or the credential    | [connectors README](../../nuxeo-agentic-connectors/README.md)                                                                          |
-| `diagnostics` in `bootstrap.json` and `manifest.json`                  | A fragment rejected, replaced or removed, with the component behind it                                                     | [extension-reference.md](../extension-reference.md)                                                                                    |
-| `diagnostics` in `/nuxeo/agentic-ui-apps/apps.json`                    | What the registry refused, such as `action-refused`; an administrator gets all of them                                     | [api-integrations.md](../api-integrations.md), section 36                                                                              |
-| A layer file's trail, and `/nuxeo/agentic-ui-apps/layer.json`          | Who changed a file, when, and to which version                                                                             | [layout designer README](../../libs/features/layout-designer/README.md)                                                                |
-| A record's history                                                     | "App action run", for each button run                                                                                      | [app-definition-v2.md](app-definition-v2.md), section 5                                                                                |
+| Where                                                                  | What it holds                                                                                                                  | Source                                                                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| An install script's log, `/var/log/nuxeo/<name>-install.log`           | What `nuxeoctl mp-install` installed or refused                                                                                | The kits' READMEs; the demo server's `demo-server-install.log`                                                                         |
+| `server.log`, `Component Loading Status`                               | A component pending or missing. Nuxeo leaves a component whose requirement is missing unstarted, so it contributes nothing     | The kits' READMEs; [package-pipeline.md](package-pipeline.md), section 10                                                              |
+| `server.log`, `Agentic UI configuration:`                              | The configuration's diagnostics; `the DEPLOYMENT LAYER IS ON` and `DEVELOPMENT OVERRIDES ARE ACTIVE` at start                  | [`AgenticUiConfigComponent.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AgenticUiConfigComponent.java)       |
+| `server.log`, `Agentic UI allow-list:`                                 | Each entry allowed, removed or refused                                                                                         | [`OperationAllowListComponent.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/OperationAllowListComponent.java) |
+| `server.log`, `Agentic UI app registry:`                               | What the registry left out, such as an action the allow-list does not hold                                                     | [`AppRegistryEndpoint.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AppRegistryEndpoint.java)                 |
+| `server.log`, `Agentic UI action run:` and `Agentic UI action refused` | Each button run, and each refusal with who asked                                                                               | [`AppActionRunner.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/AppActionRunner.java)                         |
+| `server.log`, `Agentic UI deployment layer:`                           | Each change, at `INFO`; each refused change, at `WARN`, with who asked; a failure to read or write the layer, at `ERROR`       | [`LayerService.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerService.java)                               |
+| `server.log`, `Asset rights:`                                          | A policy's mistakes as it registers; each refused download, at `INFO`                                                          | [assets README](../../nuxeo-agentic-assets/README.md)                                                                                  |
+| `server.log`, `Connector <id>:` and `A connector contributed by`       | A connector not registered, an address or credential missing, a call refused or failed; never the key or the credential        | [connectors README](../../nuxeo-agentic-connectors/README.md)                                                                          |
+| `server.log`, `Disposition run` and `Disposition review:`              | Each run started, approved, rejected, halted or disposed of, with who; each refused request, at `WARN`; never a record's title | [records add-on README](../../nuxeo-agentic-records/README.md)                                                                         |
+| `diagnostics` in `bootstrap.json` and `manifest.json`                  | A fragment rejected, replaced or removed, with the component behind it                                                         | [extension-reference.md](../extension-reference.md)                                                                                    |
+| `diagnostics` in `/nuxeo/agentic-ui-apps/apps.json`                    | What the registry refused, such as `action-refused`; an administrator gets all of them                                         | [api-integrations.md](../api-integrations.md), section 36                                                                              |
+| A layer file's trail, and `/nuxeo/agentic-ui-apps/layer.json`          | Who changed a file, when, and to which version                                                                                 | [layout designer README](../../libs/features/layout-designer/README.md)                                                                |
+| A record's history                                                     | "App action run", for each button run                                                                                          | [app-definition-v2.md](app-definition-v2.md), section 5                                                                                |
 
 On Docker, the server log is `/var/log/nuxeo/server.log` in the container:
 `docker exec nuxeo grep -A20 "Component Loading Status" /var/log/nuxeo/server.log | tail -25`, as
@@ -517,15 +538,15 @@ the [Payers README](../../business-apps/packages/payers-claims-demo/README.md) c
 Each piece below is built on a decision's recommendation, and the decision stays open: its owner
 may still take it another way, and the [decision log](decisions.md)'s notes say what would change.
 
-| Decision                                   | What is built on its recommendation                   |
-| ------------------------------------------ | ----------------------------------------------------- |
-| 2, workflow and business records in scope  | The Payers kit's claims review workflow and appeals   |
-| 3, buttons bound to Automation chains      | The operation buttons and their allow-list            |
-| 5, customer code at run time               | A spike only                                          |
-| B, the packaging of the server tier        | The registry and the layer in core; the assets add-on |
-| C, outside users                           | Share links, pending in #722                          |
-| D, connectors                              | The connectors add-on                                 |
-| E, app definitions after sign-in, by group | The app registry and the deployment layer             |
+| Decision                                   | What is built on its recommendation                                |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| 2, workflow and business records in scope  | The Payers kit's claims review workflow and appeals                |
+| 3, buttons bound to Automation chains      | The operation buttons and their allow-list                         |
+| 5, customer code at run time               | A spike only                                                       |
+| B, the packaging of the server tier        | The registry and the layer in core; the assets and records add-ons |
+| C, outside users                           | Share links, in `nuxeo-agentic-assets` 0.2.0                       |
+| D, connectors                              | The connectors add-on                                              |
+| E, app definitions after sign-in, by group | The app registry and the deployment layer                          |
 
 Decision 4, the security review of the registered computations and rules, is open too. Tenants,
 decision G, are not built: the registry knows groups only
@@ -542,7 +563,11 @@ decision G, are not built: the registry knows groups only
 - **The deployment layer:** pull request #720 was held for an independent security review; the
   [layout designer README](../../libs/features/layout-designer/README.md) lists what it must
   cover.
-- **The share links:** pull request #722 is not merged, held for its security review.
+- **The share links:** the [assets README](../../nuxeo-agentic-assets/README.md#for-the-security-review)
+  lists what their security review must cover.
+- **The disposition review:** deferred until the app is finished; the
+  [records add-on's README](../../nuxeo-agentic-records/README.md#security-notes-for-the-review)
+  lists what it does and what it guards, for the review.
 - **The registered computations and rules:** decision 4.
 
 ### Installed or shown only on a local server, or nowhere
@@ -551,8 +576,9 @@ decision G, are not built: the registry knows groups only
   Payers kit 0.3.0; the brand assets kit 0.1.0
   ([api-integrations.md](../api-integrations.md), section 36; the kits' READMEs).
 - **On no server:** `nuxeo-agentic-assets`; the connectors; the deployment layer; the operation
-  buttons; Payers 0.4.0 to 0.5.1; brand assets 0.1.1 to 0.2.1; the contracts, facilities and
-  moves kits; every kit's removal.
+  buttons; Payers 0.4.0 to 0.5.1; brand assets 0.1.1 to 0.2.2; the contracts, facilities, moves
+  and records kits; `nuxeo-agentic-records`, whose disposition runs only in its tests; every kit's
+  removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push

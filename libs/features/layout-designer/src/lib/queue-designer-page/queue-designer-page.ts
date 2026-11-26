@@ -42,6 +42,8 @@ import { LayerPanelComponent } from '../layer/layer-panel';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import { layoutFileText, type DesignerField, type LayoutJson } from '../layout-edits';
 import {
+  actionsOf,
+  addAction,
   addColumn,
   addFacet,
   addSort,
@@ -55,8 +57,10 @@ import {
   setQueueText,
   setSortOrder,
   sortsOf,
+  type DesignerAction,
   type DesignerFacet,
   type DesignerSort,
+  type QueueActionList,
   type QueueList,
   type QueueText,
 } from '../queue-edits';
@@ -77,15 +81,37 @@ export interface HiddenColumn {
  */
 export type QueueSaveState = 'nothing' | 'checking' | 'refused' | 'saveable';
 
+/**
+ * Where an action a queue names comes from: this build registers it, the platform's own included,
+ * or it is the app's own, from its `actions.json`. `unknown` is neither, which the validator
+ * refuses.
+ */
+export type ActionSource = 'registered' | 'app' | 'unknown';
+
+/** One of the queue's row or bulk actions, or one offered to add, with where it comes from. */
+export interface QueueAction extends DesignerAction {
+  readonly source: ActionSource;
+}
+
+/** The registries with no row or bulk action, to read only those an `actions.json` adds. */
+const NO_ACTIONS = {
+  ...PACKAGED_REGISTRIES,
+  rowActions: new Set<string>(),
+  bulkActions: new Set<string>(),
+};
+
 const isObject = (value: unknown): value is LayoutJson =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The queue designer: an administrator opens a queue, `queues/<id>.json`, as the app reads it,
- * changes its name, its columns, its sort and its facets, and sees the queue page it draws
- * against the server's page provider (docs/business-apps/app-definition-v2.md, section 4;
- * development-plan.md, phase 6).
+ * changes its name, its columns, its sort, its facets and its row and bulk actions, and sees the
+ * queue page it draws against the server's page provider (docs/business-apps/app-definition-v2.md,
+ * section 4; development-plan.md, phase 6).
  *
+ * - **Actions are configuration only:** the queue names actions this build registers, or the
+ *   app's own from its `actions.json`, as the validator knows them. The designer makes no action,
+ *   binds nothing to an operation, and runs none.
  * - **The preview** is the queue page's own, `lib-queue-page`, given the file as edited and drawn
  *   read-only: the page provider is asked for its records as the person signed in, and no row can
  *   be selected, nor any action offered, so nothing on it changes a record.
@@ -154,19 +180,38 @@ export class QueueDesignerPageComponent {
     initialValue: { state: 'reading' },
   });
 
+  /** The platform's registries with what this build registers: what is known without the app's. */
+  private readonly registeredRegistries = withRegistered(PACKAGED_REGISTRIES, {
+    rules: this.registered.rules,
+    rowActions: this.registered.rowActions,
+    bulkActions: this.registered.bulkActions,
+  });
+
   /**
    * What the validator knows a queue may name: the platform's registries, what this build
    * registers, and the app's own actions when they can be read, as the pipeline adds them.
    */
   private readonly registries = computed(() => {
-    const base = withRegistered(PACKAGED_REGISTRIES, {
-      rules: this.registered.rules,
-      rowActions: this.registered.rowActions,
-      bulkActions: this.registered.bulkActions,
-    });
     const actions = this.packageActions();
-    return actions.state === 'read' ? withPackageActions(base, actions.value) : base;
+    return actions.state === 'read'
+      ? withPackageActions(this.registeredRegistries, actions.value)
+      : this.registeredRegistries;
   });
+
+  /**
+   * The app's own row and bulk actions, from its `actions.json` once it is read, each where its
+   * `on` shows it, as the pipeline reads them (`withPackageActions`); none when none is served.
+   */
+  private readonly appActions = computed<Readonly<Record<QueueActionList, ReadonlySet<string>>>>(
+    () => {
+      const actions = this.packageActions();
+      const own = actions.state === 'read' ? withPackageActions(NO_ACTIONS, actions.value) : null;
+      return {
+        rowActions: own?.rowActions ?? new Set<string>(),
+        bulkActions: own?.bulkActions ?? new Set<string>(),
+      };
+    },
+  );
 
   readonly menuQueueList = computed<readonly string[]>(() => {
     const queues = this.menuQueues();
@@ -260,6 +305,75 @@ export class QueueDesignerPageComponent {
   readonly sorts = computed<readonly DesignerSort[]>(() => sortsOf(this.file()));
   readonly facets = computed<readonly DesignerFacet[]>(() => facetsOf(this.file()));
 
+  /** The queue's row and bulk actions, in their order, each with where it comes from. */
+  readonly actions = computed<Readonly<Record<QueueActionList, readonly QueueAction[]>>>(() => {
+    const file = this.file();
+    const read = (list: QueueActionList): readonly QueueAction[] =>
+      actionsOf(file, list).map((action) => ({
+        ...action,
+        source: this.sourceOf(list, action.id),
+      }));
+    return { rowActions: read('rowActions'), bulkActions: read('bulkActions') };
+  });
+
+  /**
+   * What may be added to each list: what the validator knows, this build's registered actions
+   * first and then the app's own, less those the list names already. Without the app's
+   * `actions.json`, the registered ones alone.
+   */
+  readonly offered = computed<Readonly<Record<QueueActionList, readonly QueueAction[]>>>(() => {
+    const actions = this.actions();
+    const offer = (list: QueueActionList): readonly QueueAction[] => {
+      const named = new Set(actions[list].map((action) => action.id));
+      const registered = [...this.registeredRegistries[list]];
+      const own = [...this.appActions()[list]].filter((id) => !registered.includes(id));
+      return [
+        ...registered.map((id): QueueAction => ({ index: -1, id, source: 'registered' })),
+        ...own.map((id): QueueAction => ({ index: -1, id, source: 'app' })),
+      ].filter((action) => !named.has(action.id));
+    };
+    return { rowActions: offer('rowActions'), bulkActions: offer('bulkActions') };
+  });
+
+  /**
+   * The pickers' choices: each action offered by its ID and where it comes from. `instant` in a
+   * `computed` follows the language and the catalogue, as the order picker's choices do.
+   */
+  protected readonly offeredOptions = computed<
+    Readonly<Record<QueueActionList, readonly NxsSelectOption[]>>
+  >(() => {
+    const offered = this.offered();
+    const options = (list: QueueActionList): readonly NxsSelectOption[] =>
+      offered[list].map((action) => ({
+        value: action.id ?? '',
+        label: this.translate.instant(
+          action.source === 'app'
+            ? 'layout-designer.queue.offered-app'
+            : 'layout-designer.queue.offered-registered',
+          { id: action.id },
+        ),
+      }));
+    return { rowActions: options('rowActions'), bulkActions: options('bulkActions') };
+  });
+
+  /**
+   * What each list offers, as its note says: `reading` while the app's `actions.json` is read;
+   * `all` when some of the app's own actions show in the list; `none-here` when the app has actions
+   * and none shows there, its `on` naming neither `row` nor `bulk` as the list is; and `registered`
+   * when no `actions.json` with actions is read, served or not, or one could not be read.
+   */
+  readonly offeredFrom = computed<
+    Readonly<Record<QueueActionList, 'reading' | 'all' | 'none-here' | 'registered'>>
+  >(() => {
+    const reading = this.packageActions().state === 'reading';
+    const from = (list: QueueActionList): 'reading' | 'all' | 'none-here' | 'registered' => {
+      if (reading) return 'reading';
+      if (this.appActions()[list].size > 0) return 'all';
+      return this.hasPackageActions() ? 'none-here' : 'registered';
+    };
+    return { rowActions: from('rowActions'), bulkActions: from('bulkActions') };
+  });
+
   readonly label = computed(() => this.text('label'));
   readonly labelKey = computed(() => this.text('labelKey'));
 
@@ -315,7 +429,7 @@ export class QueueDesignerPageComponent {
   /** What is typed or chosen to add, by list. */
   readonly toAdd = linkedSignal<LayoutJson | null, Readonly<Record<QueueList, string>>>({
     source: this.opened,
-    computation: () => ({ columns: '', sort: '', facets: '' }),
+    computation: () => ({ columns: '', sort: '', facets: '', rowActions: '', bulkActions: '' }),
   });
 
   /** Opens the queue `id`, once the person agrees to lose the changes to the one open, if any. */
@@ -388,17 +502,24 @@ export class QueueDesignerPageComponent {
   }
 
   /**
-   * Takes a sort or a facet out of the file. The focus goes to the next one's Remove, or the last
-   * one's, or to what adds one once none is left, rather than to the page.
+   * Takes a sort, a facet or an action out of the file. The focus goes to the next one's Remove, or
+   * the last one's, or to what adds one once none is left, rather than to the page.
    */
-  remove(list: 'sort' | 'facets', index: number): void {
+  remove(list: Exclude<QueueList, 'columns'>, index: number): void {
     this.edit((file) => removeEntry(file, list, index).file);
-    const left = list === 'sort' ? this.sorts().length : this.facets().length;
+    const left =
+      list === 'sort'
+        ? this.sorts().length
+        : list === 'facets'
+          ? this.facets().length
+          : this.actions()[list].length;
     if (left > 0) this.focusEntry(list, Math.min(index, left - 1), ['remove']);
     else
       this.focusIn(
         `[data-part="${list}"]`,
-        list === 'sort' ? '[data-picker="add-sort"] select' : '[data-picker="add-facet"] input',
+        list === 'facets'
+          ? '[data-picker="add-facet"] input'
+          : `[data-picker="add-${list}"] select`,
       );
   }
 
@@ -427,11 +548,17 @@ export class QueueDesignerPageComponent {
     return this.unsorted().map((xpath) => ({ value: xpath, label: xpath }));
   }
 
-  /** Adds what is typed or chosen to `list`, last, the focus on it. */
+  /**
+   * Adds what is typed or chosen to `list`, last, the focus on it. An action is added only if it is
+   * offered: one this build registers, or one of the app's own, that the list does not name yet.
+   */
   add(list: QueueList): void {
     const value = this.toAdd()[list].trim();
     if (value === '') return;
-    if (list === 'columns') this.edit((file) => addColumn(file, value));
+    if (list === 'rowActions' || list === 'bulkActions') {
+      if (!this.offered()[list].some((action) => action.id === value)) return;
+      this.edit((file) => addAction(file, list, value));
+    } else if (list === 'columns') this.edit((file) => addColumn(file, value));
     else if (list === 'sort') this.edit((file) => addSort(file, value));
     else this.edit((file) => addFacet(file, value));
     this.toAdd.update((chosen) => ({ ...chosen, [list]: '' }));
@@ -440,8 +567,15 @@ export class QueueDesignerPageComponent {
         ? this.columns().length
         : list === 'sort'
           ? this.sorts().length
-          : this.facets().length;
+          : list === 'facets'
+            ? this.facets().length
+            : this.actions()[list].length;
     this.focusEntry(list, added - 1, ['up', 'hide', 'remove']);
+  }
+
+  /** An action as the page names it: its ID, or its place for an entry that names none. */
+  actionName(list: QueueActionList, action: DesignerAction): string {
+    return action.id ?? `${list}[${action.index}]`;
   }
 
   /** Back to the queue as it was opened, the focus on the editor's heading. */
@@ -493,6 +627,13 @@ export class QueueDesignerPageComponent {
 
   protected failed<T>(reading: Reading<T> | null): string | null {
     return reading?.state === 'failed' ? reading.problem : null;
+  }
+
+  /** Where an action the queue names comes from: registered, the app's own, or neither. */
+  private sourceOf(list: QueueActionList, id: string | null): ActionSource {
+    if (id === null) return 'unknown';
+    if (this.registeredRegistries[list].has(id)) return 'registered';
+    return this.appActions()[list].has(id) ? 'app' : 'unknown';
   }
 
   private text(key: QueueText): string {

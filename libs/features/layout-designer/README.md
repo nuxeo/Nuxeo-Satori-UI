@@ -7,8 +7,12 @@ The designer in the shell, phase 6 of the business apps
   type's record page, edit form or create form, changes it, sees what it draws for a real record,
   and saves it as a download.
 - **Queues**, [`queues/<id>.json`](../../../docs/business-apps/app-definition-v2.md): an administrator
-  opens a queue, changes its name, columns, sort and facets, sees the queue page it draws against the
-  server's page provider, and saves it as a download.
+  opens a queue, changes its name, columns, sort, facets, and row and bulk actions, sees the queue
+  page it draws against the server's page provider, and saves it as a download.
+
+What either saves is [byte for byte](#byte-for-byte) what a person writes in the repository: the
+file's JSON as the repository's Prettier lays it out.
+
 - **Publishing**, the app's [deployment layer](#publishing-the-deployment-layer): on a server that
   switches it on, an administrator saves either file as a draft, submits it, and a second
   administrator approves it, which publishes it for everyone in the app's groups; any administrator
@@ -60,8 +64,10 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
      refused until it is.
 
    A card of related records, a timeline, comments, another system's fields or a checklist is listed
-   with its heading, and its contents are edited in the file. Every key the designer does not edit is kept as it was written, a key version 2
-   does not have included.
+   with its heading, and its contents are edited in the file. Every key the designer does not edit is
+   kept as it was written, a key version 2 does not have included, and a key it adds, such as a
+   card's `label`, is written where version 2 lists it (`LAYOUT_V2_KEYS`), so that the other keys
+   keep their places and their lines.
 
 3. **Previews it** against a record of the type: the last 20 changed, live ones, read with
    `queryParams`, never written into the query (`DocumentLayoutService.previewRecords`). The preview is
@@ -86,7 +92,8 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
 5. **Saves** the file as a download, `<mode>.layout.json`, as a package holds it at
    `layouts/<Type>/<mode>.layout.json`, and as `npm run config:dev -- --layout <Type>/<mode>=<file>`
    serves it, given every other file served too, since that command writes the whole folder again.
-   The download writes nothing to the server; the deployment layer, below the Save section, does.
+   It is written [byte for byte](#byte-for-byte) as the repository's Prettier lays it out. The
+   download writes nothing to the server; the deployment layer, below the Save section, does.
 6. **Asks before a change is lost:** opening another file, leaving the page by the app's router, a
    link in the preview included, and reloading or closing the tab each ask first while the file has a
    change or a hidden field. A new file left as it was opened loses nothing. Signing out, and the idle
@@ -102,9 +109,11 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
 2. **Edits it:** its name (`label`, `labelKey`); its columns, moved, hidden and shown again, and added
    from the properties of the server's content model, every type's, since a queue's rows may be of any
    type its page provider returns; its sort, on its columns, each ascending or descending, in order;
-   and its facets, each an aggregate of the page provider by its id on the server, with its own name.
-   An empty `sort` or `facets` is taken out of the file. Its page provider, parameters, page size, row
-   and bulk actions and rule are edited in the file.
+   its facets, each an aggregate of the page provider by its id on the server, with its own name; and
+   its [row and bulk actions](#a-queues-actions). An empty `sort`, `facets`, `rowActions` or
+   `bulkActions` is taken out of the file, and a list it makes is written where the queue format
+   lists its key (`QUEUE_V2_KEYS`). Its page provider, parameters, page size and rule are edited in
+   the file.
 3. **Previews it** with the queue page, `lib-queue-page`, given the file as edited as its `content`, and
    `readOnly`: the page provider is asked for its records as the administrator, page by page, and a
    facet filters them, but no row can be selected, and no row action, bulk action or action over the
@@ -127,6 +136,108 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
    `npm run config:dev -- --queue <file>` serves it, under its name; and, on a server that switches
    it on, to the app's deployment layer, below.
 6. **Asks before a change is lost**, as for a layout file.
+
+### A queue's actions
+
+A queue's `rowActions`, each row's menu, and `bulkActions`, what is offered for the rows chosen
+([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section 4), each a list of
+actions by their IDs, in order.
+
+- **Offered:** what the validator knows a queue may name, and nothing else. First the actions this
+  build registers, the platform's own (`PACKAGED_ROW_ACTIONS`, `PACKAGED_BULK_ACTIONS`) and those
+  registered in code (`ExtensionSlotRegistry`); then the app's own, from its `actions.json` once it
+  is read, each in the list its `on` shows it in, `row` or `bulk`, as the pipeline reads them
+  (`withPackageActions`). An action the list names already is not offered again. Each choice says
+  where it comes from.
+- **Without `actions.json`,** when the development server serves the queue, the registry serves no
+  file of actions for the app open, or it cannot be read, the page says so under each list, as it
+  does under Validation, and offers only the registered ones; while it is read, it says that the
+  app's own are offered once it has been. A file of actions read with none for a list, its `on`
+  naming neither `row` nor `bulk` as the list is, is said to be so, under that list.
+- **Chosen, ordered and removed** one at a time: an action is added last, from its list's picker and
+  its Add; moved up or down; and removed. A list left empty is taken out of the file. The focus
+  goes with the action moved, to the next one's Remove once one is removed, and to the picker once
+  none is left. Every button is named by its list and its action, "Move the row action
+  `app.rowActions.download` up", and each list's Add by its list, "Add the row action".
+- **An unknown action is refused:** one that is not offered is never added, whatever calls the
+  page's `add()`. One the file names already, such as an action of the app's own while its
+  `actions.json` is not read, is listed with "unknown", and the validator's finding,
+  `rowActions[0]` or `bulkActions[0]`, refuses the file until it is removed.
+- **Configuration only.** The queue names an action; the designer makes none, binds nothing to an
+  operation, and runs none: decision 3 stays open
+  ([decision log](../../../docs/business-apps/decisions.md)). What an action of the app's own that
+  runs an operation does is its package's, and the server's allow-list of operations still decides
+  whether it runs. **The preview stays read-only:** the queue page is given the queue with its
+  actions and draws no row's menu, no box to choose a row, and no action over the whole query, and
+  leaves the selection bar's offer as it was, so drawing it runs nothing; every request it makes is
+  a read.
+
+## Byte for byte
+
+Phase 6's demo step 3 is "the designer's output matches the hand-written JSON byte for byte". Here
+that means:
+
+- **The rule:** the designer writes a file as the repository's Prettier writes a file holding the
+  same JSON value, laid out afresh: `prettier.format(JSON.stringify(value), { parser: 'json' })` with
+  `.prettierrc` as it is, `printWidth` 100 and every other option Prettier's default. An object or a
+  list is on one line where that line fits in 100 columns, its comma counted, and otherwise one entry
+  a line, two spaces deeper; a list of two or more objects, or of lists, of more than one entry each
+  is always one a line; a list of numbers that does not fit is filled; a key and its value are never
+  split; keys and texts are as `JSON.stringify` writes them, numbers as Prettier prints them; and the
+  file ends with a newline. `jsonFileText` writes it, with no Prettier in the browser, and is held to
+  Prettier itself.
+- **A kit's file round-trips** when, opened in the designer and saved with no edit, it is the file's
+  very bytes. The designer opens the file's JSON value, as the server serves it inside its answer,
+  never its text: whatever of the text is not in the value cannot come back, and the rule above is
+  what is written instead.
+- **19 of the 29 files round-trip,** the record pages, edit forms and queues of the six kits (no
+  kit has a create form yet). The other ten are each Prettier's own, with an object their author
+  wrote across lines though it fits on one: Prettier keeps that as written (`objectWrap: "preserve"`,
+  its default, which `.prettierrc` keeps), and the value does not say it. The designer writes those
+  objects on one line, and nothing else differs, as Prettier with `objectWrap: "collapse"` shows.
+  They are left as their authors wrote them, never changed to fit the designer, and listed, with
+  why, in `NOT_BYTE_FOR_BYTE` (`src/lib/kit-files.testing.ts`), which the spec holds to the kits:
+  - `contracts-demo/…/queues/up-for-renewal.json`: its one sort, across four lines;
+  - `facilities-demo/…/layouts/WorkOrder/edit.layout.json`: four required fields, across four lines
+    each;
+  - `facilities-demo/…/queues/open-work-orders.json`: its one sort, across four lines;
+  - `moves-demo/…/layouts/DamageClaim/view.layout.json`: two fields, across five lines each;
+  - `moves-demo/…/layouts/DamageClaim/edit.layout.json`: one field, across five lines;
+  - `moves-demo/…/queues/moves-this-week.json` and `…/queues/open-claims.json`: each its one sort,
+    across four lines;
+  - `payers-claims-demo/…/layouts/Case/view.layout.json`: its history card, across five lines;
+  - `records-demo/…/queues/awaiting-approval.json` and `…/queues/certificates.json`: each its one
+    sort, across four lines.
+
+  The moves kit came into the branch while this was built: the walk found its four, and nothing was
+  changed but the list. The records kit came in after it: the walk found its two record pages, which round-trip, and
+  its two queues, and nothing was changed but the list.
+
+- **A single edit changes only the edited place,** for each edit the spec makes on each kit's
+  file: moving, hiding and adding a field or a column; a card's id and heading; a field's rule; a
+  queue's name, sort, facets and actions. Every line outside the list or object the edit is made in
+  is the same bytes, at the same place. A key the designer adds is written where the file format
+  lists it, so the lines around it stay as they were, but for the comma the line before may gain;
+  and a list on one line that an edit takes over 100 columns is drawn one entry a line.
+- **Not every edit of every file can be confined, by the same rule.** The value is laid out afresh,
+  so an edit that takes away the one reason a list or an object was drawn across lines draws it on
+  one line again, and what holds it too, if that was all that broke it: removing one of a card's two
+  `{ "field": …, "required": true }` fields can put a short file back on one line. Prettier would
+  not do that to the file a person edits, since it keeps the objects as written. No edit the spec
+  makes on a kit's file does it today. And for the eight files above, an edit is confined against
+  what the designer writes of them unedited: against the file in the repository, the change also
+  draws their objects on one line.
+- **By design, beyond those eight:** what a hand-written file says that its value does not is lost
+  the same way. A blank line between entries; a number written `1.50` or `1e3` rather than as
+  Prettier prints it; a text written with an escape JSON does not need, such as `\u00e9` or `\/`; a
+  key written twice; and the place of a key that is a whole number, such as `"2"`, which a JSON value
+  puts first. No kit's file has any of them. Every single character is measured as Prettier
+  measures it: a wide or full-width character two columns, from Unicode's own
+  list of them as Prettier reads it, and a pictograph two, or one for those Prettier draws as text,
+  such as ©. A sequence of emoji is told here by Unicode's properties and in Prettier by its list of
+  emoji, so one that list does not have may be measured apart.
+- **The deployment layer** shows each version as the download writes it, and a version it opens is
+  its JSON value, written by the same rule.
 
 ## Publishing: the deployment layer
 
@@ -158,7 +269,8 @@ changed again or rolled back. It is built against the open decisions B and E
 
 Below the Save section of either page, for the file open:
 
-- **Package's version, live version and draft**, side by side, each as its JSON text, and their
+- **Package's version, live version and draft**, side by side, each as its JSON text, as the
+  download writes it, and their
   differences: package to live, live (or package) to draft, and the newest of them to the file as
   edited here. Nothing in a version is drawn as markup.
 - **Save draft** sends the file as edited, once the page's own check finds nothing in it. **Submit
@@ -374,9 +486,11 @@ layer stays in `/agentic-ui-layers` until an administrator deletes it.
   the actions in a layer; a draft's review screen of its own, beyond the panel's differences; and an
   export of a published layer as a package. A layer layout reaches only the people in the app's
   groups with the app open: the record page of someone in no app's group keeps the package's.
-- **The rest of the plan's designer:** actions, the `metadata` mode and task forms; in a layout file,
-  tabs, cards, columns, widgets and their parameters, checks across fields, computations and related
-  lists are edited in the file, not here. A rule has no builder: it is written as its ID or its JSON.
+- **The rest of the plan's designer:** the app's actions themselves, its `actions.json`, which a
+  queue only names here, and which may bind a button to an operation (decision 3, open); the
+  `metadata` mode and task forms; in a layout file, tabs, cards, columns, widgets and their
+  parameters, checks across fields, computations and related lists are edited in the file, not
+  here; a related list's row actions too. A rule has no builder: it is written as its ID or its JSON.
 - **A facet's aggregate is typed,** not offered: the page provider's definition, which lists its
   aggregates, is not read. One the results do not have is not drawn, as on the queue page.
 - **A form is previewed read-only,** so a rule that follows a value as it is typed is seen only for the
@@ -388,10 +502,8 @@ layer stays in `/agentic-ui-layers` until an administrator deletes it.
 - **A queue whose rule is not for the administrator** previews as the queue page shows it to them:
   "not shown". Every Payers queue has one: `unassigned-claims` and `my-claims` are for
   `claims-adjusters`, and `pending-determination` for `claims-supervisors` and `member-services`.
-- **Byte for byte.** The download is the same JSON as the file, not the same bytes: it is written two
-  spaces deep, as `JSON.stringify` writes it, and a hand-written file formatted by Prettier keeps short
-  objects on one line. Phase 6's round trip, the designer's output matching the hand-written JSON
-  byte for byte, is not met.
+- **Eight of the kits' files are not written back byte for byte,** by design: the
+  [list and why](#byte-for-byte). The designer reads a file's JSON value, never its text.
 - **Rules on the document page's own state.** Where the document page is not open, nothing publishes
   its state about the record: locked, a favourite, followed, in the clipboard, versioned, an action in
   progress. A banner, card or field whose rule reads that state, such as `app.rules.isLocked`, previews
@@ -417,6 +529,16 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
   `queue-designer-page.engine.spec.ts` the queue page with the real `QueueService` and
   `lib-queue-page`, the server answered by `HttpTestingController`; both check that every request the
   engines make is a read. Each holds the deployment layer's panel as a stand-in, given the file open.
+- **The round trip:** `round-trip.spec.ts` walks every kit's folders under `business-apps/packages`,
+  so a kit added later is held too, and holds each record page, edit form, create form and queue:
+  written as Prettier lays its value out afresh; unedited, written back byte for byte, or listed in
+  `NOT_BYTE_FOR_BYTE` (`kit-files.testing.ts`) with why, which it checks with Prettier's
+  `objectWrap: "collapse"`; and each single edit the designer makes, confined to the edited place by
+  a reading of the text of its own. `round-trip.pages.spec.ts` opens each file in its page, with the
+  kit's own content model and `actions.json`, and downloads it unedited. `json-file-text.spec.ts`
+  holds the writer to Prettier itself on every JSON file of every kit's app definition, on 1500
+  generated values, on every pictograph and each edge of a wide range, and on each case its layout
+  turns on.
 - `layer/layer-panel.spec.ts` holds the panel with a stand-in for its service: the three versions
   as text, a label that is markup drawn as text, each button following the server's permissions,
   the questions before approving, rolling back and discarding, and the server's refusals.
@@ -458,6 +580,21 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
     page's words, the verdict saying a file or a queue can be saved while what it is checked with is
     still read, an `actions.json` with no actions claimed as the app's, and the administration menu
     not marking Layout Designer on its queues page.
+
+  This slice's, the round trip and a queue's actions:
+  - **the writer:** the old one, `JSON.stringify` two spaces deep; no list of objects always broken;
+    the width off by one; the comma after a value not counted; keys sorted; an unknown key, such as
+    `$schema`, dropped; numbers as `JSON.stringify` writes them; text outside ASCII escaped; wide
+    characters counted as one column, an ambiguous one, `㉈`, as two, an emoji as one, one drawn as
+    text, `©`, as two, a pictograph told narrow by Unicode's presentation property rather than as
+    Prettier tells it, and a combining mark as one; and no last newline. A kit added for one run,
+    with a sort written across lines, was walked and failed until taken out;
+  - **the edits:** a card's heading, a field's rule, a queue's name and a list of actions each
+    written last rather than where the format lists it, and a key the file has moved;
+  - **a queue's actions:** an action added that is not offered, the app's own never offered, an
+    action named offered again, an unknown action shown as registered, an empty list kept, the focus
+    left where it was on removing one, an `actions.json` with none for a list said not to be read,
+    and the preview drawn without `readOnly`.
 
   The third slice's, publishing, on the server: a non-administrator's write let through, an
   invalid file stored, a draft served by the registry, an approval by the draft's maker or
