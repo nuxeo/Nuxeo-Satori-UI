@@ -1,0 +1,120 @@
+{
+  "doctypes": {
+    "Move": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "move"]
+    },
+    "MoveItem": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "moveitem"]
+    },
+    "DamageClaim": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "files", "damageclaim"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "move",
+      "prefix": "move",
+      "@prefix": "move",
+      "fields": {
+        "number": "string",
+        "customer": "string",
+        "customerPhone": "string",
+        "customerEmail": "string",
+        "origin": "string",
+        "destination": "string",
+        "loadDate": "date",
+        "deliveryDate": "date",
+        "deliveredOn": "date",
+        "state": "string",
+        "coordinator": "string",
+        "crewLead": "string",
+        "crew": "string[]",
+        "truck": "string",
+        "declaredValue": "double",
+        "notes": "string"
+      }
+    },
+    {
+      "name": "moveitem",
+      "prefix": "moveitem",
+      "@prefix": "moveitem",
+      "fields": {
+        "move": "string",
+        "tag": "string",
+        "room": "string",
+        "condition": "string",
+        "declaredValue": "double"
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "damageclaim",
+      "prefix": "dmg",
+      "@prefix": "dmg",
+      "fields": {
+        "number": "string",
+        "move": "string",
+        "moveNumber": "string",
+        "items": "string[]",
+        "deliveredOn": "date",
+        "filedOn": "date",
+        "amountClaimed": "double",
+        "amountApproved": "double",
+        "state": "string",
+        "adjuster": "string",
+        "details": "string",
+        "decidedOn": "date",
+        "denialReason": "string"
+      }
+    }
+  ]
+}
