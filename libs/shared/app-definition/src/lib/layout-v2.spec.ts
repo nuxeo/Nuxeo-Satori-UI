@@ -707,6 +707,45 @@ describe('the date rules', () => {
       'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.datePassed" takes a property or a date here, as "2026-12-01" or an ISO 8601 date and time with its zone [parameter]',
     ]);
   });
+
+  describe('dateAfter', () => {
+    const after = (...parameters: unknown[]) => rule({ type: 'app.rules.dateAfter', parameters });
+    const filed = { field: 'dmg:filedOn' };
+    const delivered = { field: 'dmg:deliveredOn' };
+
+    it('takes two dates, either of them "today", and a whole number of days', () => {
+      expect(after(filed, delivered, 30)).toEqual([]);
+      expect(after('today', delivered, 0)).toEqual([]);
+      expect(after(filed, 'today', 36500)).toEqual([]);
+      expect(after('2026-12-01', '2026-11-01T09:30:00Z', 7)).toEqual([]);
+    });
+
+    it('refuses a date that is not one, a computation, or "today" written otherwise', () => {
+      const refused = (index: number) =>
+        `cards[0].fields[0].visibleWhen.parameters[${index}]: the rule "app.rules.dateAfter" takes a property, a date, as "2026-12-01" or an ISO 8601 date and time with its zone, or "today" here [parameter]`;
+      const computed = {
+        computed: { type: 'core.dateDiff', parameters: [filed, delivered, 'days'] },
+      };
+      for (const date of ['Today', 'now', '2026-13-01', '2026-12-01T09:30:00', 30, computed]) {
+        expect(after(date, delivered, 30)).toEqual([refused(0)]);
+        expect(after(filed, date, 30)).toEqual([refused(1)]);
+      }
+    });
+
+    it('refuses days out of range, and any other number of parameters', () => {
+      for (const days of [-1, 36501, '30', 1.5, null])
+        expect(after(filed, delivered, days)).toEqual([
+          'cards[0].fields[0].visibleWhen.parameters[2]: the rule "app.rules.dateAfter" takes a whole number of days from 0 to 36500 here [parameter]',
+        ]);
+      for (const parameters of [
+        [filed, delivered],
+        [filed, delivered, 30, 1],
+      ])
+        expect(after(...parameters)).toEqual([
+          `cards[0].fields[0].visibleWhen.parameters: the rule "app.rules.dateAfter" takes 3 parameters, not ${parameters.length} [parameter]`,
+        ]);
+    });
+  });
 });
 
 describe('a checklist', () => {

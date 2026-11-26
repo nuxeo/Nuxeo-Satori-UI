@@ -350,6 +350,18 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
           add(path, 'parameter', `${owner} takes "days", "months" or "years" here`);
         }
         return;
+      case 'dateOrToday':
+        if (item === 'today') return;
+        if (!isFieldReference(item) && !isDateText(item)) {
+          add(
+            path,
+            'parameter',
+            `${owner} takes a property, a date, as "2026-12-01" or an ISO 8601 date and time with its zone, or "today" here`,
+          );
+          return;
+        }
+        parameter('date', item, path, owner);
+        return;
       case 'date':
         if (isFieldReference(item)) {
           value(item, path);

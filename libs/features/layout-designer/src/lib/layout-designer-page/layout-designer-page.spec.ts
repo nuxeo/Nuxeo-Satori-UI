@@ -834,6 +834,30 @@ describe('LayoutDesignerPageComponent', () => {
       expect(fields()[1]).toBe('member:status');
     });
 
+    it('knows the rule over two dates, and holds its parameters to it', async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      const late = {
+        type: 'app.rules.dateAfter',
+        parameters: [{ field: 'member:enrolledOn' }, 'today', 30],
+      };
+      change('[data-field="member:status"] [data-rule="visibleWhen"]', JSON.stringify(late));
+      await settle();
+      expect(fields()[1]).toEqual({ field: 'member:status', visibleWhen: late });
+      expect(page.findings()).toEqual([]);
+      expect(page.saveState()).toBe('saveable');
+
+      // Its days are a whole number from 0 to 36500, as the rule reads them.
+      change(
+        '[data-field="member:status"] [data-rule="visibleWhen"]',
+        JSON.stringify({ ...late, parameters: [{ field: 'member:enrolledOn' }, 'today', -1] }),
+      );
+      await settle();
+      expect(page.findings().map((finding) => [finding.path, finding.kind])).toEqual([
+        ['cards[0].fields[1].visibleWhen.parameters[2]', 'parameter'],
+      ]);
+      expect(page.saveState()).toBe('refused');
+    });
+
     it('refuses to save a form whose rule is not one, whatever calls it', async () => {
       await open(MEMBER_EDIT, 'Member/edit');
       // A rule chosen and not yet written is written empty, which the validator refuses.

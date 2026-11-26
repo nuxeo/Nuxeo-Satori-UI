@@ -415,15 +415,16 @@ registered rules. They are written exactly as the manifest writes them today
 - or an ID with parameters: `{ "type": "app.rules.isType", "parameters": ["Claim"] }`;
 - combined with `core.every`, `core.some` and `core.not`.
 
-Version 2 adds five rules to the 29 or so that exist:
+Version 2 adds six rules to the 29 or so that exist:
 
-| Rule                   | Parameters                                | True when                                                                  |
-| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
-| `app.rules.fieldIn`    | A property, then the values               | The property's value is one of the values; for a list, any of its items is |
-| `app.rules.inState`    | The lifecycle states                      | The record's lifecycle state is one of them                                |
-| `app.rules.inGroup`    | The groups                                | The user is in one of the groups                                           |
-| `app.rules.datePassed` | A date                                    | The date is before today                                                   |
-| `app.rules.dateWithin` | A date, then a number of days, 0 to 36500 | The date is today, or no more than that many days after it                 |
+| Rule                   | Parameters                                                                        | True when                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `app.rules.fieldIn`    | A property, then the values                                                       | The property's value is one of the values; for a list, any of its items is |
+| `app.rules.inState`    | The lifecycle states                                                              | The record's lifecycle state is one of them                                |
+| `app.rules.inGroup`    | The groups                                                                        | The user is in one of the groups                                           |
+| `app.rules.datePassed` | A date                                                                            | The date is before today                                                   |
+| `app.rules.dateWithin` | A date, then a number of days, 0 to 36500                                         | The date is today, or no more than that many days after it                 |
+| `app.rules.dateAfter`  | A date or `"today"`, another date or `"today"`, then a number of days, 0 to 36500 | The first date is more than that many days after the second                |
 
 - **What a rule sees.** It is evaluated with the open record, the user and their groups. In a form
   it also sees the values being entered, so a field shown by another field's value appears as soon
@@ -433,7 +434,26 @@ Version 2 adds five rules to the 29 or so that exist:
   not exist included. It is read as the `date` widget reads one (section 11): a stored day as
   written, and an instant on the reader's day. Today is the reader's day, from the page's clock:
   the browser's in the app, and one a test or a demo pins (section 11).
-  A property with no date, or a value that is not one, passes neither date rule.
+  A property with no date, or a value that is not one, passes no date rule.
+- **Two dates, and an offset from today.** `app.rules.dateAfter` compares two dates, either of
+  which may be `"today"`, the reader's day: a claim filed more than 30 days after delivery is
+  `[{ "field": "dmg:filedOn" }, { "field": "dmg:deliveredOn" }, 30]`, and a delivery more than 30
+  days in the past is `["today", { "field": "dmg:deliveredOn" }, 30]`. "More than": a claim filed
+  on the 30th day after delivery does not pass, and one filed on the 31st does; with `0` it passes
+  when the first date is after the second at all. The days each date falls on are counted, as
+  above, never the hours between them. Only the literal `"today"` is today: a property holding that
+  text names no date. **Added on 26 November 2026** for the moves kit's late-filing banner
+  ([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8 feedback", item 2).
+- **A rule reads no computation.** A platform rule's parameter is a property or a literal, never
+  `{ "computed": … }`, and the validator refuses one. Considered on 26 November 2026, for the same
+  banner, and left out, because it does not fit decision 4's shape
+  ([decisions.md](decisions.md), "Settled"): decision 4 gave rules a field's value, the lifecycle
+  state and the user's group to read, and `core.choose` already takes a rule, so a rule taking a
+  computation would make the two sets nest in each other without end, which is an expression
+  language spelled in JSON; and a rule is the platform's, evaluated by every slot of every manifest
+  (`libs/shared/extensions`, in the published package), where no computation is, so a rule written
+  with one would pass on a record page and never elsewhere. The banner it was asked for is
+  `dateAfter`'s.
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
 
