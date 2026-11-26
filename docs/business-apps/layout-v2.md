@@ -47,7 +47,10 @@ It sits where version 1 does ([extension-reference.md](../extension-reference.md
 | `create`   | The Create form, for a new record of the type | No               |
 
 A type with no file for a mode keeps today's generated layout for it. With no `view` file, the
-record page is today's document page.
+record page is today's document page. With no `metadata` file, the Properties panel has a section
+for each schema it does not already present, headed by the label `layout.schema.<schema>`, the
+package's or, winning over it, the manifest's, else by the schema's name made readable: give a
+kit's own schemas a heading in its labels (app-definition-v2.md, section 7).
 
 ## 2. The shape of a file
 
@@ -215,7 +218,7 @@ a last day. `{}` turns them on; they take no option yet:
 - **The server holds every rule,** through `nuxeo-agentic-assets`
   ([its README](../../nuxeo-agentic-assets/README.md)) and its Automation operations
   `ShareLink.Create`, `ShareLink.List`, `ShareLink.Revoke` and `ShareLink.Downloads`
-  ([api-integrations.md](../api-integrations.md), section 41): who may manage a picture's links,
+  ([api-integrations.md](../api-integrations.md), section 42): who may manage a picture's links,
   `WriteSecurity` on it, and who may make one, an administrator or a member of a group the server
   names too; what a link may list; and that it serves its items watermarked, and only
   while it is neither revoked nor past its last day and while the asset's rights allow each one.
@@ -344,7 +347,7 @@ A parameter is one of:
 | Computation     | Parameters                                                               | Result                                                                                           |
 | --------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | `core.age`      | A date                                                                   | The whole years from that date to today                                                          |
-| `core.template` | A text with `{<prefix>:<name>}` placeholders                             | The text with each placeholder replaced by the property's display value. Always text, never HTML |
+| `core.template` | A text of at most 1000 characters with `{<prefix>:<name>}` placeholders  | The text with each placeholder replaced by the property's display value. Always text, never HTML |
 | `core.sum`      | A list, and for a list of complex values, the subfield                   | The sum of its numbers                                                                           |
 | `core.count`    | A list                                                                   | How many items it holds                                                                          |
 | `core.dateDiff` | Two dates (the second may be `"today"`), and `days`, `months` or `years` | The difference, in that unit                                                                     |

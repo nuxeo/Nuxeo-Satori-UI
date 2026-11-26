@@ -1,0 +1,6 @@
+// The host takes the button's place in its row: it is as wide and as tall as the button, and lines
+// up on the button's text, so a row of them lays out as a row of native buttons would.
+:host {
+  display: inline-flex;
+  vertical-align: middle;
+}

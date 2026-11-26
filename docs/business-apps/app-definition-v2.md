@@ -19,9 +19,11 @@ the Payers Claims app, checked as a whole.
 
 Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1;
 the app registry, which serves an app's files on a server after sign-in, on 24 November 2026
-(section 10). The app draws the home (section 10), the queues (section 4), the menu (section 9),
-the labels (section 7) and the task forms (section 6); since 25 November 2026, the operation
-buttons of `actions.json` (section 5), on decision 3's recommendation. Nothing in the app reads
+(section 10); the deployment layer, a customer's own versions of an app's layouts and queues that
+the registry serves over its package's, on 25 November 2026 (section 10). The app draws the home
+(section 10), the queues (section 4), the menu (section 9), the labels (section 7) and the task
+forms (section 6); since 25 November 2026, the operation buttons of `actions.json` (section 5), on
+decision 3's recommendation. Nothing in the app reads
 module settings yet.
 
 ## The short version
@@ -562,6 +564,7 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
     "payers.queue.unassigned": "Unassigned claims",
     "payers.action.requestRecords": "Request medical records",
     "payers.action.requestRecords.sent": "Medical records requested",
+    "layout.schema.claim": "Claim",
     "layout.field.claim:memberId": "Member ID"
   }
 }
@@ -572,6 +575,16 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **A key** is the app's own, best begun with the app's name, or the platform's, such as
   `layout.field.claim:memberId`, which this replaces in this language. Version 1's manifest
   `labels` replace a key in every language at once.
+- **The Properties panel's names** are two of the platform's keys. `layout.schema.<schema>` heads a
+  schema's section where the panel is generated, for a type with no `metadata` layout file
+  (layout-v2.md, section 1), by the schema's name, not its prefix: the facilities kit's
+  `layout.schema.workorder` names the schema `workorder`, whose prefix is `wo`. A layout file's
+  sections name their own headings. `layout.field.<prefix>:<field>` names a field, generated or in
+  a layout file that gives it no `label` or `labelKey` that translates. With no text, a generated
+  heading is the schema's name made readable, so a kit's own schema shows as a raw name:
+  `acmeproduct` is "Acmeproduct". Give each schema of a kit's own types a heading:
+  `kit-schema-labels.spec.ts`, in `libs/shared/document-layouts`, holds the kits under
+  `business-apps/packages/` to it, from each kit's `content-model.json`.
 - **A text** is not empty.
 - **Every key a package names has a text** in its `labels/en.json` or in the platform's English
   catalogue: the pipeline refuses one with neither, by its key and its file
@@ -839,6 +852,36 @@ and E, which are still open ([decisions.md](decisions.md), notes):
 - **The endpoint,** its responses and headers, is in
   [api-integrations.md](../api-integrations.md).
 
+**The deployment layer.** Built on 25 November 2026, the designer's third slice, against the same
+proposed answers to B and E ([decisions.md](decisions.md), notes). **It changes an app for every
+user of it from an administrator's screen.**
+
+- **What it holds:** a customer's own versions of an app's record pages, edit and create forms
+  (`layouts/<Type>/<view|edit|create>.layout.json`) and queues (`queues/<id>.json`), made in the
+  [layout designer](../../libs/features/layout-designer/README.md#publishing-the-deployment-layer)
+  and kept in the server's repository. Nothing else of the app: not `app.json`, the menu, the home,
+  the actions or the labels.
+- **Its precedence:** the customer's overlay of the architecture's "starter kit, then customer,
+  then tenant, then environment" ([architecture.md](architecture.md), section 10). A live file wins
+  over the package's file at the same path, and adds one where the package has none, as a layout
+  the `<app>` does not name. It does not touch the labels: a `labelKey` it names is looked up as
+  before, so the manifest's labels, which win over an app's, win over it too.
+- **Who sees it:** the registry serves each live file at its path, to the app's groups, after
+  sign-in, and lists it in the app's `files` with its version under `layer`. The record page and the
+  forms read a layer layout for the app open before the configuration servlet's
+  (`DocumentLayoutService`); a queue is read from the registry already. **The configuration
+  servlet, which everyone reads before sign-in, never reads a layer, drafts or live versions.**
+  So someone in none of the app's groups keeps the package's file, as a server with layouts for
+  two apps keeps one per type and mode for everyone else (section 13).
+- **How a change goes live:** as a draft, which the registry never serves; submitted; and approved
+  by an administrator who neither wrote nor submitted it, unless the server lets the same one. Every
+  write is checked on the server with this document's validator, against the server's content
+  model, and a file it finds anything in is refused. A queue is held to the app's `actions.json` as
+  the registry serves it, after the allow-list (section 5): it names an action that runs an
+  operation only while the allow-list lets that operation run, and a live one is checked again when
+  the allow-list changes. Every publish keeps the previous version, and a rollback restores it. The
+  switch, `nuxeo.agentic.ui.layer.enabled`, is off unless set.
+
 ### What the app does with it
 
 The app's page `/home` reads the file, checks it with the validator, and draws it:
@@ -917,9 +960,12 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **Layouts per app.** The registry serves an app's other files; its layouts are still the
+- **Layouts per app.** The registry serves an app's other files; its packages' layouts are still the
   configuration servlet's, one per type and mode for the whole server, to everyone. Two apps with
-  a layout for the same type and mode replace each other's.
+  a layout for the same type and mode replace each other's. Only an app's deployment layer
+  (section 10) has layouts per app, and only for the people in its groups with the app open.
+- **The deployment layer per tenant**, and its labels, menu, home and actions: not built. A layer's
+  queue names the actions the registry serves, after the allow-list (section 10).
 - **Actions and module settings in the app.** The app runs an operation button on one record, on
   the toolbar or a row; not a lifecycle button from `actions.json`, which the platform's own Change
   state offers, nor a bulk action. The registry does not serve `modules/<module>.json`: no domain

@@ -1,6 +1,6 @@
 ---
 name: app-builder
-description: Build or change a Nuxeo Satori business app, an app definition package of version 2, with a presales engineer, against a development server. Read the server's model, page providers, workflows, vocabularies and operations through the Builder MCP server, write the files with the app generators, check them with the package pipeline, then preview what can be previewed and hand publishing to a person. Use when asked for an app, a record page, a queue or an action for a demo or an account, or to change a package under business-apps/packages/.
+description: Build or change a Nuxeo Satori business app, an app definition package of version 2, with a presales engineer, against a development server. Read the server's model, page providers, workflows, vocabularies and operations through the Builder MCP server, make every write to the package through its write tools, which run the app generators and commit a change only when the package pipeline passes it, then preview what can be previewed and hand publishing to a person. Use when asked for an app, a record page, a queue or an action for a demo or an account, or to change a package under business-apps/packages/.
 ---
 
 # Build a business app with the agent
@@ -19,13 +19,13 @@ is the worked example.
 
 ## What exists today, and what does not
 
-| Step                         | How                                                             | State                                                       |
-| ---------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
-| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                     | Built: 11 read-only tools                                   |
-| 2. Write the files           | The `app-*` generators, `app-model` for a demo's stand-in model | Built, in `tools/satori-generators`                         |
-| 3. Check them                | `validate_package`, or `npm run app-package`                    | Built: the pipeline's steps 1 to 6                          |
-| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running         | Built, on the local dev server. Not `app.json` or actions   |
-| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes         | **Not built in the MCP server.** The tag path has never run |
+| Step                         | How                                                                   | State                                                                 |
+| ---------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                           | Built: 11 read-only tools                                             |
+| 2. Write the files           | `apply_generator`, `write_package_file` and `apply_package_changes`   | Built: each writes only what passes the pipeline, as CI runs it       |
+| 3. Check them                | Each write checks first; `npm run app-package` with the model as well | Built: the pipeline's steps 1 to 6. The write tools take no model yet |
+| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running               | Built, on the local dev server. Not `app.json` or actions             |
+| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes               | **Not built in the MCP server.** The tag path has never run           |
 
 Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
 step as done that this table says is not built.
@@ -74,63 +74,102 @@ shows nothing.
 - **An operation the server has is not one a package may name.** The deployment's allow-list says
   which, and the pipeline refuses every operation it is not given one for.
 
-The generators and the pipeline also take the model as a file. Export one outside the repository,
-or read it live with `--modelServer`:
+The generators and the pipeline also take the model as a file. The write tools read one inside
+the repository only, so export a customer's into the checkout's `tmp/`, which git ignores, and
+never commit it:
 
 ```bash
-npm run app-package:model -- --server http://localhost:8080/nuxeo --out /tmp/content-model.json
+npm run app-package:model -- --server http://localhost:8080/nuxeo --out tmp/content-model.json
 ```
 
-## 2. Write the files, with the generators
+## 2. Write the files, through the write tools only
 
-Run them from the repository's root. Never write `build.mjs`, `package.xml`, the manifest or the
-component by hand: the generators write what the pipeline requires, byte for byte where it
-requires that.
+**Every write to a package goes through the Builder MCP server's write tools.** Never write a
+package file with your own file tools, a shell command or `npx nx g`: those write whatever they
+are given, and the write tools write only what passes the pipeline.
 
-`--platform` in the commands below, and in what each generator says to run next, is the
-platform's version: `node -p "require('./libs/platform/package.json').version"`, which CI and
-`validate_package` pass too. It was `0.2.0` when this was written.
+| To write                                              | Call                                                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| one file of the app definition, whole                 | `write_package_file`, `{ "package", "path", "content" }`                        |
+| what a generator writes                               | `apply_generator`, `{ "package", "generator", "options" }`                      |
+| several steps that would each be refused on their own | `apply_package_changes`, `{ "package", "changes": [...] }`, all written or none |
+
+Each makes the change to a staging copy, runs the pipeline's steps 1 to 6 on it as CI does, and
+writes to the package only when there is no finding. Read the answer every time:
+
+- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed).
+- **`written: false`:** nothing was written. `validation.findings` and `validation.refusedAt` say
+  why. Fix what they name and write again. An id the platform or the package does not register (a
+  widget, a rule, an operation the allow-list does not name) is refused here, at write time: never
+  rename it to something else unregistered, and never invent one. Tell the person what is not
+  there.
+- **An error:** the request was refused before anything ran, and the message says why: a path
+  that leaves the package, a link, a file these tools do not write, a generator option they do not
+  take. Do not work around it with your own file tools. The build allow-list,
+  `deployment/build-allow-list.json`, is the deployment's: say so, and leave it to a person.
+
+The package is one folder directly inside `business-apps/packages/`, or inside the folders the
+server's `BUILDER_PACKAGE_ROOTS` names. `write_package_file` writes `app.json`, `home.json`,
+`navigation.json`, `actions.json`, `queues/<id>.json`, `labels/<language>.json`,
+`tasks/<workflow>.<step>.layout.json` and `layouts/<Type>/<mode>.layout.json`, under
+`bundle/agentic-ui-config/`, each a JSON object of `"version": 2`. The generators write the rest:
+`build.mjs`, `package.xml`, the manifest and the component, byte for byte where the pipeline
+requires it. The options are those of the generator's schema, by name, as `npx nx g` takes them;
+the tool gives `package` (and `app-package`'s name and directory) from its `package` argument.
+`modelServer` is refused: a generator would send the credentials to the address it is given.
 
 **The order depends on where the model is.** On a customer's server the types exist, so the first
-example below holds: `app-package --type` writes the first record page from the model. **A demo
-kit with a stand-in model** has no model until `app-model` writes one, and `app-model` needs the
-package, so its order is:
+example below holds: `app-package` with `type` writes the first record page from the model. **A
+demo kit with a stand-in model** has no model until `app-model` writes one, and `app-model` needs
+the package, so its order is:
 
-1. `app-package` without `--type`;
-2. `app-model --properties` for each type, then `app-model --pageProvider` for each page provider,
-   with `--aggregates` for one whose queue has facets or whose home counts buckets;
+1. `app-package` without `type`;
+2. `app-model` with `properties` for each type, then with `pageProvider` for each page provider,
+   with `aggregates` for one whose queue has facets or whose home counts buckets;
 3. `app-layout` and `app-form`, each given the kit's own model,
-   `--model=business-apps/packages/<name>/content-model.json`;
-4. `app-queue`, `app-action`, and the home and the menu by hand, then `app-registry`.
+   `"model": "business-apps/packages/<name>/content-model.json"`;
+4. `app-queue`, `app-action`, and the home and the menu with `write_package_file`, then `app-registry`, in one call.
 
-The tutorial, `docs/business-apps/tutorial.md`, follows that order for the facilities kit.
+The pipeline refuses a package with no record page, so steps 1 to 3 go in one
+`apply_package_changes` call: alone, the first two would be refused, and nothing written. So does
+a hand-written file the component must name, with the `app-registry` that names it. The tutorial,
+`docs/business-apps/tutorial.md`, follows that order for the facilities kit.
 
-```bash
-# The package, with its first record page from the model, and its app for the app registry
-npx nx g ./tools/satori-generators:app-package acme-contracts --owner=acme --title="Acme Contracts" \
-  --groups=contract-managers --type=Contract --model=/tmp/content-model.json
+```jsonc
+// apply_generator: the package, with its first record page from the model, and its app for the
+// app registry
+{ "package": "business-apps/packages/acme-contracts", "generator": "app-package",
+  "options": { "owner": "acme", "title": "Acme Contracts", "groups": "contract-managers",
+               "type": "Contract", "model": "tmp/content-model.json" } }
 
-# Another record page; --modelServer=http://localhost:8080/nuxeo reads the model live instead
-npx nx g ./tools/satori-generators:app-layout --package=business-apps/packages/acme-contracts \
-  --type=Counterparty --model=/tmp/content-model.json
+// apply_generator: another record page
+{ "package": "business-apps/packages/acme-contracts", "generator": "app-layout",
+  "options": { "type": "Counterparty", "model": "tmp/content-model.json" } }
 
-# The Edit form (--mode=create for the Create form), the fields it must have required
-npx nx g ./tools/satori-generators:app-form --package=business-apps/packages/acme-contracts \
-  --type=Contract --mode=edit --required=dc:title,contract:number --model=/tmp/content-model.json
+// apply_generator: the Edit form ("mode": "create" for the Create form), the fields it must have
+{ "package": "business-apps/packages/acme-contracts", "generator": "app-form",
+  "options": { "type": "Contract", "mode": "edit", "required": "dc:title,contract:number",
+               "model": "tmp/content-model.json" } }
 
-# A queue, on a page provider describe_page_provider showed
-npx nx g ./tools/satori-generators:app-queue --package=business-apps/packages/acme-contracts \
-  --id=open-contracts --pageProvider=acme_open_contracts --columns=contract:number,dc:title,contract:end \
-  --sort=contract:end
+// apply_generator: a queue, on a page provider describe_page_provider showed
+{ "package": "business-apps/packages/acme-contracts", "generator": "app-queue",
+  "options": { "id": "open-contracts", "pageProvider": "acme_open_contracts",
+               "columns": "contract:number,dc:title,contract:end", "sort": "contract:end" } }
 
-# A lifecycle button, on the record page and the queue's rows
-npx nx g ./tools/satori-generators:app-action --package=business-apps/packages/acme-contracts \
-  --id=acme-contracts.approve --transition=approve --on=record,row --type=Contract \
-  --confirm="Approve this contract?" --queue=open-contracts
+// apply_generator: a lifecycle button, on the record page and the queue's rows
+{ "package": "business-apps/packages/acme-contracts", "generator": "app-action",
+  "options": { "id": "acme-contracts.approve", "transition": "approve", "on": "record,row",
+               "type": "Contract", "confirm": "Approve this contract?", "queue": "open-contracts" } }
 
-# After writing the home, the menu or a task form by hand: the app names every file it serves
-npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/acme-contracts
+// apply_package_changes: the home written with write_package_file, and the app-registry that names it
+{ "package": "business-apps/packages/acme-contracts", "changes": [
+    { "kind": "write", "path": "bundle/agentic-ui-config/home.json", "content": "{ ... }" },
+    { "kind": "generator", "generator": "app-registry" } ] }
 ```
+
+What a generator prints, such as the command to run next, comes back as `generatorOutput`. Its
+`--platform` is the platform's version, `node -p "require('./libs/platform/package.json').version"`,
+which CI and the write tools pass too. It was `0.2.0` when this was written.
 
 What each writes, and what it leaves to you:
 
@@ -158,7 +197,7 @@ What each writes, and what it leaves to you:
   Attachments. The component contributes it, as it does the record page. A field rule in plain
   words is the next edit (below).
 - **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
-  against the model yet. Facets are the next edit, by hand: `"facets": [{ "aggregate": "<id>",
+  against the model yet. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
 "labelKey": "<key>" }]`, each an aggregate the page provider defines, which
   `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
   page provider in the package's own model does not define.
@@ -167,26 +206,31 @@ What each writes, and what it leaves to you:
   the platform's, and refused.
 - **`app-registry`:** the component's `<app>`, naming every file of the app definition the
   registry serves. `app-package` writes it, and `app-layout`, `app-form`, `app-queue` and
-  `app-action` keep it in step; run it after writing a file by hand, or for a package that has
+  `app-action` keep it in step; run it in the same call as writing such a file with `write_package_file`, or for a package that has
   none. It takes out a file the package no longer holds.
-- **`app-model`, for a demo kit only:** a stand-in type with its schema, `--properties` such as
+- **`app-model`, for a demo kit only:** the write tools refuse it on a package that does not ship its own `content-model.json` already, unless the same call makes the package. A stand-in type with its schema, `--properties` such as
   `number,status=Draft|Active,value:double,end:date`, and page providers over it, `--pageProvider`
-  with `--where` and `--sort`, in a model component of its own that the manifest lists first. A
+  with `--where` and `--sort`, in a model component of its own that the manifest lists first.
+  `--attachments`, with `--properties` when the type is first written, gives it Nuxeo's `files`
+  schema too, `files:files`, where the document page's Attachments panel adds a record's files. A
   page provider reads the repository, which answers no aggregate; `--aggregates=<prefix>:<name>,...`
   writes it from the search index instead, with a terms aggregate `<prefix>_<name>_agg` for each
   property and the type's search document, so a queue's facets and a home's figures can name them.
   It writes `content-model.json` beside `bundle/`: give that to the other generators until a server
   has the package. The pipeline holds a package that ships a stand-in model to it by default.
 
-  ```bash
-  npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
-    --type=Contract --properties="number,status=Draft|Active|Terminated,value:double,end:date"
-  npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
-    --type=Contract --pageProvider=acme_active_contracts --where="contract:status = 'Active'" \
-    --sort=contract:end --aggregates=contract:status
+  ```jsonc
+  // Two changes of one apply_package_changes call, after app-package and before app-layout
+  { "kind": "generator", "generator": "app-model",
+    "options": { "type": "Contract", "properties": "number,status=Draft|Active|Terminated,value:double,end:date" } }
+  { "kind": "generator", "generator": "app-model",
+    "options": { "type": "Contract", "pageProvider": "acme_active_contracts",
+                 "where": "contract:status = 'Active'", "sort": "contract:end",
+                 "aggregates": "contract:status" } }
   ```
 
-Then edit what the generators wrote, as the person asks, following `layout-v2.md`:
+Then edit what the generators wrote, with `write_package_file`, as the person asks, following
+`layout-v2.md`. Write the whole file each time, starting from what the package holds now:
 
 - **Fields come in the order the server lists them,** not the schema's. Reorder them.
 - **Pick the widgets a person would:** `currency` with its code, `status-badge` with its tones,
@@ -200,35 +244,42 @@ Then edit what the generators wrote, as the person asks, following `layout-v2.md
 - **Sensitive fields.** Ask before showing an identifier such as a social security number. Hiding a
   field with a rule is a convenience, not a control: the server still returns it to anyone who may
   read the record.
-- **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them by hand,
-  from `app-definition-v2.md`, sections 9 and 10, then run `app-registry`, so that the app names
-  them.
+- **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them with `write_package_file`,
+  from `app-definition-v2.md`, sections 9 and 10, in one `apply_package_changes` call with the
+  `app-registry` that has the app name them. Written alone, a new one is refused.
 
-## 3. Check them, after every write
+## 3. Check them: every write already did
+
+Each write tool ran the pipeline's steps 1 to 6 on the package as it would be, as CI runs them,
+before writing it: a package that ships a stand-in model held to its own `content-model.json`, one
+with `deployment/build-allow-list.json` to that allow-list, and nothing else given. So after a
+write that answered `written: true`, the package passes as CI runs it. Two checks are still yours:
 
 ```bash
-npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --model /tmp/content-model.json
+npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --model tmp/content-model.json
 ```
 
-The MCP server's `validate_package` runs the same pipeline on the folder, as CI does. It takes no
-content model: a package that ships a stand-in model is held to its own `content-model.json`, in
-both, and a package on a customer's server to none. So for a customer's package, use it for the CI
-view, and the command above for the model. Both must pass before you say anything works.
-
-- **Give it the server's model.** Without one, in a package that has no stand-in model, a field
-  the type does not have and a widget that does not fit its property both pass. With `--model` or
-  `--model-server`, they are refused.
+- **Give the pipeline the server's model.** The write tools, like CI and `validate_package`, give
+  a package on a customer's server no model, so a field the type does not have and a widget that
+  does not fit its property both pass them. With `--model` or `--model-server`, the command above
+  refuses them. For a customer's package, both must pass before you say anything works.
+- **`validate_package` checks a package as it is,** such as one a person changed by hand.
 - **Every `labelKey` needs a text,** in the package's `labels/en.json` or the platform's catalogue:
-  the pipeline refuses one with neither, naming the key and the file. Add the text when you write
-  the key, not at the end.
-- **Give it the allow-list** when the package has an operation: `--allow-list <file>`, a file of
-  `{ "operations": [...] }`; `validate_package` takes one as `allowList`, inside the repository.
-  CI passes none yet, so a package with an operation fails CI until
-  decision 3 settles where the allow-list lives. Say so.
+  the pipeline refuses one with neither, naming the key and the file. Write the text in the same
+  call as the key: `apply_package_changes`, the labels first.
+- **Name each of the kit's own schemas for the Properties panel:** `layout.schema.<schema>`, by the
+  schema's name, not its prefix, in `labels/en.json`. For a type with no `metadata` layout the panel
+  heads each schema's section with it, else with the name made readable, `acmeproduct` as
+  "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
+  `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
+- **The allow-list is the deployment's.** A package with an operation passes only against the
+  allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
+  which CI gives the pipeline. A package with none is refused at write time for every operation:
+  say so, and leave the allow-list to a person (decision 3).
 - **Read the findings, then fix the file.** Each names the file, the place and the reason, such as
   `cards[0].fields[1].widget: the widget "calendar" is not registered [unknown]`. Never weaken a
-  check, rename an id to something unregistered, or run the pipeline without the model to get a
-  pass.
+  check, rename an id to something unregistered, write the file some other way, or run the
+  pipeline without the model to get a pass.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
   a facet's aggregate on a page provider of the server's, a queue's or a related list's columns,
   the properties a rule or a computation names, and a vocabulary widget's directory against its
@@ -287,7 +338,8 @@ The MCP server has no publish tool, and promotion after a person approves is a p
 1. The person raises the version in `package/package.xml`, `app.json`'s `packageVersion` and the
    manifest's `Bundle-Version`, together, as far as the changes need (`package-pipeline.md`,
    section 8: a removed queue, layout or label key needs a major, from 1.0.0), and the pull
-   request merges. Its check refuses a version that moved less.
+   request merges. Its check refuses a version that moved less. The write tools do not write
+   `package.xml` or the manifest by hand, and do not compare with the version before.
 2. The person tags the merged commit `app-package/<name>/<version>` and pushes the tag.
 3. The workflow `app-packages.yml` checks and builds it again, attests it and publishes it to
    Marketplace preprod. This path has not run yet.
@@ -297,6 +349,8 @@ what is left for the person.
 
 ## Done means
 
+- every write to the package went through `write_package_file`, `apply_generator` or
+  `apply_package_changes`, and the last answered `written: true`;
 - the pipeline passes with the server's model, and with the allow-list when there is an operation;
 - every id the package names is registered, or is the package's own;
 - the person has seen the record pages in the preview, or has been told why not;
@@ -308,3 +362,5 @@ what is left for the person.
 - Write Angular or any other code: a package is configuration only.
 - Change the generators, the validator or the pipeline to make a package pass. A refusal is the
   answer; fix the package.
+- Write a package any way but the write tools, or write its `deployment/` allow-list, its assets
+  or its code.

@@ -66,6 +66,14 @@ enrichers-document: allowedTransitions → ours (nuxeo-agentic-core): [{ name, d
 | Page provider search       | GET    | `/nuxeo/api/v1/search/pp/:providerName/execute` |
 | Global suggest (typeahead) | GET    | `/nuxeo/api/v1/search/suggest`                  |
 
+A page provider the search index serves pages only within OpenSearch's `max_result_window`, 10,000
+by default: a page that **ends** past it is HTTP 500, not an empty page, even for a query of six
+results, and `isNextPageAvailable` is already false on the last whole page within it. It reports
+the window as `resultsCountLimit` and still counts exactly past it. The repository's providers have
+no window: `resultsCountLimit` is 0, or a count limit past which `resultsCount` is `-2`. REST offers
+no scroll or `search_after`. Measured on 2025.10.18; `resultWindow()` reads it, and
+`docs/api-integrations.md` §33 has the table.
+
 ### Workflows & Tasks
 
 | Operation              | Method | Endpoint                            |

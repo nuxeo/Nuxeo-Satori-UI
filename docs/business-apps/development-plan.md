@@ -236,7 +236,7 @@ Payers model.
 **Done when:**
 
 - a presales engineer rebuilds the Member page from an empty package in one day or less (the first
-  half of the acceptance test);
+  half of the acceptance test), run as [acceptance-tests.md](acceptance-tests.md)'s test A;
 - the kit's demo script passes end to end.
 
 **Needs:** the Payers model (phase 0).
@@ -269,7 +269,8 @@ Payers model.
 **Done when:**
 
 - the plan's acceptance test passes: a presales engineer rebuilds the Member, Claim and Case screens
-  with no Angular code in two days or less, and a prospect would accept the result;
+  with no Angular code in two days or less, and a prospect would accept the result, run as
+  [acceptance-tests.md](acceptance-tests.md)'s test B, with its review form;
 - the security review of operation buttons is done.
 
 **Needs:**
@@ -289,7 +290,10 @@ faxes wait for capture, in phase 7.
 - **The MCP server:** reads the model, page providers, workflows, vocabularies and operations
   with their parameters; validates a package; previews it in dev mode; publishes to
   pre-production. The reads, the validation and the preview, on the local development server, are
-  in [`tools/builder-mcp`](../../tools/builder-mcp/README.md); publishing is not built yet.
+  in [`tools/builder-mcp`](../../tools/builder-mcp/README.md); publishing is not built yet. So are
+  the agent's writes: `write_package_file`, `apply_generator` and `apply_package_changes` write to
+  a package only what the pipeline passes, as CI runs it, and otherwise change nothing, so an id
+  the platform does not register is refused when it is written.
 - **The app builder skill**, written under `.cursor/skills/` and mirrored. It is
   [`.cursor/skills/app-builder/SKILL.md`](../../.cursor/skills/app-builder/SKILL.md), and says
   which of its steps are not built: publishing is a person's tag.
@@ -318,7 +322,8 @@ faxes wait for capture, in phase 7.
 **Done when:**
 
 - someone outside the team builds a small app with the agent in a day, following the
-  [tutorial](tutorial.md) (the plan's section 7 asks for one);
+  [tutorial](tutorial.md) (the plan's section 7 asks for one), run as
+  [acceptance-tests.md](acceptance-tests.md)'s test C;
 - every write by the agent passes validation;
 - an agent asked to use an unregistered ID is refused.
 
@@ -391,8 +396,9 @@ be confirmed account by account in phase 0.
 **Done when:**
 
 - a presales engineer rebuilds the product and asset pages in two days or less (the plan's second
-  acceptance test);
-- a library of 100,000 synthetic assets stays within the performance budget;
+  acceptance test), run as [acceptance-tests.md](acceptance-tests.md)'s test D;
+- a library of 100,000 synthetic assets stays within the performance budget
+  ([performance-budget.md](performance-budget.md));
 - the share links' security review is done.
 
 **Needs:**
@@ -434,7 +440,7 @@ without the agent.
 - real packages with custom elements.
 
 **Built so far** ([`libs/features/layout-designer`](../../libs/features/layout-designer/README.md)):
-the designer's first two slices, at `/#/administration/layout-designer` and its `queues` page.
+the designer's three slices, at `/#/administration/layout-designer` and its `queues` page.
 
 - **What it does with a layout file:** it opens a type's record page (`view`), edit form (`edit`) or
   create form (`create`) as the server serves it, or a new one for a mode the server serves none of.
@@ -450,9 +456,15 @@ the designer's first two slices, at `/#/administration/layout-designer` and its 
   is downloaded only when it finds nothing. A layout file is held to the server's content model when
   the model can be read; when it cannot, the page says so and makes every other check, as the
   pipeline does without `--model`.
-- **Publishing is out of its scope.** It needs a write API the app registry does not have yet, so
-  the file is downloaded, for a package or for `npm run config:dev`, and nothing is written to the
-  server.
+- **Publishing, the third slice, through an app's deployment layer**
+  ([app-definition-v2.md](app-definition-v2.md), section 10): on a server that switches it on, an
+  administrator saves a layout file or a queue as a draft, submits it, and a second administrator
+  approves it, which publishes it for everyone in the app's groups, over the package's file; every
+  publish keeps the previous version, and any administrator rolls it back. The server checks every
+  write with the same validator, against its content model, and lets administrators alone write
+  and approve. It changes the app for every user of it from an administrator's screen. Built and
+  tested, not installed on a server; the download stays. Demo step 2's "previews it, gets it
+  approved, and publishes it" is the panel under the Save section.
 - **No plugin and no customer code:** decision 5 is open.
 - **Only administrators see the page, and that is not a security control:** the server's
   permissions decide what anyone may read or change.

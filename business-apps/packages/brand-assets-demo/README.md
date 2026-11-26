@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.1 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.2 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
@@ -34,6 +34,10 @@ downloaded.
   aggregates (Rights, Shot and Product), and the products.
 - **A stand-in model,** until a brand team's own arrives: the types, schemas and page providers
   those files name. It is fictional, and replaced whole when theirs comes.
+- **A performance budget at 100,000 assets,** for the library and the asset page, checked against
+  a stand-in for the server rather than a seeded one:
+  [performance-budget.md](../../../docs/business-apps/performance-budget.md), and
+  `npm run beta:asset-performance`. It does not measure the server's own query time.
 - **A seed script** writes two products, six pictures and the products' shot list into the kit's
   own workspace, and nowhere else. Run it twice and nothing is added the second time. With
   `--preview`, before the package is installed, it writes the six pictures as the platform's own
@@ -47,7 +51,7 @@ downloaded.
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
   there. Read only, on 25 November 2026, that server's package list shows 0.2.0 started, with
-  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 and 0.2.1 are installed nowhere.
+  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 to 0.2.2 are installed nowhere.
   The product page, the queues and the demo script have not run on a shared server.
 
 ## What is in it
@@ -115,7 +119,7 @@ server refuses on assets 503 and 505.
 ## Share links
 
 The asset layout's `"shareLinks": {}` turns on the asset page's share links (layout-v2.md,
-section 2, "Share links"). From 0.2.1 the package depends on `nuxeo-agentic-assets` 0.2.0, which
+section 2, "Share links"). From 0.2.2 the package depends on `nuxeo-agentic-assets` 0.2.0, which
 holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
 contributes nothing of its own to them.
 
@@ -207,7 +211,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.1.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.2.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -231,7 +235,7 @@ them first should check each step's outcome as step 3 says. The local Nuxeo is t
 [Payers kit's README](../payers-claims-demo/README.md#installing-it-on-a-local-nuxeo) says.
 
 **From 0.2.0 it also depends on `nuxeo-agentic-assets`,** the add-on that enforces its rights
-policy, and from 0.2.1 on its version 0.2.0, which adds the share links. Install the two in one
+policy, and from 0.2.2 on its version 0.2.0, which adds the share links. Install the two in one
 restart, as the
 [add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says:
 build the add-on with `mvn -pl nuxeo-agentic-assets -am package`, copy both zips in, and name both
@@ -250,11 +254,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.2.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.2.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -396,7 +400,7 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-ri
 not through the dev server. **Not run:** nothing installs the add-on or the kit yet.
 
 The plan's demo step 3, a share link, has no steps file yet: once the add-on 0.2.0 and this kit
-0.2.1 are installed, it is run by hand as the
+0.2.2 are installed, it is run by hand as the
 [add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says,
 after the share links' security review. Step 4, the review, is the next section's.
 
@@ -450,11 +454,20 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   asset layout puts a `date` widget on a text property, given the model. Version 0.2.0 was held to
   0.1.1 on the staging branch with `--previous`: its three changes, the rights component, the
   manifest and `package.xml`'s new dependency, are "to judge", which the pipeline sees as a patch,
-  and 0.2.0 raises the minor, as a package newly needing an add-on should. Version 0.2.1 was held
-  to 0.2.0 on the staging branch the same way: its two changes, the asset layout's share links and
-  `package.xml`'s dependency raised to `nuxeo-agentic-assets` 0.2.0, need a patch, and the upgrade
-  check, `npm run app-upgrade -- --since origin/staging/enterprise-grade-app`, keeps every
-  configuration.
+  and 0.2.0 raises the minor, as a package newly needing an add-on should.
+- **0.2.1 names its schemas' sections in the Properties panel:** a product's heading was
+  "Acmeproduct", its schema's name made readable, in a browser walkthrough of 0.2.0, since the
+  labels gave it none. The labels now name the three, `layout.schema.acmeasset`, `acmeproduct` and
+  `acmeshot`, "Asset", "Product" and "Shot" (app-definition-v2.md, section 7), and
+  `kit-schema-labels.spec.ts` in `libs/shared/document-layouts` fails a kit that leaves one out.
+  Held to 0.2.0 on the staging branch with `--previous`: three labels added, a patch. Not seen on a
+  server yet.
+- **0.2.2 turns the share links on:** held to 0.2.1 on the staging branch with `--previous`, its
+  two changes, the asset layout's share links and `package.xml`'s dependency raised to
+  `nuxeo-agentic-assets` 0.2.0, need a patch, and the upgrade check,
+  `npm run app-upgrade -- --since origin/staging/enterprise-grade-app`, keeps every configuration.
+  The share links were first numbered 0.2.1, before the labels took that version on the staging
+  branch.
 - **The rights policy,** `brand-assets-demo-rights.xml`, is read by `nuxeo-agentic-assets`'s own
   tests, through XMap as the runtime reads a contribution, and decides the demo's uses as this
   README's table says; giving `OriginalJpeg` another channel turns them red.
@@ -471,7 +484,7 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1 and 0.2.1 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
+- **Versions 0.1.1 to 0.2.2 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
   server, not a shared one:
   the review was seen with its layout from `config:dev`, and the product page, the queues, the full
   seed and the demo have not run on a shared server.

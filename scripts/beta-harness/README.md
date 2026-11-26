@@ -297,14 +297,37 @@ retired dependency (the legacy UI libraries, `js-api` or `hxcs-js-client`) fails
 
 Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 
-Three further checks are **not** in the pipeline, because they need something the
-pipeline cannot assume — a measurement run, or evidence that lives outside the repo:
+Four further checks are **not** in the pipeline, because they need something the
+pipeline cannot assume — a measurement run, a browser, or evidence that lives outside the repo:
 
-| Command                 | Checks                                          | Why it is separate                                                             |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| `npm run beta:coverage` | no project lost coverage; `FLOORS` met          | needs a `--coverage` run first; CI runs it after Sonar's tests, `--expect-all` |
-| `npm run beta:state`    | every "complete" phase cites a passing manifest | evidence lives outside the tree, so this is local-only and cannot run in CI    |
-| `npm run beta:backend`  | the Nuxeo stack is up and serving               | starts containers; a side effect a gate should not have                        |
+| Command                          | Checks                                                       | Why it is separate                                                                       |
+| -------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `npm run beta:coverage`          | no project lost coverage; `FLOORS` met                       | needs a `--coverage` run first; CI runs it after Sonar's tests, `--expect-all`           |
+| `npm run beta:state`             | every "complete" phase cites a passing manifest              | evidence lives outside the tree, so this is local-only and cannot run in CI              |
+| `npm run beta:backend`           | the Nuxeo stack is up and serving                            | starts containers; a side effect a gate should not have                                  |
+| `npm run beta:asset-performance` | the brand assets library at 100,000 assets within its budget | needs Chromium and a production build; CI runs only its offline controls (section below) |
+
+### The asset library's performance check
+
+`asset-performance/` holds the brand assets library and its asset page to the budget in
+[`docs/business-apps/performance-budget.md`](../../docs/business-apps/performance-budget.md), at
+100,000 synthetic assets, without a Nuxeo. `check.mjs` builds the app for production, serves it on
+port 4294 with `stand-in.mjs`, a stand-in for every REST call the two pages make, answering from
+`library.mjs`'s synthetic library after a stated latency, and measures them in Chromium. The
+stand-in keeps to OpenSearch's result window as Nuxeo does, refusing a page that ends past the
+10,000th result, and the check pages the library to that edge. It needs Playwright
+(Prerequisites, above) and no credentials. Exit codes are the runner's: 0, 1, 2.
+
+```bash
+npm run beta:asset-performance                    # build, measure, judge against budget.json
+npm run beta:asset-performance -- --skip-build    # the build already in dist/nuxeo-ui
+npm run beta:asset-performance-controls           # eight controls, each must fail its own lines
+npm run beta:asset-performance-selftest           # offline, in CI: library, stand-in, budget
+```
+
+Its report goes to `$EVIDENCE_ROOT/beta/asset-performance/<timestamp>/`. It does not measure
+Nuxeo's or OpenSearch's own query time at 100,000 documents: the stand-in's latencies are stated
+assumptions, which a server holding that data would confirm.
 
 ### The `assertions` gate
 

@@ -1,15 +1,35 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import { readContentModel, type ContentModel } from '@agentic-ui/shared/app-definition';
 import { QueuePageComponent } from '@agentic-ui/shared/queues';
 import { NxsConfirmDialogComponent, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import { BehaviorSubject, Subject, firstValueFrom, of, startWith } from 'rxjs';
 
+import { controlContract } from '../control-contract.testing';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { QueueDesignerPageComponent } from './queue-designer-page';
+import { LayerPanelComponent } from '../layer/layer-panel';
+
+/**
+ * The deployment layer's panel, as the page hands it the file open: what it is given is what is
+ * checked here. The panel itself, and every request it makes, is held by `layer-panel.spec.ts`.
+ */
+@Component({
+  selector: 'lib-layer-panel',
+  standalone: true,
+  template: '<p class="stub-layer-panel">{{ path() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubLayerPanelComponent {
+  readonly path = input<string | null>(null);
+  readonly file = input<unknown>(null);
+  readonly saveable = input(false);
+  readonly openVersion = output<unknown>();
+}
 
 /** The queue page, as the designer hands it a preview: what it is given is what is checked. */
 @Component({
@@ -115,8 +135,8 @@ describe('QueueDesignerPageComponent', () => {
       ],
     });
     TestBed.overrideComponent(QueueDesignerPageComponent, {
-      remove: { imports: [QueuePageComponent] },
-      add: { imports: [StubQueuePageComponent] },
+      remove: { imports: [QueuePageComponent, LayerPanelComponent] },
+      add: { imports: [StubQueuePageComponent, StubLayerPanelComponent] },
     });
     fixture = TestBed.createComponent(QueueDesignerPageComponent);
     page = fixture.componentInstance;
@@ -141,8 +161,9 @@ describe('QueueDesignerPageComponent', () => {
     await settle();
   }
 
+  /** The native button of the `nxs-` button `selector` names. */
   const button = (selector: string): HTMLButtonElement => {
-    const found = root().querySelector<HTMLButtonElement>(selector);
+    const found = root().querySelector<HTMLButtonElement>(`${selector} button`);
     if (!found) throw new Error(`no ${selector}`);
     return found;
   };
@@ -163,9 +184,26 @@ describe('QueueDesignerPageComponent', () => {
       reader.readAsText(blob);
     });
 
+  it("hands the deployment layer's panel the queue open, as edited, and opens a version it gives", async () => {
+    await open();
+    const panel = fixture.debugElement.query(
+      (node) => node.componentInstance instanceof StubLayerPanelComponent,
+    ).componentInstance as StubLayerPanelComponent;
+    expect(panel.path()).toBe('queues/up-for-renewal.json');
+    expect(panel.file()).toEqual(RENEWALS);
+    expect(panel.saveable()).toBe(page.saveState() === 'saveable');
+
+    const live = { ...(RENEWALS as object), label: 'Renewals, live' };
+    panel.openVersion.emit(live);
+    await settle();
+    expect(page.file()).toEqual(live);
+  });
+
   it("offers the queues the app's menu opens, and opens one by its button", async () => {
     await settle();
-    const offered = [...root().querySelectorAll<HTMLOptionElement>('#queue-designer-ids option')];
+    const offered = [
+      ...root().querySelectorAll<HTMLOptionElement>('[data-picker="queue"] datalist option'),
+    ];
     expect(offered.map((option) => option.value)).toEqual(['up-for-renewal', 'terminated']);
     expect(button('[data-action="open"]').disabled).toBe(true);
     page.idChosen.set('../etc');
@@ -180,6 +218,33 @@ describe('QueueDesignerPageComponent', () => {
     expect(columns()).toEqual(['contract:number', 'dc:title', 'contract:end']);
     expect(page.sorts()).toEqual([{ index: 0, field: 'contract:end', order: 'asc' }]);
     expect(page.facets().map((facet) => facet.aggregate)).toEqual(['contract_status']);
+  });
+
+  it('takes the queue ID and a facet to add as each key is typed, and the queue name once left', async () => {
+    await settle();
+    const typeInto = (selector: string, text: string, event: 'input' | 'change'): void => {
+      const field = root().querySelector<HTMLInputElement>(`${selector} input`);
+      if (!field) throw new Error(`no ${selector}`);
+      field.value = text;
+      field.dispatchEvent(new Event(event));
+    };
+    typeInto('[data-picker="queue"]', 'up-for-renewal', 'input');
+    await settle();
+    expect(page.idChosen()).toBe('up-for-renewal');
+    expect(button('[data-action="open"]').disabled).toBe(false);
+
+    await open();
+    typeInto('[data-picker="add-facet"]', 'contract_category', 'input');
+    await settle();
+    expect(page.toAdd().facets).toBe('contract_category');
+    expect(button('[data-action="add-facet"]').disabled).toBe(false);
+
+    typeInto('[data-text="label"]', 'Renewals', 'input');
+    await settle();
+    expect(page.file()).toEqual(RENEWALS);
+    typeInto('[data-text="label"]', 'Renewals', 'change');
+    await settle();
+    expect(page.file()?.['label']).toBe('Renewals');
   });
 
   it('previews the queue with the queue page, given the file as edited and read-only', async () => {
@@ -208,7 +273,7 @@ describe('QueueDesignerPageComponent', () => {
   it("adds a column from the content model's properties, and sorts on a column", async () => {
     await open();
     const properties = [
-      ...root().querySelectorAll<HTMLOptionElement>('#queue-designer-properties option'),
+      ...root().querySelectorAll<HTMLOptionElement>('[data-picker="add-column"] datalist option'),
     ].map((option) => option.value);
     expect(properties).toEqual(['contract:end', 'contract:number', 'contract:owner', 'dc:title']);
     page.choose('columns', 'contract:owner');
@@ -430,7 +495,7 @@ describe('QueueDesignerPageComponent', () => {
     expect(names).toContain('Show the column dc:title again');
     const named = (list: string, action: string): string | null | undefined =>
       root()
-        .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"]`)
+        .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"] button`)
         ?.getAttribute('aria-label');
     expect(named('columns', 'up')).toBe('Move the column contract:number up');
     expect(named('columns', 'down')).toBe('Move the column contract:number down');
@@ -447,8 +512,16 @@ describe('QueueDesignerPageComponent', () => {
       facets: [{ aggregate: 'a' }, { aggregate: 'b' }],
     });
     const focused = (): string | null => {
+      // The focus is on the native control inside the `nxs-` element that names the action or the
+      // picker: its button, or the facet's input. Read only off one of those.
       const element = document.activeElement as HTMLElement | null;
-      return `${element?.closest('[data-facet],[data-part]')?.getAttribute('data-facet') ?? ''}:${element?.dataset['action'] ?? element?.dataset['picker'] ?? ''}`;
+      const control =
+        element instanceof HTMLButtonElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement
+          ? element.closest<HTMLElement>('[data-action],[data-picker]')
+          : null;
+      return `${element?.closest('[data-facet],[data-part]')?.getAttribute('data-facet') ?? ''}:${control?.dataset['action'] ?? control?.dataset['picker'] ?? ''}`;
     };
     button('[data-facet="a"] [data-action="remove"]').click();
     await settle();
@@ -482,5 +555,87 @@ describe('QueueDesignerPageComponent', () => {
     const held = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(held);
     expect(held.defaultPrevented).toBe(true);
+  });
+
+  it("names the order picker's choices anew when the catalogue changes, as the translate pipe did", async () => {
+    await open({ ...RENEWALS, sort: [{ field: 'dc:title' }] });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      translate.getCurrentLang() ?? 'en',
+      { 'layout-designer': { queue: { 'order-none': 'Unsorted', 'order-asc': 'A to Z' } } },
+      true,
+    );
+    await settle();
+    expect(
+      [...root().querySelectorAll<HTMLOptionElement>('[data-picker="order"] option')].map(
+        (option) => option.textContent?.trim(),
+      ),
+    ).toEqual(['Unsorted', 'A to Z', 'Descending']);
+  });
+
+  it('moves the focus to adding a sort once the last sort is removed', async () => {
+    await open();
+    button('[data-sort="contract:end"] [data-action="remove"]').click();
+    await settle();
+    const element = document.activeElement;
+    expect(element).toBeInstanceOf(HTMLSelectElement);
+    expect(element?.closest('[data-picker]')?.getAttribute('data-picker')).toBe('add-sort');
+  });
+
+  it("keeps the queue's keyboard contract: each control's element, name, state, value and order", async () => {
+    // A sort with no order, so that the order picker offers its "none" too.
+    await open({
+      ...RENEWALS,
+      sort: [{ field: 'contract:end', order: 'asc' }, { field: 'dc:title' }],
+    });
+    button('[data-column="dc:title"] [data-action="hide"]').click();
+    await settle();
+    // A sort added, so that the sort picker is seen choosing nothing again.
+    page.choose('sort', 'contract:number');
+    await settle();
+    button('[data-action="add-sort"]').click();
+    await settle();
+    expect(controlContract(root())).toEqual([
+      'a "Layout files"',
+      'a "Queues"',
+      'input "Queue ID" = "up-for-renewal" suggests',
+      'button "Open"',
+      'h2 "The up-for-renewal queue" tabindex=-1',
+      'input "Name text" = ""',
+      'input "Name label key" = "contracts.queue.up-for-renewal"',
+      'button "Move the column contract:number up" disabled',
+      'button "Move the column contract:number down"',
+      'button "Hide the column contract:number"',
+      'button "Move the column contract:end up"',
+      'button "Move the column contract:end down" disabled',
+      'button "Hide the column contract:end"',
+      'input "Add a column: a property" = "" suggests',
+      'button "Add" disabled',
+      'button "Show the column dc:title again"',
+      'button "Move the sort on contract:end up" disabled',
+      'button "Move the sort on contract:end down"',
+      'button "Remove the sort on contract:end"',
+      'select "Order of contract:end" [*Ascending | Descending]',
+      'button "Move the sort on dc:title up"',
+      'button "Move the sort on dc:title down"',
+      'button "Remove the sort on dc:title"',
+      'select "Order of dc:title" [*As the page provider sorts | Ascending | Descending]',
+      'button "Move the sort on contract:number up"',
+      'button "Move the sort on contract:number down" disabled',
+      'button "Remove the sort on contract:number"',
+      'select "Order of contract:number" [*Ascending | Descending]',
+      'select "Sort on a column" [*Choose a column]',
+      'button "Add" disabled',
+      'button "Move the facet contract_status up" disabled',
+      'button "Move the facet contract_status down" disabled',
+      'button "Remove the facet contract_status"',
+      'input "Name of the facet contract_status" = "Status"',
+      'input "Label key of the facet contract_status" = ""',
+      'input "Add a facet: an aggregate\'s ID" = ""',
+      'button "Add" disabled',
+      'button "Download up-for-renewal.json"',
+      'button "Undo every change"',
+      'summary "up-for-renewal.json as it will be saved"',
+    ]);
   });
 });

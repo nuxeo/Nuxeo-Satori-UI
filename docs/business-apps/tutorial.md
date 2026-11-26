@@ -31,10 +31,13 @@ each file and each label from this page. It took step 5's hand path: the step's 
 Part 2's `validate_package` was asked again over stdio. The outputs those steps quote are that
 run's, and the package it built is the reference answer's again, byte for byte but for its README,
 with the same digest. Steps 1 and 9, and part 2's `preview_package`, whose outputs the change does
-not touch, were not run again. Three things were not run at all, and each place says so:
-registering the MCP server with Claude Code, installing the package on a server, and a person
-outside the team doing all of it. The times are estimates for a person new to the repository, not
-measurements: measuring them is the plan's acceptance test, still to run.
+not touch, were not run again. On 26 November 2026 the reference answer gained two labels, the
+Properties panel's headings for its two schemas (step 7), and moved to 0.1.1. Step 8's two commands
+were run again on it with its version put back to the generator's 0.1.0, as a reader's package is,
+and their digest is quoted; nothing else was run again. Three things were not run at all, and
+each place says so: registering the MCP server with Claude Code, installing the package on a
+server, and a person outside the team doing all of it. The times are estimates for a person new
+to the repository, not measurements: measuring them is the plan's acceptance test, still to run.
 
 ## What you build
 
@@ -876,8 +879,11 @@ grep -rho '"labelKey": "[^"]*"' --include='*.json' --exclude-dir=labels business
 It lists 19 keys, `facilities.app` to `facilities.queue.open-work-orders`. Rename what the
 generators guessed: `app-layout` named the WorkOrder card after its schema, "Workorder". A field
 with no key shows its property's name made readable, `wo:number` as "Number"; a
-`layout.field.<prefix>:<name>` key gives it another in this language. The whole file, in the
-reference answer's order, `bundle/agentic-ui-config/labels/en.json`:
+`layout.field.<prefix>:<name>` key gives it another in this language. The Properties panel
+beside a record page heads each schema's section the same way, `workorder` as "Workorder", until a
+`layout.schema.<schema>` key, by the schema's name and not its prefix, names it
+([app-definition-v2.md](app-definition-v2.md), section 7). The whole file, in the reference
+answer's order, `bundle/agentic-ui-config/labels/en.json`:
 
 ```json
 {
@@ -903,6 +909,8 @@ reference answer's order, `bundle/agentic-ui-config/labels/en.json`:
     "facilities.card.workOrder.history": "History",
     "facilities.field.buildingName": "Name",
     "facilities.field.workOrderTitle": "Summary",
+    "layout.schema.workorder": "Work order",
+    "layout.schema.building": "Building",
     "layout.field.bldg:code": "Building code",
     "layout.field.bldg:manager": "Facilities manager",
     "layout.field.wo:number": "Work order",
@@ -926,7 +934,7 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0 -
 ```text
 3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.
 8 files: 8 passed, 0 refused.
-facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 4afd415394480d1a3c1f2a95da3fb9d2e2c6e38d9e52596568788041b43fb61f
+facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 a8b888597aeeb8daa82808346055b7f0cbbbe5fa6e7d2d0686877ba8fbf07ab6
 ```
 
 ```bash
@@ -937,20 +945,23 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0
 The content model is the package's own content-model.json, since the package ships a stand-in model and no --model was given.
 3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.
 8 files: 8 passed, 0 refused.
-facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 4afd415394480d1a3c1f2a95da3fb9d2e2c6e38d9e52596568788041b43fb61f
+facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 a8b888597aeeb8daa82808346055b7f0cbbbe5fa6e7d2d0686877ba8fbf07ab6
 ```
 
 The same zip, byte for byte. With no `--model`, the pipeline held the package to its own
 `content-model.json`, as CI and `validate_package` do, because the package ships a stand-in
-model. Your digest is the same as this one if your files are the reference answer's; compare them:
+model. Your digest is the same as this one if your files are the reference answer's at the
+generator's version, 0.1.0; compare them:
 
 ```bash
 git status --short business-apps/packages/facilities-demo
 ```
 
-It lists `README.md` alone, ` M business-apps/packages/facilities-demo/README.md`: the reference
-answer's README describes the kit, and yours is the generator's. Any other file listed is where
-yours differs; `git diff` shows how.
+It lists `README.md`, ` M business-apps/packages/facilities-demo/README.md`: the reference
+answer's README describes the kit, and yours is the generator's. It also lists the three files that
+hold the version, `bundle/agentic-ui-config/app.json`, `package/package.xml` and
+`bundle/META-INF/MANIFEST.MF`: the reference answer is 0.1.1, since its two schema headings, and
+yours is the generator's 0.1.0. Any other file listed is where yours differs; `git diff` shows how.
 
 **A deliberate mistake.** Misspell a property, as anyone does: in the WorkOrder page, change
 `"wo:assignee"` in the schedule card to `"wo:asignee"`. Run the pipeline as CI runs it, the second
@@ -1100,6 +1111,14 @@ Not run: registering the server with `claude mcp add-json`, which changes the pe
 configuration, and a fresh Claude Code session taking the prompts below. Those are the plan's
 "outside builder's day".
 
+**Every write goes through the MCP server now.** The skill has the agent write each file with
+`write_package_file`, run each generator with `apply_generator`, and make the steps that are each
+refused alone, such as `app-package`, `app-model` and `app-layout` for a new kit, in one
+`apply_package_changes` call. Each writes to the package only what passes the pipeline, and
+otherwise answers the findings and changes nothing ([`tools/builder-mcp`](../../tools/builder-mcp/README.md),
+"Writing a package"). The reference answer below was written before those tools, with part 1's
+commands, and has not been written again through them.
+
 ## Register the MCP server, once
 
 From the repository's root, in a shell with `NUXEO_USER` and `NUXEO_PASS` exported. The single
@@ -1109,7 +1128,7 @@ quotes keep the password out of the configuration: it holds the variables' names
 claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node","args":["tools/builder-mcp/src/main.ts"],"env":{"NUXEO_URL":"${NUXEO_URL:-http://localhost:8080}","NUXEO_USER":"${NUXEO_USER}","NUXEO_PASS":"${NUXEO_PASS}"}}'
 ```
 
-Then `claude mcp list` should list `nuxeo-builder`, and `/mcp` in Claude Code its 13 tools. For
+Then `claude mcp list` should list `nuxeo-builder`, and `/mcp` in Claude Code its 16 tools. For
 `preview_package` to reach a dev server on port 4299, add `"DEV_SERVER_URL":"http://localhost:4299"`
 to `env`; its default is `http://localhost:4200`. Start the dev server as in step 9.
 
@@ -1143,7 +1162,8 @@ answers before the next.
   step 1 exported.
 
 **What `validate_package` answered** for `{ "directory": "business-apps/packages/facilities-demo" }`:
-`"passed": true`, `"asCi": true`, no finding, and the zip's digest, `4afd4153...fb61f`, step 8's. It
+`"passed": true`, `"asCi": true`, no finding, and the zip's digest, `4afd4153...fb61f`, step 8's
+before step 7 gained the two schema headings. It
 runs the pipeline as CI does, with no `--model`, so the pipeline held the package to its own
 `content-model.json`, the first line of its `stdout`. With the misspelt property of step 8 it
 answered `"passed": false`, `"refusedAt": { "step": 2 }`, and one finding:

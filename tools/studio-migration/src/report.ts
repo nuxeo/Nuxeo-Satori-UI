@@ -16,7 +16,8 @@
  *
  * The counts are of the package's constructs as the inventory reads them, each with the outcome of
  * its first entry in the report, so that an entry the report leaves out is counted `missing`
- * rather than not at all. The coverage is check 1's. Screenshots wait for the migration server.
+ * rather than not at all. The coverage is check 1's. Lab mode takes the screenshots, beside its
+ * own report; this one does not take them in yet.
  */
 import { constructsOf, type ConstructKind } from './constructs';
 import { OUTCOMES, packageBuildOf, studioBuildOf, type Outcome, type ReportEntry } from './convert';

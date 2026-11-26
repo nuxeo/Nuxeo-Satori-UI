@@ -200,7 +200,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-199 exported symbol(s).
+208 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -744,6 +744,49 @@ interface NxsBreadcrumbsInputs {
     readonly label: InputSignal<string>;
     }
 }
+type NxsButtonAppearance = 'filled' | 'outlined' | 'text';
+class NxsButtonComponent {
+    readonly appearance: InputSignal<NxsButtonAppearance>;
+    readonly icon: InputSignal<string>;
+    readonly label: InputSignal<string>;
+    readonly type: InputSignal<NxsButtonType>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly press: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly name: import("@angular/core").Signal<string>;
+    protected pressed(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsButtonComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsButtonComponent, "nxs-button", never, {
+    "appearance": {
+    "alias": "appearance";
+    "required": false;
+    "isSignal": true;
+    };
+    "icon": {
+    "alias": "icon";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "type": {
+    "alias": "type";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "press": "press";
+    }, never, ["*"], true, never>;
+    }
+}
+type NxsButtonType = 'button' | 'reset' | 'submit';
 class NxsCardComponent implements NxsCardInputs {
     readonly heading: import("@angular/core").InputSignal<string>;
     readonly subheading: import("@angular/core").InputSignal<string>;
@@ -1288,6 +1331,7 @@ class NxsDocumentListComponent {
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalMoreThan: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly loading: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly error: import("@angular/core").InputSignal<NxsErrorStatus | null>;
@@ -1397,6 +1441,11 @@ class NxsDocumentListComponent {
     };
     "totalSize": {
     "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalMoreThan": {
+    "alias": "totalMoreThan";
     "required": false;
     "isSignal": true;
     };
@@ -1918,6 +1967,7 @@ class NxsFavoriteToggleComponent {
     }, never, never, true, never>;
     }
 }
+type NxsFieldAppearance = 'fill' | 'outline';
 class NxsFolderHeaderComponent {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
@@ -2019,6 +2069,41 @@ interface NxsGroupFormDialogResult {
     }
 }
 type NxsHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+class NxsIconButtonComponent {
+    readonly icon: InputSignal<string>;
+    readonly label: InputSignal<string>;
+    readonly type: InputSignal<NxsButtonType>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly press: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly name: import("@angular/core").Signal<string>;
+    protected pressed(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsIconButtonComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsIconButtonComponent, "nxs-icon-button", never, {
+    "icon": {
+    "alias": "icon";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "type": {
+    "alias": "type";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "press": "press";
+    }, never, never, true, never>;
+    }
+}
 class NxsIconComponent {
     readonly name: import("@angular/core").InputSignal<string>;
     readonly label: import("@angular/core").InputSignal<string>;
@@ -2182,6 +2267,7 @@ class NxsPagerComponent {
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly itemCount: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalMoreThan: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly label: import("@angular/core").InputSignal<string>;
@@ -2190,6 +2276,7 @@ class NxsPagerComponent {
     protected readonly first: import("@angular/core").Signal<number>;
     protected readonly last: import("@angular/core").Signal<number>;
     protected readonly knownTotal: import("@angular/core").Signal<number | null>;
+    protected readonly moreThan: import("@angular/core").Signal<number | null>;
     protected readonly canPrevious: import("@angular/core").Signal<boolean>;
     protected readonly canNext: import("@angular/core").Signal<boolean>;
     protected readonly ownLabel: import("@angular/core").Signal<string>;
@@ -2214,6 +2301,11 @@ class NxsPagerComponent {
     };
     "totalSize": {
     "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalMoreThan": {
+    "alias": "totalMoreThan";
     "required": false;
     "isSignal": true;
     };
@@ -2690,6 +2782,63 @@ class NxsSearchFiltersComponent {
     }, never, never, true, never>;
     }
 }
+class NxsSelectComponent {
+    readonly label: InputSignal<string>;
+    readonly value: import("@angular/core").ModelSignal<string>;
+    readonly options: InputSignal<readonly (NxsSelectOption | NxsSelectGroup)[]>;
+    readonly placeholder: InputSignal<string>;
+    readonly appearance: InputSignal<NxsFieldAppearance>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    protected isGroup(entry: NxsSelectOption | NxsSelectGroup): entry is NxsSelectGroup;
+    protected key(entry: NxsSelectOption | NxsSelectGroup): string;
+    protected chosen(event: Event): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsSelectComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsSelectComponent, "nxs-select", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    "options": {
+    "alias": "options";
+    "required": false;
+    "isSignal": true;
+    };
+    "placeholder": {
+    "alias": "placeholder";
+    "required": false;
+    "isSignal": true;
+    };
+    "appearance": {
+    "alias": "appearance";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    }, never, never, true, never>;
+    }
+}
+interface NxsSelectGroup {
+    readonly label: string;
+    readonly options: readonly NxsSelectOption[];
+    }
+}
+interface NxsSelectOption {
+    readonly value: string;
+    readonly label: string;
+    }
+}
 class NxsShareExternalDialogComponent {
     protected datesValid(): boolean;
     protected readonly rights: readonly string[];
@@ -3093,6 +3242,73 @@ interface NxsTaskForm {
     }
 }
 type NxsTaskOutcome = 'abandoned' | 'completed';
+class NxsTextFieldComponent {
+    readonly label: InputSignal<string>;
+    readonly value: import("@angular/core").ModelSignal<string>;
+    readonly placeholder: InputSignal<string>;
+    readonly multiline: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly rows: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly suggestions: InputSignal<readonly string[]>;
+    readonly autocomplete: InputSignal<string>;
+    readonly appearance: InputSignal<NxsFieldAppearance>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly valueCommit: import("@angular/core").OutputEmitterRef<string>;
+    protected readonly listId: string;
+    protected typed(event: Event): void;
+    protected committed(event: Event): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTextFieldComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTextFieldComponent, "nxs-text-field", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    "placeholder": {
+    "alias": "placeholder";
+    "required": false;
+    "isSignal": true;
+    };
+    "multiline": {
+    "alias": "multiline";
+    "required": false;
+    "isSignal": true;
+    };
+    "rows": {
+    "alias": "rows";
+    "required": false;
+    "isSignal": true;
+    };
+    "suggestions": {
+    "alias": "suggestions";
+    "required": false;
+    "isSignal": true;
+    };
+    "autocomplete": {
+    "alias": "autocomplete";
+    "required": false;
+    "isSignal": true;
+    };
+    "appearance": {
+    "alias": "appearance";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    "valueCommit": "valueCommit";
+    }, never, never, true, never>;
+    }
+}
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;
@@ -3957,7 +4173,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-370 exported symbol(s).
+372 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4917,6 +5133,7 @@ interface NuxeoPaginatedList<T> {
     entries: T[];
     totalSize: number;
     resultsCount?: number;
+    resultsCountLimit?: number;
     currentPageSize: number;
     currentPageIndex: number;
     numberOfPages: number;
@@ -5126,6 +5343,12 @@ const RECENTLY_EDITED_QUERY: string;
 const RECENTLY_VIEWED_QUERY: string;
 const REMOVE_DOCUMENT = "Remove";
 const RESTRICTED_IMPORT_LOCATION_MESSAGE_KEY = "browse.message.restricted-import-location";
+interface ResultWindow {
+    readonly total: number | null;
+    readonly moreThan: number | null;
+    readonly reach: number | null;
+    }
+}
 const SHARE_LINK_ID: RegExp;
 const SHARE_LINK_OPERATIONS: {
     readonly create: "ShareLink.Create";
@@ -5650,6 +5873,7 @@ function resolveNatureLabel(id: string | null | undefined, entries: DirectoryEnt
 function resolveNuxeoIconPath(path: string): string;
 function resolvePaginatedListTotal(res: PaginatedListMeta, pageSize: number, pageIndex: number): number;
 function resolveParentSourceName(directoryName: string, metadata?: DirectoryMetadata): string | null;
+function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow;
 function sanitizeDocumentCreateName(name: string): string;
 function sanitizeDocumentName(name: string): string;
 function shareLinkDownloadsOf(body: unknown): ShareLinkDownloads;

@@ -1,0 +1,15 @@
+// The host takes the form field's place: as wide as the field on its own, and the field fills it
+// when a host stretches or sizes it, as a column of fields or a `min-inline-size` does.
+:host {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  min-inline-size: 0;
+}
+
+// Doubled to outrank Material's `.mat-mdc-form-field-input-control` rule, which sets `font: inherit`
+// on the control at the same specificity: with one class, which won depended on which stylesheet
+// the page had added last, and the field drew in the theme's font.
+.nxs-text-field__control.nxs-text-field__control {
+  font-family: var(--nxs-text-field-font-family, inherit);
+}

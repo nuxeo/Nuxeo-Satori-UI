@@ -12,10 +12,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -33,15 +30,21 @@ import {
 } from '@agentic-ui/shared/document-layouts';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsConfirmDialogComponent,
-  NxsIconComponent,
+  NxsIconButtonComponent,
+  NxsSelectComponent,
   NxsSpinnerComponent,
+  NxsTextFieldComponent,
   type NxsConfirmDialogData,
+  type NxsSelectGroup,
+  type NxsSelectOption,
 } from '@nuxeo/satori-platform/components';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, combineLatest, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
+import { LayerPanelComponent } from '../layer/layer-panel';
 import {
   DESIGNED_MODES,
   LayoutDesignerService,
@@ -162,12 +165,13 @@ const isForm = (mode: DesignedMode): mode is 'edit' | 'create' => mode !== 'view
   standalone: true,
   imports: [
     DocumentLayoutFormComponent,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
+    LayerPanelComponent,
     NxsBannerComponent,
-    NxsIconComponent,
+    NxsButtonComponent,
+    NxsIconButtonComponent,
+    NxsSelectComponent,
     NxsSpinnerComponent,
+    NxsTextFieldComponent,
     RecordPageComponent,
     RouterLink,
     TranslatePipe,
@@ -213,6 +217,32 @@ export class LayoutDesignerPageComponent {
   });
 
   /**
+   * The picker's choices: each type's three files, under the type, named as the picker names them.
+   * `instant` in a `computed` follows the language and the catalogue, as ngx-translate's own
+   * `translate()` signal does, so the names change with them as the template's pipe did.
+   */
+  protected readonly typeOptions = computed<readonly NxsSelectGroup[]>(() =>
+    this.choices().map((group) => ({
+      label: group.type,
+      options: group.choices.map((choice) => ({
+        value: choice.key,
+        label: this.translate.instant(
+          choice.served ? 'layout-designer.choice' : 'layout-designer.choice-new',
+          { type: choice.type, mode: this.modeName(choice.mode) },
+        ),
+      })),
+    })),
+  );
+
+  /** What a form's field may be: not required, always required, or required while a rule passes. */
+  protected readonly requiredOptions = computed<readonly NxsSelectOption[]>(() =>
+    (['no', 'always', 'rule'] as const).map((choice) => ({
+      value: choice,
+      label: this.translate.instant(`layout-designer.required-${choice}`),
+    })),
+  );
+
+  /**
    * The file open, or being opened. Set again to the same file, it is read again: so that a file
    * that could not be read can be opened anew.
    */
@@ -255,6 +285,12 @@ export class LayoutDesignerPageComponent {
 
   /** The file's name, as a package holds it under `layouts/<Type>/`. */
   readonly fileName = computed(() => layoutFileName(this.mode()));
+
+  /** Where the app's deployment layer holds the file open: `layouts/<Type>/<mode>.layout.json`. */
+  readonly layerPath = computed(() => {
+    const type = this.type();
+    return type ? `layouts/${type}/${this.fileName()}` : null;
+  });
 
   /** Why the file could not be opened: it could not be read, or what came is no file. */
   readonly sourceProblem = computed<string | null>(() => {
@@ -303,6 +339,11 @@ export class LayoutDesignerPageComponent {
     const records = this.records();
     return records?.state === 'read' ? records.value : [];
   });
+
+  /** The records the preview may draw, by their titles. */
+  protected readonly recordOptions = computed<readonly NxsSelectOption[]>(() =>
+    this.recordList().map((record) => ({ value: record.uid, label: record.title })),
+  );
 
   /** The record the preview draws: the first offered, until another is chosen. */
   readonly recordUid = linkedSignal<string | null>(() => {
@@ -487,7 +528,7 @@ export class LayoutDesignerPageComponent {
     ]);
     const left = card.fields.length - 1;
     if (left > 0) this.focusField(card.path, Math.min(field.index, left - 1), ['hide']);
-    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"]');
+    else this.focusIn('.layout-designer__hidden li:last-child', '[data-action="show"] button');
   }
 
   /** Puts the field back where it was, the focus on it. */
@@ -558,6 +599,11 @@ export class LayoutDesignerPageComponent {
     return (this.properties() ?? []).filter((xpath) => !shown.has(xpath));
   }
 
+  /** The add picker's choices for the card: the properties it may add, by their xpaths. */
+  protected addOptions(card: DesignerCard): readonly NxsSelectOption[] {
+    return this.addable(card).map((xpath) => ({ value: xpath, label: xpath }));
+  }
+
   chosen(card: DesignerCard): string {
     return this.toAdd()[card.path] ?? '';
   }
@@ -596,6 +642,16 @@ export class LayoutDesignerPageComponent {
     downloadJson(this.fileName(), layoutFileText(file), this.document);
   }
 
+  /**
+   * Opens a version of the file from the app's deployment layer, its draft or its live version, as
+   * the file being edited: a change to the one opened from the server, which the page then checks
+   * and previews as any other, and asks before losing.
+   */
+  openFromLayer(content: unknown): void {
+    if (typeof content === 'object' && content !== null && !Array.isArray(content))
+      this.file.set(content as LayoutJson);
+  }
+
   /** The file as the download writes it, for the page to show. */
   readonly fileText = computed(() => {
     const file = this.file();
@@ -605,16 +661,6 @@ export class LayoutDesignerPageComponent {
   /** What the designer calls a field: its property, its computed id, or its place. */
   fieldName(field: DesignerField): string {
     return field.name ?? `fields[${field.index}]`;
-  }
-
-  /** What a field or a picker holds, from its change event. */
-  protected valueOf(event: Event): string {
-    const target = event.target;
-    return target instanceof HTMLInputElement ||
-      target instanceof HTMLSelectElement ||
-      target instanceof HTMLTextAreaElement
-      ? target.value
-      : '';
   }
 
   protected failed<T>(reading: Reading<T> | null): string | null {
@@ -634,10 +680,15 @@ export class LayoutDesignerPageComponent {
   private focusField(cardPath: string, index: number, actions: readonly string[]): void {
     this.focusIn(
       `[data-card="${cardPath}"] .layout-designer__fields > li:nth-child(${index + 1})`,
-      ...actions.map((action) => `[data-action="${action}"]`),
+      ...actions.map((action) => `[data-action="${action}"] button`),
     );
   }
 
+  /**
+   * Once the page is drawn again, the focus on the first button `buttons` names in `container`
+   * that is offered. Each names the native `button` inside an `nxs-` button, since that, not the
+   * element, is what takes the focus.
+   */
   private focusIn(container: string, ...buttons: readonly string[]): void {
     afterNextRender(
       () => {

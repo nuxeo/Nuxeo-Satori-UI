@@ -174,6 +174,7 @@ export {
   PageProviderService,
   isAggregateParameter,
   isPageProviderName,
+  resultWindow,
 } from './lib/services/page-provider.service';
 export {
   BulkCommandService,
@@ -187,6 +188,7 @@ export type {
   PageProviderRequest,
   PageProviderResults,
   PageProviderSort,
+  ResultWindow,
 } from './lib/services/page-provider.service';
 export {
   BrowseService,

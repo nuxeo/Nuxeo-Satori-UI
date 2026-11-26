@@ -1,0 +1,10 @@
+<button
+  class="nxs-icon-button__button"
+  matIconButton
+  [type]="type()"
+  [disabled]="disabled()"
+  [attr.aria-label]="name() || null"
+  (click)="pressed()"
+>
+  <nxs-icon [name]="icon()" />
+</button>

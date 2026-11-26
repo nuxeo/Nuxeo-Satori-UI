@@ -316,6 +316,27 @@ describe('QueuePageComponent, over the whole query', () => {
     expect(list().selectable()).toBe(true);
   });
 
+  it("selects and runs over every result past the search index's window, which the pages stop at", async () => {
+    create();
+    await open();
+    // As the index answers 100,000 results: their exact count, and its window of 10,000.
+    await answer(100_000, { resultsCountLimit: 10_000 });
+    expect(page().querySelector('.record-list__window .nxs-banner__message')?.textContent).toBe(
+      'Only the first 10,000 of these 100,000 records can be paged through. Choose filters, or search, to narrow the list and find the others.',
+    );
+    expect(list().totalSize()).toBe(100_000);
+    await selectRow();
+    expect(notice()).toBe('This queue has 100,000 results.');
+    await press('.queue-whole-query__select-all');
+    expect(notice()).toBe('All 100,000 results of this queue are selected.');
+    await press('.queue-whole-query__run');
+    expect(dialogs[0]?.title).toBe('Delete selected: all 100,000 results');
+    // The whole query, on the server, through the framework: not held to the window.
+    expect(calls[0]).toBe(
+      'run payers_unassigned_claims {"parameters":["$currentUser"],"limit":100001} trash {"value":true}',
+    );
+  });
+
   it('confirms, naming the number of records, and runs nothing when the person cancels', async () => {
     create();
     await open();

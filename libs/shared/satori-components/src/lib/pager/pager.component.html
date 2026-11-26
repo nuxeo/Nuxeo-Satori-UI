@@ -11,6 +11,11 @@
           'satori-components.pager.range-of'
             | translate: { first: first(), last: last(), total: knownTotal() }
         }}
+      } @else if (moreThan() !== null) {
+        {{
+          'satori-components.pager.range-of-more'
+            | translate: { first: first(), last: last(), count: moreThan() }
+        }}
       } @else {
         {{ 'satori-components.pager.range' | translate: { first: first(), last: last() } }}
       }

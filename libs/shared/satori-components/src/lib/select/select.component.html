@@ -1,0 +1,25 @@
+<mat-form-field class="nxs-select__field" subscriptSizing="dynamic" [appearance]="appearance()">
+  <mat-label>{{ label() }}</mat-label>
+  <!-- Each option says whether it is chosen, as well as the select's value: the value is set before
+       the options are drawn, and a value with no option yet chooses none. -->
+  <select matNativeControl [value]="value()" [disabled]="disabled()" (change)="chosen($event)">
+    @if (placeholder()) {
+      <option value="" [selected]="value() === ''">{{ placeholder() }}</option>
+    }
+    @for (entry of options(); track key(entry)) {
+      @if (isGroup(entry)) {
+        <optgroup [label]="entry.label">
+          @for (option of entry.options; track option.value) {
+            <option [value]="option.value" [selected]="option.value === value()">
+              {{ option.label }}
+            </option>
+          }
+        </optgroup>
+      } @else {
+        <option [value]="entry.value" [selected]="entry.value === value()">
+          {{ entry.label }}
+        </option>
+      }
+    }
+  </select>
+</mat-form-field>

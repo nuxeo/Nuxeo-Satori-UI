@@ -1,6 +1,7 @@
 /**
- * The Builder kit's MCP server: its tools, each a read of the configured Nuxeo server or a run
- * of the package pipeline. Phase 3 of docs/business-apps/development-plan.md.
+ * The Builder kit's MCP server: its tools, each a read of the configured Nuxeo server, a run of
+ * the package pipeline, or a write to a package that the pipeline passed first. Phase 3 of
+ * docs/business-apps/development-plan.md.
  *
  * Publishing a package to pre-production, the plan's fourth job, is not here yet (README, "Not
  * here yet"). Previewing it in dev mode is `preview_package`.
@@ -16,6 +17,15 @@ import {
   listOperations,
   readOperations,
 } from './operations.ts';
+import {
+  APP_GENERATORS,
+  MAX_CHANGES,
+  MAX_FILE_BYTES,
+  writePackage,
+  type Change,
+  type WriteRequest,
+  type WriteResult,
+} from './package-writes.ts';
 import { describePageProvider, listPageProviders } from './page-providers.ts';
 import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
 import { validatePackage, type PackageCheck, type PackageRequest } from './validate-package.ts';
@@ -35,17 +45,26 @@ export interface ServerDependencies {
   /** The dev server `preview_package` serves to, or why it cannot; config.ts reads it. */
   readonly devServer?: PreviewOptions['devServer'];
   readonly preview?: (request: PackageRequest) => Promise<Preview>;
+  /**
+   * The folders the write tools may write a package in, or why they cannot; config.ts reads them.
+   * Default: `business-apps/packages/`.
+   */
+  readonly packageRoots?: readonly string[] | { readonly problem: string };
+  readonly write?: (request: WriteRequest) => Promise<WriteResult>;
 }
 
 const INSTRUCTIONS =
-  'Reads one Nuxeo server, the one NUXEO_URL names, and validates app definition packages with' +
-  ' the package pipeline. Every Nuxeo tool only reads, with GET requests: none writes, runs an' +
-  ' operation or starts a workflow. Use the content model tools before writing a layout, so every' +
-  ' field is one the type has; describe_page_provider before writing a queue or a related-records' +
-  ' card; describe_workflow before a task form; and validate_package after every change to a' +
-  ' package. A package that does not pass validate_package is not finished. preview_package' +
-  ' validates a package and serves it to the local development server, replacing what it served,' +
-  ' and returns the addresses to open.';
+  'Reads one Nuxeo server, the one NUXEO_URL names, validates app definition packages with the' +
+  ' package pipeline, and writes to a package only what passes it. Every Nuxeo tool only reads,' +
+  ' with GET requests: none writes, runs an operation or starts a workflow. Use the content model' +
+  ' tools before writing a layout, so every field is one the type has; describe_page_provider' +
+  ' before writing a queue or a related-records card; describe_workflow before a task form. Write' +
+  ' every package file with write_package_file, apply_generator or apply_package_changes, never' +
+  ' with your own file tools: each validates the package as it would be, writes it only when the' +
+  ' pipeline passes with no finding, and otherwise returns the findings and changes nothing. A' +
+  ' refused write is the answer: fix what it names, and never rename an id to get a pass.' +
+  ' validate_package checks a package as it is. preview_package validates a package and serves it' +
+  ' to the local development server, replacing what it served, and returns the addresses to open.';
 
 /**
  * Every Nuxeo tool reads definitions and changes nothing. The only documents read are a workflow
@@ -68,6 +87,14 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   const devServer = dependencies.devServer ?? { problem: 'No dev server is configured.' };
   const preview =
     dependencies.preview ?? ((request: PackageRequest) => previewPackage(request, { devServer }));
+  const roots = dependencies.packageRoots;
+  const write =
+    dependencies.write ??
+    ((request: WriteRequest) => {
+      if (roots !== undefined && 'problem' in roots) throw new Error(roots.problem);
+      return writePackage(request, { packageRoots: roots });
+    });
+  const writing = (request: WriteRequest) => answer(() => write(request));
   /** A Nuxeo read, or the reason the server cannot make one. */
   const reading =
     <Args>(read: (reader: NuxeoReads, args: Args) => Promise<unknown>) =>
@@ -346,6 +373,139 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       },
     },
     (args: PackageRequest) => answer(() => preview(args)),
+  );
+
+  const packageArgument = z
+    .string()
+    .min(1)
+    .describe(
+      'The package folder, directly inside business-apps/packages/ unless the server is configured' +
+        ' with other roots, such as business-apps/packages/acme-contracts',
+    );
+  const pathArgument = z
+    .string()
+    .min(1)
+    .max(512)
+    .describe(
+      'The file, relative to the package, such as bundle/agentic-ui-config/layouts/Contract/view.layout.json',
+    );
+  const contentArgument = z
+    .string()
+    .max(MAX_FILE_BYTES)
+    .describe("The file's whole new content: a JSON object of version 2");
+  const generatorArgument = z.enum(APP_GENERATORS).describe('The app generator to run');
+  const optionsArgument = z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional()
+    .describe(
+      "The generator's options, named as its schema names them, such as" +
+        ' { "type": "Contract", "model": "business-apps/packages/acme-contracts/content-model.json" }.' +
+        ' Not package, name or directory, which the package argument gives, and not modelServer:' +
+        ' a model is a JSON file inside the repository',
+    );
+  // Each replaces files in the package, so a client may ask before running one.
+  const writes = (idempotent: boolean) => ({
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: idempotent,
+    openWorldHint: false,
+  });
+  const VALIDATED =
+    ' The change is made to a staging copy of the package, which the package pipeline checks as' +
+    ' validate_package checks a folder alone, as CI does. It is written to the package only when' +
+    ' the pipeline passes with no finding; otherwise written is false, the answer holds the' +
+    ' findings and the step that refused it, and the package is unchanged. An id the platform or' +
+    ' the package does not register, such as a widget, a rule or an operation, is refused so.' +
+    ' Nothing is published, and no code of the package runs.';
+
+  server.registerTool(
+    'write_package_file',
+    {
+      title: 'Write a package file, if it validates',
+      description:
+        "Writes one file of a package's app definition, whole: app.json, home.json," +
+        ' navigation.json, actions.json, queues/<id>.json, labels/<language>.json,' +
+        ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, under' +
+        ' bundle/agentic-ui-config/. Any other path is refused before anything runs: one that' +
+        ' leaves the package or goes through a link, a hidden file, code, an asset, the build' +
+        ' allow-list, and the files the generators write (the component, the manifest, package/,' +
+        ' build.mjs, content-model.json), for which use apply_generator. A new file the component' +
+        ' must name, such as a new queue or home.json, needs app-registry in the same call: use' +
+        ' apply_package_changes.' +
+        VALIDATED,
+      inputSchema: z.object({
+        package: packageArgument,
+        path: pathArgument,
+        content: contentArgument,
+      }),
+      annotations: writes(true),
+    },
+    (args: { package: string; path: string; content: string }) =>
+      writing({
+        package: args.package,
+        changes: [{ kind: 'write', path: args.path, content: args.content }],
+      }),
+  );
+
+  server.registerTool(
+    'apply_generator',
+    {
+      title: 'Run an app generator, if the result validates',
+      description:
+        "Runs one of the Builder kit's app generators on a package, as npx nx g" +
+        ' ./tools/satori-generators:<generator> would: app-package for a new package, app-layout,' +
+        ' app-form, app-queue, app-action, app-registry, or app-model for a demo kit. It runs in a' +
+        ' process of its own, on the staging copy, and every file it would write must be inside the' +
+        ' package and one a generator writes, or nothing is written. A new demo kit, refused until' +
+        ' it has a model and a record page, takes several generators in one call: use' +
+        ' apply_package_changes.' +
+        VALIDATED,
+      inputSchema: z.object({
+        package: packageArgument,
+        generator: generatorArgument,
+        options: optionsArgument,
+      }),
+      annotations: writes(false),
+    },
+    (args: { package: string; generator: string; options?: Record<string, unknown> }) =>
+      writing({
+        package: args.package,
+        changes: [{ kind: 'generator', generator: args.generator, options: args.options }],
+      }),
+  );
+
+  server.registerTool(
+    'apply_package_changes',
+    {
+      title: 'Make several changes to a package, if the result validates',
+      description:
+        'Makes several changes to one package, in order, each as write_package_file or' +
+        ' apply_generator makes one, and checks the package once, when they are all made: for' +
+        ' steps that would each be refused alone, such as a new demo kit (app-package, then' +
+        ' app-model, then app-layout), or a hand-written home.json with the app-registry that' +
+        ' names it. All are written, or none.' +
+        VALIDATED,
+      inputSchema: z.object({
+        package: packageArgument,
+        changes: z
+          .array(
+            z.discriminatedUnion('kind', [
+              z.object({ kind: z.literal('write'), path: pathArgument, content: contentArgument }),
+              z.object({
+                kind: z.literal('generator'),
+                generator: generatorArgument,
+                options: optionsArgument,
+              }),
+            ]),
+          )
+          .min(1)
+          .max(MAX_CHANGES)
+          .describe('The changes, in the order they are made'),
+      }),
+      annotations: writes(false),
+    },
+    (args: { package: string; changes: Change[] }) =>
+      writing({ package: args.package, changes: args.changes }),
   );
 
   return server;

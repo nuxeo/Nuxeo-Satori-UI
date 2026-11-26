@@ -56,8 +56,9 @@ You need:
 command writes, in a folder outside your copy of the repository, and never commit them to it.
 
 **What the tool does with your package.** It reads it, and only reads it: it never changes the
-file, and runs nothing in it. Scripts in your layouts stay text. It has no code that talks to a
-network, and writes what it finds only into the folder you give it.
+file, and runs nothing in it. Scripts in your layouts stay text. The command talks to no network,
+and writes what it finds only into the folder you give it; only the tool's lab mode, run by the
+team on a server (section 7), talks to one.
 
 ## 2. The one command
 
@@ -318,9 +319,10 @@ Until those halves run, each of checks 3, 5, 6 and 7 that has something to settl
 stays `partial`, and the verdict stays "not ready", however complete your decisions are. Check 5,
 for example, has nothing to settle in a package with no conditions. The command lists each check
 still waiting at the end of a run, with what its server half would add and what this run could
-not settle. **This tool does not run them yet: none of
-it talks to a server, and the lab server is not built.** Keep your run, and ask your Nuxeo contact
-about having them run.
+not settle. **The command does not run them: it talks to no server.** The tool's lab mode, run by
+the team on a server, runs check 3's server half and part of 6 and 7; checks 5, 6 and 7 need your
+package installed there, and the lab server that would have it is not built. Keep your run, and
+ask your Nuxeo contact about having them run.
 
 ## 8. Words the output uses
 
@@ -344,7 +346,8 @@ about having them run.
 
 ## 9. Not done yet
 
-- **The server halves** of checks 3, 5, 6 and 7, and the lab server they run on.
+- **The server halves** of checks 5, 6 and 7 on your package, and the lab server they run on.
+  Check 3's runs in the tool's lab mode, on a server.
 - **Accepting or rejecting a proposal.** A proposal waits, and stays in the way of readiness.
 - **Carrying decisions to a new build** of your package.
 - **Installing the migrated app.** `conversion/app/` is the new app's configuration; installing it

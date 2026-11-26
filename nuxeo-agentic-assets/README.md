@@ -358,7 +358,7 @@ creator's permission is asked again at each opening, and they are staff, not the
 The record page of an asset whose layout file has `"shareLinks": {}` lists its links, offers
 Revoke and a new link, and shows the downloads, to those who may manage them; it draws nothing
 for anyone the server answers 403 ([layout-v2.md](../docs/business-apps/layout-v2.md), "Share
-links"). The brand assets kit turns it on in 0.2.1. The operations:
+links"). The brand assets kit turns it on in 0.2.2. The operations:
 
 | Operation             | Input     | Parameters                           | Answers                                                                            |
 | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
@@ -458,7 +458,7 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 
 **Not run for 0.2.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read only, on
 25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and `brand-assets-demo-0.2.0`
-started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.1, which depends on it, in one
+started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.2, which depends on it, in one
 restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
 process, so a one-off script installs them when the container next starts, as the kits' READMEs do.
 **Not before the share links' security review:** the upgrade opens `/nuxeo/agentic-share/` to
@@ -482,11 +482,11 @@ docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.2.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.2.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
@@ -496,7 +496,7 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
 **3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
 
 - `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed, at
-  0.2.0 and 0.2.1;
+  0.2.0 and 0.2.2;
 - the server log's `Component Loading Status` has nothing pending or missing, and names
   `org.nuxeo.agentic.assets.rights`, `org.nuxeo.agentic.assets.rights.download`,
   `org.nuxeo.agentic.assets.rights.enrichers`, `org.nuxeo.agentic.assets.share.directories`,

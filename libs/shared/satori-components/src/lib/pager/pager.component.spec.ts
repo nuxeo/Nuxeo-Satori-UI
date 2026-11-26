@@ -18,6 +18,7 @@ import { NxsPagerComponent } from './pager.component';
       [pageSize]="pageSize()"
       [itemCount]="itemCount()"
       [totalSize]="totalSize()"
+      [totalMoreThan]="totalMoreThan()"
       [hasNextPage]="hasNextPage()"
       [disabled]="disabled()"
       [label]="label()"
@@ -30,6 +31,7 @@ class HostComponent {
   readonly pageSize = signal(50);
   readonly itemCount = signal(50);
   readonly totalSize = signal(-2);
+  readonly totalMoreThan = signal(-1);
   readonly hasNextPage = signal(true);
   readonly disabled = signal(false);
   readonly label = signal('');
@@ -78,6 +80,24 @@ describe('NxsPagerComponent', () => {
     host.hasNextPage.set(false);
     await render();
     expect(range()).toBe('51–60 of 60');
+  });
+
+  it('shows "of more than N" where the server stopped counting at N, while the range is within it', async () => {
+    host.totalMoreThan.set(200);
+    await render();
+    expect(range()).toBe('1–50 of more than 200');
+    host.pageIndex.set(3);
+    await render();
+    expect(range()).toBe('151–200 of more than 200');
+    // Past it, "more than 200" says less than the range: the range alone.
+    host.pageIndex.set(4);
+    await render();
+    expect(range()).toBe('201–250');
+    // A real total wins.
+    host.pageIndex.set(0);
+    host.totalSize.set(1_234);
+    await render();
+    expect(range()).toBe('1–50 of 1234');
   });
 
   it('enables Previous from the page index and Next from hasNextPage, independently', async () => {

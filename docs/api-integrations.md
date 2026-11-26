@@ -2057,6 +2057,59 @@ and the console says why.
   `-`, which the rendering parameters use: it would change the request rather than filter it.
 - A page provider that queries the repository answers no aggregates, so its facets are not drawn.
 
+**The search index's window.** OpenSearch serves a query's results through `from` and `size` only
+up to its `index.max_result_window`, 10,000 by default, which every index of the local server
+leaves at its default. Measured on the local Nuxeo 2025.10.18 on 2026-11-25, as an administrator,
+with read-only `GET`s only: every document through the search service
+(`/search/lang/NXQL/execute?query=SELECT * FROM Document`, the `REST_API_SEARCH_ADAPTER` provider,
+which `nuxeo.search.pageproviders.override` gives the search service, as it does
+`default_search`), 13,592 results; the same with `dc:created` after a given second, 9,886;
+`acme_asset_library`, the brand kit's, 6; and `nxql_search`, which queries the repository, 11,902.
+The probe is a Node script that sends `GET`s with `pageSize` and `currentPageIndex` and prints the
+paging fields of each answer, the credentials from the environment.
+
+| What was asked                                                           | What the server answered                                                                                               |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Any page, search service                                                 | `resultsCount` the exact count, 13,592, past the window too; `resultsCountLimit` 10,000, also for 6 results            |
+| `pageSize=1`, `currentPageIndex` 9998, 9999                              | HTTP 200, one record each; `isNextPageAvailable` true on 9998, **false on 9999**                                       |
+| `pageSize=1`, `currentPageIndex` 10000, 10001, 13591                     | **HTTP 500**, `RuntimeServiceException … OpenSearchException … [search_phase_execution_exception] all shards failed`   |
+| `pageSize=50`, pages 198, 199, 200                                       | 198 has a next page; 199, results 9,951 to 10,000, has none; 200 is HTTP 500                                           |
+| `pageSize=30`, pages 332, 333                                            | 332, ending at 9,990, has no next page; 333, from 9,990 to 10,020, is HTTP 500: the results it could have are lost     |
+| 9,886 results, a count within the window, `pageSize=910`, pages 8, 9, 10 | 8 has a next page; 9, results 8,191 to 9,100, has none; 10 is HTTP 500: 786 results within the window are out of reach |
+| `offset=10000&pageSize=50`                                               | HTTP 500, as a page index there                                                                                        |
+| `acme_asset_library`, 6 results, `pageSize=1`, page 10000                | **HTTP 500**: the window is on where a page ends, not on the results; page 9999 is HTTP 200, empty                     |
+| `nxql_search`, the repository, `pageSize=1`, page 10000                  | HTTP 200, one record: `resultsCountLimit` 0, no window                                                                 |
+| A folder's `@children`, `pageSize=1`, page 2                             | HTTP 200; `resultsCount` -2, `resultsCountLimit` 1: the repository's count limit, not a window                         |
+
+So a page past the window is an error, not an empty page, and the server's `isNextPageAvailable`
+stops at the window's last whole page, also below a count within the window. `isLastPageAvailable`
+is false whenever the count and a page do not fit in the window; `numberOfPages` is not held to it,
+272 at 50 a page for 13,592.
+
+**Neither scroll nor `search_after` is offered through REST.** The page provider endpoint reads
+`pageSize`, `currentPageIndex`, `offset`, `maxResults`, `sortBy`, `sortOrder`, `queryParams`,
+`quickFilters` and `highlight` (`QueryExecutor`, as `PageProviderService` lists them); `scrollId`,
+`scroll` and `searchAfter`, sent, changed nothing: page 0 answered as without them. Of the 324
+Automation operations the server lists, the only scroll is `NuxeoDrive.ScrollDescendants`, Drive's,
+over a folder's descendants with no aggregates;
+`Repository.PageProvider` lists a page index and an offset as its parameters, as REST takes them
+(read from the list, not run). The Bulk Action Framework reads a whole query on the server, its
+command `SCROLLING_RUNNING` first (section 34), which is what a queue runs over every result with;
+it was not run past 10,000 here, since that would write.
+
+**What the app does with it** (`resultWindow`, in `page-provider.service.ts`): a count above
+`resultsCountLimit` can only be a window, since only the index counts past its own limit, so
+`RecordListComponent` offers no next page past the last whole page within it, whatever the server
+says, and refuses one asked for. Below a count within the limit, a server that says there is no
+next page although its count says there are more is taken to be at the window too, and the notice
+shows on that page; the repository was not seen to answer so, though one of its providers with a
+positive `maxResults` and a whole count was not measured. The list shows the server's whole count,
+and above the rows "Only the first 10,000 of these 13,592 records can be paged through", telling
+the reader to choose filters or search. A `-2` with a limit shows "of more than" that limit, and
+pages on, as the repository does. A queue's count, and the command a bulk action over every result
+sends, are still the whole query's; that the framework then processes past 10,000 is expected from
+how it reads the query, not measured here.
+
 **Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), at
 `/queues/<id>`, through `RecordListComponent`
 (`libs/shared/document-layouts/src/lib/record-page/record-list.ts`).
@@ -2272,6 +2325,7 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
       "bundle": "nuxeo.config.payers-claims-demo",
       "source": "agentic-ui-config/app.json",
       "files": ["app.json", "home.json", "navigation.json", "queues/unassigned-claims.json"],
+      "layer": {},
       "content": { "version": 2, "id": "payers-claims", "groups": ["claims-adjusters"] }
     }
   ],
@@ -2301,8 +2355,14 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 - **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
   `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
   200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
-  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only: anything else
-  is 405, with an `Allow` header and no body.
+  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only, but for a POST
+  to a deployment layer's file (section 41): anything else is 405, with an `Allow` header and no
+  body.
+- **An app's deployment layer,** where the server switches it on (section 41): each live file is
+  served at its path in place of the package's file there, a layout
+  `layouts/<Type>/<view|edit|create>.layout.json` among them, which the package's `<app>` does not
+  name; `files` lists it and `layer` gives its version, `{ "<path>": <version> }`, empty when the
+  app has none. A draft is never served here.
 - **Diagnostics** are the configuration envelope's: `level`, `code`, `message`, the `app` it is
   about, and the contribution's `component`, `bundle` and `source`. A person gets those the
   contribution in force made, from its own component and bundle, about the apps they see, not
@@ -2329,7 +2389,8 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   request with no credentials there was 401, not `Anonymous`.
 
 **Used by:** `HomeService` (the home and the menu), `QueueService` (a queue), `DocumentLayoutService`
-(a task form), `AppTranslateLoader` (the labels), and the shell's "Switch app".
+(a task form, and a record page or form of the app's deployment layer), `AppTranslateLoader` (the
+labels), and the shell's "Switch app".
 
 ---
 
@@ -2589,7 +2650,79 @@ queue's among them (an action on `row`).
 
 ---
 
-## 41. Record Page — a Picture's Share Links, through `nuxeo-agentic-assets`
+## 41. Layout Designer — Publishing through an App's Deployment Layer
+
+| Field           | Value                                                                                                                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DeploymentLayerService` (`libs/features/layout-designer/src/lib/layer/deployment-layer.service.ts`), for `LayerPanelComponent` on both designer pages                                                          |
+| **HTTP Method** | `GET` to read; `POST` to change                                                                                                                                                                                 |
+| **Endpoints**   | `/nuxeo/agentic-ui-apps/apps/<id>/layer/<path>` — one file of the app open's layer: its package, live and draft versions, versions kept, trail and the person's permissions; a change is a POST to it           |
+|                 | `/nuxeo/agentic-ui-apps/apps/<id>/layer.json` — the app's layer, file by file                                                                                                                                   |
+|                 | `/nuxeo/agentic-ui-apps/layer.json` — every app's files whose override is in force, with their versions: what the upgrade check's `--deployment` reads                                                          |
+| **Auth**        | Authenticated, through the interceptors, with `X-No-Basic-Header: true`. Administrators alone, as Nuxeo counts them: anyone else is 403 at every address                                                        |
+| **Server side** | `LayerEndpoint` and `LayerService` in `nuxeo-agentic-core`, behind the app registry's servlet; the layer is stored in the repository (`RepositoryLayerStore`). Off unless `nuxeo.agentic.ui.layer.enabled=true` |
+
+**A change** is `application/json`, with the header `X-Agentic-Layer-Change: 1`:
+
+```json
+{ "action": "save", "revision": 3, "content": { "version": 2, "cards": [] } }
+```
+
+`action` is `save` (with `content`), `submit`, `approve`, `rollback` (by default the answer's
+`previous`, the version the last approval replaced, or the package's file when it is `0`, as after
+a rollback; or with `to`, that version or `0` for the package's file) or `discard`, and `revision`
+is the file's, as last read. The answer is the file as it then is, `served` saying whether the
+registry serves its live version:
+
+```json
+{
+  "format": "nuxeo-agentic-ui-layer/1",
+  "app": "payers-claims",
+  "path": "layouts/Claim/view.layout.json",
+  "revision": 4,
+  "package": { "sha256": "…", "content": {} },
+  "live": { "version": 1, "kind": "approved", "content": {}, "approvedBy": "ben", "at": "…" },
+  "previous": 0,
+  "draft": null,
+  "versions": [{ "version": 1, "kind": "approved", "replaced": 0, "approvedBy": "ben", "at": "…" }],
+  "trail": [{ "at": "…", "by": "ben", "action": "approve", "revision": 4, "version": 1 }],
+  "packageChanged": false,
+  "served": true,
+  "trailDropped": 0,
+  "permissions": { "write": true, "approve": false, "approveRefused": "…", "selfApproval": false }
+}
+```
+
+**Notes:**
+
+- **Refused, and nothing written:** 403 for anyone but an administrator (`forbidden`), first,
+  whether the layer is on or not and before a change's body is read, and for an approval by an
+  administrator who wrote or submitted the draft (`self-approval`) unless
+  `nuxeo.agentic.ui.layer.selfApproval=true`; then 404 when the layer is switched off, for an app
+  the server does not have, and for a path no layer holds; 400 for a request that is not a change;
+  409 for a revision that is not the file's (`stale`, with `state`, the file as it is), for a change
+  the file's state does not allow, and for a rollback to any version but the one live just before or
+  the package's file, 0 (`not-restorable`); 413 for a change over 1 MiB and 64 KiB, and for a layer
+  over 500 files or 64 MiB; 415 for anything but `application/json`, and 403 without the header
+  (`no-change-header`); 422 for a file the validator finds anything in (`invalid`, with `findings`,
+  the validator's). A change that fails on the server is 500: `failed`, read the file again to see
+  whether it was written; `unreadable` and `unwritable`, the stored layer could not be read or
+  written, and nothing is changed. Every refused change is a warning in the server log, with who
+  asked.
+- **Every answer is `Cache-Control: no-store`**, `nosniff`, with the configuration servlet's
+  `Content-Security-Policy`.
+- **What is served to readers:** only the live version, by the app registry, to the app's groups
+  (section 36); the configuration servlet never reads a layer.
+- **A queue's actions** are checked against the app's `actions.json` as the registry serves it,
+  after the allow-list (section 40): an action whose operation the allow-list does not let run is a
+  finding, 422, and a live queue naming one stops being served when the allow-list changes.
+
+**Used by:** `LayerPanelComponent` (`libs/features/layout-designer`), and the upgrade check,
+`scripts/app-upgrade-check.mjs --deployment`, with an export of `/nuxeo/agentic-ui-apps/layer.json`.
+
+---
+
+## 42. Record Page — a Picture's Share Links, through `nuxeo-agentic-assets`
 
 | Field           | Value                                                                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

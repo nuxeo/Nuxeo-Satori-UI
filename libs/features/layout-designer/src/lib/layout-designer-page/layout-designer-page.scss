@@ -217,6 +217,7 @@
   padding-block: 8px;
 }
 
-.layout-designer__rules-body textarea {
-  font-family: monospace;
+/* A rule is an ID or JSON, so its fields are written in the code font; their labels keep the theme's. */
+.layout-designer__rules-body nxs-text-field {
+  --nxs-text-field-font-family: monospace;
 }
