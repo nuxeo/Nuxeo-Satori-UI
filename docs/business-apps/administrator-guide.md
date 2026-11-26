@@ -29,6 +29,7 @@ wait for a security review, and some are built on open decisions
 | `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging              | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                            | Nowhere                                           |
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                            | Nowhere                                           |
 | `onboarding-demo`           | The onboarding kit: cases with their KYC checklist and an e-signature step, disputes, three queues                                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-signature:0.1.0` | 0.1.0                            | Nowhere                                           |
+| `vehicle-titles-demo`       | The vehicle titles kit: vehicle deals with their checklist of required documents and phone capture, titles and their liens, three queues    | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                            | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -45,8 +46,9 @@ installed on any server yet"), and the kits' READMEs:
 [moves](../../business-apps/packages/moves-demo/README.md),
 [P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
 [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md),
-[records](../../business-apps/packages/records-demo/README.md) and
-[onboarding](../../business-apps/packages/onboarding-demo/README.md); the
+[records](../../business-apps/packages/records-demo/README.md),
+[onboarding](../../business-apps/packages/onboarding-demo/README.md) and
+[vehicle titles](../../business-apps/packages/vehicle-titles-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
 the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
 on any server") and the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
@@ -476,11 +478,12 @@ groups give them, and gets every diagnostic.
 | `controlled-documents`            | `document-controllers`, `engineers`                         |
 | `records`                         | `records-managers`, `records-approvers`                     |
 | `onboarding`                      | `onboarding-officers`, `kyc-analysts`, `dispute-analysts`   |
+| `vehicle-titles`                  | `vehicle-deal-desk`, `vehicle-title-clerks`                 |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
 - **Create the groups yourself.** The contracts, brand assets, moves, P&C claims, controlled
-  documents and records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
+  documents, records and vehicle titles seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
   for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
@@ -597,7 +600,8 @@ installed.
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
    `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo`,
-   `/default-domain/workspaces/pc-claims-demo` and `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
+   `/default-domain/workspaces/pc-claims-demo`, `/default-domain/workspaces/records-demo` and
+   `/default-domain/workspaces/vehicle-titles-demo`; the records kit's seed also writes `/disposition-runs`
    and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.
