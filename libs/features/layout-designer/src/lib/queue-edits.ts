@@ -1,16 +1,29 @@
 /**
  * The designer's edits on a queue, `queues/<id>.json` (docs/business-apps/app-definition-v2.md,
- * section 4): its name, its columns, its sort and its facets.
+ * section 4): its name, its columns, its sort, its facets, and its row and bulk actions.
  *
  * As for a layout file's edits, each takes the file and gives back a new one, the file it was
  * given left as it was, and changes only what it names: every other key, one the queue format does
- * not have included, is kept as written. An edit whose entry is not in the file gives the file back
- * unchanged. Whether the result is a valid queue is the validator's to say.
+ * not have included, is kept as written, and a key it adds is written where the queue format lists
+ * it, so that every other line stays as it was. An edit whose entry is not in the file gives the
+ * file back unchanged. Whether the result is a valid queue is the validator's to say.
  */
-import { fieldOf, type DesignerField, type LayoutJson } from './layout-edits';
+import { QUEUE_V2_KEYS } from '@agentic-ui/shared/app-definition';
+
+import { fieldOf, placeKey, type DesignerField, type LayoutJson } from './layout-edits';
+
+/** A queue's lists of actions: each row's menu, and what the selection bar offers for the rows chosen. */
+export type QueueActionList = 'rowActions' | 'bulkActions';
 
 /** A queue's lists the designer edits. */
-export type QueueList = 'columns' | 'sort' | 'facets';
+export type QueueList = 'columns' | 'sort' | 'facets' | QueueActionList;
+
+/** One of a queue's actions, as the designer lists it. */
+export interface DesignerAction {
+  readonly index: number;
+  /** The action's ID, or `null` for an entry that is not one, which the validator refuses. */
+  readonly id: string | null;
+}
 
 /** One entry of a queue's `sort`, as the designer lists it. */
 export interface DesignerSort {
@@ -74,10 +87,19 @@ export function facetsOf(file: unknown): DesignerFacet[] {
   });
 }
 
+/** The queue's row or bulk actions, in their order. */
+export function actionsOf(file: unknown, key: QueueActionList): DesignerAction[] {
+  return listOf(file, key).map((entry, index) => ({
+    index,
+    id: typeof entry === 'string' ? entry : null,
+  }));
+}
+
 /**
- * The file with `change` made to a copy of its list `key`. A `sort` or `facets` list left empty is
- * taken out, as a queue with neither writes none; `columns` is kept, and an empty one refused by
- * the validator. Unchanged when the file has no such list and `create` is not asked for.
+ * The file with `change` made to a copy of its list `key`. A list other than `columns` left empty
+ * is taken out, as a queue with no sort, facet or action writes none; `columns` is kept, and an
+ * empty one refused by the validator. A list made is written where the queue format lists it.
+ * Unchanged when the file has no such list and `create` is not asked for.
  */
 function withList(
   file: LayoutJson,
@@ -88,7 +110,7 @@ function withList(
   const copy = structuredClone(file);
   if (!Array.isArray(copy[key])) {
     if (!create || key in copy) return copy;
-    copy[key] = [];
+    placeKey(copy, key, [], QUEUE_V2_KEYS.queue);
   }
   const list = copy[key] as unknown[];
   change(list);
@@ -158,6 +180,15 @@ export function setSortOrder(file: LayoutJson, index: number, order: 'asc' | 'de
   });
 }
 
+/**
+ * The file with the action `id` as the last of its row or bulk actions. Whether `id` names an
+ * action this build registers, or one of the app's own, is the validator's to say; the page offers
+ * only those.
+ */
+export function addAction(file: LayoutJson, key: QueueActionList, id: string): LayoutJson {
+  return insertEntry(file, key, Number.MAX_SAFE_INTEGER, id);
+}
+
 /** The file filtered last by the page provider's aggregate `aggregate`, with no label of its own. */
 export function addFacet(file: LayoutJson, aggregate: string): LayoutJson {
   return insertEntry(file, 'facets', Number.MAX_SAFE_INTEGER, { aggregate });
@@ -177,7 +208,7 @@ export function setFacetText(
     const entry: unknown = list[index];
     if (!isObject(entry)) return;
     if (value === '') delete entry[key];
-    else entry[key] = value;
+    else placeKey(entry, key, value, QUEUE_V2_KEYS.facet);
   });
 }
 
@@ -188,7 +219,7 @@ export function setFacetText(
 export function setQueueText(file: LayoutJson, key: QueueText, value: string): LayoutJson {
   const copy = structuredClone(file);
   if (value === '') delete copy[key];
-  else copy[key] = value;
+  else placeKey(copy, key, value, QUEUE_V2_KEYS.queue);
   return copy;
 }
 
