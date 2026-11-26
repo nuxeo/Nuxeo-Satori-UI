@@ -1,0 +1,52 @@
+@use '@hylandsoftware/satori-ui/theme' as sat;
+
+// The system's own fonts. Satori's are declared with `@font-face` at addresses relative to the
+// page, which inside another system's page are that page's: a shadow root's styles resolve them
+// against the document. Naming no Satori family, the panel asks for none of them.
+$system-fonts:
+  system-ui,
+  -apple-system,
+  'Segoe UI',
+  Roboto,
+  'Helvetica Neue',
+  Arial,
+  sans-serif;
+
+// The panel's theme, on its own shadow root's host, so that nothing of it reaches the page and the
+// page's own theme does not reach it. `all: initial` first: the properties a page's styles would
+// otherwise pass down to the panel by inheritance, its font, colour and line height among them, start
+// from their initial values; custom properties are not reset by it, and the theme sets every one the
+// panel reads.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+:host {
+  all: initial;
+  display: block;
+  color-scheme: light;
+  @include sat.theme(
+    (
+      typography: (
+        plain-family: $system-fonts,
+        brand-family: $system-fonts,
+        bold-weight: 600,
+      ),
+    )
+  );
+  --nxs-banner-warning-background: var(--sat-sys-warning-container);
+  --nxs-banner-warning-foreground: var(--sat-sys-on-warning-container);
+  --nxs-banner-warning-icon: var(--sat-sys-warning-icon);
+
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+  font: var(--mat-sys-body-medium);
+}
+
+.record-panel {
+  display: block;
+  padding: 16px;
+}
+
+.record-panel__waiting {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}

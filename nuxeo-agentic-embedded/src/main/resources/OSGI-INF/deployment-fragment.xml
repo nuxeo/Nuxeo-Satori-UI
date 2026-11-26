@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<fragment version="1">
+
+  <!--
+    The token exchange and the hosts' origins, at /nuxeo/agentic-embedded/. No authentication filter
+    is mapped on the path: a host's server is not a Nuxeo user, and authenticates with its own client
+    secret, which the servlet checks; a panel reads the origins before anyone is signed in. The
+    servlet mapping is more specific than Tomcat's default servlet, so it alone answers for the path.
+  -->
+  <extension target="web#SERVLET">
+    <servlet>
+      <servlet-name>Agentic Embedded Panels</servlet-name>
+      <servlet-class>org.nuxeo.agentic.embedded.EmbeddedPanelServlet</servlet-class>
+    </servlet>
+  </extension>
+
+  <extension target="web#SERVLET-MAPPING">
+    <servlet-mapping>
+      <servlet-name>Agentic Embedded Panels</servlet-name>
+      <url-pattern>/agentic-embedded/*</url-pattern>
+    </servlet-mapping>
+  </extension>
+
+  <!--
+    A panel's token held to its scope, its host's origins and the REST API, before the REST API sees
+    the request: on /api/*, where it is asked, and on /site/*, where the REST API's servlet forwards it
+    and the server authenticates it (Nuxeo's API forward servlet, /api/v1/ to /site/api/v1/). A request
+    with no panel's token passes untouched.
+  -->
+  <extension target="web#FILTER-MAPPING">
+    <filter>
+      <display-name>Agentic Embedded Panels Token Filter</display-name>
+      <filter-name>AgenticEmbeddedPanelTokenFilter</filter-name>
+      <filter-class>org.nuxeo.agentic.embedded.PanelTokenFilter</filter-class>
+    </filter>
+    <filter-mapping>
+      <filter-name>AgenticEmbeddedPanelTokenFilter</filter-name>
+      <url-pattern>/api/*</url-pattern>
+      <dispatcher>REQUEST</dispatcher>
+    </filter-mapping>
+    <filter-mapping>
+      <filter-name>AgenticEmbeddedPanelTokenFilter</filter-name>
+      <url-pattern>/site/*</url-pattern>
+      <dispatcher>REQUEST</dispatcher>
+      <dispatcher>FORWARD</dispatcher>
+    </filter-mapping>
+  </extension>
+
+</fragment>

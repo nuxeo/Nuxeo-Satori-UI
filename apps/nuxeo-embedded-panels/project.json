@@ -1,0 +1,43 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "nuxeo-embedded-panels",
+  "projectType": "application",
+  "sourceRoot": "apps/nuxeo-embedded-panels/src",
+  "prefix": "nxe",
+  "tags": ["scope:app", "type:app"],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/nuxeo-embedded-panels"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "ng build nuxeo-embedded-panels"
+      },
+      "configurations": {
+        "production": { "command": "ng build nuxeo-embedded-panels --configuration=production" },
+        "development": { "command": "ng build nuxeo-embedded-panels --configuration=development" }
+      },
+      "defaultConfiguration": "production"
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/apps/nuxeo-embedded-panels"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{workspaceRoot}/dist/out-tsc/apps/nuxeo-embedded-panels"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "ngc -p apps/nuxeo-embedded-panels/tsconfig.app.json --outDir dist/out-tsc/apps/nuxeo-embedded-panels"
+      }
+    }
+  }
+}

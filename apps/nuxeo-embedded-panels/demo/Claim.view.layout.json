@@ -1,0 +1,54 @@
+{
+  "$schema": "../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "label": "Claim",
+      "fields": [
+        "claim:number",
+        {
+          "field": "claim:billedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "claim:received", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "payment",
+      "label": "Payment and policy, from the core system",
+      "external": {
+        "connector": "payers.claimPayments",
+        "fields": [
+          {
+            "name": "paymentStatus",
+            "label": "Payment status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Paid": "positive",
+                "Pending": "warning",
+                "Denied": "negative"
+              }
+            }
+          },
+          {
+            "name": "paidAmount",
+            "label": "Paid",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          { "name": "policyNumber", "label": "Policy" },
+          { "name": "policyStatus", "label": "Policy status" }
+        ]
+      }
+    },
+    {
+      "id": "notes",
+      "label": "Notes",
+      "fields": ["dc:description"]
+    }
+  ]
+}

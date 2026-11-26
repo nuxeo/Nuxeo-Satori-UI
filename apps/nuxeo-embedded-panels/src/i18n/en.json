@@ -1,0 +1,15 @@
+{
+  "embedded-panels": {
+    "label": "Record from Nuxeo",
+    "starting": "Opening the record",
+    "signing-in": "Signing in",
+    "loading": "Loading the record",
+    "refused-origin": "This page may not show this panel",
+    "refused-attributes": "This panel is not set up: it names no record or host it can read",
+    "forbidden": "This record cannot be shown here",
+    "not-found": "This record was not found",
+    "not-found-message": "It may have been deleted, or you may not be allowed to read it.",
+    "no-layout": "This record has no page to show",
+    "failed": "The record could not be loaded"
+  }
+}

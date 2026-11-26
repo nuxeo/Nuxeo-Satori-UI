@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.embedded" version="1.0">
+
+  <documentation>
+    Embedded panels: a record's panel shown inside another system's page, signed in with a token that
+    the other system, a host, exchanges for its user (OAuth 2.0 token exchange, RFC 8693).
+
+    A host is registered by the server's administrators, in a file of nxserver/config/ only: a
+    contribution from a bundle, a package's among them, is refused. Its client secret and the key its
+    assertions are verified with are server properties or environment variables, named after its id,
+    never in a contribution. The token is the platform's JWT, signed with nuxeo.jwt.secret, valid on
+    the REST API only, for the host's lifetime, and held to its scope and its origins by the add-on's
+    filter before the REST API sees the request.
+  </documentation>
+
+  <require>org.nuxeo.ecm.jwt.JWTService</require>
+
+  <implementation class="org.nuxeo.agentic.embedded.EmbeddedPanelComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.embedded.EmbeddedPanelService" />
+  </service>
+
+  <extension-point name="hosts">
+    <documentation>
+      One host per element. id, the assertion's algorithm and issuer, at least one origin, and at
+      least one user or group are required.
+
+      <code>
+        <host id="crm">
+          <assertion algorithm="RS256" issuer="https://crm.example.com" />
+          <origin>https://crm.example.com</origin>
+          <user subject="u-1042">jsmith</user>
+          <group>crm_panel_users</group>
+          <allowAdministrators>false</allowAdministrators>
+          <scope>read</scope>
+          <operation>Connector.Read</operation>
+          <tokenLifetime>300</tokenLifetime>
+        </host>
+      </code>
+
+      The id is 1 to 32 lower-case letters, digits or dashes, starting with a letter. The server sets
+      the host's client secret in nuxeo.agentic.embedded.(id).clientSecret, or the environment
+      variable NUXEO_EMBEDDED_(ID)_CLIENT_SECRET, at least 32 letters, digits, dots, underscores,
+      tildes or dashes; and the key its assertions are verified with in
+      nuxeo.agentic.embedded.(id).assertionKey, or NUXEO_EMBEDDED_(ID)_ASSERTION_KEY: the shared
+      secret for HS256, at least 32 bytes, or the public key for RS256 and ES256, X.509 in base64.
+      The id in capitals, with dashes as underscores.
+
+      An origin is https://host or https://host:port, exactly as a browser sends it, with plain http
+      only for localhost, 127.0.0.1 or [::1]; up to 20. A user entry maps one subject of the host's to
+      one Nuxeo user; a group lets the host name a Nuxeo user directly as its subject, a member of one
+      of the groups only. Administrators are never signed in unless allowAdministrators is true. The
+      scope is read, and write only if named here and asked for. An operation is one a read token may
+      run through Automation, Connector.Read when none is named; up to 20. The token lives 60 to 900
+      seconds, 300 by default.
+
+      A host that fails a check is not registered, and takes one registered earlier with the same id
+      out with it; the log says why. A later contribution with the same id replaces it whole, and
+      enabled="false" removes it, which ends its tokens at once.
+    </documentation>
+    <object class="org.nuxeo.agentic.embedded.HostDescriptor" />
+  </extension-point>
+
+</component>

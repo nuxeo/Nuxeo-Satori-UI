@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.embedded.authentication.contrib">
+
+  <!--
+    The panel's own files, which nuxeo-agentic-ui-package serves at /nuxeo/agentic-ui/embedded/: its
+    script and its translations, read by another system's page before anyone is signed in, as the
+    application's images are (nuxeo-agentic-core's agenticUIImages). They hold no data. A page reads
+    them only where the server's CORS configuration lets its origin, since the script is a module.
+  -->
+  <extension point="openUrl"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <openUrl name="agenticEmbeddedPanels">
+      <grantPattern>${org.nuxeo.ecm.contextPath}/agentic-ui/embedded/.*</grantPattern>
+    </openUrl>
+  </extension>
+
+</component>
