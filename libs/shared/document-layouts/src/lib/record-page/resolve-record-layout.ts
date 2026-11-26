@@ -45,10 +45,11 @@ export interface ResolvedRecordTab extends Omit<RecordTabEntry, 'cards'> {
 
 /**
  * What a record page shows of the record's own file before its cards, for a record whose file is
- * its content: `picture`, a Picture's views, for a record with the `picture` schema; `null` for a
- * record with no such file.
+ * its content: `picture`, a Picture's views, for a record with the `picture` schema and not the
+ * `video` one; `video`, a video's player, its facts and its storyboard, for a record with the
+ * `video` schema; `null` for a record with no such file.
  */
-export type RecordPreview = 'picture' | null;
+export type RecordPreview = 'picture' | 'video' | null;
 
 /** A `view` file resolved for one document: what its record page shows. */
 export interface ResolvedRecordLayout {
@@ -299,7 +300,9 @@ export function resolveRecordLayout(
   // A review is drawn on the picture, so a record that shows none has nothing to review.
   const review = file.review && preview === 'picture';
   if (file.review && !review) {
-    notes.push('review: a review is drawn on a picture, and this record shows none; left out');
+    notes.push(
+      `review: a review is drawn on a picture, and this record shows ${preview === 'video' ? 'a video' : 'none'}; left out`,
+    );
   }
   // Share links serve a picture's views: a record that shows no picture has none to share.
   const shareLinks = file.shareLinks && preview === 'picture';

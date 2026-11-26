@@ -177,6 +177,19 @@ describe('rightsRefusal', () => {
     );
   });
 
+  it("says the same reasons of a video's file in a video's words", () => {
+    const print = decision('channel-not-covered', { channel: 'Print' });
+    expect(rightsRefusal(print, ['Social'], 'en-US', 'video')).toEqual({
+      reason: 'channel-not-covered',
+      key: 'document-layouts.rights.refused-video.channel-not-covered',
+      params: { channel: 'Print', channels: 'Social' },
+    });
+    expect(rightsRefusal(decision('rights-ended'), [], 'en-US', 'video')?.key).toBe(
+      'document-layouts.rights.refused-video.rights-ended-undated',
+    );
+    expect(rightsRefusal(decision('cleared'), [], 'en-US', 'video')).toBeNull();
+  });
+
   it('has its own words for a use no rights clear and for rights the server could not read', () => {
     expect(rightsRefusal(decision('not-cleared'), [], 'en-US')?.key).toBe(
       'document-layouts.rights.refused.not-cleared',

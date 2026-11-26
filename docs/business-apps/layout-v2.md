@@ -1099,6 +1099,53 @@ becomes. In version 2's terms:
     tab, whose viewer does, or the packaged viewer, when the type turns out to have no record page.
     A record with the `picture:views` property and none of the `video` schema's is held back so,
     until its type's layout is read.
+- **A video's record page shows its player first.** A record with the `video` schema, a Video or
+  any record a facet gives it, has its record page though it holds a file, and the page shows,
+  under the banners and above the cards, the video's player, the facts Nuxeo read of it and its
+  storyboard. Nuxeo's `Video` facet declares the `picture` schema as well as `video`, for its
+  still frames, so `video` is asked first: a video is never drawn as a picture, nor reviewed. That
+  is `RecordVideoComponent`, in the same library, drawn through the component ID
+  `nxs.components.recordVideo` and given `document` and `stateHeadingLevel`, so that an override of
+  the ID reaches it ([extension reference](../extension-reference.md), section 6):
+  - **what it plays:** the record's transcoded videos, `vid:transcodedVideos`, where the server
+    made them, else its original, `file:content`. Each transcoded video is the same cut in another
+    format, such as `MP4 480p` and `WebM 480p`, so one is played: the first the browser says it can
+    probably play, else the first it may, else the first. One the browser then cannot decode gives
+    way to the next, and with none left the page says the browser cannot play the video's files.
+    No control chooses among them; the caption names the one played, its size and its format;
+  - **each file is fetched as a file, through the application,** and played from a blob URL: no
+    `<video>` is given a Nuxeo address ([AGENTS/07-security.md](../../AGENTS/07-security.md)). A
+    transcoded video is asked for by its name, through the REST API's rendition adapter,
+    `DocumentDetailService.fetchRendition`, which names it to the server's rights by that name; the
+    original through `@blob/file:content`, with the reason `view`. The whole file is fetched before
+    it plays: there is no streaming, so a long original is a long wait;
+  - a file is fetched when it is first played, and kept while the record shows it, as are the
+    storyboard's frames. A record reloaded with the same files asks for nothing; a video replaced on
+    the record has new digests, whose files are fetched, and the blob URLs of the old ones are
+    revoked at once, as are another record's, one the browser could not decode, and all of them
+    when the page is left;
+  - **a file the server's rights refuse** shows the server's reason in the player's place, asked of
+    the `assetRights` enricher after the 403, as a picture's view does, in a video's words: _The
+    server refused this video: …_. Nothing is hidden or tried instead: the server decided. A 403 the
+    rights do not explain shows the error state, as any 403 does, and so does a file the server
+    does not serve, a 404 or a 500, Retry offered for a server error: no other file is tried then
+    either, though one may play;
+  - **the facts:** the duration, the frame size and the format, from `vid:info`, as Nuxeo read
+    them with ffprobe. A server without it reads none, and the page says so;
+  - **the storyboard,** `vid:storyboard`, through `nxs.components.storyboard`, and only with the
+    player, whose position its frames move and mark. Each frame is a preview, fetched as a file; one
+    that cannot be fetched shows without its picture. Nuxeo makes one with ffmpeg, for a video of 10
+    seconds or more by default; for one with none, the page says the server has made none;
+  - a record with no transcoded video and no original says it has no file to play;
+  - **the document page fetches none of the video's files for its own viewer** while the record
+    page may hold the View tab, as it holds back a picture's original: a record with a `vid:`
+    property waits until its type's layout is read, and its files load for the Annotations tab or
+    the packaged viewer of a type with no record page. That viewer asks for a transcoded video by
+    its rendition's name too, then by the address Nuxeo gives when the name is not served, never
+    after the server refused it by name;
+  - **each file is downloaded whole, each time it is shown:** the page's tabs draw the active one
+    only, so going back to the View tab fetches the video again, and the Annotations tab's viewer
+    fetches its own copy.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;
@@ -1117,11 +1164,10 @@ becomes. In version 2's terms:
     `core.some` or `core.not`, is not offered: nothing publishes that state for a row. Those are
     the surface rules but `app.rules.isNote`, which reads the document, refused by ID. A row's rules see none of
     the page's flags, so a customer's own rule that reads them finds none;
-  - **a record with a file or a note but no picture**, such as a File or a Note, or any record a
-    facet gives the `file` or `note` schema and not the `picture` one, keeps its own View tab, its
-    preview or its editor: a record page beside its preview comes later. So does **a video**: Nuxeo's
-    `Video` facet declares the `picture` schema as well as `video`, for its still frames, so a
-    record with the `video` schema keeps its player, whatever else it has;
+  - **a record with a file or a note but no picture and no video**, such as a File or a Note, or
+    any record a facet gives the `file` or `note` schema and neither the `picture` one nor the
+    `video` one, keeps its own View tab, its preview or its editor: a record page beside its
+    preview comes later;
   - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
     that column is left out, and the rest of the table shows;
   - **`image` and `file-list`** show the property's own value, a file's name, until each has its

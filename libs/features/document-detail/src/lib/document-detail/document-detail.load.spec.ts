@@ -99,6 +99,7 @@ const mockDetailService = {
   fetchPdfRendition: vi.fn((): Observable<Blob> =>
     of(new Blob(['x'], { type: 'application/pdf' })),
   ),
+  fetchRendition: vi.fn((): Observable<Blob> => throwError(() => ({ status: 404 }))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   createComment: vi.fn((): Observable<unknown> => of({})),
   createReply: vi.fn((): Observable<unknown> => of({})),

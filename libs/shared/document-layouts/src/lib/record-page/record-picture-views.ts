@@ -117,19 +117,25 @@ export interface RightsRefusal {
   readonly params: Readonly<Record<string, string>>;
 }
 
+/** What was refused, as the page names it: a picture's view, or a video's file. */
+export type RefusedUse = 'view' | 'video';
+
 /**
  * What the page says of a use the server's rights refuse, or `null` when they do not refuse it: a
  * 403 for any other reason, such as the record's permissions, is then said as any 403 is.
  *
  * @param channels the asset's channels, as the server read them
  * @param locale the reader's, for the day and the list of channels
+ * @param use what was refused, which the words name: a picture's view, or a video's file
  */
 export function rightsRefusal(
   decision: AssetRightsDecision,
   channels: readonly string[] | null,
   locale: string,
+  use: RefusedUse = 'view',
 ): RightsRefusal | null {
-  const key = (code: string) => `document-layouts.rights.refused.${code}`;
+  const words = use === 'view' ? 'refused' : 'refused-video';
+  const key = (code: string) => `document-layouts.rights.${words}.${code}`;
   switch (decision.reason) {
     case 'cleared':
     case 'preview':

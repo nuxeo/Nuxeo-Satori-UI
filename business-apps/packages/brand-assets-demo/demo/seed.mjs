@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server with the brand assets kit's fictional records, so that its asset pages, its
- * product pages and its library have something to show: two products, six pictures and the
- * products' shot list, for the fictional Acme Outdoor, from `data.mjs`. The pictures are drawn by
- * `png.mjs`; nothing is downloaded.
+ * product pages and its library have something to show: two products, six pictures, two videos and
+ * the products' shot list, for the fictional Acme Outdoor, from `data.mjs`. The pictures are drawn
+ * by `png.mjs`; the videos are the few kilobytes of WebM under `videos/`, generated from a test
+ * pattern (README, "The videos"); nothing is downloaded.
  *
  *   node business-apps/packages/brand-assets-demo/demo/seed.mjs
  *
  * The package must be installed first: the records are of its stand-in model's types.
  *
- * **`--preview`, before the package is installed:** the six pictures only, as the platform's own
+ * **`--preview`, before the package is installed:** the six pictures only, no video, as the platform's own
  * `Picture`, under the workspace's `preview` folder, with their titles, rights end dates and rights
  * holders, and none of the kit's own properties, which no type on the server has yet. It is for
  * looking at the asset page in dev mode, with the kit's asset layout served for `Picture`
@@ -39,9 +40,14 @@
  * a new one is created there; the trashed one is left in the trash.
  *
  * **It checks what it seeded.** Last, as `check` says: Nuxeo has made each picture's views, and
- * the kit's four page providers return what it wrote, the library's aggregates counting it. Views
- * are made, and the library's index written, a moment after the repository, so the checks are
- * asked again, once a second, for up to NUXEO_INDEX_WAIT_MS.
+ * the kit's four page providers return what it wrote, the library's aggregates counting it, and
+ * each video is a Video to Nuxeo. Views are made, and the library's index written, a moment after
+ * the repository, so the checks are asked again, once a second, for up to NUXEO_INDEX_WAIT_MS.
+ *
+ * **What the server makes of the videos** is said, not checked: Nuxeo reads a video's facts,
+ * transcodes it and makes its storyboard with ffprobe and ffmpeg, a while after the upload, and a
+ * server without them never does. Each video's page then plays its original, and says that the
+ * server has read none of its facts and made no storyboard.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -52,18 +58,26 @@
  * /default-domain/workspaces, or a document at one of the seed's places that it did not write. An
  * argument other than `--preview` is refused with exit 2 too.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import {
   ASSETS,
   FOLDERS,
   MARKER,
   PRODUCTS,
   SHOTS,
+  VIDEOS,
   WORKSPACE,
   dayAfter,
   shotName,
   shotTitle,
 } from './data.mjs';
 import { picturePng } from './png.mjs';
+
+/** Where the videos' files are: committed, a few kilobytes each. */
+const VIDEO_FILES = join(dirname(fileURLToPath(import.meta.url)), 'videos');
 
 const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
@@ -76,8 +90,8 @@ const MAX_PAGES = 100;
 
 const WORKSPACES = '/default-domain/workspaces';
 const ROOT = `${WORKSPACES}/${WORKSPACE.name}`;
-/** The stand-in model's types: the three record types and the library's search document. */
-const TYPES = ['AcmeAsset', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch'];
+/** The stand-in model's types: the four record types and the library's search document. */
+const TYPES = ['AcmeAsset', 'AcmeVideo', 'AcmeProduct', 'AcmeShot', 'AcmeAssetSearch'];
 const PAGE_PROVIDERS = [
   'acme_products',
   'acme_product_assets',
@@ -150,6 +164,8 @@ async function seed() {
   for (const product of plan.products) products.set(product.key, await ensure(product));
   const assets = new Map();
   for (const asset of plan.assets) assets.set(asset.key, await ensure(asset));
+  const videos = new Map();
+  for (const video of plan.videos) videos.set(video.key, await ensure(video));
   const shots = new Map();
   for (const shot of plan.shots) {
     const fills = shot.fills === null ? null : assets.get(shot.fills).uid;
@@ -159,18 +175,21 @@ async function seed() {
     );
   }
 
-  await check({ products, assets, shots });
+  await check({ products, assets, shots, videos });
+  await sayWhatTheServerMade(videos);
 
   const { created, updated, restored, uploaded } = tally;
   console.log(
     `\nDone: ${created} created, ${updated} updated, ${restored} restored from the trash, ` +
-      `${uploaded} picture(s) uploaded, under ${ROOT}. The page providers return what was seeded.`,
+      `${uploaded} file(s) uploaded, under ${ROOT}. The page providers return what was seeded.`,
   );
   const ending = ASSETS.find((asset) => asset.rightsEndInDays >= 0 && asset.rightsEndInDays <= 30);
   const ended = ASSETS.find((asset) => asset.rightsEndInDays < 0);
   console.log(`An asset whose rights end soon: ${APP}/#/doc/${assets.get(ending.id).uid}`);
   console.log(`An asset whose rights have ended: ${APP}/#/doc/${assets.get(ended.id).uid}`);
   console.log(`A product with a missing shot: ${APP}/#/doc/${products.get(PRODUCTS[0].style).uid}`);
+  for (const video of VIDEOS)
+    console.log(`A video, ${video.title}: ${APP}/#/doc/${videos.get(video.id).uid}`);
   console.log(`The library: ${APP}/#/queues/library`);
 }
 
@@ -198,7 +217,7 @@ async function seedPreview(today) {
   const { created, updated, restored, uploaded } = tally;
   console.log(
     `\nDone: ${created} created, ${updated} updated, ${restored} restored from the trash, ` +
-      `${uploaded} picture(s) uploaded, under ${ROOT}/preview. Nuxeo made each one's views.`,
+      `${uploaded} file(s) uploaded, under ${ROOT}/preview. Nuxeo made each one's views.`,
   );
   for (const asset of ASSETS)
     console.log(`  ${asset.title}: ${APP}/#/doc/${pictures.get(asset.id).uid}`);
@@ -220,6 +239,7 @@ function previewPlanned(today) {
       },
     ],
     products: [],
+    videos: [],
     assets: full.assets.map((asset) => ({
       ...asset,
       parent,
@@ -297,7 +317,32 @@ function planned(today) {
           'acmeasset:channels': asset.channels,
           'acmeasset:regions': asset.regions,
         },
-        { fileName: `${asset.id}.png`, bytes: picturePng(asset.picture) },
+        { fileName: `${asset.id}.png`, bytes: picturePng(asset.picture), mimeType: 'image/png' },
+      ),
+    ),
+    videos: VIDEOS.map((video) =>
+      at(
+        `${ROOT}/assets`,
+        video.id,
+        'AcmeVideo',
+        video.id,
+        {
+          'dc:title': video.title,
+          'dc:expired': dayAfter(today, video.rightsEndInDays),
+          'dc:rights': video.rights,
+          'acmeasset:product': video.product,
+          'acmeasset:colorway': video.colorway,
+          'acmeasset:shot': video.shot,
+          'acmeasset:campaign': video.campaign ?? null,
+          'acmeasset:credit': video.credit,
+          'acmeasset:channels': video.channels,
+          'acmeasset:regions': video.regions,
+        },
+        {
+          fileName: video.video.file,
+          bytes: readFileSync(join(VIDEO_FILES, video.video.file)),
+          mimeType: video.video.mimeType,
+        },
       ),
     ),
     shots: SHOTS.map((shot) => ({
@@ -315,7 +360,14 @@ function planned(today) {
 
 /** Every place in `plan`, in the order the seed writes them. */
 function everyPlace(plan) {
-  return [plan.workspace, ...plan.folders, ...plan.products, ...plan.assets, ...plan.shots];
+  return [
+    plan.workspace,
+    ...plan.folders,
+    ...plan.products,
+    ...plan.assets,
+    ...plan.videos,
+    ...plan.shots,
+  ];
 }
 
 /**
@@ -411,8 +463,14 @@ async function holds(document, file) {
     // asset with no Print channel or whose rights have ended, to every user: its bytes cannot be
     // read back, so they are uploaded again rather than taken on trust. Only when the server's
     // rights say that is why: any other 403, such as a broken install's, stops the run.
-    if (error instanceof HttpError && error.status === 403 && (await rightsRefuseOriginal(document))) {
-      console.log(`  refused  ${document.path}: its original cannot be read back, so it is uploaded again`);
+    if (
+      error instanceof HttpError &&
+      error.status === 403 &&
+      (await rightsRefuseOriginal(document))
+    ) {
+      console.log(
+        `  refused  ${document.path}: its original cannot be read back, so it is uploaded again`,
+      );
       return false;
     }
     throw error;
@@ -437,15 +495,15 @@ async function rightsRefuseOriginal(document) {
   return original?.allowed === false && RIGHTS_REFUSALS.includes(original.reason);
 }
 
-/** A picture uploaded to a new batch, as the value a document's `file:content` takes. */
-async function upload({ fileName, bytes }) {
+/** A picture or a video uploaded to a new batch, as the value a document's `file:content` takes. */
+async function upload({ fileName, bytes, mimeType }) {
   const { batchId } = await call('POST', '/upload/');
   await call('POST', `/upload/${batchId}/0`, {
     body: bytes,
     headers: {
       'Content-Type': 'application/octet-stream',
       'X-File-Name': encodeURIComponent(fileName),
-      'X-File-Type': 'image/png',
+      'X-File-Type': mimeType,
       'X-File-Size': String(bytes.length),
     },
   });
@@ -463,8 +521,10 @@ async function upload({ fileName, bytes }) {
  *   seeded for the other;
  * - `acme_product_missing_shots`, for each product, its seeded shots that no asset fills, and
  *   none that one does;
- * - `acme_asset_library` every asset seeded, and its aggregates count at least the seeded assets
- *   in each bucket: each shot, each product, and each rights bucket as the server's day puts them.
+ * - each video is a Video to Nuxeo: it has the `Video` facet, which its type has from Video;
+ * - `acme_asset_library` every asset and video seeded, and its aggregates count at least the
+ *   seeded ones in each bucket: each shot, each product, each type, and each rights bucket as the
+ *   server's day puts them.
  *
  * Another document on the server may carry the same product or shot: the seed checks its own.
  */
@@ -473,7 +533,7 @@ async function check(seeded) {
   for (;;) {
     const problems = await disagreements(seeded);
     if (problems.length === 0) {
-      console.log(`  checked  the picture views, and ${PAGE_PROVIDERS.join(', ')}`);
+      console.log(`  checked  the picture views, the videos, and ${PAGE_PROVIDERS.join(', ')}`);
       return;
     }
     if (Date.now() >= deadline)
@@ -488,8 +548,8 @@ async function check(seeded) {
   }
 }
 
-async function disagreements({ products, assets, shots }) {
-  const problems = await viewsNotMade(assets);
+async function disagreements({ products, assets, shots, videos }) {
+  const problems = [...(await viewsNotMade(assets)), ...(await notVideos(videos))];
   const uid = (map, key) => map.get(key).uid;
 
   const listed = await results('acme_products');
@@ -531,9 +591,13 @@ async function disagreements({ products, assets, shots }) {
 
   const library = await execute('acme_asset_library');
   const inLibrary = library.entries.map((entry) => entry.uid);
-  const absent = ASSETS.filter((asset) => !inLibrary.includes(uid(assets, asset.id)));
+  const inTheLibrary = [
+    ...ASSETS.map((asset) => ({ ...asset, type: 'AcmeAsset', uid: uid(assets, asset.id) })),
+    ...VIDEOS.map((video) => ({ ...video, type: 'AcmeVideo', uid: uid(videos, video.id) })),
+  ];
+  const absent = inTheLibrary.filter((each) => !inLibrary.includes(each.uid));
   if (absent.length > 0)
-    problems.push(`acme_asset_library leaves out ${absent.map((asset) => asset.id).join(', ')}`);
+    problems.push(`acme_asset_library leaves out ${absent.map((each) => each.id).join(', ')}`);
   // The bucket the server's day puts each asset in. Its day is the seed's, near enough: every
   // seeded end date is at least ten days from a bound.
   const rightsBucket = (asset) => {
@@ -541,9 +605,10 @@ async function disagreements({ products, assets, shots }) {
     return days < 0 ? 'Ended' : days <= 30 ? 'Ending' : 'Cleared';
   };
   const wanted = {
-    acme_rights_agg: countBy(ASSETS, rightsBucket),
-    acme_shot_agg: countBy(ASSETS, (asset) => asset.shot),
-    acme_product_agg: countBy(ASSETS, (asset) => asset.product),
+    acme_rights_agg: countBy(inTheLibrary, rightsBucket),
+    acme_shot_agg: countBy(inTheLibrary, (each) => each.shot),
+    acme_product_agg: countBy(inTheLibrary, (each) => each.product),
+    acme_type_agg: countBy(inTheLibrary, (each) => each.type),
   };
   for (const [aggregate, counts] of Object.entries(wanted)) {
     const buckets = library.aggregations?.[aggregate]?.buckets;
@@ -559,6 +624,52 @@ async function disagreements({ products, assets, shots }) {
     }
   }
   return problems;
+}
+
+/** The videos Nuxeo does not take for Videos: without the facet, it would not transcode them. */
+async function notVideos(videos) {
+  const problems = [];
+  for (const [key, document] of videos) {
+    const read = await call('GET', `/id/${document.uid}`);
+    if (!Array.isArray(read?.facets) || !read.facets.includes('Video'))
+      problems.push(`${key}: Nuxeo gives it no Video facet, so it is no Video to it`);
+  }
+  return problems;
+}
+
+/**
+ * What the server has made of each video so far, said and not checked: its facts, read with
+ * ffprobe, and its transcoded videos and storyboard, made with ffmpeg, a while after the upload. A
+ * server without them makes none, and the video's page then plays its original.
+ */
+async function sayWhatTheServerMade(videos) {
+  for (const [key, document] of videos) {
+    const properties = (await call('GET', `/id/${document.uid}`))?.properties ?? {};
+    const info = properties['vid:info'];
+    const facts =
+      typeof info === 'object' &&
+      info !== null &&
+      ['duration', 'width', 'height', 'format'].some((field) => info[field] != null);
+    const transcoded = (
+      Array.isArray(properties['vid:transcodedVideos']) ? properties['vid:transcodedVideos'] : []
+    )
+      .map((each) => each?.name)
+      .filter((name) => typeof name === 'string' && name !== '');
+    const storyboard = properties['vid:storyboard'];
+    const frames = Array.isArray(storyboard) ? storyboard.length : 0;
+    if (!facts && transcoded.length === 0 && frames === 0) {
+      console.log(
+        `  video    ${key}: the server has read no facts, transcoded nothing and made no ` +
+          'storyboard yet. Without ffmpeg on the server it never will: its page plays the original.',
+      );
+      continue;
+    }
+    console.log(
+      `  video    ${key}: its facts ${facts ? 'read' : 'not read yet'}; transcoded: ` +
+        `${transcoded.length > 0 ? transcoded.join(', ') : 'nothing yet'}; ` +
+        `storyboard: ${frames} frame(s)`,
+    );
+  }
 }
 
 /** How many of `items` are in each bucket `key` puts them in. */

@@ -32,6 +32,14 @@
     <doctype name="AcmeAsset" extends="Picture">
       <schema name="acmeasset" />
     </doctype>
+    <!-- A video asset is a Video: it has Video's schemas and its Video facet, so Nuxeo reads its
+         facts, transcodes it and makes its storyboard as it does a Video's, where the server has
+         ffmpeg, and its record page shows its player first (docs/business-apps/layout-v2.md,
+         section 11). The same acmeasset schema as a picture asset, so that the library lists both
+         with the same columns and facets. Its rights end on dc:expired. -->
+    <doctype name="AcmeVideo" extends="Video">
+      <schema name="acmeasset" />
+    </doctype>
     <!-- A product is a record with no file, so it opens as a record page. -->
     <doctype name="AcmeProduct" extends="Document">
       <schema name="common" />
@@ -58,6 +66,7 @@
   <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
     <types>
       <type name="AcmeAsset">default</type>
+      <type name="AcmeVideo">default</type>
       <type name="AcmeProduct">default</type>
       <type name="AcmeShot">default</type>
     </types>
@@ -101,7 +110,7 @@
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>
 
-    <!-- The asset library: every asset, with three facets. A queue's facets are the aggregates of
+    <!-- The asset library: every asset, a picture or a video, with four facets. A queue's facets are the aggregates of
          its page provider's results, which only the search index answers: a coreQueryPageProvider
          queries the repository and returns none. So this is SearchServicePageProvider, the class
          the platform's default_search is replaced with (nxserver/config/search-classreplacer-config.xml),
@@ -121,7 +130,7 @@
       <searchDocumentType>AcmeAssetSearch</searchDocumentType>
       <whereClause>
         <fixedPart>
-          ecm:primaryType = 'AcmeAsset'
+          ecm:primaryType IN ('AcmeAsset', 'AcmeVideo')
           AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
         </fixedPart>
       </whereClause>
@@ -142,6 +151,14 @@
         </aggregate>
         <aggregate id="acme_product_agg" type="terms" parameter="acmeasset:product">
           <field schema="acme_asset_search" name="acme_product_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <!-- The Type facet: a picture asset or a video one, by its document type. A bucket shows
+             its key as the server returns it: AcmeAsset, a picture, or AcmeVideo. -->
+        <aggregate id="acme_type_agg" type="terms" parameter="ecm:primaryType">
+          <field schema="acme_asset_search" name="acme_type_agg" />
           <properties>
             <property name="size">10</property>
           </properties>

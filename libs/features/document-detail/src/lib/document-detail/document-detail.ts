@@ -288,6 +288,21 @@ function mayShowPictureRecordPage(doc: NuxeoDocument): boolean {
   return keys.includes('picture:views') && !keys.some((key) => key.startsWith('vid:'));
 }
 
+/**
+ * Whether the record's View tab may be its record page with a video's player, which fetches the
+ * video's files itself (layout-v2.md, section 11): it has the `video` schema, as
+ * `DocumentLayoutService.recordLayoutFor` decides, read from its `vid:` properties.
+ */
+function mayShowVideoRecordPage(doc: NuxeoDocument): boolean {
+  return Object.keys(doc.properties ?? {}).some((key) => key.startsWith('vid:'));
+}
+
+/** Whether the server refused a request, 401 or 403, rather than failing to serve it. */
+function isRefusal(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return status === 401 || status === 403;
+}
+
 /** A banner's text and the actions it offers, as a banner rendered by ID takes them. */
 interface DocumentBanner {
   readonly message: string;
@@ -585,12 +600,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /**
    * The record's own file, held back while nothing on the page shows it: a record whose View tab
-   * may be its record page, which shows its picture views instead (`mayShowPictureRecordPage`).
-   * `null` when nothing is held back. `fetchHeldBackMainBlob` fetches it once something does.
+   * may be its record page, which shows its picture views instead (`mayShowPictureRecordPage`),
+   * or a video's player, which fetches the video's files itself (`mayShowVideoRecordPage`): for a
+   * video, its files and its storyboard are held back, `kind: 'video'`. `null` when nothing is
+   * held back. `fetchHeldBackMainBlob` fetches it once something does.
    */
   private readonly heldBackMainBlob = signal<{
     readonly doc: NuxeoDocument;
     readonly generation: number;
+    readonly kind: 'main' | 'video';
   } | null>(null);
 
   /**
@@ -598,7 +616,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * viewer shows it, or the packaged viewer, when the record's type turns out to have no record
    * page. While the record page holds the View tab, the original is not downloaded at all, where
    * it used to be fetched for a viewer that was never drawn: a request per asset page, the
-   * original file's size, which nothing showed (layout-v2.md, section 11).
+   * original file's size, which nothing showed (layout-v2.md, section 11). A video's files the
+   * same: its record page's player fetches the one it plays.
    */
   private readonly fetchHeldBackMainBlob = effect(() => {
     const held = this.heldBackMainBlob();
@@ -608,8 +627,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (this.activeTabId() !== 'app.tabs.annotations' && !noRecordPage) return;
     untracked(() => {
       this.heldBackMainBlob.set(null);
-      if (held.generation === this.blobLoadGeneration && held.doc.uid === this.docUid)
-        this.fetchMainBlob(held.doc, held.generation);
+      if (held.generation !== this.blobLoadGeneration || held.doc.uid !== this.docUid) return;
+      if (held.kind === 'video') this.loadVideo(held.doc, held.generation);
+      else this.fetchMainBlob(held.doc, held.generation);
     });
   });
 
@@ -1678,7 +1698,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const transcodedVideos = doc.properties['vid:transcodedVideos'] as
       Array<Record<string, unknown>> | undefined;
     if (transcodedVideos && transcodedVideos.length > 0) {
-      this.loadVideoSources(doc, transcodedVideos, generation);
+      this.loadVideoWhenShown(doc, generation);
       this.extractVideoInfo(doc);
       return;
     }
@@ -1708,8 +1728,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     if (mime.startsWith('video/')) {
-      this.fetchMainBlob(doc, generation);
-      this.loadStoryboard(doc);
+      this.loadVideoWhenShown(doc, generation);
       this.extractVideoInfo(doc);
       return;
     }
@@ -1794,7 +1813,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    */
   private fetchMainBlobWhenShown(doc: NuxeoDocument, generation: number): void {
     if (mayShowPictureRecordPage(doc)) {
-      this.heldBackMainBlob.set({ doc, generation });
+      this.heldBackMainBlob.set({ doc, generation, kind: 'main' });
       // A fetch that succeeds clears `?fresh=1`; one held back must too, or a reload or a shared
       // link would read the record as just uploaded again. `freshBlobDocument` stays, for the
       // retries of a later fetch.
@@ -1802,6 +1821,32 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       return;
     }
     this.fetchMainBlob(doc, generation);
+  }
+
+  /**
+   * A video's files and storyboard for the packaged viewer, fetched now, or held back while its
+   * View tab may be its record page, whose player fetches the file it plays itself:
+   * `fetchHeldBackMainBlob` loads them once something on the page shows the viewer.
+   */
+  private loadVideoWhenShown(doc: NuxeoDocument, generation: number): void {
+    if (mayShowVideoRecordPage(doc)) {
+      this.heldBackMainBlob.set({ doc, generation, kind: 'video' });
+      this.clearFreshUploadQueryParam();
+      return;
+    }
+    this.loadVideo(doc, generation);
+  }
+
+  /** A video's files for the packaged viewer: its transcoded videos, else its original, and its storyboard. */
+  private loadVideo(doc: NuxeoDocument, generation: number): void {
+    const transcodedVideos = doc.properties['vid:transcodedVideos'] as
+      Array<Record<string, unknown>> | undefined;
+    if (transcodedVideos && transcodedVideos.length > 0) {
+      this.loadVideoSources(doc, transcodedVideos, generation);
+      return;
+    }
+    this.fetchMainBlob(doc, generation);
+    this.loadStoryboard(doc, generation);
   }
 
   private fetchMainBlob(doc: NuxeoDocument, generation: number, attempt = 0): void {
@@ -1890,6 +1935,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.extractPictureMetadata(doc, picViews);
     }
     this.extractVideoInfo(doc);
+    // A video held back for its record page stays held, with the record as it is now: the
+    // record page's player fetches its own files, and the viewer's are loaded only if it shows.
+    const held = this.heldBackMainBlob();
+    if (held?.kind === 'video' && held.doc.uid === doc.uid) {
+      this.heldBackMainBlob.set({ ...held, doc });
+      return;
+    }
     const transcodedVideos = doc.properties['vid:transcodedVideos'] as
       Array<Record<string, unknown>> | undefined;
     if (transcodedVideos?.length && this.videoSources().length === 0 && !this.blobUrl()) {
@@ -2036,8 +2088,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     const entry = entries[index];
-    this.http
-      .get(this.resolveNuxeoBlobRequestUrl(entry.dataUrl), { responseType: 'blob' })
+    const byAddress = (): Observable<Blob> =>
+      this.http.get(this.resolveNuxeoBlobRequestUrl(entry.dataUrl), { responseType: 'blob' });
+    // By its rendition's name first, as the record page's player asks for it, so that rights that
+    // list a transcoded video by its name decide it. By the address Nuxeo gives when the name is
+    // none the rendition adapter serves, and never after the server refused it by name: the same
+    // file is not asked for again another way.
+    (entry.label
+      ? this.detailService
+          .fetchRendition(doc.uid, entry.label)
+          .pipe(
+            catchError((error: unknown) =>
+              isRefusal(error) ? throwError(() => error) : byAddress(),
+            ),
+          )
+      : byAddress()
+    )
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError(() => of(null)),

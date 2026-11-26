@@ -278,7 +278,7 @@ describe('DocumentLayoutService: record pages', () => {
     expect((await recordLayout())?.preview).toBeNull();
   });
 
-  it("keeps a Video's own view, its player, though Nuxeo's Video facet brings the picture schema", async () => {
+  it("draws a Video's record page with its player first, though Nuxeo's Video facet brings the picture schema", async () => {
     // A Video's schemas, as Nuxeo 2025 reports them: `file`, `video` and `picture`, among others.
     const video = {
       ...CLAIM,
@@ -293,6 +293,43 @@ describe('DocumentLayoutService: record pages', () => {
     http.expectOne(INDEX).flush(index('Claim/view'));
     http.expectOne(VIEW_FILE).flush(envelope(VIEW));
     http.expectOne(CLAIM_TYPE).flush(video);
+    const resolved = await layout;
+    expect(resolved?.preview).toBe('video');
+    expect(resolved?.review).toBe(false);
+    expect(resolved?.cards[0].fields).toHaveLength(2);
+    expect(warnings).toEqual([]);
+  });
+
+  it('draws it for a record whose facet adds the video schema, and leaves its review out', async () => {
+    const facetted = firstValueFrom(
+      service.recordLayoutFor('Claim', [
+        { name: 'dublincore', prefix: 'dc' },
+        { name: 'claim', prefix: 'claim' },
+        { name: 'file', prefix: 'file' },
+        { name: 'video', prefix: 'vid' },
+        { name: 'picture', prefix: 'picture' },
+      ]),
+    );
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope({ ...VIEW, review: {} }));
+    http.expectOne(CLAIM_TYPE).flush(CLAIM);
+    const resolved = await facetted;
+    expect(resolved?.preview).toBe('video');
+    expect(resolved?.review).toBe(false);
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout: review: a review is drawn on a picture, and this record shows a video; left out',
+    ]);
+  });
+
+  it('keeps the own view of a record with a file and neither a picture nor a video', async () => {
+    const file = {
+      ...CLAIM,
+      schemas: [...CLAIM.schemas, { name: 'file', '@prefix': 'file', fields: { content: 'blob' } }],
+    };
+    const layout = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectOne(CLAIM_TYPE).flush(file);
     expect(await layout).toBeNull();
     expect(warnings).toEqual([
       '[agentic-ui-layouts] Claim/view layout not drawn for a Claim with a file or a note, which the View tab shows first; a record page beside it comes later',

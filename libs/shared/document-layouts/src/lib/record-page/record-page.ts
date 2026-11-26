@@ -99,6 +99,7 @@ import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
 import { RecordPictureViewsComponent } from './record-picture-views';
 import { RecordShareLinksComponent } from './record-share-links';
+import { RECORD_VIDEO_ID, RecordVideoComponent } from './record-video';
 import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
 import {
@@ -299,9 +300,10 @@ function fieldShowing(
  * a checklist: the items the file requires, each done or not by the record's own property, with who
  * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
  * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
- * rounds (`lib-record-picture-review`); then, when the file has `shareLinks`, the picture's share
- * links (`lib-record-share-links`), drawn only for a user the server lets manage them; then the
- * cards.
+ * rounds (`lib-record-picture-review`), and, when the file has `shareLinks`, the picture's share
+ * links (`lib-record-share-links`), drawn only for a user the server lets manage them; or, for a
+ * video, its player, its facts and its storyboard (`lib-record-video`, through
+ * `nxs.components.recordVideo`); then the cards.
  *
  * Its fields are read-only, and so are its checklists unless the file opts one in to ticking
  * (`"tickable": true`), for someone the record's permissions let change it; the comments card, the
@@ -327,6 +329,7 @@ function fieldShowing(
     RecordPictureViewsComponent,
     RecordShareLinksComponent,
     RecordTimelineComponent,
+    RecordVideoComponent,
     RouterLink,
     TranslatePipe,
   ],
@@ -353,6 +356,12 @@ export class RecordPageComponent {
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
   protected readonly detailId = checklistDetailId;
+  protected readonly videoId = RECORD_VIDEO_ID;
+  /** What a video's player is given, through `nxs.components.recordVideo`. */
+  protected readonly videoInputs = computed(() => ({
+    document: this.document(),
+    stateHeadingLevel: 3,
+  }));
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly linkedRecords = inject(LinkedRecordLookup);

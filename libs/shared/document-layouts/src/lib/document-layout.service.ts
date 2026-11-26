@@ -180,7 +180,8 @@ const PICTURE_SCHEMA = 'picture';
 /**
  * A video's schema. Nuxeo's `Video` facet declares `picture` as well as `video` (measured on Nuxeo
  * 2025: a Video's schemas are `file`, `video` and `picture`, among others), for its still frames,
- * so a record with it is not a picture: it keeps its own view, its player.
+ * so a record with it is not a picture: its record page shows its player, its facts and its
+ * storyboard first (`lib-record-video`), asked before {@link PICTURE_SCHEMA}.
  */
 const VIDEO_SCHEMA = 'video';
 
@@ -190,15 +191,17 @@ const OWN_VIEW = 'own-view';
 /**
  * What a record page shows of the record's own file, from the type's schemas and the document's
  * own: a dynamic facet can add `file` or `note` to one record of a type that has neither, and its
- * preview shows first too. A record with the `picture` schema, and not a video's, shows its views
- * first; any other record with a file or a note keeps its own View tab.
+ * preview shows first too. A record with the `video` schema shows its player first; one with the
+ * `picture` schema and not a video's, its views; any other record with a file or a note keeps its
+ * own View tab.
  */
 function recordPreviewOf(
   definition: DocumentTypeDefinition,
   documentSchemas: readonly DocumentSchemaRef[],
 ): RecordPreview | typeof OWN_VIEW {
   const names = new Set([...definition.schemas, ...documentSchemas].map((schema) => schema.name));
-  if (names.has(PICTURE_SCHEMA) && !names.has(VIDEO_SCHEMA)) return 'picture';
+  if (names.has(VIDEO_SCHEMA)) return 'video';
+  if (names.has(PICTURE_SCHEMA)) return 'picture';
   return [...names].some((name) => OWN_VIEW_SCHEMAS.has(name)) ? OWN_VIEW : null;
 }
 
@@ -340,9 +343,10 @@ export class DocumentLayoutService {
    * cannot be read. The View tab is then today's document page, as layout-v2.md, section 1, says.
    * A type with no `view` file costs no request but the index, which is read once per session.
    *
-   * A record with the `picture` schema, through its type or a facet, has its record page with its
-   * views first (`preview: 'picture'`), unless it has the `video` schema too, as every Video does.
-   * Any other record with a file or a note keeps its own view.
+   * A record with the `video` schema, through its type or a facet, as every Video has, has its
+   * record page with its player first (`preview: 'video'`); one with the `picture` schema and not
+   * the `video` one, with its views first (`preview: 'picture'`). Any other record with a file or a
+   * note keeps its own view.
    */
   recordLayoutFor(
     type: string,
