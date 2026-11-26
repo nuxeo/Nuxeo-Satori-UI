@@ -75,7 +75,8 @@ async function panelOn(page) {
       .querySelector('nuxeo-record-panel')
       ?.shadowRoot?.querySelector('.nuxeo-record-panel');
     const root = host?.shadowRoot ?? null;
-    const heading = root?.querySelector('.record-page h2, .record-page h3, .record-page h4') ?? null;
+    const heading =
+      root?.querySelector('.record-page h2, .record-page h3, .record-page h4') ?? null;
     const style = heading ? getComputedStyle(heading) : null;
     return {
       state: root?.querySelector('.record-panel')?.getAttribute('data-state') ?? null,
@@ -105,7 +106,9 @@ async function waitForState(page, states, timeout = 20_000) {
         const state = host?.shadowRoot?.querySelector('.record-panel')?.getAttribute('data-state');
         if (state !== 'ready') return wanted.includes(state);
         // Drawn, and its card from the core system has answered.
-        return wanted.includes(state) && !!host.shadowRoot.querySelector('[data-field="paymentStatus"]');
+        return (
+          wanted.includes(state) && !!host.shadowRoot.querySelector('[data-field="paymentStatus"]')
+        );
       },
       states,
       { timeout },
@@ -120,15 +123,17 @@ const fieldText = (shown, name) => shown.fields.find((field) => field.field === 
 export default async function run(page, h) {
   await h.step('Set up: the stand-in Nuxeo and the fictional CRM');
   let demo = null;
+  let unavailable = '';
   try {
     demo = await startDemo({ nuxeoPort: NUXEO_PORT, crmPort: CRM_PORT });
   } catch (error) {
-    h.requirePrecondition(
-      'the panel is built and ports 18093 and 18094 are free',
-      false,
-      String(error?.message ?? error),
-    );
+    unavailable = String(error?.message ?? error);
   }
+  h.requirePrecondition(
+    'the panel is built and ports 18093 and 18094 are free',
+    demo !== null,
+    unavailable,
+  );
   // The panel's ready messages, as the page receives them: its id is what a forged token would name.
   await page.addInitScript((ready) => {
     window.__panelIds = [];
@@ -172,7 +177,9 @@ export default async function run(page, h) {
     );
     const api = demo.log.filter(
       (entry) =>
-        entry.server === 'nuxeo' && entry.path.startsWith('/nuxeo/api/v1/') && entry.method !== 'OPTIONS',
+        entry.server === 'nuxeo' &&
+        entry.path.startsWith('/nuxeo/api/v1/') &&
+        entry.method !== 'OPTIONS',
     );
     h.check(
       'every REST API request carried the token as a Bearer header',
@@ -187,7 +194,9 @@ export default async function run(page, h) {
     h.check(
       'no address requested held the token',
       tokens.length === 1 &&
-        demo.log.every((entry) => !tokens.some((token) => `${entry.path}?${entry.query}`.includes(token))),
+        demo.log.every(
+          (entry) => !tokens.some((token) => `${entry.path}?${entry.query}`.includes(token)),
+        ),
     );
     const markup = await page.evaluate(() => {
       const outer = document
@@ -206,7 +215,11 @@ export default async function run(page, h) {
       const heading = getComputedStyle(document.querySelector('.crm-heading'));
       const button = getComputedStyle(document.querySelector('.crm-button'));
       return {
-        heading: { color: heading.color, font: heading.fontFamily, transform: heading.textTransform },
+        heading: {
+          color: heading.color,
+          font: heading.fontFamily,
+          transform: heading.textTransform,
+        },
         button: button.backgroundColor,
         rootClass: document.documentElement.className,
         rootStyle: document.documentElement.getAttribute('style'),
@@ -239,8 +252,18 @@ export default async function run(page, h) {
     await h.step('Origins: a frame of another origin on the page cannot give the panel a token');
     const [panelId] = await page.evaluate(() => window.__panelIds);
     const frame = page.frames().find((each) => each.url().startsWith(`${demo.otherOrigin}/`));
-    h.requirePrecondition('the CRM page shows a frame of another origin', Boolean(frame), page.url());
-    const forged = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJBZG1pbmlzdHJhdG9yIn0.Zm9yZ2Vk';
+    h.requirePrecondition(
+      'the CRM page shows a frame of another origin',
+      Boolean(frame),
+      page.url(),
+    );
+    // Built here, three base64url segments with no real signature: a forgery, not a credential.
+    const segment = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const forged = [
+      segment({ alg: 'HS512' }),
+      segment({ sub: 'Administrator' }),
+      segment({ forged: true }),
+    ].join('.');
     const before = demo.log.length;
     await frame.evaluate(
       ({ type, panel, token }) => window.parent.postMessage({ type, panel, token }, '*'),
@@ -249,7 +272,9 @@ export default async function run(page, h) {
     await page.waitForTimeout(1500);
     h.check(
       'the frame named the panel own id, and the panel never sent its token',
-      typeof panelId === 'string' && panelId.length > 0 && !demo.log.some((entry) => entry.bearer === forged),
+      typeof panelId === 'string' &&
+        panelId.length > 0 &&
+        !demo.log.some((entry) => entry.bearer === forged),
       `panel id ${panelId}; ${demo.log.length - before} requests since`,
     );
     h.check('the panel still shows the claim', (await panelOn(page)).state === 'ready');
@@ -262,16 +287,29 @@ export default async function run(page, h) {
     await waitForState(page, ['refused']);
     const refused = await panelOn(page);
     const since = demo.log.slice(logBefore);
-    h.check('the panel refuses to draw on that page', refused.state === 'refused', `state: ${refused.state}`);
+    h.check(
+      'the panel refuses to draw on that page',
+      refused.state === 'refused',
+      `state: ${refused.state}`,
+    );
     h.check(
       'it asked that page for no token: the CRM exchanged none',
-      !since.some((entry) => entry.path === '/crm/nuxeo-token') && demo.exchanges() === exchangesBefore,
-      JSON.stringify(since.map((entry) => `${entry.server} ${entry.method} ${entry.path} ${entry.status}`)),
+      !since.some((entry) => entry.path === '/crm/nuxeo-token') &&
+        demo.exchanges() === exchangesBefore,
+      JSON.stringify(
+        since.map((entry) => `${entry.server} ${entry.method} ${entry.path} ${entry.status}`),
+      ),
     );
     h.check(
       'the server gave that page no origins and no data',
-      since.some((entry) => entry.path === '/nuxeo/agentic-embedded/v1/hosts/crm' && entry.status === 404) &&
-        !since.some((entry) => entry.path.startsWith('/nuxeo/api/') || entry.path.startsWith('/nuxeo/agentic-ui-config/')),
+      since.some(
+        (entry) => entry.path === '/nuxeo/agentic-embedded/v1/hosts/crm' && entry.status === 404,
+      ) &&
+        !since.some(
+          (entry) =>
+            entry.path.startsWith('/nuxeo/api/') ||
+            entry.path.startsWith('/nuxeo/agentic-ui-config/'),
+        ),
     );
     await h.screenshot('refused-on-an-origin-the-host-does-not-name');
 
@@ -284,7 +322,9 @@ export default async function run(page, h) {
     await waitForState(page, ['ready']);
     const reads = demo.log
       .slice(logAtStart)
-      .filter((entry) => entry.method === 'GET' && entry.path === `/nuxeo/api/v1/id/${demo.claimId}`);
+      .filter(
+        (entry) => entry.method === 'GET' && entry.path === `/nuxeo/api/v1/id/${demo.claimId}`,
+      );
     h.check(
       'the first read was refused 401, and the second, with a fresh token, answered',
       reads.length === 2 &&

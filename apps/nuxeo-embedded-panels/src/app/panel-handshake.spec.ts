@@ -7,8 +7,9 @@ import {
   originsOf,
   tokenFromMessage,
 } from './panel-handshake';
+import { fakeToken } from '../testing/fake-token';
 
-const TOKEN_VALUE = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqc21pdGgifQ.c2lnbmF0dXJl';
+const TOKEN_VALUE = fakeToken({ sub: 'jsmith' });
 const PAGE = { name: 'page' };
 const PARENT = { name: 'parent' };
 const FRAME = { name: 'an iframe the page shows' };

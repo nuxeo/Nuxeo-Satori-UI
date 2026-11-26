@@ -12,14 +12,16 @@ import { PanelMessages } from './panel-messages.service';
 import { PANEL_SERVER } from './panel-server';
 import { PanelToken, panelTokenInterceptor } from './panel-token';
 import { RecordPanelComponent, panelLayout } from './record-panel.component';
+import { fakeToken } from '../testing/fake-token';
 
 const SERVER = {
   origin: 'https://nuxeo.example.com',
   base: 'https://nuxeo.example.com/nuxeo/agentic-ui/embedded/v1/',
 };
 const RECORD = '5f1c0e2a-0000-4000-8000-000000000130';
-const FIRST = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqc21pdGgiLCJuIjoxfQ.c2lnbmF0dXJlMQ';
-const SECOND = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqc21pdGgiLCJuIjoyfQ.c2lnbmF0dXJlMg';
+/** Made up, in the shape the server issues, built at run time: they sign nothing in. */
+const FIRST = fakeToken({ sub: 'jsmith', n: 1 });
+const SECOND = fakeToken({ sub: 'jsmith', n: 2 });
 const FORMAT = 'nuxeo-agentic-ui-config/1';
 const CONFIG = `${SERVER.origin}/nuxeo/agentic-ui-config`;
 const HOSTS = `${SERVER.origin}/nuxeo/agentic-embedded/v1/hosts/crm`;

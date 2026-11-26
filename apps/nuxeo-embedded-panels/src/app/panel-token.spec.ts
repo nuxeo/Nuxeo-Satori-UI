@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 
+import { fakeToken } from '../testing/fake-token';
 import { PANEL_SERVER } from './panel-server';
 import { PanelToken, isRestApiRequest, panelTokenInterceptor } from './panel-token';
 
@@ -10,7 +11,7 @@ const SERVER = {
   origin: 'https://nuxeo.example.com',
   base: 'https://nuxeo.example.com/nuxeo/agentic-ui/embedded/v1/',
 };
-const TOKEN = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqc21pdGgifQ.c2lnbmF0dXJl';
+const TOKEN = fakeToken({ sub: 'jsmith' });
 
 describe('the token on the wire', () => {
   let http: HttpClient;

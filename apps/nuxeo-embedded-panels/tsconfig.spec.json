@@ -7,6 +7,6 @@
     "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
     "rootDir": "../.."
   },
-  "include": ["vite.config.mts", "src/**/*.spec.ts", "src/**/*.d.ts"],
+  "include": ["vite.config.mts", "src/**/*.spec.ts", "src/**/*.d.ts", "src/testing/**/*.ts"],
   "files": ["src/test-setup.ts"]
 }
