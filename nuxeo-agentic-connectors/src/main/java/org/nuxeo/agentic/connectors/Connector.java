@@ -121,10 +121,11 @@ public record Connector(String id, List<String> types, String addressProperty, S
     public static Connector of(ConnectorDescriptor d) {
         List<String> problems = new ArrayList<>();
         String id = d.getId();
-        // Not ending ".http": that connector's names would hold the server's http switch of another.
-        if (id == null || !ID.matcher(id).matches() || id.endsWith(".http")) {
+        // Not ending ".http", ".cache" or ".events": that connector's own names would hold one of the
+        // server's settings for another, its http switch, its cache or its events secret.
+        if (id == null || !ID.matcher(id).matches() || endsInServerSegment(id)) {
             problems.add("its id must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter, and not"
-                    + " end in .http");
+                    + " end in .http, .cache or .events");
         }
         String own = PROPERTY_PREFIX + id + ".";
         List<String> types = d.getTypes() == null ? List.of() : List.copyOf(d.getTypes());
@@ -176,6 +177,42 @@ public record Connector(String id, List<String> types, String addressProperty, S
     /** The server property that, set to {@code true}, lets this connector call a plain http address. */
     public String httpAllowedProperty() {
         return PROPERTY_PREFIX + id + ".http.allowed";
+    }
+
+    /**
+     * The server property that turns this connector's cache on: how long, in whole seconds, an answer
+     * is kept ({@link ConnectorCache}). Unset, nothing is kept. The server's alone: no contribution and
+     * no request sets it.
+     */
+    public String cacheTtlProperty() {
+        return PROPERTY_PREFIX + id + ".cache.ttl";
+    }
+
+    /** The server property that bounds how many answers this connector's cache keeps. */
+    public String cacheMaxEntriesProperty() {
+        return PROPERTY_PREFIX + id + ".cache.maxEntries";
+    }
+
+    /**
+     * The server property that holds the secret this connector's system of record signs its change
+     * events with ({@link ChangeEvents}). Unset, the connector takes no events.
+     */
+    public String eventsSecretProperty() {
+        return PROPERTY_PREFIX + id + ".events.secret";
+    }
+
+    /**
+     * The first of the two names under a connector's prefix that the server's own settings for it
+     * use: {@code <id>.http.allowed}, {@code <id>.cache.ttl}, {@code <id>.cache.maxEntries} and
+     * {@code <id>.events.secret}. A contribution names one name after its own prefix, so a connector
+     * whose id ended in one of these, {@code payers.events} say, could name {@code payers}'s
+     * {@code events.secret} as its credential and have it sent to its own address. No id ends in one.
+     */
+    static final Set<String> SERVER_SEGMENTS = Set.of("http", "cache", "events");
+
+    static boolean endsInServerSegment(String id) {
+        int dot = id.lastIndexOf('.');
+        return dot >= 0 && SERVER_SEGMENTS.contains(id.substring(dot + 1));
     }
 
     /** One name after a connector's own prefix: never a dot, so never another connector's setting. */

@@ -49,7 +49,8 @@ class ConnectorComponentTest {
             stub.answer("/claims/CLAIM-000130", Answer.json("{ \"paymentStatus\": \"Paid\", \"other\": 1 }"));
             ConnectorComponent component = new ConnectorComponent();
             component.register(Fixtures.descriptor(), "kit");
-            component.start(new Fixtures.Settings().allowHttp().address(stub.address()).settings());
+            component.start(new Fixtures.Settings().allowHttp().address(stub.address()).settings(),
+                    new Fixtures.Clock(), Fixtures.metrics());
             try {
                 ReadConnectorOperation operation = new ReadConnectorOperation();
                 operation.session = new Fixtures.Session("Read").session();
@@ -61,7 +62,8 @@ class ConnectorComponentTest {
                 assertEquals("application/json", blob.getMimeType());
                 JsonNode json = ConnectorAnswer.JSON.readTree(blob.getString());
                 assertEquals(ConnectorAnswer.JSON.readTree("""
-                        { "connector": "test.claimPayments", "status": "found", "fields": { "paymentStatus": "Paid" } }
+                        { "connector": "test.claimPayments", "status": "found", "age": 0,
+                          "fields": { "paymentStatus": "Paid" } }
                         """), json);
             } finally {
                 component.stop(null);

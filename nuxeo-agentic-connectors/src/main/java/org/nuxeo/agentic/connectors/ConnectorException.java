@@ -16,6 +16,8 @@ public class ConnectorException extends NuxeoException {
     public enum Kind {
         /** No connector has the id the request names. */
         UNKNOWN_CONNECTOR(404, "No connector has this id on this server"),
+        /** Asked to read past the cache, by someone who is not an administrator. */
+        REFRESH_NOT_ALLOWED(403, "Only an administrator may ask a connector past its cache"),
         /** Its address or credential is missing or unusable on this server. */
         NOT_CONFIGURED(503, "This connector is not configured on this server"),
         /** As many calls of the connector as it allows are already running. */

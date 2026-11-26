@@ -34,6 +34,12 @@
   white-space: pre-line;
 }
 
+.record-external__age {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
 .record-external__loading {
   display: flex;
   justify-content: center;

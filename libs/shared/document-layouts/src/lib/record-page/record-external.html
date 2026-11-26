@@ -48,6 +48,9 @@
           }
         </dl>
       }
+      @if (ageText(); as age) {
+        <p class="record-external__age">{{ age }}</p>
+      }
     }
     @default {
       <div class="record-external__loading">
