@@ -10,7 +10,7 @@
   <Loggers>
     <Logger name="org.nuxeo.agentic.documents" level="off" />
     <!-- A sync listener's refusal is logged by the event service before it bubbles. -->
-    <Logger name="org.nuxeo.ecm.core.event.impl.EventServiceImpl" level="off" />
+    <Logger name="org.nuxeo.ecm.core.event.impl.EventServiceImpl" level="error" />
     <Root level="warn">
       <AppenderRef ref="console" />
     </Root>

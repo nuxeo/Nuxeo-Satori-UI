@@ -95,6 +95,22 @@ public class NumberingTest {
         assertNull(text(created, SUPERSEDED_BY));
     }
 
+    /** Stored as the server writes them, not as the creator padded them. */
+    @Test
+    public void blanksAndSpacesTheCreatorWritesAreNotKept() {
+        DocumentModel doc = alice.createDocumentModel(DRAWINGS, "padded", DRAWING);
+        doc.setPropertyValue(SERIES, " DWG ");
+        doc.setPropertyValue(ControlledDocuments.SUPERSEDES, "   ");
+        doc.setPropertyValue(SUPERSEDED_BY, " ");
+        DocumentModel created = alice.createDocument(doc);
+        alice.save();
+        DocumentModel stored = alice.getDocument(created.getRef());
+        assertEquals("DWG", stored.getPropertyValue(SERIES));
+        assertNull(stored.getPropertyValue(ControlledDocuments.SUPERSEDES));
+        assertNull(stored.getPropertyValue(SUPERSEDED_BY));
+        assertEquals("current", stored.getPropertyValue(STATUS));
+    }
+
     @Test
     public void aNewDocumentWithNoSeriesOrAnUnregisteredOneIsRefused() {
         NuxeoException none = assertThrows(NuxeoException.class,

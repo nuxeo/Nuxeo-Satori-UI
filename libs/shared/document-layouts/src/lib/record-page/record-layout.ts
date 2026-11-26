@@ -796,8 +796,8 @@ export function readRecordLayout(
           label: labelOf(banner, [], humanize(String(banner['id']))),
           tone,
           visibleWhen: (banner['visibleWhen'] as RecordRule | undefined) ?? null,
-          // A finding inside the link, such as a field that is not a property, left the banner
-          // out above, so a link here names a property.
+          // A link whose field is not a property refused the whole file, as structural, and one
+          // with a key this build lacks left the banner out above, so a link here names one.
           link:
             isRecord(banner['link']) && typeof banner['link']['field'] === 'string'
               ? banner['link']['field']

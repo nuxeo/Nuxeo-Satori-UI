@@ -101,6 +101,28 @@ public class GuardTest {
         assertEquals("current", text(stored, STATUS));
     }
 
+    /**
+     * Compared as stored, not trimmed: `" current "` would read as current to the add-on and to no
+     * query, taking the revision out of the current documents queue and out of its number's.
+     */
+    @Test
+    public void aValuePaddedWithSpacesIsAChangeToo() {
+        Map<String, String> padded = Map.of(STATUS, " current ", NUMBER, "DWG-00001   ", SUPERSEDED_BY, "   ");
+        for (Map.Entry<String, String> entry : padded.entrySet()) {
+            NuxeoException refused = assertThrows(entry.getKey(), NuxeoException.class,
+                    () -> Library.inTransactionAs(repository, ALICE, s -> {
+                        DocumentModel doc = s.getDocument(new IdRef(b));
+                        doc.setPropertyValue(entry.getKey(), entry.getValue());
+                        return s.saveDocument(doc);
+                    }));
+            assertEquals(entry.getKey(), 400, refused.getStatusCode());
+        }
+        DocumentModel stored = Library.stored(repository, b);
+        assertEquals("current", stored.getPropertyValue(STATUS));
+        assertEquals("DWG-00001", stored.getPropertyValue(NUMBER));
+        assertNull(stored.getPropertyValue(SUPERSEDED_BY));
+    }
+
     /** A superseded revision is not made current again, nor its link moved. */
     @Test
     public void aSupersededRevisionStaysSuperseded() {

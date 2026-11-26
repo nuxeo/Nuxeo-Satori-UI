@@ -121,6 +121,10 @@ timeline); the labels, the home and the menu, which have no generator; and the s
 | The same, the banner's link broken four ways, one at a time                                | Each refused at step 2: a property the type lacks, a date property, `ecm:uuid`, a key the format lacks |
 | `node business-apps/packages/controlled-documents-demo/demo/seed.selftest.mjs`             | 22 of 22 controls passed. Broken on purpose seven ways, one at a time, each turned a control red       |
 
+**Not seen on a server or in a browser.** No server has the add-on or the kit, so the record page
+has not been drawn with them: what shows the banner's link, its unavailable and read-only states
+and its one request is `record-page.spec.ts`, on the platform's own record page component.
+
 The seed's seven breakages: a number of its own written on creation; a `docctl:` property written
 on an update; a chain continued over someone else's supersession; two chains sharing a number not
 seen; the page providers not asked; the password printed; a refused sign-in taken for no
@@ -151,7 +155,7 @@ them.
    API, as a person who may write C:
 
    ```bash
-   curl -s -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
+   curl -s --fail-with-body -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
      -X POST http://localhost:8080/nuxeo/api/v1/path/default-domain/workspaces/controlled-documents-demo/register \
      -d '{"entity-type":"document","type":"EngineeringDocument","name":"pump-house-ga-d","properties":{"dc:title":"Pump house general arrangement, revision D","docctl:supersedes":"<C'\''s id>"}}'
    ```

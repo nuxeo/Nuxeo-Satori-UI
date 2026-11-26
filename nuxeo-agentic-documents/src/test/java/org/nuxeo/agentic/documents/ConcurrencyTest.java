@@ -36,6 +36,7 @@ import org.junit.runner.RunWith;
 import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
@@ -180,7 +181,9 @@ public class ConcurrencyTest {
                                                                                  .getId());
                         won.add(b);
                     } catch (RuntimeException e) {
-                        refusals.merge(e.getClass().getSimpleName(), 1, Integer::sum);
+                        String kind = e instanceof NuxeoException refusal ? "HTTP " + refusal.getStatusCode()
+                                : e.getClass().getSimpleName();
+                        refusals.merge(kind, 1, Integer::sum);
                     }
                     return null;
                 }));
@@ -194,7 +197,9 @@ public class ConcurrencyTest {
         }
 
         assertEquals("one revision won, the others were refused: " + refusals, 1, won.size());
-        assertEquals(THREADS - 1, refusals.values().stream().mapToInt(Integer::intValue).sum());
+        // Each loser refused as a conflict, by the claim or by finding A already superseded, and none
+        // by anything else, such as a lock timeout or a concurrent update the repository detected.
+        assertEquals(Map.of("HTTP 409", THREADS - 1), refusals);
         String b = won.get(0);
         DocumentModel stored = Library.stored(repository, a);
         assertEquals("superseded", Library.text(stored, STATUS));

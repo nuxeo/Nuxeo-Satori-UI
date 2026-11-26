@@ -32,7 +32,6 @@ import org.junit.runner.RunWith;
 import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
-import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.VersioningOption;
@@ -42,6 +41,7 @@ import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
+import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
  * A new revision names the one it supersedes; the old one is marked and linked back, in the same
@@ -155,7 +155,7 @@ public class SupersessionTest {
                 s -> s.hasPermission(new IdRef(a), "Read")));
 
         NuxeoException refused = refusedAs(BOB, "/library/bob", DRAWING, a);
-        assertTrue(refused.getClass().getName(), refused instanceof DocumentSecurityException);
+        assertEquals(403, refused.getStatusCode());
         assertTrue(refused.getMessage(), refused.getMessage().contains("You may not write the revision"));
 
         assertCurrent(a);
@@ -166,7 +166,7 @@ public class SupersessionTest {
     @Test
     public void aUserWhoMayNotReadTheOldRevisionIsRefused() {
         NuxeoException refused = refusedAs(CAROL, "/library/carol", DRAWING, a);
-        assertTrue(refused.getClass().getName(), refused instanceof DocumentSecurityException);
+        assertEquals(403, refused.getStatusCode());
         assertCurrent(a);
         assertEquals(List.of(), revisionsOf(a));
     }
@@ -216,6 +216,29 @@ public class SupersessionTest {
         assertTrue(FailingWrite.sawCreatedRevision());
         assertCurrent(a);
         assertEquals(List.of(), revisionsOf(a));
+    }
+
+    /**
+     * A transaction already marked for rollback could never release a claim when it rolls back,
+     * so it is given none: the supersession is refused, and A stays free to be superseded at
+     * once by a transaction that can commit. The session is used first, as a caller that carries
+     * on after a failure has: a session first used after the mark is refused by the platform,
+     * before any listener.
+     */
+    @Test
+    public void aTransactionMarkedForRollbackClaimsNothing() {
+        NuxeoException refused = assertThrows(NuxeoException.class, () -> Library.inTransactionAs(repository,
+                ALICE, s -> {
+                    s.getDocument(new IdRef(a));
+                    TransactionHelper.setTransactionRollbackOnly();
+                    return Library.revise(s, DRAWINGS, DRAWING, "doomed", a);
+                }));
+        assertEquals(refused.toString(), 409, refused.getStatusCode());
+        assertTrue(refused.getMessage(), refused.getMessage().contains("needs an active transaction"));
+        assertCurrent(a);
+        String b = Library.inTransactionAs(repository, ALICE,
+                s -> Library.revise(s, DRAWINGS, DRAWING, "pump-b", a).getId());
+        assertEquals(b, text(Library.stored(repository, a), SUPERSEDED_BY));
     }
 
     /** Whatever fails later in the same transaction takes both writes back with it. */

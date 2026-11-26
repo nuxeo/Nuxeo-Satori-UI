@@ -90,7 +90,7 @@ decision 3. Why this route:
 A new controlled document that names, in `docctl:supersedes`, the id of the revision it supersedes:
 
 1. **`aboutToCreate`:** the id must be a document's id; the user's session must read it, or the
-   platform refuses, 403. It must be a live controlled document, not a version or a proxy, of the
+   creation is refused, 403, as the platform answers a read of it. It must be a live controlled document, not a version or a proxy, of the
    new one's type, not in the trash, `current` with no `docctl:supersededBy`, with a number. **The
    user must have `Write` on it**, or the creation is refused, 403, before anything is written. Its
    series must still be registered, and its revision one the series writes. The new document is
@@ -117,8 +117,12 @@ refused, 409, and rolls back.
   transaction. `TransactionHelper.registerSynchronization` takes a `javax.transaction.Synchronization`
   on 11.5, which the bundle compiles against, and a `jakarta.transaction.Synchronization` on LTS
   2025, which it runs on; the add-on looks the method up by reflection, jakarta first, and checked
-  that it is found on the local server's own jars. Where it cannot register, it logs a warning, and
-  the claim expires on its own.
+  that it is found on the local server's own jars.
+- **No release, no claim.** The release is registered first, and the claim taken after. Where the
+  release cannot be registered, as in a transaction already marked for rollback, which server code
+  that carries on past a failure can be in, the supersession is refused, 409, and nothing is
+  claimed: a claim no rollback releases would block the revision until it expired
+  (`SupersessionTest.aTransactionMarkedForRollbackClaimsNothing`).
 - **A committed claim is kept for a day,** `nuxeo.agentic.documents.claim.ttl`, in seconds. It must
   outlast twice the longest transaction the server runs, so that a transaction that read the old
   revision as current before the claim's committed has ended before the claim expires; after that,
@@ -131,7 +135,7 @@ refused, 409, and rolls back.
 | ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------- |
 | A new document with no series, or one not registered                                 | 400    | It cannot be numbered                             |
 | `docctl:supersedes` not an id, of no document, or of one not a live controlled one   | 400    | There is nothing to supersede                     |
-| Superseding a document the user may not read                                         | 403    | The platform's own refusal                        |
+| Superseding a document the user may not read                                         | 403    | As the platform answers a read of it              |
 | Superseding a revision of another type                                               | 400    | A revision is of its predecessor's type           |
 | Superseding a revision in the trash, superseded, being superseded, or with no number | 409    | Only the current revision is superseded, once     |
 | Superseding a revision the user may not write                                        | 403    | It could not be marked superseded                 |
@@ -140,10 +144,19 @@ refused, 409, and rolls back.
 | Copying a controlled document, or a folder holding one, readable by the user or not  | 400    | The copy would carry the number                   |
 | Restoring a version whose `docctl:` properties differ from the live document's       | 409    | A superseded revision would be made current again |
 
-Whatever the creator writes in the six properties of a new document is replaced, not refused: a
-REST client may send the whole document back. A save that writes a property's own value back is
-no change. Each refusal is logged at `INFO`, with the event, the document, its type, the user and
-the reason; a refusal message names the creator's series text only when it has a series id's form.
+Whatever the creator writes in the six properties of a new document is replaced, not refused,
+blanks and padding included: a REST client may send the whole document back. On a save, a value is
+compared as stored, so `" current "` for `current` is a change, and refused: read trimmed, it
+would still pass for current to the add-on and to no query. Writing a property's own value back,
+or an empty text for none, is no change.
+
+**Each refusal is told to the user, not logged as an error.** It is a `RecoverableClientException`
+with its status, which the event service logs at `INFO`, where it logs any other exception a
+synchronous listener throws at `ERROR`, with its stack: a user who may create or write could
+otherwise fill the server's log (`RefusalLogTest`, which also shows an unforeseen failure still
+logged at `ERROR`). The add-on logs each refusal at `INFO` too, with the event, the document, its
+type, the user and the reason. A refusal message names the creator's series text only when it has a
+series id's form, and an id only once it is checked to be one.
 
 ### Administrators
 
@@ -227,7 +240,7 @@ From the repository's root, with JDK 21 and Maven:
 mvn -pl nuxeo-agentic-documents -am verify
 ```
 
-It runs the module's 40 tests and writes the bundle and the Marketplace package,
+It runs the module's 46 tests and writes the bundle and the Marketplace package,
 `nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.1.0.zip`. `build-marketplace.yml` builds
 and tests it on every pull request it runs for, without uploading or publishing it.
 
@@ -238,17 +251,20 @@ store and `KeyValueStoreUIDSequencer` configured as the local server configures 
 test framework run on Java 21, for the tests only, none in the bundle: ASM 9.7, which reads Java 21
 class files where 11.5's 9.0 does not; the JDK packages opened to Nuxeo Stream; and Chronicle Queue
 2.25ea, where 11.5's 2.20 looks for a JDK method Java 21 removed. Chronicle publishes its open-source
-builds as `ea`, and the test runtime starts it whether a test uses streams or not.
+builds as `ea`, and the test runtime starts it whether a test uses streams or not. A fourth,
+`log4j-jcl`, takes 11.5's event service's Commons Logging to Log4j 2, where `RefusalLogTest` reads
+it.
 
-| Test                 | What it holds                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NumberingTest`      | A first revision numbered from its series, each series counting alone, the creator's own values replaced, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                |
-| `SupersessionTest`   | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time |
-| `ConcurrencyTest`    | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins                                                                                                                                                                                                                                                     |
-| `GuardTest`          | No save changes a `docctl:` property, an administrator's included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                               |
-| `NumberSeriesTest`   | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                       |
-| `SeriesRegistryTest` | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                        |
-| `BundleTest`         | The manifest's components, the service, the facet and the schema the runtime registers, and the package's version                                                                                                                                                                                                                                                          |
+| Test                 | What it holds                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NumberingTest`      | A first revision numbered from its series, each series counting alone, the creator's own values replaced, blanks and padding included, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                                  |
+| `SupersessionTest`   | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time; no claim in a transaction marked for rollback |
+| `ConcurrencyTest`    | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins and every other is refused as a conflict                                                                                                                                                                                                                                                           |
+| `GuardTest`          | No save changes a `docctl:` property, an administrator's included, padded with spaces included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                                                 |
+| `RefusalLogTest`     | A refusal not logged by the event service as an error; an unforeseen failure still logged as one                                                                                                                                                                                                                                                                                                                          |
+| `NumberSeriesTest`   | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                                                                      |
+| `SeriesRegistryTest` | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                                                                       |
+| `BundleTest`         | The manifest's components, the service, the facet and the schema the runtime registers, and the package's version                                                                                                                                                                                                                                                                                                         |
 
 **The concurrency test:** 16 threads, each creating 25 documents in one series, each creation in a
 transaction of its own, started together; every seventh creation rolls its transaction back after
@@ -257,11 +273,17 @@ no rolled-back number is stored; that the numbers given, committed or rolled bac
 400, so the only gaps are the rolled-back ones and none is reused; and that the next number is 401.
 It passes, on H2 with the SQL key/value store, in about a second, and passed six runs in a row;
 with the sequencer asked once instead of up to 20 times, it failed six runs of six, each on the
-store's `ConcurrentUpdateException`. Its second case, 16 threads superseding one revision at once, asserts one winner, the old
-revision superseded by it alone, and no other revision naming it.
+store's `ConcurrentUpdateException`. Its second case, 16 threads superseding one revision at once,
+asserts one winner, the old revision superseded by it alone, no other revision naming it, and each
+of the 15 others refused as a conflict, 409, by the claim or by finding the old one superseded: none
+by anything else, such as a lock timeout.
 
-**Every guard was seen failing.** Each of 25 breakages, one at a time, turned its tests red, and the
-build unbroken was green: numbers from a constant; the creator's status kept; the write check
+**Every guard was seen failing.** Each of 29 breakages, one at a time, turned its tests red, and the
+build unbroken was green. The four the independent review's fixes added: values compared trimmed
+(a padded `" current "` let through); a blank `docctl:supersedes` kept on a first revision; a claim
+taken where no release could be registered (a transaction marked for rollback then blocked the next
+supersession); and a refusal thrown as a plain `NuxeoException` (the event service logged it as an
+error). The first 25: numbers from a constant; the creator's status kept; the write check
 removed (the platform's own `WriteProperties` refusal still came, without the add-on's message);
 the rollback mark removed (a caller that caught the refusal committed the new revision alone); no
 claim (16 of 16 revisions created over one); a claim not released, or released only on commit; the

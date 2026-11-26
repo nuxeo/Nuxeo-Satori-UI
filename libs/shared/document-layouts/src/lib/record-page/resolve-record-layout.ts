@@ -125,7 +125,8 @@ export function propertyDefinitions(
 
 /**
  * The schemas a document's facets add that the record page needs read: those whose properties a
- * field shows or a computation reads. As `facetSchemasToRead` does for version 1, a facet schema
+ * field shows, a computation reads, a checklist holds or a banner links by. As
+ * `facetSchemasToRead` does for version 1, a facet schema
  * nothing names is not read, and one a field names is read even where the panel presents it.
  */
 export function recordFacetSchemasToRead(
@@ -140,6 +141,8 @@ export function recordFacetSchemasToRead(
     else propertiesReadBy(field.computed, read);
   }
   for (const card of cardsOf(file)) if (card.checklist) read.add(card.checklist.field);
+  // A banner's link is held to its property's definition, which a facet's schema may hold.
+  for (const banner of file.banners) if (banner.link !== null) read.add(banner.link);
   const named = new Set([...read].map(prefixOfXpath));
   return documentSchemas.filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
 }

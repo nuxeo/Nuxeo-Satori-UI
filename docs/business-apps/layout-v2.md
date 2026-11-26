@@ -123,38 +123,53 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
 
 - **The message is text,** as a card's heading is. It names no property, so a date the reader needs
   is shown by a field: the `rights` card above shows the day the rights end.
+- **Each banner is decided alone.** The two above never show together, because their rules never
+  pass together: a date that has passed is not within the next 30 days.
+- **A banner is not a security control,** any more than a hidden field is. Refusing a download
+  whose rights have ended is the server's to do.
 - **A banner may link to one record,** the one its `link` property names, such as the revision that
   superseded the one open. **Added on 26 November 2026, for phase 8's demo step 3**
   ([development plan](development-plan.md)), as the smallest addition that lets a banner say where
   to go: until then a banner held text only. The page shows the linked record by its title, as a
   `document-link` field does, read in the page's one request for linked records, as the banner's
   one action, which opens it through the app's router. A record the reader may not read, or that no
-  longer exists, and a value that is not a document's id, show "Unavailable", disabled, and are never
-  asked for by anything but an id; an empty property shows the message alone. On a page drawn
+  longer exists, and a value that is not a document's id, show "Unavailable", disabled, and nothing
+  but an id is ever asked for; an empty property shows the message alone. On a page drawn
   read-only, as the layout designer previews it, the link shows disabled.
-  - **What is checked:** the property is `<prefix>:<name>`, never an `ecm:` or `var:` name, and
-    `field` is the link's one key: anything else is structural. Given the content model, the
-    property is the type's or a facet's, and one text, a `string`: a list would name several. When
-    the app loads the file, a link the type cannot hold is left out, and the banner is shown without
-    it.
+  - **What is checked:** a link that is not an object, or whose `field` is not a `<prefix>:<name>`
+    or is an `ecm:` or `var:` name, is structural; another key in it is unknown, and leaves the
+    banner out. Given the content model, the property is the type's or a facet's, and one text, a
+    `string`: a list would name several. When the app loads the file, a link the type cannot hold
+    is left out, and the banner is shown without it.
 
   ```json
   {
-    "id": "superseded",
-    "tone": "warning",
-    "labelKey": "acme.document.superseded",
-    "visibleWhen": {
-      "type": "app.rules.fieldIn",
-      "parameters": [{ "field": "docctl:status" }, "superseded"]
-    },
-    "link": { "field": "docctl:supersededBy" }
+    "version": 2,
+    "banners": [
+      {
+        "id": "superseded",
+        "tone": "warning",
+        "labelKey": "acme.document.superseded",
+        "visibleWhen": {
+          "type": "app.rules.fieldIn",
+          "parameters": [{ "field": "docctl:status" }, "superseded"]
+        },
+        "link": { "field": "docctl:supersededBy" }
+      }
+    ],
+    "cards": [
+      {
+        "id": "control",
+        "labelKey": "acme.document.control",
+        "fields": [
+          "docctl:number",
+          "docctl:revision",
+          { "field": "docctl:supersededBy", "widget": "document-link" }
+        ]
+      }
+    ]
   }
   ```
-
-- **Each banner is decided alone.** The two above never show together, because their rules never
-  pass together: a date that has passed is not within the next 30 days.
-- **A banner is not a security control,** any more than a hidden field is. Refusing a download
-  whose rights have ended is the server's to do.
 
 ### Review
 

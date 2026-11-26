@@ -164,6 +164,16 @@
       <version>3.23.3</version>
       <scope>test</scope>
     </dependency>
+    <!--
+      11.5's event service logs through Commons Logging, which reaches Log4j 2, where
+      RefusalLogTest reads what it logs, only through this bridge: the server has its own.
+    -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-jcl</artifactId>
+      <version>2.14.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

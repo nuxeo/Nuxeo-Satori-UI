@@ -299,6 +299,46 @@ describe('recordFacetSchemasToRead', () => {
       { name: 'audit', prefix: 'aud' },
     ]);
   });
+
+  it("reads the schema of a banner link's property, which no field names", () => {
+    const page = file([{ id: 'a', fields: ['dc:title'] }], {
+      banners: [{ id: 'next', label: 'Next', link: { field: 'aud:reviewer' } }],
+    });
+    expect(recordFacetSchemasToRead(MEMBER, schemas, page)).toEqual([
+      { name: 'audit', prefix: 'aud' },
+    ]);
+  });
+});
+
+describe("a banner's link", () => {
+  const linked = (field: string) =>
+    file([{ id: 'a', fields: ['dc:title'] }], {
+      banners: [{ id: 'next', label: 'Next', link: { field } }],
+    });
+
+  it("keeps a link to a text property of the type, or of a facet's schema", () => {
+    expect(resolveRecordLayout(MEMBER, linked('member:phone')).layout.banners[0].link).toBe(
+      'member:phone',
+    );
+    const facet = resolveRecordLayout(MEMBER, linked('aud:reviewer'), [AUDIT]);
+    expect(facet.layout.banners[0].link).toBe('aud:reviewer');
+    expect(facet.notes).toEqual([]);
+  });
+
+  it('leaves out a link to a property the type lacks, or to a list, keeping the banner, and says so', () => {
+    const missing = resolveRecordLayout(MEMBER, linked('member:next'));
+    expect(missing.layout.banners.map((banner) => [banner.id, banner.link])).toEqual([
+      ['next', null],
+    ]);
+    expect(missing.notes).toEqual([
+      'banners[0].link: "member:next" is not a property of Member; the banner shows without its link',
+    ]);
+    const list = resolveRecordLayout(MEMBER, linked('member:tags'));
+    expect(list.layout.banners[0].link).toBeNull();
+    expect(list.notes).toEqual([
+      'banners[0].link: "member:tags" is a string[] property, and a banner links one record; the banner shows without its link',
+    ]);
+  });
 });
 
 describe('a checklist', () => {

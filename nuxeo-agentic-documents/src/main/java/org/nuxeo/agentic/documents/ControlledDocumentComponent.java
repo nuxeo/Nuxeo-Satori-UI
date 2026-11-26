@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -169,13 +170,22 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
         KeyValueStore store = kv.getKeyValueStore(CLAIMS_STORE);
         String key = claimKey(previousId);
         long ttl = claimTtl();
+        // The release first, then the claim: a claim made where its release could not be
+        // registered, in a transaction already marked for rollback for one, would outlive the
+        // transaction and block the revision until it expired. So no release, no claim.
+        AtomicBoolean claimed = new AtomicBoolean();
+        if (!TransactionSynchronizations.unlessCommitted(() -> {
+            if (claimed.get()) {
+                store.compareAndSet(key, revisionId, null);
+            }
+        })) {
+            throw new NuxeoException("Controlled documents: a supersession needs an active transaction to commit "
+                    + "it, and has none", 409);
+        }
         if (!store.compareAndSet(key, null, revisionId, ttl)) {
             return false;
         }
-        if (!TransactionSynchronizations.unlessCommitted(() -> store.compareAndSet(key, revisionId, null))) {
-            log.warn("Controlled documents: the claim on {} cannot be released if its transaction rolls back, "
-                    + "and expires in {} s", previousId, ttl);
-        }
+        claimed.set(true);
         return true;
     }
 

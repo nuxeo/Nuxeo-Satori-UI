@@ -30,6 +30,7 @@ import org.nuxeo.ecm.core.api.DocumentNotFoundException;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
+import org.nuxeo.ecm.core.api.RecoverableClientException;
 import org.nuxeo.ecm.core.api.event.CoreEventConstants;
 import org.nuxeo.ecm.core.api.event.DocumentEventTypes;
 import org.nuxeo.ecm.core.api.facet.VersioningDocument;
@@ -57,10 +58,11 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * its predecessor's series and number and the next revision, once the predecessor is checked
  * ({@link #predecessor}). Whatever else the creator wrote in the six properties is replaced.</li>
  * <li><strong>{@code documentCreated}:</strong> the new revision now has its id. The predecessor
- * is checked again and marked {@code superseded}, {@code docctl:supersededBy} the new revision,
- * written as the user, in the same transaction.</li>
- * <li><strong>{@code beforeDocumentModification}:</strong> no change to the six properties, nor
- * the facet added or removed, is let through, but the supersession above.</li>
+ * is checked again, claimed across the cluster ({@link ControlledDocumentService#claimSupersession}),
+ * and marked {@code superseded}, {@code docctl:supersededBy} the new revision, written as the user,
+ * in the same transaction.</li>
+ * <li><strong>{@code beforeDocumentModification}:</strong> no change to the six properties as
+ * stored, nor the facet added or removed, is let through, but the supersession above.</li>
  * <li><strong>{@code aboutToCopy}:</strong> a controlled document, or a folder holding one, is not
  * copied: the copy would carry its number.</li>
  * <li><strong>{@code beforeRestoringDocument}:</strong> a version is restored only when its six
@@ -131,6 +133,8 @@ public class ControlledDocumentListener implements EventListener {
             doc.setPropertyValue(SERIES, series.id());
             doc.setPropertyValue(NUMBER, service().nextNumber(series));
             doc.setPropertyValue(REVISION, series.revisions().first());
+            // Blank or empty as written, it is written empty: every property is the server's own.
+            doc.setPropertyValue(SUPERSEDES, null);
         } else {
             DocumentModel previous = predecessor(context.getCoreSession(), doc, supersedes);
             NumberSeries series = registered(value(previous, SERIES),
@@ -190,8 +194,10 @@ public class ControlledDocumentListener implements EventListener {
             previous = session.getDocument(new IdRef(id));
         } catch (DocumentNotFoundException e) {
             throw invalid("The revision it supersedes, " + id + ", does not exist");
+        } catch (DocumentSecurityException e) {
+            // As the platform answers a read of it: 403, for an id that exists.
+            throw forbidden("You may not read the revision it supersedes, " + id);
         }
-        // A user who may not read it gets the platform's own refusal, a DocumentSecurityException.
         if (!isControlled(previous)) {
             throw invalid("The document it supersedes, " + id + ", is not a live controlled document");
         }
@@ -211,7 +217,7 @@ public class ControlledDocumentListener implements EventListener {
             throw conflict("The revision it supersedes, " + id + ", has no number");
         }
         if (!session.hasPermission(previous.getRef(), SecurityConstants.WRITE)) {
-            throw new DocumentSecurityException("You may not write the revision this one supersedes, " + id
+            throw forbidden("You may not write the revision this one supersedes, " + id
                     + ", so it cannot be marked superseded");
         }
         return previous;
@@ -307,9 +313,22 @@ public class ControlledDocumentListener implements EventListener {
 
     // ------------------------------------------------------------------ helpers
 
-    /** The properties whose value differs from one document to the other, in their order. */
+    /**
+     * The properties whose stored value differs from one document to the other, in their order:
+     * compared as stored, not trimmed, so that `" current "` is a change from `"current"`, and a
+     * query for the value would no longer find it. Only an empty text and none count as the same.
+     */
     private static List<String> changes(DocumentModel before, DocumentModel after) {
-        return PROPERTIES.stream().filter(p -> !Objects.equals(value(before, p), value(after, p))).toList();
+        return PROPERTIES.stream().filter(p -> !Objects.equals(stored(before, p), stored(after, p))).toList();
+    }
+
+    /** A property of the schema as stored, {@code null} for an empty text or a document without the schema. */
+    private static Serializable stored(DocumentModel doc, String xpath) {
+        if (!doc.hasSchema(SCHEMA)) {
+            return null;
+        }
+        Serializable value = doc.getPropertyValue(xpath);
+        return value instanceof String text && text.isEmpty() ? null : value;
     }
 
     /** A property of the schema, trimmed, {@code null} when empty or when the document lacks the schema. */
@@ -326,11 +345,32 @@ public class ControlledDocumentListener implements EventListener {
     }
 
     private static NuxeoException invalid(String message) {
-        return new NuxeoException(message, 400);
+        return new Refusal(message, 400);
     }
 
     private static NuxeoException conflict(String message) {
-        return new NuxeoException(message, 409);
+        return new Refusal(message, 409);
+    }
+
+    private static NuxeoException forbidden(String message) {
+        return new Refusal(message, 403);
+    }
+
+    /**
+     * A refusal the user is told of: the event service logs a {@code RecoverableClientException}
+     * at {@code INFO}, where it logs any other a synchronous listener throws at {@code ERROR}, with
+     * its stack, so a user who may create or write could otherwise fill the server's log. The
+     * status, 400, 403 or 409, is the one the REST API answers with. An unforeseen failure stays a
+     * plain {@link NuxeoException}, logged as the error it is.
+     */
+    static final class Refusal extends RecoverableClientException {
+
+        private static final long serialVersionUID = 1L;
+
+        Refusal(String message, int status) {
+            super(message, message, null);
+            this.statusCode = status;
+        }
     }
 
     /**
