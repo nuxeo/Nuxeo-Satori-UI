@@ -25,7 +25,9 @@ Read from the two branches with git on 27 November 2026, and from the coverage r
 | `staging/enterprise-grade-app` | `en`, `de`, `fr`, `ja`, `nl`                               |
 | `main`                         | `en`, `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` |
 
-Each of `main`'s reaches the staging branch when `main` is merged into it. Danish, Finnish and
+Each of `main`'s reaches the staging branch when `main` is merged into it. The administrator's
+guide, section 4, read the same day, still says Spanish waits in Crowdin's pull request into `main`;
+`main`'s tree has its catalogue, from NXSAT-754 on 24 November 2026. Danish, Finnish and
 Norwegian Bokmål, `da`, `fi` and `nb`, are registered here and are not yet Crowdin targets. **No
 kit has a labels file in any language but English.**
 
@@ -73,15 +75,16 @@ here. From the administrator's guide:
 ## 2. In the repository: the app's catalogue, in two steps
 
 **A developer, on `main`.** Six touchpoints, in two steps, because four of them cannot run ahead of
-the translated catalogue: a guardrail fails them, and `.husky/pre-push` runs the guardrails.
+the translated catalogue: a guardrail or a spec fails each, and `.husky/pre-push` runs the
+guardrails.
 
 **Step 1, request it,** safe before any translation exists:
 
 - an entry in `LOCALE_DATA` in `apps/nuxeo-ui/src/app/i18n/register-locale-data.ts`: Angular's
   locale data, for dates, numbers and amounts. Today it registers `ar`, `da`, `de`, `es`, `fi`,
   `fr`, `he`, `it`, `ja`, `nb`, `nl` and `sv`. Registration ahead of a catalogue only warns
-  (`checkLocaleDataRegistered`); a catalogue with no registration fails the build, since a date
-  pipe would throw `NG0701`;
+  (`checkLocaleDataRegistered`); a catalogue with no registration fails the guardrails, since a
+  date pipe would throw `NG0701`;
 - a `--language` in `download_translations_args` in
   [`crowdin-pull.yaml`](../../../.github/workflows/crowdin-pull.yaml), which downloads only the
   languages listed. On this branch it lists `fr`, `de`, `ja`, `nl` and `es`. **The id is Crowdin's:**
@@ -157,7 +160,7 @@ npm run app-package -- $K --platform 0.2.0
 scratch copy, outside the workspace, the write tool runs the same generator:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/language-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/language-kits \
   node tools/builder-mcp/src/call.ts apply_generator '{ "package": "/tmp/language-kits/contracts-demo", "generator": "app-registry", "options": {} }'
 ```
 

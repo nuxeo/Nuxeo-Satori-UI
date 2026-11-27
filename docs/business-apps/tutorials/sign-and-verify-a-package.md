@@ -7,8 +7,8 @@ to install, and what the release candidate refuses. The design is
 candidate; the administrator's check is [administrator-guide.md](../administrator-guide.md),
 section 3, "Checking a kit before you install it".
 
-**How this was checked.** On 27 November 2026, on macOS with Node 24.22.1, Maven and the GitHub CLI
-2.83.1: every command below but those marked **Not run**, in the order given. Steps 1 to 3 ran in a
+**How this was checked.** On 27 November 2026, on macOS with Node 24.22.1, Maven, and the GitHub CLI
+2.83.1 installed, though no `gh` command ran: every command below but those marked **Not run**, in the order given. Steps 1 to 3 ran in a
 checkout of `staging/enterprise-grade-app` at `d1f315cf5` with nothing uncommitted; step 5's
 commands ran again after the branch's merge of `3c1c4c51d`, which raised the Payers kit to 0.8.0,
 and are quoted from that run. The outputs are trimmed, with a key's fingerprint written `<…>`. No Nuxeo server was involved, and nothing

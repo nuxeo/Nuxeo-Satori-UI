@@ -101,7 +101,7 @@ Run it again with `good` in place of `bankAccount`, for the card as the demo has
 with `bankAccount` first, which must be refused:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/payers-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/payers-kits \
   node tools/builder-mcp/src/call.ts apply_package_changes - < /tmp/connectors-demo/opt-in-bankAccount.json > /tmp/connectors-demo/answer.json
 node -e "const a = require('/tmp/connectors-demo/answer.json'); console.log(a.written, a.validation.findings.map((f) => f.place + ': ' + f.message))"
 ```
@@ -116,7 +116,7 @@ The stand-in's record does hold a bank account, and an adjuster's note: neither 
 allow-list, so neither reaches the page. Then the card as the demo has it:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/payers-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/payers-kits \
   node tools/builder-mcp/src/call.ts apply_package_changes - < /tmp/connectors-demo/opt-in-good.json > /tmp/connectors-demo/answer.json
 node -e "const a = require('/tmp/connectors-demo/answer.json'); console.log(a.written, a.changes); console.log(a.generatorOutput[0])"
 ```
@@ -182,13 +182,15 @@ Wrote the connector payers.claimPayments to business-apps/packages/payers-claims
 
 ## 3. The stand-in core system
 
-Make up a token and a webhook secret for the demo, in files only you can read. Never reuse a real
+Make up a token, a webhook secret and, for the server steps, a connector events secret, for the
+demo, in files only you can read. Never reuse a real
 one, and never write one into a command line, a file in the repository or a URL:
 
 ```bash
 umask 077
 openssl rand -hex 16 > /tmp/connectors-demo/core-token
 openssl rand -hex 32 > /tmp/connectors-demo/webhook-secret
+openssl rand -hex 32 > /tmp/connectors-demo/events-secret
 ```
 
 Start the stand-in, in a terminal of its own. It answers on 127.0.0.1:8091, and requires the token
@@ -266,11 +268,12 @@ demo", has the commands; none was run here, and each changes the server.
    the kept answers for that key are dropped. The stand-in sends one:
 
    ```bash
-   CORE_SYSTEM_EVENTS_SECRET=<the connector's events secret> node nuxeo-agentic-connectors/demo/core-system.mjs \
+   CORE_SYSTEM_EVENTS_SECRET=$(cat /tmp/connectors-demo/events-secret) node nuxeo-agentic-connectors/demo/core-system.mjs \
      notify CLAIM-000130 --to http://localhost:8080/nuxeo/agentic-connectors/events/payers.claimPayments
    ```
 
-   It prints `204`, and the next card asks the stand-in again: "just now". With a wrong secret,
+   The server's `….payers.claimPayments.events.secret` is the same secret, from the same file. It
+   prints `204`, and the next card asks the stand-in again: "just now". With a wrong secret,
    `401`, and the kept answer stays. An event does nothing else: it opens no session, reads no
    document and writes nothing.
 

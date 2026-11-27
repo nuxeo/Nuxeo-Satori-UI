@@ -4,16 +4,17 @@ For a presales engineer who needs a demo kit: a stand-in model, record pages, qu
 menu, a package that the pipeline builds, a seed that writes fictional records, and a steps file
 that a server run of the demo follows. The worked example is the vehicle deals and titles kit,
 [`business-apps/packages/vehicle-titles-demo`](../../../business-apps/packages/vehicle-titles-demo/README.md):
-this tutorial builds a smaller copy of it, with the same names, in a scratch folder, through the
-same write tools, then uses the real kit for the seed and the steps file.
+this tutorial builds a smaller copy of it in a scratch folder, through the same write tools, with
+the kit's type names, prefixes and page providers but an app of its own, `vehicle-deals`, and its
+checklist in `vdeal:checklist` where the kit's is `vdocs:checklist`, then uses the real kit for the seed and the steps file.
 
 The skill is [`.cursor/skills/app-builder/SKILL.md`](../../../.cursor/skills/app-builder/SKILL.md).
 When a person asks an agent for a kit, the agent follows its steps and calls the Builder MCP
 server's tools. Here the same tools are called from a shell, one call at a time, with
 `tools/builder-mcp/src/call.ts`, so that each answer can be read.
 
-**How this was checked.** Every command below that needs no Nuxeo server was run on 27 November
-2026, in a checkout of `staging/enterprise-grade-app` at `d1f315cf5`, on macOS with Node 24.22.1,
+**How this was checked.** Every command below was run on 27 November 2026, but the server steps and
+the two lists of step 4, which a kit in `business-apps/packages/` joins and this scratch one does not, in a checkout of `staging/enterprise-grade-app` at `d1f315cf5`, on macOS with Node 24.22.1,
 in the order given, and the outputs quoted are that run's, trimmed. The pipeline builds, the seed's controls and the steps listing ran again after the branch's merge of `3c1c4c51d`, which added the letters add-on, with the same outputs. Nothing was read from or
 written to any Nuxeo server. Each step that needs one is marked **Server step**, and was not run.
 
@@ -28,7 +29,7 @@ written to any Nuxeo server. Each step that needs one is marked **Server step**,
 | 5. Publish to pre-production | **Not built in the MCP server.** A person tags a merged commit, and that tag path has never run |
 
 The vehicle titles kit itself is installed nowhere, and its two queries over a checklist and a date
-have run on no server (its README, "Not done yet"). It has **no steps file**: section 5 below writes
+have run on no server (its README, "Not done yet"). It has **no steps file**: section 7 below writes
 one as a skeleton and lists it, and does not run it.
 
 ## Before you start
@@ -58,7 +59,9 @@ one as a skeleton and lists it, and does not run it.
   ```
 
 - **No token for the MCP server.** `call.ts` starts the server with the shell's whole environment.
-  It needs no token to write a package, so leave yours out with `env -u`, as every call below does.
+  It needs no token and no Nuxeo credential to write a package, so leave them out with `env -u`, as
+  every call below does: `SATORI_GH_READONLY_TOKEN`, `NUXEO_USER` and `NUXEO_PASS`, and any other
+  token your shell holds.
 - **Credentials for the server steps only:** `NUXEO_USER` and `NUXEO_PASS`, from the environment,
   with no default. Never write them into a file, a command's arguments or a URL.
 
@@ -183,7 +186,7 @@ What each property type gives the kit:
 Then call the write tool:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
   node tools/builder-mcp/src/call.ts apply_package_changes - < /tmp/vehicle-work/01-model.json > /tmp/vehicle-work/01-answer.json
 ```
 
@@ -240,7 +243,7 @@ vehicle-deals-tutorial 0.1.0: checked, built and verified: <temporary>/builder-m
 ```
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
   node tools/builder-mcp/src/call.ts apply_package_changes - < /tmp/vehicle-work/02-queues.json > /tmp/vehicle-work/02-answer.json
 ```
 
@@ -547,8 +550,8 @@ the lien, and the deals that sell the vehicle, a related list given the title's 
 
 A write tool takes each file's content as a string, so build the arguments from the files: the six
 writes and the `app-registry` that has the app name the new home and menu, in one call, the labels
-first. The second file is the deal page with its checklist on a property the type does not have,
-on purpose.
+first. The command also writes `04-misspelt.json`: the deal page with its checklist on a property
+the type does not have, on purpose, for `write_package_file`.
 
 ```bash
 node -e "
@@ -577,7 +580,7 @@ fs.writeFileSync('/tmp/vehicle-work/04-misspelt.json', JSON.stringify({
 ```
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
   node tools/builder-mcp/src/call.ts apply_package_changes - < /tmp/vehicle-work/03-pages.json > /tmp/vehicle-work/03-answer.json
 ```
 
@@ -586,7 +589,7 @@ It answered `written: true`, seven files, `8 files: 8 passed, 0 refused`, and `a
 refuse and leave the package as it was:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS BUILDER_PACKAGE_ROOTS=/tmp/vehicle-kits \
   node tools/builder-mcp/src/call.ts write_package_file - < /tmp/vehicle-work/04-misspelt.json > /tmp/vehicle-work/04-answer.json
 ```
 
@@ -655,7 +658,7 @@ packages inside the repository only: given the scratch kit, it answered
 Given the real kit, with no dev server running:
 
 ```bash
-env -u SATORI_GH_READONLY_TOKEN node tools/builder-mcp/src/call.ts preview_package '{ "package": "business-apps/packages/vehicle-titles-demo" }'
+env -u SATORI_GH_READONLY_TOKEN -u NUXEO_USER -u NUXEO_PASS node tools/builder-mcp/src/call.ts preview_package '{ "package": "business-apps/packages/vehicle-titles-demo" }'
 ```
 
 It answered `served: true`, the home, the menu, the three queues, the labels and the two layouts

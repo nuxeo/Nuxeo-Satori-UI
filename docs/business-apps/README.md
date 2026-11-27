@@ -120,8 +120,8 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
 ## Tutorials
 
 Phase 10's tutorials, in [`tutorials/`](tutorials/): each a task a presales engineer or an
-administrator does from start to finish, with every command that needs no server run on 27 November
-2026, and each step that needs one marked as a server step, not run.
+administrator does from start to finish. Each says which commands were run, on 27 November 2026,
+and which were not; each step that needs a server is marked as a server step, and was not run.
 
 1. [Build a kit with the app builder skill](tutorials/build-a-kit-with-the-app-builder.md): the
    vehicle deals kit as the worked example, from a stand-in model through the write tools to a

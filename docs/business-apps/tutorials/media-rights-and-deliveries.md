@@ -173,7 +173,8 @@ are the Java tests' (step 2).
 3. **The seed,** as an administrator, with `NUXEO_USER` and `NUXEO_PASS` exported:
    `node business-apps/packages/media-demo/demo/seed.mjs`. To seed again, delete the kit's
    workspace first.
-4. **A delivery inside its window,** by a member of `media-distribution`, with their own credentials
+4. **A delivery inside its window,** with `NUXEO_URL` the server's address, such as
+   `http://localhost:8080`, by a member of `media-distribution`, with their own credentials
    in `COORDINATOR` as `user:password`, never typed on the command line. `<the French version>` is
    its id, which its page shows:
 
