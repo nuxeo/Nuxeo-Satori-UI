@@ -283,7 +283,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
 
   // What was carried from an earlier build, and what any earlier run offers again, of a file
   // taken at all.
-  const reconfirm = held.refused ? [] : reconfirmItems(conversion, held, first);
+  const reconfirm = held.notTaken ? [] : reconfirmItems(conversion, held, first);
   const carried =
     held.carriedFrom || reconfirm.length > 0
       ? {
