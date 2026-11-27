@@ -166,8 +166,8 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   something new: the appeal review workflow. One thing behaves otherwise, which the rule cannot
   see: a claims review started on a denied claim reopens it, where before 0.7.0 its start refused
   one, and only an administrator, or the system an overturned appeal's chain runs as, may start it
-  there. **0.8.0** is a minor raise, more than the patch the pipeline asks for: it counts 18
-  changes since 0.7.0, two actions and twelve labels added and the Claim and Case layouts changed,
+  there. **0.8.0** is a minor raise, more than the patch the pipeline asks for: it counts 21
+  changes since 0.7.0, two actions and fifteen labels added and the Claim and Case layouts changed,
   and leaves the manifest, `package.xml`, the new letters component and its vocabulary to a person.
   Those add a facet to two types, a vocabulary, a page provider and two chains, remove nothing, and
   add a dependency, `nuxeo-agentic-letters` 0.1.0, which in turn needs the platform's Template
@@ -647,7 +647,7 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
 `dist/payers-claims-demo-0.8.0.changes.md`. Run on 27 November 2026 against the staging branch's
-0.7.0, with the platform not compared: 18 changes, which need a patch version, and 0.8.0 raises
+0.7.0, with the platform not compared: 21 changes, which need a patch version, and 0.8.0 raises
 the minor. 0.7.0's run, on 26 November 2026, against the staging branch's 0.6.1, with the content model and the platform as it was there (`--previous-platform`, the
 upgrade check): 14 changes, which need a patch version, and 0.7.0 raises the minor; the upgrade
 check keeps every configuration. 0.6.1's run, against 0.6.0: 3 changes, which needed a patch, and
