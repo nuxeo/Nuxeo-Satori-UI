@@ -5,7 +5,9 @@ Phases M0, M1 and M2 of the migration in
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
 declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
 definition the package pipeline's validator accepts, and runs the verification harness over the
-result. It prints the report a person approves, with every reported item's owner and decision.
+result. It prints the report a person approves, with every reported item's owner and decision and
+every proposal accepted or rejected, writes what a person accepted, carries decisions to a new
+build of the package, and records the reviewer's approval.
 
 **A customer migrating their own package** runs one command, `migrate`, and follows
 [the guide](../../docs/business-apps/studio-migration-guide.md), which is written for them:
@@ -22,12 +24,13 @@ The commands it runs, one by one:
 
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
-npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>] [--decisions <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
 npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts approve <package.zip> <conversion-directory> --by <name>
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
 npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
@@ -36,12 +39,16 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 `npm run studio-migration -- <command> …` runs the same, from the repository's root.
 
 - `inventory` says what the package holds, what each part becomes and what someone has to decide.
-- `convert` writes the M1 conversion and its report.
+- `convert` writes the M1 conversion and its report. `--decisions` writes what people accepted in
+  a `decisions.json`, of this build or an earlier one, carried as `decisions --from` carries it.
 - `check` runs the harness on a conversion.
 - `mutate` writes a deliberately broken copy of a conversion, for the harness to refuse.
 - `decisions` writes the conversion's `decisions.json`, for people to say who owns each reported
-  item and what they decided. `--from` carries the decisions of an earlier file that still hold.
+  item and what they decided, and who accepts or rejects each proposal, and why. `--from` carries
+  the decisions of an earlier file that still hold, of this build or another build of the package.
 - `report` prints the report of the migration document's section 8 (below, **The report**).
+- `approve` records a person's approval of the report and its decisions, in `approval.json`, typed
+  at a terminal; no other command writes one (below, **The report**).
 - `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, in that
   order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
   guided migration**). Given several packages, or a folder, it runs each so into a folder of its
@@ -66,8 +73,9 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 - **2:** the command was wrong; for `lab`, also its environment (below, **Lab mode**).
 
 `convert` and `mutate` write only into a new or empty directory, `decisions` only a
-`decisions.json` the conversion does not hold yet, and `migrate` and `lab` only into a new or
-empty `--out`, so none of them writes over anything.
+`decisions.json` the conversion does not hold yet, `approve` only an `approval.json` it does not
+hold yet, and `migrate` and `lab` only into a new or empty `--out`, so none of them writes over
+anything. `approve` exits 0 once it wrote the approval, and 1 when it refused, writing nothing.
 
 ## The guided migration
 
@@ -80,23 +88,29 @@ them through what it writes.
 - **The steps are the commands.** Each is `main` itself, given the arguments a person would type,
   and what it prints goes into a file of `--out`:
 
-  | Step                              | Command                                | In `--out`                                   |
-  | --------------------------------- | -------------------------------------- | -------------------------------------------- |
-  | 1. The inventory                  | `inventory <package>`                  | `inventory.txt`                              |
-  | 2. The conversion                 | `convert <package> <out>/conversion`   | `conversion/`, `conversion.txt`              |
-  | 3. The checks that need no server | `check <package> <out>/conversion`     | `check.txt`                                  |
-  | 4. The report                     | `report <package> <out>/conversion`    | `report.txt`                                 |
-  | 5. The decisions to fill in       | `decisions <package> <out>/conversion` | `conversion/decisions.json`, `decisions.txt` |
+  | Step                              | Command                                                                      | In `--out`                                   |
+  | --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+  | 1. The inventory                  | `inventory <package>`                                                        | `inventory.txt`                              |
+  | 2. The conversion                 | `convert <package> <out>/conversion`, and `--decisions <from>` with `--from` | `conversion/`, `conversion.txt`              |
+  | 3. The checks that need no server | `check <package> <out>/conversion`                                           | `check.txt`                                  |
+  | 4. The report                     | `report <package> <out>/conversion`                                          | `report.txt`                                 |
+  | 5. The decisions to fill in       | `decisions <package> <out>/conversion`                                       | `conversion/decisions.json`, `decisions.txt` |
 
   `--allow-list` goes to `convert`, `check` and `report`, and `<out>` is given in full, so that
   every path the run prints opens from any folder. So each file is what the command prints by
   hand into the same paths, byte for byte, and the tests hold them to it.
 
-- **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, the decisions
-  step carries the decisions that still hold (`decisions --from`), and runs third, so that the
-  checks and the report count them: inventory, conversion, decisions, checks, report. A first run
-  keeps the decisions last: a scaffold of blank entries changes nothing the checks or the report
-  print.
+- **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, of this build
+  of the package or another, the conversion step writes what people accepted
+  (`convert --decisions`), and the decisions step carries the decisions that still hold
+  (`decisions --from`), and runs third, so that the checks and the report count them: inventory,
+  conversion, decisions, checks, report. Both carry the earlier file the same way, so the
+  conversion is made with exactly the decisions the step then writes beside it. A first run keeps
+  the decisions last: a scaffold of blank entries changes nothing the checks or the report print.
+  A `--from` of another package, or of a first-format file of another build, is refused before
+  anything is written.
+- **It never approves.** No step writes `approval.json`: a reviewer runs `approve` at a terminal
+  once every decision is made, and the next steps say so.
 - **It stops at the first step that refuses,** says why and what to do in plain words, and runs
   nothing after it. A check that fails is not a refusal: the harness ran and found something, which
   the report shows, so the run carries on to the report and the decisions, and exits 1. It knows
@@ -126,8 +140,10 @@ is byte-identical to the commands run by hand into the same paths:
 - **A package that is not a Studio package:** an `addon` package, a zip with no `package.xml`, and
   a file that is no zip. The inventory refuses each, and nothing is written.
 - **A step that refuses:** a theme folder whose name cannot be a file name on every system, which
-  the conversion refuses, so the checks, the report and the decisions do not run; and `--from`
-  holding another build's decisions, which the decisions step refuses before the checks.
+  the conversion refuses, so the checks, the report and the decisions do not run.
+- **A `--from` it cannot carry:** the decisions of another package, or a first-format file of
+  another build, refused before anything is written. Another build of the same package is carried,
+  by each construct's identity, and what it accepted is written.
 - **A re-run that would overwrite:** `migrate` into the `--out` of an earlier run, its decisions
   filled in, which refuses before writing anything and leaves the run byte for byte as it was;
   and a file appearing where a step's output goes during the run, which is not written over.
@@ -183,10 +199,12 @@ One argument that is a package file runs as above, unchanged; several, or a fold
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
   folder, found through its `summary.json`: the folder of the same bytes, whatever the package's
   file is called now, or else the one folder of the same build, as `decisions.json` names it,
-  which is what `--from` holds one package's decisions to. When that run held the build under two
-  sets of bytes and none is the package's, neither is taken, and its line says so; one whose run
-  stopped before its decisions step says "Not carried". A package that run did not hold, or holds no decisions for, starts
-  again, and its line says so. A folder name read from that summary is used only when it is one the
+  which is what `--from` holds one package's decisions to; or else the one folder of another build
+  of the same package, by the name its `package.xml` declares, whose decisions are carried by each
+  construct's identity. When that run held the build under two sets of bytes and none is the
+  package's, or several other builds of the package and not this one, none is taken, and its line
+  says so; one whose run stopped before its decisions step says "Not carried". A package that run
+  did not hold, or holds no decisions for, starts again, and its line says so. A folder name read from that summary is used only when it is one the
   run could have made. `--from` a run of one package, or a summary that lists no packages, is
   refused.
 - **It never writes over anything:** `--out` must be new or empty, and each file is written only
@@ -845,65 +863,134 @@ Section 8 of the migration document describes the report a person approves, and 
 demo shows it: 100% of the package accounted for, and every reported item with an owner.
 
 **The decisions** ([`src/decisions.ts`](src/decisions.ts)). `report.json` is the converter's, the
-same for the same package every time. What people decide is kept beside it, in `decisions.json`,
-which no conversion writes, so that converting the same package again, once the catalogue has
-learnt something, loses none of it.
+same for the same package and the same decisions every time. What people decide is kept beside it,
+in `decisions.json`, which no conversion writes, so that converting the same package again, once
+the catalogue has learnt something, loses none of it.
 
 - **For one build of the package.** A file of decisions names the package's name and version,
-  Studio's commit and build time from the bundle's manifest, and the SHA-256 of the bundle, and is
-  taken only for the package `check` or `report` is given, when all five are the same. A
-  construct's id is its place in its file, so another build can give an id to another construct,
-  and a decision would land on it. The bundle's SHA-256 tells two builds apart where the manifest
-  records neither commit nor build time, as when a project keeps its version.
+  Studio's commit and build time from the bundle's manifest, and the SHA-256 of the bundle, and
+  `check` and `report` take it only for the package they are given, when all five are the same.
+  The bundle's SHA-256 tells two builds apart where the manifest records neither commit nor build
+  time, as when a project keeps its version.
 - **`decisions <package> <conversion>`** writes `decisions.json`, in the provisional format
-  `studio-migration-decisions/1`: the build, and an entry for every reported item, in the
-  report's order. Each entry copies what it is made on from the report, the item's
-  label, property, outcome, where it was written, its reason and its rule, and leaves `owner` and
-  `decision` for a person to fill in. It never writes over a `decisions.json` the conversion holds.
-- **`--from <earlier decisions.json>`** carries each decision of a file written for an earlier
-  conversion of the same build, where the decision still holds for this report. It lists each
-  that said something and does not carry, and why; the earlier file is read and never changed, so
-  it still holds them. An entry of the earlier file that says nothing is passed over. It refuses
-  the decisions of another package, version or Studio build. It says how many entries are left
-  to fill in.
+  `studio-migration-decisions/2`: the build, and an entry for every reported item and every
+  proposal that takes a decision, in the report's order. Each entry copies what it is made on from
+  the report, the item's label, property, outcome, where it was written (but for a proposal, where
+  accepting it writes), its reason and its rule, and its construct's `identity` (below). A
+  reported item's entry leaves `owner` and `decision` for a person to fill in; a proposal's,
+  `owner`, the person deciding, `decision`, `accept` or `reject`, and `reason`. It never writes
+  over a `decisions.json` the conversion holds.
+- **A proposal** is a condition's rule in a known JavaScript pattern, marked `proposal` in the
+  report, or a dashboard card an operation feeds. What a condition's proposal guards, a field, an
+  action, a tab or a card under it, is `proposed` too, and takes no decision of its own: it follows
+  its condition's. A proposal is decided once someone named accepts or rejects it, for a reason; a
+  card an operation feeds proposes nothing the converter can write yet, and is rejected or waits.
+- **`convert --decisions <decisions.json>`** writes what people accepted
+  ([`src/convert.ts`](src/convert.ts), `convertWithDecisions`): it converts, carries the file to
+  that report as `decisions --from` does, and converts again with the proposals' decisions, given
+  to the inventory's conditions (`withVerdicts`). An accepted rule is written as the `visibleWhen`
+  of what its condition guards, as a converted condition's is; a rejected one's condition is
+  reported, and so is what it guards, for a decision of its own. The report keeps each proposal
+  `proposed`, as it was proposed, and records `applied`, what the conversion was made with, and
+  `to`, where an accepted one went.
+- **The checks read the decisions too.** `runHarness` gives the checks the inventory with the
+  proposals' decisions `decisions.json` holds, so check 5 holds an accepted rule on every row of
+  its truth table, a rule written for a proposal nobody accepted, or one rejected, as a rule no
+  condition gives, and an accepted rule's field left out as missing (`check-conditions.ts`). So
+  nothing proposed is written unless a person accepted it, and nothing accepted is left out.
+- **A construct's identity** ([`src/constructs.ts`](src/constructs.ts), `identityOf`) is a
+  fingerprint of its kind, its file and what it is there, such as a field's element and the
+  property it binds, a condition's test, a contribution's slot and name, or a card's heading, page
+  provider, operation and parameters and whether it repeats another. Never its place among its
+  file's constructs: Studio names files after what they hold. It is the same in every build where
+  the construct is unchanged, wherever it moved, and shared by constructs a build cannot tell apart
+  (`sharedIdentities`).
+- **`--from <earlier decisions.json>`** carries each decision of an earlier file that still holds:
+  - **of the same build,** by its item, where the decision still holds for this report, as before,
+    and one made on something the report gives otherwise now is offered for re-confirmation;
+  - **of another build of the package,** by its construct's identity: to the construct of this
+    build of the same identity, when what it was made on is unchanged; offered for re-confirmation
+    when that changed, its earlier decision and what it was made on in `earlier`, beside a blank
+    one for a person to fill in; dropped when the construct is gone, or this build or the earlier
+    file holds its identity more than once. The file records them in `carriedFrom`, for the
+    report. Never by place.
+
+  It lists each that said something and did not carry, and why; the earlier file is read and never
+  changed. An entry of the earlier file that says nothing is passed over. It refuses the decisions
+  of another package, and a first-format file of another build, whose items are their places
+  alone. It says how many entries are left to fill in.
+
 - **A decision is taken** only when what it copied still matches the report, whatever the order
-  of a rule's keys. One made on another reason, label, property, place or rule was made on
-  something else, and is not taken: it is decided again. Nor is one of an item the report does not
-  list, or does not report, one listed twice, one holding a key a decision does not take, such as
-  a verdict, or one whose owner or decision is not text. An item the report lists twice is its
-  first entry's, as everywhere else. A file of another format, of another build, or with no list,
-  is taken not at all, and a key of the file other than `format`, `package` and `decisions`, such
-  as an approval, is named. Each is a line of what stands in the way.
+  of a rule's keys, and its `identity` is that of the construct the package holds at its `id`. One
+  made on another reason, label, property, place, rule or construct was made on something else,
+  and is not taken: it is decided again. Nor is one of an item the report does not list, or that
+  takes no decision, one listed twice, one holding a key a decision does not take, such as a
+  verdict, one whose owner, decision or reason is not text, a proposal's decision other than
+  `accept` or `reject`, or an acceptance of a proposal of nothing to write. An item the report
+  lists twice is its first entry's, as everywhere else. A file of another format, of another
+  build, or with no list, is taken not at all, and a key of the file other than `format`, `package`,
+  `decisions` and `carriedFrom`, such as an approval, is named. Each is a line of what stands in the
+  way.
 - **Readiness** then counts the reported items with no owner, and those whose owner says nothing
-  decided, as `check` prints them. An owner or a decision of spaces alone is none.
-- **Only a reported item takes a decision.** Accepting or rejecting a proposal is not built: the
-  converter would have to write what a person accepts, and until it does a proposal waits.
+  decided; the proposals that wait, and those accepted or rejected with no one's name or no reason;
+  and a conversion made with other decisions of its proposals than the file holds now. An owner, a
+  decision or a reason of spaces alone is none.
+
+**The approval** ([`src/approval.ts`](src/approval.ts)).
+`approve <package> <conversion> --by <name>` records a person's approval of the report and its
+decisions in the conversion's `approval.json`, in the provisional format
+`studio-migration-approval/1`: who approved, when, the build, and the SHA-256 of `report.json`, of
+`decisions.json` and of the conversion's other files, `app/` and `themes/` by path and bytes. The
+first two are of each file as the tool reads it and writes it, two-space JSON, which is the file
+byte for byte when the tool wrote it; so a change of what either says voids the approval, and its
+spacing alone does not.
+
+- **Readiness** needs an approval whose digests are those of the conversion as it is now, and of
+  the package given. A decision filled in or changed, the conversion made again, a file edited by
+  hand: each voids it, and the verdict and the report say which. It is never carried to another
+  run.
+- **No run approves itself.** `approve` is the only command that writes an approval, and no other
+  runs it: `migrate`, for one package or many, never does. It refuses while a decision is still to
+  make. It refuses to run where its input or output is not a terminal, as in a script, a pipeline
+  or an agent's run, and asks the person named with `--by` to type back the first 8 characters of
+  the digest it shows. It writes only an `approval.json` the conversion does not hold.
+- **What it is not:** proof of who typed. Someone at a terminal, or a program driving one, can
+  type any name; the approval is a record of who said they approved, as a signature on paper is,
+  not a cryptographic one.
 
 **The report** ([`src/report.ts`](src/report.ts)): `report <package> <conversion>` prints it, and
-`--json` gives the same as data. It reads the package, the conversion and its decisions, and writes
-nothing.
+`--json` gives the same as data. It reads the package, the conversion, its decisions and its
+approval, and writes nothing.
 
 - **The header:** the package handed in and its version, the platform it targets, its bundle;
   Studio's branch, commit and build time, from its bundle's manifest; the app's id and platform
   range; the converter; the allow-list the harness held the actions to, and whether it is the
-  deployment's, given with `--allow-list`, or the one the conversion recorded. Whether the report
-  is of that package is check 1's.
+  deployment's, given with `--allow-list`, or the one the conversion recorded; and the approval, by
+  whom and when, or why none holds. Whether the report is of that package is check 1's.
 - **The summary:** the package's constructs, as the inventory reads them, by kind, with the outcome
-  of each one's first entry in the report: how many are converted, proposed, reported and of those
-  decided, generated, left on the server, pending, and missing from the report. An entry whose
-  outcome is none is counted apart. The coverage is check 1's: the share of the constructs the
-  report lists, rounded down to a tenth, so that 99.96% never reads as 100%.
+  of each one's first entry in the report: how many are converted, proposed and of those accepted
+  and rejected, reported and of those decided, generated, left on the server, pending, and missing
+  from the report. An entry whose outcome is none is counted apart. The coverage is check 1's: the
+  share of the constructs the report lists, rounded down to a tenth, so that 99.96% never reads as
+  100%.
 - **What the harness found:** the ten checks, and the verdict with what stands in its way.
 - **The decisions needed:** every reported item, with its reason, where it was written, and its
-  owner and decision, each or none; what was not taken from `decisions.json`; and every proposal.
-  What people and the package wrote is printed on one line each, a line break as `\n`, so that no
-  owner's words can print a line of their own, such as an item that looks decided.
-- **Each file:** its constructs by outcome, and where those converted went. What the harness
-  found is not split by file: its findings name the conversion's files rather than the package's,
-  and are given whole, above.
+  owner and decision, each or none; what was not taken from `decisions.json`; every proposal, with
+  who accepted or rejected it and why, where an accepted one was written, or that it waits, or
+  follows its condition's; and, for a file carried from another build, what was carried, each
+  decision offered for re-confirmation with the earlier one, and each dropped, with why. What people
+  and the package wrote is printed on one line each, a line break as `\n`, so that no owner's words
+  can print a line of their own, such as an item that looks decided.
+- **What the harness found, file by file:** each finding under the file it is of
+  (`fileOfFinding`): the file of the conversion it starts by naming, as the checks write them,
+  `layouts/…: …`, `app/labels/…: …`, a theme by its name; else a file of the package it names, as
+  check 1's and check 5's own lines do; else none. Each file of the conversion is given with the
+  package's files whose constructs it holds, from the report's `to`.
+- **Each file of the package:** its constructs by outcome, where those converted went, and what the
+  harness found in the files of the conversion they went to.
 
 Screenshots and request logs are lab mode's, below, which writes them beside its own report; this
-report does not take them in yet. The reviewer's approval is the reviewer's: no command records it.
+report does not take them in.
 
 ## Lab mode
 

@@ -218,11 +218,8 @@ export function holdDecisions(
   let unsigned = 0;
   for (const entry of firstEntries(report)) {
     if (entry.outcome !== 'proposed') continue;
-    // What a condition's proposal guards waits on it, and takes no decision of its own.
-    if (entry.proposal !== true) {
-      waiting++;
-      continue;
-    }
+    // What a condition's proposal guards takes no decision of its own (`readDecisions` takes
+    // none), so it waits here until the conversion is made with its condition's decision.
     const decision = reading.taken.get(entry.id);
     const verdict = decision?.decision.trim();
     if (verdict !== ACCEPT && verdict !== REJECT) {

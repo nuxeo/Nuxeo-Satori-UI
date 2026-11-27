@@ -6,6 +6,7 @@
  * those decisions. Each rule has a control in `mutations.ts`, `PROPOSAL_MUTATIONS`, seen failing.
  */
 import { loadCatalogue } from './catalogue';
+import { decideCondition } from './conditions';
 import { constructsOf, identitiesOf, sharedIdentities } from './constructs';
 import {
   convert,
@@ -271,6 +272,37 @@ describe('a proposal a person accepted', () => {
     const before = JSON.stringify(corpus.conversion.app);
     expect(before).not.toContain('var:versionNote');
     expect(before).not.toContain('"label":"Review"');
+  });
+});
+
+describe('a decision on another rule than the converter proposes now', () => {
+  const input = prepare();
+  const condition = input.inventory.conditions.find(
+    (candidate) => `condition:${candidate.path}#${candidate.index + 1}` === VIEW_IF,
+  );
+  const other = { type: 'app.rules.hasFacet', parameters: ['Folderish'] };
+
+  it('is no decision of this proposal: nothing is written, and it stays proposed', () => {
+    if (!condition) throw new Error(VIEW_IF);
+    expect(
+      decideCondition({ ...condition, verdict: { accepted: true, rule: other } }),
+    ).toMatchObject({ kind: 'proposed' });
+    // The same rule, its keys in another order, is the same rule.
+    expect(
+      decideCondition({
+        ...condition,
+        verdict: {
+          accepted: true,
+          rule: { parameters: ['Versionable'], type: 'app.rules.hasFacet' },
+        },
+      }),
+    ).toMatchObject({ kind: 'rule' });
+    const conversion = convert(input.pkg, input.inventory, catalogue, {
+      allowList: ALLOW_LIST,
+      verdicts: new Map([[VIEW_IF, { accepted: true, rule: other, owner: 'x', reason: 'y' }]]),
+    });
+    expect(viewFields(conversion).has('cl:tags')).toBe(false);
+    expect(entry(conversion, VIEW_IF)).not.toHaveProperty('applied');
   });
 });
 
