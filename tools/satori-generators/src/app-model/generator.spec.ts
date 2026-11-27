@@ -605,11 +605,18 @@ describe('app-model generator', () => {
       expect(read(tree, `${ROOT}/bundle/schemas/vehicledeal.xsd`)).toBe(xsd);
       expect(read(tree, MANIFEST)).toBe(manifest);
       // The schema file and the model's entries are the ones the vehicle kit wrote by hand.
-      const elements = (text: string) =>
-        text
-          .replace(/<!--[\s\S]*?-->/g, '')
-          .slice(text.replace(/<!--[\s\S]*?-->/g, '').indexOf('<xs:element'))
-          .replace(/\s+/g, ' ');
+      // The schema's elements, its comments left out one after the other, as a reader skips them.
+      const elements = (text: string) => {
+        let kept = '';
+        let at = 0;
+        for (let start = text.indexOf('<!--'); start >= 0; start = text.indexOf('<!--', at)) {
+          kept += text.slice(at, start);
+          const end = text.indexOf('-->', start + 4);
+          at = end < 0 ? text.length : end + 3;
+        }
+        kept += text.slice(at);
+        return kept.slice(kept.indexOf('<xs:element')).split(/\s+/).join(' ');
+      };
       expect(elements(read(tree, `${ROOT}/bundle/schemas/vehicledeal_docs.xsd`))).toBe(
         elements(readFileSync(join(VEHICLE, 'bundle', 'schemas', 'vehicledeal_docs.xsd'), 'utf8')),
       );

@@ -177,7 +177,7 @@ describe('serverEnvironment: what call.ts starts the server with', () => {
       LANG: 'en_US.UTF-8',
       NODE_EXTRA_CA_CERTS: '/etc/ssl/company-ca.pem',
       // What a shell holds for other things: another service's settings, a cloud profile.
-      OTHER_SERVICE_PASSWORD: 'not-for-the-server',
+      OTHER_TOOL_SETTING: 'for another tool',
       AWS_PROFILE: 'default',
       HOME: '/home/someone',
       NODE_OPTIONS: '--require ./elsewhere.js',
