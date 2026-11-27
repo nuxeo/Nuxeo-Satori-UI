@@ -144,7 +144,8 @@ describe('the JSON Schema, held to the registries and the validator', () => {
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());
     }
-    expect(Object.keys(defs['relatedCreate'].properties['in'].properties).sort()).toEqual(
+    const where = defs['relatedCreate'].properties['in'] as { properties: Record<string, unknown> };
+    expect(Object.keys(where.properties).sort()).toEqual(
       [...LAYOUT_V2_KEYS.relatedCreateIn].sort(),
     );
   });
