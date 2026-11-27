@@ -1,12 +1,13 @@
-import type { Tree } from '@nx/devkit';
+import { workspaceRoot, type Tree } from '@nx/devkit';
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { readModel, schemasOf } from '../app-layout/content-model';
+import appLayoutGenerator from '../app-layout/generator';
 import appPackageGenerator from '../app-package/generator';
 import appModelGenerator, { type AppModelSchema } from './generator';
 
@@ -497,6 +498,217 @@ describe('app-model generator', () => {
       );
     });
 
+    it('writes a complex property and a list of them, with their subfields, which app-layout lays out as an address and a table', async () => {
+      await generate({
+        properties:
+          'number, address:complex{street, city, zip}, parties:complex[]{name, role=Buyer|Seller, share:double, tags:string[]}, notes:string[]',
+      });
+      const xsd = read(tree, `${ROOT}/bundle/schemas/contract.xsd`);
+      // One list type for the property's and the subfield's lists alike.
+      expect(xsd.match(/<xs:simpleType name="stringList">/g)).toHaveLength(1);
+      expect(xsd).toContain(
+        '  <xs:element name="address" type="nxs:addressType" />\n' +
+          '  <xs:complexType name="addressType">\n' +
+          '    <xs:sequence>\n' +
+          '      <xs:element name="street" type="xs:string" />\n' +
+          '      <xs:element name="city" type="xs:string" />\n' +
+          '      <xs:element name="zip" type="xs:string" />\n' +
+          '    </xs:sequence>\n' +
+          '  </xs:complexType>\n',
+      );
+      expect(xsd).toContain(
+        '  <xs:element name="parties" type="nxs:partiesEntries" />\n' +
+          '  <xs:complexType name="partiesEntries">\n' +
+          '    <xs:sequence>\n' +
+          '      <xs:element name="entry" type="nxs:partiesEntry" minOccurs="0" maxOccurs="unbounded" />\n' +
+          '    </xs:sequence>\n' +
+          '  </xs:complexType>\n' +
+          '  <xs:complexType name="partiesEntry">\n' +
+          '    <xs:sequence>\n' +
+          '      <xs:element name="name" type="xs:string" />\n' +
+          '      <xs:element name="role">\n' +
+          '        <xs:simpleType>\n' +
+          '          <xs:restriction base="xs:string">\n' +
+          '            <xs:enumeration value="Buyer" />\n' +
+          '            <xs:enumeration value="Seller" />\n' +
+          '          </xs:restriction>\n' +
+          '        </xs:simpleType>\n' +
+          '      </xs:element>\n' +
+          '      <xs:element name="share" type="xs:double" />\n' +
+          '      <xs:element name="tags" type="nxs:stringList" />\n' +
+          '    </xs:sequence>\n' +
+          '  </xs:complexType>\n',
+      );
+      expect(
+        model().schemas.find((each: { name: string }) => each.name === 'contract').fields,
+      ).toEqual({
+        number: 'string',
+        address: { type: 'complex', fields: { street: 'string', city: 'string', zip: 'string' } },
+        parties: {
+          type: 'complex[]',
+          fields: { name: 'string', role: 'string', share: 'double', tags: 'string[]' },
+        },
+        notes: 'string[]',
+      });
+      const asRead = readModel(model(), 'content-model.json');
+      expect(asRead.schemas.get('contract')?.properties.get('address')).toMatchObject({
+        type: 'complex',
+        list: false,
+      });
+      expect(asRead.schemas.get('contract')?.properties.get('parties')).toMatchObject({
+        type: 'complex',
+        list: true,
+      });
+      // app-layout, given the model app-model wrote, shows them as Nuxeo would have them shown.
+      const scratch = mkdtempSync(join(tmpdir(), 'app-model-complex-'));
+      const file = join(scratch, 'content-model.json');
+      writeFileSync(file, read(tree, `${ROOT}/content-model.json`));
+      await appLayoutGenerator(tree, { package: ROOT, type: 'Contract', model: file });
+      const fields = JSON.parse(
+        read(tree, `${ROOT}/bundle/agentic-ui-config/layouts/Contract/view.layout.json`),
+      ).cards.flatMap((card: { fields?: unknown[] }) => card.fields ?? []);
+      expect(fields).toContainEqual({
+        field: 'contract:address',
+        widget: 'address',
+        parameters: { parts: { street: 'street', city: 'city', postcode: 'zip' } },
+      });
+      expect(fields).toContainEqual(
+        expect.objectContaining({ field: 'contract:parties', widget: 'table' }),
+      );
+    });
+
+    it('adds a schema of its own to a type it has, as the vehicle kit wrote its checklist by hand', async () => {
+      const VEHICLE = join(workspaceRoot, 'business-apps', 'packages', 'vehicle-titles-demo');
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal',
+        prefix: 'vdeal',
+        properties: 'number, status=Draft|Contracted',
+        attachments: true,
+      });
+      const xsd = read(tree, `${ROOT}/bundle/schemas/vehicledeal.xsd`);
+      const manifest = read(tree, MANIFEST);
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal_docs',
+        prefix: 'vdocs',
+        properties: 'checklist:checklist',
+      });
+      // In the model component: the schema registered, and the type given it after its own.
+      expect(read(tree, MODEL)).toContain(
+        '<schema name="vehicledeal_docs" prefix="vdocs" src="schemas/vehicledeal_docs.xsd" />',
+      );
+      expect(doctype('VehicleDeal')).toContain(
+        '      <schema name="vehicledeal" />\n      <schema name="vehicledeal_docs" />\n    </doctype>',
+      );
+      // The type's own schema is not written again, and the manifest lists no other component.
+      expect(read(tree, `${ROOT}/bundle/schemas/vehicledeal.xsd`)).toBe(xsd);
+      expect(read(tree, MANIFEST)).toBe(manifest);
+      // The schema file and the model's entries are the ones the vehicle kit wrote by hand.
+      // The schema's elements, its comments left out one after the other, as a reader skips them.
+      const elements = (text: string) => {
+        let kept = '';
+        let at = 0;
+        for (let start = text.indexOf('<!--'); start >= 0; start = text.indexOf('<!--', at)) {
+          kept += text.slice(at, start);
+          const end = text.indexOf('-->', start + 4);
+          at = end < 0 ? text.length : end + 3;
+        }
+        kept += text.slice(at);
+        return kept.slice(kept.indexOf('<xs:element')).split(/\s+/).join(' ');
+      };
+      expect(elements(read(tree, `${ROOT}/bundle/schemas/vehicledeal_docs.xsd`))).toBe(
+        elements(readFileSync(join(VEHICLE, 'bundle', 'schemas', 'vehicledeal_docs.xsd'), 'utf8')),
+      );
+      const kit = JSON.parse(readFileSync(join(VEHICLE, 'content-model.json'), 'utf8'));
+      expect(model().doctypes.VehicleDeal).toEqual(kit.doctypes.VehicleDeal);
+      const docs = (from: { schemas: { name: string }[] }) =>
+        from.schemas.find((each) => each.name === 'vehicledeal_docs');
+      expect(docs(model())).toEqual(docs(kit));
+      // Its heading is apart from the type's first schema's, for the person to name.
+      const labels = JSON.parse(read(tree, `${ROOT}/bundle/agentic-ui-config/labels/en.json`));
+      expect(labels.labels['layout.schema.vehicledeal']).toBe('Vehicle deal');
+      expect(labels.labels['layout.schema.vehicledeal_docs']).toBe('Vehicle deal docs');
+      // The type has it now: written again only with --force, which keeps the type as it is.
+      const xml = read(tree, MODEL);
+      await expect(
+        generate({
+          type: 'VehicleDeal',
+          schema: 'vehicledeal_docs',
+          prefix: 'vdocs',
+          properties: 'checklist:checklist',
+        }),
+      ).rejects.toThrow('has the type VehicleDeal already. Pass --force');
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal_docs',
+        prefix: 'vdocs',
+        properties: 'checklist:checklist, notes',
+        force: true,
+      });
+      expect(read(tree, MODEL)).toBe(xml);
+      expect(model().doctypes.VehicleDeal).toEqual(kit.doctypes.VehicleDeal);
+      // Not with a prefix another schema has, nor a schema another type has.
+      await expect(
+        generate({
+          type: 'VehicleDeal',
+          schema: 'vehicledeal_more',
+          prefix: 'vdeal',
+          properties: 'a',
+        }),
+      ).rejects.toThrow('registers the schema vehicledeal with the prefix vdeal already');
+      await generate({ type: 'Other', properties: 'a' });
+      await expect(
+        generate({ type: 'VehicleDeal', schema: 'other', prefix: 'oth', properties: 'a' }),
+      ).rejects.toThrow('The schema other is in');
+      // A schema the type does not have, named by default rather than by --schema, adds nothing.
+      await generate({ type: 'Third', schema: 'third_own', properties: 'a' });
+      await expect(generate({ type: 'Third', properties: 'b', force: true })).rejects.toThrow(
+        'The type Third in',
+      );
+      expect(doctype('Third')).not.toContain('<schema name="third" />');
+      // Nor does one given with --force, which writes again what the type has: a misspelt name.
+      await expect(
+        generate({
+          type: 'VehicleDeal',
+          schema: 'vehicledeal_doc',
+          prefix: 'vdoc',
+          properties: 'a',
+          force: true,
+        }),
+      ).rejects.toThrow('--force writes again a schema the type has');
+      expect(doctype('VehicleDeal')).not.toContain('vehicledeal_doc"');
+    });
+
+    it("names the search document after the type's first schema, a schema added with aggregates", async () => {
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal',
+        prefix: 'vdeal',
+        properties: 'number, status=Draft|Contracted',
+        pageProvider: 'deals_by_status',
+        aggregates: 'vdeal:status',
+      });
+      const search = read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`);
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal_docs',
+        prefix: 'vdocs',
+        properties: 'kind=Title|Insurance',
+        pageProvider: 'deals_by_document',
+        aggregates: 'vdocs:kind',
+      });
+      const xml = read(tree, MODEL);
+      // One search document, its schema the first's, with the new aggregate's field added.
+      expect(xml).not.toContain('vehicledeal_docs_search');
+      expect(xml).toContain('<field schema="vehicledeal_search" name="vdocs_kind_agg" />');
+      expect(xml.match(/<doctype name="VehicleDealSearch"/g)).toHaveLength(1);
+      expect(read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`)).not.toBe(search);
+      expect(read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`)).toContain(
+        '<xs:element name="vdocs_kind_agg" type="nxs:stringList" />',
+      );
+    });
+
     it("writes a document property as another record's id, which app-layout shows as a link", async () => {
       await generate({ properties: 'number, counterparty:document' });
       const xsd = read(tree, `${ROOT}/bundle/schemas/contract.xsd`);
@@ -725,6 +937,18 @@ describe('app-model generator', () => {
       ['a value with markup', { properties: 'a=<b>' }, '"<b>", a value of "a"'],
       ['a property twice', { properties: 'a,b,a:long' }, 'lists "a" twice'],
       ['a property name with a colon', { properties: 'contract:number' }, 'has the type "number"'],
+      ['a complex property with no subfields', { properties: 'a:complex' }, 'names no subfield'],
+      [
+        'a complex list with none in its braces',
+        { properties: 'a:complex[]{}' },
+        'lists no subfield',
+      ],
+      ['subfields of a simple property', { properties: 'a:string{b}' }, 'only a complex property'],
+      ['a brace left open', { properties: 'a:complex{b, c' }, 'opens or closes a brace'],
+      ['a brace closing nothing', { properties: 'a, b}' }, 'opens or closes a brace'],
+      ['a subfield twice', { properties: 'a:complex{b, b:long}' }, 'the subfield "b" twice'],
+      ['a complex subfield', { properties: 'a:complex{b:checklist}' }, 'a subfield of "a",'],
+      ['a list of booleans as a subfield', { properties: 'a:complex{b:boolean[]}' }, 'boolean[]'],
       ["Nuxeo's own schema", { properties: 'a', schema: 'dublincore' }, '--schema "dublincore"'],
       ["Dublin Core's prefix", { properties: 'a', prefix: 'dc' }, '--prefix "dc"'],
       ["a task's schema", { type: 'Task', properties: 'a' }, '--schema "task"'],

@@ -49,7 +49,10 @@ step as done that this table says is not built.
   Registering changes the person's own Claude configuration: ask first. Not registered, call each
   tool through `tools/builder-mcp/src/call.ts`, which starts the same server over stdio for one
   call: `node tools/builder-mcp/src/call.ts <tool> '<arguments as JSON>'`, or `-` to read them
-  from standard input. Every rule below holds as it does for the registered server.
+  from standard input. It gives the server the five variables it reads (`NUXEO_URL`,
+  `NUXEO_USER`, `NUXEO_PASS`, `DEV_SERVER_URL`, `BUILDER_PACKAGE_ROOTS`), what Node needs to
+  run and to reach the server, and nothing else of the shell's: never write a client of your own that passes the whole
+  environment. Every rule below holds as it does for the registered server.
 
 ## 1. Read the server
 
@@ -265,6 +268,16 @@ What each writes, and what it leaves to you:
   - **A checklist,** for a checklist card: a property of the type `checklist`, such as
     `steps:checklist` in `--properties`, the list of entries the card reads (`item`, `done`,
     `doneBy`, `doneOn`). Never write that schema by hand.
+  - **A complex property,** a value of subfields in braces, each written as a property is but
+    simple: `address:complex{street,city,zip}`, which `app-layout` shows as an `address`, or a list
+    of them, `parties:complex[]{name,role=Buyer|Seller,share:double}`, which it shows as a `table`.
+  - **A schema of its own added to a type the kit has,** such as a checklist kept apart from the
+    type's first schema: `--properties` with a `--schema` the type does not list yet, and its own
+    `--prefix`, such as `{ "type": "VehicleDeal", "schema": "vehicledeal_docs", "prefix": "vdocs",
+"properties": "checklist:checklist" }`. It writes the schema, registers it in the model
+    component, adds it to the type there and in `content-model.json`, and names its heading in
+    `labels/en.json`, so no component, schema or manifest entry is written by hand. Written again,
+    it takes `--force`, as the type's first schema does.
   - **Facets,** `--facets=Versionable` with `--properties` when the type is first written, or
     alone to add to a type the kit has. Nuxeo's own that bring no schema need nothing more
     (`Versionable` brings `uid` too); an add-on's, such as `Signable`, must be described by a
@@ -394,15 +407,32 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
 - **A page provider's NXQL is checked for what Nuxeo refuses, not validated.** For a page
   provider the package defines, such as one `app-model --where` wrote, the write is refused for a
   construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)`, for which compare with `>=` and
-  `<=`, a string or a parenthesis left open, `==`, `&&`. A query it passes may still be refused
-  on install: run it read-only on the development server first, as a search.
+  `<=`, a string or a parenthesis left open, `==`, `&&`. Given a model, as a demo kit's own always
+  is, it is refused too for a property the model does not have, in its NXQL, its sorts, its
+  aggregates or its predicates: `vdocs:checklist/*/don`, a checklist's entries with no subfield
+  `don`, or `vtitle:openOn`, a property the schema does not have, each named with its page
+  provider and its component; and for a property of another type than the one its NXQL lists, which
+  no record it lists has. A type, a facet or a prefix that neither the model nor Nuxeo's own lists
+  know is refused only when it is a near miss of one they do, `VehicleDeals` for `VehicleDeal`, and
+  the finding names that one; one near none may be an add-on's, and passes. A query it passes may
+  still be refused on install: run it read-only on the development server first, as a search.
+- **A queue gives its page provider as many parameters as its NXQL's `?`,** its search's text
+  last, and so do a related list and a home's figure, on a page provider of the package's own:
+  Nuxeo puts each in the next `?`, so with fewer or more the query fails or runs otherwise than it
+  is written. The write is refused either way, with or without a model.
+- **A queue and a banner that say one thing are written twice,** the queue in NXQL and the banner
+  in a rule, and nothing holds them together. Write the values out on both, `IN (...)` and
+  `app.rules.fieldIn`, and "more than 30 days" as `< NOW('-P31D')` and `dateAfter` 30; then tell
+  the person they still part for some hours a day, the rule on the reader's calendar and the
+  query on the server's clock (`layout-v2.md`, section 5).
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
   a facet's aggregate on a page provider of the server's, a queue's or a related list's columns
   and sorts on a page provider of the server's (on the package's own, whose NXQL names its type as
-  `app-model` writes it, they are held to that type, given a model), what a table's or a related
-  list's column computes, and a vocabulary widget's directory against its property's. Check those
-  by reading the server. Given a model, the properties a rule, a computation or a check names are
-  held to the type, as fields are.
+  `app-model` writes it, they are held to that type, given a model), the NXQL of a page provider
+  of the server's, what a table's or a related list's column computes, and a vocabulary widget's
+  directory against its property's. Check those by reading the server. Given a model, the
+  properties a rule, a computation or a check names are held to the type, as fields are, and the
+  properties, types and facets a page provider of the package's own names are held to the model.
 
 ## 4. Preview in dev mode, as far as it goes
 

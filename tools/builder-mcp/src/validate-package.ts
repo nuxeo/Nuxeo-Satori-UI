@@ -44,6 +44,7 @@ import {
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { RUN_ENVIRONMENT } from './config.ts';
 
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 export const PIPELINE = join(REPO_ROOT, 'scripts', 'app-package.mjs');
@@ -52,18 +53,7 @@ export const RUN_TIMEOUT_MS = 180_000;
 export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'] as const;
 const OUTPUT_LIMIT = 16 * 1024 * 1024;
 /** What the pipeline's processes may see of the environment: where programs and temporary files are. */
-const PASSED_ENVIRONMENT = [
-  'PATH',
-  'Path',
-  'PATHEXT',
-  'SystemRoot',
-  'TMPDIR',
-  'TEMP',
-  'TMP',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-];
+const PASSED_ENVIRONMENT = RUN_ENVIRONMENT;
 
 export interface PackageRequest {
   /** The package folder, holding `build.mjs`, `bundle/` and `package/`. Relative to the repository. */

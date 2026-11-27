@@ -18,11 +18,11 @@
     },
     "properties": {
       "type": "string",
-      "description": "Writes the type: its properties, separated by commas, each <name>, <name>:<type> or <name>=<value>|<value>. A type is string (the default), long, double, boolean or date, or a list of one but boolean, such as string[]; or checklist, a list of the entries a checklist card reads, item, done, doneBy and doneOn, such as steps:checklist; or document, another record's id, as Nuxeo's documentResolver stores it, which app-layout shows as a document-link, such as policy:document. Values make a string take only those, such as status=Draft|Active."
+      "description": "Writes the type: its properties, separated by commas, each <name>, <name>:<type> or <name>=<value>|<value>. A type is string (the default), long, double, boolean or date, or a list of one but boolean, such as string[]; or checklist, a list of the entries a checklist card reads, item, done, doneBy and doneOn, such as steps:checklist; document, another record's id, as Nuxeo's documentResolver stores it, which app-layout shows as a document-link, such as policy:document; or complex, a value of subfields in braces, each written as a property is but simple, such as address:complex{street,city,zip}, which app-layout shows as an address, or a list of them, complex[], such as parties:complex[]{name,role=Buyer|Seller,share:double}, which it shows as a table. Values make a string take only those, such as status=Draft|Active."
     },
     "schema": {
       "type": "string",
-      "description": "With properties: the schema's name. Defaults to the type's name in lower case.",
+      "description": "With properties: the schema's name. Defaults to the type's name in lower case. For a type the package has, a name it does not list adds that schema to it, with its own prefix, such as a checklist kept in a schema of its own: vehicledeal_docs, written vdocs.",
       "pattern": "^[a-z][a-z0-9_]{0,63}$"
     },
     "prefix": {

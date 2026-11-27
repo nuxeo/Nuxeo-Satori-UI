@@ -114,6 +114,64 @@ export function isThisMachine(hostname: string): boolean {
 export const PACKAGE_ROOTS_ENV = 'BUILDER_PACKAGE_ROOTS';
 
 /**
+ * What a program needs of the environment to run, and nothing more: where its programs are, a
+ * temporary directory, and the locale. The pipeline and the generators are given these alone
+ * (`pipelineEnvironment`), so that no credential reaches them.
+ */
+export const RUN_ENVIRONMENT: readonly string[] = [
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SystemRoot',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+];
+
+/** The variables the server reads, each above: the only ones of a shell it is given. */
+export const SERVER_ENVIRONMENT: readonly string[] = [
+  NUXEO_URL_ENV,
+  NUXEO_USER_ENV,
+  NUXEO_PASS_ENV,
+  DEV_SERVER_URL_ENV,
+  PACKAGE_ROOTS_ENV,
+];
+
+/**
+ * How the server reaches a Nuxeo that is not on this machine, as Node reads it: a certificate
+ * authority of the person's network, and the proxy, when Node is told to use one.
+ */
+export const NETWORK_ENVIRONMENT: readonly string[] = [
+  'NODE_EXTRA_CA_CERTS',
+  'NODE_USE_ENV_PROXY',
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+  'NO_PROXY',
+  'no_proxy',
+];
+
+/**
+ * The environment `call.ts` starts the server with: what Node needs to run it ({@link
+ * RUN_ENVIRONMENT}), the variables it reads ({@link SERVER_ENVIRONMENT}) and how it reaches the
+ * server ({@link NETWORK_ENVIRONMENT}), and nothing else of the shell's: no other service's
+ * password, no token, no key, and no `NODE_OPTIONS` to load other code into it. The vehicle kit's
+ * first client gave the server its whole environment, a token among it, and the session's
+ * permission system refused it (its README, "Phase 8 feedback", item 1).
+ */
+export function serverEnvironment(env: Environment): Record<string, string> {
+  return Object.fromEntries(
+    [...RUN_ENVIRONMENT, ...SERVER_ENVIRONMENT, ...NETWORK_ENVIRONMENT]
+      .map((key) => [key, env[key]] as const)
+      .filter((entry): entry is readonly [string, string] => entry[1] !== undefined),
+  );
+}
+
+/**
  * The folders the write tools may write a package in, from `BUILDER_PACKAGE_ROOTS`, or why there
  * are none. Unset, it is `business-apps/packages/` alone. Set, its folders replace that one: each
  * a path, absolute or from the repository's root, separated as `PATH` separates them (`:`, or `;`
