@@ -337,7 +337,8 @@ describe('studio-migration decisions and report', () => {
     const file = JSON.parse(readFileSync(path, 'utf8'));
     for (const item of file.decisions) {
       item.owner = 'Migration lead';
-      item.decision = 'Rebuilt by hand';
+      item.decision = item.outcome === 'proposed' ? 'accept' : 'Rebuilt by hand';
+      if (item.outcome === 'proposed') item.reason = 'The host has the function it calls';
     }
     writeFileSync(path, JSON.stringify(file));
   };
@@ -347,10 +348,10 @@ describe('studio-migration decisions and report', () => {
     const written = run(['decisions', 'acme.zip', out], files);
     expect(written).toMatchObject({ code: 0, err: '' });
     expect(written.out).toBe(
-      `Wrote ${join(out, 'decisions.json')}: 14 reported items, 14 of them still without an owner or a decision\n`,
+      `Wrote ${join(out, 'decisions.json')}: 14 reported items and 1 proposal, 15 of them still to fill in\n`,
     );
     const file = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8'));
-    expect(file.decisions).toHaveLength(14);
+    expect(file.decisions).toHaveLength(15);
     expect(run(['check', 'acme.zip', out], files).out).toContain(
       '  - 14 reported items have no owner',
     );
@@ -363,9 +364,14 @@ describe('studio-migration decisions and report', () => {
       'Migration lead',
     );
     const checked = run(['check', 'acme.zip', out, '--allow-list', 'allow.json'], files);
-    expect(checked.code).toBe(0);
     expect(checked.out).toContain('Verdict: not ready');
     expect(checked.out).not.toMatch(/reported items? ha/);
+    // The proposal it accepts is not written in this conversion, made before it was decided: the
+    // checks hold the conversion to what it records, and pass, and readiness says to convert again.
+    expect(checked.code).toBe(0);
+    expect(checked.out).toContain(
+      '  - the conversion was made with 1 of its proposals decided otherwise than decisions.json decides them now',
+    );
   });
 
   it('carries the decisions of an earlier conversion that still hold, and says which do not', () => {
@@ -381,12 +387,26 @@ describe('studio-migration decisions and report', () => {
     });
     expect(carried.code).toBe(0);
     expect(carried.out).toContain(
-      ': 14 reported items, 1 of them still without an owner or a decision\n' +
-        '  carried from old.json: 13\n  not carried, and still in old.json: 1\n',
+      ': 14 reported items and 1 proposal, 1 of them still to fill in\n' +
+        '  carried from old.json: 14\n' +
+        '  offered for re-confirmation, the earlier decision beside a blank one: 1\n' +
+        '  not carried, and still in old.json: 1\n',
     );
     expect(carried.out).toMatch(
-      /\n {4}- old\.json: layout-field:.*#3 was made on another reason than the report gives now, so it is not taken: decide it again\n$/,
+      /\n {4}- old\.json: layout-field:.*#3 was made on another reason than the report gives now, so it is offered for re-confirmation, beside it\n$/,
     );
+    // Offered beside a blank decision, with the earlier one and what it was made on.
+    const offered = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8')).decisions[0];
+    expect(offered).toMatchObject({
+      owner: '',
+      decision: '',
+      earlier: {
+        owner: 'Migration lead',
+        decision: 'Rebuilt by hand',
+        madeOn: { note: 'An earlier reason' },
+        changed: ['reason'],
+      },
+    });
     expect(run(['check', 'acme.zip', out], files).out).toContain(
       '  - 1 reported item has no owner',
     );

@@ -30,7 +30,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { main, type CliIo } from './cli';
 import { packageBuildOf } from './convert';
 import { readStudioPackage } from './studio-package';
@@ -145,7 +145,9 @@ function fill(path: string): void {
   const file = JSON.parse(readFileSync(path, 'utf8'));
   for (const item of file.decisions) {
     item.owner = 'Migration lead';
-    item.decision = 'Rebuilt by hand';
+    // A proposal is accepted or rejected, for a reason; a reported item is decided in words.
+    item.decision = item.outcome === 'proposed' ? 'accept' : 'Rebuilt by hand';
+    if (item.outcome === 'proposed') item.reason = 'The host has the function it calls';
   }
   writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
 }
@@ -256,10 +258,13 @@ const SCENARIOS: Readonly<Record<string, () => Recorded>> = {
       ...bundleOf(data),
     ]);
   },
-  'refused at the decisions: --from another build': () => {
+  // Since decisions carry to a new build by their constructs' identities, another build of the
+  // package carries them, where it was refused at its decisions step before.
+  'carried to another build: --from an earlier build': () => {
     const first = PACKAGES.synthetic();
     const earlier = fresh();
     expect(main(['migrate', 'acme.zip', '--out', earlier], quiet({ 'acme.zip': first }))).toBe(0);
+    fill(join(earlier, 'conversion', 'decisions.json'));
     const other = PACKAGES.m2();
     const out = fresh();
     return migrateRun(
@@ -267,6 +272,24 @@ const SCENARIOS: Readonly<Record<string, () => Recorded>> = {
       { 'other.zip': other },
       out,
       [[out, '<out>'], [earlier, '<earlier>'], ...bundleOf(first), ...bundleOf(other)],
+    );
+  },
+  'refused: --from another package': () => {
+    const earlier = fresh();
+    expect(
+      main(['migrate', 'acme.zip', '--out', earlier], quiet({ 'acme.zip': PACKAGES.synthetic() })),
+    ).toBe(0);
+    const decisions = join(earlier, 'conversion', 'decisions.json');
+    const file = JSON.parse(readFileSync(decisions, 'utf8'));
+    const other = join(dirname(earlier), 'other.json');
+    writeFileSync(other, JSON.stringify({ ...file, package: { ...file.package, name: 'Other' } }));
+    const data = PACKAGES.synthetic();
+    const out = fresh();
+    return migrateRun(
+      ['migrate', 'acme.zip', '--out', out, '--from', other],
+      { 'acme.zip': data },
+      out,
+      [[out, '<out>'], [dirname(earlier), '<earlier>'], ...bundleOf(data)],
     );
   },
   'refused: --out is a file': () => {

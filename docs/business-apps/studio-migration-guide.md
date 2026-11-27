@@ -8,13 +8,13 @@ checks the result, and writes a report with a list of the decisions only a perso
 You need no Nuxeo server for it, and nothing leaves your computer. The tool behind it is
 [`tools/studio-migration`](../../tools/studio-migration/README.md); the
 [migration document](studio-migration.md) explains the approach. If you have several Studio
-packages, one run can take them all (section 8). Your Nuxeo contact helps with what a run finds
+packages, one run can take them all (section 9). Your Nuxeo contact helps with what a run finds
 following the [support playbook](studio-migration-support.md).
 
 **Where it stands.** The command is the first piece of phase 10's self-service migration
 ([development plan](development-plan.md)). Its report tells you what still stands in the way, and
 for every package today the verdict is "not ready": some checks need a server that is not built
-yet (section 7), and some parts of a package wait for a later version of the tool. Read the
+yet (section 8), and some parts of a package wait for a later version of the tool. Read the
 report as a picture of your migration, not as a go-ahead to switch.
 
 ## 1. Before you start
@@ -60,7 +60,7 @@ command writes, in a folder outside your copy of the repository, and never commi
 **What the tool does with your package.** It reads it, and only reads it: it never changes the
 file, and runs nothing in it. Scripts in your layouts stay text. The command talks to no network,
 and writes what it finds only into the folder you give it; only the tool's lab mode, run by the
-team on a server (section 7), talks to one.
+team on a server (section 8), talks to one.
 
 ## 2. The one command
 
@@ -88,13 +88,13 @@ full path, so you can open it from any folder.
 
 It runs five steps, in order, and prints each as it ends:
 
-| Step                              | What it does                                                                      | What it writes, in `--out`                                   |
-| --------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 1. The inventory                  | Reads every file of the package, and says what each part becomes                  | `inventory.txt`                                              |
-| 2. The conversion                 | Converts what it can into the new app's configuration                             | `conversion/`, and what the step printed in `conversion.txt` |
-| 3. The checks that need no server | Holds the conversion to your package: the checks of section 7                     | `check.txt`                                                  |
-| 4. The report                     | The report a reviewer reads (section 4)                                           | `report.txt`                                                 |
-| 5. The decisions to fill in       | A file with an entry for every reported item, for a person's decision (section 5) | `conversion/decisions.json`, and `decisions.txt`             |
+| Step                              | What it does                                                                                         | What it writes, in `--out`                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1. The inventory                  | Reads every file of the package, and says what each part becomes                                     | `inventory.txt`                                              |
+| 2. The conversion                 | Converts what it can into the new app's configuration                                                | `conversion/`, and what the step printed in `conversion.txt` |
+| 3. The checks that need no server | Holds the conversion to your package: the checks of section 8                                        | `check.txt`                                                  |
+| 4. The report                     | The report a reviewer reads (section 4)                                                              | `report.txt`                                                 |
+| 5. The decisions to fill in       | A file with an entry for every reported item and every proposal, for a person's decision (section 5) | `conversion/decisions.json`, and `decisions.txt`             |
 
 `conversion/` holds:
 
@@ -114,7 +114,7 @@ the made-up package the repository tests with, it ends like this (shortened):
 3. The checks that need no server: done, and no check failed; in /home/me/studio/migration-1/check.txt
 4. The report: done, in /home/me/studio/migration-1/report.txt
 5. The decisions to fill in: done; what it printed is in /home/me/studio/migration-1/decisions.txt
-   Wrote /home/me/studio/migration-1/conversion/decisions.json: 15 reported items, 15 of them still without an owner or a decision
+   Wrote /home/me/studio/migration-1/conversion/decisions.json: 15 reported items and 1 proposal, 16 of them still to fill in
 
 Verdict: not ready. What stands in the way:
   - check 3 ran only in part
@@ -125,6 +125,7 @@ Verdict: not ready. What stands in the way:
   - 3 constructs are pending a later phase
   - 2 proposals wait for a person to accept or reject them
   - 15 reported items have no owner
+  - no one has approved the report and its decisions: a person does, with the approve command, once every decision is made
 
 Checks that still need the migration lab server:
   ...
@@ -169,7 +170,8 @@ after it. What it wrote before then stays in `--out`.
   the check found is in `check.txt`, and in the report. Where it is about your package's own
   content, such as a theme colour below the contrast WCAG 2.1 AA asks for, change it in Studio,
   build the package again, and migrate it into a new folder. Do this before you fill in the
-  decisions: they are for one build of the package, and a new build starts them again (section 6).
+  decisions: they are for one build of the package, and a new build carries only those whose part
+  of the package is unchanged (section 6).
   Send any other failure to your Nuxeo contact.
 
 ## 4. Reading the report
@@ -195,27 +197,34 @@ and the allow-list the actions were held to.
 `decided` counts the reported items with an owner and a decision (section 5). **Coverage** is the
 share of your package's parts the report accounts for. It must be 100%.
 
-**What the harness found** lists the ten checks of section 7, each `pass`, `FAIL`, `partial` (the
+**What the harness found** lists the ten checks of section 8, each `pass`, `FAIL`, `partial` (the
 part that needs no server found nothing, and the rest did not run) or `not run`, then the verdict.
-A migration is **ready** only when every check passes, nothing is pending, no proposal waits, and
-every reported item has an owner and a decision. Each line under the verdict says what stands in
-the way:
+A migration is **ready** only when every check passes, nothing is pending, every proposal is
+accepted or rejected and the run was made with those decisions, every reported item has an owner
+and a decision, and a reviewer has approved the report (section 7). Each line under the verdict says
+what stands in the way:
 
-| Line                                                     | What to do                                                                                                |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `check N failed`                                         | Read what it found: section 3, "A check failed"                                                           |
-| `check 10 ran only in part`                              | Only when `check` or `report` is run by hand without the run's `--allow-list`: give it the same one       |
-| `check N ran only in part`, `check N did not run`        | For any other check, nothing for now: section 7 says what each needs                                      |
-| `N constructs are pending a later phase`                 | Nothing, for now: a later version of the tool converts them                                               |
-| `N proposals wait for a person to accept or reject them` | Read them under "Proposals". Accepting or rejecting one is not built yet, so they stay in the way for now |
-| `N reported items have no owner`                         | Fill in `decisions.json`: section 5                                                                       |
-| `N reported items have an owner but no decision`         | Write what was decided: section 5                                                                         |
-| A line naming `decisions.json`                           | A decision the tool could not take, with the reason: section 6                                            |
+| Line                                                                    | What to do                                                                                                            |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `check N failed`                                                        | Read what it found: section 3, "A check failed"                                                                       |
+| `check 10 ran only in part`                                             | Only when `check` or `report` is run by hand without the run's `--allow-list`: give it the same one                   |
+| `check N ran only in part`, `check N did not run`                       | For any other check, nothing for now: section 8 says what each needs                                                  |
+| `N constructs are pending a later phase`                                | Nothing, for now: a later version of the tool converts them                                                           |
+| `N proposals wait for a person to accept or reject them`                | Read them under "Proposals", accept or reject each in `decisions.json`, and run again with `--from`: sections 5 and 6 |
+| `N proposal(s) … accepted or rejected with no one's name, or no reason` | Write who decided it, in `owner`, and why, in `reason`: section 5                                                     |
+| `the conversion was made with N of its proposals decided otherwise …`   | Run again with `--from`, so that what you accepted is written: section 6                                              |
+| `N reported items have no owner`                                        | Fill in `decisions.json`: section 5                                                                                   |
+| `N reported items have an owner but no decision`                        | Write what was decided: section 5                                                                                     |
+| A line naming `decisions.json`                                          | A decision the tool could not take, with the reason: section 6                                                        |
+| `no one has approved the report …`, or `the approval … is void`         | The reviewer approves the report, once every decision is made: section 7                                              |
 
 **Decisions needed** lists every reported item: its name, its file in your package, its id, why
 it is reported, where it was written if it was, and its owner and decision, or "none" and
-"nothing yet". Then come the **proposals**, and **each file** of your package with what its parts
-became.
+"nothing yet". Then come the **proposals**, each with who accepted or rejected it and why, or
+"nothing yet"; for a run that carried decisions from another build of your package, what was
+carried, what is offered for you to confirm again, and what was dropped; **what the harness found,
+file by file**, each finding under the file of `conversion/` it is about; and **each file** of your
+package with what its parts became and what was found in them.
 
 `inventory.txt` is a shorter view of what the package holds, and `check.txt` is the checks alone.
 The inventory has a "Decisions needed" list of its own, which is shorter than the report's: it
@@ -225,7 +234,8 @@ that set nothing. The report's list is every reported item, one by one, and is t
 
 ## 5. Filling in the decisions
 
-`conversion/decisions.json` has an entry for every reported item, in the report's order:
+`conversion/decisions.json` has an entry for every reported item and every proposal, in the
+report's order. A reported item's looks like this:
 
 ```json
 {
@@ -238,12 +248,29 @@ that set nothing. The report's list is every reported item, one by one, and is t
 }
 ```
 
-An entry also has a `property`, a `to` or a `rule` when the report gives its item one. For each
-entry, write:
+Every entry also has an `identity`, which says which part of your package it is about, and a
+`property`, a `to` or a `rule` when the report gives its item one. For each reported item, write:
 
 - **`owner`:** who decides it, a person or a team;
 - **`decision`:** what they decided, in their own words, such as "Keep the search in Web UI until
   the new app has search forms" or "Not needed: nobody uses this screen".
+
+**A proposal** is something the tool can convert only once a person agrees: a condition written as
+JavaScript in a pattern the tool knows, such as `[[hasFacet(document, 'Versionable')]]`, for which it
+proposes the new app's rule, given in the entry's `rule`. Read its `note`, check that the rule
+shows what Web UI shows, and write:
+
+- **`owner`:** your name;
+- **`decision`:** `accept` or `reject`, exactly so;
+- **`reason`:** why, in your own words, such as "The layout's host has hasFacet, as Web UI's stock
+  layouts do".
+
+What you accept is written into the new app's configuration on the next run with `--from`
+(section 6), and the checks hold it to Web UI's condition. What you reject is written nowhere, and
+what it shows, such as a field under the condition, becomes a reported item for a decision of its
+own. A field under a proposed condition has no entry: it follows the condition's decision. A
+dashboard card fed by an operation, such as the favourites card, proposes nothing the tool can write
+yet: you can reject it, with your reason, and not accept it.
 
 Change nothing else. The other keys are copied from the report, so that a decision is taken only
 while the report still says the same about its item: if the next run gives the item another
@@ -251,7 +278,7 @@ reason, the decision is not taken, and the item is decided again. Do not add ent
 keep the top of the file as it is: it names the build of the package the decisions are for.
 
 **Make your changes in Studio first.** Decisions are for one build of your package, and a new build
-starts them again (section 6). If you mean to fix something in Studio, such as a check that failed,
+carries only those whose part is unchanged, and asks you to confirm the others again (section 6). If you mean to fix something in Studio, such as a check that failed,
 build the package again and migrate it before you fill in the decisions.
 
 ## 6. Running it again
@@ -273,12 +300,22 @@ next free folder name.
   the checks and the report count your decisions: inventory, conversion, decisions, checks,
   report.
 - **Use the same `--allow-list`** as the earlier run, or none if it had none.
-- **Another build of your package.** Decisions are for one build: its name and version, the
-  Studio commit and build time, and the exact bundle. An id names a place in a file, and another
-  build can put something else there. So `--from` refuses the decisions of another build, and the
-  run stops at its decisions step. Leave `--from` out and fill in the decisions again; you can
-  copy each `owner` and `decision` across by hand where the item is the same. Carrying decisions
-  to a new build is not built yet.
+- **What you accepted is written.** With `--from`, the conversion is made with your decisions on
+  the proposals, so this run's `conversion/` holds what you accepted, and nothing you did not.
+- **Another build of your package.** Give `--from` the run of an earlier build, after you changed
+  something in Studio and built the package again. Each decision is carried to the same part of
+  your package in the new build, found by its `identity`, wherever it moved in its file:
+  - **carried** when the part is unchanged;
+  - **offered for you to confirm again** when the part changed, such as a field with a new label:
+    its entry is blank, with the earlier decision beside it in `earlier`, and you fill it in again,
+    the same or otherwise;
+  - **dropped** when the part is gone, or the new build holds two parts alike that the tool cannot
+    tell apart.
+
+  `decisions.txt` and the report list each. A decision is never carried by its place in a file,
+  which another build can give another part. `--from` the run of another package is refused before
+  anything is written.
+
 - **A newer version of the tool.** After updating your copy of the repository (`git pull`, then
   `npm ci`), run again with `--from` on the same package. The tool may convert more than before;
   a decision on an item that is no longer reported, or whose reason changed, is listed as not
@@ -293,7 +330,25 @@ npm run studio-migration -- check <your-package.zip> ~/studio/migration-1/conver
 npm run studio-migration -- report <your-package.zip> ~/studio/migration-1/conversion
 ```
 
-## 7. What a server-side check adds
+## 7. Approving the report
+
+When every decision is made and the run made with them, the person who reviews the migration
+approves its report, themselves, at a terminal:
+
+```bash
+npm run studio-migration -- approve ~/studio/my-project-1.0.0.zip ~/studio/migration-2/conversion --by "Your Name"
+```
+
+It shows the SHA-256 of `report.json`, of `decisions.json` and of the conversion's other files,
+asks you to type the first 8 characters of the digest it shows, and writes `approval.json` into
+the conversion: who approved, when, and those digests. It refuses while a decision is still to
+make, and where it is not run at a terminal, as in a script: no run of the tool approves itself,
+and `migrate` never does.
+
+Any change after that, a decision changed, a file edited, voids the approval, and the verdict says
+so: read the report again, and approve again. A new run is a new report, approved on its own.
+
+## 8. What a server-side check adds
 
 The harness has ten checks. The command runs every check, or the half of a check, that needs only
 your package and its conversion:
@@ -326,7 +381,7 @@ the team on a server, runs check 3's server half and part of 6 and 7; checks 5, 
 package installed there, and the lab server that would have it is not built. Keep your run, and
 ask your Nuxeo contact about having them run.
 
-## 8. Several packages in one run
+## 9. Several packages in one run
 
 If you look after several Studio projects, give `migrate` all their packages at once, or the folder
 that holds them, or both:
@@ -376,15 +431,15 @@ line says "Nothing carried".
 The summary prints the command, with the next free folder. To carry the decisions of a run of one
 package, run that package on its own with `--from` that run.
 
-## 9. Words the output uses
+## 10. Words the output uses
 
 - **Construct:** one part of your package the tool counts and accounts for, such as a layout, a
   field, a column, a button, a translation, a theme colour or a file.
-- **The harness:** the ten checks of section 7.
+- **The harness:** the ten checks of section 8.
 - **Truth table:** for a condition, every combination of what it tests, such as each group a user
   may be in and each type a document may have. A converted rule passes when it decides as the
   original does on every row.
-- **The migration server, the migration lab server:** the same server, of section 7.
+- **The migration server, the migration lab server:** the same server, of section 8.
 - **Phases M1 to M4:** the stages of the migration work, in the
   [migration document](studio-migration.md), section 10. M3 brings plugins for custom code; M4 is
   this command and what comes after it.
@@ -396,14 +451,13 @@ package, run that package on its own with `--from` that run.
   of the [migration document](studio-migration.md), and "(decision 3)" is in the
   [decision log](decisions.md).
 
-## 10. Not done yet
+## 11. Not done yet
 
 - **The server halves** of checks 5, 6 and 7 on your package, and the lab server they run on.
   Check 3's runs in the tool's lab mode, on a server.
-- **Accepting or rejecting a proposal.** A proposal waits, and stays in the way of readiness.
-- **Carrying decisions to a new build** of your package.
+- **A target for a card an operation feeds,** such as the favourites card: it can be rejected,
+  not accepted, until the tool proposes something to write for it.
 - **Installing the migrated app.** `conversion/app/` is the new app's configuration; installing it
   beside Web UI is not part of this guide.
-- **Recording a reviewer's approval** of the report.
 - **An upload service.** You run the command yourself, on a copy of this repository; uploading a
   package and getting its report back comes later in phase 10.

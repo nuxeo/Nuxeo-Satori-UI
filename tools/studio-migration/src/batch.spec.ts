@@ -118,7 +118,9 @@ function fill(path: string): void {
   const file = JSON.parse(readFileSync(path, 'utf8'));
   for (const item of file.decisions) {
     item.owner = 'Migration lead';
-    item.decision = 'Rebuilt by hand';
+    // A proposal is accepted or rejected, for a reason; a reported item is decided in words.
+    item.decision = item.outcome === 'proposed' ? 'accept' : 'Rebuilt by hand';
+    if (item.outcome === 'proposed') item.reason = 'The host has the function it calls';
   }
   writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
 }
@@ -698,19 +700,21 @@ describe('migrate, given several packages', () => {
       ]);
       expect(ran.code).toBe(0);
       const [policies, claims] = summaryOf(out).packages;
-      expect(policies).toMatchObject({ carriedFrom: null });
       expect(claims).toMatchObject({
         carriedFrom: 'packages/claims',
         folder: 'packages/claims-renamed',
       });
       expect(claims.constructs?.decided).toBe(claims.constructs?.reported);
-      expect(policies.constructs?.decided).toBe(0);
-      expect(ran.out).toContain(
-        `\n     Carried what still holds of the decisions of ${join(first, 'packages', 'claims')}\n`,
-      );
-      expect(ran.out).toContain(
-        `\n     Nothing carried: ${first} holds no decisions for this package as it is now, so they start again\n`,
-      );
+      // The policies package is another build of Acme-Claims, M2's corpus added: it carries the
+      // claims package's decisions by each construct's identity, and decides its own items again.
+      expect(policies).toMatchObject({ carriedFrom: 'packages/claims' });
+      expect(policies.constructs?.decided).toBeGreaterThan(0);
+      expect(policies.constructs?.decided).toBeLessThan(policies.constructs?.reported ?? 0);
+      expect(
+        ran.out.split(
+          `\n     Carried what still holds of the decisions of ${join(first, 'packages', 'claims')}\n`,
+        ),
+      ).toHaveLength(3);
       // The earlier run is only read.
       expect(tree(first, first)).toEqual(before);
       // As by hand: the same package on its own, carrying that run's decisions.
@@ -783,7 +787,8 @@ describe('migrate, given several packages', () => {
         const file = JSON.parse(readFileSync(path, 'utf8'));
         for (const item of file.decisions) {
           item.owner = owner;
-          item.decision = 'Rebuilt by hand';
+          item.decision = item.outcome === 'proposed' ? 'accept' : 'Rebuilt by hand';
+          if (item.outcome === 'proposed') item.reason = 'The host has the function it calls';
         }
         writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
       }
@@ -820,6 +825,39 @@ describe('migrate, given several packages', () => {
         `\n     Nothing carried: ${first} holds the decisions of 2 packages of this build, packages/claims-rezipped and packages/claims, and none of its bytes: run it on its own with --from the one you mean\n`,
       );
       expect(summaryOf(thirdOut).packages[1]).toMatchObject({ carriedFrom: 'packages/claims' });
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
+    'carries another build by its name only from a file that names identities, and runs it either way',
+    async () => {
+      const earlier = fresh();
+      expect((await run(['migrate', folder({ 'claims.zip': SOUND }), '--out', earlier])).code).toBe(
+        0,
+      );
+      const path = join(earlier, 'packages', 'claims', 'conversion', 'decisions.json');
+      fill(path);
+      // As the tool's earlier version wrote it: the first format, its items their places alone.
+      const file = JSON.parse(readFileSync(path, 'utf8'));
+      file.format = 'studio-migration-decisions/1';
+      for (const item of file.decisions) delete item.identity;
+      writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+      const out = fresh();
+      const ran = await run([
+        'migrate',
+        folder({ 'policies.zip': CORPUS }),
+        '--out',
+        out,
+        '--from',
+        earlier,
+      ]);
+      // Another build: not carried from a file of places, and not stopped either.
+      expect(ran.code).toBe(0);
+      expect(summaryOf(out).packages[0]).toMatchObject({ result: 'not ready', carriedFrom: null });
+      expect(ran.out).toContain(
+        `\n     Nothing carried: ${earlier} holds no decisions for this package as it is now, so they start again\n`,
+      );
     },
     SEVERAL_RUNS,
   );

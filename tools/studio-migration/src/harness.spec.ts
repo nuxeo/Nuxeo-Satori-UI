@@ -99,8 +99,9 @@ describe('the harness on a sound conversion', () => {
       'check 7 ran only in part',
       'check 9 did not run',
       expect.stringMatching(/^\d+ constructs are pending a later phase$/),
-      expect.stringMatching(/^\d+ proposals wait for a person to accept or reject them$/),
+      '1 proposal waits for a person to accept or reject it',
       expect.stringMatching(/^\d+ reported items have no owner$/),
+      'no one has approved the report and its decisions: a person does, with the approve command, once every decision is made',
     ]);
   });
 
@@ -336,7 +337,7 @@ describe('check 1, nothing dropped', () => {
     const sound = runHarness(input).blockers;
     const listed = runHarness(twice).blockers;
     expect(count(listed, /constructs are pending/)).toBe(count(sound, /constructs are pending/));
-    expect(count(listed, /proposals wait/)).toBe(count(sound, /proposals wait/));
+    expect(count(listed, /proposals? waits?/)).toBe(count(sound, /proposals? waits?/));
   });
 
   it('stands in the way of a conversion made with another allow-list than the deployment gives', () => {
