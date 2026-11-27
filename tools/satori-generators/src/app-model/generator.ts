@@ -177,28 +177,103 @@ const SEARCH_PAGE_PROVIDER = 'org.nuxeo.ecm.platform.query.nxql.SearchServicePag
 
 interface Property {
   readonly name: string;
+  /** One of `SIMPLE`, `checklist`, `document`, or `complex`, a value of subfields. */
   readonly type: string;
+  /** A list of the type: a `complex` one is a list of values, each of its subfields. */
   readonly list: boolean;
   readonly values: readonly string[];
+  /** A `complex` property's subfields, in the order written. */
+  readonly fields?: readonly Property[];
 }
 
-/** `name[:type][=value|value...]`, as `--properties` writes each one; `checklist` a type too. */
-function parseProperty(text: string): Property {
+/**
+ * `--properties`, one property each: split at its commas outside braces, so that a complex
+ * property's subfields, `parties:complex[]{name,role}`, stay in it. A list is one property per
+ * item, as `listOption` reads one.
+ */
+function propertyList(value: string | readonly string[] | undefined): string[] {
+  if (typeof value !== 'string') return listOption(value);
+  const items: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < value.length && depth >= 0; at++) {
+    const c = value[at];
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (c === ',' && depth === 0) {
+      items.push(value.slice(start, at));
+      start = at + 1;
+    }
+  }
+  if (depth !== 0) {
+    throw new Error(
+      `--properties: "${value}" opens or closes a brace it does not match: a complex property's subfields are written in one pair, such as parties:complex[]{name,role}.`,
+    );
+  }
+  items.push(value.slice(start));
+  return items.map((item) => item.trim()).filter((item) => item !== '');
+}
+
+/**
+ * A complex property, `name:complex{sub,...}` or `name:complex[]{sub,...}`, a value or a list of
+ * values of subfields, each written as a property is, but simple: `street`, `share:double`,
+ * `role=Buyer|Seller`. `null` for a property written with no braces.
+ */
+function parseComplex(text: string): Property | null {
+  if (!/[{}]/.test(text)) return null;
+  const braced = /^([^{}]*)\{([^{}]*)\}$/.exec(text.trim());
+  const head = braced === null ? null : /^([^:=]+):\s*complex\s*(\[\])?$/.exec(braced[1].trim());
+  const name = head?.[1].trim() ?? '';
+  if (braced === null || head === null || !PROPERTY.test(name)) {
+    throw new Error(
+      `--properties: "${text}" has subfields, and only a complex property does, its subfields in one pair of braces: <name>:complex{<subfield>,...}, such as address:complex{street,city}, or <name>:complex[]{<subfield>,...} for a list.`,
+    );
+  }
+  const fields = listOption(braced[2]).map((each) => parseProperty(each, name));
+  if (fields.length === 0) {
+    throw new Error(`--properties: "${name}" is complex, and lists no subfield in its braces.`);
+  }
+  const twice = fields.find((f, i) => fields.findIndex((g) => g.name === f.name) !== i);
+  if (twice) throw new Error(`--properties: "${name}" lists the subfield "${twice.name}" twice.`);
+  return { name, type: 'complex', list: head[2] !== undefined, values: [], fields };
+}
+
+/**
+ * `name[:type][=value|value...]`, as `--properties` writes each one; `checklist` and `document`
+ * types too, and a complex property (`parseComplex`). `subfield` names the complex property a
+ * subfield is read for, which takes a simple type only.
+ */
+function parseProperty(text: string, subfield?: string): Property {
+  const complex = subfield === undefined ? parseComplex(text) : null;
+  if (complex !== null) return complex;
+  const of = subfield === undefined ? '' : `, a subfield of "${subfield}",`;
   const match = /^([^:=]+)(?::([^=]+))?(?:=(.*))?$/.exec(text.trim());
   const name = match?.[1]?.trim() ?? '';
   if (!PROPERTY.test(name)) {
     throw new Error(
-      `--properties: "${text}" must be <name>, <name>:<type> or <name>=<value>|<value>, its name letters, digits and "_".`,
+      `--properties: "${text}"${of} must be <name>, <name>:<type> or <name>=<value>|<value>, its name letters, digits and "_".`,
     );
   }
   const written = (match?.[2] ?? 'string').trim();
   const list = written.endsWith('[]');
   const type = list ? written.slice(0, -2) : written;
-  if ((type === 'checklist' || type === 'document') && !list && match?.[3] === undefined)
+  if (
+    subfield === undefined &&
+    (type === 'checklist' || type === 'document') &&
+    !list &&
+    match?.[3] === undefined
+  )
     return { name, type, list: false, values: [] };
+  if (type === 'complex' && subfield === undefined) {
+    throw new Error(
+      `--properties: "${name}" is complex, and names no subfield: write them in braces, such as ${name}:complex{street,city}, or ${name}:complex[]{name,role} for a list.`,
+    );
+  }
   if (!SIMPLE.includes(type) || (list && type === 'boolean')) {
     throw new Error(
-      `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[]; checklist, a checklist card's entries; or document, another record's id.`,
+      subfield === undefined
+        ? `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[]; checklist, a checklist card's entries; document, another record's id; or complex, with its subfields in braces, such as address:complex{street,city}.`
+        : `--properties: "${name}"${of} has the type "${written}"; a subfield is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[].`,
     );
   }
   const values =
@@ -210,7 +285,7 @@ function parseProperty(text: string): Property {
           .filter((value) => value !== '');
   if (match?.[3] !== undefined && (type !== 'string' || list || values.length === 0)) {
     throw new Error(
-      `--properties: "${name}" lists values; only a single string may, such as status=Draft|Active.`,
+      `--properties: "${name}"${of} lists values; only a single string may, such as status=Draft|Active.`,
     );
   }
   const badValue = values.find((value) => !VALUE.test(value));
@@ -225,7 +300,7 @@ function parseProperty(text: string): Property {
   return { name, type, list, values };
 }
 
-/** A property as the content model describes it: its type, or a checklist's entries. */
+/** A property as the content model describes it: its type, or a complex one's subfields. */
 function described(
   property: Property,
 ):
@@ -233,6 +308,17 @@ function described(
   | { type: string; fields: Record<string, string> }
   | { type: string; constraints: { name: string; parameters: Record<string, string> }[] } {
   if (property.type === 'checklist') return { type: 'complex[]', fields: { ...CHECKLIST } };
+  // A subfield is simple, so described as its type alone, as the export describes one.
+  if (property.type === 'complex')
+    return {
+      type: property.list ? 'complex[]' : 'complex',
+      fields: Object.fromEntries(
+        (property.fields ?? []).map((field) => [
+          field.name,
+          `${field.type}${field.list ? '[]' : ''}`,
+        ]),
+      ),
+    };
   // Another record's id, as Nuxeo's documentResolver stores it: app-layout shows it as a link.
   if (property.type === 'document')
     return {
@@ -251,7 +337,70 @@ function escapeXml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** The schema file: each property an element, a list through a named list type. */
+/**
+ * A simple property's element, `indent` before each line: its type, a list's through its named
+ * list type, or a string of the values it takes.
+ */
+function simpleElement(property: Property, indent: string): string {
+  if (property.values.length > 0) {
+    return (
+      `${indent}<xs:element name="${property.name}">\n` +
+      `${indent}  <xs:simpleType>\n` +
+      `${indent}    <xs:restriction base="xs:string">\n` +
+      property.values
+        .map((value) => `${indent}      <xs:enumeration value="${escapeXml(value)}" />\n`)
+        .join('') +
+      `${indent}    </xs:restriction>\n` +
+      `${indent}  </xs:simpleType>\n` +
+      `${indent}</xs:element>\n`
+    );
+  }
+  const written = property.list ? `nxs:${property.type}List` : `xs:${property.type}`;
+  return `${indent}<xs:element name="${property.name}" type="${written}" />\n`;
+}
+
+/** A complex value's type, `name`, a sequence of its subfields' elements. */
+function complexType(name: string, fields: readonly Property[]): string {
+  return (
+    `  <xs:complexType name="${name}">\n` +
+    '    <xs:sequence>\n' +
+    fields.map((field) => simpleElement(field, '      ')).join('') +
+    '    </xs:sequence>\n' +
+    '  </xs:complexType>\n'
+  );
+}
+
+/**
+ * A list of complex values, as Nuxeo reads one from a schema: an element of a type whose sequence
+ * is any number of `entry` elements, each of the entry's type. A checklist's, `<name>Entries` of
+ * `<name>Entry`, is one.
+ */
+function entriesElement(name: string, fields: readonly Property[]): string {
+  const entries = `${name}Entries`;
+  const entry = `${name}Entry`;
+  return (
+    `  <xs:element name="${name}" type="nxs:${entries}" />\n` +
+    `  <xs:complexType name="${entries}">\n` +
+    '    <xs:sequence>\n' +
+    `      <xs:element name="entry" type="nxs:${entry}" minOccurs="0" maxOccurs="unbounded" />\n` +
+    '    </xs:sequence>\n' +
+    '  </xs:complexType>\n' +
+    complexType(entry, fields)
+  );
+}
+
+/** The checklist's entries as subfields, as `entriesElement` writes them. */
+const CHECKLIST_FIELDS: readonly Property[] = Object.entries(CHECKLIST).map(([name, type]) => ({
+  name,
+  type,
+  list: false,
+  values: [],
+}));
+
+/**
+ * The schema file: each property an element, a list through a named list type, a complex one
+ * through a type of its subfields, `<name>Type`, or of each entry, `<name>Entry`.
+ */
 function schemaFile(
   pkgName: string,
   schema: string,
@@ -259,30 +408,30 @@ function schemaFile(
   properties: readonly Property[],
 ): string {
   const namespace = `http://www.nuxeo.org/ecm/project/schemas/${pkgName}/${schema}`;
-  const lists = [...new Set(properties.filter((p) => p.list).map((p) => p.type))];
+  // The list types the properties and their subfields name, each once.
+  const simple = properties.flatMap((p) => (p.type === 'complex' ? (p.fields ?? []) : [p]));
+  const lists = [...new Set(simple.filter((p) => p.list).map((p) => p.type))];
   const listTypes = lists.map(
     (item) =>
       `  <xs:simpleType name="${item}List">\n    <xs:list itemType="xs:${item}" />\n  </xs:simpleType>\n`,
   );
   const elements = properties.map((property) => {
     if (property.type === 'checklist') {
-      const entries = `${property.name}Entries`;
-      const entry = `${property.name}Entry`;
       return (
         `  <!-- A checklist card's entries: one per item done or under way. -->\n` +
-        `  <xs:element name="${property.name}" type="nxs:${entries}" />\n` +
-        `  <xs:complexType name="${entries}">\n` +
-        '    <xs:sequence>\n' +
-        `      <xs:element name="entry" type="nxs:${entry}" minOccurs="0" maxOccurs="unbounded" />\n` +
-        '    </xs:sequence>\n' +
-        '  </xs:complexType>\n' +
-        `  <xs:complexType name="${entry}">\n` +
-        '    <xs:sequence>\n' +
-        Object.entries(CHECKLIST)
-          .map(([field, kind]) => `      <xs:element name="${field}" type="xs:${kind}" />\n`)
-          .join('') +
-        '    </xs:sequence>\n' +
-        '  </xs:complexType>\n'
+        entriesElement(property.name, CHECKLIST_FIELDS)
+      );
+    }
+    if (property.type === 'complex' && property.list) {
+      return (
+        `  <!-- A list of values, each of the subfields of ${property.name}Entry. -->\n` +
+        entriesElement(property.name, property.fields ?? [])
+      );
+    }
+    if (property.type === 'complex') {
+      return (
+        `  <xs:element name="${property.name}" type="nxs:${property.name}Type" />\n` +
+        complexType(`${property.name}Type`, property.fields ?? [])
       );
     }
     if (property.type === 'document') {
@@ -295,21 +444,7 @@ function schemaFile(
         '  </xs:element>\n'
       );
     }
-    if (property.values.length > 0) {
-      return (
-        `  <xs:element name="${property.name}">\n` +
-        '    <xs:simpleType>\n' +
-        '      <xs:restriction base="xs:string">\n' +
-        property.values
-          .map((value) => `        <xs:enumeration value="${escapeXml(value)}" />\n`)
-          .join('') +
-        '      </xs:restriction>\n' +
-        '    </xs:simpleType>\n' +
-        '  </xs:element>\n'
-      );
-    }
-    const written = property.list ? `nxs:${property.type}List` : `xs:${property.type}`;
-    return `  <xs:element name="${property.name}" type="${written}" />\n`;
+    return simpleElement(property, '  ');
   });
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -794,6 +929,14 @@ const FILES = { name: 'files', fields: { files: { type: 'complex[]', fields: { f
  *   page) and the default lifecycle. **`--attachments`** gives a new type Nuxeo's `files` schema
  *   too, `files:files`, where the document page's Attachments panel adds a record's files: it
  *   still opens as a record page, since only `file` and `note` keep a record's own view.
+ * - **A complex property,** `address:complex{street,city}` or a list of them,
+ *   `parties:complex[]{name,role=Buyer|Seller}`, is an element of a type of its subfields, as a
+ *   checklist's entries are (`steps:checklist`), and is described in `content-model.json` with its
+ *   subfields, so that `app-layout` shows it as an address or a table.
+ * - **A schema added to a type the package has:** `--properties` with a `--schema` the type does
+ *   not list yet writes that schema and adds it to the type, in the model component and in
+ *   `content-model.json`, so a checklist may be kept in a schema of its own, as the vehicle kit's
+ *   `vehicledeal_docs` is, with nothing written by hand. The type's first schema is left as it is.
  * - **`--pageProvider`** writes a page provider over the type, reading the repository so that it
  *   lists a write at once: `SELECT * FROM Document WHERE ecm:primaryType = '<Type>'`, `--where`'s
  *   condition, and no version, proxy or trashed record. A `?` in it is a parameter, bound as a
@@ -828,7 +971,7 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       `--type "${type}" is one of Nuxeo's own types: a stand-in of that name would replace the platform's. Choose another, such as Acme${type}.`,
     );
   }
-  const properties = listOption(options.properties).map(parseProperty);
+  const properties = propertyList(options.properties).map((text) => parseProperty(text));
   const facets = listOption(options.facets);
   const subtypes = listOption(options.subtypes);
   const schemaless = options.schemaless === true;
@@ -1022,27 +1165,41 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       : [{ model: readModelFile(options.model), from: options.model }]),
   ]);
   const versionable = facets.includes('Versionable');
+  // The type's doctype in the component, up to its end tag, when it has one.
+  const typeBody = (() => {
+    if (!hasType) return '';
+    const [doctype] = named(markup, 'doctype', type);
+    const close = markup.indexOf('</doctype>', doctype.index ?? 0);
+    return close < 0 ? '' : markup.slice(doctype.index ?? 0, close);
+  })();
+  /**
+   * Whether `--properties` writes a schema of its own that a type the package has does not list
+   * yet, which `--schema` names: added to the type, as a checklist of a schema of its own is,
+   * beside the one the type was first written with. Nothing of the type's is written again.
+   */
+  const addsSchema =
+    hasType &&
+    properties.length > 0 &&
+    options.schema !== undefined &&
+    named(typeBody, 'schema', schema).length === 0;
   if (properties.length > 0) {
-    if (hasType && !options.force) {
+    if (hasType && !addsSchema && !options.force) {
       throw new Error(
-        `${modelFile} has the type ${type} already. Pass --force to write its schema again from --properties.`,
+        `${modelFile} has the type ${type} already. Pass --force to write its schema again from --properties, or give --schema a name the type does not have to add a schema to it.`,
       );
     }
     if (hasType) {
       // Written again only as the schema the type already has: another would be a schema no type
-      // lists.
-      const [doctype] = named(markup, 'doctype', type);
-      const close = markup.indexOf('</doctype>', doctype.index ?? 0);
-      const body = close < 0 ? '' : markup.slice(doctype.index ?? 0, close);
-      if (named(body, 'schema', schema).length === 0) {
+      // lists. Added, the type lists it below.
+      if (!addsSchema && named(typeBody, 'schema', schema).length === 0) {
         throw new Error(
-          `The type ${type} in ${modelFile} has no schema ${schema}: give its --schema.`,
+          `The type ${type} in ${modelFile} has no schema ${schema}: give its --schema to write it again, or a new one to add to it.`,
         );
       }
-      const hasFiles = named(body, 'schema', 'files').length > 0;
+      const hasFiles = named(typeBody, 'schema', 'files').length > 0;
       if (attachments && !hasFiles) {
         throw new Error(
-          `The type ${type} in ${modelFile} has no files schema, and --force writes its own schema only: give --attachments when the type is first written.`,
+          `The type ${type} in ${modelFile} has no files schema, and --properties writes a schema of its own only: give --attachments when the type is first written.`,
         );
       }
       attachments = hasFiles;
@@ -1050,9 +1207,24 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     const schemaEntries = named(markup, 'schema', schema).filter(
       ([tag]) => attribute(tag, 'src') !== undefined,
     );
-    if (!hasType && (schemaEntries.length > 0 || tree.exists(schemaPath))) {
+    if ((!hasType || addsSchema) && (schemaEntries.length > 0 || tree.exists(schemaPath))) {
       throw new Error(
         `The schema ${schema} is in ${pkg.root} already, for another type. Give this one --schema.`,
+      );
+    }
+    // Two schemas written with one prefix would name one property twice, and Nuxeo registers
+    // neither as the package means.
+    const samePrefix = [
+      ...markup.matchAll(/<schema(?=[ \t\r\n/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g),
+    ].find(
+      ([tag]) =>
+        attribute(tag, 'src') !== undefined &&
+        attribute(tag, 'prefix') === prefix &&
+        attribute(tag, 'name') !== schema,
+    );
+    if (samePrefix !== undefined) {
+      throw new Error(
+        `${modelFile} registers the schema ${attribute(samePrefix[0], 'name')} with the prefix ${prefix} already: give ${schema} another --prefix.`,
       );
     }
     if (schemaEntries.length === 0) {
@@ -1128,8 +1300,14 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       'types',
       `<types>\n  <type name="${type}">default</type>\n</types>`,
     );
-  } else if (hasType && (facets.length > 0 || subtypes.length > 0)) {
-    xml = addedToDoctype(xml, modelFile, type, facetLines, subtypes);
+  } else if (hasType && (addsSchema || facets.length > 0 || subtypes.length > 0)) {
+    xml = addedToDoctype(
+      xml,
+      modelFile,
+      type,
+      [...(addsSchema ? [`<schema name="${schema}" />`] : []), ...facetLines],
+      subtypes,
+    );
   }
 
   if (pageProvider !== undefined) {
@@ -1312,10 +1490,17 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
 
   // The heading of the schema's section in the Properties panel, which a type with no `metadata`
   // layout generates: `layout.schema.<schema>`, by the schema's name, else the name made readable,
-  // "Damageclaim" (layout-v2.md, section 1). From the type's name; a text the kit gave is kept.
+  // "Damageclaim" (layout-v2.md, section 1). From the type's name; a text the kit gave is kept. A
+  // schema added to the type is named apart from the type's first: `vehicledeal_docs` of
+  // VehicleDeal, "Vehicle deal docs", for the person to name otherwise.
   const heading = `layout.schema.${schema}`;
+  const headingText = !addsSchema
+    ? humanize(type)
+    : schema.startsWith(`${type.toLowerCase()}_`)
+      ? `${humanize(type)} ${schema.slice(type.length + 1).replace(/_/g, ' ')}`
+      : humanize(schema);
   const keptHeading =
-    properties.length > 0 && addLabels(tree, pkg, { [heading]: humanize(type) }).length > 0;
+    properties.length > 0 && addLabels(tree, pkg, { [heading]: headingText }).length > 0;
   if (properties.length > 0) {
     written.push(`${pkg.config}/labels/en.json`);
     // labels/en.json is a file the app registry serves: named, if the component contributes the app.
@@ -1330,10 +1515,10 @@ Wrote the stand-in model, for a demo:
 
   ${written.join('\n  ')}
 
-  Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : writesType ? `${type}, ${folder ? 'a folder' : 'no schema of its own'}${attachments ? ', and its attachments, files:files' : ''}` : `${type}${facets.length > 0 || subtypes.length > 0 ? ', added to' : ', unchanged'}`}
+  Type:           ${addsSchema ? `${type}, a schema added to it, ${schema} (${prefix}:), ${properties.length} properties` : properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : writesType ? `${type}, ${folder ? 'a folder' : 'no schema of its own'}${attachments ? ', and its attachments, files:files' : ''}` : `${type}${facets.length > 0 || subtypes.length > 0 ? ', added to' : ', unchanged'}`}
 ${facets.length > 0 ? `  Facets:         ${facets.join(', ')}${versionable ? ', with the uid schema its versions are numbered in' : ''}\n` : ''}${subtypes.length > 0 ? `  Subtypes:       ${subtypes.join(', ')}, which its Create menu offers\n` : ''}
   Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
-${properties.length > 0 ? `  Heading:        ${heading} in labels/en.json, the Properties panel's heading for the schema${keptHeading ? ', its text kept as labels/en.json had it' : `, "${humanize(type)}"`}\n` : ''}
+${properties.length > 0 ? `  Heading:        ${heading} in labels/en.json, the Properties panel's heading for the schema${keptHeading ? ', its text kept as labels/en.json had it' : `, "${headingText}"`}\n` : ''}
 ${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}
 Lay the type out against the content model beside it:
 
