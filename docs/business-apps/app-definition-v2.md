@@ -23,7 +23,8 @@ the app registry, which serves an app's files on a server after sign-in, on 24 N
 the registry serves over its package's, on 25 November 2026 (section 10). The app draws the home
 (section 10), the queues (section 4), the menu (section 9), the labels (section 7) and the task
 forms (section 6); since 25 November 2026, the operation buttons of `actions.json` (section 5), on
-decision 3's recommendation. Nothing in the app reads
+decision 3's recommendation; since 27 November 2026, the home's lists of the person's tasks and of
+their recent records (section 10). Nothing in the app reads
 module settings yet.
 
 ## The short version
@@ -792,13 +793,18 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 
 A card:
 
-| Key                 | What it is                                                                                         |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `id`                | Required, and used once in the file                                                                |
-| `kpi`               | A figure: what it counts, below                                                                    |
-| `queue`             | A queue of the package, by its id. With a `kpi`, the card links to it; alone, the card is the link |
-| `label`, `labelKey` | The card's title. A KPI needs one; a link to a queue shows the queue's own name when it has none   |
-| `visibleWhen`       | A rule: who sees the card                                                                          |
+| Key                 | What it is                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                | Required, and used once in the file                                                                                                                          |
+| `kpi`               | A figure: what it counts, below                                                                                                                              |
+| `queue`             | A queue of the package, by its id. With a `kpi`, the card links to it; alone, the card is the link                                                           |
+| `tasks`             | A list of the person's open tasks, below                                                                                                                     |
+| `recent`            | A list of the records the person created or edited last, below                                                                                               |
+| `label`, `labelKey` | The card's title. A KPI needs one; a link to a queue shows the queue's own name when it has none, and a list the platform's, "My tasks" or "Recently viewed" |
+| `visibleWhen`       | A rule: who sees the card                                                                                                                                    |
+
+A card shows one thing: a `kpi`, which may link to its `queue`; a `queue` alone; a list of `tasks`;
+or a list of `recent` records. A list opens what it lists, so it names no queue.
 
 A KPI:
 
@@ -834,6 +840,34 @@ A KPI:
   rule, its parameters included, in every file.
 - **A figure is not a security control,** and not an audit either. It counts what the page provider
   returns to the person signed in, and hiding a card hides the figure, not the records.
+
+A list of tasks, `"tasks": { "workflow": "SerialDocumentReview", "limit": 5 }`, either key or
+neither:
+
+| Key        | What it is                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| `workflow` | A workflow model defined on the server, by its name: only its tasks show. Every workflow's when left out |
+| `limit`    | How many show, a whole number from 1 to 20. 5 when left out                                              |
+
+A list of recent records, `"recent": { "types": ["Contract"], "limit": 5 }`, either key or neither:
+
+| Key     | What it is                                                                                                                       |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `types` | Document types, 1 to 20, each once: only records of these show. Each must be in the content model when the pipeline is given one |
+| `limit` | How many show, a whole number from 1 to 20. 5 when left out                                                                      |
+
+- **What a list of tasks shows:** the person's open tasks, newest first, each with the record it is
+  about, its workflow and the day it was given them, each opening on the tasks page, and a link to
+  the tasks page under them. It is the tasks page's read, `GET /api/v1/task` for the person, with
+  `workflowModelName` when the card names a workflow (api-integrations.md, section 3).
+- **What a list of recent records shows:** the records the person created or edited last, the
+  latest changed first, each with its type and the day it last changed, each opening its record
+  page. It is what the app's Recently viewed lists (api-integrations.md, section 4): **Nuxeo records
+  no read of a record,** and has no recently viewed list of its own on the server. Web UI keeps one
+  in the browser, which this app does not share. So a record the person only opened is not in it.
+- **Each list says when it is empty,** "No open tasks" or "No recent records", and that it is
+  unavailable when the server does not answer.
+- **A list is not a security control** either: it holds what the server returns to the person.
 
 ### Where the app reads it: the development server, then the app registry
 
@@ -962,7 +996,10 @@ The app's page `/home` reads the file, checks it with the validator, and draws i
 - **a page provider the server does not have,** or a request it refuses, shows the card's title
   with no figure, and the console says why;
 - **a link to a queue** opens the queue's page, `/queues/<id>` (section 4). The home reads no queue
-  file, so a link with no name of its own shows the queue's id, not its name.
+  file, so a link with no name of its own shows the queue's id, not its name;
+- **a list** reads its tasks or records once, as the person signed in, when its card shows. A list
+  of tasks opens the app's tasks page, `/tasks` and `/tasks/<id>`; a host with no tasks page draws
+  none.
 
 The engine is `libs/shared/home`, and its `samples/documents/home.json` is a home on the
 platform's own `default_search` page provider, for the development server.
@@ -1054,8 +1091,13 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **The other cards of a Studio home.** A Web UI home also holds the person's tasks, recently
   viewed documents and favourites, and lists a page provider's records in place. The menu opens
   the first three as platform pages (`app.navbar.tasks`, `app.navbar.recentlyViewed`,
-  `app.navbar.favorites`); the home has no card for them yet, and a list in place is a link to a
-  queue for now. The Studio migration writes such a list as a queue.
+  `app.navbar.favorites`). The home has a list of tasks and a list of recent records since
+  27 November 2026 (section 10), which the Studio migration does not write yet; it has no card for
+  favourites, and a list in place is a link to a queue for now. The Studio migration writes such a
+  list as a queue.
+- **Recently viewed, as viewed.** The app's recent records are those the person created or edited
+  last (section 10). A list of what they opened needs the app to keep one, or the server to record
+  reads; neither does yet.
 - **The person signed in as a page provider parameter.** A page provider names them on the server
   for now. The server already reads a parameter written `$currentUser` as the person's name, and
   `$currentRepository` as the repository's (`QueryExecutor` in `nuxeo-search-rest-api`

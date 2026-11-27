@@ -144,10 +144,13 @@ describe('HomePageComponent: the lists at a phone width and on a desktop', () =>
       const box = card.getBoundingClientRect();
       if (box.right > window.innerWidth + 0.5)
         found.push(`${card.dataset['cardId']} ends at ${box.right}`);
-      for (const child of card.querySelectorAll<HTMLElement>('*')) {
+      for (const child of [card, ...card.querySelectorAll<HTMLElement>('*')]) {
         const inner = child.getBoundingClientRect();
         if (inner.width > 0 && inner.right > box.right + 0.5)
           found.push(`${card.dataset['cardId']}: ${child.className} ends at ${inner.right}`);
+        // A flex item keeps its box while its text runs out of it: that is overflow too.
+        if (child.clientWidth > 0 && child.scrollWidth > child.clientWidth + 1)
+          found.push(`${card.dataset['cardId']}: ${child.className} scrolls ${child.scrollWidth}`);
       }
     }
     return found;

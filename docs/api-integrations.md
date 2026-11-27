@@ -117,22 +117,23 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 ---
 
-## 3. User Tasks (Tasks Page, Drawer, Dashboard Widget)
+## 3. User Tasks (Tasks Page, Drawer, Dashboard Widget, Home)
 
 | Field           | Value                                                                       |
 | --------------- | --------------------------------------------------------------------------- |
 | **Service**     | `TaskService` (`libs/shared/nuxeo-client/src/lib/services/task.service.ts`) |
-| **Method**      | `getUserTasks(userId, pageSize)`                                            |
+| **Method**      | `getUserTasks(userId, pageSize, context?, workflowModelName?)`              |
 | **HTTP Method** | `GET`                                                                       |
 | **Endpoint**    | `/nuxeo/api/v1/task`                                                        |
 
 **Query Parameters:**
 
-| Parameter  | Value                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `userId`   | Current authenticated username (e.g., `Administrator`)                                                       |
-| `pageSize` | First read: how many to return, 50 for the tasks page and the drawer, 10 for the dashboard, 100 for the bell |
-| `offset`   | Second read only: the first read's entry count, with `pageSize` the rest, at most 1000                       |
+| Parameter           | Value                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `userId`            | Current authenticated username (e.g., `Administrator`)                                                                        |
+| `pageSize`          | First read: how many to return, 50 for the tasks page and the drawer, 10 for the dashboard, 100 for the bell                  |
+| `offset`            | Second read only: the first read's entry count, with `pageSize` the rest, at most 1000                                        |
+| `workflowModelName` | Only for a home's list of tasks of one workflow (app-definition-v2.md, section 10): its model, such as `SerialDocumentReview` |
 
 **Order, and why there can be two reads.** Nuxeo cannot be asked for the newest tasks. Its task
 list (`RoutingTaskPageProvider` in `nuxeo-routing-core`, Nuxeo 2025.10) builds its own query,
@@ -154,6 +155,14 @@ two when they do not. The page providers that query task documents directly
 (`GET_TASKS_FOR_ACTORS…`) return documents, not tasks, and need the reader's groups expanded, so
 they are not used. **Limit:** a user with more than `pageSize` + 1000 open tasks gets the newest of
 the ones due soonest.
+
+**One workflow's tasks.** With `workflowModelName`, Nuxeo 2025.10 answers differently, as measured
+on the local server on 27 November 2026: every such task of the user, in one list with no paging
+fields at all (`{"entity-type": "tasks", "entries": [...]}`), whatever `pageSize` says; still only
+the user's (`userId=nobodyxyz&workflowModelName=SerialDocumentReview` was empty); and none for a
+model the server does not have. The service sorts that list newest first and keeps the first
+`pageSize`, as above, reading titles only for those it keeps, and leaves out a task of another
+workflow whatever the server sends.
 
 **Request Headers:**
 
@@ -205,12 +214,12 @@ the ones due soonest.
 
 ---
 
-## 4. Recently Viewed Documents (Dashboard Widget)
+## 4. Recently Viewed Documents (Dashboard Widget, Drawer, Home)
 
 | Field           | Value                                                                               |
 | --------------- | ----------------------------------------------------------------------------------- |
 | **Service**     | `DocumentService` (`libs/shared/nuxeo-client/src/lib/services/document.service.ts`) |
-| **Method**      | `getRecentlyViewed(userId, pageSize)`                                               |
+| **Method**      | `getRecentlyViewed(userId, pageSize, types?)`                                       |
 | **HTTP Method** | `GET`                                                                               |
 | **Endpoint**    | `/nuxeo/api/v1/search/lang/NXQL/execute`                                            |
 
@@ -220,6 +229,17 @@ the ones due soonest.
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `query`    | `SELECT * FROM Document WHERE ecm:mixinType != 'HiddenInNavigation' AND ecm:isProxy = 0 AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND ecm:primaryType NOT IN ('Root', 'Favorites', 'Collections') AND (dc:creator = '{user}' OR dc:lastContributor = '{user}') ORDER BY dc:modified DESC` |
 | `pageSize` | `10` (default)                                                                                                                                                                                                                                                                              |
+
+**Not what was viewed.** Nuxeo records no read of a record, and has no recently viewed list of its
+own on the server: Web UI keeps one in the browser's local storage, which this app neither writes
+nor reads. So the app's "Recently viewed", the dashboard's, the drawer's and a home's list of recent
+records, is the records the person created or edited last, the latest changed first.
+
+**With `types`,** a home's list of recent records of some document types (app-definition-v2.md,
+section 10), the query gains `AND ecm:primaryType IN ('Contract', …)` before its `ORDER BY`, each
+type escaped as the user is. The validator holds each to a document type's name, and to the content
+model when the pipeline is given one. Measured on the local server on 27 November 2026 with
+`('File', 'Note')`: Files and Notes alone, the latest changed first.
 
 **Request Headers:**
 
@@ -1983,7 +2003,7 @@ list; `nxs-saved-search-actions` for the permission read.
 | Field           | Value                                                                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Service**     | `HomeService` (`libs/shared/home/src/lib/home.service.ts`)                                                                                                                            |
-| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads                                                          |
+| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads; `tasks(list)` and `recent(list)`, once per list card    |
 | **HTTP Method** | `GET`                                                                                                                                                                                 |
 | **Endpoints**   | `/nuxeo/agentic-ui-config/home.json` (`/agentic-ui-config/home.json` under `nx serve`) — without interceptors, no `Authorization` header                                              |
 |                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                              |
@@ -2016,6 +2036,14 @@ list; `nxs-saved-search-actions` for the permission read.
   `tree_children` does; the card says its figure is unavailable.
 - The counts are the signed-in person's: a user in `members` only counted 2,167 records of
   `default_search` where an administrator counted 2,249.
+
+**The lists, `tasks` and `recent`:** `HomeService.tasks(list)` and `HomeService.recent(list)`, once
+per list card the person sees, as the signed-in person, read what the tasks page and Recently viewed
+read: `TaskService.getUserTasks` (section 3), with the card's `limit` as `pageSize` and its
+`workflow` as `workflowModelName`, and `DocumentService.getRecentlyViewed` (section 4), with its
+`limit` and `types`. Each with the home's 10-second timeout; a failure shows "Unavailable" in the
+card and the reason in the console. With no one signed in, nothing is asked. A host that gives the
+home no tasks page (`HOME_TASKS_LINK`) asks for no tasks, and draws no list of them.
 
 **The menu, `navigation.json`:** `HomeService.loadNavigation()` reads
 `/nuxeo/agentic-ui-config/navigation.json` (`/agentic-ui-config/navigation.json` under `nx serve`)
