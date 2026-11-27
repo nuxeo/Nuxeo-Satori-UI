@@ -14,7 +14,7 @@ server's tools. Here the same tools are called from a shell, one call at a time,
 
 **How this was checked.** Every command below that needs no Nuxeo server was run on 27 November
 2026, in a checkout of `staging/enterprise-grade-app` at `d1f315cf5`, on macOS with Node 24.22.1,
-in the order given, and the outputs quoted are that run's, trimmed. Nothing was read from or
+in the order given, and the outputs quoted are that run's, trimmed. The pipeline builds, the seed's controls and the steps listing ran again after the branch's merge of `3c1c4c51d`, which added the letters add-on, with the same outputs. Nothing was read from or
 written to any Nuxeo server. Each step that needs one is marked **Server step**, and was not run.
 
 ## What is built, and what is not

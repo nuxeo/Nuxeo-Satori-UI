@@ -7,10 +7,11 @@ to install, and what the release candidate refuses. The design is
 candidate; the administrator's check is [administrator-guide.md](../administrator-guide.md),
 section 3, "Checking a kit before you install it".
 
-**How this was checked.** On 27 November 2026, in a checkout of `staging/enterprise-grade-app` at
-`d1f315cf5` with nothing uncommitted, on macOS with Node 24.22.1, Maven and the GitHub CLI 2.83.1:
-every command below but the two marked **Not run**, in the order given. The outputs quoted are that
-run's, trimmed, with a key's fingerprint written `<…>`. No Nuxeo server was involved, and nothing
+**How this was checked.** On 27 November 2026, on macOS with Node 24.22.1, Maven and the GitHub CLI
+2.83.1: every command below but those marked **Not run**, in the order given. Steps 1 to 3 ran in a
+checkout of `staging/enterprise-grade-app` at `d1f315cf5` with nothing uncommitted; step 5's
+commands ran again after the branch's merge of `3c1c4c51d`, which raised the Payers kit to 0.8.0,
+and are quoted from that run. The outputs are trimmed, with a key's fingerprint written `<…>`. No Nuxeo server was involved, and nothing
 was tagged, signed for real or published.
 
 ## What is built, and what is not
@@ -148,10 +149,10 @@ the repository's attestations, the certificate's identity pinned whole to that w
 that tag (administrator-guide.md, section 3):
 
 ```bash
-gh attestation verify payers-claims-demo-0.7.0.zip --repo nuxeo/Nuxeo-Satori-UI \
+gh attestation verify vehicle-titles-demo-0.1.0.zip --repo nuxeo/Nuxeo-Satori-UI \
   --predicate-type https://github.com/nuxeo/Nuxeo-Satori-UI/app-package-signature/v1 \
-  --cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/payers-claims-demo/0.7.0 \
-  --source-ref refs/tags/app-package/payers-claims-demo/0.7.0 --deny-self-hosted-runners
+  --cert-identity https://github.com/nuxeo/Nuxeo-Satori-UI/.github/workflows/app-packages.yml@refs/tags/app-package/vehicle-titles-demo/0.1.0 \
+  --source-ref refs/tags/app-package/vehicle-titles-demo/0.1.0 --deny-self-hosted-runners
 ```
 
 Or with the signature beside the zip, from a clone: the tag run's artifact `app-package-signature`
@@ -192,7 +193,7 @@ npm run release-candidate -- --out /tmp/signing-demo/rc --since origin/staging/e
 vehicle-titles-demo 0.1.0: checked, built and verified: /tmp/signing-demo/rc/kits/vehicle-titles-demo-0.1.0.zip, sha256 c451afe3…0e168
 vehicle-titles-demo: not taken, for its signature, /tmp/signing-demo/no-signatures/vehicle-titles-demo-0.1.0.zip.sig.json:
   - vehicle-titles-demo-0.1.0.zip is not signed: there is no signature at /tmp/signing-demo/no-signatures/vehicle-titles-demo-0.1.0.zip.sig.json.
-The release candidate is refused: stage 2: 11 kit(s) not signed by a trusted signer over the zip built here: brand-assets-demo 0.2.5, contracts-demo 0.2.1, controlled-documents-demo 0.3.0, facilities-demo 0.1.1, media-demo 0.2.0, moves-demo 0.3.0, onboarding-demo 0.2.0, payers-claims-demo 0.7.0, pc-claims-demo 0.2.0, records-demo 0.2.0, vehicle-titles-demo 0.1.0, as above.
+The release candidate is refused: stage 2: 11 kit(s) not signed by a trusted signer over the zip built here: brand-assets-demo 0.2.5, contracts-demo 0.2.1, controlled-documents-demo 0.3.0, facilities-demo 0.1.1, media-demo 0.2.0, moves-demo 0.3.0, onboarding-demo 0.2.0, payers-claims-demo 0.8.0, pc-claims-demo 0.2.0, records-demo 0.2.0, vehicle-titles-demo 0.1.0, as above.
 /tmp/signing-demo/rc is removed: it was this run's, and holds no candidate.
 ```
 
@@ -222,7 +223,7 @@ npm run release-candidate:selftest
 ```
 
 ```text
-53 negative and 16 positive controls, 0 failed.
+54 negative and 18 positive controls, 0 failed.
 ```
 
 **Not run here: `--unsigned-kits`,** which takes kits no tag has signed and goes on to build the

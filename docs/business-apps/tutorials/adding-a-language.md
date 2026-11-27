@@ -11,7 +11,7 @@ tutorial follows them as a task, and runs what can run.
 **How this was checked.** On 27 November 2026, in a checkout of `staging/enterprise-grade-app` at
 `d1f315cf5`, on macOS with Node 24.22.1: the coverage report, the Crowdin tools' controls, and a
 kit's new labels file on a scratch copy of the contracts kit, through the package pipeline and the
-write tools. The outputs quoted are that run's, trimmed. Nothing was done on Crowdin, no workflow was
+write tools. The outputs quoted are that run's, trimmed. The report and the controls ran again after the branch's merge of `3c1c4c51d`, which added the letters add-on, with the same outputs. Nothing was done on Crowdin, no workflow was
 run, and no server was touched: those steps are marked **Crowdin step** or **Server step**, and
 were not run. **No translation was written:** translations come from Crowdin, never from this
 repository.
@@ -198,7 +198,22 @@ to the French file that `labels/en.json` does not have, the pipeline refuses it,
 `labels/en.json has no text for "<the key>": a language's labels give a text only to a key English
 has`. A file with a subset of the keys passes, and the missing ones show in English.
 
-## 4. On the server
+## 4. Letters: a language is a template, not a catalogue
+
+The letters add-on, [`nuxeo-agentic-letters`](../../../nuxeo-agentic-letters/README.md), merged on
+27 November 2026 and installed nowhere, writes letters on a record from templates an administrator
+keeps on the server. **Crowdin plays no part in them.** A letter's language is its template's,
+`ltpl:language`:
+
+- the letter is written in the language the person asks for, refused, 400, when no template is in
+  it; with none asked for, in the record's `corr:language` when a template is in it, else in the
+  server's `nuxeo.agentic.letters.language.default`, `en` unless set;
+- so **a letter in a new language is a new template** in that language, for each letter, kept by an
+  administrator, and no change to the repository's catalogues. The Payers kit's fictional templates
+  are in `business-apps/packages/payers-claims-demo/demo/letters/`, in English and Spanish, which its
+  seed writes on a server (its README, "The letters").
+
+## 5. On the server
 
 **Server step.** An administrator installs the kits' new versions, and sets `defaultLanguage` in the
 deployment's Layer 0 configuration, which `availableLanguages` must list. The app runs in a language

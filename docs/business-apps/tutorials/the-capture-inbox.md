@@ -11,7 +11,7 @@ claims kit, [`pc-claims-demo`](../../../business-apps/packages/pc-claims-demo/RE
 **How this was checked.** On 27 November 2026, in a checkout of `staging/enterprise-grade-app` at
 `d1f315cf5`, on macOS with Node 24.22.1 and JDK 21: the add-on's Java tests, the kit's pipeline
 build, and the controls of its seed and its intake script. The outputs quoted are that run's,
-trimmed. No Nuxeo server was read or written. Each step that needs one is marked **Server step**,
+trimmed. The build and the controls ran again after the branch's merge of `3c1c4c51d`, which added the letters add-on, with the same outputs. No Nuxeo server was read or written. Each step that needs one is marked **Server step**,
 and was not run.
 
 ## What is built, and what is not

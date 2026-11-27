@@ -9,8 +9,9 @@ stand-in core system and stand-in webhook receiver, and the Payers kit's claims.
 
 **How this was checked.** On 27 November 2026, in a checkout of `staging/enterprise-grade-app` at
 `d1f315cf5`, on macOS with Node 24.22.1 and JDK 21: the add-on's Java tests, both stand-ins and their
-controls, the kit-side writes on a scratch copy of the Payers kit, and the pipeline. The outputs
-quoted are that run's, trimmed. No Nuxeo server was read or written. Each step that needs one is
+controls, the kit-side writes on a scratch copy of the Payers kit, and the pipeline. Section 2 ran
+again after the branch's merge of `3c1c4c51d`, which raised the Payers kit to 0.8.0 and changed its
+claim page, and is quoted from that run. The outputs are trimmed. No Nuxeo server was read or written. Each step that needs one is
 marked **Server step**, and was not run.
 
 ## What is built, and what is not
@@ -107,7 +108,7 @@ node -e "const a = require('/tmp/connectors-demo/answer.json'); console.log(a.wr
 
 ```text
 false [
-  'cards[2].external.fields[7].name: the connector "payers.claimPayments" (connectors/payers-claims-demo-connectors-config.xml) does not return the field "bankAccount": it returns paymentStatus, paidAmount, paidOn, paymentReference, policyNumber, policyStatus, deductibleMet'
+  'cards[3].external.fields[7].name: the connector "payers.claimPayments" (connectors/payers-claims-demo-connectors-config.xml) does not return the field "bankAccount": it returns paymentStatus, paidAmount, paidOn, paymentReference, policyNumber, policyStatus, deductibleMet'
 ]
 ```
 
@@ -160,7 +161,7 @@ Wrote the connector payers.claimPayments to business-apps/packages/payers-claims
   ```text
   4 layouts were held to the content model in /tmp/payers-kits/payers-claims-demo/content-model.json.
   17 files: 16 passed, 0 refused, 1 in version 1, which this does not check.
-  payers-claims-demo 0.7.0: checked, built and verified: …
+  payers-claims-demo 0.8.0: checked, built and verified: …
   ```
 
   A real change to the kit would also raise its version: the pipeline's `--previous` refuses a
@@ -252,7 +253,9 @@ demo", has the commands; none was run here, and each changes the server.
    added to `conf.d` later is never read ([administrator-guide.md](../administrator-guide.md),
    section 3).
 
-3. **The Payers kit installed and seeded,** so that claims with the stand-in's numbers exist.
+3. **The Payers kit installed and seeded,** so that claims with the stand-in's numbers exist. Since
+   0.8.0 the kit needs `nuxeo-agentic-letters`, which needs Nuxeo's Template Rendering
+   ([administrator-guide.md](../administrator-guide.md), section 3).
 4. **The page:** `npm run config:dev -- --layout Claim/view=nuxeo-agentic-connectors/demo/Claim.view.layout.json`,
    then `npx nx serve nuxeo-ui`, signed in as a Payers demo user. Open `CLAIM-000130`.
 5. **The cache:** open it again within 5 minutes. The card says "Read from the other system" and how
