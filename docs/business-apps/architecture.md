@@ -401,7 +401,9 @@ demo/                                demo data and the demo script (starter kits
 - **Validated before it ships:** JSON schemas for every file, registered IDs, the operation
   allow-list and the platform range. A mistake fails the build, not a user's screen.
 - **Overlays:** starter kit, then customer, then tenant, then environment, merged on the server in
-  that order. The app registry serves the result.
+  that order. The app registry serves the result. As built on 27 November 2026, a later file
+  replaces an earlier one whole, and only labels combine key by key; patch overlays are proposed in
+  [extension-model.md](extension-model.md) (decision L).
 - **Versions:** each package has a semantic version and declares the platform range it needs. The
   shell refuses an app it cannot run, with a clear message, rather than drawing half of it.
 - **Where it lives:** contributed to the configuration extension point

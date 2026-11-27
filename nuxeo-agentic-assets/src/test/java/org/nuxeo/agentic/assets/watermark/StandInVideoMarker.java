@@ -49,6 +49,12 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
 
     static final AtomicInteger probes = new AtomicInteger();
 
+    /**
+     * The thread each probe ran on: a request's is the test's own thread, a job's the work manager's,
+     * which runs as soon as it is queued, so a count alone cannot tell the two apart.
+     */
+    static final List<String> probeThreads = new CopyOnWriteArrayList<>();
+
     public static final AtomicInteger marks = new AtomicInteger();
 
     /** The thread each mark ran on. */
@@ -60,8 +66,14 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
         gate = null;
         unreadableOutput = false;
         probes.set(0);
+        probeThreads.clear();
         marks.set(0);
         threads.clear();
+    }
+
+    /** How many probes ran on {@code thread}'s name. */
+    static long probesOn(String thread) {
+        return probeThreads.stream().filter(thread::equals).count();
     }
 
     @Override
@@ -72,6 +84,7 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
     @Override
     public Probe probe(Blob video) throws Unavailable {
         probes.incrementAndGet();
+        probeThreads.add(Thread.currentThread().getName());
         Matcher seconds = SECONDS.matcher(text(video));
         if (!seconds.find()) {
             throw new Unavailable("the stand-in reads no length");

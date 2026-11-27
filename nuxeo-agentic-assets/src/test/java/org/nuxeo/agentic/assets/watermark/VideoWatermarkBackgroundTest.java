@@ -214,9 +214,15 @@ public class VideoWatermarkBackgroundTest {
         Framework.getProperties().setProperty(MarkedVideosComponent.BYTES_PROPERTY, "1000");
         String video = video("heavy", 5, 5000);
         assertEquals(202, ask(video, OLGA).status());
-        assertEquals("over the bytes, ffprobe is not asked in the request", 0, StandInVideoMarker.probes.get());
+        // Counted by thread: the job, queued at once, probes on the work manager's thread whenever
+        // it runs, before or after this line.
+        String request = Thread.currentThread().getName();
+        assertEquals("over the bytes, ffprobe is not asked in the request", 0, StandInVideoMarker.probesOn(request));
         awaitJobs();
+        assertEquals("the job probes the video it marks, on its own thread", 1, StandInVideoMarker.probes.get());
+        assertEquals(0, StandInVideoMarker.probesOn(request));
         assertEquals(200, ask(video, OLGA).status());
+        assertEquals("nor when its copy is served", 0, StandInVideoMarker.probesOn(request));
     }
 
     @Test
@@ -413,8 +419,9 @@ public class VideoWatermarkBackgroundTest {
         gate.countDown();
         awaitJobs();
         assertEquals(200, ask(video, OLGA).status());
-        assertEquals("by the first request and by its job, and by no request after", 2,
-                StandInVideoMarker.probes.get());
+        assertEquals("by the first request, on its thread, and by no request after", 1,
+                StandInVideoMarker.probesOn(Thread.currentThread().getName()));
+        assertEquals("and once by its job", 2, StandInVideoMarker.probes.get());
     }
 
     /**
