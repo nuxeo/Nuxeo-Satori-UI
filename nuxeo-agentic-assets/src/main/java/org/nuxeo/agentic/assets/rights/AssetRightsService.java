@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 
 /** The rights policies in force, and the decision for a download. */
 public interface AssetRightsService {
@@ -46,6 +47,17 @@ public interface AssetRightsService {
      * @param rendition the rendition's name, or {@code null} when the download is not of one
      */
     DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition);
+
+    /**
+     * As {@link #decideDownload(DocumentModel, String, Blob, String)}, for {@code person}: since 0.5.0,
+     * a use the rights allow and the policy's watermark marks for them is refused unmarked,
+     * {@code watermark-required}. With no person, no one is exempt from the watermark, which is how the
+     * four-argument form decides. An implementation that does not read the person decides as that form.
+     */
+    default DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition,
+            NuxeoPrincipal person) {
+        return decideDownload(document, xpath, blob, rendition);
+    }
 
     /**
      * What the rights decide for a delivery of {@code document}'s package to {@code territory}: each

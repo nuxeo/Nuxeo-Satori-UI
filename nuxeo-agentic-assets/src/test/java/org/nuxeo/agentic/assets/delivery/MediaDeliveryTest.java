@@ -3,9 +3,13 @@
  */
 package org.nuxeo.agentic.assets.delivery;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -30,6 +34,7 @@ import org.nuxeo.ecm.core.api.Blobs;
 import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.PathRef;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
@@ -44,6 +49,9 @@ import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.ecm.core.test.annotations.Granularity;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
 import org.nuxeo.ecm.core.api.trash.TrashService;
+import org.nuxeo.agentic.assets.rights.Watermark;
+import org.nuxeo.agentic.assets.share.Watermarker;
+import org.nuxeo.agentic.assets.watermark.WatermarkedFiles;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
@@ -99,6 +107,12 @@ public class MediaDeliveryTest {
 
     private static final String KEY_ART = "files:files/2/file";
 
+    /** Since the kit's 0.2.0: a still from the film, a preview, marked for anyone outside the kit's groups. */
+    private static final String STILL = "files:files/3/file";
+
+    /** An outside partner: may read the versions, in neither of the kit's groups. */
+    private static final String PARTNER = "paula";
+
     @Inject
     protected CoreSession session;
 
@@ -121,7 +135,7 @@ public class MediaDeliveryTest {
         DocumentModel deliveries = folder("/", "deliveries", "Deliveries");
         grant(session.getDocument(new PathRef("/films")), FILER, SecurityConstants.READ);
         grant(session.getDocument(new PathRef("/versions")), FILER, SecurityConstants.READ,
-                READER, SecurityConstants.READ);
+                READER, SecurityConstants.READ, PARTNER, SecurityConstants.READ);
         grant(deliveries, FILER, SecurityConstants.READ_WRITE, OUTSIDER, SecurityConstants.READ_WRITE);
 
         film = session.createDocumentModel("/films", "lighthouse", "Film");
@@ -141,7 +155,7 @@ public class MediaDeliveryTest {
 
     /** Inside its windows, the French version is delivered whole, and the server writes the record. */
     @Test
-    public void aLocalisedVersionIsDeliveredInsideItsWindow() {
+    public void aLocalisedVersionIsDeliveredInsideItsWindow() throws Exception {
         DocumentModel delivery = deliver(FILER, french, "  Acme Distribution France ", " FR ");
 
         assertEquals("Acme Distribution France", delivery.getPropertyValue("mdlv:distributor"));
@@ -157,6 +171,74 @@ public class MediaDeliveryTest {
         assertFile(files.get(1), "blob", SUBTITLES, "SVOD", french, SUBTITLES);
         assertFile(files.get(2), "blob", KEY_ART, "Marketing", french, KEY_ART);
         assertEquals(1, deliveries());
+
+        // Since 0.5.0, the kit's watermark: the key art marked for the distributor, and held; the
+        // master and the subtitles recorded as not marked, and not held.
+        assertEquals(Boolean.FALSE, files.get(0).get("watermarked"));
+        assertNull(files.get(0).get("watermarkedFor"));
+        assertNull(files.get(0).get("watermarkedFile"));
+        assertEquals(Boolean.FALSE, files.get(1).get("watermarked"));
+        assertEquals(Boolean.TRUE, files.get(2).get("watermarked"));
+        assertEquals("Acme Distribution France", files.get(2).get("watermarkedFor"));
+        String text = "ACME PICTURES · FOR Acme Distribution France · " + today;
+        assertEquals(text, files.get(2).get("watermark"));
+        Blob marked = (Blob) files.get(2).get("watermarkedFile");
+        Blob keyArt = (Blob) session.getDocument(french.getRef()).getPropertyValue(KEY_ART);
+        assertEquals("image/jpeg", marked.getMimeType());
+        assertNotEquals(keyArt.getDigest(), marked.getDigest());
+        // The text drawn names the distributor: the same picture marked with that text, byte for byte.
+        assertArrayEquals(watermarked(keyArt, text), bytes(marked));
+        assertFalse(java.util.Arrays.equals(watermarked(keyArt, "ACME PICTURES · FOR Acme Suisse · " + today),
+                bytes(marked)));
+    }
+
+    /**
+     * A delivery's file the watermark marks that cannot be marked, such as key art that is not a
+     * picture, refuses the delivery whole: nothing is delivered unmarked.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void aDeliveryWhoseMarkedFileCannotBeMarkedIsRefusedWhole() {
+        DocumentModel textual = version("textual", "French", 365, List.of("FR"), "SVOD", "Marketing");
+        DocumentModel changed = session.getDocument(textual.getRef());
+        List<Map<String, Serializable>> attachments = new ArrayList<>(
+                (List<Map<String, Serializable>>) changed.getPropertyValue("files:files"));
+        attachments.set(2, attachment("key art, in words"));
+        changed.setPropertyValue("files:files", (Serializable) attachments);
+        session.saveDocument(changed);
+        commit();
+        DeliveryRefusal refusal = refused("watermark-unavailable",
+                () -> deliver(FILER, textual, "Acme Distribution France", "FR"));
+        assertTrue(refusal.getMessage(), refusal.getMessage().contains(KEY_ART));
+        assertEquals(0, deliveries());
+    }
+
+    /**
+     * The still, a preview, is refused unmarked to an outside partner and to an administrator, served
+     * as it is to the kit's staff, and served marked for the partner, naming them.
+     */
+    @Test
+    public void theStillIsMarkedForAnOutsidePartnerAndServedAsItIsToStaff() throws Exception {
+        assertFalse("outside both groups", downloadAs(new UserPrincipal(PARTNER, List.of(), false, false), french, STILL));
+        assertFalse("an administrator is not exempt",
+                downloadAs(new UserPrincipal("Administrator", List.of("administrators"), false, true), french, STILL));
+        assertTrue("distribution staff", downloadAs(
+                new UserPrincipal(FILER, List.of("media-distribution"), false, false), french, STILL));
+        assertTrue("rights staff",
+                downloadAs(new UserPrincipal(READER, List.of("media-rights"), false, false), french, STILL));
+        // The key art is not marked for downloads: the partner is served it, inside its window.
+        assertTrue(downloadAs(new UserPrincipal(PARTNER, List.of(), false, false), french, KEY_ART));
+
+        NuxeoPrincipal partner = new UserPrincipal(PARTNER, List.of(), false, false);
+        DocumentModel read = CoreInstance.getCoreSession(session.getRepositoryName(), partner)
+                                         .getDocument(french.getRef());
+        Blob marked = new WatermarkedFiles().serve(read, "blob:" + STILL, partner);
+        Blob still = (Blob) read.getPropertyValue(STILL);
+        assertEquals("image/jpeg", marked.getMimeType());
+        assertArrayEquals(watermarked(still, "ACME PICTURES · FOR " + PARTNER + " · " + today), bytes(marked));
+        // What the watermark does not mark, it does not serve.
+        assertEquals(404, assertThrows(NuxeoException.class,
+                () -> new WatermarkedFiles().serve(read, "blob:" + KEY_ART, partner)).getStatusCode());
     }
 
     /** A window is open from its first day to the end of its last, in UTC, both included. */
@@ -506,7 +588,8 @@ public class MediaDeliveryTest {
         version.setPropertyValue("fver:channels", channels);
         version.setPropertyValue("dc:expired", midnightUtc(today.plusDays(rightsForDays)));
         version.setPropertyValue("files:files", (Serializable) List.of(attachment("master of " + name),
-                attachment("subtitles of " + name), attachment("key art of " + name)));
+                attachment("subtitles of " + name), picture("key-art-" + name, 320, 180),
+                picture("still-" + name, 240, 135)));
         DocumentModel created = session.createDocument(version);
         commit();
         return session.getDocument(created.getRef());
@@ -516,6 +599,54 @@ public class MediaDeliveryTest {
         Map<String, Serializable> entry = new HashMap<>();
         entry.put("file", (Serializable) Blobs.createBlob(content, "text/plain", null, content.replace(' ', '-') + ".txt"));
         return entry;
+    }
+
+    /** A drawn picture, a PNG, as the kit's seed draws its key art and still. */
+    private static Map<String, Serializable> picture(String name, int width, int height) {
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(width, height,
+                java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        try {
+            g.setPaint(new java.awt.GradientPaint(0, 0, new java.awt.Color(20, 60, 90), width, height,
+                    new java.awt.Color(220, 170, 90)));
+            g.fillRect(0, 0, width, height);
+        } finally {
+            g.dispose();
+        }
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            javax.imageio.ImageIO.write(image, "png", out);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        Map<String, Serializable> entry = new HashMap<>();
+        Blob blob = new org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob(out.toByteArray(), "image/png");
+        blob.setFilename(name + ".png");
+        entry.put("file", (Serializable) blob);
+        return entry;
+    }
+
+    /** {@code file} marked with {@code text} as the kit's watermark places it. */
+    private static byte[] watermarked(Blob file, String text) throws Exception {
+        Watermarker watermarker = new Watermarker();
+        return watermarker.watermark(watermarker.read(file), text, Watermark.Placement.TILED);
+    }
+
+    private static byte[] bytes(Blob blob) {
+        try {
+            return blob.getByteArray();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private boolean downloadAs(NuxeoPrincipal person, DocumentModel version, String xpath) {
+        org.nuxeo.runtime.api.login.LoginComponent.pushPrincipal(person);
+        try {
+            return download(version, xpath);
+        } finally {
+            org.nuxeo.runtime.api.login.LoginComponent.popPrincipal();
+        }
     }
 
     private Map<String, Serializable> window(String territory, String channel, Integer from, Integer until) {

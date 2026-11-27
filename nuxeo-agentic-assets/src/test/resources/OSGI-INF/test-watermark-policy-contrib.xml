@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!-- A rights policy with a watermark, for the tests of watermarked pictures and videos: an
+     AcmeAsset's Medium view, a preview, marked for anyone outside brand-team, and every download
+     marked too, its text naming the reader; an AcmeVideo's original, marked for everyone. -->
+<component name="org.nuxeo.agentic.assets.test.watermark-policy">
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.agentic.assets.rights" point="policies">
+    <policy type="AcmeAsset">
+      <rightsEnd xpath="dc:expired" />
+      <channels xpath="acmeasset:channels" />
+      <original channel="Print" />
+      <view name="Medium" preview="true" />
+      <view name="Thumbnail" preview="true" />
+      <view name="FullHD" channel="E-commerce" />
+      <rendition name="thumbnail" preview="true" />
+      <watermark text="ACME OUTDOOR · {recipient} · {day}" placement="tiled">
+        <previews>
+          <view name="Medium" />
+        </previews>
+        <downloads />
+        <except group="brand-team" />
+      </watermark>
+    </policy>
+    <policy type="AcmeVideo">
+      <rightsEnd xpath="dc:expired" />
+      <channels xpath="acmeasset:channels" />
+      <original channel="Print" />
+      <rendition name="thumbnail" preview="true" />
+      <watermark text="ACME OUTDOOR · {recipient}" placement="bottom-right">
+        <downloads>
+          <original />
+        </downloads>
+      </watermark>
+    </policy>
+  </extension>
+
+</component>

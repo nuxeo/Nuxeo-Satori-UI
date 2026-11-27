@@ -19,8 +19,9 @@
     picture views it lists, watermarked on the server, to anyone holding its token, while the link
     and the asset's rights both hold. Media rights: an asset's territories and release windows, a
     localised version reading its film's windows, and a delivery package refused whole outside
-    them. Its own Marketplace package, beside nuxeo-agentic-core: one add-on per domain module
-    (decision B's recommendation).
+    them. Since 0.5.0, watermarks a rights policy requires, and an asset's review decided on the
+    server, held to the add-on's ReviewAsset permission and audited. Its own Marketplace package,
+    beside nuxeo-agentic-core: one add-on per domain module (decision B's recommendation).
   </description>
 
   <properties>
@@ -29,7 +30,7 @@
       nuxeo-agentic-ui, and a package depends on it by this version. The manifest's Bundle-Version
       repeats it, and AddonPackageTest refuses a build where the two differ.
     -->
-    <assets.package.version>0.4.0</assets.package.version>
+    <assets.package.version>0.5.0</assets.package.version>
   </properties>
 
   <!--
@@ -129,6 +130,24 @@
       <scope>provided</scope>
     </dependency>
     <!--
+      Since 0.5.0, a review decision's entry in the platform's audit: AuditLogger and LogEntry,
+      reached through AuditAccess, as the documents and records add-ons reach them.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      Since 0.5.0, a watermarked rendition: the rendition service, read to mark a rendition a
+      policy lists, such as a picture's thumbnail, with the reader's name.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-rendition-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
       The platform's Video.* operations, which the add-on replaces by operations of the same ids
       that ask the rights first, then run the platform's own. Every class named is in the same
       jar, with the same fields and methods, on the local Nuxeo LTS 2025.10.18 server.
@@ -175,6 +194,40 @@
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
       <artifactId>nuxeo-runtime-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      Since 0.5.0, the review's tests: Nuxeo's comment bundle for its Annotation and CommentRoot
+      types only, which the review's annotations are (the tests write one as the platform's comment
+      manager does, ReviewAnnotations says how); the user manager with its test directories, for a
+      reviewer's groups (PlatformFeature); and the platform's audit, its service, its listener and
+      its store, an H2 database, as the documents add-on's tests run it.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-comment</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <!-- The tags' facet, which the platform's Video type has. -->
@@ -271,7 +324,8 @@
         <executions>
           <!--
             The brand assets kit's own video policy, into the test bundle, so that VideoRightsTest
-            deploys the file the kit ships, as it is, rather than a copy that could drift from it.
+            deploys the file the kit ships, as it is, rather than a copy that could drift from it;
+            and, since 0.5.0, its review policy, for AssetReviewTest.
           -->
           <execution>
             <id>kit-video-policy</id>
@@ -284,6 +338,8 @@
                   <directory>${project.basedir}/../business-apps/packages/brand-assets-demo/bundle/OSGI-INF</directory>
                   <includes>
                     <include>brand-assets-demo-video-rights.xml</include>
+                    <!-- Since 0.5.0: the kit's review policy, which AssetReviewTest decides on. -->
+                    <include>brand-assets-demo-review.xml</include>
                   </includes>
                 </resource>
               </resources>

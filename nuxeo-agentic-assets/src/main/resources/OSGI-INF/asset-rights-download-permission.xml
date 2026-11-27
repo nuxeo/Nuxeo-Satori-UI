@@ -5,7 +5,8 @@
     The download permission: the platform's DownloadService asks every permission before it
     streams a blob, and refuses the download with 403 when one returns false. This one asks the
     rights policies (org.nuxeo.agentic.assets.rights) about the document, the xpath and the
-    rendition being downloaded. The script only hands them to AssetRightsDownloadPermission,
+    rendition being downloaded, and, since 0.5.0, the person downloading, whom a policy's watermark
+    may exempt from a mark it requires: a use it marks for them is refused unmarked. The script only hands them to AssetRightsDownloadPermission,
     which decides in Java. Should the class not load, the script answers false, so a broken
     install refuses downloads rather than serving them.
   </documentation>
@@ -19,7 +20,7 @@
         function run() {
           try {
             return Java.type("org.nuxeo.agentic.assets.rights.AssetRightsDownloadPermission")
-              .allows(Document, XPath, Blob, Reason, Rendition, Infos) === true;
+              .allows(Document, XPath, Blob, Reason, Rendition, Infos, CurrentUser) === true;
           } catch (e) {
             return false;
           }

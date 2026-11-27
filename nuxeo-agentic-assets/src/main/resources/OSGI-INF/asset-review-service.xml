@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.review" version="1.0">
+
+  <documentation>
+    An asset's review decided on the server, since 0.5.0. The review is the asset page's: Nuxeo's
+    own annotations on the asset, of the origin nuxeo-satori.review, on picture:views. A pin is
+    anyone's whom Nuxeo lets comment on the asset. A decision, a round sent back, the review
+    approved or rejected, and anything else of that origin that is not a pin, needs all of: a review
+    policy for the asset's type, the person in one of its reviewer groups, and the add-on's
+    permission, ReviewAsset, granted to them on the asset. The add-on reads the asset's permissions
+    itself, so neither an administrator nor a holder of Everything holds ReviewAsset unless it is
+    granted. Anyone else is refused, 403, with the reason.
+
+    ReviewAsset: the add-on's permission, shown in the platform's permissions list so that an
+    administrator grants it to a reviewer group on a folder.
+  </documentation>
+
+  <require>org.nuxeo.ecm.core.security.defaultPermissions</require>
+
+  <implementation class="org.nuxeo.agentic.assets.review.AssetReviewComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.review.AssetReviewService" />
+  </service>
+
+  <extension-point name="policies">
+    <documentation>
+      One review policy per document type: the groups whose members may decide a review of a
+      document of that type, where they are granted ReviewAsset on it.
+
+      <code>
+        <review type="AcmeAsset">
+          <reviewer group="creative-review" />
+        </review>
+      </code>
+
+      A group that is not a group's name, or names Everyone, is left out. A policy with no group
+      lets no one decide. A later policy for the same type replaces it whole, and enabled="false"
+      removes it: decisions on documents of that type are then refused, not-reviewable.
+    </documentation>
+    <object class="org.nuxeo.agentic.assets.review.ReviewPolicyDescriptor" />
+  </extension-point>
+
+  <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissions">
+    <permission name="ReviewAsset" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.security.SecurityService" point="permissionsVisibility">
+    <visibility>
+      <item show="true" order="95">ReviewAsset</item>
+    </visibility>
+  </extension>
+
+</component>

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.watermark.operations">
+
+  <documentation>
+    Since 0.5.0, Asset.GetWatermarked: a use of an asset its rights policy's watermark marks,
+    served marked for the person signed in, where the platform's download endpoints refuse it
+    unmarked (watermark-required). It decides the use's rights as a download of it is decided,
+    and serves nothing the watermark does not mark. A picture is drawn on the server in Java; a
+    video goes through the platform's video tools, which need ffmpeg, and is refused,
+    watermark-unavailable, where they are not available. It changes nothing.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.assets.watermark.GetWatermarkedOperation" />
+  </extension>
+
+</component>

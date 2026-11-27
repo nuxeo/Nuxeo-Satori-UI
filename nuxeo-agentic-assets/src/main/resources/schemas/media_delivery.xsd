@@ -1,11 +1,15 @@
 <?xml version="1.0"?>
 <!-- A delivery package: a distributor's delivery of a localised version to a territory. The person
      who files one writes the version, the distributor and the territory; DeliveryListener decides
-     it, and writes the rest, the files delivered and when, or refuses it whole, and then nothing is
-     made. It refuses any later write to these properties. -->
+     it, and writes the rest, the files delivered and when, and, since 0.5.0, each file the version's
+     watermark marked, for whom, or refuses it whole, and then nothing is made. It refuses any later
+     write to these properties. -->
 <xs:schema targetNamespace="http://www.nuxeo.org/agentic/assets/media-delivery"
   xmlns:xs="http://www.w3.org/2001/XMLSchema"
   xmlns:nxs="http://www.nuxeo.org/agentic/assets/media-delivery">
+
+  <!-- The platform's blob type, content, for a file marked for its distributor. -->
+  <xs:include schemaLocation="core-types.xsd" />
 
   <!-- Filed: the id of the localised version delivered, a live document of a type whose rights
        policy has a <delivery>. -->
@@ -38,6 +42,14 @@
       <xs:element name="length" type="xs:long" />
       <!-- The file's digest, as the blob store gives it. -->
       <xs:element name="digest" type="xs:string" />
+      <!-- Since 0.5.0: whether the version's policy marked this file for the delivery, for whom, the
+           distributor, with what text, and the file marked, which the delivery holds: it is what
+           the distributor receives. A file the policy does not mark is recorded by its digest only,
+           and not held. -->
+      <xs:element name="watermarked" type="xs:boolean" />
+      <xs:element name="watermarkedFor" type="xs:string" />
+      <xs:element name="watermark" type="xs:string" />
+      <xs:element name="watermarkedFile" type="nxs:content" />
     </xs:sequence>
   </xs:complexType>
 

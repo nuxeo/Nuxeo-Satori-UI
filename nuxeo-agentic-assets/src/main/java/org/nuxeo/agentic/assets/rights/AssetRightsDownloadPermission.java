@@ -52,6 +52,16 @@ public final class AssetRightsDownloadPermission {
      */
     public static boolean allows(Object document, Object xpath, Object blob, Object reason, Object rendition,
             Object infos) {
+        return allows(document, xpath, blob, reason, rendition, infos, null);
+    }
+
+    /**
+     * As {@link #allows(Object, Object, Object, Object, Object, Object)}, with the {@code CurrentUser}
+     * global, since 0.5.0: the person downloading, whom the policy's watermark may exempt. Anything but
+     * a {@link NuxeoPrincipal}, {@code null} included, exempts no one.
+     */
+    public static boolean allows(Object document, Object xpath, Object blob, Object reason, Object rendition,
+            Object infos, Object currentUser) {
         try {
             if (document == null) {
                 return true;
@@ -67,7 +77,8 @@ public final class AssetRightsDownloadPermission {
                 return false;
             }
             DownloadDecision decided = rights.decideDownload(model, text(xpath),
-                    blob instanceof Blob b ? b : null, text(rendition));
+                    blob instanceof Blob b ? b : null, text(rendition),
+                    currentUser instanceof NuxeoPrincipal person ? person : null);
             if (decided == null || decided.decision().allowed()) {
                 return true;
             }

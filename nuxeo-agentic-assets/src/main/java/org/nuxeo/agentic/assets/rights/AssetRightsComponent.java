@@ -27,6 +27,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.IdRef;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
 
@@ -304,6 +305,12 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
 
     @Override
     public DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition) {
+        return decideDownload(document, xpath, blob, rendition, null);
+    }
+
+    @Override
+    public DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition,
+            NuxeoPrincipal person) {
         if (document == null) {
             return null;
         }
@@ -323,7 +330,7 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
             use = DownloadUse.classify(document, policy, xpath, blob, rendition);
             // Read only when the decision needs them: a preview is served without.
             Decision decision = AssetRights.decide(policy, () -> facts(document, policy), use, today());
-            return new DownloadDecision(use, decision);
+            return new DownloadDecision(use, AssetRights.watermarked(policy, use, decision, person));
         } catch (RuntimeException e) {
             log.error("Asset rights: the rights of {} ({}) could not be read, so its {} is refused", id(document),
                     type, use, e);

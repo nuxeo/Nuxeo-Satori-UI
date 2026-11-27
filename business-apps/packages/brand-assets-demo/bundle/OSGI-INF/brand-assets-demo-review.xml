@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- The kit's review policy, for nuxeo-agentic-assets 0.5.0: who may decide an asset's creative
+     review, send a round back, approve or reject it, on the server. A member of creative-review,
+     the kit's reviewer group, where they are granted the add-on's ReviewAsset permission on the
+     asset, which the seed grants the group on the kit's assets folder. Anyone else is refused,
+     403, administrators included; a pin stays anyone's whom Nuxeo lets comment on the asset.
+
+     A component of its own, beside the rights policies, so that a brand team's own review policy
+     replaces it alone. -->
+<component name="nuxeo.config.brand-assets-demo.review">
+
+  <require>org.nuxeo.agentic.assets.review</require>
+
+  <extension target="org.nuxeo.agentic.assets.review" point="policies">
+    <review type="AcmeAsset">
+      <reviewer group="creative-review" />
+    </review>
+  </extension>
+
+</component>

@@ -31,7 +31,9 @@ import java.util.regex.Pattern;
  * <em>broken</em>: a territory with no window, or a window with no territory, decides nothing;</li>
  * <li>a {@code <delivery>} in a policy with no territories, or one that is empty, names a use its
  * policy does not list, a preview, a rendition or the storyboard, or gives an entry a channel or
- * {@code preview}, is <em>broken</em>: every delivery of the type is refused.</li>
+ * {@code preview}, is <em>broken</em>: every delivery of the type is refused;</li>
+ * <li>since 0.5.0, a {@code <watermark>} with a mistake in it, or a second one, is <em>broken</em>:
+ * every use of the type is refused ({@link Watermark}).</li>
  * </ul>
  * {@link #problems()} lists each one, for the server log.
  */
@@ -86,9 +88,13 @@ public final class RightsPolicy {
 
     private final boolean deliveryBroken;
 
+    /** The watermark it requires, or {@code null} for none. */
+    private final Watermark watermark;
+
     private RightsPolicy(String type, String rightsEndXpath, String channelsXpath, String originalXpath,
             Map<Use, Rule> rules, List<String> problems, boolean broken, String territoriesXpath, String windowsXpath,
-            String windowsDocumentXpath, String windowsDocumentType, List<Use> delivery, boolean deliveryBroken) {
+            String windowsDocumentXpath, String windowsDocumentType, List<Use> delivery, boolean deliveryBroken,
+            Watermark watermark) {
         this.type = type;
         this.rightsEndXpath = rightsEndXpath;
         this.channelsXpath = channelsXpath;
@@ -102,6 +108,7 @@ public final class RightsPolicy {
         this.windowsDocumentType = windowsDocumentType;
         this.delivery = delivery == null ? null : List.copyOf(delivery);
         this.deliveryBroken = deliveryBroken;
+        this.watermark = watermark;
     }
 
     /** The policy a descriptor describes, with each of its mistakes read as a refusal. */
@@ -192,9 +199,23 @@ public final class RightsPolicy {
             delivery = new ArrayList<>();
             deliveryBroken = !delivery(packaged, rules, territorial, delivery, problems);
         }
+        // Since 0.5.0: a watermark with a mistake in it, or a second one, breaks the policy, so that
+        // no use it would mark is served unmarked.
+        Watermark watermark = null;
+        List<WatermarkDescriptor> watermarks = descriptor.getWatermarks() == null ? List.of()
+                : descriptor.getWatermarks();
+        if (watermarks.size() > 1) {
+            problems.add("more than one <watermark>: every use is refused");
+            broken = true;
+        } else if (watermarks.size() == 1) {
+            watermark = Watermark.of(watermarks.get(0), rules, delivery, problems);
+            if (watermark == null) {
+                broken = true;
+            }
+        }
         return new RightsPolicy(type, rightsEnd, channels, originalXpath, rules, problems, broken,
                 territorial ? territories : null, territorial ? windows : null, territorial ? windowsDocument : null,
-                territorial && windowsDocument != null ? windowsType : null, delivery, deliveryBroken);
+                territorial && windowsDocument != null ? windowsType : null, delivery, deliveryBroken, watermark);
     }
 
     /**
@@ -379,5 +400,10 @@ public final class RightsPolicy {
     /** A delivery package with a mistake in it: every delivery of the type is refused. */
     public boolean deliveryBroken() {
         return deliveryBroken;
+    }
+
+    /** The watermark the policy requires, or {@code null} for none; a broken one breaks the policy. */
+    public Watermark watermark() {
+        return watermark;
     }
 }
