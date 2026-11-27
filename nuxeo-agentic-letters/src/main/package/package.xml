@@ -1,0 +1,21 @@
+<package type="addon" name="nuxeo-agentic-letters" version="@letters.package.version@">
+  <title>Nuxeo Satori letters: correspondence from templates, on the platform's Template Rendering</title>
+  <description>
+    <p>The letters module's server add-on, on Nuxeo's Template Rendering, which the package depends on. Letter templates are the platform's template documents, of the type LetterTemplate, which only administrators create, change or remove: each names its letter, its language and the record types it is for, and holds an HTML or text file of text and placeholders, checked when it is saved. Nothing in a template runs.</p>
+    <p>Letter.Generate writes a letter on a record whose type carries the Correspondence facet, for someone who may write the record: it picks the letter's template in the language asked for, or the record's, renders it through the platform's template processor service with a processor of the add-on's own, and files the letter next to the record, linked to it, as a Letter document only the server writes. Each letter is recorded in the record's history.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <require-terms-and-conditions-acceptance>false</require-terms-and-conditions-acceptance>
+  <license>Apache License, Version 2.0</license>
+  <license-url>http://www.apache.org/licenses/LICENSE-2.0</license-url>
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <dependencies>
+    <package>nuxeo-template-rendering:2025.0.0</package>
+  </dependencies>
+  <visibility>PRIVATE</visibility>
+</package>

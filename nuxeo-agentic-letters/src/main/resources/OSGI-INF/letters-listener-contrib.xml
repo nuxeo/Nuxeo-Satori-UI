@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.letters.listener" version="1.0">
+
+  <documentation>
+    The letters' guards, synchronous, in the transaction of the change that fires them, before the
+    platform's own template listener (priority 500): a letter template is created, changed, copied,
+    trashed, restored or removed by an administrator alone, and saved only when its file and its
+    properties pass the add-on's checks; a letter is created only by Letter.Generate, changed by no
+    one after, and trashed or removed by an administrator alone. Every refusal marks the
+    transaction for rollback.
+
+    And the audit's writer: each letter's entry on its record, written to the platform's audit once
+    the transaction that wrote the letter has committed.
+  </documentation>
+
+  <require>org.nuxeo.agentic.letters.schema</require>
+  <require>org.nuxeo.platform.TemplateSources.listener</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="letterGuard" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.letters.LetterGuardListener">
+      <event>aboutToCreate</event>
+      <event>documentCreatedByCopy</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>aboutToRemoveVersion</event>
+      <event>documentTrashed</event>
+      <event>documentUntrashed</event>
+      <event>beforeRestoringDocument</event>
+    </listener>
+    <listener name="letterAuditWriter" async="true" postCommit="true" priority="200"
+      class="org.nuxeo.agentic.letters.LetterAuditWriter">
+      <event>letterGenerated</event>
+    </listener>
+  </extension>
+
+</component>

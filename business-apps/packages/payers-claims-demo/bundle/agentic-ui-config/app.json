@@ -4,7 +4,7 @@
   "id": "payers-claims",
   "label": "Claims",
   "labelKey": "payers.app.claims",
-  "packageVersion": "0.7.0",
+  "packageVersion": "0.8.0",
   "platform": ">=0.2.0 <1.0.0",
   "groups": ["claims-adjusters", "claims-supervisors", "member-services"],
   "branding": { "applicationTitle": "Payers Claims" }

@@ -38,7 +38,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { appealProblems, readAppealChecklist } from './appeals.mjs';
-import { CASES, CLAIMS, USERS } from './data.mjs';
+import { CASES, CLAIMS, LETTER_TEMPLATES, MEMBERS, USERS } from './data.mjs';
+import { LETTERS_DIR, letterProblems, offered } from './letters.mjs';
 import { pathBetween, readLifecycle } from './lifecycle.mjs';
 
 const LIFECYCLE = readLifecycle();
@@ -87,7 +88,11 @@ function expect(condition, what, output = '') {
  * not decided, grievances among them; `checklistDrift` answers the case of that number, read back by its id, with its first
  * checklist entry not done, as a server that had dropped what was written would. Since 0.7.0,
  * `appealWorkflow: false` answers as version 0.6.1, which has no appeal review workflow, and
- * `decisionDrift` answers the case of that number, read back by its id, with no decision.
+ * `decisionDrift` answers the case of that number, read back by its id, with no decision. Since
+ * 0.8.0, `letters: false` answers as version 0.7.0, whose Claim type has no `Correspondence` facet,
+ * and a `types` without `LetterTemplate` as a server without nuxeo-agentic-letters;
+ * `languageDrift` answers the claim of that number, read back by its id, with no `corr:language`,
+ * and `templateDrift` the letter template of that name with another `ltpl:letter`.
  */
 function standIn({
   user,
@@ -96,6 +101,9 @@ function standIn({
   workflowModel = true,
   appealWorkflow = true,
   decisionDrift = null,
+  letters = true,
+  languageDrift = null,
+  templateDrift = null,
   caseChecklist = true,
   openAppeals = true,
   openAppealsDrift = null,
@@ -106,7 +114,15 @@ function standIn({
   groupless = null,
   indexLag = 0,
   membersWrite = false,
-  types = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'],
+  types = [
+    'Member',
+    'Claim',
+    'Case',
+    'Provider',
+    'ClaimDocument',
+    'PayersClaimSearch',
+    'LetterTemplate',
+  ],
   brokenProvider = null,
   renameOnTrash = true,
   pageSize = 3,
@@ -381,6 +397,13 @@ function standIn({
       if (method === 'GET' && path.startsWith('/config/types/')) {
         const type = path.slice('/config/types/'.length);
         if (!types.includes(type)) return send(404, { message: 'no such type' });
+        // Since 0.8.0, the Claim type with nuxeo-agentic-letters' facet, which the kit gives it.
+        if (type === 'Claim')
+          return send(200, {
+            parent: 'Document',
+            facets: letters ? ['Correspondence'] : [],
+            schemas: [],
+          });
         if (type !== 'Case') return send(200, {});
         return send(200, {
           parent: 'Document',
@@ -443,6 +466,12 @@ function standIn({
         // The one case `decisionDrift` names, read back with no decision.
         if (decisionDrift !== null && document.properties['case:number'] === decisionDrift)
           shown.properties['case:decision'] = null;
+        // Since 0.8.0: the one claim `languageDrift` names, read back with no language, and the one
+        // letter template `templateDrift` names, read back as another letter's.
+        if (languageDrift !== null && document.properties['claim:number'] === languageDrift)
+          shown.properties['corr:language'] = null;
+        if (templateDrift !== null && document.properties['tmpl:templateName'] === templateDrift)
+          shown.properties['ltpl:letter'] = 'payers.somethingElse';
         if (checklistDrift !== null && document.properties['case:number'] === checklistDrift) {
           const [first, ...rest] = shown.properties['case:checklist'] ?? [];
           if (first)
@@ -579,7 +608,7 @@ function standIn({
       return send(500, { message: error.message });
     }
   });
-  Object.assign(server, { byPath, add, trash, users, groups, acls, calls, basic });
+  Object.assign(server, { byPath, add, trash, users, groups, acls, blobs, calls, basic });
   return server;
 }
 
@@ -685,7 +714,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /version 0.2.0 or older .* upgrade it to 0.7.0/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.8.0/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,
@@ -726,15 +755,15 @@ for (const renameOnTrash of [true, false]) {
     const first = await run();
     expect(first.status === 0, `${how}: a first run exits 0`, first.output);
     expect(
-      /32 created, 0 updated, 0 restored from the trash, 4 file\(s\) uploaded/.test(first.output),
-      `${how}: a first run creates 32 documents and uploads 4 files`,
+      /39 created, 0 updated, 0 restored from the trash, 10 file\(s\) uploaded/.test(first.output),
+      `${how}: a first run creates 39 documents and uploads 10 files, six of them letter templates`,
       first.output,
     );
     expect(
-      /People: 9 created, 0 updated, 6 permission\(s\) granted, 0 removed, for 6 users in 3 groups/.test(
+      /People: 9 created, 0 updated, 9 permission\(s\) granted, 0 removed, for 6 users in 3 groups/.test(
         first.output,
       ),
-      `${how}: a first run creates 6 users and 3 groups, and grants 6 permissions`,
+      `${how}: a first run creates 6 users and 3 groups, and grants 9 permissions`,
       first.output,
     );
     // Each claim brought from submitted to its status, along the fewest transitions, and kept so.
@@ -775,7 +804,7 @@ for (const renameOnTrash of [true, false]) {
     );
     expect(
       second.status === 0 &&
-        /0 created, 32 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
+        /0 created, 39 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
           second.output,
         ),
       `${how}: a second run creates and uploads nothing (${done(second.output)})`,
@@ -795,7 +824,7 @@ for (const renameOnTrash of [true, false]) {
     const third = await run();
     expect(
       third.status === 0 &&
-        /0 created, 32 updated, 1 restored from the trash/.test(third.output) &&
+        /0 created, 39 updated, 1 restored from the trash/.test(third.output) &&
         member.isTrashed === false &&
         member.path === `${ROOT}/members/member-100048` &&
         member.properties['member:status'] === 'active',
@@ -841,7 +870,7 @@ await against({ caseChecklist: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.7.0/.test(output) &&
+      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.8.0/.test(output) &&
       server.calls.every((call) => call.startsWith('GET ')),
     'version 0.4.0 of the package, whose case schema has no checklist, is exit 2, with nothing written',
     output,
@@ -899,7 +928,7 @@ await against({ openAppeals: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.5.1 or older .* no open-appeals queue: upgrade it to 0.7.0/.test(output) &&
+      /version 0.5.1 or older .* no open-appeals queue: upgrade it to 0.8.0/.test(output) &&
       server.calls.every((call) => call.startsWith('GET ')),
     'version 0.5.1 of the package, with no open-appeals queue, is exit 2, with nothing written',
     output,
@@ -978,7 +1007,7 @@ await against({ appealWorkflow: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.6.1 or older .* no PayersAppealReview workflow .* upgrade it to 0.7.0/.test(
+      /version 0.6.1 or older .* no PayersAppealReview workflow .* upgrade it to 0.8.0/.test(
         output,
       ) &&
       server.calls.every((call) => call.startsWith('GET ')),
@@ -1155,7 +1184,7 @@ await against({ workflowModel: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.7.0/.test(
+      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.8.0/.test(
         output,
       ) &&
       server.calls.every((call) => call.startsWith('GET ')),
@@ -1422,6 +1451,228 @@ await against({}, async ({ server, run }) => {
     again.output,
   );
 });
+
+// Since 0.8.0, the letters: nuxeo-agentic-letters and the kit's facet required, every claim and
+// case given its member's language, the six templates kept and checked, and data.mjs's templates
+// held to what the add-on takes before the server is asked anything.
+await against({ letters: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /version 0.7.0 or older .* no letters on claims .* upgrade it to 0.8.0/.test(output) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'version 0.7.0 of the package, with no Correspondence facet on claims, is exit 2, with nothing written',
+    output,
+  );
+});
+await against(
+  { types: ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'] },
+  async ({ server, run }) => {
+    const { status, output } = await run();
+    expect(
+      status === 2 &&
+        /no LetterTemplate type: install nuxeo-agentic-letters/.test(output) &&
+        server.calls.every((call) => call.startsWith('GET ')),
+      'a server without nuxeo-agentic-letters is exit 2, with nothing written',
+      output,
+    );
+  },
+);
+await against({}, async ({ server, run }) => {
+  const first = await run();
+  expect(first.status === 0, 'a first run, for the letters, exits 0', first.output);
+  const languages = new Map(MEMBERS.map((member) => [member.number, member.language]));
+  expect(
+    CLAIMS.every(
+      (claim) =>
+        at(server, `claims/${claim.number.toLowerCase()}`)?.properties['corr:language'] ===
+        languages.get(claim.member),
+    ) &&
+      CASES.every(
+        (kase) =>
+          at(server, `cases/${kase.number.toLowerCase()}`)?.properties['corr:language'] ===
+          languages.get(kase.member),
+      ),
+    "every claim and case holds its member's language, for its letters",
+  );
+  expect(
+    at(server, 'claims/claim-000144')?.properties['corr:language'] === 'es' &&
+      at(server, 'cases/case-2043')?.properties['corr:language'] === 'en',
+    "the Spanish-speaking member's denied claim is in es, the decided appeal in en",
+  );
+  const kept = LETTER_TEMPLATES.map((template) => ({
+    template,
+    document: at(server, `templates/${template.name}`),
+  }));
+  expect(
+    kept.length === 6 &&
+      kept.every(
+        ({ template, document }) =>
+          document?.type === 'LetterTemplate' &&
+          document.properties['tmpl:templateName'] === template.name &&
+          document.properties['tmpl:templateType'] === 'agenticLetter' &&
+          JSON.stringify(document.properties['tmpl:applicableTypes']) ===
+            JSON.stringify(template.types) &&
+          document.properties['ltpl:letter'] === template.letter &&
+          document.properties['ltpl:language'] === template.language &&
+          JSON.stringify(document.properties['ltpl:conditions']) ===
+            JSON.stringify(template.conditions) &&
+          server.blobs
+            .get(document.uid)
+            ?.bytes.equals(readFileSync(join(LETTERS_DIR, template.file))),
+      ),
+    'the six letter templates are kept in the templates folder, each with its properties and its text',
+    JSON.stringify(kept.map(({ document }) => document?.path ?? null)),
+  );
+  const folder = at(server, 'templates');
+  const aces = server.acls.get(folder?.uid) ?? [];
+  expect(
+    ['claims-adjusters', 'claims-supervisors', 'member-services'].every((group) =>
+      aces.some((ace) => ace.username === group && ace.permission === 'Read'),
+    ) && !aces.some((ace) => ace.permission === 'ReadWrite'),
+    'the templates folder gives every demo group Read, and none ReadWrite',
+    JSON.stringify(aces),
+  );
+
+  // A template's text changed by hand is put back, and the others are not uploaded again.
+  const denial = at(server, 'templates/payers-denial-en');
+  server.blobs.set(denial.uid, { bytes: Buffer.from('<p>{{claim:number}}</p>'), name: 'x.html' });
+  denial.properties['ltpl:language'] = 'sv';
+  const second = await run();
+  expect(
+    second.status === 0 &&
+      /1 file\(s\) uploaded/.test(second.output) &&
+      server.blobs
+        .get(denial.uid)
+        ?.bytes.equals(readFileSync(join(LETTERS_DIR, 'payers-denial-en.html'))) &&
+      denial.properties['ltpl:language'] === 'en',
+    "a template's text and language changed by hand are put back, uploading that one file alone",
+    second.output,
+  );
+
+  // Someone outside the demo's groups given ReadWrite on the templates: everyone may change them,
+  // as every user is in members, and the run fails, naming them.
+  server.acls.set(folder.uid, [
+    ...(server.acls.get(folder.uid) ?? []),
+    {
+      id: 'members:ReadWrite:true:x::',
+      username: 'members',
+      permission: 'ReadWrite',
+      granted: true,
+      status: 'effective',
+    },
+  ]);
+  const third = await run();
+  expect(
+    third.status === 1 && /may change the letter template payers-denial-en/.test(third.output),
+    'a letter template a demo user may change fails the run, naming it',
+    third.output,
+  );
+});
+await against({ languageDrift: 'CLAIM-000144' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /CLAIM-000144's letters are in null, not es/.test(output),
+    'a claim read back with no language fails the run, naming it',
+    output,
+  );
+});
+await against({ templateDrift: 'payers-denial-es' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /payers-denial-es's ltpl:letter is "payers.somethingElse"/.test(output),
+    'a letter template read back as another letter fails the run, naming it',
+    output,
+  );
+});
+{
+  // The kit's own templates are what the add-on takes; broken copies are refused, before the server
+  // is asked anything, naming what each breaks.
+  const records = { Claim: CLAIMS, Case: CASES };
+  expect(
+    letterProblems(LETTER_TEMPLATES, { records, offered }).length === 0,
+    "data.mjs's six letter templates are what nuxeo-agentic-letters takes",
+    JSON.stringify(letterProblems(LETTER_TEMPLATES, { records, offered })),
+  );
+  const original = readFileSync(join(LETTERS_DIR, 'payers-denial-es.html'), 'utf8');
+  const broken = [
+    ['${claim:number}', /holds "\$\{"/, 'a FreeMarker expression'],
+    ['<#assign x = 1>', /holds "<#"/, 'a FreeMarker directive'],
+    ['#set($x = 1)', /holds a Velocity directive/, 'a Velocity directive'],
+    ['<script>x()</script>', /has a <script> tag/, 'a script'],
+    ['<p onclick="x()">x</p>', /<p> has the attribute onclick/, 'an event handler'],
+    ['<p style="background: url(x)">x</p>', /holds "url\("/, 'a style that fetches a URL'],
+    ['{{principal.name}}', /\{\{principal.name\}\} is not one the add-on takes/, 'the person'],
+    ['{{ecm:acl}}', /names ecm:acl, which Claim does not have/, 'a system property'],
+    ['{{claim:nope}}', /names claim:nope, which Claim does not have/, 'a property Claim lacks'],
+    [
+      '{{claim:member>member:address>member:city}}',
+      /is not one the add-on takes/,
+      'two hops through references',
+    ],
+  ];
+  for (const [inserted, refused, what] of broken) {
+    const text = original.replace('</body>', `<p>${inserted}</p>\n</body>`);
+    const problems = letterProblems(LETTER_TEMPLATES, {
+      records,
+      offered,
+      read: (file) =>
+        file === 'payers-denial-es.html'
+          ? Buffer.from(text)
+          : readFileSync(join(LETTERS_DIR, file)),
+    });
+    expect(
+      problems.some((problem) => problem.startsWith('payers-denial-es') && refused.test(problem)),
+      `a template holding ${what} is refused, naming it`,
+      JSON.stringify(problems),
+    );
+  }
+  const both = LETTER_TEMPLATES.map((template) =>
+    template.name === 'payers-appeal-overturned-en'
+      ? { ...template, conditions: ['case:category=appeal'] }
+      : template,
+  );
+  expect(
+    letterProblems(both, { records, offered }).some((problem) =>
+      /CASE-2043 fits 2 payers.appealOutcome templates in en/.test(problem),
+    ),
+    'two templates of one letter in one language that fit the same appeal are refused',
+  );
+  const noEnglish = LETTER_TEMPLATES.filter((template) => template.name !== 'payers-denial-en');
+  expect(
+    letterProblems(noEnglish, { records, offered }).some((problem) =>
+      /payers.denial has no en template/.test(problem),
+    ),
+    "a letter with no English template, the add-on's default language, is refused",
+  );
+
+  // The seed itself refuses such a template, before it asks the server anything: run from a copy
+  // of the kit whose Spanish denial letter names the social security number through a FreeMarker
+  // expression.
+  const copy = mkdtempSync(join(tmpdir(), 'payers-seed-letters-'));
+  try {
+    const KIT = join(DEMO, '..');
+    for (const part of ['demo', 'workflow', 'bundle', 'content-model.json'])
+      cpSync(join(KIT, part), join(copy, part), { recursive: true });
+    writeFileSync(
+      join(copy, 'demo', 'letters', 'payers-denial-es.html'),
+      original.replace('</body>', '<p>${claim.member.ssn}</p>\n</body>'),
+    );
+    await against({}, async ({ server, run }) => {
+      const { status, output } = await run({}, join(copy, 'demo', 'seed.mjs'));
+      expect(
+        status === 1 &&
+          /letter templates are not what nuxeo-agentic-letters takes/.test(output) &&
+          /payers-denial-es holds "\$\{"/.test(output) &&
+          server.calls.length === 0,
+        'the seed refuses a letter template the add-on would refuse, before it asks the server anything',
+        output,
+      );
+    });
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
 
 // A place holding another type is left alone.
 await against({}, async ({ server, run }) => {

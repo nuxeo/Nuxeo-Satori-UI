@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+  A letter (letter:), as the add-on files it next to its record. Every property is the server's:
+  written when the letter is generated, and changed by no one after.
+-->
+<xs:schema targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/letter/"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:letter="http://www.nuxeo.org/ecm/schemas/agentic/letter/">
+  <!-- The record it was written on, by id. -->
+  <xs:element name="record" type="xs:string" />
+  <!-- The letter it is, as its template names it: payers.denial. -->
+  <xs:element name="letter" type="xs:string" />
+  <!-- The template it was written from, by id, and its name then. -->
+  <xs:element name="template" type="xs:string" />
+  <xs:element name="templateName" type="xs:string" />
+  <!-- The language it is written in. -->
+  <xs:element name="language" type="xs:string" />
+  <!-- Who wrote it, by user name, and when. -->
+  <xs:element name="writtenBy" type="xs:string" />
+  <xs:element name="writtenAt" type="xs:date" />
+</xs:schema>

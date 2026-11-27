@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notice of claim denial</title>
+<style>
+body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; margin: 2cm; }
+header { margin-bottom: 2em; }
+.fictional { font-size: 9pt; color: gray; }
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { text-align: left; padding: 0.2em 1.5em 0.2em 0; }
+</style>
+</head>
+<body>
+<!-- A fictional letter of the Payers kit demo: no real payer, person, provider or claim. -->
+<header>
+<p><strong>Bayside Health Plan</strong><br>Member services, 100 Example Way, Oakland, CA 94600</p>
+<p class="fictional">A fictional letter of the Payers kit demo. No real person, provider or claim.</p>
+</header>
+<p>{{letter.date}}</p>
+<address>
+{{claim:member>member:firstName}} {{claim:member>member:lastName}}<br>
+{{claim:member>member:address/street}}<br>
+{{claim:member>member:address/city}} {{claim:member>member:address/zip}}
+</address>
+<h1>Notice of claim denial</h1>
+<p>Dear {{claim:member>member:firstName}} {{claim:member>member:lastName}},</p>
+<p>We have reviewed claim {{claim:number}} for the services you received from {{claim:provider>dc:title}}. We are unable to pay this claim.</p>
+<table>
+<tr><th>Claim</th><td>{{claim:number}}</td></tr>
+<tr><th>Member number</th><td>{{claim:member>member:number}}</td></tr>
+<tr><th>Date of service</th><td>{{claim:serviceDate}}</td></tr>
+<tr><th>Amount billed</th><td>USD {{claim:billedAmount}}</td></tr>
+</table>
+<p>You may appeal this decision. To appeal, write to us within 180 days of the date of this letter and tell us why you think the claim should be paid. Include a copy of this letter and any records that support your appeal.</p>
+<p>If you have questions, call member services at the number on your member card.</p>
+<p>Sincerely,</p>
+<p>{{letter.writer}}<br>Claims department, Bayside Health Plan</p>
+</body>
+</html>
