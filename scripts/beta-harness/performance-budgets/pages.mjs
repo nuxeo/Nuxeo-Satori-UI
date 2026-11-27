@@ -41,7 +41,17 @@ import { spawnToolSync } from '../package-command.mjs';
 import { EXTERNAL_ALLOWED, NETWORKS } from '../asset-performance/check.mjs';
 import { startStandIn } from '../asset-performance/stand-in.mjs';
 import { parseLowered } from './bundles.mjs';
-import { failures, judgePages, lowered, median, readBudgets, table } from './budgets.mjs';
+import {
+  NavigationTimeout,
+  failures,
+  judgePages,
+  lowered,
+  median,
+  readBudgets,
+  retriesCheck,
+  table,
+  withNavigationRetry,
+} from './budgets.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const DIST = join(ROOT, 'dist/nuxeo-ui/browser');
@@ -126,7 +136,11 @@ function parse() {
       report: { type: 'string' },
       headed: { type: 'boolean', default: false },
       lower: { type: 'string', multiple: true, default: [] },
+      'navigation-timeout': { type: 'string', default: '30000' },
+      'stall-navigations': { type: 'string', default: '0' },
+      warmup: { type: 'boolean', default: true },
     },
+    allowNegative: true,
     strict: true,
   });
   const runs = Number(values.runs);
@@ -139,7 +153,16 @@ function parse() {
   if (!Object.hasOwn(NETWORKS, values.network)) {
     exitWith(2, `--network ${values.network}: one of ${Object.keys(NETWORKS).join(', ')}`);
   }
-  return { ...values, runs, port };
+  const navigationTimeout = Number(values['navigation-timeout']);
+  if (!Number.isInteger(navigationTimeout) || navigationTimeout < 1000) {
+    exitWith(2, `--navigation-timeout ${values['navigation-timeout']}: milliseconds, 1000 or more`);
+  }
+  const stallSpec = values['stall-navigations'];
+  const stall = stallSpec === 'all' ? Number.POSITIVE_INFINITY : Number(stallSpec);
+  if (!(stall === Number.POSITIVE_INFINITY || (Number.isInteger(stall) && stall >= 0))) {
+    exitWith(2, `--stall-navigations ${stallSpec}: a whole number, or all`);
+  }
+  return { ...values, runs, port, navigationTimeout, stall };
 }
 
 async function loadPlaywright() {
@@ -169,17 +192,44 @@ function build() {
 }
 
 /** One cold load of `path` in a new context: the page's clock when `test` first held, from navigation. */
-async function coldLoad(browser, standIn, options, run, path, test, arg) {
+/**
+ * The control `--stall-navigations <n>`: the first `n` measured navigations' documents held past the
+ * navigation timeout, as a cold runner's stall holds one, so that the retry is seen working, and,
+ * with `all`, a page that never navigates seen failing.
+ */
+async function stallNavigations(context, options, run) {
+  if (options.stall === 0) return;
+  await context.route('**/*', async (route) => {
+    const request = route.request();
+    if (request.isNavigationRequest() && request.resourceType() === 'document') {
+      if (run.stalled < options.stall) {
+        run.stalled += 1;
+        await new Promise((done) => setTimeout(done, options.navigationTimeout + 1_000));
+      }
+    }
+    // The context may be closed by then, its load given up: nothing to continue.
+    await route.continue().catch(() => {});
+  });
+}
+
+async function coldLoad(browser, standIn, options, run, path, test, arg, { measured = true } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   try {
+    if (measured) await stallNavigations(context, options, run);
     await context.addInitScript(pageInstruments);
     const page = await context.newPage();
     page.on('pageerror', (error) => run.problems.push(`${path}: page error: ${error.message}`));
+    // What the page still waits on, for a load that does not draw: its own word on why.
+    const pending = new Map();
     page.on('request', (request) => {
       const url = new URL(request.url());
       if (/^https?:$/.test(url.protocol) && url.origin !== standIn.url)
         run.external.add(url.origin);
+      pending.set(request, performance.now());
     });
+    page.on('requestfinished', (request) => pending.delete(request));
+    page.on('requestfailed', (request) => pending.delete(request));
+    const asked = standIn.log.length;
     const network = NETWORKS[options.network];
     if (network.kbps > 0) {
       const cdp = await context.newCDPSession(page);
@@ -192,16 +242,48 @@ async function coldLoad(browser, standIn, options, run, path, test, arg) {
         uploadThroughput: bytesPerSecond,
       });
     }
-    await page.goto(`${standIn.url}/${path}`);
-    await page.waitForFunction(
-      ([name, value]) => {
-        if (!window.__budget.tests[name](value)) return false;
-        window.__budget.met = performance.now();
-        return true;
-      },
-      [test, arg],
-      { polling: 'raf', timeout: 30_000 },
-    );
+    // Until the navigation commits only: what is measured is the page drawn, by its own clock from
+    // navigation, never the `load` event, which a request the page does not wait for can hold. A
+    // navigation that does not commit is the one failure a load is tried again for.
+    try {
+      await page.goto(`${standIn.url}/${path}`, {
+        waitUntil: 'commit',
+        timeout: options.navigationTimeout,
+      });
+    } catch (error) {
+      if (error?.name === 'TimeoutError') {
+        throw new NavigationTimeout(String(error.message).split('\n')[0]);
+      }
+      throw error;
+    }
+    try {
+      await page.waitForFunction(
+        ([name, value]) => {
+          if (!window.__budget || !window.__budget.tests[name](value)) return false;
+          window.__budget.met = performance.now();
+          return true;
+        },
+        [test, arg],
+        { polling: 'raf', timeout: 30_000 },
+      );
+    } catch (error) {
+      if (error?.name !== 'TimeoutError') throw error;
+      // Not tried again: the page navigated and did not draw. Said with what it was waiting on.
+      const waiting = [...pending]
+        .map(
+          ([request, at]) =>
+            `${request.method()} ${request.url().replace(standIn.url, '')} ${Math.round(performance.now() - at)} ms`,
+        )
+        .slice(0, 8);
+      const answering = standIn.log
+        .slice(asked)
+        .filter((record) => !record.done)
+        .map((record) => `${record.method} ${record.path}`)
+        .slice(0, 8);
+      throw new Error(
+        `did not draw within 30000 ms; the page still waited on ${waiting.length ? waiting.join(', ') : 'nothing'}; the stand-in was still answering ${answering.length ? answering.join(', ') : 'nothing'}`,
+      );
+    }
     return await page.evaluate(() => window.__budget.met);
   } finally {
     await context.close();
@@ -261,17 +343,59 @@ async function main() {
       arg: { title: first.title },
     },
   ];
-  const run = { problems: [], external: new Set() };
+  const run = { problems: [], external: new Set(), stalled: 0 };
   const times = Object.fromEntries(pages.map((page) => [page.id, []]));
+  /** Each navigation tried again, with why: in the output and the report, never silent. */
+  const retries = [];
+  /** The warm-up's loads, not measured. */
+  const warmup = [];
   let verdict = 'error';
   let judged = null;
   let checks = [];
   try {
+    // A warm-up round, not measured: each page once, so that a freshly launched browser's first
+    // navigations, which on a cold runner sometimes stall, are not a measured load's. What it
+    // finds is reported; a page error in it still fails the run, as in any load, but its time and
+    // a stall do not count, since the measured loads that follow must each draw on their own.
+    if (options.warmup) {
+      for (const page of pages) {
+        try {
+          const ms = await coldLoad(
+            browser,
+            standIn,
+            options,
+            run,
+            page.path,
+            page.test,
+            page.arg,
+            {
+              measured: false,
+            },
+          );
+          warmup.push({ page: page.path, ms, problem: null });
+          console.log(`warm-up ${page.path}: ${Math.round(ms)} ms, not measured`);
+        } catch (error) {
+          const problem = String(error.message).split('\n')[0];
+          warmup.push({ page: page.path, ms: null, problem });
+          console.log(`warm-up ${page.path}: did not draw, not measured (${problem})`);
+        }
+      }
+    }
     for (let index = 0; index < options.runs; index++) {
       for (const page of pages) {
         let ms = Number.NaN;
         try {
-          ms = await coldLoad(browser, standIn, options, run, page.path, page.test, page.arg);
+          ({ value: ms } = await withNavigationRetry(
+            () => coldLoad(browser, standIn, options, run, page.path, page.test, page.arg),
+            {
+              onRetry: (error) => {
+                retries.push({ page: page.path, load: index + 1, reason: error.message });
+                console.log(
+                  `${page.id} load ${index + 1}: its navigation did not commit (${error.message}); tried once more`,
+                );
+              },
+            },
+          ));
         } catch (error) {
           run.problems.push(`${page.path}, load ${index + 1}: ${error.message.split('\n')[0]}`);
         }
@@ -305,6 +429,7 @@ async function main() {
         pass: run.problems.length === 0,
         detail: run.problems.join('; ') || null,
       },
+      retriesCheck(retries),
     ];
     verdict = judged.pass && checks.every((check) => check.pass) ? 'pass' : 'fail';
   } finally {
@@ -318,6 +443,9 @@ async function main() {
     network: { profile: options.network, ...NETWORKS[options.network] },
     runs: options.runs,
     lowered: lowers,
+    warmup,
+    retries,
+    stalled: run.stalled,
     times,
     judged,
     checks,
@@ -334,6 +462,12 @@ async function main() {
       `- ${check.pass ? 'pass' : 'FAIL'}: ${check.name}${check.detail ? ` (${check.detail})` : ''}`,
     );
   }
+  if (retries.length > 0) {
+    console.log(
+      `navigations tried again: ${retries.map((each) => `${each.page} load ${each.load}`).join(', ')}`,
+    );
+  }
+  if (run.stalled > 0) console.log(`control: ${run.stalled} navigations stalled on purpose`);
   if (lowers.length > 0) {
     console.log(
       `control: ${lowers.map(({ id, limit }) => `${id} lowered to ${limit}`).join(', ')}`,
