@@ -124,6 +124,85 @@ class AppRegistryEndpointTest {
         assertEquals(200, endpoint.respond("/apps/payers-claims/queues/unassigned-claims.json", ADJUSTER, null).status());
     }
 
+    private static final String ENGLISH = "{\"$schema\":\"../../labels.schema.json\",\"version\":2,\"labels\":{"
+            + "\"payers.app.claims\":\"Claims\",\"payers.queue.mine\":\"My claims\",\"payers.queue.open\":\"Open\"}}";
+
+    /** Claims, with English and the Spanish and Swedish files the pipeline accepts: subsets of English. */
+    private static AppRegistryEndpoint translated(String spanish) {
+        return endpoint(app("payers", "payers-claims", appJson("payers-claims", "claims-adjusters"),
+                files("labels/en.json", ENGLISH, "labels/es.json", spanish, "labels/sv.json",
+                        "{\"version\":2,\"labels\":{\"payers.queue.mine\":\"Mina ärenden\"}}")));
+    }
+
+    private static Map<String, String> labels(AppRegistryEndpoint.Response response) throws Exception {
+        assertEquals(200, response.status());
+        return ConfigSnapshot.JSON.convertValue(body(response).get("labels"), Map.class);
+    }
+
+    @Test
+    void servesALanguagesLabelsOverEnglishKeyByKey() throws Exception {
+        AppRegistryEndpoint endpoint = translated(
+                "{\"$schema\":\"../../labels.schema.json\",\"version\":2,\"labels\":{\"payers.app.claims\":\"Reclamaciones\"}}");
+
+        AppRegistryEndpoint.Response spanish = endpoint.respond("/apps/payers-claims/labels/es.json", ADJUSTER, null);
+        // The language's text where it gives one, English for every key it leaves out, in English's order.
+        assertEquals(List.of("payers.app.claims", "payers.queue.mine", "payers.queue.open"),
+                new ArrayList<>(labels(spanish).keySet()));
+        assertEquals(Map.of("payers.app.claims", "Reclamaciones", "payers.queue.mine", "My claims",
+                "payers.queue.open", "Open"), labels(spanish));
+        // Still a version 2 labels file, with the language's own `$schema`.
+        assertEquals(2, body(spanish).get("version").asInt());
+        assertEquals("../../labels.schema.json", body(spanish).get("$schema").asText());
+
+        assertEquals(Map.of("payers.app.claims", "Claims", "payers.queue.mine", "Mina ärenden", "payers.queue.open",
+                "Open"), labels(endpoint.respond("/apps/payers-claims/labels/sv.json", ADJUSTER, null)));
+    }
+
+    @Test
+    void servesEnglishAsThePackageWroteItAndNoLanguageItLacks() throws Exception {
+        AppRegistryEndpoint endpoint = translated("{\"version\":2,\"labels\":{}}");
+
+        AppRegistryEndpoint.Response english = endpoint.respond("/apps/payers-claims/labels/en.json", ADJUSTER, null);
+        assertArrayEquals(ENGLISH.getBytes(StandardCharsets.UTF_8), english.body());
+        // A language the package has no file for is not invented: the app asks only for a language
+        // the listing names, and the listing names only the package's files.
+        assertEquals(404, endpoint.respond("/apps/payers-claims/labels/fi.json", ADJUSTER, null).status());
+        assertEquals(List.of("app.json", "labels/en.json", "labels/es.json", "labels/sv.json"),
+                ConfigSnapshot.JSON.convertValue(body(endpoint.respond("/apps.json", ADJUSTER, null)).at("/apps/0/files"),
+                        List.class));
+        // An empty Spanish file is English throughout.
+        assertEquals(Map.of("payers.app.claims", "Claims", "payers.queue.mine", "My claims", "payers.queue.open",
+                "Open"), labels(endpoint.respond("/apps/payers-claims/labels/es.json", ADJUSTER, null)));
+        // And someone who may not see the app is told nothing about it, in any language.
+        assertEquals(404, endpoint.respond("/apps/payers-claims/labels/es.json", CLERK, null).status());
+    }
+
+    @Test
+    void aTextThatIsNotOneFallsBackToEnglishAndAKeyEnglishLacksIsKeptForTheAppToJudge() throws Exception {
+        AppRegistryEndpoint endpoint = translated("{\"version\":2,\"labels\":{\"payers.app.claims\":\"  \","
+                + "\"payers.queue.mine\":7,\"payers.only.spanish\":\"Solo\"}}");
+
+        Map<String, String> spanish = labels(endpoint.respond("/apps/payers-claims/labels/es.json", ADJUSTER, null));
+        assertEquals("Claims", spanish.get("payers.app.claims"));
+        assertEquals("My claims", spanish.get("payers.queue.mine"));
+        assertEquals("Solo", spanish.get("payers.only.spanish"));
+    }
+
+    @Test
+    void aLanguageFileThatIsNotAVersion2LabelsFileIsServedAsWritten() {
+        String notLabels = "{\"version\":1,\"labels\":{\"payers.app.claims\":\"Reclamaciones\"}}";
+        AppRegistryEndpoint endpoint = translated(notLabels);
+
+        assertArrayEquals(notLabels.getBytes(StandardCharsets.UTF_8),
+                endpoint.respond("/apps/payers-claims/labels/es.json", ADJUSTER, null).body());
+        // With no English to fall back to, a language is served as written too.
+        String alone = "{\"version\":2,\"labels\":{\"x.y\":\"Z\"}}";
+        AppRegistryEndpoint noEnglish = endpoint(app("payers", "payers-claims",
+                appJson("payers-claims", "claims-adjusters"), files("labels/es.json", alone)));
+        assertArrayEquals(alone.getBytes(StandardCharsets.UTF_8),
+                noEnglish.respond("/apps/payers-claims/labels/es.json", ADJUSTER, null).body());
+    }
+
     @Test
     void anAppThePersonMayNotSeeIsNotFoundRatherThanForbidden() {
         AppRegistryEndpoint endpoint = twoApps();
