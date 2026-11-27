@@ -162,9 +162,14 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
    * width, on a system that draws classic scrollbars.
    */
   function expectPageAtWindowWidth(root: HTMLElement): void {
+    // The drawer takes none of the container it shares with the page. Compared with the
+    // container, not the window: on Linux and Windows the shell's own scroll boxes draw classic
+    // scrollbars, so the container is narrower than the window there (290 pixels at 320 in CI).
     const box = content(root);
-    expect(Math.round(box.getBoundingClientRect().left)).toBe(0);
-    expect(Math.round(box.getBoundingClientRect().width)).toBe(window.innerWidth);
+    const shared = (root.querySelector('.shell-content') as HTMLElement).getBoundingClientRect();
+    expect(Math.round(box.getBoundingClientRect().left)).toBe(Math.round(shared.left));
+    expect(Math.round(box.getBoundingClientRect().width)).toBe(Math.round(shared.width));
+    expect(Math.round(shared.left)).toBe(0);
     const page = adminPage(root);
     expect([Math.round(page.left), Math.round(page.width)]).toEqual([0, box.clientWidth]);
     const bar = (root.querySelector('.admin-menu-bar') as HTMLElement).getBoundingClientRect();
