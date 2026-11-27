@@ -594,6 +594,14 @@ export class AppShellComponent implements OnDestroy {
     void this.router.navigateByUrl(path, { onSameUrlNavigation: 'reload' });
   }
 
+  /**
+   * The collapsed administration menu has begun to close: the header and the platform's menu are
+   * usable again from now, not only once its animation has ended.
+   */
+  onDrawerClosing(): void {
+    if (this.adminMenuCompact()) this.adminMenuOpen.set(false);
+  }
+
   onDrawerClose(): void {
     // The collapsed administration menu closes back into its button, by Escape, the backdrop or a
     // page chosen in it: the section, and the button, stay. The drawer gives the focus back to the

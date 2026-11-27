@@ -73,7 +73,9 @@ sat-platform-nav-container.has-selection-topbar {
   flex-direction: column;
 }
 
-:host ::ng-deep .shell-main--admin-compact > lib-administration-shell {
+// The routed page, an administration page or any other the person reached from one with the
+// section still open: whatever height it asks for, it takes what the bar leaves.
+:host ::ng-deep .shell-main--admin-compact > :not(.admin-menu-bar, router-outlet) {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;

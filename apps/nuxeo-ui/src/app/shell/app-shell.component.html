@@ -283,6 +283,7 @@
         [mode]="drawerMode()"
         position="start"
         [opened]="drawerShown()"
+        (closedStart)="onDrawerClosing()"
         (closed)="onDrawerClose()"
         class="nav-drawer-sidenav"
         [attr.role]="adminMenuCompact() ? 'dialog' : null"

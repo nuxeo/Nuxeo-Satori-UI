@@ -171,6 +171,8 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
     expect(Math.round(bar.height + page.height))
       .withContext('the bar and the page fit the scroll box')
       .toBeLessThanOrEqual(box.clientHeight);
+    // And asked directly: the box has nothing to scroll, an empty page in it.
+    expect(box.scrollHeight).withContext('nothing to scroll').toBeLessThanOrEqual(box.clientHeight);
   }
 
   async function pressEscape(root: HTMLElement): Promise<void> {
@@ -254,7 +256,17 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
     it('closes on Escape, giving the focus back to the button', async () => {
       const root = await open(320);
       const button = await openMenu(root);
-      await pressEscape(root);
+      (document.activeElement ?? drawer(root)).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+      );
+      // The header is usable again as soon as the menu begins to close, not once it has.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      harness.detectChanges();
+      TestBed.tick();
+      expect(header(root).hasAttribute('inert'))
+        .withContext('the header, while the menu is still closing')
+        .toBe(false);
+      await step();
       expectClosedWithFocusOnButton(root, button);
     });
 
