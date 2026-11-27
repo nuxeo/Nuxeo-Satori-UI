@@ -101,6 +101,7 @@ describe('the harness on a sound conversion', () => {
       expect.stringMatching(/^\d+ constructs are pending a later phase$/),
       expect.stringMatching(/^\d+ proposals wait for a person to accept or reject them$/),
       expect.stringMatching(/^\d+ reported items have no owner$/),
+      'no one has approved the report and its decisions: a person does, with the approve command, once every decision is made',
     ]);
   });
 

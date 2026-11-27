@@ -17,7 +17,18 @@
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
 import { fieldOf, layoutFields } from './app-walk';
-import { labelsOf, type Conversion, type ConvertedTheme, type ReportEntry } from './convert';
+import { digestsOf } from './approval';
+import { identitiesOf } from './constructs';
+import {
+  convert,
+  labelsOf,
+  packageBuildOf,
+  recordedAllowList,
+  type Conversion,
+  type ConvertedTheme,
+  type ReportEntry,
+  type Verdict,
+} from './convert';
 import { slotEntry, type Catalogue } from './catalogue';
 import { menuEntryId } from './convert-home';
 import { buttonAction } from './convert-slots';
@@ -1141,12 +1152,25 @@ export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS,
  * file holds and readiness takes, so the conversion it is given needs one, filled in.
  */
 export interface DecisionMutation extends Omit<Mutation, 'caughtBy'> {
-  readonly caughtBy: 'decisions';
+  /** `decisions`: readiness names it among the decisions; `approval`: the approval is void. */
+  readonly caughtBy: 'decisions' | 'approval';
+}
+
+/** The identities a decisions file names, by its items' ids: the file's own word for them. */
+function identitiesIn(file: Json): Map<string, string> {
+  const items = Array.isArray(file['decisions']) ? (file['decisions'] as unknown[]) : [];
+  return new Map(
+    items.flatMap((item) =>
+      isRecord(item) && typeof item['id'] === 'string' && typeof item['identity'] === 'string'
+        ? [[item['id'], item['identity']] as const]
+        : [],
+    ),
+  );
 }
 
 /**
- * The conversion's decisions, copied, and the first of them readiness takes that names an owner
- * and what they decided: one whose breakage readiness must then see.
+ * The conversion's decisions, copied, and the first of them readiness takes for a reported item
+ * that names an owner and what they decided: one whose breakage readiness must then see.
  */
 function decided(conversion: Conversion): { file: Json; items: Json[]; item: Json } {
   const file = conversion.decisions === undefined ? undefined : clone(conversion.decisions);
@@ -1155,15 +1179,19 @@ function decided(conversion: Conversion): { file: Json; items: Json[]; item: Jso
       'the conversion has no decisions.json to break: `decisions` writes one, for a person to fill in',
     );
   const items = file['decisions'] as Json[];
-  // Held to the build the file itself names: a control breaks a decision, not the file's build.
+  // Held to the build the file itself names, and the identities it names: a control breaks a
+  // decision, not the file's build.
   const { taken } = holdDecisions(
     conversion.report,
     conversion.decisions,
     file['package'] as DecisionsBuild,
+    identitiesIn(file),
   );
   const item = items.find((candidate) => {
     const decision = isRecord(candidate) ? taken.get(String(candidate['id'])) : undefined;
-    return Boolean(decision?.owner.trim() && decision.decision.trim());
+    return Boolean(
+      decision?.outcome === 'reported' && decision.owner.trim() && decision.decision.trim(),
+    );
   });
   if (!item)
     throw new MutationError('no decision of decisions.json names an owner and what they decided');
@@ -1266,10 +1294,252 @@ export const DECISION_MUTATIONS: readonly DecisionMutation[] = [
   },
 ];
 
+/**
+ * The proposals of a conversion, by id, with what the conversion's `decisions.json` decides of
+ * each: the conditions' rules, which the converter writes once accepted.
+ */
+function proposalsOf(
+  conversion: Conversion,
+  source: MutationSource,
+): { readonly id: string; readonly verdict: Verdict | undefined }[] {
+  const { verdicts } = holdDecisions(
+    conversion.report,
+    conversion.decisions,
+    packageBuildOf(source.pkg),
+    identitiesOf(source.inventory),
+  );
+  return conversion.report.constructs
+    .filter(
+      (entry) =>
+        entry.kind === 'condition' &&
+        entry.outcome === 'proposed' &&
+        entry.proposal === true &&
+        entry.rule !== undefined,
+    )
+    .map((entry) => ({ id: entry.id, verdict: verdicts.get(entry.id) }));
+}
+
+/**
+ * The conversion with its app written as the converter writes it when `verdicts` are what people
+ * decided, its report and its decisions left as they are: what a converter that wrote other
+ * decisions than the file's would leave. Refused when that writes nothing other.
+ */
+function writtenWith(
+  conversion: Conversion,
+  source: MutationSource,
+  verdicts: ReadonlyMap<string, Verdict>,
+  what: string,
+): Conversion {
+  const app = convert(source.pkg, source.inventory, source.catalogue, {
+    allowList: recordedAllowList(conversion),
+    verdicts,
+  }).app;
+  if (JSON.stringify(app) === JSON.stringify(conversion.app))
+    throw new MutationError(`${what} writes nothing in this conversion that it does not hold`);
+  return { ...conversion, app };
+}
+
+/** What the conversion's decisions accept and reject, by id, as the converter is given them. */
+function verdictsOf(proposals: ReturnType<typeof proposalsOf>): Map<string, Verdict> {
+  return new Map(proposals.flatMap(({ id, verdict }) => (verdict ? [[id, verdict] as const] : [])));
+}
+
+const accepted = (owner: string): Verdict => ({
+  accepted: true,
+  owner,
+  reason: 'as a converter that writes it unaccepted would',
+});
+
+/**
+ * The controls of the proposals: what is written must be what a person accepted, and nothing
+ * else. Each writes the app as the converter would with other decisions than the conversion's
+ * `decisions.json` holds, and check 5, which holds the app to the package and that file, must fail.
+ * They read the package, as `--package` gives it.
+ */
+export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'write-undecided-proposal',
+    description: 'Write a proposal no one has accepted or rejected, as if it were accepted',
+    caughtBy: 5,
+    apply: (conversion, given) => {
+      const source = needSource(given);
+      const proposals = proposalsOf(conversion, source);
+      const waiting = proposals.filter((proposal) => proposal.verdict === undefined);
+      if (waiting.length === 0)
+        throw new MutationError('no proposal of the conversion waits for a person to decide it');
+      const verdicts = verdictsOf(proposals);
+      const rule = conversion.report.constructs.find((entry) => entry.id === waiting[0].id)?.rule;
+      verdicts.set(waiting[0].id, { ...accepted('no one'), rule });
+      return {
+        conversion: writtenWith(conversion, source, verdicts, `accepting ${waiting[0].id}`),
+        changed: `wrote what ${waiting[0].id} proposes, which no one has decided, as if it were accepted`,
+      };
+    },
+  },
+  {
+    name: 'write-rejected-proposal',
+    description: 'Write a proposal a person rejected, as if it were accepted',
+    caughtBy: 5,
+    apply: (conversion, given) => {
+      const source = needSource(given);
+      const proposals = proposalsOf(conversion, source);
+      const rejected = proposals.find((proposal) => proposal.verdict?.accepted === false);
+      if (!rejected?.verdict)
+        throw new MutationError('no proposal of the conversion is rejected in its decisions.json');
+      const verdicts = verdictsOf(proposals);
+      verdicts.set(rejected.id, { ...rejected.verdict, accepted: true });
+      return {
+        conversion: writtenWith(conversion, source, verdicts, `accepting ${rejected.id}`),
+        changed: `wrote what ${rejected.id} proposes, which ${rejected.verdict.owner} rejected, as if it were accepted`,
+      };
+    },
+  },
+  {
+    name: 'drop-accepted-proposal',
+    description:
+      'Leave out what a person accepted, as a conversion made without the decision would',
+    caughtBy: 5,
+    apply: (conversion, given) => {
+      const source = needSource(given);
+      const proposals = proposalsOf(conversion, source);
+      const accept = proposals.find((proposal) => proposal.verdict?.accepted === true);
+      if (!accept?.verdict)
+        throw new MutationError('no proposal of the conversion is accepted in its decisions.json');
+      const verdicts = verdictsOf(proposals);
+      verdicts.delete(accept.id);
+      return {
+        conversion: writtenWith(conversion, source, verdicts, `leaving ${accept.id} undecided`),
+        changed: `left out what ${accept.id} proposes, which ${accept.verdict.owner} accepted`,
+      };
+    },
+  },
+];
+
+/** The conversion's approval, copied, or a refusal saying how to make one. */
+function approvalIn(conversion: Conversion): Json {
+  if (!isRecord(conversion.approval))
+    throw new MutationError(
+      'the conversion holds no approval.json to break: a person writes one, with the approve command',
+    );
+  return clone(conversion.approval);
+}
+
+/** The controls of the approval: readiness must say it is void. */
+export const APPROVAL_MUTATIONS: readonly DecisionMutation[] = [
+  {
+    name: 'approve-other-report',
+    description: 'Make the approval one of another report than the conversion holds',
+    caughtBy: 'approval',
+    apply: (conversion) => {
+      const approval = approvalIn(conversion);
+      const other = {
+        ...conversion,
+        report: { ...conversion.report, constructs: conversion.report.constructs.slice(1) },
+      };
+      approval['report'] = digestsOf(other).report;
+      return {
+        conversion: { ...conversion, approval },
+        changed: "made approval.json approve another report, one entry short of the conversion's",
+      };
+    },
+  },
+  {
+    name: 'change-after-approval',
+    description:
+      'Change what a reported item was decided after the report was approved, as an edit of decisions.json would',
+    caughtBy: 'approval',
+    apply: (conversion) => {
+      approvalIn(conversion);
+      const { file, item } = decided(conversion);
+      item['decision'] = `${String(item['decision'])} (changed after the approval)`;
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `changed the decision on ${String(item['id'])} after the report was approved`,
+      };
+    },
+  },
+];
+
+/**
+ * The controls of carrying decisions to a new build of the package: a decision must be held to
+ * the construct it was made on, and to what it was made on. Readiness must name what broke.
+ */
+export const CARRY_MUTATIONS: readonly DecisionMutation[] = [
+  {
+    name: 'carry-to-other-construct',
+    description:
+      "Carry a decision to another construct of the report, with that one's reason, as a carry by place would",
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, items, item } = decided(conversion);
+      const index = items.findIndex(
+        (candidate) =>
+          isRecord(candidate) &&
+          candidate !== item &&
+          candidate['outcome'] === 'reported' &&
+          candidate['identity'] !== item['identity'],
+      );
+      if (index === -1)
+        throw new MutationError('decisions.json decides no other reported item to carry it to');
+      const other = items[index];
+      items[index] = {
+        ...other,
+        identity: item['identity'],
+        owner: item['owner'],
+        decision: item['decision'],
+      };
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `carried the decision on ${String(item['id'])} to ${String(other['id'])}, another construct`,
+      };
+    },
+  },
+  {
+    name: 'carry-changed-silently',
+    description:
+      'Carry the decision of a construct that changed in the new build, as it was made, rather than offer it for re-confirmation',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const file = conversion.decisions === undefined ? undefined : clone(conversion.decisions);
+      const items =
+        isRecord(file) && Array.isArray(file['decisions']) ? (file['decisions'] as Json[]) : [];
+      const index = items.findIndex(
+        (candidate) => isRecord(candidate) && isRecord(candidate['earlier']),
+      );
+      if (!isRecord(file) || index === -1)
+        throw new MutationError(
+          'no decision of decisions.json is offered for re-confirmation: carry decisions from another build of the package, one of whose decided constructs changed, first',
+        );
+      const {
+        earlier,
+        owner: _owner,
+        decision: _decision,
+        reason: _reason,
+        ...entry
+      } = items[index];
+      const before = earlier as Json;
+      items[index] = {
+        id: entry['id'],
+        identity: entry['identity'],
+        ...(before['madeOn'] as Json),
+        owner: before['owner'],
+        decision: before['decision'],
+        ...(typeof before['reason'] === 'string' ? { reason: before['reason'] } : {}),
+      };
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `carried the earlier decision on ${String(entry['id'])}, whose construct changed, as it was made`,
+      };
+    },
+  },
+];
+
 export function mutation(name: string): Mutation | DecisionMutation | null {
   return (
-    MUTATIONS.find((candidate) => candidate.name === name) ??
-    DECISION_MUTATIONS.find((candidate) => candidate.name === name) ??
+    [...MUTATIONS, ...PROPOSAL_MUTATIONS].find((candidate) => candidate.name === name) ??
+    [...DECISION_MUTATIONS, ...CARRY_MUTATIONS, ...APPROVAL_MUTATIONS].find(
+      (candidate) => candidate.name === name,
+    ) ??
     null
   );
 }

@@ -34,14 +34,15 @@ import { dirname, join } from 'node:path';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
 import { appIdOf, labelsPath, labelTexts } from './app-files';
 import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
-import { decideCondition } from './conditions';
-import { constructsOf, type Construct, type ConstructKind } from './constructs';
+import { proposalOf, sameRule } from './conditions';
+import { constructsOf, sharedIdentities, type Construct, type ConstructKind } from './constructs';
 import { convertBlocks } from './convert-blocks';
 import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
 import { convertTasks } from './convert-tasks';
-import { DECISIONS_FILE } from './decisions';
+import { APPROVAL_FILE } from './approval';
+import { DECISIONS_FILE, decisionsFor, holdDecisions } from './decisions';
 import type { FileKind, Inventory } from './inventory';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -74,6 +75,17 @@ export interface ReportEntry {
   readonly note?: string;
   /** For a condition: the registered rule it becomes, or is proposed to become. */
   readonly rule?: unknown;
+  /**
+   * True for a proposal a person accepts or rejects in `decisions.json`: a condition's rule, or a
+   * card an operation feeds. What such a proposal guards, a field under the condition, say, takes
+   * no decision of its own: it is written with the rule once the condition's is accepted.
+   */
+  readonly proposal?: true;
+  /**
+   * For a proposal, what a person decided of it when the conversion was made: what it wrote.
+   * Absent when it was made with no decision of it, so nothing proposed was written.
+   */
+  readonly applied?: 'accept' | 'reject';
 }
 
 export interface MigrationReport {
@@ -109,9 +121,16 @@ export interface Conversion {
   readonly assets: Readonly<Record<string, Buffer>>;
   /**
    * `decisions.json` as read, which people write and no conversion does: who owns each reported
-   * item, and what they decided (`decisions.ts`). Absent when the directory holds none.
+   * item, and what they decided, and who accepted or rejected each proposal (`decisions.ts`).
+   * Absent when the directory holds none.
    */
   readonly decisions?: unknown;
+  /**
+   * `approval.json` as read, which only the `approve` command writes, for a person at a terminal:
+   * who approved the report and its decisions, when, and the SHA-256 of what they approved
+   * (`approval.ts`). Absent when no one has.
+   */
+  readonly approval?: unknown;
 }
 
 export interface ConvertOptions {
@@ -119,13 +138,52 @@ export interface ConvertOptions {
   readonly allowList?: ReadonlySet<string>;
   /** The platform version the app is written for; the platform's own when left out. */
   readonly platformVersion?: string;
+  /**
+   * What people decided of the proposals, by the proposal's construct id, as `decisions.json`
+   * gives them once held to the report (`verdictsOf`): an accepted rule is written, and a rejected
+   * one is reported. Left out, nothing proposed is written.
+   */
+  readonly verdicts?: ReadonlyMap<string, Verdict>;
+}
+
+/** What a person decided of one proposal. */
+export interface Verdict {
+  readonly accepted: boolean;
+  /** The rule they accepted or rejected, for a condition's proposal. */
+  readonly rule?: unknown;
+  readonly owner: string;
+  readonly reason: string;
+}
+
+/**
+ * The inventory with what people decided of the conditions' proposals, on copies of those
+ * conditions: the converter and the checks both read it, so that an accepted rule is held where
+ * it is written, and one nobody accepted is held to be written nowhere.
+ */
+export function withVerdicts(
+  inventory: Inventory,
+  verdicts: ReadonlyMap<string, Verdict> | undefined,
+): Inventory {
+  if (!verdicts || verdicts.size === 0) return inventory;
+  return {
+    ...inventory,
+    conditions: inventory.conditions.map((condition) => {
+      const verdict = verdicts.get(`condition:${condition.path}#${condition.index + 1}`);
+      return verdict && verdict.rule !== undefined
+        ? { ...condition, verdict: { accepted: verdict.accepted, rule: verdict.rule } }
+        : condition;
+    }),
+  };
 }
 
 export class ConversionError extends Error {
   override readonly name = 'ConversionError';
 }
 
-export type Decision = Pick<ReportEntry, 'outcome' | 'to' | 'note' | 'rule'>;
+export type Decision = Pick<
+  ReportEntry,
+  'outcome' | 'to' | 'note' | 'rule' | 'proposal' | 'applied'
+>;
 
 /** What the parts of the conversion share: what they read, and what they write and decide. */
 export interface ConvertContext {
@@ -143,6 +201,8 @@ export interface ConvertContext {
   readonly decide: (id: string, decision: Decision) => void;
   /** What has been decided for a construct so far. */
   readonly decision: (id: string) => Decision | undefined;
+  /** What people decided of the proposals, by construct id (`ConvertOptions.verdicts`). */
+  readonly verdicts: ReadonlyMap<string, Verdict>;
 }
 
 const FILE_OUTCOMES: Readonly<
@@ -184,10 +244,12 @@ const FILE_OUTCOMES: Readonly<
 
 export function convert(
   pkg: StudioPackage,
-  inventory: Inventory,
+  read: Inventory,
   catalogue: Catalogue,
   options: ConvertOptions = {},
 ): Conversion {
+  const verdicts = options.verdicts ?? new Map<string, Verdict>();
+  const inventory = withVerdicts(read, verdicts);
   const decided = new Map<string, Decision>();
   const files: Record<string, unknown> = {};
   const allowList = options.allowList ?? new Set<string>();
@@ -202,6 +264,7 @@ export function convert(
     carried: new Map(),
     decide: (id, decision) => decided.set(id, decision),
     decision: (id) => decided.get(id),
+    verdicts,
   };
 
   convertLayouts(context);
@@ -333,6 +396,37 @@ export function convert(
   };
 }
 
+/**
+ * The conversion made with the decisions an earlier file holds of its proposals: `earlier` is a
+ * `decisions.json` as read, of this build or of another build of the package, carried as the
+ * `decisions` command carries it (`decisionsFor`), so that what the conversion writes is what the
+ * decisions file it then holds says. Each proposal accepted by someone named, for a reason, is
+ * written; each rejected so is reported; every other one is written nowhere. Refuses, with a
+ * `DecisionsError`, a file the `decisions` command would refuse.
+ */
+export function convertWithDecisions(
+  pkg: StudioPackage,
+  inventory: Inventory,
+  catalogue: Catalogue,
+  options: Omit<ConvertOptions, 'verdicts'>,
+  earlier?: { readonly raw: unknown; readonly file: string },
+): Conversion {
+  const base = convert(pkg, inventory, catalogue, options);
+  if (!earlier) return base;
+  const constructs = constructsOf(inventory);
+  const identities = new Map(constructs.map((construct) => [construct.id, construct.identity]));
+  const build = packageBuildOf(pkg);
+  const { file } = decisionsFor(
+    base.report,
+    build,
+    identities,
+    sharedIdentities(constructs),
+    earlier,
+  );
+  const { verdicts } = holdDecisions(base.report, file, build, identities);
+  return verdicts.size === 0 ? base : convert(pkg, inventory, catalogue, { ...options, verdicts });
+}
+
 /** The outcome of a construct no part of the conversion decided. */
 function decide(
   construct: Construct,
@@ -366,22 +460,41 @@ function decide(
         (candidate) => candidate.path === construct.file && candidate.index === key - 1,
       );
       if (!condition) return { outcome: 'reported', note: 'The conversion did not reach it' };
-      const decision = decideCondition(condition);
-      if (decision.kind === 'reported') return { outcome: 'reported', note: decision.note };
-      if (decision.kind === 'proposed')
-        return { outcome: 'proposed', note: decision.note, rule: decision.rule };
-      // Converted only where a rule was written: what it guards says why it was not otherwise.
       const where = carried.get(`${condition.path}#${condition.index}`) ?? [];
+      const proposal = proposalOf(condition);
+      if (proposal.kind === 'proposed') {
+        // A proposal stays one, whatever a person decided, so that their decision is held to
+        // what was proposed. What it wrote, once accepted, is where its rule went.
+        const verdict = condition.verdict;
+        const applied =
+          verdict && sameRule(verdict.rule, proposal.rule)
+            ? verdict.accepted
+              ? ('accept' as const)
+              : ('reject' as const)
+            : undefined;
+        return {
+          outcome: 'proposed',
+          note: proposal.note,
+          rule: proposal.rule,
+          proposal: true,
+          ...(applied ? { applied } : {}),
+          ...(applied === 'accept' && where.length > 0
+            ? { to: `the visibleWhen of ${where.join(', ')}` }
+            : {}),
+        };
+      }
+      if (proposal.kind === 'reported') return { outcome: 'reported', note: proposal.note };
+      // Converted only where a rule was written: what it guards says why it was not otherwise.
       return where.length > 0
         ? {
             outcome: 'converted',
             to: `the visibleWhen of ${where.join(', ')}`,
-            rule: decision.rule,
+            rule: proposal.rule,
           }
         : {
             outcome: 'pending',
             note: 'Its rule is decided, but nothing it guards carries one yet: each says why',
-            rule: decision.rule,
+            rule: proposal.rule,
           };
     }
     default:
@@ -550,6 +663,10 @@ export function writeConversion(directory: string, conversion: Conversion): void
   write('report.json', `${JSON.stringify(conversion.report, null, 2)}\n`);
   if (conversion.decisions !== undefined)
     write(DECISIONS_FILE, `${JSON.stringify(conversion.decisions, null, 2)}\n`);
+  // A copy of an approved conversion, as `mutate` writes, keeps the approval, which its checks
+  // then hold to what the copy holds.
+  if (conversion.approval !== undefined)
+    write(APPROVAL_FILE, `${JSON.stringify(conversion.approval, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.app))
     write(`app/${path}`, `${JSON.stringify(content, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.appAssets)) write(`app/${path}`, content);
@@ -606,5 +723,9 @@ export function readConversion(directory: string): Conversion {
   const decisions = existsSync(join(directory, DECISIONS_FILE))
     ? { decisions: json(DECISIONS_FILE) }
     : {};
-  return { report, app, appAssets, themes, assets, ...decisions };
+  // A person writes it, with the `approve` command, and nothing else does.
+  const approval = existsSync(join(directory, APPROVAL_FILE))
+    ? { approval: json(APPROVAL_FILE) }
+    : {};
+  return { report, app, appAssets, themes, assets, ...decisions, ...approval };
 }

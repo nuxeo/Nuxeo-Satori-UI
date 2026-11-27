@@ -129,7 +129,13 @@ export interface PackageEntry {
   readonly blockers: readonly string[];
   /** Its constructs by outcome, as its report counts them, once its report was printed. */
   readonly constructs:
-    (Readonly<Record<Tally, number>> & { readonly total: number; readonly decided: number }) | null;
+    | (Readonly<Record<Tally, number>> & {
+        readonly total: number;
+        readonly decided: number;
+        readonly accepted: number;
+        readonly rejected: number;
+      })
+    | null;
   /**
    * With `--from`: under the earlier run, `/`-separated, the folder whose decisions it was given to
    * carry, or `null` when it was given none, and then why, in `notCarried`.
@@ -500,11 +506,13 @@ export function folderName(path: string, taken: Set<string>): string {
   return name;
 }
 
-/** An earlier run's folders that hold decisions, by their package's bytes and by its build. */
+/** An earlier run's folders that hold decisions, by their package's bytes, build and name. */
 interface Earlier {
   readonly bySha: ReadonlyMap<string, string>;
   /** Each build's folders: more than one when the run held one build under two sets of bytes. */
   readonly byBuild: ReadonlyMap<string, readonly string[]>;
+  /** Each package's folders, by the name its builds declare: one folder per build it held. */
+  readonly byName: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -525,6 +533,13 @@ function carryFor(
     return {
       why: `holds the decisions of ${folders.length} packages of this build, ${folders.map((folder) => `${PACKAGES_DIRECTORY}/${folder}`).join(' and ')}, and none of its bytes: run it on its own with --from the one you mean`,
     };
+  // Another build of the package: its decisions are carried by each construct's identity.
+  const named = build === null ? [] : (earlier.byName.get(build.name) ?? []);
+  if (named.length === 1) return { folder: named[0] };
+  if (named.length > 1)
+    return {
+      why: `holds the decisions of ${named.length} other builds of this package, ${named.map((folder) => `${PACKAGES_DIRECTORY}/${folder}`).join(' and ')}, and none of this build: run it on its own with --from the one you mean`,
+    };
   return { why: 'holds no decisions for this package as it is now, so they start again' };
 }
 
@@ -540,6 +555,7 @@ function earlierRuns(from: string): Earlier {
   if (!Array.isArray(raw.packages)) throw new Error(`${file} lists no packages`);
   const bySha = new Map<string, string>();
   const byBuild = new Map<string, string[]>();
+  const byName = new Map<string, string[]>();
   for (const entry of raw.packages) {
     const folder =
       typeof entry?.folder === 'string' && entry.folder.startsWith(`${PACKAGES_DIRECTORY}/`)
@@ -554,9 +570,11 @@ function earlierRuns(from: string): Earlier {
     if (build !== null && typeof build === 'object') {
       const key = buildKey(build);
       byBuild.set(key, [...(byBuild.get(key) ?? []), folder]);
+      if (typeof build.name === 'string')
+        byName.set(build.name, [...(byName.get(build.name) ?? []), folder]);
     }
   }
-  return { bySha, byBuild };
+  return { bySha, byBuild, byName };
 }
 
 /** A path under `<out>`, `/`-separated, as `summary.json` gives it. */
@@ -568,7 +586,13 @@ function under(out: string, path: string): string {
 }
 
 function constructsOf(summary: MigrationSummary): NonNullable<PackageEntry['constructs']> {
-  return { total: summary.all.total, ...summary.all.tallies, decided: summary.all.decided };
+  return {
+    total: summary.all.total,
+    ...summary.all.tallies,
+    decided: summary.all.decided,
+    accepted: summary.all.accepted,
+    rejected: summary.all.rejected,
+  };
 }
 
 /** What the summary says of one package that ran. */
@@ -613,7 +637,9 @@ function packageLines(
       (tally) =>
         tally === 'reported'
           ? `reported ${counts.reported} (${counts.decided} decided)`
-          : `${tally} ${counts[tally]}`,
+          : tally === 'proposed'
+            ? `proposed ${counts.proposed} (${counts.accepted} accepted, ${counts.rejected} rejected)`
+            : `${tally} ${counts[tally]}`,
     );
     lines.push(`     ${counts.total} constructs: ${shown.join(', ')}`);
   }
@@ -688,11 +714,14 @@ function closingLines(summary: BatchSummary, request: BatchRequest): string[] {
     );
   }
   const undecided = ran.some(
-    (entry) => entry.constructs !== null && entry.constructs.reported > entry.constructs.decided,
+    (entry) =>
+      entry.constructs !== null &&
+      (entry.constructs.reported > entry.constructs.decided ||
+        entry.constructs.proposed > entry.constructs.accepted + entry.constructs.rejected),
   );
   if (ran.some((entry) => entry.report !== null) && !undecided)
     todo.push(
-      "Read each package's report. Every reported item of every package that reached its report has an owner and a decision: none is left to fill in.",
+      "Read each package's report. Every item of every package that reached its report has its decision: none is left to fill in. A reviewer approves each package's report themselves, at a terminal, with the approve command, as for one package.",
     );
   if (undecided) {
     todo.push(

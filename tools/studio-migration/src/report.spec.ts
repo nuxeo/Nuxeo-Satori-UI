@@ -1,6 +1,6 @@
 import { loadCatalogue } from './catalogue';
 import { reportSummary } from './cli';
-import { constructsOf } from './constructs';
+import { constructsOf, identitiesOf } from './constructs';
 import { convert, packageBuildOf, type Conversion, type ReportEntry } from './convert';
 import { decisionsFor } from './decisions';
 import { runHarness, type HarnessInput } from './harness';
@@ -27,18 +27,26 @@ function prepare(): HarnessInput {
   };
 }
 
+/** The identities of the made-up package's constructs, which decisions copy. */
+const IDS = identitiesOf(inventory(readStudioPackage(syntheticPackage())));
+
 /** The conversion with each reported item but the first `left` owned and decided. */
 function decided(conversion: Conversion, left = 0): Conversion {
   const { file } = decisionsFor(
     conversion.report,
     packageBuildOf(readStudioPackage(syntheticPackage())),
+    IDS,
+    new Set(),
   );
+  let reported = 0;
   return {
     ...conversion,
     decisions: {
       ...file,
-      decisions: file.decisions.map((item, index) =>
-        index < left ? item : { ...item, owner: 'Migration lead', decision: 'Rebuilt by hand' },
+      decisions: file.decisions.map((item) =>
+        item.outcome !== 'reported' || reported++ < left
+          ? item
+          : { ...item, owner: 'Migration lead', decision: 'Rebuilt by hand' },
       ),
     },
   };
@@ -124,7 +132,10 @@ describe('the report of a sound conversion', () => {
     raw.decisions[0]['decision'] = '';
     raw.decisions[1]['owner'] = ' ';
     const partly = summarise({ ...input, conversion });
-    expect(partly.all.decided).toBe(raw.decisions.length - 2);
+    // Of the reported items, less the proposal the file holds too.
+    expect(partly.all.decided).toBe(
+      raw.decisions.filter((item) => item['outcome'] === 'reported').length - 2,
+    );
     expect(partly.reported.slice(0, 2).map(({ owner, decision }) => [owner, decision])).toEqual([
       ['Migration lead', null],
       [null, 'Rebuilt by hand'],
@@ -149,6 +160,7 @@ describe('the report of a sound conversion', () => {
       kind: 'translations',
       tallies: { converted: 3 },
       became: ['app/labels/fr.json'],
+      found: [],
     });
     expect(
       summary.files.find(
@@ -256,9 +268,9 @@ describe('the report as text', () => {
     );
     expect(text).toContain("Allow-list: Claim.Approve, the deployment's, as given\n");
     expect(text).toMatch(
-      /\n {2}kind +total +converted +proposed +reported +decided +generated +server +pending +missing\n/,
+      /\n {2}kind +total +converted +proposed +accepted +rejected +reported +decided +generated +server +pending +missing\n/,
     );
-    expect(text).toMatch(/\n {2}translation +6 +6 +0 +0 +0 +0 +0 +0 +0\n/);
+    expect(text).toMatch(/\n {2}translation +6 +6 +0 +0 +0 +0 +0 +0 +0 +0 +0\n/);
     expect(text).not.toContain('not an outcome');
     expect(text).toMatch(/\nCoverage: 100%, (\d+) of the package's \1 constructs in the report\n/);
   });
@@ -276,7 +288,9 @@ describe('the report as text', () => {
       '      written to: layouts/Claim/edit.layout.json\n      owner: none; decided: nothing yet\n',
     );
     expect(text).toContain('      owner: Migration lead; decided: Rebuilt by hand\n');
-    expect(text).toMatch(/\nProposals: 2, each waiting for a person to accept or reject it\n/);
+    expect(text).toMatch(
+      /\nProposals: 2: 0 accepted, 0 rejected, 1 waiting for a person to accept or reject them, and 1 decided with the condition each shows under\n/,
+    );
     expect(text).toContain(
       '  data/i18n/messages-fr.json (translations): converted 3\n      became: app/labels/fr.json\n',
     );
