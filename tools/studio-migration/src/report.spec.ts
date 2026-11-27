@@ -6,7 +6,7 @@ import { decisionsFor } from './decisions';
 import { runHarness, type HarnessInput } from './harness';
 import { inventory } from './inventory';
 import { MUTATIONS } from './mutations';
-import { summarise, TALLIES } from './report';
+import { fileOfFinding, summarise, TALLIES } from './report';
 import { readStudioPackage } from './studio-package';
 import { m2CorpusFiles } from './testing/m2-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
@@ -365,5 +365,111 @@ describe('the report as text', () => {
     const odd = reportSummary(summarise(withConstructs(input, entries)));
     expect(odd).toMatch(/ pending +not an outcome +missing\n/);
     expect(odd).toContain('\nProposals: none\n');
+  });
+});
+
+describe('what the harness found, file by file', () => {
+  const pkg = readStudioPackage(syntheticPackage({ bundle: m2CorpusFiles() }));
+  const read = inventory(pkg);
+  const corpus: HarnessInput = {
+    pkg,
+    inventory: read,
+    catalogue,
+    allowList: ALLOW_LIST,
+    conversion: convert(pkg, read, catalogue, { allowList: ALLOW_LIST }),
+  };
+  const files = new Set(read.files.map((file) => file.path));
+
+  it('names the file of the conversion a finding starts with, or a file of the package, or none', () => {
+    const conversion = corpus.conversion;
+    expect(
+      fileOfFinding('layouts/Claim/view.layout.json: cl:tags is missing', conversion, files),
+    ).toEqual({
+      file: 'app/layouts/Claim/view.layout.json',
+      of: 'conversion',
+    });
+    expect(
+      fileOfFinding('app/labels/fr.json: label.claim.number is missing', conversion, files),
+    ).toEqual({
+      file: 'app/labels/fr.json',
+      of: 'conversion',
+    });
+    expect(
+      fileOfFinding('queues/home-1-claims.json is missing, though Web UI', conversion, files),
+    ).toEqual({
+      file: 'app/queues/home-1-claims.json',
+      of: 'conversion',
+    });
+    expect(fileOfFinding('actions.json: x runs y', conversion, files)?.file).toBe(
+      'app/actions.json',
+    );
+    expect(fileOfFinding('acme: --mat-sys-primary is #000', conversion, files)).toEqual({
+      file: 'themes/acme.json',
+      of: 'conversion',
+    });
+    expect(
+      fileOfFinding(
+        `condition 2 of ${UI}/document/claim/nuxeo-claim-view-layout.html: its rule`,
+        conversion,
+        files,
+      ),
+    ).toEqual({ file: `${UI}/document/claim/nuxeo-claim-view-layout.html`, of: 'package' });
+    expect(
+      fileOfFinding(
+        `the report lists layout-field:${UI}/document/claim/nuxeo-claim-view-layout.html#99, which`,
+        conversion,
+        files,
+      ),
+    ).toEqual({ file: `${UI}/document/claim/nuxeo-claim-view-layout.html`, of: 'package' });
+    expect(
+      fileOfFinding('the report is of Other 1.0.0, not of the package given', conversion, files),
+    ).toBeNull();
+  });
+
+  for (const mutation of MUTATIONS)
+    it(`puts every finding of ${mutation.name} under a file, its own where it names one`, () => {
+      const broken = mutation.apply(corpus.conversion, corpus).conversion;
+      const summary = summarise({ ...corpus, conversion: broken });
+      const found = summary.checks.flatMap((check) => check.findings);
+      const grouped = summary.byFile.flatMap((group) =>
+        group.findings.map((finding) => finding.line),
+      );
+      expect([mutation.name, [...grouped].sort()]).toEqual([mutation.name, [...found].sort()]);
+      for (const group of summary.byFile) {
+        if (group.of !== 'conversion' || group.file === null) continue;
+        const named = group.file.replace(/^app\//, '');
+        for (const finding of group.findings)
+          expect([
+            mutation.name,
+            group.file.startsWith('themes/') ||
+              finding.line.startsWith(named) ||
+              finding.line.startsWith(group.file),
+          ]).toEqual([mutation.name, true]);
+      }
+      // The report prints each under its file.
+      const text = reportSummary(summary);
+      expect(text).toContain('\nWhat the harness found, file by file:\n');
+      for (const group of summary.byFile.filter((candidate) => candidate.of === 'conversion'))
+        expect(text).toContain(`\n  ${group.file}, of the conversion`);
+    });
+
+  it('lists under each file of the package what the harness found in what it became', () => {
+    const drop = MUTATIONS.find((mutation) => mutation.name === 'drop-translation');
+    if (!drop) throw new Error('drop-translation');
+    const summary = summarise({
+      ...corpus,
+      conversion: drop.apply(corpus.conversion, corpus).conversion,
+    });
+    const group = summary.byFile.find((candidate) => candidate.file?.startsWith('app/labels/'));
+    expect(group?.from).toEqual([expect.stringMatching(/^data\/i18n\/messages.*\.json$/)]);
+    const file = summary.files.find((candidate) => candidate.path === group?.from[0]);
+    expect(file?.found).toEqual([
+      { check: 4, file: group?.file, line: expect.stringMatching(/ is missing$/) },
+    ]);
+    expect(reportSummary(summary)).toContain(`      found, check 4, in ${group?.file}: `);
+    // A sound conversion: nothing found, and said so.
+    expect(reportSummary(summarise(corpus))).toContain(
+      '\nWhat the harness found, file by file: nothing\n',
+    );
   });
 });
