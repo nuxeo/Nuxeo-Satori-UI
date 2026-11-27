@@ -1,0 +1,19 @@
+<package type="addon" name="nuxeo-agentic-capture" version="@capture.package.version@">
+  <title>Nuxeo Satori capture: incoming files classified, extracted, matched and filed on their record</title>
+  <description>
+    <p>Capture and classification's server add-on. A file uploaded into an inbox, a folder of a type a capture profile names, as a document whose type carries the CaptureItem facet, is classified and its fields extracted, in the background, through the capture provider the server configures; then matched to an existing record by the profile's keys, such as a claim number, and filed on it as an attachment, audited, with the classification and its confidence kept on the item.</p>
+    <p>Anything below the profile's threshold, unmatched, or matching more than one record waits for a person, who confirms, corrects or rejects it. Nothing is filed by itself on a guess below the threshold, and a person files only on a record they may write.</p>
+    <p>Two providers: a deterministic stand-in, for demonstrations, which reads the file's own text and calls nothing; and one that calls the AI package's AI.* operations, unused until a server setting turns it on, which is to be done only once the AI data terms are approved. It adds no Automation operation.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <require-terms-and-conditions-acceptance>false</require-terms-and-conditions-acceptance>
+  <license>Apache License, Version 2.0</license>
+  <license-url>http://www.apache.org/licenses/LICENSE-2.0</license-url>
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <visibility>PRIVATE</visibility>
+</package>

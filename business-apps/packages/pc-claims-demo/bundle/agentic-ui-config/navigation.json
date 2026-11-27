@@ -4,6 +4,7 @@
   "entries": [
     { "id": "home", "labelKey": "pc-claims.nav.home", "icon": "home", "page": "home" },
     { "id": "open-property-claims", "icon": "inbox", "queue": "open-property-claims" },
+    { "id": "mail-to-confirm", "icon": "tasks", "queue": "mail-to-confirm" },
     {
       "id": "high-reserve",
       "icon": "list",

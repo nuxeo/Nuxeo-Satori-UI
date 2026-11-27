@@ -177,6 +177,15 @@ jobs:
           ls nuxeo-agentic-signature/target/nuxeo-agentic-signature-*.zip
           node nuxeo-agentic-signature/demo/esign-stand-in.selftest.mjs
 
+      # Capture and classification's add-on, likewise its own package. Its tests start a Nuxeo
+      # runtime with the Automation service and the platform's audit, classify with the stand-in,
+      # and call the AI provider only against the tests' own stand-ins for the AI package's
+      # operations: no AI service is reached. Its zip is not uploaded or published.
+      - name: Build and test the capture add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-capture -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-capture/target/nuxeo-agentic-capture-*.zip
+
       # Embedded panels' token exchange (decision F), an add-on of its own with no Marketplace
       # package yet: its jar, after its tests, with no Nuxeo runtime. The jar must not carry the
       # compile-time copy of the platform's authentication plugin interface.

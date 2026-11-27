@@ -13,6 +13,7 @@ import { AdminVocabulariesPageComponent } from './admin-vocabularies-page/admin-
 import { AdminAuditPageComponent } from './admin-audit-page/admin-audit-page.component';
 import { AdminCloudServicesPageComponent } from './admin-cloud-services-page/admin-cloud-services-page.component';
 import { AdminNxqlSearchPageComponent } from './admin-nxql-search-page/admin-nxql-search-page.component';
+import { AdminDiagnosticsPageComponent } from './admin-diagnostics-page/admin-diagnostics-page.component';
 
 describe('administrationRoutes', () => {
   it('should define administration routes array', () => {
@@ -28,10 +29,10 @@ describe('administrationRoutes', () => {
     expect(parentRoute.children).toBeDefined();
   });
 
-  it('should have 9 child routes', () => {
+  it('should have 10 child routes', () => {
     const parentRoute = administrationRoutes[0];
     expect(parentRoute.children).toBeDefined();
-    expect(parentRoute.children?.length).toBe(9);
+    expect(parentRoute.children?.length).toBe(10);
   });
 
   it('should redirect from empty path to analytics', () => {
@@ -112,6 +113,15 @@ describe('administrationRoutes', () => {
     expect(nxqlSearchRoute).toBeDefined();
     expect(nxqlSearchRoute?.component).toBe(AdminNxqlSearchPageComponent);
     expect(nxqlSearchRoute?.canActivate).toEqual([fullAdministratorGuard]);
+  });
+
+  // The page's guard is for the menu; the server refuses its report to anyone else (403).
+  it('should configure diagnostics route with fullAdministratorGuard', () => {
+    const parentRoute = administrationRoutes[0];
+    const diagnosticsRoute = parentRoute.children?.find((r) => r.path === 'diagnostics');
+    expect(diagnosticsRoute).toBeDefined();
+    expect(diagnosticsRoute?.component).toBe(AdminDiagnosticsPageComponent);
+    expect(diagnosticsRoute?.canActivate).toEqual([fullAdministratorGuard]);
   });
 });
 

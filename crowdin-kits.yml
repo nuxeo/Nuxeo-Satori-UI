@@ -1,0 +1,53 @@
+# Crowdin source and translation mapping for the business apps' labels.
+#
+# Every kit's `bundle/agentic-ui-config/labels/en.json` (docs/business-apps/app-definition-v2.md,
+# section 7) is a source, and its approved translations are written beside it as
+# `labels/<language>.json`, which is where the package pipeline and the app registry read a
+# language's labels from. Same project, same tenant and the same options as `crowdin-conf.yml`,
+# which explains each of them; this file explains only what differs.
+#
+# ## Why a file of its own
+#
+# `crowdin-conf.yml`'s pull is one pull request for every language. A kit's file is not like the
+# app's catalogue: a kit is a versioned package, so the pull request that brings a kit's file in a
+# new language must also name it in the kit's component (`npx nx g
+# ./tools/satori-generators:app-registry --package=business-apps/packages/<kit>`) and raise the
+# kit's version, a minor; one that changes a file's texts must raise it a patch. A bot cannot, and
+# the package pipeline refuses the kit until a person has. In the app's pull request that would hold
+# every app catalogue red with the kits. Here it holds only the kits.
+#
+# So: uploaded by `crowdin-push.yaml`, after the app's sources and their context, and downloaded by
+# `crowdin-pull-kits.yaml`, which opens its own pull request and runs only once
+# `vars.CROWDIN_KIT_LABELS_ENABLED` is `'true'`. `checkCrowdinConfig` holds this file to every rule
+# it holds `crowdin-conf.yml` to; `crowdin-sources.selftest.mjs` holds it to every kit, and to
+# writing each language where the app reads it.
+#
+# ## What a Crowdin manager does once
+#
+# HIDE the `$schema` string in each kit's file on the project. It is the address of a JSON Schema
+# for editors, a string, so Crowdin imports it like a label; hidden, it is not shown to a
+# translator and exports as written. `version` is a number, which Crowdin does not import. Nothing
+# else in a kit's file is anything but a label. See "Languages" in
+# docs/business-apps/administrator-guide.md.
+
+'base_url': 'https://hyland.api.crowdin.com'
+
+'project_id_env': 'CROWDIN_PROJECT_ID'
+'api_token_env': 'CROWDIN_PERSONAL_TOKEN'
+
+'base_path': '.'
+'preserve_hierarchy': true
+
+# One pattern for every kit, so a new kit is a source with no change here. Rooted at
+# `business-apps/packages/`, which cannot reach `node_modules`.
+'files': [
+    {
+      'source': '/business-apps/packages/*/bundle/agentic-ui-config/labels/en.json',
+      'translation': '/%original_path%/%two_letters_code%.%file_extension%',
+      'export_only_approved': 'true',
+      'update_option': 'update_without_changes',
+      # Norwegian Bokmål as `nb`, as in `crowdin-conf.yml`, whichever of Crowdin's two Norwegians
+      # the project targets.
+      'languages_mapping': { 'two_letters_code': { 'no': 'nb' } },
+    },
+  ]

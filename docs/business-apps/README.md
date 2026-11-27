@@ -78,6 +78,11 @@ Designer, the development plan and its decisions. Start here when you pick this 
 18. [embedded-panels.md](embedded-panels.md): a record page's panel inside another system's page,
     and how a host page and its server use it: the element, the handshake, the token exchange and
     the server's configuration.
+19. [performance-budgets-ci.md](performance-budgets-ci.md): phase 10's performance budgets in CI,
+    the bundles' sizes and three pages' first render in Chromium, each limit with its reasoning, and
+    how the job is seen failing.
+20. [telemetry.md](telemetry.md): telemetry, a design only, for decision T: opt-in and off by
+    default, to the customer's own collector, a closed list of fields, and what needs deciding.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):
@@ -96,6 +101,11 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   the provider's callback authenticated and taken once, and the signed file filed on the record as
   a new version with the provider's evidence (phase 7), with its kit,
   [onboarding and disputes](../../business-apps/packages/onboarding-demo/README.md).
+- [`nuxeo-agentic-capture`](../../nuxeo-agentic-capture/README.md): capture and classification:
+  mail uploaded into an inbox, classified, its fields extracted, matched to its record by the
+  profile's keys and filed on it, or queued for a person to confirm or correct, through a
+  deterministic stand-in or the AI package's `AI.*` operations, off until a server turns them on
+  (phase 7), with the [P&C claims](../../business-apps/packages/pc-claims-demo/README.md) kit.
 - [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md): the token exchange of
   embedded panels, a host's signed assertion of its user for a short-lived token of the add-on's
   own, signed in on the REST API alone and held to its host's origins and to reads (phase 7,

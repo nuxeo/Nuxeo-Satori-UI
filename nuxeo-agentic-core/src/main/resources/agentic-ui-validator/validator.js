@@ -875,6 +875,40 @@ var agenticUiValidator = (function () {
         var add = function (path, kind, message2) {
             findings.push({ path: path, kind: kind, message: message2 });
         };
+        var references = [];
+        var reading = null;
+        var columnDepth = 0;
+        var computing = 0;
+        var readBy = function (by, walk) {
+            var was = reading;
+            reading = by;
+            if (by === "computation")
+                computing++;
+            try {
+                walk();
+            }
+            finally {
+                reading = was;
+                if (by === "computation")
+                    computing--;
+            }
+        };
+        var inColumns = function (walk) {
+            columnDepth++;
+            try {
+                walk();
+            }
+            finally {
+                columnDepth--;
+            }
+        };
+        var refer = function (xpath, path, by) {
+            if (by === null || xpath.startsWith(VARIABLE))
+                return;
+            if (columnDepth > 0 && (by !== "rule" || computing > 0))
+                return;
+            references.push({ xpath: xpath, path: path, by: by });
+        };
         var depth = 0;
         var nested = function (path, walk) {
             if (depth >= MAX_NESTING) {
@@ -947,8 +981,9 @@ var agenticUiValidator = (function () {
         var variable = function (xpath, path) {
             if (!task && xpath.startsWith(VARIABLE))
                 add(path, "structure", '"var:" names a task variable, which only a task form has');
+            refer(xpath, path, reading);
         };
-        var rule = function (item, path) { return nested(path, function () { return ruleAt(item, path); }); };
+        var rule = function (item, path) { return readBy("rule", function () { return nested(path, function () { return ruleAt(item, path); }); }); };
         var ruleAt = function (item, path) {
             var _h = __read(typeof item === "string" ? [item, []] : isRecord(item) ? [item["type"], "parameters" in item ? item["parameters"] : []] : [null, null], 2), type = _h[0], parameters2 = _h[1];
             if (typeof type !== "string" || !RULE_ID.test(type)) {
@@ -977,6 +1012,8 @@ var agenticUiValidator = (function () {
             if (isFieldReference(item)) {
                 if (!record)
                     add(path, "parameter", "no record is open here, so a rule is given literals, not a property");
+                else
+                    refer(item.field, join(path, "field"), reading);
             }
             else if (Array.isArray(item))
                 item.forEach(function (inner, index) { return inCustomerRule(inner, join(path, index)); });
@@ -1108,7 +1145,7 @@ var agenticUiValidator = (function () {
                     parameter(kind, item, join(path, index), owner);
             });
         };
-        var computation = function (item, path) { return nested(path, function () { return computationAt(item, path); }); };
+        var computation = function (item, path) { return readBy("computation", function () { return nested(path, function () { return computationAt(item, path); }); }); };
         var computationAt = function (item, path) {
             if (!isRecord(item) || typeof item["type"] !== "string") {
                 add(path, "structure", 'a computation is { "type": <ID>, "parameters": [...] }');
@@ -1126,7 +1163,8 @@ var agenticUiValidator = (function () {
             else
                 signed(registries.computations[type], parameters2, join(path, "parameters"), "the computation \"".concat(type, "\""));
         };
-        var check = function (item, path) {
+        var check = function (item, path) { return readBy("check", function () { return checkAt(item, path); }); };
+        var checkAt = function (item, path) {
             if (!isRecord(item) || typeof item["type"] !== "string") {
                 add(path, "structure", 'a check is { "type": <ID>, "parameters": [...], "label" or "labelKey" }');
                 return;
@@ -1178,20 +1216,23 @@ var agenticUiValidator = (function () {
             }
             var definition = registries.widgets[id];
             var given = parameters2 != null ? parameters2 : {};
+            var _loop_2 = function (name, setting) {
+                if (!Object.hasOwn(definition.parameters, name)) {
+                    add(join(join(path, "parameters"), name), "parameter", "the widget \"".concat(id, "\" has no parameter \"").concat(name, "\""));
+                    return "continue";
+                }
+                var problem = definition.parameters[name](setting);
+                if (problem)
+                    add(join(join(path, "parameters"), name), "parameter", "".concat(name, " ").concat(problem));
+                else if (isFieldReference(setting))
+                    readBy("widget's parameter", function () { return variable(setting.field, join(join(join(path, "parameters"), name), "field")); });
+                else if (id === "document-link" && name === "show")
+                    linkedShow(given, path, form2, inTable);
+            };
             try {
                 for (var _k = __values(Object.entries(given)), _l = _k.next(); !_l.done; _l = _k.next()) {
                     var _m = __read(_l.value, 2), name = _m[0], setting = _m[1];
-                    if (!Object.hasOwn(definition.parameters, name)) {
-                        add(join(join(path, "parameters"), name), "parameter", "the widget \"".concat(id, "\" has no parameter \"").concat(name, "\""));
-                        continue;
-                    }
-                    var problem = definition.parameters[name](setting);
-                    if (problem)
-                        add(join(join(path, "parameters"), name), "parameter", "".concat(name, " ").concat(problem));
-                    else if (isFieldReference(setting))
-                        variable(setting.field, join(join(join(path, "parameters"), name), "field"));
-                    else if (id === "document-link" && name === "show")
-                        linkedShow(given, path, form2, inTable);
+                    _loop_2(name, setting);
                 }
             }
             catch (e_20_1) { e_20 = { error: e_20_1 }; }
@@ -1216,7 +1257,8 @@ var agenticUiValidator = (function () {
                 finally { if (e_21) throw e_21.error; }
             }
             if (id === "table" && Array.isArray(given["columns"])) {
-                given["columns"].forEach(function (column, index) { return field(column, join(join(join(path, "parameters"), "columns"), index), form2, false, true); });
+                var columnsAt_1 = join(join(path, "parameters"), "columns");
+                inColumns(function () { return given["columns"].forEach(function (column, index) { return field(column, join(columnsAt_1, index), form2, false, true); }); });
             }
         };
         var field = function (entry2, path, form2, inForm, inTable) {
@@ -1326,7 +1368,7 @@ var agenticUiValidator = (function () {
                     if (!options2.openRecord)
                         add(at2, "structure", "a queue has no open record, so a page provider parameter is a literal");
                     else if (isFieldReference(p))
-                        variable(p.field, join(at2, "field"));
+                        readBy("page provider's parameter", function () { return variable(p.field, join(at2, "field")); });
                     else
                         add(at2, "structure", 'a page provider parameter is a literal or { "field": "<prefix>:<name>" }');
                 });
@@ -1335,7 +1377,7 @@ var agenticUiValidator = (function () {
             if (!Array.isArray(columns2) || columns2.length === 0)
                 add(join(path, "columns"), "structure", "needs a list of columns");
             else
-                columns2.forEach(function (column, index) { return field(column, join(join(path, "columns"), index), false); });
+                inColumns(function () { return columns2.forEach(function (column, index) { return field(column, join(join(path, "columns"), index), false); }); });
             var shownThrough = new Set((Array.isArray(columns2) ? columns2 : []).flatMap(function (column) { return isRecord(column) && typeof column["field"] === "string" && column["widget"] === "document-link" && isRecord(column["parameters"]) && "show" in column["parameters"] ? [column["field"]] : []; }));
             if ("sort" in item) {
                 var sort = item["sort"];
@@ -1368,6 +1410,7 @@ var agenticUiValidator = (function () {
         return {
             registries: registries,
             findings: findings,
+            references: references,
             add: add,
             claim: claim,
             unknownKeys: unknownKeys,
@@ -1422,7 +1465,10 @@ var agenticUiValidator = (function () {
             ];
         });
     }
-    function againstModel(file, type, model, registries) {
+    function againstModel(file, type, model, registries, references) {
+        var e_23, _h, e_24, _j, e_25, _k, e_26, _l;
+        if (references === void 0) { references = []; }
+        var _a;
         var findings = [];
         var add = function (path, kind, message2) {
             findings.push({ path: path, kind: kind, message: message2 });
@@ -1453,7 +1499,7 @@ var agenticUiValidator = (function () {
             };
         };
         var field = function (entry2, path, scope) {
-            var e_23, _h;
+            var e_27, _h;
             if (scope === ofType)
                 findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(entry2, path, model)), false));
             var name;
@@ -1503,17 +1549,17 @@ var agenticUiValidator = (function () {
                             add(join(parameter("parts"), part), "unknown", subfields.missing(written));
                     }
                 }
-                catch (e_23_1) { e_23 = { error: e_23_1 }; }
+                catch (e_27_1) { e_27 = { error: e_27_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_23) throw e_23.error; }
+                    finally { if (e_27) throw e_27.error; }
                 }
             }
         };
         var checklist2 = function (entry2, path) {
-            var e_24, _h;
+            var e_28, _h;
             var name = entry2["field"];
             if (typeof name !== "string" || !XPATH.test(name))
                 return;
@@ -1540,12 +1586,12 @@ var agenticUiValidator = (function () {
                         add(at2, "parameter", "\"".concat(subfield, "\" of \"").concat(name, "\" is a ").concat(propertyTypeOf(read), " value, and a checklist reads it as a ").concat(wanted));
                 }
             }
-            catch (e_24_1) { e_24 = { error: e_24_1 }; }
+            catch (e_28_1) { e_28 = { error: e_28_1 }; }
             finally {
                 try {
                     if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                 }
-                finally { if (e_24) throw e_24.error; }
+                finally { if (e_28) throw e_28.error; }
             }
         };
         var cards = function (list, path) {
@@ -1602,7 +1648,7 @@ var agenticUiValidator = (function () {
                 add("shareLinks", "unknown", "share links serve a picture's views, and the type \"".concat(type, "\" has the \"video\" schema: its record page keeps its player, not its picture"));
         }
         var capture2 = function (entry2) {
-            var _a, _b, _c;
+            var _a2, _b, _c;
             var name = entry2["property"];
             if (typeof name === "string" && XPATH.test(name)) {
                 var at2 = join("capture", "property");
@@ -1611,7 +1657,7 @@ var agenticUiValidator = (function () {
                     add(at2, "unknown", whyMissing(model, type, name));
                 else {
                     var shown2 = propertyTypeOf(property);
-                    var file2 = (_a = property.fields) == null ? void 0 : _a.get("file");
+                    var file2 = (_a2 = property.fields) == null ? void 0 : _a2.get("file");
                     var read = ((_c = (_b = property.fields) == null ? void 0 : _b.size) != null ? _c : 0) > 0;
                     if (shown2 === "complex[]") {
                         if (read && (!file2 || propertyTypeOf(file2) !== "blob"))
@@ -1637,36 +1683,90 @@ var agenticUiValidator = (function () {
         };
         if (isRecord(file["capture"]))
             capture2(file["capture"]);
+        var facetProperties = /* @__PURE__ */ new Set();
+        try {
+            for (var _m = __values(model.facets.values()), _o = _m.next(); !_o.done; _o = _m.next()) {
+                var facet = _o.value;
+                try {
+                    for (var _p = (e_24 = void 0, __values(facet.schemas)), _q = _p.next(); !_q.done; _q = _p.next()) {
+                        var schema = _q.value;
+                        var read = model.schemas.get(schema);
+                        try {
+                            for (var _r = (e_25 = void 0, __values((_a = read == null ? void 0 : read.properties.keys()) != null ? _a : [])), _s = _r.next(); !_s.done; _s = _r.next()) {
+                                var name = _s.value;
+                                facetProperties.add("".concat(read == null ? void 0 : read.prefix, ":").concat(name));
+                            }
+                        }
+                        catch (e_25_1) { e_25 = { error: e_25_1 }; }
+                        finally {
+                            try {
+                                if (_s && !_s.done && (_k = _r.return)) _k.call(_r);
+                            }
+                            finally { if (e_25) throw e_25.error; }
+                        }
+                    }
+                }
+                catch (e_24_1) { e_24 = { error: e_24_1 }; }
+                finally {
+                    try {
+                        if (_q && !_q.done && (_j = _p.return)) _j.call(_p);
+                    }
+                    finally { if (e_24) throw e_24.error; }
+                }
+            }
+        }
+        catch (e_23_1) { e_23 = { error: e_23_1 }; }
+        finally {
+            try {
+                if (_o && !_o.done && (_h = _m.return)) _h.call(_m);
+            }
+            finally { if (e_23) throw e_23.error; }
+        }
+        try {
+            for (var references_1 = __values(references), references_1_1 = references_1.next(); !references_1_1.done; references_1_1 = references_1.next()) {
+                var _t = references_1_1.value, xpath = _t.xpath, path = _t.path, by = _t.by;
+                if (xpath.startsWith("ecm:") || properties.has(xpath) || facetProperties.has(xpath))
+                    continue;
+                add(path, "unknown", "".concat(whyMissing(model, type, xpath), ", so the ").concat(by, " naming it reads nothing"));
+            }
+        }
+        catch (e_26_1) { e_26 = { error: e_26_1 }; }
+        finally {
+            try {
+                if (references_1_1 && !references_1_1.done && (_l = references_1.return)) _l.call(references_1);
+            }
+            finally { if (e_26) throw e_26.error; }
+        }
         return findings;
     }
     function schemasOf(model, type) {
-        var e_25, _h, e_26, _j;
+        var e_29, _h, e_30, _j;
         var _a, _b, _c, _d, _e, _f;
         var names = new Set((_b = (_a = model.types.get(type)) == null ? void 0 : _a.schemas) != null ? _b : []);
         try {
             for (var _k = __values((_d = (_c = model.types.get(type)) == null ? void 0 : _c.facets) != null ? _d : []), _l = _k.next(); !_l.done; _l = _k.next()) {
                 var facet = _l.value;
                 try {
-                    for (var _m = (e_26 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
+                    for (var _m = (e_30 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
                         var schema = _o.value;
                         names.add(schema);
                     }
                 }
-                catch (e_26_1) { e_26 = { error: e_26_1 }; }
+                catch (e_30_1) { e_30 = { error: e_30_1 }; }
                 finally {
                     try {
                         if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
                     }
-                    finally { if (e_26) throw e_26.error; }
+                    finally { if (e_30) throw e_30.error; }
                 }
             }
         }
-        catch (e_25_1) { e_25 = { error: e_25_1 }; }
+        catch (e_29_1) { e_29 = { error: e_29_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_25) throw e_25.error; }
+            finally { if (e_29) throw e_29.error; }
         }
         return names;
     }
@@ -1733,7 +1833,7 @@ var agenticUiValidator = (function () {
     function validateLayoutV2(content, options) {
         var _a;
         var registries = (_a = options.registries) != null ? _a : PACKAGED_REGISTRIES;
-        var model = options.model ? { model: options.model, type: options.type } : null;
+        var model = options.model ? { model: options.model, type: options.type, references: options.references === true } : null;
         return layout(content, options.mode, registries, false, model);
     }
     function validateTaskForm(content, options) {
@@ -1885,7 +1985,7 @@ var agenticUiValidator = (function () {
                 });
         }
         if (model)
-            (_h = c.findings).push.apply(_h, __spreadArray([], __read(againstModel(file, model.type, model.model, registries)), false));
+            (_h = c.findings).push.apply(_h, __spreadArray([], __read(againstModel(file, model.type, model.model, registries, model.references ? c.references : [])), false));
         return c.findings;
     }
     function banners(c, list) {
@@ -2056,8 +2156,8 @@ var agenticUiValidator = (function () {
     function addresses(c, item, path) {
         var found = function (at2) { return c.add(at2, "structure", "an address is never written in a layout: a connector's address is the server's configuration"); };
         var queue2 = [[item, path, 0]];
-        var _loop_2 = function (next) {
-            var e_27, _h;
+        var _loop_3 = function (next) {
+            var e_31, _h;
             var _j = __read(queue2[next], 3), value = _j[0], at2 = _j[1], depth = _j[2];
             if (typeof value === "string") {
                 if (ADDRESS.test(value) && !XPATH.test(value))
@@ -2070,23 +2170,23 @@ var agenticUiValidator = (function () {
                 value.forEach(function (inner, index) { return queue2.push([inner, join(at2, index), depth + 1]); });
             else if (isRecord(value))
                 try {
-                    for (var _k = (e_27 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
+                    for (var _k = (e_31 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
                         var _m = __read(_l.value, 2), key = _m[0], inner = _m[1];
                         if (ADDRESS.test(key))
                             found(join(at2, key));
                         queue2.push([inner, join(at2, key), depth + 1]);
                     }
                 }
-                catch (e_27_1) { e_27 = { error: e_27_1 }; }
+                catch (e_31_1) { e_31 = { error: e_31_1 }; }
                 finally {
                     try {
                         if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
                     }
-                    finally { if (e_27) throw e_27.error; }
+                    finally { if (e_31) throw e_31.error; }
                 }
         };
         for (var next = 0; next < queue2.length; next++) {
-            _loop_2(next);
+            _loop_3(next);
         }
     }
     function checklist(c, item, path) {
@@ -2178,7 +2278,7 @@ var agenticUiValidator = (function () {
         return Array.isArray(action2["on"]) ? action2["on"] : ["record"];
     }
     function action(c, item, path, operations) {
-        var e_28, _h;
+        var e_32, _h;
         if (!isRecord(item)) {
             c.add(path, "structure", "an action is an object");
             return;
@@ -2232,12 +2332,12 @@ var agenticUiValidator = (function () {
                     message(c, item[key], join(path, key));
             }
         }
-        catch (e_28_1) { e_28 = { error: e_28_1 }; }
+        catch (e_32_1) { e_32 = { error: e_32_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_28) throw e_28.error; }
+            finally { if (e_32) throw e_32.error; }
         }
         if ("refresh" in item && typeof item["refresh"] !== "boolean")
             c.add(join(path, "refresh"), "structure", "refresh is true or false");
@@ -2263,7 +2363,7 @@ var agenticUiValidator = (function () {
         return seen;
     }
     function parameters(c, value, path, on, fields, sent) {
-        var e_29, _h;
+        var e_33, _h;
         if (!isRecord(value)) {
             c.add(path, "structure", "parameters must be an object");
             return;
@@ -2288,16 +2388,16 @@ var agenticUiValidator = (function () {
                     c.value(item, at2);
             }
         }
-        catch (e_29_1) { e_29 = { error: e_29_1 }; }
+        catch (e_33_1) { e_33 = { error: e_33_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_29) throw e_29.error; }
+            finally { if (e_33) throw e_33.error; }
         }
     }
     function form(c, value, path, hasOperation, on) {
-        var e_30, _h;
+        var e_34, _h;
         if (!Array.isArray(value) || value.length === 0) {
             c.add(path, "structure", "a form is a list of the fields it asks for");
             return [];
@@ -2313,12 +2413,12 @@ var agenticUiValidator = (function () {
                 c.add(finding.path.startsWith(card2) ? "".concat(path).concat(finding.path.slice(card2.length)) : path, finding.kind, finding.message);
             }
         }
-        catch (e_30_1) { e_30 = { error: e_30_1 }; }
+        catch (e_34_1) { e_34 = { error: e_34_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_30) throw e_30.error; }
+            finally { if (e_34) throw e_34.error; }
         }
         return value.map(function (entry2, index) {
             var field = isRecord(entry2) ? entry2["field"] : entry2;
@@ -2417,7 +2517,7 @@ var agenticUiValidator = (function () {
         return { major: major, minor: minor, patch: patch, prerelease: match[4] ? match[4].split(".") : [] };
     }
     function compareVersions(a, b) {
-        var e_31, _h;
+        var e_35, _h;
         try {
             for (var _j = __values(["major", "minor", "patch"]), _k = _j.next(); !_k.done; _k = _j.next()) {
                 var part = _k.value;
@@ -2425,12 +2525,12 @@ var agenticUiValidator = (function () {
                     return a[part] < b[part] ? -1 : 1;
             }
         }
-        catch (e_31_1) { e_31 = { error: e_31_1 }; }
+        catch (e_35_1) { e_35 = { error: e_35_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_31) throw e_31.error; }
+            finally { if (e_35) throw e_35.error; }
         }
         if (a.prerelease.length === 0 || b.prerelease.length === 0)
             return b.prerelease.length - a.prerelease.length;
@@ -2452,7 +2552,7 @@ var agenticUiValidator = (function () {
         return 0;
     }
     function parseRange(text2) {
-        var e_32, _h;
+        var e_36, _h;
         var _a;
         var parts2 = text2.trim().split(/\s+/);
         var comparators = [];
@@ -2472,12 +2572,12 @@ var agenticUiValidator = (function () {
                     comparators.push({ operator: operator, version: version });
             }
         }
-        catch (e_32_1) { e_32 = { error: e_32_1 }; }
+        catch (e_36_1) { e_36 = { error: e_36_1 }; }
         finally {
             try {
                 if (parts2_1_1 && !parts2_1_1.done && (_h = parts2_1.return)) _h.call(parts2_1);
             }
-            finally { if (e_32) throw e_32.error; }
+            finally { if (e_36) throw e_36.error; }
         }
         return text2.trim() === "" ? null : comparators;
     }
@@ -2605,7 +2705,7 @@ var agenticUiValidator = (function () {
         });
     }
     function branding(c, value) {
-        var e_33, _h, e_34, _j;
+        var e_37, _h, e_38, _j;
         if (!isRecord(value)) {
             c.add("branding", "structure", "branding is an object");
             return;
@@ -2618,12 +2718,12 @@ var agenticUiValidator = (function () {
                     c.add(join("branding", key), "structure", "must be a text");
             }
         }
-        catch (e_33_1) { e_33 = { error: e_33_1 }; }
+        catch (e_37_1) { e_37 = { error: e_37_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_33) throw e_33.error; }
+            finally { if (e_37) throw e_37.error; }
         }
         if ("theme" in value && (typeof value["theme"] !== "string" || !ID.test(value["theme"])))
             c.add("branding.theme", "structure", "theme is the id of one of the server's themes");
@@ -2634,12 +2734,12 @@ var agenticUiValidator = (function () {
                     image(c, value[key], join("branding", key));
             }
         }
-        catch (e_34_1) { e_34 = { error: e_34_1 }; }
+        catch (e_38_1) { e_38 = { error: e_38_1 }; }
         finally {
             try {
                 if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
             }
-            finally { if (e_34) throw e_34.error; }
+            finally { if (e_38) throw e_38.error; }
         }
     }
     function image(c, value, path) {
@@ -2818,7 +2918,7 @@ var agenticUiValidator = (function () {
     var LABELS_KEYS = ["$schema", "version", "labels"];
     var MODULE_KEYS = ["$schema", "version", "settings"];
     function validateLabels(content) {
-        var e_35, _h;
+        var e_39, _h;
         var stop = unreadable(content, "a labels file");
         if (stop)
             return stop;
@@ -2841,12 +2941,12 @@ var agenticUiValidator = (function () {
                     c.add(at2, "structure", "must be a text");
             }
         }
-        catch (e_35_1) { e_35 = { error: e_35_1 }; }
+        catch (e_39_1) { e_39 = { error: e_39_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_35) throw e_35.error; }
+            finally { if (e_39) throw e_39.error; }
         }
         return c.findings;
     }
@@ -2963,7 +3063,7 @@ var agenticUiValidator = (function () {
         [at(String.raw(__makeTemplateObject(["home.json"], ["home\\.json"]))), function () { return ({ kind: "home" }); }]
     ];
     function placeFile(path, hasApp) {
-        var e_36, _h;
+        var e_40, _h;
         if (hasApp === void 0) { hasApp = function () { return false; }; }
         var _a, _b, _c;
         var candidates = [];
@@ -2976,12 +3076,12 @@ var agenticUiValidator = (function () {
                     candidates.push({ file: placed, root: (_a = match[1]) != null ? _a : "" });
             }
         }
-        catch (e_36_1) { e_36 = { error: e_36_1 }; }
+        catch (e_40_1) { e_40 = { error: e_40_1 }; }
         finally {
             try {
                 if (PLACES_1_1 && !PLACES_1_1.done && (_h = PLACES_1.return)) _h.call(PLACES_1);
             }
-            finally { if (e_36) throw e_36.error; }
+            finally { if (e_40) throw e_40.error; }
         }
         return (_c = (_b = candidates.find(function (candidate) { return hasApp(candidate.root); })) != null ? _b : candidates[0]) != null ? _c : null;
     }
@@ -2997,7 +3097,7 @@ var agenticUiValidator = (function () {
     function untranslated(content, labels, catalogue) {
         var findings = [];
         var visit = function (value, path) {
-            var e_37, _h;
+            var e_41, _h;
             if (Array.isArray(value))
                 value.forEach(function (item, index) { return visit(item, join(path, index)); });
             else if (isRecord(value))
@@ -3018,12 +3118,12 @@ var agenticUiValidator = (function () {
                             visit(item, at2);
                     }
                 }
-                catch (e_37_1) { e_37 = { error: e_37_1 }; }
+                catch (e_41_1) { e_41 = { error: e_41_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_37) throw e_37.error; }
+                    finally { if (e_41) throw e_41.error; }
                 }
         };
         visit(content, "");
@@ -3043,7 +3143,8 @@ var agenticUiValidator = (function () {
                     mode: (_b = options.mode) != null ? _b : file.mode,
                     registries: registries,
                     model: options.model,
-                    type: file.type
+                    type: file.type,
+                    references: options.references
                 });
             case "queue":
                 return __spreadArray(__spreadArray([], __read(ID.test(file.id) ? [] : add("", "structure", "the file name is the queue's id: 1 to 64 letters, digits, \".\", \"_\" or \"-\"")), false), __read(validateQueue(content, { registries: withPackageActions(registries, context.actions) })), false);
@@ -3056,13 +3157,25 @@ var agenticUiValidator = (function () {
             case "task":
                 return __spreadArray(__spreadArray([], __read(TASK.test(file.name) ? [] : add("", "structure", 'the file name is <workflow>.<step>.layout.json, each of the two letters, digits, "_" or "-"')), false), __read(validateTaskForm(content, { registries: registries })), false);
             case "labels":
-                return __spreadArray(__spreadArray([], __read(LOCALE.test(file.locale) ? [] : add("", "structure", 'the file name is a language tag, such as "en" or "pt-BR"')), false), __read(validateLabels(content)), false);
+                return __spreadArray(__spreadArray(__spreadArray([], __read(LOCALE.test(file.locale) ? [] : add("", "structure", 'the file name is a language tag, such as "en" or "pt-BR"')), false), __read(validateLabels(content)), false), __read(notInEnglish(file.locale, content, context.labels)), false);
             case "module":
                 return __spreadArray(__spreadArray(__spreadArray([], __read(APP_ID.test(file.module) ? [] : add("", "structure", "the file name is the module's id: lower-case letters, digits and \"-\"")), false), __read(validateModuleSettings(content, { module: file.module, registries: registries })), false), __read(turnedOn(file.module, context.app)), false);
         }
     }
+    function notInEnglish(locale, content, english) {
+        if (locale === "en" || english === void 0 || !isRecord(content))
+            return [];
+        var labels = content["labels"];
+        if (!isRecord(labels))
+            return [];
+        return Object.keys(labels).filter(function (key) { return !english.has(key); }).map(function (key) { return ({
+            path: "labels[".concat(JSON.stringify(key), "]"),
+            kind: "unknown",
+            message: "labels/en.json has no text for \"".concat(key, "\": a language's labels give a text only to a key English has")
+        }); });
+    }
     function withPackageActions(registries, actions) {
-        var e_38, _h;
+        var e_42, _h;
         if (!isRecord(actions) || !Array.isArray(actions["actions"]))
             return registries;
         var row = [];
@@ -3079,17 +3192,17 @@ var agenticUiValidator = (function () {
                     bulk.push(action2["id"]);
             }
         }
-        catch (e_38_1) { e_38 = { error: e_38_1 }; }
+        catch (e_42_1) { e_42 = { error: e_42_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_38) throw e_38.error; }
+            finally { if (e_42) throw e_42.error; }
         }
         return withRegistered(registries, { rowActions: row, bulkActions: bulk });
     }
     function missingAssets(content, context) {
-        var e_39, _h;
+        var e_43, _h;
         if (!isRecord(content) || !isRecord(content["branding"]))
             return [];
         var branding2 = content["branding"];
@@ -3108,12 +3221,12 @@ var agenticUiValidator = (function () {
                     });
             }
         }
-        catch (e_39_1) { e_39 = { error: e_39_1 }; }
+        catch (e_43_1) { e_43 = { error: e_43_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_39) throw e_39.error; }
+            finally { if (e_43) throw e_43.error; }
         }
         return findings;
     }

@@ -326,6 +326,116 @@
       "parent": "Parent",
       "save": "Save",
       "select-a-parent": "Select a Parent"
+    },
+    "diagnostics": {
+      "title": "Diagnostics",
+      "intro": "What support needs to know about this server's apps: versions, installed packages, the server checks the apps depend on, the configuration in force and the errors it logged. It is built to name no person and hold no secret; read it before you send it.",
+      "loading": "Loading the diagnostics",
+      "failed": "The diagnostics could not be read",
+      "unknown": "Not known",
+      "versions": {
+        "heading": "Versions",
+        "platform": "Platform",
+        "app": "App package",
+        "core": "Server module",
+        "generated": "Generated"
+      },
+      "packages": {
+        "heading": "Installed packages",
+        "caption": "Each Marketplace package the server's package manager records as installed",
+        "name": "Package",
+        "version": "Version",
+        "kind": "Kind",
+        "state": "State",
+        "signature": "Signature",
+        "signature-not-recorded": "Not recorded by the server",
+        "signature-note": "The server does not record whether a package's signature was verified: verify each package before installing it, as the administrator's guide says.",
+        "none": "No package is recorded as installed.",
+        "role": {
+          "app": "The app",
+          "kit": "Kit",
+          "add-on": "Add-on"
+        },
+        "problem": {
+          "no-directory": "The server names no package directory, so its installed packages cannot be listed.",
+          "no-list": "The server's package manager keeps no list of packages here, so its installed packages cannot be listed.",
+          "list-too-large": "The package manager's list is too large to read.",
+          "list-unreadable": "The package manager's list could not be read.",
+          "id-skipped": "A package whose name is not a plain file name was left out.",
+          "too-many": "More packages are installed than the page lists; the first ones are shown.",
+          "descriptor-unreadable": "A package's description could not be read; it is listed by its identifier.",
+          "unknown": "The package list could not be read whole."
+        },
+        "signature-unknown": "Not known"
+      },
+      "checks": {
+        "heading": "Server checks"
+      },
+      "check": {
+        "retention": "Retention",
+        "retention-meaning": "Nuxeo's retention module, which the records kit's disposition review needs.",
+        "template-rendering": "Template Rendering",
+        "template-rendering-meaning": "The add-on letters from templates would be rendered with.",
+        "ai": "AI package",
+        "ai-meaning": "The package whose operations the app's AI features call; without it they answer an error.",
+        "deployment-layer": "Deployment layer",
+        "deployment-layer-meaning": "Administrators' own versions of an app's layouts and queues, published from the designer.",
+        "development-overrides": "Development overrides",
+        "development-overrides-meaning": "Configuration read from a directory on every request: never on in production.",
+        "operation-allow-list": "Operation allow-list",
+        "operation-allow-list-meaning": "The operations an app's buttons may run on this server."
+      },
+      "status": {
+        "present": "Present",
+        "absent": "Not installed",
+        "on": "On",
+        "off": "Off",
+        "intact": "In force",
+        "replaced": "Replaced",
+        "unknown": "Unknown"
+      },
+      "configuration": {
+        "heading": "Configuration in force",
+        "built": "Built by the server at {{ builtAt }}, when it logged the errors below.",
+        "server-wide": "Server-wide",
+        "bootstrap": "Bootstrap",
+        "manifest": "Manifest",
+        "layouts": "Layouts",
+        "layout-count": "{{ count }} in force",
+        "development-overrides": "Development overrides"
+      },
+      "apps": {
+        "version": "Package version",
+        "platform": "Platform needed",
+        "package-layer": "From its package",
+        "deployment-layer": "Deployment layer",
+        "deployment-none": "On, with no live file",
+        "deployment-file": "{{ path }}, version {{ version }}",
+        "errors": "Configuration errors and warnings",
+        "error-count": "{{ count }} logged"
+      },
+      "errors": {
+        "heading": "Configuration errors",
+        "caption": "Errors and warnings the server logged for the configuration in force",
+        "none": "The server logged no configuration error or warning.",
+        "level": "Level",
+        "app": "App",
+        "code": "Code",
+        "message": "Message",
+        "source": "From",
+        "error": "Error",
+        "warning": "Warning",
+        "server-wide": "Every app",
+        "omitted": "Not listed: {{ info }} for information only, and {{ beyond }} over the list's limit."
+      },
+      "support": {
+        "heading": "Copy for support",
+        "hint": "The same facts as plain text, to paste into a support request. It is built to name no person and hold no secret, and messages are cleaned of what looks like one; read it before you send it.",
+        "label": "Text for support",
+        "copy": "Copy",
+        "copied": "Copied to the clipboard.",
+        "copy-failed": "The browser did not allow copying: the text is selected, copy it yourself."
+      }
     }
   },
   "administration": {
@@ -1758,7 +1868,8 @@
     "settings-cloud-services": "Cloud Services",
     "settings-nuxeo-drive": "Nuxeo Drive",
     "settings-profile": "Profile",
-    "settings-themes": "Themes"
+    "settings-themes": "Themes",
+    "administration-diagnostics": "Diagnostics"
   },
   "embedded-panels": {
     "label": "Record from Nuxeo",

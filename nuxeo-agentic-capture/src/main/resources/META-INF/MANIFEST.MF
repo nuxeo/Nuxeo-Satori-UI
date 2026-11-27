@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Capture
+Bundle-SymbolicName: org.nuxeo.agentic.capture;singleton:=true
+Bundle-Version: 0.1.0
+Bundle-Vendor: Hyland Software
+Nuxeo-Component: OSGI-INF/capture-schema-contrib.xml,
+ OSGI-INF/capture-service.xml,
+ OSGI-INF/capture-providers-contrib.xml,
+ OSGI-INF/capture-listener-contrib.xml

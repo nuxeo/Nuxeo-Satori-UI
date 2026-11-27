@@ -240,12 +240,17 @@ public class SendTest {
     public void aFileChangedWhileItIsSentIsNotWrittenOver() {
         String caseId = Desk.newCase(repository, "onb-1", "agreement.pdf");
         byte[] meanwhile = "%PDF-1.4 changed meanwhile".getBytes();
-        stub.onSend = () -> TransactionHelper.runInTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(
-                repository, (CoreSession s) -> {
-                    DocumentModel record = s.getDocument(new org.nuxeo.ecm.core.api.IdRef(caseId));
-                    record.setPropertyValue("files:files/0/file", (Serializable) Desk.pdf("agreement.pdf", meanwhile));
-                    return s.saveDocument(record);
-                }));
+        stub.onSend = () -> {
+            TransactionHelper.runInTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                    (CoreSession s) -> {
+                        DocumentModel record = s.getDocument(new org.nuxeo.ecm.core.api.IdRef(caseId));
+                        record.setPropertyValue("files:files/0/file", (Serializable) Desk.pdf("agreement.pdf",
+                                meanwhile));
+                        return s.saveDocument(record);
+                    }));
+            // Its fulltext extraction ended before the send's transaction writes the record (Desk.awaitAsync).
+            Desk.awaitAsync();
+        };
         String requestId = Desk.send(repository, ALICE, caseId, "agreement.pdf");
         stub.onSend = null;
         String envelope = text(Desk.stored(repository, requestId), Signatures.ENVELOPE);

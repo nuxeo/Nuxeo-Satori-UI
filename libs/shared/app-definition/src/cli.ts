@@ -234,7 +234,7 @@ export function main(argv: readonly string[], io: CliIo): number {
       placed.file,
       content,
       contextOf(placed.root, contexts, problems),
-      { registries, operations, platformVersion, mode, model, catalogue },
+      { registries, operations, platformVersion, mode, model, catalogue, references: true },
     );
     if (findings.length === 0) {
       passed++;

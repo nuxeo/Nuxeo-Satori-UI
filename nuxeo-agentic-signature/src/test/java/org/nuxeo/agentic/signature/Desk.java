@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -27,6 +28,8 @@ import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.impl.ACPImpl;
+import org.nuxeo.ecm.core.event.EventService;
+import org.nuxeo.ecm.core.work.api.WorkManager;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.transaction.TransactionHelper;
 
@@ -81,6 +84,7 @@ final class Desk {
         admin.setACP(requests.getRef(), requestsAcp, true);
         admin.save();
         TransactionHelper.commitOrRollbackTransaction();
+        awaitAsync();
         TransactionHelper.startTransaction();
     }
 
@@ -212,10 +216,12 @@ final class Desk {
         if (TransactionHelper.isTransactionActiveOrMarkedRollback()) {
             TransactionHelper.commitOrRollbackTransaction();
         }
+        awaitAsync();
         try {
             return new CallbackEndpoint(Framework.getService(SignatureService.class), clock, repository)
                     .respond(method, path, headers, body);
         } finally {
+            awaitAsync();
             TransactionHelper.startTransaction();
         }
     }
@@ -253,10 +259,30 @@ final class Desk {
         if (TransactionHelper.isTransactionActiveOrMarkedRollback()) {
             TransactionHelper.commitOrRollbackTransaction();
         }
+        awaitAsync();
         try {
             return TransactionHelper.runInTransaction(work);
         } finally {
+            awaitAsync();
             TransactionHelper.startTransaction();
+        }
+    }
+
+    /**
+     * Wait for what a commit started in the background, the repository's fulltext extraction among
+     * it, before the next step: a version's checkin, a restore and a copy write a document's rows as
+     * that work writes them, and on H2 the two can deadlock, one of them chosen its victim. A server
+     * retries such work; a test that did not wait would fail at random, as one did in CI.
+     */
+    static void awaitAsync() {
+        Framework.getService(EventService.class).waitForAsyncCompletion();
+        try {
+            if (!Framework.getService(WorkManager.class).awaitCompletion(60, TimeUnit.SECONDS)) {
+                throw new AssertionError("the background work after a commit did not end within 60 seconds");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(e);
         }
     }
 

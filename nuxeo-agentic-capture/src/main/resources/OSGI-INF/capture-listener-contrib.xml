@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.capture.listener" version="1.0">
+
+  <documentation>
+    The capture listeners. CaptureItemListener, synchronous, in the transaction of the change, as
+    the person who makes it: an item is received when it is created in its inbox with its file; a
+    person confirms, corrects or rejects one while it waits; and nothing else of the server's
+    changes. CaptureIntakeListener, in the background once the item's creation has committed, as
+    the system: classifies, extracts, matches and files, or queues it for a person.
+    CaptureAuditWriter writes the add-on's entries to the platform's audit once their transaction
+    has committed. No Automation operation: a person reaches it by uploading and by editing an
+    item, as every client does.
+  </documentation>
+
+  <require>org.nuxeo.agentic.capture</require>
+  <require>org.nuxeo.agentic.capture.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="captureItemListener" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.capture.CaptureItemListener">
+      <event>aboutToCreate</event>
+      <event>documentCreatedByCopy</event>
+      <event>beforeDocumentModification</event>
+      <event>beforeRestoringDocument</event>
+    </listener>
+    <listener name="captureIntakeListener" async="true" postCommit="true"
+      class="org.nuxeo.agentic.capture.CaptureIntakeListener">
+      <event>documentCreated</event>
+    </listener>
+    <listener name="captureAuditWriter" async="true" postCommit="true"
+      class="org.nuxeo.agentic.capture.CaptureAuditWriter">
+      <event>captureQueued</event>
+      <event>captureFiled</event>
+      <event>captureRejected</event>
+    </listener>
+  </extension>
+
+</component>

@@ -23,6 +23,10 @@
     "beta:asset-performance": "node scripts/beta-harness/asset-performance/check.mjs",
     "beta:asset-performance-controls": "node scripts/beta-harness/asset-performance/controls.mjs",
     "beta:asset-performance-selftest": "node --test scripts/beta-harness/asset-performance/asset-performance.selftest.mjs",
+    "beta:bundle-budgets": "node scripts/beta-harness/performance-budgets/bundles.mjs",
+    "beta:page-budgets": "node scripts/beta-harness/performance-budgets/pages.mjs",
+    "beta:budgets-controls": "node scripts/beta-harness/performance-budgets/controls.mjs",
+    "beta:budgets-selftest": "node --test scripts/beta-harness/performance-budgets/performance-budgets.selftest.mjs",
     "beta:integration": "npx tsx libs/integration-tests/src/preflight-cli.ts && npx vitest run --config libs/integration-tests/vitest.config.mts",
     "beta:integration-preflight": "npx tsx libs/integration-tests/src/preflight-cli.ts",
     "beta:customer-guardrails": "node libs/platform/guardrails/check-extension-library.mjs libs/extensions/acme-extensions && node scripts/check-extension-library.selftest.mjs",
@@ -117,7 +121,8 @@
     "beta:mirror": "node scripts/mirror-agent-config.mjs check",
     "i18n:pseudo": "node tools/i18n/pseudo-locale.mjs",
     "i18n:audit": "node tools/i18n/pseudo-locale.mjs && node tools/i18n/pseudo-locale-audit.mjs && node tools/i18n/pseudo-locale-deep.mjs",
-    "review:crowdin-selftest": "node tools/i18n/crowdin-push-context.selftest.mjs && node tools/i18n/crowdin-status.selftest.mjs",
+    "i18n:coverage": "node tools/i18n/coverage.mjs",
+    "review:crowdin-selftest": "node tools/i18n/crowdin-push-context.selftest.mjs && node tools/i18n/crowdin-status.selftest.mjs && node tools/i18n/crowdin-sources.selftest.mjs && node tools/i18n/coverage.selftest.mjs",
     "studio-migration": "tsx tools/studio-migration/src/cli.ts"
   },
   "lint-staged": {
