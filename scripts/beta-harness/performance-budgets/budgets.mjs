@@ -181,6 +181,56 @@ export function judgeBundles(measured, budgets) {
 }
 
 /**
+ * A navigation that did not commit in time: the browser never had the page's address answered.
+ * The only failure of a load that is tried again ({@link withNavigationRetry}): a page that
+ * navigated and then did not draw, or threw, is never.
+ */
+export class NavigationTimeout extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NavigationTimeout';
+  }
+}
+
+/**
+ * Runs `attempt`, and once more when it failed with a {@link NavigationTimeout}: a cold runner's
+ * first navigations sometimes stall before the server's answer reaches the page, which is the
+ * runner's, not the app's. Any other failure, and a second stall, is thrown as it is, so a page
+ * that did not draw still fails its load. Each retry is told to `onRetry`, to be reported.
+ *
+ * @param {(attempt: number) => Promise<number>} attempt the load, given 0, then 1
+ * @returns {Promise<{ value: number, retried: number }>}
+ */
+export async function withNavigationRetry(attempt, { retries = 1, onRetry = () => {} } = {}) {
+  for (let tried = 0; ; tried++) {
+    try {
+      return { value: await attempt(tried), retried: tried };
+    } catch (error) {
+      if (!(error instanceof NavigationTimeout) || tried >= retries) throw error;
+      onRetry(error, tried + 1);
+    }
+  }
+}
+
+/**
+ * Whether the run's retried navigations are the runner's noise and not a page's defect: at most
+ * one a page. A page whose navigation stalled on two of its loads fails the run, however both
+ * second tries went.
+ *
+ * @param {{ page: string }[]} retries one per navigation tried again
+ */
+export function retriesCheck(retries) {
+  const byPage = new Map();
+  for (const { page } of retries) byPage.set(page, (byPage.get(page) ?? 0) + 1);
+  const over = [...byPage].filter(([, count]) => count > 1);
+  return {
+    name: 'no page needed its navigation tried again more than once',
+    pass: over.length === 0,
+    detail: over.map(([page, count]) => `${page}: ${count}`).join(', ') || null,
+  };
+}
+
+/**
  * The budgets with one line's limit replaced: the guard's own control, a budget lowered on purpose
  * below what was measured, which the judgement must then fail with both numbers.
  */

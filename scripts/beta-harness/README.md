@@ -355,6 +355,10 @@ npm run beta:budgets-controls -- --bundles /tmp/bundles.json --pages /tmp/pages.
 ```
 
 `--lower <budget>=<limit>` sets one budget on purpose, for a control: the run must then fail on it.
+`pages.mjs` loads each page once, unmeasured, before the measured runs (`--no-warmup` skips it),
+waits for each navigation to commit rather than for the `load` event, and tries a navigation that
+did not commit once more, saying so; `--stall-navigations <n|all>` with `--navigation-timeout <ms>`
+holds measured navigations on purpose, to see that retry pass once and fail twice.
 
 ### The `assertions` gate
 
