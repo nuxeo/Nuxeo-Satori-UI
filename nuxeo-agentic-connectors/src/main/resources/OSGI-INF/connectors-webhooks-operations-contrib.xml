@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.connectors.webhooks.operations">
+
+  <documentation>
+    Webhook.Deliveries and Webhook.Resend: an administrator's view of the outbound webhooks'
+    deliveries, and a dead letter sent again. Anyone else is refused with 403, before anything is read.
+  </documentation>
+
+  <require>org.nuxeo.agentic.connectors.webhooks</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.connectors.ListWebhookDeliveriesOperation" />
+    <operation class="org.nuxeo.agentic.connectors.ResendWebhookDeliveryOperation" />
+  </extension>
+
+</component>
