@@ -305,12 +305,14 @@ Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 Four further checks are **not** in the pipeline, because they need something the
 pipeline cannot assume — a measurement run, a browser, or evidence that lives outside the repo:
 
-| Command                          | Checks                                                       | Why it is separate                                                                       |
-| -------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `npm run beta:coverage`          | no project lost coverage; `FLOORS` met                       | needs a `--coverage` run first; CI runs it after Sonar's tests, `--expect-all`           |
-| `npm run beta:state`             | every "complete" phase cites a passing manifest              | evidence lives outside the tree, so this is local-only and cannot run in CI              |
-| `npm run beta:backend`           | the Nuxeo stack is up and serving                            | starts containers; a side effect a gate should not have                                  |
-| `npm run beta:asset-performance` | the brand assets library at 100,000 assets within its budget | needs Chromium and a production build; CI runs only its offline controls (section below) |
+| Command                          | Checks                                                                   | Why it is separate                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `npm run beta:coverage`          | no project lost coverage; `FLOORS` met                                   | needs a `--coverage` run first; CI runs it after Sonar's tests, `--expect-all`                |
+| `npm run beta:state`             | every "complete" phase cites a passing manifest                          | evidence lives outside the tree, so this is local-only and cannot run in CI                   |
+| `npm run beta:backend`           | the Nuxeo stack is up and serving                                        | starts containers; a side effect a gate should not have                                       |
+| `npm run beta:asset-performance` | the brand assets library at 100,000 assets within its budget             | needs Chromium and a production build; CI runs only its offline controls (section below)      |
+| `npm run beta:page-budgets`      | the home, a queue's first page and a record page within their CI budgets | needs Chromium and a production build; CI's `performance-budgets` job runs it (section below) |
+| `npm run beta:bundle-budgets`    | the initial bundle and each lazy chunk within their sizes                | needs a production build with `--stats-json`; the same job runs it                            |
 
 ### The asset library's performance check
 
@@ -333,6 +335,26 @@ npm run beta:asset-performance-selftest           # offline, in CI: library, sta
 Its report goes to `$EVIDENCE_ROOT/beta/asset-performance/<timestamp>/`. It does not measure
 Nuxeo's or OpenSearch's own query time at 100,000 documents: the stand-in's latencies are stated
 assumptions, which a server holding that data would confirm.
+
+### The performance budgets in CI
+
+`performance-budgets/` holds the app to phase 10's budgets,
+[`docs/business-apps/performance-budgets-ci.md`](../../docs/business-apps/performance-budgets-ci.md):
+`bundles.mjs` the initial bundle and each lazy chunk, by size, from the build's esbuild metafile;
+`pages.mjs` three pages' first render in Chromium, the median of five cold loads, against the asset
+check's stand-in (port 4295). Exit codes are the runner's: 0 within budget, 1 over it, each line
+named with its number and its budget, 2 a precondition not met. CI's `performance-budgets` job runs
+all four:
+
+```bash
+npx nx run nuxeo-ui:build:production --stats-json
+npm run beta:budgets-selftest                      # offline: judgement, metafile, controls, doc, job
+npm run beta:bundle-budgets -- --report /tmp/bundles.json
+npm run beta:page-budgets -- --skip-build --report /tmp/pages.json
+npm run beta:budgets-controls -- --bundles /tmp/bundles.json --pages /tmp/pages.json --run-checks
+```
+
+`--lower <budget>=<limit>` sets one budget on purpose, for a control: the run must then fail on it.
 
 ### The `assertions` gate
 

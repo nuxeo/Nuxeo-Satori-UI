@@ -322,7 +322,7 @@ function vocabulary(name) {
  *
  * @param {{ port?: number, host?: string, dist: string, size?: number, today?: Date,
  *   latencyScale?: number, rttMs?: number, padMainBytes?: number, window?: number,
- *   counted?: number | null, windowShown?: boolean }} options
+ *   counted?: number | null, windowShown?: boolean, home?: object | null }} options
  * @returns {Promise<{ url: string, log: object[], library: ReturnType<typeof createLibrary>,
  *   inFlight: () => number, close: () => Promise<void> }>}
  */
@@ -338,12 +338,15 @@ export async function startStandIn({
   window,
   counted,
   windowShown,
+  home = null,
 }) {
   if (!dist || !existsSync(join(dist, 'index.html'))) {
     throw new Error(`no production build at ${dist}: index.html is missing`);
   }
   const library = createLibrary({ size, today, window, counted, windowShown });
   const config = kitConfiguration();
+  // The kit has no home; the CI budgets' check gives one of its own (performance-budgets/pages.mjs).
+  if (home !== null) config.set('home.json', home);
   const model = contentModel();
   const picture = pictures();
   const vocabularies = new Map(
@@ -632,6 +635,13 @@ export async function startStandIn({
         entries: [],
         isNextPageAvailable: false,
       });
+    }
+    // The asset page's share links panel (brand assets kit 0.2.2 on): a synthetic asset has none.
+    if (method === 'POST' && path === '/nuxeo/api/v1/automation/ShareLink.List') {
+      return answer('documentPage', LATENCY.other.base, { links: [] });
+    }
+    if (method === 'POST' && path === '/nuxeo/api/v1/automation/ShareLink.Downloads') {
+      return answer('documentPage', LATENCY.other.base, { downloads: [], truncated: false });
     }
     if (method === 'POST' && path === '/nuxeo/api/v1/automation/Directory.SuggestEntries') {
       const name = String(body?.params?.directoryName ?? '');
