@@ -102,7 +102,7 @@
     </genericPageProvider>
     <coreQueryPageProvider name="vtitles_overdue_titles">
       <pattern>
-        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleTitle' AND (vtitle:status &lt;&gt; 'Issued' AND vtitle:openedOn &lt; NOW('-P31D'))
+        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleTitle' AND (vtitle:status IN ('Awaiting title', 'Awaiting lien release', 'In hand', 'Submitted to state') AND vtitle:openedOn &lt; NOW('-P31D'))
         AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
       </pattern>
       <sort column="vtitle:openedOn" ascending="true" />

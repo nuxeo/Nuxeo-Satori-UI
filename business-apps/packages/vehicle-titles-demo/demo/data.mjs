@@ -1,8 +1,10 @@
 /**
  * The vehicle titles kit's fictional records, which `seed.mjs` writes. No real dealership, lender,
  * person, vehicle or title: every name here is made up, the makes and models among them, every
- * phone number is a 555 number, every address is at example.com, and every VIN starts `1VTDM0000`
- * and runs in sequence, so that none is a real vehicle's.
+ * phone number is a 555 number, and every address is at example.com. Every VIN is the kit's own:
+ * `1VTDM0000`, a year letter, `A`, and a number the kit gave it, 5001xx for the vehicles sold and
+ * 5103xx for the trade-ins. None was drawn from a vehicle or looked up; a VIN of that shape can
+ * still pass a check digit, as two of them do, and says nothing about any real vehicle.
  *
  * Dates are days from the UTC day the seed runs, so that the queues and banners hold the same
  * records whichever day it is run: `soldOn: -12` is 12 days ago. `dayFrom` turns them into dates.
@@ -49,6 +51,16 @@ export const REQUIRED_DOCUMENTS = [
 export const FINANCE_DOCUMENTS = ['creditApplication', 'financeContract', 'lenderApproval'];
 /** The statuses of a deal that is sold: the deals missing documents queue lists these only. */
 export const SOLD = ['Contracted', 'Funded', 'Delivered'];
+/**
+ * The statuses of a title whose work is still open, everything but `Issued`, written out so that a
+ * title with no status is open to neither the overdue queue nor the overdue banner.
+ */
+export const OPEN_TITLE = [
+  'Awaiting title',
+  'Awaiting lien release',
+  'In hand',
+  'Submitted to state',
+];
 /** How many days a title may stay open before it is overdue: the queue's and the banner's. */
 export const OVERDUE_AFTER_DAYS = 30;
 
@@ -97,7 +109,7 @@ export const TITLES = [
     clerk: 'ines.calloway',
   },
   {
-    // A trade-in waiting for its lien release, and open 34 days: in both title queues.
+    // VD-5004's trade-in, taken in on the day of the sale: waiting for its lien release.
     number: 'TTL-6004',
     summary: 'Title TTL-6004, 2018 Harlow Summit',
     issuingState: 'Oregon',
@@ -106,8 +118,8 @@ export const TITLES = [
     owner: 'Juniper Achebe-Holt',
     status: 'Awaiting lien release',
     lienHolder: 'Larkspur Credit Union',
-    payoffSentOn: -30,
-    openedOn: -34,
+    payoffSentOn: -12,
+    openedOn: -14,
     clerk: 'bram.vasquez',
     notes: 'Payoff confirmed by phone; the release has not come.',
   },
@@ -407,7 +419,7 @@ export function checklistOf(deal, today = new Date()) {
 }
 
 const missing = (deal) => checklistOf(deal).some((entry) => !entry.done);
-const titleOpen = (title) => title.status !== 'Issued';
+const titleOpen = (title) => OPEN_TITLE.includes(title.status);
 const open = (title) => -title.openedOn;
 
 /**

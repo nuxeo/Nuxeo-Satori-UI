@@ -33,12 +33,13 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   DEALS,
   EXPECTED,
   FINANCE_DOCUMENTS,
+  OPEN_TITLE,
   OVERDUE_AFTER_DAYS,
   REQUIRED_DOCUMENTS,
   SOLD,
@@ -160,7 +161,7 @@ function standIn({
       type: 'VehicleTitle',
       answer: () =>
         live('VehicleTitle')
-          .filter((d) => prop(d, 'vtitle:status') !== 'Issued' && openedBefore(d))
+          .filter((d) => OPEN_TITLE.includes(prop(d, 'vtitle:status')) && openedBefore(d))
           .sort(asc('vtitle:openedOn')),
     },
     vtitles_awaiting_lien_release: {
@@ -476,9 +477,9 @@ await against({}, async ({ server, run }) => {
   expect(
     titleAt(server, 'TTL-6008')?.properties['vtitle:openedOn'] === dayFrom(-31) &&
       titleAt(server, 'TTL-6007')?.properties['vtitle:openedOn'] === dayFrom(-30) &&
-      titleAt(server, 'TTL-6004')?.properties['vtitle:payoffSentOn'] === dayFrom(-30) &&
+      titleAt(server, 'TTL-6004')?.properties['vtitle:payoffSentOn'] === dayFrom(-12) &&
       dealAt(server, 'VD-5004')?.properties['vdeal:soldOn'] === dayFrom(-14),
-    'dates are counted from today: a title open 31 days, one open 30, a payoff sent 30 days ago, a deal sold 14 days ago',
+    'dates are counted from today: a title open 31 days, one open 30, a payoff sent 12 days ago, a deal sold 14 days ago',
     JSON.stringify([
       titleAt(server, 'TTL-6008')?.properties,
       dealAt(server, 'VD-5004')?.properties,
@@ -753,7 +754,7 @@ await against({ reversedProvider: 'vtitles_awaiting_lien_release' }, async ({ ru
   const { status, output } = await run({ NUXEO_INDEX_WAIT_MS: '1500' });
   expect(
     status === 1 &&
-      /vtitles_awaiting_lien_release returns TTL-6003, TTL-6004, not TTL-6004, TTL-6003/.test(
+      /vtitles_awaiting_lien_release returns TTL-6004, TTL-6003, not TTL-6003, TTL-6004/.test(
         output,
       ),
     'titles awaiting release out of payoff order, oldest first, fail the run',
@@ -788,35 +789,67 @@ const layout = (type) =>
   );
 const dealPage = layout('VehicleDeal');
 const titlePage = layout('VehicleTitle');
+const model = readFileSync(join(KIT, 'bundle/OSGI-INF/vehicle-titles-demo-model.xml'), 'utf8');
+/** A page provider's query, as the model component writes it, its `<` and `>` escaped. */
+const queryOf = (name) =>
+  new RegExp(`<coreQueryPageProvider name="${name}">[\\s\\S]*?</pattern>`).exec(model)?.[0];
+const quoted = (values) => values.map((value) => `'${value}'`).join(', ');
 {
-  // The overdue banner's rule and the overdue queue's NXQL say the same: more than 30 days open.
+  // The overdue banner's rule and the overdue queue's NXQL say the same: more than 30 days open,
+  // and a status other than Issued. The banner's days are counted by the platform's own day count,
+  // `daysBetween` in libs/shared/extensions, which `app.rules.dateAfter` compares with `>` its
+  // number of days (`document-rules.ts`); the rule's evaluator itself imports the platform's client
+  // by an alias Node alone does not resolve, so the comparison is written here as it is there.
+  await import(
+    pathToFileURL(join(KIT, '../../../libs/shared/app-definition/src/typescript-hook.mjs')).href
+  );
+  const { TODAY, daysBetween } = await import(
+    pathToFileURL(join(KIT, '../../../libs/shared/extensions/src/lib/date-rules.ts')).href
+  );
   const banner = titlePage.banners.find((b) => b.id === 'overdue').visibleWhen;
   const dateAfter = banner.parameters.find((r) => r.type === 'app.rules.dateAfter');
-  const model = readFileSync(join(KIT, 'bundle/OSGI-INF/vehicle-titles-demo-model.xml'), 'utf8');
-  const query = /<coreQueryPageProvider name="vtitles_overdue_titles">[\s\S]*?<\/pattern>/.exec(
-    model,
-  )?.[0];
-  const bannerShows = (t) => t.status !== 'Issued' && 0 - t.openedOn > dateAfter.parameters[2];
+  const open = banner.parameters.find((r) => r.type === 'app.rules.fieldIn');
+  const query = queryOf('vtitles_overdue_titles');
+  const today = new Date();
+  const bannerShows = (t) =>
+    open.parameters.slice(1).includes(t.status) &&
+    daysBetween(TODAY, dayFrom(t.openedOn, today), today, 'UTC') > dateAfter.parameters[2];
   expect(
-    dateAfter.parameters[0] === 'today' &&
+    banner.type === 'core.every' &&
+      banner.parameters.length === 2 &&
+      dateAfter.parameters[0] === 'today' &&
       dateAfter.parameters[1].field === 'vtitle:openedOn' &&
       dateAfter.parameters[2] === OVERDUE_AFTER_DAYS &&
+      open.parameters[0].field === 'vtitle:status' &&
+      open.parameters.slice(1).join() === OPEN_TITLE.join() &&
+      query?.includes(`vtitle:status IN (${quoted(OPEN_TITLE)})`) &&
       query?.includes(`vtitle:openedOn &lt; NOW('-P${OVERDUE_AFTER_DAYS + 1}D')`) &&
-      query?.includes("vtitle:status &lt;&gt; 'Issued'") &&
       TITLES.filter(bannerShows)
         .map((t) => t.number)
         .sort()
         .join() === [...EXPECTED.vtitles_overdue_titles].sort().join(),
-    "the title page's overdue banner, dateAfter today, opened on and 30, and the overdue queue's NOW('-P31D') pick the same titles",
-    JSON.stringify({ dateAfter, query }),
+    "the title page's overdue banner, dateAfter today, opened on and 30 over the open statuses, and the overdue queue's NOW('-P31D') over the same statuses pick the same titles, the banner's days counted by the platform's daysBetween",
+    JSON.stringify({ banner, query }),
   );
-  const open = (t) => -t.openedOn;
+  const days = (t) => -t.openedOn;
   expect(
-    EXPECTED.vtitles_overdue_titles.join() === 'TTL-6002,TTL-6004,TTL-6008' &&
-      TITLES.some((t) => t.number === 'TTL-6007' && open(t) === 30 && t.status !== 'Issued') &&
-      TITLES.some((t) => t.number === 'TTL-6008' && open(t) === 31),
-    'the data has three titles overdue, oldest first, one open 31 days among them, and one open 30 days that is not',
+    EXPECTED.vtitles_overdue_titles.join() === 'TTL-6002,TTL-6008' &&
+      TITLES.some((t) => t.number === 'TTL-6007' && days(t) === 30 && t.status !== 'Issued') &&
+      TITLES.some((t) => t.number === 'TTL-6008' && days(t) === 31),
+    'the data has two titles overdue, the longest open first, one open 31 days, and one open 30 days that is not',
     JSON.stringify(EXPECTED.vtitles_overdue_titles),
+  );
+}
+{
+  // The missing-documents queue's query lists sold deals with an entry not done, as the stand-in
+  // answers it and EXPECTED is worked out: the statuses and the checklist's subfield, read from
+  // the model component.
+  const query = queryOf('vtitles_deals_missing_documents');
+  expect(
+    query?.includes(`vdeal:status IN (${quoted(SOLD)}) AND vdocs:checklist/*/done = 0`) &&
+      query.includes("ecm:primaryType = 'VehicleDeal'"),
+    "the missing-documents queue's query lists the sold statuses and a checklist entry whose done is false, as the stand-in and EXPECTED read it",
+    query ?? 'no such page provider',
   );
 }
 {
@@ -870,7 +903,7 @@ const titlePage = layout('VehicleTitle');
           (d.tradeInTitle === undefined || byNumber.get(d.tradeInTitle)?.vin === d.tradeInVin),
       ) &&
       EXPECTED.vtitles_title_sales['TTL-6002'].join() === 'VD-5002,VD-5007' &&
-      EXPECTED.vtitles_awaiting_lien_release.join() === 'TTL-6004,TTL-6003',
+      EXPECTED.vtitles_awaiting_lien_release.join() === 'TTL-6003,TTL-6004',
     "the not-funded banner flags VD-5004 only; each deal's title and trade-in title are its vehicles', by VIN; TTL-6002 lists two deals; two titles await release, the older payoff first",
   );
   expect(

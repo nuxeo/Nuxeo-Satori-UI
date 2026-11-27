@@ -123,7 +123,7 @@ package carries a fictional one, as the moves and P&C claims kits do.
 | Page provider                     | Given        | Returns                                                                                                                            | Reads            |
 | --------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `vtitles_deals_missing_documents` | Nothing      | Deals `Contracted`, `Funded` or `Delivered` with a checklist entry not done, `vdocs:checklist/*/done = 0`, oldest sale first       | The repository   |
-| `vtitles_overdue_titles`          | Nothing      | Titles not `Issued` opened before `NOW('-P31D')`, the longest open first                                                           | The repository   |
+| `vtitles_overdue_titles`          | Nothing      | Titles with an open status, every one but `Issued`, opened before `NOW('-P31D')`, the longest open first                           | The repository   |
 | `vtitles_awaiting_lien_release`   | Nothing      | Titles `Awaiting lien release`, the oldest payoff first, with the aggregates `vtitle_lienHolder_agg` and `vtitle_issuingState_agg` | The search index |
 | `vtitles_title_sales`             | A title's id | The deals that sell its vehicle (`vdeal:title = ?`), latest sale first                                                             | The repository   |
 | `vtitles_title_trade_ins`         | A title's id | The deals that take it in trade (`vdeal:tradeInTitle = ?`), latest sale first                                                      | The repository   |
@@ -136,6 +136,10 @@ package carries a fictional one, as the moves and P&C claims kits do.
   entry for each of its documents** to be listed for the one it lacks. The seed writes them all, done
   or not; a tick sets one done, and an untick keeps it, not done. A deal written some other way with
   no entry for a document is not listed for it (feedback, item 6).
+- **And the other way:** a loan changed to cash keeps its finance documents' entries, so one not done
+  keeps the deal in the queue, though its page no longer shows the finance card, where it could be
+  ticked. The next seed run writes the checklist again; on a real server, whoever changes the
+  finance clears those entries.
 - **Sold deals only:** a deal still `Working` lacks documents as a matter of course, and a
   `Cancelled` one needs none.
 - **It reads the repository,** not the search index, so it does not lag a tick, and the query over a
@@ -144,17 +148,26 @@ package carries a fictional one, as the moves and P&C claims kits do.
 
 ### Titles overdue: the queue and the banner say the same
 
-- **Overdue is more than 30 days open and not issued.** The title page's banner says it with
+- **Overdue is more than 30 days open, with an open status.** The title page's banner says it with
   `app.rules.dateAfter`, `["today", { "field": "vtitle:openedOn" }, 30]`: today more than 30 days
-  after the day the title work opened, counted in days. A title open 30 days shows no banner; one
-  open 31 does.
-- **The queue says it in NXQL,** `vtitle:openedOn < NOW('-P31D')`: a day stored at UTC midnight that
-  is at least 31 days before now. `NOW('-P30D')` would list the title open 30 days, which the banner
-  does not flag. The two agree on the UTC day, as the seed counts its dates; near midnight, a reader
-  far from UTC may see the banner a day before or after the queue lists the title.
+  after the day the title work opened, counted in days; and `app.rules.fieldIn` of the four open
+  statuses, every one but `Issued`. A title open 30 days shows no banner; one open 31 does.
+- **The queue says it in NXQL,** `vtitle:status IN (...)`, the same four, and
+  `vtitle:openedOn < NOW('-P31D')`: a day stored at UTC midnight that is at least 31 days before
+  now. `NOW('-P30D')` would list the title open 30 days, which the banner does not flag. The
+  statuses are written out on both sides, so that a title with no status is in neither: NXQL's
+  `<> 'Issued'` leaves one out, and `core.not` of `fieldIn` `Issued` would show the banner for it.
+- **They agree while the reader's day is the UTC day,** which the seed counts its dates by. The
+  banner counts days on the reader's own calendar, and the queue from the server's clock: for a
+  reader behind UTC, such as the kit's fictional Oregon, Washington and Idaho clerks, the queue
+  lists a title the evening before its banner shows, from 16:00 or 17:00 to midnight every day; for
+  a reader ahead of it, such as one in India, the banner shows from midnight to 05:30 before the
+  queue lists the title. Not fixed here: a page provider has no reader's day.
 - **Nothing outside the kit holds them together:** a rule and a page provider are written apart. The
-  seed's controls read both files and fail when they differ, and the seed's data has a title open
-  30 days and one open 31, which a server's run tells apart.
+  seed's controls read both files, count the banner's days with the platform's own `daysBetween`,
+  and fail when they differ; the rule's `>` is written in the control as the evaluator writes it,
+  since the evaluator imports the platform's client by an alias Node alone does not resolve. The
+  seed's data has a title open 30 days and one open 31, which a server's run tells apart.
 
 ## Photos and documents from a phone
 
@@ -221,9 +234,9 @@ nothing here has run (feedback, item 7).
 **The skill says to stop here** when a type is missing: creating it is Studio's. The request asked
 for a demo kit with a stand-in model, so the kit carries one, written by `app-model` where it can be.
 
-### Step 2. Write the files, through the write tools (00:55 to 01:05, 10 minutes)
+### Step 2. Write the files, through the write tools (00:55 to 01:05, 10 minutes, then 1 at 05:29)
 
-Four writes, each answering `written: true`, one set of hand edits between them, and three writes
+Five writes, each answering `written: true`, the last after the review, one set of hand edits, and three writes
 refused on purpose, as negative controls of the write tools, which show that a refusal leaves the
 package as it was; they are not evidence that the kit is right, which the rest of this log is.
 
@@ -237,6 +250,7 @@ package as it was; they are not evidence that the kit is right, which the rest o
 | `write_package_file`, on purpose: the documents checklist on `vdocs:checklists`                                                                                                                                                                                                                                                         | **Refused:** step 2, `cards[6].checklist.field: "vdocs:checklists" is not a property of the type "VehicleDeal" or of its facets` [unknown]                                                                              |
 | `write_package_file`, on purpose: the capture looked up by `vdeal:price` as well                                                                                                                                                                                                                                                        | **Refused:** step 2, `capture.findBy[1]: a capture looks a number up in a text, and "vdeal:price" is a double property` [parameter]                                                                                     |
 | `write_package_file`, on purpose: the lien release queue with a third facet, `vtitle_clerk_agg`                                                                                                                                                                                                                                         | **Refused:** step 2, `facets[2].aggregate`: the page provider "has no aggregate "vtitle_clerk_agg": it defines vtitle_lienHolder_agg, vtitle_issuingState_agg" [unknown]. Both files' SHA-256 unchanged after the three |
+| After the review (below): `apply_package_changes`, 2 changes: `app-model` for `vtitles_overdue_titles` again, `force`, on the four open statuses; then the title page, whole, its overdue banner and days open on the same four                                                                                                         | `written: true`, 2 files, in 2.2 seconds: 9 files passed, sha256 `c451afe3…0e168`                                                                                                                                       |
 
 **What was written by hand, and why.** The skill says never to write a model component by hand. But
 `app-model` writes no complex property, and a checklist card needs one in a fixed shape: the
@@ -311,22 +325,24 @@ are held instead by the layout designer's round trip, which opens each, and by t
 **Not done, and not built in the MCP server.** No `app-package/*` tag was pushed. The kit is not
 installed anywhere.
 
-### The seed (01:08 to 01:19, 11 minutes)
+### The seed (01:08 to 01:19, 11 minutes, and 05:30 to 05:45 after the review)
 
 Written by hand: the write tools refuse `demo/*`, as code. On the P&C claims kit's seed. Its
-controls, `node business-apps/packages/vehicle-titles-demo/demo/seed.selftest.mjs`, **46 of 46
-passed**. Broken on purpose eighteen ways, one at a time, in a scratch copy, each turned at least
-one control red: no type precondition, no checklist schema precondition, no check that `/me`
+controls, `node business-apps/packages/vehicle-titles-demo/demo/seed.selftest.mjs`, **47 of 47
+passed** (46 before the review added the missing-documents query's). Broken on purpose twenty-two
+ways, one at a time, in a scratch copy laid out as the repository is, which passed 47 of 47
+unbroken, each turned at least one control red, a failed control and not a crash: no type precondition, no checklist schema precondition, no check that `/me`
 answers a user, a deal linked to its title by number instead of id, the checklist written on
 create only, a deal's attachments written over, no wait for the search index, no check of the
 facets, no order check, a record listed twice not seen, the Basic header printed, no parameter
 given to a title's deals, any trashed name like a record's restored, no write over an existing
 record, an empty note not emptied, a missing document written with no entry, the overdue queue's
-NXQL one day off the banner (`NOW('-P30D')`), and the finance checklist card shown for a cash deal
-too. The first run found a defect in the data, before any of these: a deal's summary and its title's
+NXQL one day off the banner (`NOW('-P30D')`), the overdue banner after 29 days, the overdue banner
+missing a status the queue lists, the missing-documents query without its sold statuses or on a
+misspelt subfield (the review's two), and the finance checklist card shown for a cash deal too. The first run found a defect in the data, before any of these: a deal's summary and its title's
 number were both `title`, so one replaced the other; the summary is `summary` now.
 
-### The lists of kits, and the release candidate (01:16 to 01:50)
+### The lists of kits, and the release candidate (01:16 to 01:26)
 
 - **The two lists of kits.** `npm run app-definition:server-validator` rebuilt the server
   validator's parity corpus with the kit, and the administrator guide has its rows: section 1's
@@ -340,11 +356,40 @@ number were both `title`, so one replaced the other; the summary is `summary` no
   as `app-queue` writes it, and put back.
 - **`npm run app-package:selftest`:** 124 negative controls refused and 37 sound packages built.
 - **The release candidate,** `node scripts/release-candidate.mjs --out /tmp/vt-agent/rc-1 --since origin/staging/enterprise-grade-app --unsigned-kits`:
-  RELEASE_CANDIDATE_RESULT
+  assembled whole, from 01:21 to 01:26, with this kit among the ten, new and held to nothing. Its stage 3, the kits as a set, compared the kit's 26 names with the other nine kits' and found no clash; Maven's packages and tests passed, `DeploymentValidatorParityTest` among them, on the parity corpus with this kit. Nothing was signed, tagged or published.
 
 ### The gate, the pre-PR review and the independent review
 
-GATE_RESULT
+- **The gate,** `npm run beta:gate -- --base origin/staging/enterprise-grade-app --gates
+lockfile,guardrails,sanitizer-audit,lint,test,spec-types,api-surface,reference-drift,published-links,module-boundaries,agent-mirror`:
+  GATE_RUNS
+- **`node scripts/pre-pr-review.mjs --base origin/staging/enterprise-grade-app`:** no mechanisable
+  defect, on 8 changed files, at 01:27. Its skill's four comparisons, worked by hand, left the
+  independent review to find what they missed, below.
+- **A reviewer agent,** given the request, the skill and the documents, and not this log, read the
+  kit and its diff, recomputed the queues' contents and orders from the data and the model, ran the
+  pipeline, the controls and breaks of its own, and checked every claim it could re-run. It found one
+  thing blocking, this section's placeholders and the gate's failed first run, unreported; the rest
+  it found true: 48 label keys with their texts, every property on its type, the committed files the
+  last write's bytes, the 18 breaks red, the release candidate's 26 names. What it found, and what
+  was done:
+
+| Finding                                                                                                                     | Done                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Blocking: the README's placeholders, and the gate's first run, which failed, not reported                                   | Filled, the failure among them (above)                                                                                        |
+| The times: the end of the run and the release candidate's were written before they happened                                 | Each time is now its command's; the end written last                                                                          |
+| No control read the missing-documents query: without its sold statuses, or on `done` misspelt, the controls passed 46 of 46 | A control reads the query from the model component; both breaks turn it red                                                   |
+| The overdue control worked out both sides in its own code, as `EXPECTED` does                                               | The banner's days are counted by the platform's `daysBetween`; the rule's `>` is still the control's, and the README says why |
+| The time-zone caveat understated the gap: banner and queue part for hours every day for a reader behind UTC                 | Said as it is, [above](#titles-overdue-the-queue-and-the-banner-say-the-same)                                                 |
+| A title with no status: the queue left it out, the banner showed for it                                                     | Both name the four open statuses, through the write tools (step 2's last row)                                                 |
+| A loan changed to cash stays in the queue for a finance document its page no longer shows                                   | Said, in "Deals missing documents"                                                                                            |
+| TTL-6004's title work opened 20 days before the deal that took it in trade                                                  | It opens with the sale, its payoff 12 days ago; it is no longer overdue                                                       |
+| The VINs "run in sequence, so that none is a real vehicle's": neither is enforced, and two pass a check digit               | The comment says what is true                                                                                                 |
+| Feedback item 11 said layout-v2.md does not describe two checklist cards over one property; its text covers them            | Reworded                                                                                                                      |
+
+After the edits: the pipeline passed, `c451afe3…0e168`; the controls 47 of 47 and the twenty-two
+breaks each red; the property walk 134 references, none missing; the round trip and the specs
+above passed again (the gate).
 
 ## Building it
 
@@ -353,7 +398,7 @@ npm run app-package -- business-apps/packages/vehicle-titles-demo --platform 0.2
 ```
 
 It writes `dist/vehicle-titles-demo-0.1.0.zip`, held to the package's own `content-model.json`,
-since it ships a stand-in model: sha256 `7d1d34c7…aea6f` for 0.1.0, on 27 November 2026.
+since it ships a stand-in model: sha256 `c451afe3…0e168` for 0.1.0, on 27 November 2026.
 
 ## Installing it on a local Nuxeo
 
@@ -426,9 +471,9 @@ node business-apps/packages/vehicle-titles-demo/demo/seed.mjs
     (contracted, its title application, delivery receipt and lender's approval not in) and VD-5008
     (funded, its proof of insurance not in), oldest sale first. Not VD-5001, VD-5003 or VD-5005,
     every document in; nor VD-5006, still worked, or VD-5007, cancelled, though both lack some;
-  - **titles overdue:** TTL-6002 (open 40 days), TTL-6004 (34) and TTL-6008 (31), the longest open
-    first. Not TTL-6007, open 30 days exactly, nor TTL-6005, issued;
-  - **titles awaiting lien release:** TTL-6004, its payoff sent 30 days ago, and TTL-6003, 18 days
+  - **titles overdue:** TTL-6002 (open 40 days) and TTL-6008 (31), the longest open first. Not
+    TTL-6007, open 30 days exactly, nor TTL-6005, issued;
+  - **titles awaiting lien release:** TTL-6003, its payoff sent 18 days ago, and TTL-6004, 12 days
     ago. Lien holder: one each for `Larkspur Credit Union` and `Harrow Valley Bank`; State: one each
     for `Oregon` and `Washington`;
   - **VD-5004 is financed, contracted 14 days ago and not funded,** so its page shows the warning,
@@ -460,10 +505,11 @@ node business-apps/packages/vehicle-titles-demo/demo/seed.mjs
   something that is not JSON, or with no user, credentials refused, either type missing, the deal's
   checklist schema missing, or no `/default-domain/workspaces`.
 - **Its controls** run it against a stand-in for the REST API: they prove the script, not the
-  server. CI does not run them. 46 controls, each behaviour above among them, one that no run prints
-  a password or its Basic header, and six on the data as the pages read it: the overdue banner and
-  queue agreeing, the checklist cards listing the documents each deal has an entry for, and the
-  records this README names.
+  server. CI does not run them. 47 controls, each behaviour above among them, one that no run prints
+  a password or its Basic header, and seven on the data as the pages and queries read it: the
+  overdue banner and queue agreeing, the banner's days counted by the platform's `daysBetween`;
+  the missing-documents query naming the sold statuses and the checklist's subfield; the checklist
+  cards listing the documents each deal has an entry for; and the records this README names.
 
 It prints the home, the three queues, the deal missing its odometer statement, the deal not funded
 and the title sold twice, on the app at `APP_URL` (`http://localhost:4200` by default).
@@ -522,14 +568,17 @@ candidate for the tools' owners.
    both held to the model where it is known, as columns and `show` are.
 9. **A queue and a banner say one thing twice:** "more than 30 days open" is `NOW('-P31D')` in the
    page provider and `dateAfter` 30 in the rule, and only the kit's own control holds them
-   together. Candidate: a queue that filters a page provider's records by a registered rule, or a
-   note in layout-v2.md on writing the two to agree.
+   together. Even written alike they part for some hours a day, the rule on the reader's calendar
+   and the query on the server's clock ([above](#titles-overdue-the-queue-and-the-banner-say-the-same)).
+   Candidate: a queue that filters a page provider's records by a registered rule, or a note in
+   layout-v2.md on writing the two to agree.
 10. **A rule reads the open record only,** so the deal page cannot warn that its title is overdue
     or awaiting a lien release (layout-v2.md, section 5); it shows the title's status as text
     through `show`, which gives the shown value no widget (section 12), so not as a badge.
-11. **Two checklist cards over one property are not described:** layout-v2.md's section 7 has one
-    card per property, and nothing says whether a record page with two writes each tick from the
-    same copy. The validator passes it; no browser saw it here.
+11. **Two checklist cards over one property are covered by the text, not by an example:**
+    layout-v2.md's section 7 says a tick writes the whole list from the page's copy, keeping every
+    other entry, one tick at a time on any card, which holds for two cards over one property; its
+    examples have one card per property. The validator passes it; no browser saw it here.
 12. **The scaffolded README still offers a button** (`app-action`) for a package with none (the
     moves kit's item 13, the P&C claims kit's 16, still).
 13. **Dev mode shows a demo kit's shell, not its pages** (the tutorial's item 8, still), and the
@@ -556,7 +605,8 @@ Each reversible, each the agent's recommendation:
 - **The required documents:** six for every deal, three more for a loan or a lease in a second card
   over the same checklist.
 - **"Missing documents"** as a sold deal with an entry not done; **"overdue"** as more than 30 days
-  since the title work opened and not issued.
+  since the title work opened with a status other than `Issued`, the four written out on both the
+  queue and the banner.
 - **The lien release queue, its menu entry and its home figure for title clerks only,** and the rest
   for everyone. Hiding a queue is not a security control.
 - **No Edit form, no `actions.json`, no `external` card:** none was asked for, and no other system's

@@ -15,12 +15,13 @@
             "parameters": ["today", { "field": "vtitle:openedOn" }, 30]
           },
           {
-            "type": "core.not",
+            "type": "app.rules.fieldIn",
             "parameters": [
-              {
-                "type": "app.rules.fieldIn",
-                "parameters": [{ "field": "vtitle:status" }, "Issued"]
-              }
+              { "field": "vtitle:status" },
+              "Awaiting title",
+              "Awaiting lien release",
+              "In hand",
+              "Submitted to state"
             ]
           }
         ]
@@ -101,12 +102,13 @@
             "parameters": [{ "field": "vtitle:openedOn" }, "today", "days"]
           },
           "visibleWhen": {
-            "type": "core.not",
+            "type": "app.rules.fieldIn",
             "parameters": [
-              {
-                "type": "app.rules.fieldIn",
-                "parameters": [{ "field": "vtitle:status" }, "Issued"]
-              }
+              { "field": "vtitle:status" },
+              "Awaiting title",
+              "Awaiting lien release",
+              "In hand",
+              "Submitted to state"
             ]
           }
         },
