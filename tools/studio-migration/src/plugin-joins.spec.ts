@@ -44,6 +44,9 @@ const TEMPLATE_CONFIG = 'apps/nuxeo-satori-template/src/app/app.config.ts';
 
 type Input = HarnessInput & { plugins: NonNullable<HarnessInput['plugins']> };
 
+/** `text` for a pattern, every character a pattern reads otherwise escaped, backslashes among them. */
+const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
 afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
 /** A person's decision of each item: every proposal accepted, unless `rejected` names it. */
@@ -537,19 +540,19 @@ describe('each deliberate breakage of the joins stands in the way of readiness',
     'accept-plugin-undecided': {
       subject: () => accepted,
       line: new RegExp(
-        `^the conversion was made with 1 of its proposals decided otherwise than decisions\\.json decides them now, such as ${EXPOSURE.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}: `,
+        `^the conversion was made with 1 of its proposals decided otherwise than decisions\\.json decides them now, such as ${escaped(EXPOSURE)}: `,
       ),
     },
     'carry-plugin-to-changed-element': {
       subject: changedBuild,
       line: new RegExp(
-        `^decisions\\.json: ${EXPOSURE.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')} was made on another construct than the package holds there now, whose identity is custom-element:[0-9a-f]{16}, not custom-element:[0-9a-f]{16}, so it is not taken: decide it again$`,
+        `^decisions\\.json: ${escaped(EXPOSURE)} was made on another construct than the package holds there now, whose identity is custom-element:[0-9a-f]{16}, not custom-element:[0-9a-f]{16}, so it is not taken: decide it again$`,
       ),
     },
     'change-plugin-after-approval': {
       subject: () => accepted,
       line: new RegExp(
-        `^the approval by ${BY} at ${AT.toISOString().replace(/\./g, '\\.')} is void: the accepted plugins have changed since, so a person approves again$`,
+        `^the approval by ${escaped(BY)} at ${escaped(AT.toISOString())} is void: the accepted plugins have changed since, so a person approves again$`,
       ),
     },
   };
