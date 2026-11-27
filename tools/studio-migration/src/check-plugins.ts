@@ -201,8 +201,7 @@ function holdPlugin(
   if (template === null)
     findings.push(`the repository holds no template app to build ${source.library} into`);
   else if (
-    !new RegExp(`from\\s+['"]${escape(metadata.importPath ?? '')}['"]`).test(template.text) ||
-    !new RegExp(`\\b${escape(metadata.provider ?? '')}\\s*\\(`).test(withoutComments(template.text))
+    !callsImported(template, String(metadata.importPath ?? ''), String(metadata.provider ?? ''))
   )
     findings.push(
       `${template.path} does not build ${source.library} in: import ${String(metadata.provider)} from ${String(metadata.importPath)} and call it among its providers`,
@@ -515,6 +514,46 @@ function firstLine(text: string): string {
       .filter(Boolean)[0] ??
     ''
   ).slice(0, 300);
+}
+
+/**
+ * Whether the template calls `provider` as it imports it from `importPath`: a call of a name the
+ * file binds to that export of that module, by its syntax tree, so that a comment, another module's
+ * function of the same name, or the import renamed and another function called, is not taken.
+ */
+function callsImported(
+  template: { readonly path: string; readonly text: string },
+  importPath: string,
+  provider: string,
+): boolean {
+  const file = ts.createSourceFile(template.path, template.text, ts.ScriptTarget.Latest, true);
+  const bound = new Set<string>();
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== importPath ||
+      statement.importClause?.isTypeOnly
+    )
+      continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    for (const element of named.elements)
+      if (!element.isTypeOnly && (element.propertyName ?? element.name).text === provider)
+        bound.add(element.name.text);
+  }
+  let called = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      bound.has(node.expression.text)
+    )
+      called = true;
+    if (!called) ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return called;
 }
 
 /** Whether the template imports the plugin, by its import path or its directory. */

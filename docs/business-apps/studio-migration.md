@@ -575,8 +575,15 @@ These sit inside the [development plan](development-plan.md):
   - a plugin's place in the app, which the conversion does not write: the person who accepts the
     plugin places it with a manifest entry;
   - another language than the package's own in a plugin;
-  - the template app's own configuration in the approval: it covers each accepted plugin's library,
-    and check 9 holds the template to build each accepted plugin in from its own library, through `tsconfig.app.json`'s import path, and a rejected plugin's library to be gone; the rest of the fork is the customer's own code, which check 9 does not read.
+  - the template app's own configuration in the approval: it covers each accepted plugin's
+    library, and check 9 holds the template to call each accepted plugin's provider as it imports
+    it, `tsconfig.app.json` to resolve its import path to its library, and a rejected plugin's
+    library to be gone. `angular.json` and the rest of the fork are the customer's own code, which
+    check 9 does not read;
+  - an element's reach beyond one level of the package's files: a behaviour defined in another
+    element's module or in Web UI is not in its identity;
+  - two packages in one repository with an element of the same name: they share its plugin's
+    library, so they cannot decide it differently and both be ready.
 - **Not checked:** on a real package, or by a person reviewing a migrated plugin for a customer.
 
 **Where M4 stands, 26 November 2026:**

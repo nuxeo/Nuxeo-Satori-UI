@@ -11,7 +11,7 @@
  * Each control of these joins (`PLUGIN_JOIN_MUTATIONS`) is applied to a migration whose decisions
  * are made and whose report is approved, and readiness must name what broke.
  */
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { approvalOf, digestsOf, holdApproval } from './approval';
@@ -225,6 +225,62 @@ describe('a plugin is a proposal a person decides', () => {
     // The approval still holds, as it covers the library: check 9 is what stands in the way.
     expect(runHarness(elsewhere).blockers).toContain('check 9 failed');
     expect(peoples(runHarness(elsewhere).blockers)).toEqual([]);
+  });
+
+  it('builds an accepted plugin in only by calling the provider it imports from the plugin', () => {
+    const template = accepted.plugins.template?.text ?? '';
+    const exposureImport =
+      "import { provideAcmeClaimExposurePlugin } from '@agentic-ui/acme-claim-exposure';";
+    expect(template).toContain(exposureImport);
+    const withTemplate = (text: string): Input => ({
+      ...accepted,
+      plugins: { ...accepted.plugins, template: { path: TEMPLATE_CONFIG, text } },
+    });
+    const refused =
+      'apps/nuxeo-satori-template/src/app/app.config.ts does not build libs/extensions/acme-claim-exposure in: import provideAcmeClaimExposurePlugin from @agentic-ui/acme-claim-exposure and call it among its providers';
+    // Imported under another name, and a function of the same name from another module called.
+    const renamed = template.replace(
+      exposureImport,
+      "import { provideAcmeClaimExposurePlugin as held } from '@agentic-ui/acme-claim-exposure';\nimport { provideAcmeClaimExposurePlugin } from '@agentic-ui/acme-extensions';",
+    );
+    // The plugin's import left in a comment, and the provider taken from elsewhere.
+    const commented = template.replace(
+      exposureImport,
+      `// ${exposureImport}\nimport { provideAcmeClaimExposurePlugin } from '../../../../libs/other/src';`,
+    );
+    for (const text of [renamed, commented]) {
+      expect(text).not.toBe(template);
+      expect(runCheck(withTemplate(text), 9)?.findings).toEqual([refused]);
+    }
+    // Renamed and called by that name, it is built in.
+    const calledRenamed = template
+      .replace(
+        exposureImport,
+        "import { provideAcmeClaimExposurePlugin as exposure } from '@agentic-ui/acme-claim-exposure';",
+      )
+      .replace('provideAcmeClaimExposurePlugin(),', 'exposure(),');
+    expect(calledRenamed).toContain('exposure(),');
+    expect(runCheck(withTemplate(calledRenamed), 9)?.findings).toEqual([]);
+  });
+
+  it('reads the directories it does not read from the disk, and names them', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'studio-plugin-skipped-'));
+    const library = join(workspace, 'libs', 'extensions', 'acme-claim-exposure');
+    mkdirSync(join(library, 'src', 'node_modules', 'hidden'), { recursive: true });
+    writeFileSync(join(library, 'src', 'index.ts'), 'export {};\n');
+    writeFileSync(
+      join(library, 'src', 'node_modules', 'hidden', 'index.js'),
+      'module.exports = 1;\n',
+    );
+    const read = readPlugins(workspace, accepted.inventory);
+    expect(read.sources).toEqual([
+      {
+        element: 'acme-claim-exposure',
+        library: 'libs/extensions/acme-claim-exposure',
+        files: { 'src/index.ts': 'export {};\n' },
+        skipped: ['src/node_modules'],
+      },
+    ]);
   });
 
   it('refuses a directory it does not read in a plugin, installed packages or a repository', () => {

@@ -1360,7 +1360,20 @@ which were then finished with the skill and built into `apps/nuxeo-satori-templa
 - **Placing a plugin** is a person's, as they accept it: the conversion writes no manifest entry for
   it, and the record page's layout file holds no component.
 - **The template's own configuration** is not in the approval: it covers each accepted plugin's
-  library, and check 9 holds the template to build each accepted plugin in, from its own library as `tsconfig.app.json` resolves its import path, and a rejected plugin's library to be gone from the repository. Check 9 reads no other file of the template app: the rest of the fork is the customer's own code, which their review holds.
+  library. Check 9 holds the template's `app.config.ts` to call each accepted plugin's provider as
+  it imports it from the plugin, read from its syntax tree; its `tsconfig.app.json` to resolve the
+  plugin's import path to the library's `src/index.ts`; and a rejected plugin's library to be gone
+  from the repository. It reads no other file of the template app: `angular.json`, whose
+  `tsConfig` or `fileReplacements` could build other files, and the rest of the fork are the
+  customer's own code, which their review holds.
+- **An element's reach is read one level deep, in the package.** Its identity covers its module,
+  the custom bundle's code outside its elements, and the package's files either names; not a file
+  one of those loads in turn, a behaviour defined in another element's module or another custom
+  bundle, a path from the server's root, `/…`, which is no file of the package, or Web UI's own
+  behaviours. A change there keeps the element's identity and its plugin's acceptance.
+- **One plugin per element name** in a repository: `libs/extensions/<element>`. Two packages in one
+  repository with an element of the same name share it, so one cannot accept the plugin while the
+  other rejects it and both be ready.
 - **The observed behaviour of a real element** needs Web UI on the migration server.
 - **Another language** than the package's own: the plugin carries its element's texts in that
   language, since the template provides no translation service.
