@@ -57,12 +57,15 @@ What differs, each on purpose:
   `app-package.mjs` runs the package's own, and refuses one that is not the generator's.
 - **A package with no `app.json` is configuration alone,** and is held to the configuration
   builder's checks and the configuration's own. `app-package.mjs` refuses it, being the app
-  package pipeline. A package with any file of an app definition and no `app.json` is refused.
+  package pipeline. A package with no `app.json` that holds anything of an app definition is
+  refused, since nothing would check it: a file of the registry's that no fragment names as its
+  body, a layout of version 2, or an `<app>`.
 - **The platform is the one the tool carries:** `--platform` is its version when it is not given,
   and the upgrade check's platform as it is is the one it was built from. `--previous-platform`,
   which reads the platform's sources at another version, stays with `app-package.mjs`.
 - **No kits are compared unless `--kits` names their folder.** `app-package.mjs` compares a kit
-  in `business-apps/packages/` with the others there.
+  in `business-apps/packages/` with the others there. The names compared are an app definition's,
+  so a package that is configuration alone is compared with nothing, which a note says.
 - **`--previous` may be a zip,** which the tool unpacks into the package it was built from.
 
 ## The content model

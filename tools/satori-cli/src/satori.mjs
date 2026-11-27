@@ -171,7 +171,7 @@ async function validate(args) {
     );
     if (code === 0)
       process.stdout.write(
-        'satori validate: the package passes every step. Nothing was written: the zip was built in a scratch folder to check it, and is removed.\n',
+        'satori validate: the package passes every step. Nothing was written: the zip named above was built in a scratch folder to check it, and is removed.\n',
       );
     return code;
   } finally {
@@ -191,7 +191,8 @@ async function withPrevious(args, run) {
     );
     return 2;
   }
-  const at = args.indexOf('--previous');
+  // The last one, as the pipeline's command line reads it.
+  const at = args.lastIndexOf('--previous');
   const previous = at >= 0 ? args[at + 1] : undefined;
   if (previous === undefined || !isFile(previous)) return run(args);
   const scratch = mkdtempSync(join(tmpdir(), 'satori-previous-'));
@@ -254,8 +255,11 @@ async function upgradeCheck(args) {
       options.json,
     );
   } catch (error) {
-    if (!(error instanceof Usage)) throw error;
-    console.error(`satori upgrade-check: ${error.message}\n${UPGRADE_USAGE}`);
+    // Any run that ends here could not be made, so it exits 2, as app-upgrade-check.mjs does: a
+    // crash must not read as "not kept".
+    console.error(
+      error instanceof Usage ? `satori upgrade-check: ${error.message}\n${UPGRADE_USAGE}` : error,
+    );
     return 2;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -272,7 +276,8 @@ async function upgradeCheck(args) {
 function packageOfZip(zip, scratch) {
   let unpacked;
   try {
-    unpacked = unpack(zip, join(scratch, 'zip'));
+    // By its absolute path, so that a name beginning with "-" reaches unzip as a file.
+    unpacked = unpack(resolve(zip), join(scratch, 'zip'));
   } catch (error) {
     return { problem: error.message };
   }

@@ -133,6 +133,10 @@ Check and build the package:
   satori validate config-packages/${options.name}
   satori build config-packages/${options.name} --out dist
 
+The workflow installs the tool with npm ci, from package-lock.json, which npm install writes once
+@nuxeo/satori-cli is published: commit it. Until then it is not on a registry, and the workflow
+cannot install it.
+
 Not written by this version: the app builder skill, .mcp.json and the MCP server (agents sync),
 and signing and promotion in the workflow.
 `);

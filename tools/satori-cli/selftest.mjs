@@ -31,6 +31,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -434,7 +435,49 @@ function refusals(satori) {
     first,
     ({ write }) => write('bundle/agentic-ui-config/home.json', '{ "version": 2, "cards": [] }\n'),
     2,
-    'holds home.json, of an app definition, and no app.json',
+    'the package holds bundle/agentic-ui-config/home.json, of an app definition, and no bundle/agentic-ui-config/app.json',
+    none,
+  );
+  refused(
+    'an <app> with no app.json, which the registry would serve unchecked',
+    first,
+    ({ edit, write }) => {
+      write('bundle/apps/app.json', '{ "version": 2, "id": "acme", "bogus": true }\n');
+      edit(
+        COMPONENT,
+        '  </extension>',
+        '    <app id="acme" src="apps/app.json" />\n  </extension>',
+      );
+    },
+    2,
+    'the app "acme" that OSGI-INF/acme-config-config.xml contributes, of an app definition',
+    none,
+  );
+  refused(
+    'a layout of version 2 outside agentic-ui-config/, with no app.json',
+    first,
+    ({ edit, write }) => {
+      write('bundle/elsewhere/view.json', '{ "version": 2, "cards": [] }\n');
+      edit(
+        COMPONENT,
+        '  </extension>',
+        '    <layout type="File" mode="view" src="elsewhere/view.json" />\n  </extension>',
+      );
+    },
+    2,
+    'bundle/elsewhere/view.json, a layout of version 2',
+    none,
+  );
+  refused(
+    'a manifest that is a folder, in a package with no app.json',
+    first,
+    ({ directory }) => {
+      const manifest = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
+      rmSync(manifest);
+      mkdirSync(manifest);
+    },
+    2,
+    'bundle/META-INF/MANIFEST.MF is not a file',
     none,
   );
   // What the builder refuses, through the tool: the configuration builder's checks run.
@@ -484,15 +527,21 @@ function refusals(satori) {
   else held++;
 
   // The command's own errors.
-  for (const [what, args] of [
+  for (const [what, args, says] of [
     ['validate with --out', ['validate', first, '--out', join(scratch, 'x')]],
-    ['--previous-platform', ['build', first, '--previous', first, '--previous-platform', first]],
+    [
+      '--previous-platform',
+      ['build', PAYERS, '--previous', PAYERS, '--previous-platform', REPO],
+      '--previous-platform reads the platform',
+    ],
     ['no command', []],
     ['upgrade-check with no --previous', ['upgrade-check', first]],
     ['model pull with no --out', ['model', 'pull', '--server', 'https://nuxeo.example/nuxeo']],
   ]) {
     const run = node([satori, ...args]);
     if (run.status !== 2) fail(what, `exit ${run.status}, not 2`, run.output);
+    else if (says !== undefined && !run.output.includes(says))
+      fail(what, `no "${says}"`, run.output);
     else held++;
   }
 
@@ -533,12 +582,87 @@ function refusals(satori) {
     },
     '1 in version 1, which this does not check',
   );
+  // A build.mjs that would fail if it ran, so that the tool is seen not to run it.
   passes(
-    "a package whose build.mjs is not the tool's",
+    "a package whose build.mjs is not the tool's, and is not run",
     first,
-    ({ edit }) => edit('build.mjs', '#!/usr/bin/env node', '#!/usr/bin/env node\n// an older copy'),
+    ({ edit }) => edit('build.mjs', '#!/usr/bin/env node', '#!/usr/bin/env node\nprocess.exit(3);'),
     'note: build.mjs is not the builder this tool carries',
   );
+  passes(
+    'a package whose build.mjs is a folder',
+    first,
+    ({ directory }) => {
+      rmSync(join(directory, 'build.mjs'));
+      mkdirSync(join(directory, 'build.mjs'));
+    },
+    'note: build.mjs is not the builder this tool carries',
+  );
+  // A version 1 package may name its bodies as it likes: a manifest called navigation.json.
+  passes(
+    'a Layer 1 fragment whose body is called navigation.json',
+    first,
+    ({ directory, edit }) => {
+      const config = join(directory, 'bundle', 'agentic-ui-config');
+      writeFileSync(join(config, 'navigation.json'), readFileSync(join(config, 'manifest.json')));
+      rmSync(join(config, 'manifest.json'));
+      edit(
+        COMPONENT,
+        'src="agentic-ui-config/manifest.json"',
+        'src="agentic-ui-config/navigation.json"',
+      );
+    },
+    'No app definition',
+  );
+  passes(
+    'a configuration package given --kits, which compares only app definitions',
+    first,
+    () => undefined,
+    'it was compared with nothing',
+    () => ['--kits', join(scaffold, 'config-packages')],
+  );
+
+  // A refusal is the pipeline's and the tool's alike: the same exit code and the same words.
+  for (const [what, change] of [
+    [
+      'a widget the platform does not have',
+      ({ edit }) => edit(LAYOUT, '"widget": "document-link"', '"widget": "calendar"'),
+    ],
+    [
+      'a property the type does not have',
+      ({ edit }) => edit(LAYOUT, '"claim:number",', '"claim:numbr",'),
+    ],
+    [
+      "app.json's version not package.xml's",
+      ({ edit }) =>
+        edit('bundle/agentic-ui-config/app.json', '"packageVersion": "', '"packageVersion": "9.'),
+    ],
+  ]) {
+    const directory = changed(PAYERS, change);
+    const [pipeline, ours] = [
+      node([PIPELINE, directory, '--out', join(directory, '..', 'p'), ...withAllowList(directory)]),
+      node([
+        satori,
+        'build',
+        directory,
+        '--out',
+        join(directory, '..', 't'),
+        ...withAllowList(directory),
+      ]),
+    ];
+    const refusal = (run) => run.output.split('\n').find((line) => line.includes(' refused it: '));
+    if (
+      pipeline.status !== 1 ||
+      ours.status !== pipeline.status ||
+      refusal(ours) !== refusal(pipeline)
+    )
+      fail(
+        `${what}, through both`,
+        `app-package.mjs exited ${pipeline.status}, the tool ${ours.status}`,
+        `${refusal(pipeline)}\n${refusal(ours)}`,
+      );
+    else held++;
+  }
 
   // The upgrade check: against a folder and a zip of the kit as it is, and a queue removed.
   const payersZip = join(scratch, 'payers-zip');
@@ -585,6 +709,58 @@ function refusals(satori) {
   if (held2.status !== 0)
     fail('satori build --previous <zip>', `exit ${held2.status}`, held2.output);
   else held++;
+  // A body a src names, not called .json, is packaged compact: held to its own zip, no change.
+  const body = changed(PAYERS, ({ directory, write }) => {
+    write('bundle/fragments/payers.manifest', '{\n  "version": 1,\n  "labels": {}\n}\n');
+    const component = join(directory, 'bundle', 'OSGI-INF', 'payers-claims-demo-config.xml');
+    const text = readFileSync(component, 'utf8');
+    const extension = '<extension target="org.nuxeo.agentic.ui.config" point="configuration">';
+    if (!text.includes(extension)) throw new Error(`${component} has no ${extension}`);
+    writeFileSync(
+      component,
+      text.replace(
+        extension,
+        `${extension}\n    <fragment name="payers-claims-demo" layer="manifest" src="fragments/payers.manifest" />`,
+      ),
+    );
+  });
+  const bodyZip = join(scratch, 'named-zip');
+  const bodyBuilt = node([satori, 'build', body, '--out', bodyZip, ...withAllowList(body)]);
+  const bodyHeld = node([
+    satori,
+    'build',
+    body,
+    '--out',
+    join(scratch, 'named-held'),
+    '--previous',
+    join(bodyZip, readdirSync(bodyZip).find((name) => name.endsWith('.zip')) ?? 'none.zip'),
+    ...withAllowList(body),
+  ]);
+  if (bodyBuilt.status !== 0 || bodyHeld.status !== 0)
+    fail(
+      'a fragment body not called .json, held to its own zip',
+      `built ${bodyBuilt.status}, held ${bodyHeld.status}`,
+      bodyBuilt.output + bodyHeld.output,
+    );
+  else held++;
+  // A check that cannot be made exits 2, never 1, which would read as "not kept".
+  if (process.platform !== 'win32') {
+    const unreadable = changed(PAYERS, () => undefined);
+    const locked = join(unreadable, 'bundle', 'schemas');
+    chmodSync(locked, 0);
+    try {
+      const run = node([satori, 'upgrade-check', unreadable, '--previous', PAYERS]);
+      if (run.status !== 2)
+        fail(
+          'satori upgrade-check of a package it cannot read',
+          `exit ${run.status}, not 2`,
+          run.output,
+        );
+      else held++;
+    } finally {
+      chmodSync(locked, 0o755);
+    }
+  }
 }
 
 /**

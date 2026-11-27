@@ -19,8 +19,9 @@
  *   `defaults` or `nuxeo-agentic-ui`, Satori's own package (`reservedName`, which step 3 asks). The
  *   `config-package` generator refuses the same names (`SATORI_NAMES`, in `generator.ts` and
  *   `create.mjs`), which the tool's controls hold this list to.
- * - **A file of version 2's with no `app.json`** (`versionTwoFiles`): one nothing would check or
- *   serve, for the tool, which builds a package with no app definition as configuration alone.
+ * - **An app definition's file, layout or `<app>` with no `app.json`** (`versionTwoFiles`): one
+ *   nothing would check, or the registry would serve unchecked, for the tool, which builds a
+ *   package with no app definition as configuration alone.
  *
  * A fragment's body is read as the builder reads it: the file its `src` names inside `bundle/`, or
  * its inline `<json>`. One the builder will refuse, a file that is not there or JSON that does not
@@ -118,29 +119,82 @@ export function configurationFindings(directory, components, schemas) {
 }
 
 /**
- * The files under `root` that only an app definition reads, as paths from `root`: the registry's
- * files, a domain module's, and a layout of version 2, by its `"version"`. A package with any of
- * them and no `app.json` has an app definition nothing checks.
+ * What only an app definition holds, in a package that has no `app.json`, each said as what it is,
+ * or nothing: such a package has an app definition nothing checks, and that the registry would not
+ * serve, or would serve unchecked. Read from `root`, `bundle/agentic-ui-config/`, and from the
+ * components:
+ *
+ * - **a file of the registry's or a domain module's,** by its place, `home.json`, `navigation.json`,
+ *   `actions.json`, `queues/`, `labels/`, `tasks/` or `modules/`, unless a fragment or an asset names
+ *   it as its body, as a version 1 package may name its files what it likes;
+ * - **a layout of version 2,** by its `"version"`: a file under `layouts/`, or the body any
+ *   `<layout>` names, wherever it is;
+ * - **an `<app>`,** which the registry serves only with the `app.json` the validator reads.
+ *
+ * @param directory the package
+ * @param components `componentsOf(directory)`, as for `configurationFindings`
  */
-export function versionTwoFiles(root) {
-  if (!isDirectory(root)) return [];
+export function versionTwoFiles(directory, components) {
+  const bundle = resolve(directory, 'bundle');
+  const root = join(bundle, 'agentic-ui-config');
+  const bodies = new Set();
+  const layouts = new Set();
   const found = [];
-  for (const path of filesUnder(root).sort()) {
-    if (APP_FILES.some((place) => place.test(path)) || path.startsWith('modules/')) {
-      found.push(path);
-      continue;
-    }
-    if (!path.startsWith('layouts/') || !path.endsWith('.json')) continue;
-    try {
-      const content = JSON.parse(
-        readFileSync(join(root, ...path.split('/')), 'utf8').replace(BOM, ''),
-      );
-      if (isRecord(content) && content.version === 2) found.push(path);
-    } catch {
-      // Not JSON: the builder refuses it at step 4.
-    }
-  }
+  for (const { component, xml } of components)
+    for (const [from, to] of configurationExtensions(xml))
+      for (const match of xml
+        .slice(from, to)
+        .matchAll(new RegExp(`<(fragment|asset|layout|app)${TAG}`, 'g'))) {
+        const [, element, inside] = match;
+        const { src, id, enabled } = attributesOf(inside);
+        if (element === 'app') {
+          if (enabled === undefined || enabled.toLowerCase() === 'true')
+            found.push(`the app "${id ?? ''}" that ${component} contributes`);
+          continue;
+        }
+        if (src === undefined) continue;
+        const file = resolve(bundle, src);
+        if (!file.startsWith(bundle + sep)) continue;
+        (element === 'layout' ? layouts : bodies).add(file);
+      }
+  const files = isDirectory(root)
+    ? filesUnder(root)
+        .sort()
+        .map((path) => ({ path, file: join(root, ...path.split('/')) }))
+    : [];
+  for (const { path, file } of files)
+    if (
+      (APP_FILES.some((place) => place.test(path)) || path.startsWith('modules/')) &&
+      !bodies.has(file)
+    )
+      found.push(`bundle/agentic-ui-config/${path}`);
+  const shown = (file) =>
+    `bundle/${file
+      .slice(bundle.length + 1)
+      .split(sep)
+      .join('/')}`;
+  const candidates = new Set([
+    ...files
+      .filter(({ path }) => path.startsWith('layouts/') && path.endsWith('.json'))
+      .map(({ file }) => file),
+    ...layouts,
+  ]);
+  for (const file of [...candidates].sort())
+    if (!found.includes(shown(file)) && versionOf(file) === 2)
+      found.push(`${shown(file)}, a layout of version 2`);
   return found;
+}
+
+/** A JSON file's top-level `"version"`, or `undefined`: one that cannot be read is the builder's. */
+function versionOf(file) {
+  try {
+    const entry = lstatSync(file, { throwIfNoEntry: false });
+    if (!entry?.isFile()) return undefined;
+    const content = JSON.parse(readFileSync(file, 'utf8').replace(BOM, ''));
+    return isRecord(content) ? content.version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The files of an app definition the registry serves besides `app.json`: version 1 has none. */

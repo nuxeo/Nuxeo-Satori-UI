@@ -28,6 +28,7 @@ jobs:
         with:
           node-version: '24'
 
+      # npm ci installs what package-lock.json pins, which the first npm install writes: commit it.
       - name: Install the tool, as package-lock.json pins it
         run: npm ci
 

@@ -299,9 +299,14 @@ function versionIn(files: PackageFiles): string | null {
  * A file's text as the builder packages it: a JSON file of the bundle parsed and written again
  * without its `$schema`, the manifest with its lines unfolded and its line ends made one. Anything
  * else, and JSON that cannot be read, which the builder would refuse, as it is.
+ *
+ * A fragment's or a layout's body that a `src` names is packaged as JSON whatever the file is
+ * called, `fragments/acme.manifest` as well as `manifest.json`, so a file of the bundle that is not
+ * `.json` and reads as a JSON object is compared as JSON too. Otherwise a package compared with the
+ * zip it was built into, whose bodies are compact, would differ from itself.
  */
 export function packagedText(file: string, text: string): string {
-  if (file.startsWith('bundle/') && file.endsWith('.json')) {
+  if (file.startsWith('bundle/') && file !== 'bundle/META-INF/MANIFEST.MF') {
     const content = objectOf(text);
     if (content === null) return text;
     delete content['$schema'];

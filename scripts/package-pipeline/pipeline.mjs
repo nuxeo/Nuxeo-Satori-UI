@@ -429,7 +429,9 @@ function run(
     );
   const builder = join(directory, 'build.mjs');
   const template = readFileSync(host.builder.template);
-  const reviewed = existsSync(builder) && readFileSync(builder).equals(template);
+  // A folder there is no builder, and is not read as one.
+  const builderEntry = lstatSync(builder, { throwIfNoEntry: false });
+  const reviewed = builderEntry?.isFile() === true && readFileSync(builder).equals(template);
   if (host.builder.runs === 'package' && !reviewed)
     return refuse(
       1,
@@ -438,7 +440,7 @@ function run(
     );
   // The tool runs its own builder on the package, never the package's: one there that is not the
   // tool's is said, since `node build.mjs` would then build it with other checks than these.
-  if (host.builder.runs === 'carried' && existsSync(builder) && !reviewed)
+  if (host.builder.runs === 'carried' && builderEntry !== undefined && !reviewed)
     process.stdout.write(
       `note: build.mjs is not the builder this tool carries, ${host.builder.shownTemplate}, byte for byte. It is not run: the package is built with the tool's own.\n`,
     );
@@ -467,18 +469,32 @@ function run(
   if (!app && host.requireApp)
     return refuse(2, 'bundle/agentic-ui-config/ has no app.json, which an app definition needs.');
   if (!app) {
-    // A file of version 2's with no app.json would be checked by nothing, and served by nothing.
-    const unowned = versionTwoFiles(root);
+    // As layoutContributions refuses it for an app definition: a folder there names no component.
+    const manifestEntry = lstatSync(join(directory, 'bundle', 'META-INF', 'MANIFEST.MF'), {
+      throwIfNoEntry: false,
+    });
+    if (manifestEntry !== undefined && !manifestEntry.isFile())
+      return refuse(
+        2,
+        "bundle/META-INF/MANIFEST.MF is not a file. A bundle's manifest is a file, which names its components.",
+      );
+    // What only an app definition holds, with no app.json: checked by nothing, or served by nothing.
+    const unowned = versionTwoFiles(directory, componentsOf(directory));
     if (unowned.length > 0)
       return refuse(
         2,
-        `bundle/agentic-ui-config/ holds ${unowned.join(', ')}, of an app definition, and no app.json: an app definition needs one, and without it none of its files would be checked or served.`,
+        `the package holds ${unowned.join(', ')}, of an app definition, and no bundle/agentic-ui-config/app.json: an app definition needs one, and without it none of it would be checked, or served as it was checked.`,
       );
     const reached = allowListContributions(directory);
     if (reached) return refuse(2, reached);
     process.stdout.write(
       'No app definition: bundle/agentic-ui-config/ has no app.json, so the package is configuration alone, Layer 0, Layer 1, assets and version 1 layouts, which the builder checks at step 4.\n',
     );
+    // The other kits' names are an app definition's to compare: said, not passed in silence.
+    if (kits !== undefined)
+      process.stdout.write(
+        `note: --kits ${kits}: the names a package shares with the other packages are compared for an app definition, and this package has none, so it was compared with nothing.\n`,
+      );
   } else {
     const defined = appDefinition(
       { directory, root, model, allowList, registered, platform, kits },

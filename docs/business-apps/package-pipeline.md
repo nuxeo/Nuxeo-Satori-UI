@@ -1452,9 +1452,17 @@ which the application would ignore in silence; and a fragment named `defaults`, 
 3 refuses a package named `defaults` or `nuxeo-agentic-ui`, the names the generator refuses. No kit
 has a fragment or such a name, so every kit builds to the same zip as before.
 
+**The version rules read a body as the builder packages it** (`packagedText`, in
+`libs/shared/app-definition/src/lib/changes.ts`): a file of the bundle that reads as a JSON object
+is compared compact and without its `$schema`, whatever it is called, as the builder packages any
+body a `src` names. Before, only a `.json` file was, so a package held to the zip it was built into,
+which `satori build --previous <zip>` reads, differed from itself in a body called
+`acme.manifest`.
+
 **What differs, on purpose.** A package with no `app.json` is built by the tool as configuration
-alone, and refused by `app-package.mjs`; one with a file of an app definition and no `app.json` is
-refused by both. The tool's platform is the one it carries: `--platform` is its version unless
+alone, and refused by `app-package.mjs`; one with no `app.json` that holds anything of an app
+definition, a file of the registry's that no fragment names as its body, a layout of version 2 or an
+`<app>`, is refused by both. The tool's platform is the one it carries: `--platform` is its version unless
 given, and `--previous-platform` stays with `app-package.mjs`, which has the platform's sources.
 The tool compares a package's names with other packages only when `--kits` names their folder.
 
