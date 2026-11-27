@@ -1,0 +1,4 @@
+# What npm installs, and the zips satori build writes: rebuilt from the reviewed source.
+node_modules/
+dist/
+config-packages/*/dist/

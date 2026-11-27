@@ -731,7 +731,7 @@ function appDefinition(
 /**
  * The generator's `build.mjs`, `template`, run on the package in `directory` as the package's own
  * copy of it would run: the same bytes, with the package's folder as the folder it builds. The
- * builder finds the package beside itself, `dirname(import.meta.url)`, and a module Node reads from
+ * builder finds the package beside itself, in the folder of its own module URL, and a module Node reads from
  * standard input is one in the working directory (`file:///<cwd>/[eval1]`), so it is given the
  * template on standard input with the package's folder as its working directory. `--out` is
  * absolute, so the working directory names nothing else: only the line it prints once built, which

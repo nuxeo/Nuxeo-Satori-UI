@@ -233,10 +233,15 @@ function takes(node, key) {
   return node.additionalProperties !== false;
 }
 
-/** `; perhaps "<known>"` when a key the schema lists is one edit, or a letter case, from `key`. */
+/**
+ * `; perhaps "<known>"` when a key the schema lists is a near miss of `key`, as the pipeline reads
+ * a near miss of a type's name: the same but for case, or one edit apart, two for one of more than
+ * five letters.
+ */
 function near(key, known) {
   const close = known.find(
-    (each) => each.toLowerCase() === key.toLowerCase() || distance(each, key) <= 1,
+    (each) =>
+      each.toLowerCase() === key.toLowerCase() || distance(each, key) <= (key.length > 5 ? 2 : 1),
   );
   return close === undefined ? '' : `; perhaps "${close}"`;
 }
