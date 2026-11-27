@@ -267,6 +267,13 @@ export function crowdinSourceFindings({
       )
     )
       findings.push(`${path} downloads no translation from ${name}.`);
+  // Off until a kit string is approved: before then every file it wrote would be English, and each
+  // would still need its kit named and versioned by a person.
+  if (!/^\s*if:[^\n]*vars\.CROWDIN_KIT_LABELS_ENABLED == 'true'/m.test(kitsPullWorkflow))
+    findings.push(
+      ".github/workflows/crowdin-pull-kits.yaml runs without `vars.CROWDIN_KIT_LABELS_ENABLED == 'true'`, " +
+        'so it pulls before any kit string is approved.',
+    );
   const [appBranch, kitsBranch] = pulls.map(({ workflow }) => branchOf(workflow));
   if (appBranch === undefined || appBranch === kitsBranch)
     findings.push(

@@ -75,12 +75,16 @@ jobs:
           upload_sources: false
           download_translations: true
 
-          # The languages the app ships or has requested, and only those with an approved kit
-          # string: a language listed here with none writes every kit's file in English. Each id is
-          # Crowdin's, so Norwegian is `nb` or `no`, whichever the project targets; either is
-          # written `nb.json` (`crowdin-kits.yml`). An unknown id fails the whole pull, so add the
-          # language on the project first.
-          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es'
+          # Only languages with an approved kit string: a language listed here with none writes
+          # every kit's file in English, and each such file still needs its kit named and versioned.
+          # So **the change that sets `CROWDIN_KIT_LABELS_ENABLED` sets this list too**, to the
+          # languages with approvals then. It is French alone until that change, as a placeholder:
+          # French is the language of phase 8's demo and the one the app has shipped longest. An
+          # empty list is no way to leave it unset — the CLI then downloads every target language.
+          # Each id is Crowdin's, so Norwegian is `nb` or `no`, whichever the project targets;
+          # either is written `nb.json` (`crowdin-kits.yml`). An unknown id fails the whole pull, so
+          # add the language on the project first.
+          download_translations_args: '--language=fr'
 
           create_pull_request: true
           localization_branch_name: crowdin-kit-labels-update

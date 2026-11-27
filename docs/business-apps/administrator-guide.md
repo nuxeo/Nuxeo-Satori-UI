@@ -588,8 +588,10 @@ Team, does each of these:
    `fi` and `nb` need no regional entry. Until then that pull request is red, on purpose: a
    catalogue nobody offers ships and is never shown.
 2. **For the kits,** once a kit string is approved, sets the repository variable
-   `CROWDIN_KIT_LABELS_ENABLED` to `true`, which turns the kits' pull on, and keeps its
-   `download_translations_args` to the languages with approved kit strings. In each pull request it
+   `CROWDIN_KIT_LABELS_ENABLED` to `true`, which turns the kits' pull on, and in the same change
+   sets the pull's `download_translations_args` to the languages with approved kit strings: it
+   holds French alone until then, as a placeholder, and a language listed with no approval writes
+   every kit's file in English, each needing its kit named and versioned. In each pull request it
    opens, for each kit with a new file, names it in the component
    (`npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/<kit>`), and
    raises the kit's version: a minor for a new language, a patch for changed texts. Until then the

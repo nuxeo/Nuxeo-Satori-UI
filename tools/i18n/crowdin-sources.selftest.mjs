@@ -226,6 +226,17 @@ reports(
   /The two pulls write one branch, crowdin-translations-update/,
 );
 reports(
+  "the kits' pull without its own switch",
+  {
+    kitsPullWorkflow: edited(
+      REAL.kitsPullWorkflow,
+      " && vars.CROWDIN_KIT_LABELS_ENABLED == 'true'",
+      '',
+    ),
+  },
+  /crowdin-pull-kits\.yaml runs without `vars\.CROWDIN_KIT_LABELS_ENABLED == 'true'`/,
+);
+reports(
   'a config in a shape this does not read',
   { kitsConfig: "'files':\n  - 'source': '/business-apps/packages/*/labels/en.json'\n" },
   /crowdin-kits\.yml cannot be read: it has no `files: \[ … \]` flow sequence/,
