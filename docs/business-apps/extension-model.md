@@ -21,9 +21,10 @@ All are in [decisions.md](decisions.md). Until they are taken, the plan's work g
 - **What we ship:** the platform, the domain add-ons and the tools. The kits in
   `business-apps/packages/`, Payers among them, test the platform and show what it does. They are
   not shipped to customers.
-- **Where a customer works: one config repository of their own,** created from
-  [Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config) as a starter. It holds all
-  of their configuration in one place: branding, what the app shows, and their app definitions.
+- **Where a customer works: one config repository of their own,** which they create by following
+  our documentation, with `satori create` to scaffold it. It holds all of their configuration in
+  one place: branding, what the app shows, and their app definitions. Nuxeo-Satori-Config stays
+  ours, for presales and the hosted Beta, and customers never see it.
 - **Their tools come from npm:** a command-line tool and an MCP server, pinned in their lockfile,
   with the agent's skill and rules installed by the tool. **Their own AI IDE and agents** build the
   configuration with them, as most customers already do. Upgrades arrive as a version bump.
@@ -32,8 +33,8 @@ All are in [decisions.md](decisions.md). Until they are taken, the plan's work g
   2. server logic in their own Studio project;
   3. user-interface code, only where configuration can't reach.
 - **The proposed order:**
-  1. the tools on npm and the starter (K);
-  2. the starter's builder checking version 2's files;
+  1. one builder for every file a customer writes, version 2's included, in the command-line tool;
+  2. the tools on npm, `satori create` and its documentation (K);
   3. customers' own signing and promotion (M);
   4. publishing the add-ons (N);
   5. patch overlays (L);
@@ -48,7 +49,8 @@ workspace for people working on Satori itself". What a customer receives:
 
 - signed Marketplace packages, which an administrator installs on the customer's Nuxeo;
 - published tools, which a developer or presales engineer runs on their own computer, with no
-  clone of this repository and no token for Hyland's private packages;
+  clone of this repository. Until Satori is public, which is Hyland's long-term plan, a tool that
+  needs one of Hyland's private packages comes with a read token from us;
 - the documentation that goes with both.
 
 Everything a customer changes, they change by shipping a package of their own. That package
@@ -191,10 +193,11 @@ sits below a customer's. That is why the proposed order puts it after the tools.
 
 ### One config repository per customer
 
-[Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config) is public today and holds our
-own presales and hosted Beta packages. It becomes the **starter** a customer creates their
-repository from, as a GitHub template or with `npm create @nuxeo/satori-config`. Our presales
-packages stay in it.
+A customer creates their own repository by following our documentation, and `satori create`
+writes its skeleton: the tree below, with a first package, `AGENTS.md`, the skill and the
+workflows. [Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config) stays ours, for
+presales and the hosted Beta; customers never see it, and it is not the starter. Its packages
+move onto the same tools, so we use what customers use.
 
 ```text
 acme-satori/
@@ -216,13 +219,15 @@ manifest and their app definitions are their configuration, reviewed and release
 
 ### The tools on npm
 
-**Today the starter copies three files.** `build.mjs` and the two schemas are copied from this
-repository into every package, pinned to one commit in `platform-ref.txt`, and checked by a
+**Today Nuxeo-Satori-Config copies three files.** `build.mjs` and the two schemas are copied from
+this repository into every package, pinned to one commit in `platform-ref.txt`, and checked by a
 weekly job that goes red when they drift. That works for one repository we own. Across hundreds of
 customer repositories the copies would drift.
 
 **Proposed: publish the tools**, at `packages.nuxeo.com/repository/npm-public/`, where
-`@nuxeo/satori-platform` is already set to publish. That registry needs no token.
+`@nuxeo/satori-platform` is already set to publish. That registry needs no token, though a tool
+that depends on one of Hyland's private packages needs the read token we give a customer until
+Satori is public.
 
 | Package               | What it does                                                                                                                                                                                                                                                                                                                                   |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -238,7 +243,7 @@ customer repositories the copies would drift.
 4. The developer previews the result on their development server.
 5. CI checks, signs and publishes it.
 
-Nothing needs our source or our private packages.
+Nothing needs our source.
 
 **How upgrades reach customers:** we release a platform version with tool versions to match.
 Renovate or Dependabot opens a pull request in the customer's repository, and their CI runs
@@ -246,12 +251,19 @@ Renovate or Dependabot opens a pull request in the customer's repository, and th
 
 ### What has to be true
 
-- **The tools depend on no private package.** `npm ci` in this repository needs
-  `SATORI_GH_READONLY_TOKEN` for Hyland's packages. The validator and the pipeline must not.
+- **Hyland's private packages:** a tool that needs one comes with a read token from us, until
+  Satori is public, which is Hyland's long-term plan. The validator and the pipeline likely need
+  none.
 - **Preview runs against the customer's development server,** with Satori installed on it, not a
   bundled copy of the app.
-- **The starter's builder checks version 2's files.** Today it checks none of an app definition's
-  version 2 files: layouts, queues, home, actions and the rest. The command-line tool replaces it.
+- **One builder checks every file a customer writes.** Today there are two:
+  - the configuration package's `build.mjs`, which checks Layer 0, Layer 1 and version 1 layouts,
+    and none of version 2's files;
+  - the app package pipeline, `scripts/app-package.mjs`, which checks version 2's files and runs
+    only from this repository.
+
+  The command-line tool is the two made one.
+
 - **The MCP server reads the customer's server with their own credentials,** from the environment,
   never from a file in the repository, as it does today.
 
@@ -301,7 +313,7 @@ What a customer needs:
 
 - **Their own signer,** named in their deployment's trusted-signers list: their CI's identity, or a
   key they hold. Our signer stays trusted for our packages.
-- **The starter's workflows** (section 5):
+- **The workflows `satori create` writes** (section 5):
   - checking every change with the pipeline;
   - signing with their identity;
   - promotion through development, test and production servers, with a person's approval before
@@ -343,12 +355,13 @@ What a customer needs:
 
 ## 11. The proposed order
 
-1. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows,
-   and turn Nuxeo-Satori-Config into the starter. This is what lets a customer's AI IDE build their
-   configuration at all, so it comes first.
-2. **The command-line tool checks version 2's files,** so that one config repository holds all of a
-   customer's configuration.
-3. **Decide M,** then customer signing and promotion in the starter's workflows.
+1. **One builder,** the configuration package's checks and the app package pipeline made one
+   command-line tool that runs outside this repository, so that one config repository holds all
+   of a customer's configuration.
+2. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows,
+   with `satori create` and the documentation for a customer's own repository. This is what lets a
+   customer's AI IDE build their configuration at all.
+3. **Decide M,** then customer signing and promotion in the workflows `satori create` writes.
 4. **Decide N,** then publish the add-ons beside the platform.
 5. **Decide L,** then build patch overlays, before the first partner package or shared package sits
    below a customer's.
@@ -374,6 +387,6 @@ Checked on 27 November 2026, in this repository unless named:
 **Not checked:**
 
 - whether `@nuxeo/satori-platform` is published at `packages.nuxeo.com` today;
-- whether the validator and the pipeline can run without Hyland's private packages;
+- whether the validator and the pipeline need any of Hyland's private packages;
 - how other Nuxeo products extend their own user interfaces;
 - what customers and partners need first, which presales would know.
