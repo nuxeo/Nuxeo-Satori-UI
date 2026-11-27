@@ -18,8 +18,10 @@
  * types, and checks only that Nuxeo made each picture's views.
  *
  * Environment:
- *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. Any user
- *                            who may create a workspace under /default-domain/workspaces.
+ *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. An
+ *                            administrator's, since the seed grants the reviewer group its
+ *                            permission; with `--preview`, which grants nothing, any user who may
+ *                            create a workspace under /default-domain/workspaces.
  *   NUXEO_URL                the server, default http://localhost:8080
  *   APP_URL                  the app, for the links printed at the end,
  *                            default http://localhost:4200
@@ -31,7 +33,11 @@
  * documents it created: every document it writes carries `data.mjs`'s `MARKER` as its `dc:source`.
  * Before anything is written, it reads every place it would write, and a document there that does
  * not carry the marker, or is not of the type the seed would write, stops the run with exit 2,
- * untouched. It creates no user and no group, and grants no permission.
+ * untouched. It creates no user and no group. **It grants one permission,** since the kit's 0.2.5:
+ * `data.mjs`'s `GRANTS`, the assets add-on's ReviewAsset to the kit's reviewer group,
+ * creative-review, on the assets folder, once: the kit's review policy names that group, and the
+ * server lets a member of it decide an asset's review only where the permission is granted. It is
+ * added to the folder's own permissions when they do not hold it, and never removed.
  *
  * **Safe to run twice.** Each record has a fixed place, named by its id. A record already there has
  * `data.mjs`'s values written over its own, dates included, which `data.mjs` counts from the day
@@ -54,7 +60,7 @@
  *
  * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, or
  * a check failed; 2, a precondition, found before anything is written: no credentials, no server,
- * credentials refused, the package not installed (without `--preview`), no
+ * credentials refused, not an administrator or the package not installed (without `--preview`), no
  * /default-domain/workspaces, or a document at one of the seed's places that it did not write. An
  * argument other than `--preview` is refused with exit 2 too.
  */
@@ -65,6 +71,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ASSETS,
   FOLDERS,
+  GRANTS,
   MARKER,
   PRODUCTS,
   SHOTS,
@@ -110,7 +117,7 @@ class HttpError extends Error {
   }
 }
 
-const tally = { created: 0, updated: 0, restored: 0, uploaded: 0 };
+const tally = { created: 0, updated: 0, restored: 0, uploaded: 0, granted: 0 };
 /** Whether the run is still in its preflight, where no answer at all means no server. */
 let preflighting = true;
 
@@ -159,7 +166,9 @@ async function seed() {
   preflighting = false;
 
   await ensure(plan.workspace);
-  for (const folder of plan.folders) await ensure(folder);
+  const folders = new Map();
+  for (const folder of plan.folders) folders.set(folder.key, await ensure(folder));
+  for (const grant of GRANTS) await ensureGrant(folders.get(grant.folder), grant);
   const products = new Map();
   for (const product of plan.products) products.set(product.key, await ensure(product));
   const assets = new Map();
@@ -178,10 +187,11 @@ async function seed() {
   await check({ products, assets, shots, videos });
   await sayWhatTheServerMade(videos);
 
-  const { created, updated, restored, uploaded } = tally;
+  const { created, updated, restored, uploaded, granted } = tally;
   console.log(
     `\nDone: ${created} created, ${updated} updated, ${restored} restored from the trash, ` +
-      `${uploaded} file(s) uploaded, under ${ROOT}. The page providers return what was seeded.`,
+      `${uploaded} file(s) uploaded, ${granted} permission(s) granted, under ${ROOT}. ` +
+      'The page providers return what was seeded.',
   );
   const ending = ASSETS.find((asset) => asset.rightsEndInDays >= 0 && asset.rightsEndInDays <= 30);
   const ended = ASSETS.find((asset) => asset.rightsEndInDays < 0);
@@ -199,7 +209,7 @@ async function seed() {
  */
 async function seedPreview(today) {
   const plan = previewPlanned(today);
-  await preflight(plan, { types: [] });
+  await preflight(plan, { types: [], grants: [] });
   preflighting = false;
   await ensure(plan.workspace);
   for (const folder of plan.folders) await ensure(folder);
@@ -375,14 +385,20 @@ function everyPlace(plan) {
  * place the seed would write is free or holds a document it wrote before, of the same type. All of
  * it read, nothing written.
  */
-async function preflight(plan, { types = TYPES } = {}) {
+async function preflight(plan, { types = TYPES, grants = GRANTS } = {}) {
+  let me;
   try {
-    await call('GET', '/me');
+    me = await call('GET', '/me');
   } catch (error) {
     if (error instanceof HttpError && error.status === 401)
       throw new Precondition(`${SERVER} refused NUXEO_USER and NUXEO_PASS (HTTP 401).`);
     throw error;
   }
+  if (grants.length > 0 && me?.isAdministrator !== true)
+    throw new Precondition(
+      `${username} is not an administrator: only an administrator grants the kit's reviewer group ` +
+        'its ReviewAsset permission. Run the seed as one, or with --preview, which grants nothing.',
+    );
   const missing = [];
   for (const type of types) {
     if ((await find(`/config/types/${type}`)) === null) missing.push(type);
@@ -444,6 +460,27 @@ async function ensure({ parent, name, path, type, properties, file }) {
   tally.updated++;
   console.log(`  updated  ${path}`);
   return updated;
+}
+
+/**
+ * A group's permission on a folder, granted once: added to the folder's own permissions when they do
+ * not already grant it to the group, as the assets add-on reads a grant. Never removed.
+ */
+async function ensureGrant(folder, { group, permission }) {
+  if (!folder?.uid) throw new Error(`no folder to grant ${permission} on to ${group}`);
+  const acl = await call('GET', `/id/${folder.uid}/@acl`);
+  const local = (acl?.acl ?? []).find((each) => each.name === 'local')?.aces ?? [];
+  if (
+    local.some(
+      (ace) => ace.username === group && ace.permission === permission && ace.granted === true,
+    )
+  )
+    return;
+  await call('POST', '/automation/Document.AddPermission', {
+    json: { input: `doc:${folder.uid}`, params: { users: [group], permission, notify: false } },
+  });
+  tally.granted++;
+  console.log(`  granted  ${permission} on ${folder.path ?? folder.uid} to ${group}`);
 }
 
 /**

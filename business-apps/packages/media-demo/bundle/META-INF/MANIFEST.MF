@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: media-demo
 Bundle-SymbolicName: nuxeo.config.media-demo;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.2.0
 Nuxeo-Component: OSGI-INF/media-demo-model.xml,OSGI-INF/media-demo-rights.xml,OSGI-INF/media-demo-queues.xml,OSGI-INF/media-demo-config.xml

@@ -417,13 +417,14 @@ describe('DocumentDetailService permissions', () => {
       expect(req.request.body).toEqual({
         params: {
           query: ANNOTATION_DOCUMENTS_QUERY,
-          queryParams: ['doc-uid', 'picture:views', 'nuxeo-satori.review'],
+          queryParams: ['doc-uid', 'doc-uid', 'picture:views', 'nuxeo-satori.review'],
           pageSize: 1000,
           currentPageIndex: 0,
         },
         context: {},
       });
       expect(ANNOTATION_DOCUMENTS_QUERY).toContain('ORDER BY dc:created ASC');
+      expect(ANNOTATION_DOCUMENTS_QUERY).toContain('ecm:ancestorId = ? AND comment:parentId = ?');
       expect(req.request.headers.get('properties')).toBe(
         'dublincore,comment,annotation,externalEntity',
       );

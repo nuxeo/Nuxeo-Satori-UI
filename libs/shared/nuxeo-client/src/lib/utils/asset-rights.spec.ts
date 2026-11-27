@@ -121,6 +121,34 @@ describe('assetRights', () => {
   });
 });
 
+describe('assetRights, since nuxeo-agentic-assets 0.5.0', () => {
+  it('reads a use the watermark marks for this reader, and one it cannot mark, as refusals', () => {
+    const rights = assetRights(
+      documentWith({
+        assetRights: {
+          ...NO_PRINT,
+          uses: [
+            { use: 'view', name: 'Medium', allowed: false, reason: 'watermark-required' },
+            {
+              use: 'view',
+              name: 'FullHD',
+              allowed: false,
+              reason: 'watermark-unavailable',
+              channel: 'E-commerce',
+            },
+            // A watermark-required that serves is not as the enricher writes one: left out.
+            { use: 'view', name: 'Small', allowed: true, reason: 'watermark-required' },
+          ],
+        },
+      }),
+    );
+    expect(rights?.uses.map((use) => [use.name, use.allowed, use.reason, use.channel])).toEqual([
+      ['Medium', false, 'watermark-required', null],
+      ['FullHD', false, 'watermark-unavailable', 'E-commerce'],
+    ]);
+  });
+});
+
 describe('assetRightsDecision', () => {
   const rights = assetRights(documentWith({ assetRights: NO_PRINT }))!;
 

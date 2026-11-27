@@ -49,7 +49,18 @@ public record Decision(boolean allowed, Reason reason, String channel, LocalDate
          */
         OUTSIDE_WINDOW("outside-window", false),
         /** Refused: a file a delivery's package lists that the document does not have, or has with no digest. */
-        NO_SUCH_FILE("no-such-file", false);
+        NO_SUCH_FILE("no-such-file", false),
+        /**
+         * Refused, since 0.5.0: the rights allow the use, and the policy's watermark requires it marked
+         * for this reader, so the unmarked file is not served; {@code Asset.GetWatermarked} serves it
+         * marked.
+         */
+        WATERMARK_REQUIRED("watermark-required", false),
+        /**
+         * Refused, since 0.5.0: the policy requires the file marked, and it cannot be: not a JPEG, a PNG
+         * or a video, over the watermark's limits, or a video on a server without the video tools.
+         */
+        WATERMARK_UNAVAILABLE("watermark-unavailable", false);
 
         private final String code;
 

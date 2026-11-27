@@ -142,6 +142,7 @@
 }
 
 .record-review__status,
+.record-review__conclusion,
 .record-review__read-only,
 .record-review__hint,
 .record-review__closed-by,
@@ -150,6 +151,12 @@
   font-size: 13px;
   line-height: 1.4;
   color: var(--mat-sys-on-surface-variant);
+}
+
+/* Concluded: the review's last word, said as plainly as the round it ended. */
+.record-review__conclusion {
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
 }
 
 .record-review__actions,

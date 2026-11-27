@@ -75,7 +75,8 @@ class BundleTest {
                 "OSGI-INF/asset-rights-enricher-contrib.xml", "OSGI-INF/share-links-directories.xml",
                 "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml",
                 "OSGI-INF/asset-rights-video-operations-contrib.xml", "OSGI-INF/media-delivery-types.xml",
-                "OSGI-INF/media-delivery-listener.xml"), components);
+                "OSGI-INF/media-delivery-listener.xml", "OSGI-INF/asset-watermark-operations-contrib.xml",
+                "OSGI-INF/asset-review-service.xml", "OSGI-INF/asset-review-listener.xml"), components);
         for (String component : components) {
             byte[] xml = resource(component);
             assertDoesNotThrow(() -> parse(xml),
@@ -96,7 +97,7 @@ class BundleTest {
             collect(xml.getElementsByTagName("operation"), "class", classes);
             collect(xml.getElementsByTagName("listener"), "class", classes);
         }
-        assertEquals(16, classes.size(), classes::toString);
+        assertEquals(23, classes.size(), classes::toString);
         for (String name : classes) {
             assertDoesNotThrow(() -> Class.forName(name), name);
         }
@@ -104,6 +105,46 @@ class BundleTest {
                                                                                        .item(0)
                                                                                        .getTextContent();
         assertTrue(script.contains("\"" + AssetRightsDownloadPermission.class.getName() + "\""), script);
+        // Since 0.5.0, the person downloading, whom a watermark may exempt.
+        assertTrue(script.contains(".allows(Document, XPath, Blob, Reason, Rendition, Infos, CurrentUser)"), script);
+    }
+
+    /**
+     * Since 0.5.0: the review's component has the name and point a kit's review policy targets, the
+     * add-on's permission is registered and shown, and its listener is synchronous, before the commit,
+     * on the events this list names, beside the audit writer, after it. What each does is
+     * AssetReviewTest's, in a runtime.
+     */
+    @Test
+    void theReviewIsHeldByASynchronousListenerAndAPermissionOfItsOwn() throws Exception {
+        org.w3c.dom.Document service = parse(resource("OSGI-INF/asset-review-service.xml"));
+        assertEquals("org.nuxeo.agentic.assets.review", service.getDocumentElement().getAttribute("name"));
+        NodeList points = service.getElementsByTagName("extension-point");
+        assertEquals(1, points.getLength());
+        assertEquals("policies", ((Element) points.item(0)).getAttribute("name"));
+        NodeList permissions = service.getElementsByTagName("permission");
+        assertEquals(1, permissions.getLength());
+        assertEquals("ReviewAsset", ((Element) permissions.item(0)).getAttribute("name"));
+        assertEquals("ReviewAsset", service.getElementsByTagName("item").item(0).getTextContent());
+
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/asset-review-listener.xml"));
+        NodeList listeners = xml.getElementsByTagName("listener");
+        assertEquals(2, listeners.getLength());
+        Element listener = (Element) listeners.item(0);
+        assertEquals("false", listener.getAttribute("async"));
+        assertEquals("false", listener.getAttribute("postCommit"));
+        assertEquals("org.nuxeo.agentic.assets.review.AssetReviewListener", listener.getAttribute("class"));
+        List<String> events = new ArrayList<>();
+        NodeList named = listener.getElementsByTagName("event");
+        for (int i = 0; i < named.getLength(); i++) {
+            events.add(named.item(i).getTextContent());
+        }
+        assertEquals(List.of("aboutToCreate", "documentCreated", "beforeDocumentModification", "aboutToRemove",
+                "documentTrashed", "aboutToMove", "aboutToCopy", "aboutToImport"), events);
+        Element writer = (Element) listeners.item(1);
+        assertEquals("true", writer.getAttribute("async"));
+        assertEquals("true", writer.getAttribute("postCommit"));
+        assertEquals("assetReviewDecided", writer.getElementsByTagName("event").item(0).getTextContent());
     }
 
     private static void collect(NodeList elements, String attribute, List<String> into) {
@@ -154,7 +195,8 @@ class BundleTest {
         assertEquals(0, doctype.getElementsByTagName("facet").getLength());
         // The filed three, the server's three, and each delivered file's fields.
         assertEquals(List.of("version", "distributor", "territory", "deliveredAt", "deliveredBy", "files", "file", "use",
-                "name", "channel", "filename", "mimeType", "length", "digest"), fields("schemas/media_delivery.xsd"));
+                "name", "channel", "filename", "mimeType", "length", "digest", "watermarked", "watermarkedFor",
+                "watermark", "watermarkedFile"), fields("schemas/media_delivery.xsd"));
     }
 
     /** package.xml's version is the module's property, and the manifest's Bundle-Version repeats it. */

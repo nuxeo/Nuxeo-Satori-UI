@@ -5,11 +5,17 @@
  *
  *   4.1 A reviewer places a pin on the picture with a note; it is drawn where they clicked, and
  *       listed beside the picture. Choosing a pin in the list highlights it on the picture.
- *   4.2 Round 1 is closed and round 2 opens; round 1's pins stay, marked as past.
+ *   4.2 Round 1 is sent back and round 2 opens; round 1's pins stay, marked as past.
  *   4.3 A pin placed with the keyboard alone, in round 2, and the pins reached by keyboard.
  *   4.4 The review is the server's: a reload shows it again, a view drawn at another size keeps
  *       each pin on its point, and the REST API holds the pins and the round as Nuxeo annotations.
  *   4.5 A reader who may not comment sees the pins and is offered no pin.
+ *   4.6 The review is decided on the server (`nuxeo-agentic-assets` 0.5.0): the reviewer, a member
+ *       of creative-review granted ReviewAsset, is offered Send back, Approve and Reject; a holder
+ *       of Write the server does not let decide is offered none; the REST API refuses a decision
+ *       where ReviewAsset is not granted, 403, and one from another account outside the group when
+ *       `REVIEW_WRITER_USER` names one; the reviewer approves, the page says so and offers nothing
+ *       more, the decision is in the asset's audit, and a later one is refused, 409.
  *
  * **It writes only what it creates.** It draws a picture with the kit's `demo/png.mjs`, creates an
  * asset from it in a folder of its own, reviews that asset, and trashes the folder at the end,
@@ -25,7 +31,16 @@
  * What it needs, and refuses to run without (exit 2):
  *
  * - `NUXEO_USER` and `NUXEO_PASS`: someone who may create a folder and a picture in the workspace,
- *   comment on the picture and change it, so that Close round is offered. There is no default.
+ *   and manage its permissions, and a member of the kit's reviewer group, `creative-review`, so
+ *   that the review's decisions are theirs once the file grants that group the add-on's
+ *   `ReviewAsset` on its own folder. There is no default.
+ * - The kit installed with `nuxeo-agentic-assets` 0.5.0: its `AcmeAsset` type, which its review
+ *   policy covers, and the add-on's `assetReview` enricher answering. The platform's `Picture`,
+ *   which no review policy covers, is refused every decision, so it no longer stands in.
+ * - Optionally `REVIEW_WRITER_USER` and `REVIEW_WRITER_PASS`: a second account outside
+ *   `creative-review`, which the file grants Write on its folder, for the server's refusal of a
+ *   holder of Write. Without it, that check is said in a note, and the refusal is checked on an
+ *   asset where `NUXEO_USER` is not granted `ReviewAsset`.
  * - The dev server with `npm run config:dev` serving the kit's asset layout for the type used (the
  *   kit's README, "Seeing it under nx serve", or for `Picture`, "Previewing the asset page").
  * - Picture conversion on the server: the asset's views are waited for, up to a minute.
@@ -38,15 +53,21 @@
  * round's pins marked as past on the picture, in their names and in the list; a pin placed with no
  * pointerdown or mousedown at all, at the place typed; the arrow keys moving among the pins; the
  * annotations the REST API returns, their origin, file, payload and author, the same pins after a
- * real reload, and their notes in the Comments panel. Negative ones: no pin offered to a reader,
- * no Close round before a pin, none of the review's annotations on `file:content`, and no pointer
- * event during the keyboard step, whose positive control is the pointer step's count.
+ * real reload, and their notes in the Comments panel; the reviewer offered the three decisions,
+ * their approval concluding the review, on the page, in the REST API and in the audit. Negative
+ * ones: no pin offered to a reader, no Send back before a pin, none of the review's annotations on
+ * `file:content`, no pointer event during the keyboard step, whose positive control is the
+ * pointer step's count; no decision offered to a holder of Write the server does not let decide,
+ * the server's 403 for a decision where ReviewAsset is not granted, and its 409 after the
+ * approval.
  *
- * Not covered, and said in notes: the server refusing a reader's pin (Nuxeo 2025 accepts an
- * annotation from anyone who may read the record, so hiding the control is not the control), the
- * reader seen through a second account (the kit has no demo people: the record's permissions are
- * answered without Comment and Write in the browser instead), and the package installed from the
- * pipeline (the dev server reads the layout from `config:dev`).
+ * Not covered, and said in notes: the server refusing a reader's pin (Nuxeo 2025 accepts a pin
+ * from anyone who may read the record, so hiding the control is not the control), the reader and
+ * the holder of Write outside the group seen on the page through the record's answers edited in
+ * the browser (the kit has no demo people), a second account's 403 unless `REVIEW_WRITER_USER` is
+ * set, and the package installed from the pipeline (the dev server reads the layout from
+ * `config:dev`). **Not run yet:** no server has `nuxeo-agentic-assets` 0.5.0; on one without it,
+ * the file stops at its precondition, exit 2.
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -69,14 +90,20 @@ export const serverRun = {
   seeds: [],
   runAs: {
     users: [],
-    who: 'someone who may create a folder and a picture in the workspace, comment on the picture and change it',
+    who: 'a member of creative-review who may create a folder and a picture in the workspace and manage its permissions',
   },
   signsInAs: [],
   needs: [
     'picture conversion on the server',
-    "the dev server with `npm run config:dev` serving the kit's asset layout for the type used",
+    "the dev server with `npm run config:dev` serving the kit's asset layout for AcmeAsset",
+    'nuxeo-agentic-assets 0.5.0 and the kit with its review policy installed',
+    'optionally REVIEW_WRITER_USER and REVIEW_WRITER_PASS, an account outside creative-review',
   ],
 };
+
+/** The kit's reviewer group, which its review policy names, and the add-on's permission. */
+const REVIEWERS = 'creative-review';
+const REVIEW_PERMISSION = 'ReviewAsset';
 
 /** The review's own annotations, as `picture-review.ts` writes them. */
 const REVIEW_XPATH = 'picture:views';
@@ -193,6 +220,12 @@ function readReview(page) {
         })),
         add: root.querySelector('.record-review__add') !== null,
         close: root.querySelector('.record-review__close')?.textContent?.trim() ?? null,
+        approve: root.querySelector('.record-review__approve') !== null,
+        reject: root.querySelector('.record-review__reject') !== null,
+        conclusion: root.querySelector('.record-review__conclusion')?.textContent?.trim() ?? null,
+        decision:
+          root.querySelector('.record-review__conclusion')?.getAttribute('data-decision') ?? null,
+        error: root.querySelector('.record-review__error')?.textContent?.trim() || null,
         readOnly: root.querySelector('.record-review__read-only')?.textContent?.trim() ?? null,
       };
     })
@@ -204,7 +237,8 @@ async function reviewSettled(page, { pins = null } = {}) {
   await page
     .waitForFunction(
       (count) =>
-        document.querySelector('.record-review__status') !== null &&
+        (document.querySelector('.record-review__status') ??
+          document.querySelector('.record-review__conclusion')) !== null &&
         document
           .querySelector('.record-picture__image')
           ?.getAttribute('src')
@@ -339,6 +373,46 @@ export default async function run(page, h) {
       `upload ${uploaded?.status() ?? 'not answered'}`,
     );
 
+    // The review is decided on the server: the kit's type, its reviewer group, and the add-on's
+    // permission, which this file grants that group on its own folder, as the kit's seed grants it
+    // on the kit's assets folder.
+    h.requirePrecondition(
+      "the kit's AcmeAsset type is on the server: its review policy covers no other",
+      type === 'AcmeAsset',
+      'the package is not installed: the platform Picture is refused every decision',
+    );
+    const me = await json(await page.request.get(api(`/user/${username}`)).catch(unread));
+    const groups = [
+      ...(me?.properties?.groups ?? []),
+      ...(me?.extendedGroups ?? []).map((group) => group?.name),
+    ];
+    h.requirePrecondition(
+      `${username} is in the kit's reviewer group, ${REVIEWERS}`,
+      groups.includes(REVIEWERS),
+      `their groups: ${JSON.stringify(groups)}`,
+    );
+    const granted = await page.request
+      .post(api('/automation/Document.AddPermission'), {
+        data: { input: scratch, params: { users: [REVIEWERS], permission: REVIEW_PERMISSION } },
+      })
+      .catch(unread);
+    const reviewAnswer = async (uid) =>
+      (
+        await json(
+          await page.request
+            .get(api(`/id/${uid}`), {
+              headers: { properties: 'dublincore', 'enrichers.document': 'assetReview' },
+            })
+            .catch(unread),
+        )
+      )?.contextParameters?.assetReview ?? null;
+    const mayDecide = await reviewAnswer(asset.uid);
+    h.requirePrecondition(
+      `${REVIEW_PERMISSION} granted to ${REVIEWERS} on the run's folder, and the server's assetReview lets ${username} decide`,
+      granted?.ok() === true && mayDecide?.mayDecide === true,
+      `grant ${granted?.status() ?? 'not answered'}, assetReview ${JSON.stringify(mayDecide)}: is nuxeo-agentic-assets 0.5.0 installed?`,
+    );
+
     // Nuxeo makes the views a moment after the upload; the asset page shows them when it has them.
     let views = [];
     for (let waited = 0; waited < 60_000 && views.length < 2; waited += 1000) {
@@ -373,12 +447,14 @@ export default async function run(page, h) {
       .catch(deferred);
     const empty = await readReview(page);
     h.check(
-      'the asset page shows its picture as a review, round 1 open, with no pin and no Close round yet',
+      'the asset page shows its picture as a review, round 1 open, with no pin and no Send back yet, and Approve and Reject for its reviewer',
       empty?.round === 1 &&
         empty.status === 'Round 1 is open' &&
         empty.pins.length === 0 &&
         empty.add &&
         empty.close === null &&
+        empty.approve &&
+        empty.reject &&
         empty.src?.startsWith('blob:'),
       JSON.stringify(empty),
     );
@@ -439,8 +515,11 @@ export default async function run(page, h) {
     await h.screenshot('review-round-1-two-pins');
 
     // ── 4.2 A second round ─────────────────────────────────────────────────────────────────────
-    await h.step('4.2 Round 1 closed and round 2 opened; round 1 pins stay, marked as past');
-    h.check('Close round 1 is offered once round 1 has a pin', chosen?.close === 'Close round 1');
+    await h.step('4.2 Round 1 sent back and round 2 opened; round 1 pins stay, marked as past');
+    h.check(
+      'Send back round 1 is offered to the reviewer once round 1 has a pin',
+      chosen?.close === 'Send back round 1',
+    );
     await page.locator('.record-review__close').click().catch(deferred);
     await page
       .waitForFunction(
@@ -624,7 +703,7 @@ export default async function run(page, h) {
       { kind: 'pin', round: 1, x: FIRST.x, y: FIRST.y, text: FIRST.note },
       { kind: 'pin', round: 2, x: TYPED.across / 100, y: TYPED.down / 100, text: TYPED.note },
       { kind: 'pin', round: 1, x: SECOND.x, y: SECOND.y, text: SECOND.note },
-      { kind: 'round-closed', round: 1, text: 'Round 1 closed' },
+      { kind: 'round-closed', round: 1, text: 'Round 1 sent back' },
     ];
     h.check(
       `the REST API holds three pins and a round's close, as annotations on ${REVIEW_XPATH} by ${username}`,
@@ -680,8 +759,8 @@ export default async function run(page, h) {
       .evaluate(() => document.querySelector('nxs-comments')?.textContent ?? null)
       .catch(unread);
     h.check(
-      "the asset's Comments panel lists each pin's note, and the round's close",
-      [FIRST.note, SECOND.note, TYPED.note, 'Round 1 closed'].every((text) =>
+      "the asset's Comments panel lists each pin's note, and the round sent back",
+      [FIRST.note, SECOND.note, TYPED.note, 'Round 1 sent back'].every((text) =>
         thread?.includes(text),
       ),
       thread === null ? 'no comments panel' : thread.replace(/\s+/g, ' ').slice(0, 400),
@@ -729,14 +808,23 @@ export default async function run(page, h) {
     await h.step(
       '4.5 A reader sees the pins and is offered no pin; a holder of Comment, a pin only',
     );
-    // The record's own answer, with the permissions a reader has: a check of the page, not of the
-    // server, which is said in a note.
+    // The record's own answer, with the permissions a reader has, and the server's review saying
+    // they may not decide: a check of the page, not of the server, which is said in a note.
     const isRecord = (url) => new URL(url).pathname === `/nuxeo/api/v1/id/${asset.uid}`;
+    const notAReviewer = (body) => {
+      if (body?.contextParameters?.assetReview)
+        body.contextParameters.assetReview = {
+          ...body.contextParameters.assetReview,
+          mayDecide: false,
+          reason: 'not-a-reviewer',
+        };
+    };
     const asReader = async (route) => {
       const answer = await route.fetch();
       const body = await answer.json().catch(unread);
       if (body?.contextParameters)
         body.contextParameters.permissions = ['Read', 'Browse', 'ReadProperties', 'ReadChildren'];
+      notAReviewer(body);
       await route.fulfill({ response: answer, json: body });
     };
     await page.route(isRecord, asReader);
@@ -745,23 +833,26 @@ export default async function run(page, h) {
     const reader = await readReview(page);
     await page.unroute(isRecord, asReader);
     h.check(
-      'a reader sees the three pins and their list, with no Add a pin and no Close round',
+      'a reader sees the three pins and their list, with no Add a pin and no decision',
       reader?.pins.length === 3 &&
         reader.rounds.flatMap((round) => round.entries).length === 3 &&
         !reader.add &&
         reader.close === null &&
+        !reader.approve &&
+        !reader.reject &&
         reader.readOnly === 'You can see the pins, but not add one.',
       JSON.stringify({ add: reader?.add, close: reader?.close, readOnly: reader?.readOnly }),
     );
     await h.screenshot('review-reader-no-pin-offered');
 
-    // And a holder of Comment, not Write: offered a pin, not Close round. The same edit of the
+    // And a holder of Comment, not Write: offered a pin, no decision. The same edit of the
     // record's answer in the browser, a check of the page alone.
     const asCommenter = async (route) => {
       const answer = await route.fetch();
       const body = await answer.json().catch(unread);
       if (body?.contextParameters)
         body.contextParameters.permissions = ['Read', 'Browse', 'ReadProperties', 'Comment'];
+      notAReviewer(body);
       await route.fulfill({ response: answer, json: body });
     };
     await page.route(isRecord, asCommenter);
@@ -770,10 +861,11 @@ export default async function run(page, h) {
     const commenter = await readReview(page);
     await page.unroute(isRecord, asCommenter);
     h.check(
-      'a holder of Comment, not Write, is offered Add a pin and not Close round',
+      'a holder of Comment, not Write, is offered Add a pin and no decision',
       commenter?.pins.length === 3 &&
         commenter.add &&
         commenter.close === null &&
+        !commenter.approve &&
         commenter.readOnly === null,
       JSON.stringify({
         add: commenter?.add,
@@ -782,18 +874,208 @@ export default async function run(page, h) {
       }),
     );
 
+    // ── 4.6 Decided on the server ──────────────────────────────────────────────────────────────
+    await h.step(
+      '4.6 The review is decided on the server: who is offered what, and who is refused',
+    );
+    // The record and its review as the server answers them, no longer edited in the browser.
+    await page.reload({ waitUntil: 'networkidle' }).catch(deferred);
+    await reviewSettled(page, { pins: 3 });
+    const reviewer = await readReview(page);
+    h.check(
+      'the reviewer, a member of creative-review granted ReviewAsset, is offered Send back, Approve and Reject',
+      reviewer?.close === 'Send back round 2' && reviewer.approve && reviewer.reject,
+      JSON.stringify({
+        close: reviewer?.close,
+        approve: reviewer?.approve,
+        reject: reviewer?.reject,
+      }),
+    );
+    // A holder of Write the server does not let decide: the record's own permissions, Write
+    // included, and the server's review answering not-a-reviewer. A check of the page alone.
+    const asWriter = async (route) => {
+      const answer = await route.fetch();
+      const body = await answer.json().catch(unread);
+      notAReviewer(body);
+      await route.fulfill({ response: answer, json: body });
+    };
+    await page.route(isRecord, asWriter);
+    await page.reload({ waitUntil: 'networkidle' }).catch(deferred);
+    await reviewSettled(page, { pins: 3 });
+    const writer = await readReview(page);
+    await page.unroute(isRecord, asWriter);
+    h.check(
+      'a holder of Write the server does not let decide is offered a pin and none of the three decisions',
+      writer?.add === true && writer.close === null && !writer.approve && !writer.reject,
+      JSON.stringify({ add: writer?.add, close: writer?.close, approve: writer?.approve }),
+    );
+
+    // The server's own refusal: a decision on an asset where ReviewAsset is not granted, in a folder
+    // of the run's own whose inheritance is blocked, though the reviewer holds Everything there.
+    const sealed = await json(
+      await page.request
+        .post(api(`/id/${scratch}`), {
+          data: {
+            'entity-type': 'document',
+            type: 'Folder',
+            name: 'sealed',
+            properties: { 'dc:title': 'No ReviewAsset here' },
+          },
+        })
+        .catch(unread),
+    );
+    const blocked = sealed?.uid
+      ? await page.request
+          .post(api('/automation/Document.AddPermission'), {
+            data: {
+              input: sealed.uid,
+              params: { users: [username], permission: 'Everything', blockInheritance: true },
+            },
+          })
+          .catch(unread)
+      : null;
+    const elsewhere = blocked?.ok()
+      ? await json(
+          await page.request
+            .post(api(`/id/${sealed.uid}`), {
+              data: {
+                'entity-type': 'document',
+                type,
+                name: 'summit-shell-sealed',
+                properties: { 'dc:title': `${DRAFT.title}, sealed` },
+              },
+            })
+            .catch(unread),
+        )
+      : null;
+    const decision = (round, word) =>
+      JSON.stringify({ kind: 'decision', version: 1, round, decision: word });
+    const annotate = (uid, entity, headers = {}) =>
+      page.request
+        .post(api(`/id/${uid}/@annotation`), {
+          headers,
+          data: {
+            'entity-type': 'annotation',
+            parentId: uid,
+            xpath: REVIEW_XPATH,
+            text: 'Approved in round 1',
+            origin: REVIEW_ORIGIN,
+            entity,
+          },
+        })
+        .catch(unread);
+    const refusedElsewhere = elsewhere?.uid
+      ? await annotate(elsewhere.uid, decision(1, 'approved'))
+      : null;
+    h.check(
+      'the REST API refuses a decision, 403, on an asset where ReviewAsset is not granted, whatever else the reviewer holds there',
+      refusedElsewhere?.status() === 403 &&
+        (await reviewAnswer(elsewhere.uid))?.mayDecide === false,
+      `answered ${refusedElsewhere?.status() ?? 'nothing'}`,
+    );
+
+    // A second account outside creative-review, granted Write on the run's folder, when one is named.
+    const writerUser = process.env['REVIEW_WRITER_USER'];
+    const writerPass = process.env['REVIEW_WRITER_PASS'];
+    if (writerUser && writerPass) {
+      await page.request
+        .post(api('/automation/Document.AddPermission'), {
+          data: { input: scratch, params: { users: [writerUser], permission: 'ReadWrite' } },
+        })
+        .catch(unread);
+      const basic = `Basic ${Buffer.from(`${writerUser}:${writerPass}`).toString('base64')}`;
+      const refusedWriter = await annotate(asset.uid, decision(2, 'approved'), {
+        Authorization: basic,
+      });
+      h.check(
+        `the REST API refuses ${writerUser}'s decision, a holder of Write outside creative-review, 403`,
+        refusedWriter?.status() === 403,
+        `answered ${refusedWriter?.status() ?? 'nothing'}`,
+      );
+    } else {
+      h.note(
+        "a second account's decision is not checked: set REVIEW_WRITER_USER and REVIEW_WRITER_PASS " +
+          'to an account outside creative-review; the refusal is checked where ReviewAsset is not granted',
+      );
+    }
+
+    // The reviewer approves: the page says so, and offers no decision after it.
+    await page.reload({ waitUntil: 'networkidle' }).catch(deferred);
+    await reviewSettled(page, { pins: 3 });
+    await page.locator('.record-review__approve').click().catch(deferred);
+    await page
+      .waitForFunction(
+        () => document.querySelector('.record-review__conclusion') !== null,
+        undefined,
+        {
+          timeout: 15_000,
+        },
+      )
+      .catch(deferred);
+    const approved = await readReview(page);
+    h.check(
+      `the reviewer's approval concludes the review: Approved by ${username}, and no decision offered after it`,
+      approved?.decision === 'approved' &&
+        approved.conclusion?.startsWith(`Approved by ${username}`) &&
+        approved.close === null &&
+        !approved.approve &&
+        !approved.reject,
+      JSON.stringify({ conclusion: approved?.conclusion, close: approved?.close }),
+    );
+    await h.screenshot('review-approved-on-the-server');
+    const after = await json(
+      await page.request
+        .get(api(`/id/${asset.uid}/@annotation?xpath=${encodeURIComponent(REVIEW_XPATH)}`))
+        .catch(unread),
+    );
+    const decided = (after?.entries ?? []).filter((entry) => {
+      try {
+        return entry.origin === REVIEW_ORIGIN && JSON.parse(entry.entity).kind === 'decision';
+      } catch {
+        return false;
+      }
+    });
+    h.check(
+      `the REST API holds one decision, approved, by ${username}`,
+      decided.length === 1 &&
+        decided[0].author === username &&
+        JSON.parse(decided[0].entity).decision === 'approved',
+      JSON.stringify(decided),
+    );
+    // Written to the platform's audit in the background, after the commit: asked a few times.
+    let audited = [];
+    for (let waited = 0; waited < 15_000 && audited.length < 2; waited += 1000) {
+      const audit = await json(
+        await page.request.get(api(`/id/${asset.uid}/@audit`)).catch(unread),
+      );
+      audited = (audit?.entries ?? []).filter((entry) => entry.eventId === 'assetReviewDecided');
+      if (audited.length < 2) await page.waitForTimeout(1000);
+    }
+    h.check(
+      "the asset's audit holds the send back and the approval, each by the reviewer",
+      audited.length === 2 && audited.every((entry) => entry.principalName === username),
+      JSON.stringify(audited.map((entry) => [entry.eventId, entry.principalName, entry.comment])),
+    );
+    const late = await annotate(asset.uid, decision(2, 'rejected'));
+    h.check(
+      'a decision after the approval is refused, 409, and the review stays approved',
+      late?.status() === 409,
+      `answered ${late?.status() ?? 'nothing'}`,
+    );
+
     // ── Health ─────────────────────────────────────────────────────────────────────────────────
     await h.step('Health');
     h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
     h.note(
       "the server's refusal of a reader's pin is not checked: Nuxeo 2025's comment service " +
-        'accepts an annotation from anyone who may read the record, so Add a pin hidden from a ' +
-        'reader is the page, not a security control',
+        'accepts a pin from anyone who may read the record, so Add a pin hidden from a reader is ' +
+        "the page, not a security control. The review's decisions are the server's: 4.6",
     );
     h.note(
-      'the reader is the record answered without Comment and Write in the browser, not a second ' +
-        'account: the kit creates no people',
+      'the reader, the holder of Comment and the holder of Write outside the group are the ' +
+        "record's answers edited in the browser, not second accounts: the kit creates no people",
     );
+
     h.note(
       `the asset was of the type ${type}, and its layout came from config:dev, not from an installed package`,
     );

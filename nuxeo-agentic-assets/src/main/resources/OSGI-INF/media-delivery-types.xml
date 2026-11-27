@@ -6,8 +6,10 @@
     territory. A person files one, naming the version, the distributor and the territory, wherever
     they may add a document; the delivery listener decides its files by the version's rights policy,
     refuses it whole when any is outside its release window or its territory, and otherwise writes
-    what was delivered, when and by whom. A delivery holds no file: it records the files the version
-    held, by their digests. No Versionable facet: a delivery is never checked in or restored.
+    what was delivered, when and by whom. It records the files the version held, by their digests,
+    and holds none of them; since 0.5.0, it holds each file the version's watermark marks for
+    deliveries, marked for its distributor and naming its filer. No Versionable facet: a delivery
+    is never checked in or restored.
   </documentation>
 
   <require>org.nuxeo.ecm.core.CoreExtensions</require>

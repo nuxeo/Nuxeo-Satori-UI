@@ -5,6 +5,7 @@ package org.nuxeo.agentic.assets.delivery;
 
 import java.io.Serializable;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
@@ -21,6 +22,9 @@ import org.nuxeo.agentic.assets.rights.AssetRightsService;
 import org.nuxeo.agentic.assets.rights.AssetRightsService.DeliveryDecision;
 import org.nuxeo.agentic.assets.rights.AssetRightsService.PackageFile;
 import org.nuxeo.agentic.assets.rights.Decision;
+import org.nuxeo.agentic.assets.rights.RightsPolicy;
+import org.nuxeo.agentic.assets.rights.Watermark;
+import org.nuxeo.agentic.assets.watermark.AssetWatermarks;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -42,6 +46,12 @@ import org.nuxeo.runtime.api.Framework;
  * missing: the answer is 403, its code the first refused file's reason, its message every refused
  * file's, and nothing is made. Otherwise the server writes what was delivered, file by file with
  * its digest, when and by whom, over anything the filer wrote there.
+ *
+ * <p>Since 0.5.0, each file the version's watermark marks for deliveries is marked for the
+ * distributor, the text naming them as its {@code recipient}, the filer as its {@code user}, the day
+ * and the territory; the delivery records, for each file, whether it was marked, for whom and with
+ * what text, and holds the file marked. One that cannot be marked, such as a video on a server
+ * without ffmpeg, refuses the delivery whole, 403 {@code watermark-unavailable}.
  */
 public class Deliveries {
 
@@ -145,6 +155,12 @@ public class Deliveries {
                     versionId, territory, files);
             throw new DeliveryRefusal(403, code, "The delivery to " + territory + " is refused whole: " + files + ".");
         }
+        // Since 0.5.0: each file the version's watermark marks for deliveries, marked for the
+        // distributor, and held by the delivery; one that cannot be refuses the delivery whole.
+        RightsPolicy policy = service.policyFor(version.getType());
+        Watermark watermark = policy == null ? null : policy.watermark();
+        LocalDate today = service.today();
+        List<String> unmarkable = new ArrayList<>();
         List<Map<String, Serializable>> files = new ArrayList<>();
         for (PackageFile file : decided.files()) {
             Blob blob = file.blob();
@@ -156,7 +172,27 @@ public class Deliveries {
             entry.put("mimeType", blob.getMimeType());
             entry.put("length", blob.getLength());
             entry.put("digest", blob.getDigest());
+            boolean marks = watermark != null && watermark.marks(Watermark.Occasion.DELIVERY, file.use());
+            entry.put("watermarked", marks);
+            if (marks) {
+                String text = watermark.text(distributor, principal.getName(), today, territory);
+                try {
+                    Blob marked = AssetWatermarks.mark(blob, text, watermark.placement());
+                    entry.put("watermarkedFor", distributor);
+                    entry.put("watermark", text);
+                    entry.put("watermarkedFile", (Serializable) marked);
+                } catch (AssetWatermarks.Unavailable e) {
+                    log.info("Media deliveries: the {} of {} could not be marked for {}: {}", file.use(), versionId,
+                            territory, e.getMessage());
+                    unmarkable.add(file.use().toString());
+                }
+            }
             files.add(entry);
+        }
+        if (!unmarkable.isEmpty()) {
+            throw new DeliveryRefusal(403, Decision.Reason.WATERMARK_UNAVAILABLE.code(),
+                    "The delivery to " + territory + " is refused whole: " + String.join("; ", unmarkable)
+                            + " cannot be marked as the version's rights require.");
         }
         GregorianCalendar now = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
         now.setTimeInMillis(clock.millis());

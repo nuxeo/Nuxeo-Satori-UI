@@ -29,6 +29,7 @@ import {
 } from '@nuxeo/satori-platform/components';
 import {
   DocumentDetailService,
+  type AssetReviewAnswer,
   type NuxeoAnnotation,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -38,6 +39,7 @@ import {
   MAX_NOTE_LENGTH,
   REVIEW_ORIGIN,
   REVIEW_XPATH,
+  decisionPayload,
   fromAnnotationDocument,
   fromCreatedAnnotation,
   percent,
@@ -48,6 +50,7 @@ import {
   toFraction,
   type PictureReview,
   type ReviewAnnotation,
+  type ReviewDecision,
   type ReviewPin,
   type ReviewRound,
 } from './picture-review';
@@ -68,6 +71,15 @@ interface RoundShown {
   readonly round: ReviewRound;
   readonly open: boolean;
   readonly pins: readonly ReviewPin[];
+}
+
+/** What a write was for: a pin, a round sent back, or the review decided. */
+type Write = 'pin' | 'close' | 'decide';
+
+/** The server's review enricher's answer for a record: what it lets the reader decide. */
+interface Answered {
+  readonly uid: string;
+  readonly answer: AssetReviewAnswer | null;
 }
 
 /** A pin being placed: where, as fractions of the view, from a click or the form. */
@@ -91,13 +103,19 @@ let nextId = 0;
  *   picture as they change. The note is required. Both are offered only while a view is shown.
  * - **After each write the record's annotations are read again,** quietly, so that a round someone
  *   else closed meanwhile, and their pins, show; the answer to the write shows until then.
- * - **Rounds.** A pin goes into the round open now. Closing it opens the next; the pins of a
- *   closed round stay, marked as past, on the picture and in the list.
+ * - **Rounds.** A pin goes into the round open now. Sending it back closes it and opens the next;
+ *   the pins of a closed round stay, marked as past, on the picture and in the list.
+ * - **Decisions,** Send back, Approve and Reject, are offered only to a reader the server's
+ *   `assetReview` enricher says may decide (`nuxeo-agentic-assets` 0.5.0), and none once the review
+ *   is approved or rejected, which the page then says. The server holds each to its `ReviewAsset`
+ *   permission and the review policy's groups, and refuses anyone else: a refusal is said where the
+ *   decision was asked, and the review read again.
  * - **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys move between
  *   them, in the order they were placed, and choose the one reached. Each one's name says its
  *   number, its round, its place and its note. A chosen pin pressed again is no longer chosen.
- * - **What it offers is not a control** (`reviewOffers`): the server decides what it accepts, and
- *   Nuxeo 2025 accepts an annotation from anyone who may read the record.
+ * - **What it offers is not a control** (`reviewOffers`): the server decides what it accepts. It
+ *   holds decisions to the add-on's permission; Nuxeo 2025 accepts a pin from anyone who may read
+ *   the record.
  */
 @Component({
   selector: 'lib-record-picture-review',
@@ -119,7 +137,7 @@ let nextId = 0;
 })
 export class RecordPictureReviewComponent {
   readonly document = input.required<NuxeoDocument>();
-  /** Shows the pins without a way to add one or close a round, as the designer's preview does. */
+  /** Shows the pins without a way to add one or decide the review, as the designer's preview does. */
   readonly readOnly = input(false);
   /** The heading level of the picture's empty and error states, as `lib-record-picture-views` takes it. */
   readonly stateHeadingLevel = input<NxsHeadingLevel>(3);
@@ -146,9 +164,17 @@ export class RecordPictureReviewComponent {
   /** Whether a view of the picture is shown: what a pin is placed on. */
   protected readonly pictureShown = computed(() => (this.views()?.imageUrl() ?? null) !== null);
   private readonly loaded = signal<Loaded | null>(null);
+  /** The server's review enricher's answer for the record shown; another record's is never used. */
+  private readonly answered = signal<Answered | null>(null);
+  private readonly answer = computed(() => {
+    const answered = this.answered();
+    return answered && answered.uid === this.uid() ? answered.answer : null;
+  });
 
-  /** What the signed-in user is offered, from the record's permissions: see `reviewOffers`. */
-  protected readonly offers = computed(() => reviewOffers(this.document(), this.readOnly()));
+  /** What the signed-in user is offered, from the record's permissions and the server: see `reviewOffers`. */
+  protected readonly offers = computed(() =>
+    reviewOffers(this.document(), this.readOnly(), this.answer()),
+  );
 
   /** The state of the record shown now; another record's, still answering, is never shown. */
   protected readonly state = computed<Loaded>(() => {
@@ -163,6 +189,8 @@ export class RecordPictureReviewComponent {
 
   protected readonly pins = computed(() => this.review()?.pins ?? []);
   protected readonly round = computed(() => this.review()?.round ?? 1);
+  /** The review's approval or rejection, once there is one. */
+  protected readonly conclusion = computed(() => this.review()?.conclusion ?? null);
 
   /** The rounds, the open one first, each with its pins. */
   protected readonly rounds = computed<readonly RoundShown[]>(() => {
@@ -175,9 +203,14 @@ export class RecordPictureReviewComponent {
     }));
   });
 
-  /** Close round is offered once the open round has a pin. */
+  /** Approve and Reject: to a reader the server lets decide, while the review is not concluded. */
+  protected readonly decidable = computed(
+    () => this.offers().decide && this.review() !== null && this.conclusion() === null,
+  );
+
+  /** Send back is offered with them, once the open round has a pin. */
   protected readonly closable = computed(
-    () => this.offers().close && this.pins().some((pin) => pin.round === this.round()),
+    () => this.decidable() && this.pins().some((pin) => pin.round === this.round()),
   );
 
   private readonly chosenId = signal<string | null>(null);
@@ -212,6 +245,24 @@ export class RecordPictureReviewComponent {
         takeUntilDestroyed(),
       )
       .subscribe((loaded) => this.loaded.set(loaded));
+    // What the server lets the reader decide, asked once a record and again on Retry. A server
+    // without the review's add-on, or one that fails to answer, lets no decision be offered.
+    toObservable(this.uid)
+      .pipe(
+        switchMap((uid) =>
+          this.reloads.pipe(
+            startWith(undefined),
+            switchMap(() =>
+              this.documents.fetchAssetReview(uid).pipe(
+                catchError(() => of(null)),
+                map((answer): Answered => ({ uid, answer })),
+              ),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((answered) => this.answered.set(answered));
     this.refreshes
       .pipe(
         switchMap((uid) =>
@@ -376,8 +427,9 @@ export class RecordPictureReviewComponent {
     );
   }
 
+  /** Send back: closes the open round, changes requested, and opens the next. */
   protected closeRound(): void {
-    if (this.saving()) return;
+    if (this.saving() || !this.closable()) return;
     const uid = this.uid();
     const round = this.round();
     this.write(
@@ -404,16 +456,42 @@ export class RecordPictureReviewComponent {
     );
   }
 
+  /** Approve or Reject: concludes the review, in the round open now. */
+  protected decide(decision: ReviewDecision): void {
+    if (this.saving() || !this.decidable()) return;
+    const uid = this.uid();
+    const round = this.round();
+    this.write(
+      this.documents.createAnnotation(uid, {
+        xpath: REVIEW_XPATH,
+        text: this.translate.instant(`document-layouts.review.${decision}-text`, { round }),
+        origin: REVIEW_ORIGIN,
+        entity: decisionPayload(round, decision),
+      }),
+      uid,
+      'decide',
+      () => {
+        // One the review does not read as its conclusion, as after another's, is said.
+        if (this.conclusion()?.decision !== decision) return false;
+        this.announcer.announce(this.translate.instant(`document-layouts.review.${decision}`));
+        this.focus(`${this.id}-heading`);
+        return true;
+      },
+    );
+  }
+
   /**
    * One write, its answer added to what the review was read from, so that the review shows it at
    * once, read as any other annotation is, and then the record's annotations read again. Dropped
    * when the record changed while it was answered. `done` says whether the answer did what it was
-   * for; when it did not, the failure is said.
+   * for; when it did not, the failure is said. A decision the server refused is said as its
+   * refusal, 403 one the reader may not make, 409 a review already concluded, and the review is
+   * read again, so that what someone else decided meanwhile shows.
    */
   private write(
     request: Observable<NuxeoAnnotation>,
     uid: string,
-    what: 'pin' | 'close',
+    what: Write,
     done: (created: NuxeoAnnotation) => boolean,
   ): void {
     this.saving.set(true);
@@ -435,12 +513,17 @@ export class RecordPictureReviewComponent {
         this.saving.set(false);
         if (this.uid() !== uid) return;
         // A 401 is a session that ended, not a refusal: it says the write failed.
-        const refused = failure instanceof HttpErrorResponse && failure.status === 403;
-        this.writeError.set(
-          this.translate.instant(
-            `document-layouts.review.error.${what}${refused ? '-forbidden' : ''}`,
-          ),
-        );
+        const status = failure instanceof HttpErrorResponse ? failure.status : 0;
+        const why =
+          status === 403
+            ? '-forbidden'
+            : status === 409 && what !== 'pin'
+              ? '-concluded'
+              : status === 400 && what === 'decide'
+                ? '-invalid'
+                : '';
+        this.writeError.set(this.translate.instant(`document-layouts.review.error.${what}${why}`));
+        if (what !== 'pin') this.refreshes.next(uid);
       },
     });
   }
@@ -458,7 +541,7 @@ export class RecordPictureReviewComponent {
         const { unreadable } = readPictureReview(annotations);
         if (unreadable > 0) {
           console.warn(
-            `[document-layouts] ${unreadable} review annotation(s) of ${uid} left out: neither a pin nor a round's close`,
+            `[document-layouts] ${unreadable} review annotation(s) of ${uid} left out: neither a pin, a round's close nor a decision`,
           );
         }
         return { uid, status: 'loaded', annotations };

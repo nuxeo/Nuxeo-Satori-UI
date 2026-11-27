@@ -13,9 +13,21 @@ import type { NuxeoDocument } from '../models/document.model';
  */
 export const ASSET_RIGHTS_ENRICHER = 'assetRights';
 
-/** Why the server serves or refuses a use: the enricher's codes. */
+/**
+ * Why the server serves or refuses a use: the enricher's codes. Since `nuxeo-agentic-assets` 0.5.0,
+ * two more refuse: `watermark-required`, a use the rights allow and the policy's watermark marks for
+ * this reader, which the download endpoints refuse unmarked and `Asset.GetWatermarked` serves
+ * marked; and `watermark-unavailable`, one that must be marked and cannot be.
+ */
 export type AssetRightsReason =
-  'cleared' | 'preview' | 'rights-ended' | 'channel-not-covered' | 'not-cleared' | 'policy-error';
+  | 'cleared'
+  | 'preview'
+  | 'rights-ended'
+  | 'channel-not-covered'
+  | 'not-cleared'
+  | 'policy-error'
+  | 'watermark-required'
+  | 'watermark-unavailable';
 
 const REASONS: ReadonlySet<string> = new Set<AssetRightsReason>([
   'cleared',
@@ -24,6 +36,8 @@ const REASONS: ReadonlySet<string> = new Set<AssetRightsReason>([
   'channel-not-covered',
   'not-cleared',
   'policy-error',
+  'watermark-required',
+  'watermark-unavailable',
 ]);
 
 /** What a use of an asset is: its original, a picture view, a rendition or another blob. */

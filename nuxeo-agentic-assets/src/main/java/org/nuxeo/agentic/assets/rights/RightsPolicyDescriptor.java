@@ -45,6 +45,16 @@ import org.nuxeo.common.xmap.annotation.XObject;
  * {@code channel}, a {@code from} day and an {@code until} day; with {@code document}, it is read
  * from the document whose id that property of the asset holds, such as a localised version's film.
  *
+ * <p>Since 0.5.0, a policy may require a watermark ({@link Watermark}):
+ *
+ * <pre>
+ * &lt;watermark text="FOR {recipient} · {day}" placement="tiled"&gt;
+ *   &lt;previews /&gt;
+ *   &lt;deliveries&gt;&lt;blob xpath="files:files/2/file" /&gt;&lt;/deliveries&gt;
+ *   &lt;except group="brand-team" /&gt;
+ * &lt;/watermark&gt;
+ * </pre>
+ *
  * {@link RightsPolicy#of} reads it, and decides what a mistake in it means: always a refusal.
  */
 @XObject("policy")
@@ -97,6 +107,10 @@ public class RightsPolicyDescriptor {
     /** The files a delivery of the type carries. */
     @XNode("delivery")
     protected DeliveryDescriptor delivery;
+
+    /** Since 0.5.0, the watermark the policy requires: one at most, a second breaking the policy. */
+    @XNodeList(value = "watermark", type = ArrayList.class, componentType = WatermarkDescriptor.class)
+    protected List<WatermarkDescriptor> watermarks = new ArrayList<>();
 
     public String getType() {
         return type;
@@ -152,5 +166,9 @@ public class RightsPolicyDescriptor {
 
     public DeliveryDescriptor getDelivery() {
         return delivery;
+    }
+
+    public List<WatermarkDescriptor> getWatermarks() {
+        return watermarks;
     }
 }
