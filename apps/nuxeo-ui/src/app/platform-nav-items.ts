@@ -109,6 +109,12 @@ export const ADMINISTRATION_DRAWER_ITEMS: DrawerLinkItem[] = [
     label: 'Layout Designer',
     path: LAYOUT_DESIGNER_PATH,
   },
+  // Administrators only too: the server answers its report to no one else.
+  {
+    labelKey: 'drawer.administration-diagnostics',
+    label: 'Diagnostics',
+    path: '/administration/diagnostics',
+  },
 ];
 
 /** Limited administration menu for `powerusers` (matches classic Web UI). */
