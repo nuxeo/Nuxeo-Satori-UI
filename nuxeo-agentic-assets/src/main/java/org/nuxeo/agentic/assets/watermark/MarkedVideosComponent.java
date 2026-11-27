@@ -223,12 +223,10 @@ public class MarkedVideosComponent extends DefaultComponent implements MarkedVid
             Copy copy = inTransaction(() -> CoreInstance.doPrivileged(order.repository(),
                     (Function<CoreSession, Copy>) privileged -> WatermarkedCopies.find(privileged, key)));
             if (copy != null && !matches(copy, order)) {
-                // Its key is the order's, and it does not say what the order asks: never served, and
-                // dropped, so that the job makes the order's.
-                log.error("Asset rights: the copy {} kept under {} does not match its order: dropped, not served",
-                        copy.id(), brief(key));
-                inTransaction(() -> CoreInstance.doPrivileged(order.repository(),
-                        (Function<CoreSession, Boolean>) privileged -> WatermarkedCopies.remove(privileged, copy.id())));
+                // Its key is the order's, and it does not say what the order asks: never served. The
+                // job drops it and makes the order's, holding the key's lease: the request writes nothing.
+                log.error("Asset rights: the copy {} kept under {} does not match its order: not served, and"
+                        + " replaced", copy.id(), brief(key));
                 return queue(order, key, digest);
             }
             if (copy != null && fresh(copy)) {
@@ -444,7 +442,7 @@ public class MarkedVideosComponent extends DefaultComponent implements MarkedVid
             return;
         }
         boolean kept = inTransaction(() -> CoreInstance.doPrivileged(job.repository(),
-                (Function<CoreSession, Boolean>) privileged -> freshCopy(privileged, job.key())));
+                (Function<CoreSession, Boolean>) privileged -> freshCopy(privileged, job)));
         if (kept) {
             return;
         }
@@ -489,7 +487,7 @@ public class MarkedVideosComponent extends DefaultComponent implements MarkedVid
                                 job.document());
                         return null;
                     }
-                    if (!freshCopy(privileged, job.key())) {
+                    if (!freshCopy(privileged, job)) {
                         WatermarkedCopies.keep(privileged, job, marked, clock.millis());
                     }
                     sweep(privileged, job);
@@ -499,17 +497,30 @@ public class MarkedVideosComponent extends DefaultComponent implements MarkedVid
                 whom(job.recipient(), job.user()), brief(job.key()));
     }
 
-    /** Whether a copy within its days is kept under {@code key}; one past them is removed. */
-    private boolean freshCopy(CoreSession privileged, String key) {
-        Copy copy = WatermarkedCopies.find(privileged, key);
+    /**
+     * Whether a copy within its days, saying what the job asks, is kept under its key; one past its
+     * days, or that does not say so, or has no file, is removed, so that the job makes the job's.
+     */
+    private boolean freshCopy(CoreSession privileged, Job job) {
+        Copy copy = WatermarkedCopies.find(privileged, job.key());
         if (copy == null) {
             return false;
         }
-        if (fresh(copy)) {
+        if (fresh(copy) && matches(copy, job)) {
             return true;
         }
         WatermarkedCopies.remove(privileged, copy.id());
         return false;
+    }
+
+    /**
+     * Whether a copy says what {@code job} asks: a file, the job's digest, watermark, purpose and text.
+     * The person and the territory are the key's where the text names them, and no one's otherwise.
+     */
+    static boolean matches(Copy copy, Job job) {
+        return copy.file() != null && copy.file().getLength() != 0 && copy.digest().equals(job.digest())
+                && copy.fingerprint().equals(job.fingerprint()) && copy.purpose().equals(job.purpose())
+                && copy.watermark().equals(job.text());
     }
 
     /**

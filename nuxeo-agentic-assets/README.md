@@ -1246,7 +1246,7 @@ the video test ran with this machine's ffmpeg 8, and is skipped where there is n
 **The long videos' guards were seen failing too,** on 27 November 2026: 43 breakages, made one at a
 time, and every one turned the tests red; the build unbroken was green. **The request, 14:** the
 bytes set not read; the seconds set not read; every video marked in the request; a kept copy not
-looked for; a copy not held to what it records; one that does not match its key left in place; the
+looked for; a copy not held to what it records; one that does not match its job kept by the job; the
 person, the file's digest or the watermark left out of the key; a kept failure not answered; a job
 queued whatever is queued; a marker queued long ago never queued again; a long video read by
 ffprobe at every ask; the video tools' availability not asked. **The job, 10:** the lease not taken;

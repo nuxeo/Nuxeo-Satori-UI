@@ -374,6 +374,8 @@ public class VideoWatermarkBackgroundTest {
             return null;
         });
         commit();
+        // The platform's own work on the edited copy, as its text's extraction, done first.
+        awaitJobs();
         assertEquals("not olga's: being made for pablo", 202, ask(video, PABLO).status());
         awaitJobs();
         assertEquals("olga's copy under the wrong key is gone", 1, copies());
@@ -393,6 +395,7 @@ public class VideoWatermarkBackgroundTest {
             return null;
         });
         commit();
+        awaitJobs();
         assertEquals(202, ask(video, OLGA).status());
         awaitJobs();
         assertEquals(2, StandInVideoMarker.marks.get());
@@ -445,6 +448,7 @@ public class VideoWatermarkBackgroundTest {
             return null;
         });
         commit();
+        awaitJobs();
         MarkedVideosComponent videos = (MarkedVideosComponent) Framework.getService(MarkedVideos.class);
         assertEquals(2, videos.sweepEverywhere());
         commit();
