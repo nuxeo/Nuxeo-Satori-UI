@@ -303,10 +303,14 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.share-links.original': 'Original file',
   'document-layouts.share-links.revoke.label': 'Revoke link {{label}}',
   'document-layouts.timeline.loading': 'Loading the history',
+  // The still-preparing banner's one button: its text is its name.
+  'document-layouts.video.check-again': 'Check again',
   'document-layouts.video.label': 'Video',
   'document-layouts.video.loading': 'Loading the video',
   'document-layouts.video.original': 'Original',
   'document-layouts.video.player': '{{title}}, {{rendition}}',
+  'document-layouts.video.preparing':
+    'The server is preparing a copy of this video watermarked for you. A long video can take a few minutes.',
   'document-layouts.video.storyboard': 'Storyboard of the video',
   'embedded-panels.label': 'Record from Nuxeo',
   'embedded-panels.loading': 'Loading the record',

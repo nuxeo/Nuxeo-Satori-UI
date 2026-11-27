@@ -81,6 +81,13 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
      */
     public static final String COPY_TYPE = "WatermarkedCopy";
 
+    /**
+     * Since 0.6.0, the folder the copies are kept in ({@code WatermarkedCopies.CONTAINER_TYPE}): every
+     * file and rendition of it refused to everyone, a tree export of it above all. A folder holding a
+     * copy below it, as the root, is refused its renditions too, as one holding an asset is.
+     */
+    public static final String COPIES_FOLDER_TYPE = "WatermarkedCopies";
+
     /** What a type or a document id may be, to be written into a query: anything else refuses. */
     private static final Pattern QUERY_SAFE = Pattern.compile("[A-Za-z0-9_.:-]+");
 
@@ -413,11 +420,13 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
             log.error("Asset rights: a download's document has no readable type, so it is refused", e);
             return new DownloadDecision(Use.unknown(null), Decision.refuse(Reason.POLICY_ERROR));
         }
-        if (COPY_TYPE.equals(type)) {
+        if (COPY_TYPE.equals(type) || COPIES_FOLDER_TYPE.equals(type)) {
             // Since 0.6.0: a long video's marked copy, kept for the person it names, is served by
             // Asset.GetWatermarked alone, to that person, once the rights allow it; to everyone else,
-            // an administrator included, wherever it is asked for, refused.
-            return new DownloadDecision(Use.unknown(xpath), Decision.refuse(Reason.NOT_CLEARED));
+            // an administrator included, wherever it is asked for, refused, as is every rendition of
+            // the folder that keeps them, which would zip every person's copies.
+            return new DownloadDecision(rendition == null ? Use.unknown(xpath) : Use.rendition(rendition),
+                    Decision.refuse(Reason.NOT_CLEARED));
         }
         RightsPolicy policy = policyFor(type);
         if (policy == null) {
@@ -451,7 +460,8 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
             if (!document.isFolder() && !document.hasFacet(COLLECTION_FACET)) {
                 return null;
             }
-            return holdsAny.test(document, inForce.keySet())
+            // Since 0.6.0, a marked copy below it counts as an asset does.
+            return holdsAny.test(document, VideoOperationRights.withCopies(inForce.keySet()))
                     ? new DownloadDecision(use, Decision.refuse(Reason.CONTAINS_ASSETS))
                     : null;
         } catch (RuntimeException e) {

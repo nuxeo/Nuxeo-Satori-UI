@@ -170,7 +170,6 @@ public class Deliveries {
         LocalDate today = service.today();
         List<String> unmarkable = new ArrayList<>();
         List<String> pending = new ArrayList<>();
-        List<String> taken = new ArrayList<>();
         List<Map<String, Serializable>> files = new ArrayList<>();
         for (PackageFile file : decided.files()) {
             Blob blob = file.blob();
@@ -194,9 +193,6 @@ public class Deliveries {
                         entry.put("watermarkedFor", distributor);
                         entry.put("watermark", text);
                         entry.put("watermarkedFile", (Serializable) marked.file());
-                        if (marked.copy() != null) {
-                            taken.add(marked.copy());
-                        }
                     } else if (outcome instanceof MarkedVideos.Preparing) {
                         pending.add(file.use().toString());
                     } else {
@@ -231,11 +227,6 @@ public class Deliveries {
                     + " files: " + String.join("; ", pending) + " " + (pending.size() == 1 ? "is" : "are")
                     + " being marked for its distributor. File it again once they are ready.");
         }
-        MarkedVideos videos = taken.isEmpty() ? null : Framework.getService(MarkedVideos.class);
-        for (String copy : taken) {
-            // The delivery holds the marked file now, and is the only document that does.
-            videos.taken(session, copy);
-        }
         GregorianCalendar now = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
         now.setTimeInMillis(clock.millis());
         // Written by the server, over anything the filer wrote there.
@@ -251,6 +242,28 @@ public class Deliveries {
         log.info("Media deliveries: {} delivered {} to {} in {}: {}", principal.getName(), versionId,
                 distributor.length() > 80 ? distributor.substring(0, 80) + "…" : distributor, territory,
                 decided.files().stream().map(file -> file.use().toString()).toList());
+    }
+
+    /**
+     * Since 0.6.0, once a delivery is created, in its filer's transaction: the kept copies for
+     * deliveries of each file it holds marked dropped, so that the delivery alone holds that file, and
+     * no other path is refused it as a copy's. After its creation, so that it holds the file first.
+     */
+    @SuppressWarnings("unchecked")
+    void delivered(CoreSession session, DocumentModel delivery) {
+        if (!(delivery.getPropertyValue(FILES) instanceof List<?> files)) {
+            return;
+        }
+        MarkedVideos videos = null;
+        for (Object each : files) {
+            if (each instanceof Map<?, ?> file && Boolean.TRUE.equals(file.get("watermarked"))
+                    && file.get("watermarkedFile") instanceof Blob marked && AssetWatermarks.isVideo(marked)) {
+                videos = videos == null ? Framework.getService(MarkedVideos.class) : videos;
+                if (videos != null) {
+                    videos.delivered(session, marked);
+                }
+            }
+        }
     }
 
     /**

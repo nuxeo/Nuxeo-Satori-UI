@@ -57,6 +57,9 @@ import org.nuxeo.ecm.core.io.download.DownloadService;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.ecm.core.test.annotations.Granularity;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
+import org.nuxeo.ecm.core.event.EventService;
+import org.nuxeo.ecm.core.event.impl.DocumentEventContext;
+import org.nuxeo.ecm.core.work.api.WorkManager;
 import org.nuxeo.ecm.platform.audit.api.LogEntry;
 import org.nuxeo.ecm.core.query.sql.model.QueryBuilder;
 import org.nuxeo.ecm.core.query.sql.model.Predicates;
@@ -279,6 +282,62 @@ public class VideoWatermarkBackgroundTest {
         assertEquals(200, ask(video, OLGA).status());
     }
 
+    /** A job queued a moment ago, waiting its turn on some node: a request queues no other. */
+    @Test
+    public void aJobQueuedAMomentAgoIsNotQueuedAgain() throws Exception {
+        String video = video("long", 600, 200);
+        String key = key(video, "olga");
+        KeyValueStore kv = Framework.getService(KeyValueService.class).getKeyValueStore(MarkedVideosComponent.STORE);
+        kv.put(MarkedVideosComponent.JOB_PREFIX + key, MarkedVideosComponent.QUEUED + System.currentTimeMillis(), 3600);
+        assertEquals(202, ask(video, OLGA).status());
+        assertEquals(202, ask(video, PABLO).status());
+        awaitJobs();
+        assertEquals("pablo's job ran, and olga's was left to the one queued", 1, StandInVideoMarker.marks.get());
+        assertTrue(StandInVideoMarker.text(copyFile()).startsWith(marked("pablo")));
+    }
+
+    /** A job run for a key whose copy is kept already, as a second job queued on another node: it marks nothing. */
+    @Test
+    public void aJobForAKeptCopyMakesNothing() throws Exception {
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        assertEquals(1, StandInVideoMarker.marks.get());
+        schedule(job(video, "olga"));
+        awaitJobs();
+        assertEquals(1, StandInVideoMarker.marks.get());
+        assertEquals(1, copies());
+    }
+
+    /** A job run while its key's failure is kept, as one queued before it failed: it marks nothing. */
+    @Test
+    public void aJobForAKeptFailureMakesNothing() throws Exception {
+        StandInVideoMarker.failWith = "the stand-in failed";
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        StandInVideoMarker.failWith = null;
+        schedule(job(video, "olga"));
+        awaitJobs();
+        assertEquals(0, StandInVideoMarker.marks.get());
+        assertEquals(0, copies());
+    }
+
+    /** A job whose file changed before it ran marks nothing: the next request names the file the document holds. */
+    @Test
+    public void aJobWhoseSourceChangedMakesNothing() throws Exception {
+        String video = video("long", 600, 200);
+        MarkedVideos.Job before = job(video, "olga");
+        DocumentModel doc = session.getDocument(new IdRef(video));
+        doc.setPropertyValue("file:content", (Serializable) StandInVideoMarker.video("recut", 700, 200));
+        session.saveDocument(doc);
+        commit();
+        schedule(before);
+        awaitJobs();
+        assertEquals(0, StandInVideoMarker.marks.get());
+        assertEquals(0, copies());
+    }
+
     // ------------------------------------------------------------------ for whom
 
     @Test
@@ -299,10 +358,10 @@ public class VideoWatermarkBackgroundTest {
 
     /**
      * A copy found under someone's key that records another person is never served to them: the key
-     * names the person, and the copy's own record is held to it too.
+     * names the person, and the copy's own record is held to it too. It is dropped, and their own made.
      */
     @Test
-    public void aCopyUnderTheKeyThatNamesAnotherPersonIsRefused() throws Exception {
+    public void aCopyUnderTheKeyThatNamesAnotherPersonIsNeverServedAndIsReplaced() throws Exception {
         String video = video("long", 600, 200);
         assertEquals(202, ask(video, OLGA).status());
         awaitJobs();
@@ -315,9 +374,120 @@ public class VideoWatermarkBackgroundTest {
             return null;
         });
         commit();
-        NuxeoException refusal = refused(video, PABLO);
+        assertEquals("not olga's: being made for pablo", 202, ask(video, PABLO).status());
+        awaitJobs();
+        assertEquals("olga's copy under the wrong key is gone", 1, copies());
+        assertTrue(ask(video, PABLO).text().startsWith(marked("pablo")));
+    }
+
+    /** A copy whose file is gone is not served: it is dropped, and made again. */
+    @Test
+    public void aCopyWithNoFileIsReplaced() throws Exception {
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        CoreInstance.doPrivileged(session, (Function<CoreSession, Void>) privileged -> {
+            DocumentModel copy = privileged.query("SELECT * FROM " + WatermarkedCopies.TYPE).get(0);
+            copy.setPropertyValue(WatermarkedCopies.CONTENT, null);
+            privileged.saveDocument(copy);
+            return null;
+        });
+        commit();
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        assertEquals(2, StandInVideoMarker.marks.get());
+        assertTrue(ask(video, OLGA).text().startsWith(marked("olga")));
+    }
+
+    /** Asked again while it is prepared, and once it is ready, the video is not read by ffprobe again. */
+    @Test
+    public void aLongVideoAskedAgainIsNotProbedAgain() throws Exception {
+        CountDownLatch gate = new CountDownLatch(1);
+        StandInVideoMarker.gate = gate;
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        assertEquals(202, ask(video, OLGA).status());
+        gate.countDown();
+        awaitJobs();
+        assertEquals(200, ask(video, OLGA).status());
+        assertEquals("by the first request and by its job, and by no request after", 2,
+                StandInVideoMarker.probes.get());
+    }
+
+    /**
+     * The copies past their days, or kept under a watermark no policy has now, are dropped by the
+     * sweep every node runs on a timer, whether or not a long video is marked again.
+     */
+    @Test
+    public void theSweepDropsCopiesPastTheirDaysOrTheirWatermark() throws Exception {
+        String old = video("old", 600, 200);
+        String other = video("other", 600, 200);
+        String kept = video("kept", 600, 200);
+        for (String video : List.of(old, other, kept)) {
+            assertEquals(202, ask(video, OLGA).status());
+        }
+        awaitJobs();
+        assertEquals(3, copies());
+        CoreInstance.doPrivileged(session, (Function<CoreSession, Void>) privileged -> {
+            for (DocumentModel copy : privileged.query("SELECT * FROM " + WatermarkedCopies.TYPE)) {
+                String source = (String) copy.getPropertyValue(WatermarkedCopies.SOURCE);
+                if (source.equals(old)) {
+                    GregorianCalendar made = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+                    made.add(GregorianCalendar.DAY_OF_MONTH, -30);
+                    copy.setPropertyValue(WatermarkedCopies.MADE, made);
+                } else if (source.equals(other)) {
+                    copy.setPropertyValue(WatermarkedCopies.FINGERPRINT, "a watermark no policy has");
+                } else {
+                    continue;
+                }
+                privileged.saveDocument(copy);
+            }
+            return null;
+        });
+        commit();
+        MarkedVideosComponent videos = (MarkedVideosComponent) Framework.getService(MarkedVideos.class);
+        assertEquals(2, videos.sweepEverywhere());
+        commit();
+        assertEquals(1, copies());
+        assertTrue(StandInVideoMarker.text(copyFile()).contains("STAND-IN VIDEO kept"));
+    }
+
+    /**
+     * A copy the repository will not keep is not the video's failure: it is answered for a few
+     * minutes only, with that reason, and the original is not served meanwhile.
+     */
+    @Test
+    public void aCopyThatCannotBeKeptIsRefusedForAFewMinutesOnly() throws Exception {
+        StandInVideoMarker.unreadableOutput = true;
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        NuxeoException refusal = refused(video, OLGA);
         assertEquals(409, refusal.getStatusCode());
-        assertTrue(refusal.getMessage(), refusal.getMessage().contains("watermark-unavailable"));
+        assertTrue(refusal.getMessage(), refusal.getMessage().contains(MarkedVideosComponent.TRANSIENT_REASON));
+        assertFalse(downloads(video, OLGA));
+        assertEquals(0, copies());
+    }
+
+    /** The folder the copies are kept in is refused every rendition, as its tree's zip, to an administrator too. */
+    @Test
+    public void theCopiesFolderIsRefusedItsRenditions() throws Exception {
+        String video = video("long", 600, 200);
+        assertEquals(202, ask(video, OLGA).status());
+        awaitJobs();
+        DocumentModel folder = CoreInstance.doPrivileged(session,
+                (Function<CoreSession, DocumentModel>) privileged -> privileged.query(
+                        "SELECT * FROM " + WatermarkedCopies.CONTAINER_TYPE).get(0));
+        Blob zip = new org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob(new byte[] { 1 }, "application/zip");
+        LoginComponent.pushPrincipal(ADMINISTRATOR);
+        try {
+            assertFalse(downloads.checkPermission(folder, null, zip, "rendition", Map.of("rendition", "zipTreeExport")));
+            assertFalse("nor the root, which holds it",
+                    downloads.checkPermission(session.getRootDocument(), null, zip, "rendition",
+                            Map.of("rendition", "zipTreeExport")));
+        } finally {
+            LoginComponent.popPrincipal();
+        }
     }
 
     // ------------------------------------------------------------------ dropped
@@ -423,6 +593,18 @@ public class VideoWatermarkBackgroundTest {
         awaitJobs();
         assertEquals(0, StandInVideoMarker.marks.get());
         assertEquals(0, copies());
+    }
+
+    /** An entry of the failure's name with no boolean mark, as {@code Event.Fire} would fire one, is not audited. */
+    @Test
+    public void anEntryFiredUnderTheFailuresNameWithoutItsMarkIsNotAudited() {
+        String video = video("long", 600, 200);
+        DocumentEventContext context = new DocumentEventContext(session, OLGA, session.getDocument(new IdRef(video)));
+        context.setProperty(WatermarkAudit.MARK, "true");
+        Framework.getService(EventService.class).fireEvent(context.newEvent(WatermarkAudit.EVENT));
+        commit();
+        awaitJobs();
+        assertEquals(0, audited(video).size());
     }
 
     @Test
@@ -545,6 +727,30 @@ public class VideoWatermarkBackgroundTest {
         return MarkedVideosComponent.key(MarkedVideos.Order.of(doc, "original", "file:content",
                 (Blob) doc.getPropertyValue("file:content"), watermark, text, reader, reader, "",
                 MarkedVideos.Purpose.DOWNLOAD));
+    }
+
+    /** The job a request for {@code reader}'s copy of the video's original queues. */
+    private MarkedVideos.Job job(String id, String reader) {
+        DocumentModel doc = session.getDocument(new IdRef(id));
+        Watermark watermark = Framework.getService(AssetRightsService.class).policyFor("AcmeVideo").watermark();
+        String text = watermark.text(reader, reader, LocalDate.now(ZoneOffset.UTC), "");
+        Blob file = (Blob) doc.getPropertyValue("file:content");
+        MarkedVideos.Order order = MarkedVideos.Order.of(doc, "original", "file:content", file, watermark, text, reader,
+                reader, "", MarkedVideos.Purpose.DOWNLOAD);
+        return new MarkedVideos.Job(MarkedVideosComponent.key(order), doc.getRepositoryName(), doc.getId(),
+                doc.getType(), "file:content", "original", file.getDigest(), text, watermark.placement().code(),
+                order.fingerprint(), reader, reader, "", "download", MarkedVideosComponent.QUEUED + "0");
+    }
+
+    private static void schedule(MarkedVideos.Job job) {
+        Framework.getService(WorkManager.class).schedule(new VideoWatermarkWork(job), WorkManager.Scheduling.ENQUEUE,
+                false);
+    }
+
+    /** The one kept copy's file. */
+    private Blob copyFile() {
+        return CoreInstance.doPrivileged(session, (Function<CoreSession, Blob>) privileged -> (Blob) privileged.query(
+                "SELECT * FROM " + WatermarkedCopies.TYPE).get(0).getPropertyValue(WatermarkedCopies.CONTENT));
     }
 
     private long copies() {

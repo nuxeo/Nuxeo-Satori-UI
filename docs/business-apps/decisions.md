@@ -244,6 +244,16 @@ way.
   above, the bundle moves whole, and a kit's components, `org.nuxeo.agentic.assets.rights` and
   `org.nuxeo.agentic.assets.review`, keep their names.
 
+- **B, long videos watermarked in the background, in the assets add-on (27 November 2026).** Built
+  against the recommendation too:
+  [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md#long-videos-in-the-background) 0.6.0
+  marks a long video in the work manager and keeps its copy for whom it was marked, since the copy is
+  the same watermark's, decided at the same endpoints. No Automation operation is added and no button
+  bound, so decision 3 is not touched: `Asset.GetWatermarked` answers 202 while the copy is prepared,
+  and a delivery is refused until it is ready. Its security review is deferred until the app is
+  finished. What changes if B goes another way: the copies' types, the work's queue and the
+  key/value store's name move with the bundle, and keep their names.
+
 - **B, the document control module's server add-on (26 November 2026).** Built against the
   recommendation: numbering, revisions and supersession are
   [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md), a Maven module beside

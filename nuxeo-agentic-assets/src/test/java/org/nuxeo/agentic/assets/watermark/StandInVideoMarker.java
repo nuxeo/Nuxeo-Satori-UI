@@ -4,6 +4,7 @@
 package org.nuxeo.agentic.assets.watermark;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.regex.Pattern;
 import org.nuxeo.agentic.assets.rights.Watermark.Placement;
 import org.nuxeo.agentic.assets.watermark.AssetWatermarks.Unavailable;
 import org.nuxeo.ecm.core.api.Blob;
+import org.nuxeo.ecm.core.api.impl.blob.AbstractBlob;
 import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
 import org.nuxeo.runtime.model.DefaultComponent;
 
@@ -42,6 +44,9 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
     /** When set, a mark waits for it to open, up to 30 seconds. */
     static volatile CountDownLatch gate;
 
+    /** When set, a mark answers a file that cannot be read, so that keeping it fails. */
+    static volatile boolean unreadableOutput;
+
     static final AtomicInteger probes = new AtomicInteger();
 
     public static final AtomicInteger marks = new AtomicInteger();
@@ -53,6 +58,7 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
         available = true;
         failWith = null;
         gate = null;
+        unreadableOutput = false;
         probes.set(0);
         marks.set(0);
         threads.clear();
@@ -91,9 +97,32 @@ public class StandInVideoMarker extends DefaultComponent implements VideoMarker 
         }
         marks.incrementAndGet();
         threads.add(Thread.currentThread().getName());
+        if (unreadableOutput) {
+            return new Unreadable(video.getMimeType());
+        }
         String marked = MARKED + text + "|" + placement.code() + "|" + probe.width() + "x" + probe.height() + "\n"
                 + text(video);
         return new ByteArrayBlob(marked.getBytes(StandardCharsets.UTF_8), video.getMimeType());
+    }
+
+    /** A marked file the repository cannot read when it keeps it, as a disk that failed would give. */
+    static final class Unreadable extends AbstractBlob {
+
+        private static final long serialVersionUID = 1L;
+
+        Unreadable(String mimeType) {
+            setMimeType(mimeType);
+        }
+
+        @Override
+        public InputStream getStream() throws IOException {
+            throw new IOException("the stand-in's output cannot be read");
+        }
+
+        @Override
+        public long getLength() {
+            return 42;
+        }
     }
 
     /** A stand-in video, {@code length} bytes at least. */

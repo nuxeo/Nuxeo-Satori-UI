@@ -1350,6 +1350,16 @@ becomes. In version 2's terms:
     rights do not explain shows the error state, as any 403 does, and so does a file the server
     does not serve, a 404 or a 500, Retry offered for a server error: no other file is tried then
     either, though one may play;
+  - **a video the server serves only watermarked,** `watermark-required` in the `assetRights`
+    answer after the 403, since `nuxeo-agentic-assets` 0.6.0, is then asked of the server marked for
+    the reader, through `DocumentDetailService.fetchWatermarkedVideo`, the add-on's
+    `Asset.GetWatermarked`, by `original` or `rendition:<name>`, and played from a blob URL with a
+    note that it is watermarked for the reader. A long video is marked in the background: while the
+    server answers 202, `preparing`, the page says so in the player's place and asks again after the
+    server's `retryAfter`, doubled at each answer up to a minute, at most 12 times, about 8 minutes;
+    then it stops and offers Check again, which asks once more. Nothing more is asked once the
+    record changes or the page is left. A 409 is the server saying it could not mark it, said as
+    the rights' `watermark-unavailable`; any other failure shows the error state;
   - **the facts:** the duration, the frame size and the format, from `vid:info`, as Nuxeo read
     them with ffprobe. A server without it reads none, and the page says so;
   - **the storyboard,** `vid:storyboard`, through `nxs.components.storyboard`, and only with the

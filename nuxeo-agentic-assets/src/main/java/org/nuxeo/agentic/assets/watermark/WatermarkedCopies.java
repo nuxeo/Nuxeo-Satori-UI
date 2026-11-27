@@ -38,7 +38,8 @@ public final class WatermarkedCopies {
     /** The rights refuse this type's file to everyone, by its document or by its stored file's key. */
     public static final String TYPE = AssetRightsComponent.COPY_TYPE;
 
-    public static final String CONTAINER_TYPE = "WatermarkedCopies";
+    /** The rights refuse this type's files and renditions, as a folder's export, to everyone. */
+    public static final String CONTAINER_TYPE = AssetRightsComponent.COPIES_FOLDER_TYPE;
 
     static final String CONTAINER_NAME = "agentic-watermarked-copies";
 
@@ -164,10 +165,21 @@ public final class WatermarkedCopies {
                 + "' AND ecm:isProxy = 0 AND ecm:isVersion = 0", limit);
     }
 
+    /** The ids of the copies of {@code purpose} whose file is the stored file of {@code key}. */
+    static List<String> holding(CoreSession privileged, String key, MarkedVideos.Purpose purpose) {
+        List<String> ids = new ArrayList<>();
+        privileged.queryProjection("SELECT ecm:uuid FROM " + TYPE + " WHERE " + CONTENT + "/data = "
+                + NXQL.escapeString(key) + " AND " + PURPOSE + " = " + NXQL.escapeString(purpose.code())
+                + " AND ecm:isProxy = 0 AND ecm:isVersion = 0", SWEEP_LIMIT, 0)
+                  .forEach(row -> ids.add((String) row.get("ecm:uuid")));
+        return ids;
+    }
+
     /**
-     * The copies due to go: made more than {@code days} days ago, or under a watermark no policy in
-     * force has now for their source's type, as {@code current} gives each type's fingerprint, at
-     * most {@value #SWEEP_LIMIT}.
+     * The copies due to go: made before {@code before}, or under a watermark no policy in force has
+     * now for their source's type, as {@code current} gives each type's fingerprint, at most
+     * {@value #SWEEP_LIMIT} of each. With no {@code current}, as when the rights service is not
+     * running, those made before only.
      */
     static List<String> stale(CoreSession privileged, Calendar before, Map<String, String> current) {
         List<String> ids = new ArrayList<>();
@@ -175,6 +187,9 @@ public final class WatermarkedCopies {
                 "SELECT ecm:uuid FROM " + TYPE + " WHERE " + MADE + " < TIMESTAMP '" + timestamp(before) + "'",
                 SWEEP_LIMIT, 0);
         rows.forEach(row -> ids.add((String) row.get("ecm:uuid")));
+        if (current == null) {
+            return ids;
+        }
         StringBuilder query = new StringBuilder("SELECT ecm:uuid FROM " + TYPE + " WHERE ");
         if (current.isEmpty()) {
             query.append("ecm:isProxy = 0");

@@ -187,7 +187,8 @@ class BundleTest {
         for (int i = 0; i < named.getLength(); i++) {
             events.add(named.item(i).getTextContent());
         }
-        assertEquals(List.of("aboutToCreate", "aboutToImport", "beforeDocumentModification", "aboutToRemove",
+        assertEquals(List.of("aboutToCreate", "documentCreated", "aboutToImport", "beforeDocumentModification",
+                "aboutToRemove",
                 "aboutToMove", "aboutToCopy", "documentCreatedByCopy", "aboutToCheckIn", "beforeRestoringDocument",
                 "documentTrashed"), events);
 

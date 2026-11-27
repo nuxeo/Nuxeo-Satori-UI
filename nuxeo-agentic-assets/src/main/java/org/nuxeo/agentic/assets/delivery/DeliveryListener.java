@@ -104,6 +104,8 @@ public class DeliveryListener implements EventListener {
     private void handle(String event, CoreSession session, DocumentModel doc) {
         switch (event) {
         case DocumentEventTypes.ABOUT_TO_CREATE -> deliveries.deliver(session, doc);
+        // Since 0.6.0: the kept copies its marked videos came from dropped, once it holds them.
+        case DocumentEventTypes.DOCUMENT_CREATED -> deliveries.delivered(session, doc);
         case DocumentEventTypes.BEFORE_DOC_UPDATE -> {
             DataModel own = doc.getDataModel(Deliveries.SCHEMA);
             if (own != null && own.isDirty()) {

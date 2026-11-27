@@ -52,7 +52,8 @@ public class VideoWatermarkWork extends AbstractWork {
         TransactionHelper.commitOrRollbackTransaction();
         try {
             if (Framework.getService(MarkedVideos.class) instanceof MarkedVideosComponent videos) {
-                videos.run(job);
+                // Stopped by the work manager, as a node shuts down: nothing is kept as a failure.
+                videos.run(job, this::isSuspending);
             } else {
                 log.error("Asset rights: the marked videos' service is not running, so the copy {} is not made",
                         MarkedVideosComponent.brief(job.key()));

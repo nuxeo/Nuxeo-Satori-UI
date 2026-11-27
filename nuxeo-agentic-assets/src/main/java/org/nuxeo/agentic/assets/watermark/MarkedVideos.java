@@ -88,10 +88,10 @@ public interface MarkedVideos {
     Outcome mark(Order order);
 
     /**
-     * A kept copy a delivery has taken, which now holds its file: dropped, in {@code session}'s
-     * transaction, so that a delivery's file is held by the delivery alone.
+     * The kept copies for deliveries of {@code file}, once a delivery holding it is created: dropped,
+     * in {@code session}'s transaction, so that a delivery's file is held by the delivery alone.
      */
-    void taken(CoreSession session, String copy);
+    void delivered(CoreSession session, Blob file);
 
     /**
      * The SHA-256, in hex, of a policy's type and its watermark's whole definition: a copy kept under
@@ -119,10 +119,11 @@ public interface MarkedVideos {
     /**
      * What the background job is given, for the work manager to keep: text only, never a file. It
      * reads the file again from its document, at its place, and marks it only while it has the
-     * digest it was asked for.
+     * digest it was asked for; {@code marker} is the job's marker as it was queued, which it removes
+     * when it ends only if it is still that one.
      */
     record Job(String key, String repository, String document, String type, String xpath, String use, String digest,
             String text, String placement, String fingerprint, String recipient, String user, String territory,
-            String purpose) implements Serializable {
+            String purpose, String marker) implements Serializable {
     }
 }
