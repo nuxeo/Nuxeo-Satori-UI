@@ -130,6 +130,23 @@ export interface CheckerOptions {
   readonly record?: boolean;
 }
 
+/**
+ * A property of the open record that a rule, a computation, a check, a widget's parameter or a
+ * related list's parameter names, where the checker read it: what the layout is held to in the
+ * content model besides its fields (`layout-model.ts`). A task form's `var:` names are not the
+ * record's, and are not here. Nor is what a table's or a related list's column computes or gives a
+ * widget, which may be the row's rather than the record's; a column's `visibleWhen` is the open
+ * record's, as a field's is (layout-v2.md, section 11), and is.
+ */
+export interface PropertyReference {
+  readonly xpath: string;
+  /** Where, as `banners[0].visibleWhen.parameters[0].field`. */
+  readonly path: string;
+  /** What reads it, as a message names it. */
+  readonly by:
+    'rule' | 'computation' | 'check' | "widget's parameter" | "page provider's parameter";
+}
+
 /** The name of a Material Symbols icon, such as `check`. */
 export const ICON = /^[a-z0-9_]{1,64}$/;
 
@@ -158,6 +175,39 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
+  };
+  const references: PropertyReference[] = [];
+  /** What the walk is in now: the innermost rule, computation or check, or none. */
+  let reading: PropertyReference['by'] | null = null;
+  /** How many table or related-list columns the walk is in, and how many computations. */
+  let columnDepth = 0;
+  let computing = 0;
+  /** `walk`, read as `by` reads it, the walk's own state given back however it ends. */
+  const readBy = (by: PropertyReference['by'], walk: () => void): void => {
+    const was = reading;
+    reading = by;
+    if (by === 'computation') computing++;
+    try {
+      walk();
+    } finally {
+      reading = was;
+      if (by === 'computation') computing--;
+    }
+  };
+  /** `walk`, in a table's or a related list's columns. */
+  const inColumns = (walk: () => void): void => {
+    columnDepth++;
+    try {
+      walk();
+    } finally {
+      columnDepth--;
+    }
+  };
+  /** A property a reader names, kept when it is the open record's (`PropertyReference`). */
+  const refer = (xpath: string, path: string, by: PropertyReference['by'] | null): void => {
+    if (by === null || xpath.startsWith(VARIABLE)) return;
+    if (columnDepth > 0 && (by !== 'rule' || computing > 0)) return;
+    references.push({ xpath, path, by });
   };
 
   /** How deep the walk is in rules, computations, a customer's rule's parameters and fields. */
@@ -234,10 +284,12 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   const variable = (xpath: string, path: string): void => {
     if (!task && xpath.startsWith(VARIABLE))
       add(path, 'structure', '"var:" names a task variable, which only a task form has');
+    refer(xpath, path, reading);
   };
 
   /** A rule, as the manifest writes it: an ID, or `{ "type", "parameters" }`. */
-  const rule = (item: unknown, path: string): void => nested(path, () => ruleAt(item, path));
+  const rule = (item: unknown, path: string): void =>
+    readBy('rule', () => nested(path, () => ruleAt(item, path)));
 
   const ruleAt = (item: unknown, path: string): void => {
     const [type, parameters] =
@@ -284,6 +336,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
           'parameter',
           'no record is open here, so a rule is given literals, not a property',
         );
+      else refer(item.field, join(path, 'field'), reading);
     } else if (Array.isArray(item))
       item.forEach((inner, index) => inCustomerRule(inner, join(path, index)));
     else if (
@@ -438,7 +491,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   };
 
   const computation = (item: unknown, path: string): void =>
-    nested(path, () => computationAt(item, path));
+    readBy('computation', () => nested(path, () => computationAt(item, path)));
 
   const computationAt = (item: unknown, path: string): void => {
     if (!isRecord(item) || typeof item['type'] !== 'string') {
@@ -463,7 +516,9 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       );
   };
 
-  const check = (item: unknown, path: string): void => {
+  const check = (item: unknown, path: string): void => readBy('check', () => checkAt(item, path));
+
+  const checkAt = (item: unknown, path: string): void => {
     if (!isRecord(item) || typeof item['type'] !== 'string') {
       add(
         path,
@@ -558,7 +613,9 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       const problem = definition.parameters[name](setting);
       if (problem) add(join(join(path, 'parameters'), name), 'parameter', `${name} ${problem}`);
       else if (isFieldReference(setting))
-        variable(setting.field, join(join(join(path, 'parameters'), name), 'field'));
+        readBy("widget's parameter", () =>
+          variable(setting.field, join(join(join(path, 'parameters'), name), 'field')),
+        );
       else if (id === 'document-link' && name === 'show') linkedShow(given, path, form, inTable);
     }
     for (const name of definition.required ?? []) {
@@ -567,8 +624,11 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     // A table's columns are field entries, held to the same rules as a card's.
     if (id === 'table' && Array.isArray(given['columns'])) {
-      given['columns'].forEach((column, index) =>
-        field(column, join(join(join(path, 'parameters'), 'columns'), index), form, false, true),
+      const columnsAt = join(join(path, 'parameters'), 'columns');
+      inColumns(() =>
+        (given['columns'] as unknown[]).forEach((column, index) =>
+          field(column, join(columnsAt, index), form, false, true),
+        ),
       );
     }
   };
@@ -711,7 +771,8 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
             'structure',
             'a queue has no open record, so a page provider parameter is a literal',
           );
-        else if (isFieldReference(p)) variable(p.field, join(at, 'field'));
+        else if (isFieldReference(p))
+          readBy("page provider's parameter", () => variable(p.field, join(at, 'field')));
         else
           add(
             at,
@@ -724,7 +785,11 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     if (!Array.isArray(columns) || columns.length === 0)
       add(join(path, 'columns'), 'structure', 'needs a list of columns');
     else
-      columns.forEach((column, index) => field(column, join(join(path, 'columns'), index), false));
+      inColumns(() =>
+        columns.forEach((column, index) =>
+          field(column, join(join(path, 'columns'), index), false),
+        ),
+      );
     // A column showing a linked record's property through `show` holds only that record's id:
     // the page provider would order the records by it (layout-v2.md, section 12).
     const shownThrough = new Set(
@@ -783,6 +848,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   return {
     registries,
     findings,
+    references,
     add,
     claim,
     unknownKeys,

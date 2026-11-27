@@ -8,7 +8,8 @@
  *    the roots `BUILDER_PACKAGE_ROOTS` names instead (config.ts). It is reached through no link,
  *    holds no link, symbolic or hard, and is named as a Marketplace package is, in kebab case.
  * 2. **Each file is one a writer may write** (`fileKind`): the app definition's files, for
- *    `write_package_file`; those and the files the generators write, for a generator. Anything
+ *    `write_package_file` and for a `remove`, which takes one out but `app.json`; those and the
+ *    files the generators write, for a generator. Anything
  *    else is refused before anything runs: a path that leaves the package, a hidden file, code, an
  *    asset, the build allow-list, the pipeline's own output.
  * 3. **The changes are made to a staging copy,** a private temporary folder: each write, and each
@@ -16,9 +17,10 @@
  *    copy and writes nothing.
  * 4. **The staging copy is validated as `validate_package` validates a folder alone, as CI does:**
  *    the pipeline's steps 1 to 6, with the package's own build allow-list when it names one, the
- *    platform's version, and its own `content-model.json` when it ships a stand-in model. No other
- *    allow-list, registered file or platform version is taken, so nothing the agent gives can
- *    register an id. Every app definition file the changes touch must be of version 2, since the
+ *    platform's version, and its own `content-model.json` when it ships a stand-in model, its
+ *    names compared with the other kits in the folder the package is in (`--kits`), as CI compares
+ *    a kit in `business-apps/packages/`. No other allow-list, registered file or platform version
+ *    is taken, so nothing the agent gives can register an id. Every app definition file the changes touch must be of version 2, since the
  *    validator does not check a layout of version 1.
  * 5. **Only with no finding and no refusing step** are the changes committed, under a lock in the
  *    package's own `dist/` that another process's write also takes: each file is written there,
@@ -78,6 +80,8 @@ export const APP_GENERATORS = [
   'app-action',
   'app-registry',
   'app-model',
+  'app-connector',
+  'app-dependency',
 ] as const;
 export type AppGenerator = (typeof APP_GENERATORS)[number];
 export const MAX_CHANGES = 32;
@@ -96,6 +100,8 @@ const OWN_MODEL = 'content-model.json';
 
 export type Change =
   | { readonly kind: 'write'; readonly path: string; readonly content: string }
+  /** A file of the app definition taken out, as `write_package_file` could write it. */
+  | { readonly kind: 'remove'; readonly path: string }
   | {
       readonly kind: 'generator';
       readonly generator: string;
@@ -124,12 +130,23 @@ export interface WriteOptions {
   /** Where the staging copy is made. Default: the system's temporary folder. */
   readonly workIn?: string;
   readonly timeoutMs?: number;
-  /** The pipeline, as `validate_package` runs it on a folder alone. Replaced in some tests. */
+  /**
+   * The pipeline, as `validate_package` runs it on a folder alone, its names compared with the
+   * other kits in `kits`, the folder the package is in. Replaced in some tests.
+   */
   readonly validate?: (
     directory: string,
     roots: readonly string[],
     workIn: string,
+    kits: string | null,
   ) => Promise<PackageCheck>;
+  /**
+   * The folder of the kits whose names the package's are compared with, by the pipeline's
+   * `--kits`. Default: the folder the package is in, as CI compares a kit in
+   * `business-apps/packages/` with the others there. `null` compares none: for tests that keep
+   * several copies of one kit in one root.
+   */
+  readonly kits?: string | null;
   /** The generator's process. Replaced in some tests. */
   readonly generate?: (run: GeneratorRun) => Promise<GeneratorAnswer>;
   /** Called once the changes passed, before the package is read again and written. Tests only. */
@@ -186,6 +203,8 @@ const GENERATED = [
   /^bundle\/META-INF\/MANIFEST\.MF$/,
   /^bundle\/OSGI-INF\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xml$/,
   /^bundle\/schemas\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xsd$/,
+  // A kit's connectors, beside its bundle and not in it: app-connector's.
+  /^connectors\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}-connectors-config\.xml$/,
 ];
 /** The names Windows keeps for devices, which no file there may have. */
 const DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
@@ -242,8 +261,8 @@ export function fileKind(path: string): FileKind | { readonly problem: string } 
     return refuse('is code. A package is configuration only, and these tools write no code.');
   return refuse(
     `is not a file these tools write. write_package_file writes ${WRITABLE}; the generators` +
-      ' also write the component, the manifest, package/, build.mjs, the schemas and' +
-      ' content-model.json.',
+      ' also write the component, the manifest, package/, build.mjs, the schemas,' +
+      ' content-model.json and the connectors, connectors/<package>-connectors-config.xml.',
   );
 }
 
@@ -251,8 +270,11 @@ export function fileKind(path: string): FileKind | { readonly problem: string } 
 function writtenBy(path: string): string {
   if (path === 'content-model.json' || path.startsWith('bundle/schemas/'))
     return 'app-model writes it, for a demo kit';
+  if (path.startsWith('connectors/')) return 'app-connector writes it, and takes a connector out';
   if (path.startsWith('bundle/OSGI-INF/'))
     return 'the generator of what it contributes writes it: app-layout, app-form, app-queue, app-action, app-registry or app-model';
+  if (path === 'package/package.xml')
+    return 'app-package writes it, and app-dependency a dependency in it. A version is raised by a person, in package.xml, app.json and the manifest together';
   return 'app-package writes it. A version is raised by a person, in package.xml, app.json and the manifest together';
 }
 
@@ -630,6 +652,17 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
         throw new Error(
           `${at}.content: more than ${MAX_FILE_BYTES} bytes, which the server refuses for a file of the app definition.`,
         );
+    } else if (change.kind === 'remove') {
+      const kind = fileKind(change.path);
+      if (typeof kind !== 'string') throw new Error(`${at}.path: ${kind.problem}`);
+      if (kind === 'generated')
+        throw new Error(
+          `${at}.path: ${change.path} is written by the generators only, and taken out by them: ${writtenBy(change.path)}.`,
+        );
+      if (change.path === `${CONFIG}/app.json`)
+        throw new Error(
+          `${at}.path: ${change.path} is the app itself: a package without it is no app definition, and is refused. Remove the package's folder by hand, if that is what the person asks.`,
+        );
     } else if (!(APP_GENERATORS as readonly string[]).includes(change.generator))
       throw new Error(
         `${at}.generator: ${change.generator} is not one the write tools run. They run ${APP_GENERATORS.join(', ')}.`,
@@ -659,7 +692,7 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
     const held = new Set<string>();
     for (const name of before.keys()) for (const prefix of prefixesOf(name)) held.add(prefix);
     for (const [index, change] of request.changes.entries()) {
-      if (change.kind !== 'write') continue;
+      if (change.kind === 'generator') continue;
       for (const prefix of prefixesOf(change.path)) {
         const other = sameButCase(prefix, held);
         if (other !== undefined)
@@ -687,6 +720,16 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
         } catch (error) {
           throw unmade(index, error);
         }
+        continue;
+      }
+      if (change.kind === 'remove') {
+        // A file the package holds, or an earlier change of the same call wrote: never a folder.
+        const file = inside(staging, change.path);
+        if (!lstatSync(file, { throwIfNoEntry: false })?.isFile())
+          throw new Error(
+            `changes[${index}].path: ${change.path} is not a file of ${target.shown}, as the earlier changes of this call left it. Nothing was written.`,
+          );
+        rmSync(file);
         continue;
       }
       const generator = change.generator as AppGenerator;
@@ -784,7 +827,12 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       );
 
     const check = shownCheck(
-      await (options.validate ?? defaultValidate(options.timeoutMs))(staging, [stagingRoot], work),
+      await (options.validate ?? defaultValidate(options.timeoutMs))(
+        staging,
+        [stagingRoot],
+        work,
+        options.kits === undefined ? dirname(target.directory) : options.kits,
+      ),
       target.shown,
       shownPaths,
     );
@@ -894,7 +942,8 @@ function removeIfEmpty(folder: string): void {
 }
 
 function defaultValidate(timeoutMs: number | undefined): NonNullable<WriteOptions['validate']> {
-  return (directory, roots, workIn) => validatePackage({ directory }, { roots, workIn, timeoutMs });
+  return (directory, roots, workIn, kits) =>
+    validatePackage({ directory }, { roots, workIn, timeoutMs, kits: kits ?? undefined });
 }
 
 function differences(before: Files, after: Files): FileChange[] {

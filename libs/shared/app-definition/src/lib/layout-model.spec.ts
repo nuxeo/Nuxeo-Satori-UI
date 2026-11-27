@@ -8,6 +8,7 @@ import {
   type LayoutMode,
 } from './layout-v2';
 import { validateFile } from './package';
+import { PACKAGED_REGISTRIES, withRegistered } from './registries';
 
 /** A Member type, in the shape the server answers, as `content-model.spec.ts` reads it. */
 function memberModel(): ContentModel {
@@ -72,16 +73,20 @@ const withFields = (...fields: unknown[]): Record<string, unknown> => ({
   cards: [{ id: 'c', fields }],
 });
 
-/** The findings as the command line prints them. `given: null` checks with no model. */
+/**
+ * The findings as the command line prints them. `given: null` checks with no model; `references`
+ * holds what rules read to it too, as the command line and the pipeline ask.
+ */
 const messages = (
   content: unknown,
   {
     type = 'Member',
     mode = 'view',
     given = model,
-  }: { type?: string; mode?: LayoutMode; given?: ContentModel | null } = {},
+    references = false,
+  }: { type?: string; mode?: LayoutMode; given?: ContentModel | null; references?: boolean } = {},
 ): string[] =>
-  validateLayoutV2(content, { mode, model: given ?? undefined, type }).map(
+  validateLayoutV2(content, { mode, model: given ?? undefined, type, references }).map(
     (finding) => `${finding.path}: ${finding.message} [${finding.kind}]`,
   );
 
@@ -401,6 +406,203 @@ describe('validateLayoutV2, given the content model', () => {
       ],
     };
     expect(messages(related)).toEqual([]);
+  });
+
+  describe('what a rule, a computation, a check or a parameter reads of the open record', () => {
+    const late = (later: string, earlier: string) => ({
+      type: 'app.rules.dateAfter',
+      parameters: [{ field: later }, { field: earlier }, 30],
+    });
+    const named = {
+      version: 2,
+      banners: [
+        {
+          id: 'late',
+          label: 'Late',
+          tone: 'warning',
+          visibleWhen: late('member:joined', 'dc:created'),
+        },
+      ],
+      cards: [
+        {
+          id: 'c',
+          visibleWhen: {
+            type: 'core.every',
+            parameters: [
+              { type: 'app.rules.fieldIn', parameters: [{ field: 'member:state' }, 'A'] },
+            ],
+          },
+          fields: [
+            {
+              field: 'member:balance',
+              widget: 'currency',
+              parameters: { currency: { field: 'member:currency' } },
+            },
+            {
+              id: 'age',
+              computed: { type: 'core.age', parameters: [{ field: 'member:born' }] },
+            },
+            {
+              field: 'dc:title',
+              visibleWhen: { type: 'acme.rules.mine', parameters: [{ field: 'member:own' }] },
+            },
+          ],
+        },
+        {
+          id: 'claims',
+          label: 'Claims',
+          related: {
+            pageProvider: 'member_claims',
+            parameters: [{ field: 'member:number' }, { field: 'ecm:uuid' }],
+            columns: [
+              {
+                field: 'claim:amount',
+                widget: 'currency',
+                parameters: { currency: { field: 'claim:currency' } },
+                visibleWhen: {
+                  type: 'app.rules.fieldIn',
+                  parameters: [{ field: 'member:shows' }, 'Y'],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    it('refuses each property the type lacks, naming what reads it', () => {
+      const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.mine'] });
+      expect(
+        validateLayoutV2(named, {
+          mode: 'view',
+          model,
+          type: 'Member',
+          registries,
+          references: true,
+        }).map((finding) => `${finding.path}: ${finding.message} [${finding.kind}]`),
+      ).toEqual([
+        'banners[0].visibleWhen.parameters[0].field: "member:joined" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
+        'cards[0].visibleWhen.parameters[0].parameters[0].field: "member:state" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
+        'cards[0].fields[0].parameters.currency.field: "member:currency" is not a property of the type "Member" or of its facets, so the widget\'s parameter naming it reads nothing [unknown]',
+        'cards[0].fields[1].computed.parameters[0].field: "member:born" is not a property of the type "Member" or of its facets, so the computation naming it reads nothing [unknown]',
+        'cards[0].fields[2].visibleWhen.parameters[0].field: "member:own" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
+        'cards[1].related.parameters[0].field: "member:number" is not a property of the type "Member" or of its facets, so the page provider\'s parameter naming it reads nothing [unknown]',
+        'cards[1].related.columns[0].visibleWhen.parameters[0].field: "member:shows" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
+      ]);
+    });
+
+    it("passes the type's own properties, a form's rules and checks included, and the server's ecm: ones", () => {
+      expect(
+        messages(
+          {
+            version: 2,
+            banners: [
+              {
+                id: 'late',
+                label: 'Late',
+                tone: 'warning',
+                visibleWhen: late('member:birthDate', 'dc:created'),
+              },
+            ],
+            cards: [
+              {
+                id: 'c',
+                visibleWhen: {
+                  type: 'app.rules.fieldIn',
+                  parameters: [{ field: 'ecm:currentLifeCycleState' }, 'project'],
+                },
+                fields: ['dc:title'],
+              },
+            ],
+          },
+          { references: true },
+        ),
+      ).toEqual([]);
+      expect(
+        messages(
+          withFields({
+            field: 'dc:title',
+            required: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'member:firstName' }, 'A'],
+            },
+            checks: [
+              { type: 'core.notBefore', parameters: [{ field: 'member:birthDate' }], label: 'No' },
+            ],
+          }),
+          { mode: 'edit', references: true },
+        ),
+      ).toEqual([]);
+    });
+
+    it("refuses a check's property the type lacks, and checks nothing when no model is given", () => {
+      const checked = withFields({
+        field: 'member:birthDate',
+        checks: [{ type: 'core.notBefore', parameters: [{ field: 'member:joined' }], label: 'No' }],
+      });
+      expect(messages(checked, { mode: 'edit', references: true })).toEqual([
+        'cards[0].fields[0].checks[0].parameters[0].field: "member:joined" is not a property of the type "Member" or of its facets, so the check naming it reads nothing [unknown]',
+      ]);
+      expect(messages(named, { given: null, references: true })).toEqual([
+        'cards[0].fields[2].visibleWhen: the rule "acme.rules.mine" is not registered [unknown]',
+      ]);
+    });
+
+    it("says how a property is written, as for a field, and leaves a table's columns' computations and widgets alone", () => {
+      expect(
+        messages(
+          withFields({
+            field: 'member:claims',
+            widget: 'table',
+            parameters: {
+              columns: [
+                {
+                  field: 'claim:amount',
+                  widget: 'currency',
+                  parameters: { currency: { field: 'claim:currency' } },
+                },
+              ],
+            },
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'dublincore:title' }, 'A'],
+            },
+          }),
+          { references: true },
+        ),
+      ).toEqual([
+        'cards[0].fields[0].visibleWhen.parameters[0].field: "dublincore:title" is written "dc:title": the schema "dublincore" has the prefix "dc", so the rule naming it reads nothing [unknown]',
+      ]);
+    });
+
+    it("holds nothing a rule reads unless asked, as the server's validator does not ask", () => {
+      const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.mine'] });
+      expect(validateLayoutV2(named, { mode: 'view', model, type: 'Member', registries })).toEqual(
+        [],
+      );
+    });
+
+    it('lets be a property a facet of the model brings, which a rule guarded by that facet reads', () => {
+      const guarded = {
+        version: 2,
+        banners: [
+          {
+            id: 'flagged',
+            label: 'Flagged',
+            tone: 'warning',
+            visibleWhen: {
+              type: 'core.every',
+              parameters: [
+                { type: 'app.rules.hasFacet', parameters: ['Flagged'] },
+                { type: 'app.rules.fieldIn', parameters: [{ field: 'flag:reason' }, 'fraud'] },
+              ],
+            },
+          },
+        ],
+        cards: [{ id: 'c', fields: ['dc:title'] }],
+      };
+      expect(messages(guarded, { references: true })).toEqual([]);
+    });
   });
 
   it('adds nothing to a finding the file has already: an unknown widget, a malformed name', () => {

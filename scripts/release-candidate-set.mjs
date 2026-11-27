@@ -624,6 +624,52 @@ export function allowListArguments(kitDirectory) {
 }
 
 /**
+ * What a kit's bundle contributes that a second kit could contribute too, `[{ kind, key, file }]`,
+ * read as the server reads it: the manifest's components, and the app definition beside them.
+ * `bundle` is the folder holding `META-INF/MANIFEST.MF` and `agentic-ui-config/`, as a zip's bundle
+ * and a kit folder's `bundle/` each do; `file` is each name's file, under `shownAs`.
+ */
+function bundleContributions(bundle, name, where, shownAs = '') {
+  const contributes = [{ kind: 'package', key: name, file: 'package.xml' }];
+  const unknown = [];
+  const manifest = readFileSync(join(bundle, 'META-INF', 'MANIFEST.MF'), 'utf8').replace(
+    /^\uFEFF/,
+    '',
+  );
+  for (const component of componentPathsOf(manifest)) {
+    const read = registrationsOf(componentXmlOf(readFileSync(join(bundle, component), 'utf8')));
+    contributes.push(
+      ...read.registrations.map((entry) => ({ ...entry, file: `${shownAs}${component}` })),
+    );
+    for (const point of read.unknown) unknown.push(`${point} (${component})`);
+  }
+  const config = join(bundle, 'agentic-ui-config');
+  const app = jsonIn(join(config, 'app.json'));
+  if (app === null) throw new Error(`${where} carries no agentic-ui-config/app.json.`);
+  const appFile = `${shownAs}agentic-ui-config/app.json`;
+  contributes.push({ kind: 'app id', key: app.id, file: appFile });
+  // With no address of its own, an app's id is its address (app-definition-v2.md, section 1).
+  contributes.push({ kind: 'address', key: app.address ?? app.id, file: appFile });
+  const queues = join(config, 'queues');
+  if (existsSync(queues))
+    for (const file of readdirSync(queues).sort())
+      if (file.endsWith('.json'))
+        contributes.push({
+          kind: 'queue',
+          key: file.slice(0, -'.json'.length),
+          file: `${shownAs}agentic-ui-config/queues/${file}`,
+        });
+  for (const action of jsonIn(join(config, 'actions.json'))?.actions ?? [])
+    if (typeof action?.id === 'string')
+      contributes.push({
+        kind: 'action',
+        key: action.id,
+        file: `${shownAs}agentic-ui-config/actions.json`,
+      });
+  return { app, contributes, unknown };
+}
+
+/**
  * A kit's zip, unpacked under `scratch`: its descriptor, its app, and everything it contributes
  * that a second kit could contribute too (`duplicatesAcross`), with the extension points its
  * components contribute to that this check does not compare. Read from the bundle the zip carries,
@@ -639,36 +685,85 @@ export function readKit(zip, scratch) {
   if (jars.length !== 1)
     throw new Error(`${zip} carries ${jars.length} bundles in install/bundles/, and a kit is one.`);
   const bundle = unpack(join(bundles, jars[0]), join(scratch, 'bundle'));
-  const contributes = [{ kind: 'package', key: descriptor.name }];
-  const unknown = [];
-  const manifest = readFileSync(join(bundle, 'META-INF', 'MANIFEST.MF'), 'utf8').replace(
-    /^\uFEFF/,
-    '',
-  );
-  for (const component of componentPathsOf(manifest)) {
-    const read = registrationsOf(componentXmlOf(readFileSync(join(bundle, component), 'utf8')));
-    contributes.push(...read.registrations);
-    for (const point of read.unknown) unknown.push(`${point} (${component})`);
-  }
-  const config = join(bundle, 'agentic-ui-config');
-  const app = jsonIn(join(config, 'app.json'));
-  if (app === null) throw new Error(`${zip} carries no agentic-ui-config/app.json.`);
-  contributes.push({ kind: 'app id', key: app.id });
-  // With no address of its own, an app's id is its address (app-definition-v2.md, section 1).
-  contributes.push({ kind: 'address', key: app.address ?? app.id });
-  const queues = join(config, 'queues');
-  if (existsSync(queues))
-    for (const file of readdirSync(queues).sort())
-      if (file.endsWith('.json'))
-        contributes.push({ kind: 'queue', key: file.slice(0, -'.json'.length) });
-  for (const action of jsonIn(join(config, 'actions.json'))?.actions ?? [])
-    if (typeof action?.id === 'string') contributes.push({ kind: 'action', key: action.id });
+  const { app, contributes, unknown } = bundleContributions(bundle, descriptor.name, zip);
   return {
     descriptor,
     app: { id: app.id, address: app.address ?? null, platform: app.platform ?? null },
     contributes,
     unknown,
   };
+}
+
+/** The connectors a component registers with the connectors add-on, by id: its enabled ones. */
+export function connectorIdsOf(componentXml) {
+  const ids = [];
+  let inPoint = false;
+  for (const element of elementsOf(componentXml)) {
+    const attributes = attributesOf(element.tag);
+    if (element.name === 'extension' && element.path.length === 1) {
+      inPoint =
+        attributes.target === 'org.nuxeo.agentic.connectors' && attributes.point === 'connectors';
+      continue;
+    }
+    if (
+      inPoint &&
+      element.name === 'connector' &&
+      element.path.length === 2 &&
+      element.path[1] === 'extension' &&
+      attributes.id &&
+      (attributes.enabled === undefined || attributes.enabled.toLowerCase() === 'true')
+    )
+      ids.push(attributes.id);
+  }
+  return ids;
+}
+
+/**
+ * A kit's folder, as the package pipeline reads it before it is built: everything its bundle
+ * contributes, as `readKit` reads a zip's, and two names a kit holds that no server keeps one of
+ * per kit, or that no zip carries. Each `[{ kind, key, file }]`, `file` from the kit's folder.
+ *
+ * - **Its label keys,** `labelKeys`, apart from what it contributes: every key of each
+ *   `labels/<language>.json` but the platform's, those `platformKeys` holds and the `layout.` keys
+ *   that name a schema or a field, which every app may give a text of its own. On a server each
+ *   app reads its own labels, so two kits' keys do not replace each other there; but a key begun
+ *   with an app's name is that app's (app-definition-v2.md, section 7), and another kit that has
+ *   it is most often a copied one. The pipeline compares only such keys (`kitClashes`): a key
+ *   begun with neither kit's name, such as one the platform reads by a pattern, is no clash.
+ * - **Its connectors,** each `<connector id>` of a component in `connectors/`, which the connectors
+ *   add-on keeps one of, whichever kit contributes it.
+ */
+export function readKitFolder(directory, { platformKeys = new Set() } = {}) {
+  const descriptor = descriptorOf(readFileSync(join(directory, 'package', 'package.xml'), 'utf8'));
+  const { app, contributes, unknown } = bundleContributions(
+    join(directory, 'bundle'),
+    descriptor.name,
+    directory,
+    'bundle/',
+  );
+  const packageEntry = contributes.find((entry) => entry.kind === 'package');
+  if (packageEntry) packageEntry.file = 'package/package.xml';
+  const labels = join(directory, 'bundle', 'agentic-ui-config', 'labels');
+  const keys = new Map();
+  if (existsSync(labels))
+    for (const file of readdirSync(labels).sort()) {
+      if (!file.endsWith('.json')) continue;
+      const read = jsonIn(join(labels, file))?.labels;
+      if (read === null || typeof read !== 'object' || Array.isArray(read)) continue;
+      for (const key of Object.keys(read))
+        if (!platformKeys.has(key) && !key.startsWith('layout.') && !keys.has(key))
+          keys.set(key, `bundle/agentic-ui-config/labels/${file}`);
+    }
+  const labelKeys = keys;
+  const connectors = join(directory, 'connectors');
+  if (existsSync(connectors))
+    for (const file of readdirSync(connectors).sort())
+      if (file.endsWith('.xml'))
+        for (const id of connectorIdsOf(
+          componentXmlOf(readFileSync(join(connectors, file), 'utf8')),
+        ))
+          contributes.push({ kind: 'connector', key: id, file: `connectors/${file}` });
+  return { name: descriptor.name, app, contributes, labelKeys, unknown };
 }
 
 /**

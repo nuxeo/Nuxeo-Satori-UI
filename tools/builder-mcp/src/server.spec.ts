@@ -241,6 +241,53 @@ describe('createServer', () => {
     }
   });
 
+  it('takes the folder as package, as the write tools name it, or as directory, not as two', async () => {
+    const seen: PackageRequest[] = [];
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        validate: async (request) => {
+          seen.push(request);
+          throw new Error('stopped here');
+        },
+        preview: async (request) => {
+          seen.push(request);
+          throw new Error('stopped here');
+        },
+      }),
+    );
+    try {
+      const pkg = 'business-apps/packages/x';
+      for (const tool of ['validate_package', 'preview_package']) {
+        expect(await client.call(tool, { package: pkg })).toMatchObject({
+          isError: true,
+          text: 'stopped here',
+        });
+        expect(await client.call(tool, { package: pkg, directory: pkg })).toMatchObject({
+          isError: true,
+          text: 'stopped here',
+        });
+        const two = await client.call(tool, {
+          package: pkg,
+          directory: 'business-apps/packages/y',
+        });
+        expect(two).toMatchObject({ isError: true });
+        expect(two.text).toContain('package and directory name two folders');
+        const none = await client.call(tool, {});
+        expect(none).toMatchObject({ isError: true });
+        expect(none.text).toContain('give the package folder');
+      }
+      expect(seen).toEqual([
+        { directory: pkg },
+        { directory: pkg },
+        { directory: pkg },
+        { directory: pkg },
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
   it('passes preview_package its arguments as they were given', async () => {
     const seen: PackageRequest[] = [];
     const client = await connect(
@@ -306,8 +353,13 @@ describe('createServer', () => {
           package: pkg,
           changes: [
             { kind: 'write', path: 'bundle/agentic-ui-config/home.json', content: '{}' },
+            { kind: 'remove', path: 'bundle/agentic-ui-config/queues/old.json' },
             { kind: 'generator', generator: 'app-registry' },
           ],
+        }),
+        await client.call('remove_package_file', {
+          package: pkg,
+          path: 'bundle/agentic-ui-config/queues/old.json',
         }),
       ];
       for (const answer of answers)
@@ -331,6 +383,14 @@ describe('createServer', () => {
           package: pkg,
           changes: [
             { kind: 'write', path: 'bundle/agentic-ui-config/home.json', content: '{}' },
+            { kind: 'remove', path: 'bundle/agentic-ui-config/queues/old.json' },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        {
+          package: pkg,
+          changes: [
+            { kind: 'remove', path: 'bundle/agentic-ui-config/queues/old.json' },
             { kind: 'generator', generator: 'app-registry' },
           ],
         },

@@ -92,6 +92,16 @@ describe('app-package generator', () => {
       expect(readme()).not.toMatch(/\| `[^`]*(queues|actions\.json)/);
     });
 
+    it('offers what it has not written as a next step, a button only if the app has one', async () => {
+      await generate({ title: 'Acme Contracts' });
+      expect(readme()).toContain('The package has none of these yet');
+      expect(readme()).toContain(
+        "# A button on a record or a queue's rows, in actions.json, if the app has one",
+      );
+      expect(readme()).toContain('tools/satori-generators:app-connector');
+      expect(readme()).not.toContain('# A button, in actions.json\n');
+    });
+
     it('names the record page it wrote, given --type', async () => {
       await generate({ type: 'Contract', model: CONTRACTS_MODEL });
       expect(rows()).toContain('bundle/agentic-ui-config/layouts/Contract/view.layout.json');
