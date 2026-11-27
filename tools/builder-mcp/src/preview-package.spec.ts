@@ -3,6 +3,7 @@
  * copied into a scratch checkout of its own so that the tests never write this checkout's dev
  * folder, and a stand-in dev server on this machine.
  */
+import { randomBytes } from 'node:crypto';
 import {
   watch,
   cpSync,
@@ -24,6 +25,7 @@ import {
   SERVED,
   pagesOf,
   previewPackage,
+  standInFor,
   type PreviewOptions,
 } from './preview-package.ts';
 import { REPO_ROOT } from './validate-package.ts';
@@ -248,6 +250,8 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           `${origin}/#/tasks`,
         ]);
         expect(preview.pages.some((page) => page.what === 'the Claim record page')).toBe(true);
+        // A copy of the Payers kit, by another name: the stand-in reads no such kit, and says so.
+        expect(preview.standIn).toMatchObject({ reads: false, commands: [] });
 
         // Nothing is left in the package: its dist/, made for the check, is gone with it.
         expect(everyFile(directory)).toEqual(before);
@@ -539,5 +543,105 @@ describe('previewPackage refuses before running anything', () => {
       ),
     ).rejects.toThrow('has no bundle/agentic-ui-config/');
     expect(existsSync(dev.folder)).toBe(false);
+  });
+});
+
+describe('the stand-in a preview names for a demo kit', () => {
+  const kit = (name: string) => join(REPO_ROOT, 'business-apps', 'packages', name);
+
+  it('gives the commands, what it answers and a record page per type, for a kit it reads', async () => {
+    const standIn = await standInFor(kit('vehicle-titles-demo'), 'http://localhost:4299');
+    expect(standIn).toMatchObject({
+      reads: true,
+      answers: [
+        'vtitles_title_sales',
+        'vtitles_title_trade_ins',
+        'vtitles_awaiting_lien_release',
+        'vtitles_overdue_titles',
+        'vtitles_deals_missing_documents',
+      ],
+      notAnswered: [],
+    });
+    expect(standIn?.commands).toEqual([
+      'npm run kit:stand-in -- business-apps/packages/vehicle-titles-demo',
+      'NUXEO_PROXY_TARGET=http://localhost:8091 npx ng serve nuxeo-ui --configuration=development,remote --port 4299',
+    ]);
+    expect(standIn?.records.map((page) => page.what)).toEqual([
+      'the VehicleTitle record page, on TTL-6001',
+      'the VehicleDeal record page, on VD-5001',
+    ]);
+    expect(standIn?.records[0].url).toMatch(/^http:\/\/localhost:4299\/#\/doc\/[0-9a-f-]{36}$/);
+    expect(standIn?.note).toContain('read-only');
+  });
+
+  it('names the page providers it answers 501, and no port for the default dev server', async () => {
+    const standIn = await standInFor(kit('pc-claims-demo'), 'http://localhost:4200');
+    expect(standIn?.reads).toBe(true);
+    expect(standIn?.notAnswered).toEqual(['pc_capture_review', 'pc_claim_mail']);
+    expect(standIn?.note).toContain('pc_capture_review, pc_claim_mail HTTP 501');
+    expect(standIn?.commands[1]).toBe(
+      'NUXEO_PROXY_TARGET=http://localhost:8091 npx ng serve nuxeo-ui --configuration=development,remote',
+    );
+  });
+
+  it('says why, for a demo kit whose data it does not read, or with no demo data', async () => {
+    for (const name of ['payers-claims-demo', 'facilities-demo']) {
+      const standIn = await standInFor(kit(name), 'http://localhost:4200');
+      expect(standIn).toMatchObject({ reads: false, commands: [], records: [] });
+      expect(standIn?.note).toContain('reads only the kits whose demo/data.mjs it knows');
+    }
+  });
+
+  it('is null for a package with no content-model.json', async () => {
+    const directory = join(scratch, 'no-stand-in-package');
+    mkdirSync(join(directory, 'demo'), { recursive: true });
+    writeFileSync(join(directory, 'demo', 'data.mjs'), 'export const EXPECTED = {};\n');
+    expect(await standInFor(directory, 'http://localhost:4200')).toBeNull();
+  });
+
+  it('gives the check no credential, and reads what it prints', async () => {
+    const folder = join(scratch, 'stand-in-environment');
+    const directory = join(folder, 'vehicle-titles-demo');
+    mkdirSync(join(directory, 'demo'), { recursive: true });
+    writeFileSync(join(directory, 'content-model.json'), '{}\n');
+    writeFileSync(join(directory, 'demo', 'data.mjs'), 'export const EXPECTED = {};\n');
+    const seen = join(folder, 'seen.json');
+    const script = join(folder, 'kit-stand-in.mjs');
+    const id = '0b7c1a2e-4d5f-4a6b-8c9d-0e1f2a3b4c5d';
+    const printed = {
+      records: { Thing: [{ key: 'T-1', id }] },
+      pageProviders: { answered: ['things'], notAnswered: [] },
+    };
+    writeFileSync(
+      script,
+      `import { writeFileSync } from 'node:fs';\n` +
+        `writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ args: process.argv.slice(2), keys: Object.keys(process.env) }));\n` +
+        `console.log(${JSON.stringify(JSON.stringify(printed))});\n`,
+    );
+    const saved = { user: process.env['NUXEO_USER'], pass: process.env['NUXEO_PASS'] };
+    process.env['NUXEO_USER'] = 'someone';
+    process.env['NUXEO_PASS'] = randomBytes(12).toString('hex');
+    let standIn: Awaited<ReturnType<typeof standInFor>>;
+    try {
+      standIn = await standInFor(directory, 'http://localhost:4200', script);
+    } finally {
+      for (const [key, value] of [
+        ['NUXEO_USER', saved.user],
+        ['NUXEO_PASS', saved.pass],
+      ] as const)
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
+    const { args, keys } = JSON.parse(readFileSync(seen, 'utf8')) as {
+      args: string[];
+      keys: string[];
+    };
+    expect(args).toEqual([directory, '--check']);
+    expect(keys).toContain('PATH');
+    expect(keys.filter((key) => key.startsWith('NUXEO_'))).toEqual([]);
+    expect(standIn?.records).toEqual([
+      expect.objectContaining({ url: `http://localhost:4200/#/doc/${id}` }),
+    ]);
+    expect(standIn?.answers).toEqual(['things']);
   });
 });

@@ -555,6 +555,27 @@ console.log('Forwarded');
   );
 }
 
+{
+  // An upstream that is gone: a port that was free a moment ago.
+  const gone = createServer();
+  const gonePort = await listen(gone);
+  await new Promise((done) => gone.close(done));
+  const orphan = createStandIn(vehicles, { upstream: `http://127.0.0.1:${gonePort}` });
+  const orphanPort = await listen(orphan);
+  const forwarded = await call(orphanPort, 'GET', '/nuxeo/api/v1/me');
+  const merged = await call(orphanPort, 'GET', '/nuxeo/api/v1/config/types');
+  const own = await call(orphanPort, 'GET', `/nuxeo/api/v1/id/${deal.id}`);
+  orphan.close();
+  check(
+    'an upstream that does not answer is said to be the upstream, 502, forwarded or merged',
+    forwarded.status === 502 &&
+      merged.status === 502 &&
+      /could not reach the upstream/.test(merged.json?.message ?? ''),
+    `${forwarded.status} ${merged.status}`,
+  );
+  check("a stand-in record needs no upstream: it is the kit's", own.status === 200);
+}
+
 console.log('Credentials untouched');
 {
   const secret = randomBytes(16).toString('hex');

@@ -184,7 +184,8 @@ const isList = (type) =>
 export async function loadKit(folder, { today = new Date() } = {}) {
   const directory = resolve(folder);
   const name = basename(directory);
-  const shown = relative(ROOT, directory) || directory;
+  const fromRoot = relative(ROOT, directory);
+  const shown = fromRoot === '' || fromRoot.startsWith('..') ? directory : fromRoot;
   const reader = KITS[name];
   if (!reader) {
     throw new Precondition(
@@ -1182,6 +1183,9 @@ export function createStandIn(
 
   return createServer((req, res) => {
     handle(req, res).catch((error) => {
+      // A merged answer asks the upstream itself: one that does not answer is the upstream's.
+      if (typeof error?.code === 'string' && /^E[A-Z]+$/.test(error.code))
+        return unreachable(res, error);
       if (res.headersSent) return res.destroy();
       const body = JSON.stringify(exception(500, `The kit stand-in failed: ${error.message}`));
       res.writeHead(500, { 'content-type': 'application/json' });
