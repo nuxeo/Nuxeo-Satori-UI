@@ -1598,7 +1598,10 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   The 41 add to those above: the report held to the converter; the checks held to the decisions
   the report records; names of a letter or a digit; the earlier build's own shared identities;
   offers kept, and what was carried kept, on a run of the same build; a batch carrying by name only
-  from a file of identities; and the controls picking what they break.
+  from a file of identities; and the controls picking what they break. After the reviews' second
+  rounds, three more, broken the same way, each turned the specs red: a Hangul filler naming no one,
+  and an offer no one confirmed offered again, as it was offered, on another build and on the same
+  one.
 
 - **Two independent reviews of this slice**, by reviewers given the diff and what it is for, one
   for correctness and one adversarial, asking whether a conversion nobody approved, or a proposal
