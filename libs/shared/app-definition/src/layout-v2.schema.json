@@ -547,6 +547,7 @@
         },
         "field": {
           "$ref": "#/$defs/xpath",
+          "not": { "pattern": "^(ecm|var):" },
           "description": "The new record's property, a string, that holds the open record's id. Never an ecm: or var: name."
         },
         "label": {

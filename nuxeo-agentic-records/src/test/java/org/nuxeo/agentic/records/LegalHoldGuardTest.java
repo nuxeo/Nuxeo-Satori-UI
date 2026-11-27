@@ -350,6 +350,50 @@ public class LegalHoldGuardTest extends DispositionTestCase {
         assertTrue(session.exists(record.getRef()));
     }
 
+    /**
+     * A live proxy writes the files of the record it stands for: a change to them through a proxy of
+     * a held record is refused as the record's own, and the record keeps its files.
+     */
+    @Test
+    public void aHeldRecordsFilesAreNotChangedThroughALiveProxyOfIt() {
+        DocumentModel published = session.createDocument(session.createDocumentModel(CASES, "published", "Folder"));
+        DocumentModel proxy = session.createProxy(record.getRef(), published.getRef());
+        settled();
+        assertTrue(proxy.isProxy());
+        assertFalse("a live proxy, which writes its record's files", proxy.isVersion());
+        DispositionRefusal refused = refusal(() -> {
+            DocumentModel through = session.getDocument(proxy.getRef());
+            through.setPropertyValue("files:files", (Serializable) attachments("Another letter."));
+            return session.saveDocument(through);
+        });
+        assertHeld(refused, LegalHolds.FILES_HELD);
+        List<?> files = (List<?>) session.getDocument(record.getRef()).getPropertyValue("files:files");
+        assertEquals(1, files.size());
+    }
+
+    /**
+     * Whom the platform lets delete what it keeps is exempt from the guard on a deletion only, as
+     * the platform's own exemption is: the trash and the files stay held for them too.
+     */
+    @Test
+    public void whomThePlatformLetsDeleteStillMayNotTrashAHeldRecordNorChangeItsFiles() {
+        Framework.getProperties().put(ALLOW_DELETE_UNDELETABLE, "true");
+        try {
+            assertHeld(refusal(() -> {
+                trash(session, record.getRef());
+                return null;
+            }), LegalHolds.RECORD_HELD);
+            assertHeld(refusal(() -> {
+                DocumentModel changed = session.getDocument(record.getRef());
+                changed.setPropertyValue("files:files", (Serializable) attachments("Another letter."));
+                return session.saveDocument(changed);
+            }), LegalHolds.FILES_HELD);
+        } finally {
+            Framework.getProperties().remove(ALLOW_DELETE_UNDELETABLE);
+        }
+        assertFalse(session.getDocument(record.getRef()).isTrashed());
+    }
+
     static String text(Blob blob) {
         try {
             return blob.getString();

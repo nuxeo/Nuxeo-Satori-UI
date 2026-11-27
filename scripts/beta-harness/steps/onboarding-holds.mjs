@@ -31,10 +31,15 @@
  *     ONBOARDING_OFFICER_PASSWORD=<password> npm run beta:evidence -- onboarding-holds
  *
  * Load-bearing checks: the card's hold before and after; the audit's `afterSetLegalHold` and
- * `afterRemoveLegalHold` with the reasons entered; the server refusing the trash, the deletion and
- * a change of the files while the hold is on, and a metadata change going through; the page's
- * toast saying the server's reason; the new dispute's `dsp:case`; the officer's create refused.
- * Negative ones: no Place on a held dispute, no Release on one not held, no New for the officer.
+ * `afterRemoveLegalHold` with the reasons entered; the server refusing, while the hold is on, the
+ * trash and the deletion (the platform's 403: it takes `Remove` from a held record) and the
+ * removal of its attachment (the records add-on's 409, with its sentence), and a metadata change
+ * going through; the document page's toast saying that sentence when the attachment is removed
+ * there; the new dispute's `dsp:case`; the officer's create refused. Negative ones: no Place on a
+ * held dispute, no Release on one not held, no Delete offered on the held dispute.
+ *
+ * Each run attaches a fictional statement to DSP-2002 when it has none, so that removing it is a
+ * change of its files, and leaves it there.
  *
  * Not covered, and said in notes: an administrator's trash, which the records add-on refuses with
  * its own 409 where the platform lets an administrator through (LegalHoldGuardTest), and the hold
@@ -54,7 +59,9 @@ const { CASES, DISPUTES, REGISTERS, WORKSPACE } = await import(join(KIT, 'demo',
 const APP = 'onboarding';
 const PLACE = 'onboarding.dispute.placeHold';
 const RELEASE = 'onboarding.dispute.releaseHold';
-const HELD_MESSAGE = /legal hold/i;
+/** The records add-on's refusal of a change to a held record's files, as it writes it. */
+const FILES_HELD =
+  'This record is under a legal hold: its files cannot be changed until the hold is released.';
 
 /**
  * What a server run of this file needs, for the release candidate's list of demo steps
@@ -90,6 +97,10 @@ const ENVIRONMENTAL_ERRORS = [
 ];
 
 const labels = JSON.parse(readFileSync(join(CONFIG, 'labels/en.json'), 'utf8')).labels;
+/** The app's own English catalogue, for the document page's controls. */
+const app = JSON.parse(
+  readFileSync(join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json'), 'utf8'),
+);
 const unread = () => null;
 
 async function until(probe, timeout = 20_000) {
@@ -204,6 +215,36 @@ export default async function run(page, h) {
     kase?.uid !== undefined && dispute.properties?.['dsp:case'] === kase.uid,
     `${seeded.case} answered ${kase?.uid ?? 'nothing'}: run demo/seed.mjs again`,
   );
+  // A fictional statement on the dispute, so that removing it later is a change of its files. The
+  // seed attaches agreements to cases only.
+  const current = (await asAnalyst('GET', `/api/v1/id/${dispute.uid}`)).body;
+  if ((current?.properties?.['files:files'] ?? []).length === 0) {
+    const batch = (await asAnalyst('POST', '/api/v1/upload/')).body?.batchId;
+    const bytes = Buffer.from(`Fictional statement for ${seeded.number}. ${RUN}\n`, 'utf8');
+    const uploaded = await fetch(`${h.baseUrl}/nuxeo/api/v1/upload/${batch}/0`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+        'X-No-Basic-Header': 'true',
+        'X-File-Name': 'statement.txt',
+        'X-File-Type': 'text/plain',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(30_000),
+    }).catch(unread);
+    await asAnalyst('PUT', `/api/v1/id/${dispute.uid}`, {
+      'entity-type': 'document',
+      properties: {
+        'files:files': [{ file: { 'upload-batch': batch, 'upload-fileId': '0' } }],
+      },
+    });
+    h.requirePrecondition(
+      `${seeded.number} has an attachment the run can try to remove`,
+      uploaded?.ok === true,
+      `the upload answered ${uploaded?.status}`,
+    );
+  }
   const holds = async () =>
     (
       (
@@ -272,27 +313,31 @@ export default async function run(page, h) {
   );
   await h.screenshot('dispute-on-legal-hold');
 
+  // For a person, the platform takes Remove from a held record: a trash or a deletion is refused
+  // before any event, with its permission's message. An administrator's is the add-on's to refuse,
+  // with its own sentence (LegalHoldGuardTest), which this run does not sign in as.
   const trashed = await asAnalyst('POST', '/api/v1/automation/Document.Trash', {
     input: `doc:${dispute.uid}`,
   });
   h.check(
-    'the server refuses to put the held dispute in the trash, with its reason',
-    (trashed.status === 403 || trashed.status === 409) && typeof trashed.body?.message === 'string',
+    "the server refuses to put the held dispute in the trash: the platform's Remove taken away",
+    trashed.status === 403 && typeof trashed.body?.message === 'string',
     `${trashed.status}: ${trashed.body?.message}`,
   );
   const deleted = await asAnalyst('DELETE', `/api/v1/id/${dispute.uid}`);
   h.check(
     'the server refuses to delete it',
-    deleted.status === 403 || deleted.status === 409,
+    deleted.status === 403,
     `${deleted.status}: ${deleted.body?.message}`,
   );
+  // Its files are the add-on's to keep, for everyone: the attachment the run put on it stays.
   const files = await asAnalyst('PUT', `/api/v1/id/${dispute.uid}`, {
     'entity-type': 'document',
     properties: { 'files:files': [] },
   });
   h.check(
-    'the server refuses a change of its files',
-    files.status === 403 || files.status === 409,
+    "the server refuses to remove its attachment, with the records add-on's reason",
+    files.status === 409 && files.body?.message === FILES_HELD,
     `${files.status}: ${files.body?.message}`,
   );
   const described = await asAnalyst('PUT', `/api/v1/id/${dispute.uid}`, {
@@ -304,28 +349,35 @@ export default async function run(page, h) {
     described.status === 200,
   );
   const still = (await asAnalyst('GET', `/api/v1/id/${dispute.uid}`)).body;
-  h.check('the dispute is still there, out of the trash', still?.isTrashed === false);
+  h.check(
+    'the dispute is still there, out of the trash, with its attachment',
+    still?.isTrashed === false && (still?.properties?.['files:files'] ?? []).length === 1,
+  );
 
+  // The page: removing the attachment from the document page's Attachments is refused by the
+  // server, and the page says the server's reason.
   await page.reload();
-  await page.locator('nxs-document-toolbar').first().waitFor({ timeout: 30_000 }).catch(unread);
-  const remove = page.locator('[data-action-id="app.toolbar.delete"]');
-  if ((await remove.count()) > 0) {
-    await remove.first().click();
-    await page
-      .getByRole('button', { name: /delete/i })
-      .last()
-      .click()
-      .catch(unread);
-    const told = await page
-      .getByText(HELD_MESSAGE)
-      .first()
-      .waitFor({ state: 'visible', timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    h.check("Delete on the page shows the server's reason", told);
-  } else {
-    h.note('the toolbar offered no Delete: the platform took Remove from the held dispute');
-  }
+  const more = page.getByRole('button', {
+    name: app['document-detail']['document-detail']['more-actions'],
+  });
+  await more.first().click().catch(unread);
+  await page
+    .getByRole('menuitem', { name: app['document-detail']['document-detail']['remove'] })
+    .click()
+    .catch(unread);
+  await page.locator('.btn-yes').click().catch(unread);
+  const told = await page
+    .getByText(FILES_HELD, { exact: true })
+    .first()
+    .waitFor({ state: 'visible', timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  h.check("removing the attachment on the page shows the server's reason", told);
+  await h.screenshot('attachment-refused-under-hold');
+  h.check(
+    'the toolbar offers the analyst no Delete on the held dispute: the platform took Remove',
+    (await page.locator('[data-action-id="app.toolbar.delete"]').count()) === 0,
+  );
 
   const releaseButton = card.locator(`[data-action="${RELEASE}"] button`);
   h.check('it offers Release legal hold, and no Place', (await releaseButton.count()) === 1);

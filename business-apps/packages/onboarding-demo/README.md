@@ -144,13 +144,16 @@ server has the kit, the records add-on or the retention module.
    the retention module's own `Document.Hold`, through `AgenticUi.RunAction` and the deployment's
    allow-list: the dispute is made a record, and held. The card says "On legal hold", and the hold
    placed, by whom, when, and the reason, the platform's audit's comment.
-3. **Delete**, on the page's toolbar: refused on the server, and the page shows its reason. For an
-   analyst, the platform takes `Remove` away from a held record, and says so; for an
-   administrator, `nuxeo-agentic-records` refuses it, 409: "This record is under a legal hold: it
-   cannot be put in the trash or deleted until the hold is released." Replacing or removing an
-   attachment is refused the same way, and so is putting the disputes register in the trash.
-   Editing its status or resolution is not: a hold keeps the record and its files, not its
-   description, as the platform's does.
+3. **Deleting it is refused, on the server.** For the analyst, the platform takes `Remove` from a
+   held record: the page offers no Delete, and a deletion or a trash sent anyway is refused, 403,
+   with the platform's message. An administrator's, which the platform would let through,
+   `nuxeo-agentic-records` refuses, 409: "This record is under a legal hold: it cannot be put in the
+   trash or deleted until the hold is released." Removing or replacing an attachment, in the
+   document page's Attachments, is refused for everyone, 409, and the page shows the add-on's
+   reason: "This record is under a legal hold: its files cannot be changed until the hold is
+   released." So is putting the disputes register in the trash. Editing the dispute's status or
+   resolution is not: a hold keeps the record and its files, not its description, as the
+   platform's does.
 4. **Release legal hold**, with a reason, "Settled with the merchant". It runs
    `Records.ReleaseLegalHold`, the records add-on's, since the module's `Document.Unhold` takes no
    reason. The card lists the release under the hold, with its reason, and offers Place again.
@@ -373,6 +376,23 @@ control was too weak at first: a `/me` that was not a user was refused by the ad
 anyway, so removing the user check left it green; it now answers an administrator with no id. The
 independent review found the dispute type missing from the preflight, which would have stopped the
 run after its first writes rather than before them; it is checked now, with a control of its own.
+
+## 0.2.0: what was written, and seen failing (27 November 2026)
+
+Written by hand, in a worktree of `staging/enterprise-grade-app`, beside the platform's two pieces
+it needed: layout version 2's holds card and a related list's `create`, and the `card` placement of
+an action. **Nothing was written to any server**; the local Nuxeo was read once, to see that it
+answers a document's `isRecord`, `retainUntil` and `hasLegalHold`, and that it has no legal hold
+operation without the retention module.
+
+| What                                                                                                   | Result                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run app-package` with `--model`, `--allow-list` and `--previous` (0.1.0, from staging)            | 8 layouts held to the model, 16 files passed; 0.2.0 raises the minor                                                                         |
+| The same, on a copy whose holds card names `onboarding.dispute.placeHld` and whose New names `dsp:cas` | Refused at step 2, both named                                                                                                                |
+| The seed's controls                                                                                    | 21 of 21; with the retention module's precondition taken out, its control red                                                                |
+| The holds card, the New button and dialog, the form's fixed value, the server's reason                 | Their specs, with axe at WCAG 2.2 AA; each check taken out in turn turned its spec red (the pull request lists them)                         |
+| The deployment allow-list                                                                              | `AllowListXmlTest`: it registers, and the registry serves both actions to a dispute analyst                                                  |
+| A held record's deletion, trash, folder and files                                                      | `LegalHoldGuardTest` and `ReleaseLegalHoldTest`, in Nuxeo's test framework ([the add-on's README](../../../nuxeo-agentic-records/README.md)) |
 
 ## Where the tools fell short: phase 7 feedback
 

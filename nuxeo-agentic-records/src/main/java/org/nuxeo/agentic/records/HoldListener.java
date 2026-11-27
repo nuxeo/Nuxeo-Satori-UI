@@ -2,8 +2,10 @@ package org.nuxeo.agentic.records;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.event.DocumentEventTypes;
 import org.nuxeo.ecm.core.event.Event;
@@ -30,12 +32,15 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * </ul>
  *
  * The add-on's own writes ({@link ServiceWrites}) are passed over, so that a disposition run meets
- * the platform's own guard, as it always has; so is whom the platform lets delete what it keeps
- * ({@code BaseSession.canDeleteUndeletable}): the members of {@code NuxeoRecordCleaners} outside
- * compliance mode, and everyone while the server's {@code org.nuxeo.core.allowDeleteUndeletableDocuments}
- * is on. Versions and proxies are passed over: a hold is the live document's. A refusal marks the
- * person's transaction for rollback, and throws a 409 with the code {@code held}, so that nothing of
- * the request is written.
+ * the platform's own guard, as it always has; so is a deletion by whom the platform lets delete what
+ * it keeps ({@code BaseSession.canDeleteUndeletable}): the members of {@code NuxeoRecordCleaners}
+ * outside compliance mode, and everyone while the server's
+ * {@code org.nuxeo.core.allowDeleteUndeletableDocuments} is on. That exemption is the platform's for
+ * deleting, and is not taken for the trash or for the files. Versions are passed over: a hold is the
+ * live document's. So is a proxy, but for a change to its files: a live proxy writes the files of the
+ * document it stands for, so a change through one of a held document's is refused as the document's
+ * own. A refusal marks the person's transaction for rollback, and throws a 409 with the code
+ * {@code held}, so that nothing of the request is written.
  */
 public class HoldListener implements EventListener {
 
@@ -47,21 +52,22 @@ public class HoldListener implements EventListener {
             return;
         }
         DocumentModel doc = context.getSourceDocument();
-        if (doc == null || doc.isProxy() || doc.isVersion() || ServiceWrites.active() || doc.getRef() == null) {
+        if (doc == null || doc.isVersion() || ServiceWrites.active() || doc.getRef() == null) {
             return;
         }
         CoreSession session = context.getCoreSession();
         if (session == null || session.getPrincipal() == null) {
             return;
         }
+        String name = event.getName();
         // The platform's own record cleaners, whom it lets delete what it keeps: the members of
         // NuxeoRecordCleaners outside compliance mode, or everyone while the server's
-        // org.nuxeo.core.allowDeleteUndeletableDocuments is on. They pass the platform's guard, and
-        // pass this one.
-        if (BaseSession.canDeleteUndeletable(session.getPrincipal())) {
+        // org.nuxeo.core.allowDeleteUndeletableDocuments is on. They pass the platform's guard on a
+        // deletion, and pass this one there; never for the trash or the files.
+        if (DocumentEventTypes.ABOUT_TO_REMOVE.equals(name) && BaseSession.canDeleteUndeletable(session.getPrincipal())) {
             return;
         }
-        DispositionRefusal refusal = refusal(event.getName(), session, doc);
+        DispositionRefusal refusal = doc.isProxy() ? proxyRefusal(name, session, doc) : refusal(name, session, doc);
         if (refusal == null) {
             return;
         }
@@ -93,6 +99,29 @@ public class HoldListener implements EventListener {
             return null;
         }
         }
+    }
+
+    /**
+     * A proxy's: a live proxy writes the files of the document it stands for, so a change to them
+     * through it is refused while that document is held. Removing or trashing the proxy leaves the
+     * document as it is, and is not refused.
+     */
+    private static DispositionRefusal proxyRefusal(String event, CoreSession session, DocumentModel proxy) {
+        if (!"beforeDocumentModification".equals(event) || !LegalHolds.filesChange(proxy)) {
+            return null;
+        }
+        String source = proxy.getSourceId();
+        if (source == null) {
+            return null;
+        }
+        DocumentModel target = CoreInstance.doPrivileged(session,
+                (CoreSession privileged) -> privileged.exists(new IdRef(source)) ? privileged.getDocument(new IdRef(source))
+                        : null);
+        // A proxy of a version stands for a version, which is no live document's hold.
+        if (target == null || target.isVersion()) {
+            return null;
+        }
+        return LegalHolds.held(session, target) ? LegalHolds.refusal(LegalHolds.FILES_HELD) : null;
     }
 
     private static String who(CoreSession session) {

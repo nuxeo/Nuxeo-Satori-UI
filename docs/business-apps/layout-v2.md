@@ -616,6 +616,10 @@ refers to the open record the open record's id, read-only:
   The record is created as the person, `POST` under the folder, as in Browse: the server checks the
   permission and the folder's types, and its refusal, or a constraint it names, is said in the
   form, which stays open with what was entered. A server error says only that it failed.
+- **The reference is the form's, not the server's.** The new record's `field` is an ordinary
+  property: once created, anyone the server lets write the record may change it, through the REST
+  API or a form that shows it editable. The onboarding kit's Edit form shows it read-only, which is
+  no control either.
 - **Where it is filed is the server's to find,** as a list's records are: a page provider defined
   on the server, never a path in configuration, whose first record the person may read is the
   folder. A path would differ from one server to the next, and name a place nobody reviewed.
@@ -886,11 +890,15 @@ through Retention Management"):
 - **The validator holds `place` and `release`** to the form of an id, and, given the package's
   `actions.json`, as the pipeline gives it, to the package's actions shown on a card. The app,
   which loads a layout without it, offers only what the registry served.
-- **The server decides, and refuses what a hold forbids.** The platform keeps a record under a
-  legal hold from being deleted, and `nuxeo-agentic-records` from being put in the trash and from
-  having its files changed, for everyone, administrators included; each answers with its reason,
-  which the record page shows when it refuses a delete, a change of the files or an edit. Hiding a
-  button is not the control.
+- **The server decides, and refuses what a hold forbids.** The platform takes `Remove` from a held
+  record for everyone but administrators, so their deletion or trash is refused, 403, with its
+  permission's message, and the page offers them no Delete. An administrator's trash, which the
+  platform lets through, and their deletion, `nuxeo-agentic-records` refuses, 409, with its own
+  sentence, as it refuses for everyone a folder's trash or deletion that would take a held record
+  along and a change of the record's files, through the record or a live proxy of it. The record
+  page shows the server's reason when it refuses a deletion, a change of the files or an edit: the
+  sentence for a 409, and the server's message for any other refusal but a missing permission on
+  an edit, which the Edit form says in its own words. Hiding a button is not the control.
 
 ## 8. What is refused, and when
 

@@ -19,6 +19,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, TimeoutError, catchError, map, of, switchMap, timeout } from 'rxjs';
 
+import { readServerRefusal } from '../validation-failure';
 import { appActionForm } from './app-action-form';
 import {
   AppActionDialogComponent,
@@ -292,6 +293,9 @@ export class AppActionsService {
                 } satisfies AppActionOutcome);
               }
               warn(`"${action.id}" not run: HTTP ${status}`);
+              // A conflict is the server's to explain, as a legal hold released meanwhile is.
+              const reason = status === 409 ? readServerRefusal(error) : null;
+              if (reason) return of({ kind: 'failed', message: reason } satisfies AppActionOutcome);
               return of(this.failed(FAILURE_KEYS[status] ?? 'document-layouts.action.failed'));
             }),
           );

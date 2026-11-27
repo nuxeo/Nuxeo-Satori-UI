@@ -355,5 +355,23 @@ describe('AppActionsService', () => {
       service().runOnCard('kit.releaseHold', manager(claim('inReview')));
       expect(opened).toHaveLength(1);
     });
+
+    it("says the server's reason for a conflict, such as a hold released meanwhile", async () => {
+      service().register('onboarding', HOLDS);
+      service().runOnCard('kit.placeHold', manager(claim('inReview')));
+      const { outcome } = await run({ reason: 'Chargeback dispute' }, claim('inReview'));
+      http.expectOne(RUN_URL).flush(
+        {
+          'entity-type': 'exception',
+          status: 409,
+          message: 'This record is under no legal hold.',
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+      expect(await outcome).toEqual({
+        kind: 'failed',
+        message: 'This record is under no legal hold.',
+      });
+    });
   });
 });
