@@ -9,7 +9,7 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus the documents the tests hold this library to: the layout version 2 proposal, whose examples must validate, the extension reference, whose rules and row actions the registries must match, and the administrator's guide, which must list every kit (kit-lists.spec.ts). Each kit's app.json and package.xml too, and the committed parity corpus, so that a new kit makes this project affected and kit-lists.spec.ts runs on it. Without them an edit to any would replay a cached pass, or run nothing.",
+      "$inputsComment": "nx.json's test inputs, plus the documents the tests hold this library to: the layout version 2 proposal, whose examples must validate, the extension reference, whose rules and row actions the registries must match, and the administrator's guide, which must list every kit (kit-lists.spec.ts). Each kit's app.json, package.xml, model and bundle too, whose page providers page-providers.spec.ts holds to the kit's own model, and the committed parity corpus, so that a new kit makes this project affected and kit-lists.spec.ts runs on it. Without them an edit to any would replay a cached pass, or run nothing.",
       "inputs": [
         "default",
         "^production",
@@ -22,6 +22,7 @@
         "{workspaceRoot}/business-apps/packages/*/bundle/agentic-ui-config/app.json",
         "{workspaceRoot}/business-apps/packages/*/package/package.xml",
         "{workspaceRoot}/business-apps/packages/*/content-model.json",
+        "{workspaceRoot}/business-apps/packages/*/bundle/**/*",
         "{workspaceRoot}/nuxeo-agentic-core/src/test/resources/agentic-ui-validator/parity.json"
       ],
       "options": { "reportsDirectory": "coverage/libs/shared/app-definition" }

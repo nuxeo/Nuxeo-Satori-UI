@@ -532,6 +532,72 @@ describe('RecordPageComponent: ticking a checklist item', () => {
         box('decisionLetter').getAttribute('aria-describedby'),
       );
     });
+
+    it("keeps one card's ticks when another card over the same property ticks, each writing the whole list", async () => {
+      // As the vehicle kit's deal page has them: every deal's documents on one card, a financed
+      // deal's on another, both over one checklist (its README, "Phase 8 feedback", item 11).
+      await render(appeal(), {
+        version: 2,
+        cards: [
+          ...page(true).cards,
+          {
+            id: 'finance',
+            label: 'Finance documents',
+            checklist: {
+              field: 'case:checklist',
+              tickable: true,
+              items: [{ id: 'creditApplication', label: 'Credit application' }],
+            },
+          },
+        ],
+      });
+      const finance = (): HTMLInputElement =>
+        root().querySelector<HTMLInputElement>('[data-card-id="finance"] input[type="checkbox"]')!;
+      // The first card's tick, answered.
+      box('medicalRecords').click();
+      await settle();
+      const first = (updateDocument.mock.calls[0][1] as Record<string, unknown>)['case:checklist'];
+      writes[0].next(appeal({ properties: { 'case:checklist': first } }, null));
+      writes[0].complete();
+      await settle();
+      // The second card's starts from the first's answer: its entry added, every other kept.
+      finance().click();
+      await settle();
+      const second = (updateDocument.mock.calls[1][1] as Record<string, unknown>)['case:checklist'];
+      expect(second).toEqual([
+        HELD[0],
+        expect.objectContaining({ item: 'medicalRecords', done: true }),
+        HELD[2],
+        {
+          item: 'creditApplication',
+          done: true,
+          doneBy: 'sam.patel',
+          doneOn: '2026-11-26T00:00:00.000Z',
+        },
+      ]);
+      writes[1].next(appeal({ properties: { 'case:checklist': second } }, null));
+      writes[1].complete();
+      await settle();
+      // Each card shows its own items, both ticks in.
+      expect(box('medicalRecords').checked).toBe(true);
+      expect(finance().checked).toBe(true);
+      expect(
+        root()
+          .querySelector('[data-card-id="finance"] .record-page__checklist-count')
+          ?.textContent?.trim(),
+      ).toBe('1 of 1 done');
+      // An untick on the first card keeps the second card's entry.
+      box('appealLetter').click();
+      await settle();
+      expect(
+        (updateDocument.mock.calls[2][1] as Record<string, unknown>)['case:checklist'],
+      ).toEqual([
+        expect.objectContaining({ item: 'appealLetter', done: false }),
+        expect.objectContaining({ item: 'medicalRecords', done: true }),
+        HELD[2],
+        expect.objectContaining({ item: 'creditApplication', done: true }),
+      ]);
+    });
   });
 
   describe('progress and failure', () => {

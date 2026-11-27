@@ -528,6 +528,18 @@ Version 2 adds six rules to the 29 or so that exist:
   (`libs/shared/extensions`, in the published package), where no computation is, so a rule written
   with one would pass on a record page and never elsewhere. The banner it was asked for is
   `dateAfter`'s.
+- **A rule and a queue that say one thing are written twice.** A banner's rule reads the open
+  record, and a queue's page provider is NXQL on the server: nothing holds the two together, so
+  write them from one definition. Write the values out on both sides, `app.rules.fieldIn` and
+  `IN (...)`, rather than `core.not` on one and `<>` on the other, which part over a record with
+  no value. "More than 30 days" is `dateAfter` 30 in the rule and `< NOW('-P31D')` in the query,
+  since `NOW('-P30D')` lists the record open 30 days, which the rule does not flag. And even then
+  they part for some hours a day: the rule counts days on the reader's calendar, and the query on
+  the server's clock, so for a reader behind UTC the queue lists a record before its banner
+  shows, and for one ahead the banner shows first. A page provider has no reader's day. Say so
+  to whoever reads both, and hold them together in the kit's own controls, as the vehicle kit's
+  seed does (its [README](../../business-apps/packages/vehicle-titles-demo/README.md), "Titles
+  overdue: the queue and the banner say the same").
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
 
@@ -847,6 +859,49 @@ let the page tick them, with `"tickable": true`:
   a record read before it, by the server's modification stamps; on failure the card is as it was,
   and a toast says why, as the Edit form does: the server's own words for a value it refused, that
   the person may not change the checklist for a 403, or that it could not be saved.
+- **Two cards may show one property,** each its own items: the documents every deal needs on one,
+  and those a financed deal needs too on another, shown only for a loan or a lease. A tick on
+  either card writes the whole list from the page's copy, so it keeps every entry the other card
+  shows, and one tick at a time on the whole page holds for both. Give each item to one card: an
+  item on both shows the same entry twice. `record-page.checklist-ticks.spec.ts` ticks across two
+  such cards; the vehicle kit's deal page has them:
+
+```json
+{
+  "version": 2,
+  "cards": [
+    {
+      "id": "documents",
+      "label": "Required documents",
+      "checklist": {
+        "field": "vdocs:checklist",
+        "tickable": true,
+        "items": [
+          { "id": "license", "label": "Driver's license" },
+          { "id": "insurance", "label": "Proof of insurance" }
+        ]
+      }
+    },
+    {
+      "id": "financeDocuments",
+      "label": "Finance documents",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+      },
+      "checklist": {
+        "field": "vdocs:checklist",
+        "tickable": true,
+        "items": [
+          { "id": "creditApplication", "label": "Credit application" },
+          { "id": "lenderApproval", "label": "Lender's approval" }
+        ]
+      }
+    }
+  ]
+}
+```
+
 - **Two people ticking at once can lose a tick.** The list is written whole from the page's copy,
   as the Edit form writes it, with no change token: a tick someone else wrote since the page read
   the record is replaced, and the page reads the record again only after its own write. Sending

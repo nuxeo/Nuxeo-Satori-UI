@@ -58,10 +58,10 @@ one as a skeleton and lists it, and does not run it.
   mkdir -p /tmp/vehicle-kits /tmp/vehicle-work
   ```
 
-- **No token for the MCP server.** `call.ts` starts the server with the shell's whole environment.
-  It needs no token and no Nuxeo credential to write a package, so leave them out with `env -u`, as
-  every call below does: `SATORI_GH_READONLY_TOKEN`, `NUXEO_USER` and `NUXEO_PASS`, and any other
-  token your shell holds.
+- **No token for the MCP server.** `call.ts` gives the server only the variables it reads and what
+  Node needs, so no other token your shell holds reaches it. It needs no Nuxeo credential to write
+  a package either, so every call below leaves `NUXEO_USER` and `NUXEO_PASS` out with `env -u`,
+  and `SATORI_GH_READONLY_TOKEN` too, which costs nothing.
 - **Credentials for the server steps only:** `NUXEO_USER` and `NUXEO_PASS`, from the environment,
   with no default. Never write them into a file, a command's arguments or a URL.
 
@@ -641,8 +641,9 @@ vehicle-titles-demo 0.1.0: checked, built and verified: business-apps/packages/v
 That is the digest its README records. **What the pipeline does not check,** from the skill's step 3
 and the kit's feedback items 7 and 8: a page provider's NXQL is checked for what Nuxeo's grammar has
 no place for, not run, so `vdeal:checklist/*/done = 0` and the vehicle kit's `NOW('-P31D')` have run
-on no server; and the properties a rule or a query names are not held to the model. Check those by
-hand, then on the server.
+on no server. The properties, types and facets a query names are held to the model, down to a
+checklist's subfields, so a misspelt `vdeal:checklist/*/don` is refused; whether the query lists
+what it should, only a server tells. Check that by hand, then on the server.
 
 **For a real kit in `business-apps/packages/`, two lists outside its folder** (the skill, step 3):
 `npm run app-definition:server-validator` rebuilds the server validator's parity corpus, and the kit
