@@ -41,9 +41,12 @@ import org.xml.sax.SAXException;
  * the server could not back.
  *
  * Bounded: at most {@value #MAX_PACKAGES} packages, a {@code .packages} of at most {@value
- * #MAX_LIST_BYTES} bytes and a {@code package.xml} of at most {@value #MAX_XML_BYTES}; an id that is
- * not a plain file name is skipped, so that a line cannot point the reader outside the store; and
- * the XML is parsed with no DTD and no external entity.
+ * #MAX_LIST_BYTES} bytes and a {@code package.xml} of at most {@value #MAX_XML_BYTES}, each limit held
+ * as the file is read; an id that is not a plain file name is skipped, so that a line cannot point
+ * the reader outside the store, and a {@code package.xml} that is not inside the store once its
+ * links are followed is not read; neither file is read through a link of its own; and the XML is
+ * parsed with no DTD and no external entity. Read for each request, not kept: at most 500 files of
+ * 64 KB, for an administrator's page.
  */
 final class InstalledPackages {
 
@@ -111,11 +114,15 @@ final class InstalledPackages {
             return Listing.notRecorded("no-list");
         }
         Properties states = new Properties();
+        Path store;
         try {
-            if (Files.size(list) > MAX_LIST_BYTES) {
+            byte[] bytes = bounded(list, MAX_LIST_BYTES);
+            if (bytes == null) {
                 return Listing.notRecorded("list-too-large");
             }
-            states.load(new StringReader(Files.readString(list, StandardCharsets.UTF_8)));
+            states.load(new StringReader(new String(bytes, StandardCharsets.UTF_8)));
+            Path stored = directory.resolve(STORE);
+            store = Files.isDirectory(stored) ? stored.toRealPath() : null;
         } catch (IOException | IllegalArgumentException e) {
             return Listing.notRecorded("list-unreadable");
         }
@@ -134,7 +141,7 @@ final class InstalledPackages {
                 problem = "too-many";
                 break;
             }
-            Descriptor descriptor = descriptor(directory.resolve(STORE).resolve(id).resolve("package.xml"));
+            Descriptor descriptor = store == null ? null : descriptor(store, id);
             String name = descriptor == null ? id : descriptor.name();
             packages.add(new Entry(id, name, descriptor == null ? null : descriptor.version(), state,
                     role(name, descriptor), SIGNATURE_NOT_RECORDED));
@@ -162,17 +169,30 @@ final class InstalledPackages {
         return "add-on";
     }
 
-    /** A {@code package.xml}'s name, version and dependencies, or {@code null} when it cannot be read. */
-    private static Descriptor descriptor(Path file) {
+    /**
+     * The file's bytes, read through no link and at most {@code limit} of them: {@code null} when it
+     * holds more. Bounded as it is read, not by a size asked for first, which the file could outgrow.
+     */
+    private static byte[] bounded(Path file, int limit) throws IOException {
+        try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+            byte[] bytes = in.readNBytes(limit + 1);
+            return bytes.length > limit ? null : bytes;
+        }
+    }
+
+    /**
+     * A package's {@code package.xml} in the store: its name, version and dependencies, or {@code
+     * null} when it cannot be read, is over its limit, or is not inside the store once every link on
+     * its way is followed, so that a package's folder linked elsewhere is not read.
+     */
+    private static Descriptor descriptor(Path store, String id) {
         try {
-            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > MAX_XML_BYTES) {
+            Path file = store.resolve(id).resolve("package.xml");
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().startsWith(store)) {
                 return null;
             }
-            byte[] bytes;
-            try (InputStream in = Files.newInputStream(file)) {
-                bytes = in.readNBytes(MAX_XML_BYTES + 1);
-            }
-            if (bytes.length > MAX_XML_BYTES) {
+            byte[] bytes = bounded(file, MAX_XML_BYTES);
+            if (bytes == null) {
                 return null;
             }
             Element root = parser().parse(new InputSource(new StringReader(new String(bytes, StandardCharsets.UTF_8))))

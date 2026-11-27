@@ -190,6 +190,22 @@ class DiagnosticsReportTest {
                 "nuxeo-web-ui 2025.21.0 started add-on", "payers-claims-demo 0.7.0 started kit"), listed);
     }
 
+    /** The exact build is what support needs most: a timestamped version is shown whole, not cleaned. */
+    @Test
+    void aTimestampedBuildVersionIsShownWhole(@TempDir Path root) throws IOException {
+        String build = "2026.0.2-" + "20261126114747" + "-BUILD-local";
+        write(root.resolve(".packages"), "nuxeo-agentic-ui-" + build + "=started\n");
+        write(root.resolve("store/nuxeo-agentic-ui-" + build + "/package.xml"),
+                "<package type=\"addon\" name=\"nuxeo-agentic-ui\" version=\"" + build + "\"/>");
+        ConfigSnapshot snapshot = snapshot();
+
+        ObjectNode report = DiagnosticsReport.build(snapshot, snapshot.diagnostics(), LayerService.SWITCHED_OFF, false,
+                new Probe(Set.of(), Set.of(), root), CLOCK);
+
+        assertEquals(build, report.path("app").path("version").asText());
+        assertEquals(build, report.path("packages").path("entries").get(0).path("version").asText());
+    }
+
     @Test
     void eachCheckSaysWhatTheServerHas(@TempDir Path root) throws IOException {
         ConfigSnapshot snapshot = snapshot();

@@ -131,8 +131,10 @@ function parse() {
   });
   const runs = Number(values.runs);
   const port = Number(values.port);
-  if (!Number.isInteger(runs) || runs < 1)
-    exitWith(2, `--runs ${values.runs}: a whole number, 1 or more`);
+  // Odd, so that the median is one run's own time, not the faster of the two in the middle.
+  if (!Number.isInteger(runs) || runs < 1 || runs % 2 === 0) {
+    exitWith(2, `--runs ${values.runs}: an odd whole number, 1, 3, 5 or more`);
+  }
   if (!Number.isInteger(port) || port < 1) exitWith(2, `--port ${values.port}: a port`);
   if (!Object.hasOwn(NETWORKS, values.network)) {
     exitWith(2, `--network ${values.network}: one of ${Object.keys(NETWORKS).join(', ')}`);

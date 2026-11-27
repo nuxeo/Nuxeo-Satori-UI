@@ -23,7 +23,7 @@ import {
   readBudgets,
 } from './budgets.mjs';
 import { measureBundles, parseLowered, staticClosure } from './bundles.mjs';
-import { lineControls } from './controls.mjs';
+import { lineControls, loweredLine } from './controls.mjs';
 import { HOME } from './pages.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -322,6 +322,36 @@ describe("the guard's own controls", () => {
     assert.deepEqual(shortfalls, []);
   });
 
+  it('rounds a measure up, so that one just over its budget never reads as the budget', () => {
+    const judged = judgePages(
+      { 'home.firstRenderMs': 2500.4, 'queue.firstPageMs': 1, 'record.firstRenderMs': 1 },
+      budgets(),
+    );
+    assert.deepEqual(failures(judged), [
+      "over budget: home.firstRenderMs is 2,501 ms, budget 2,500 ms (the home page's cards drawn with their figures)",
+    ]);
+  });
+
+  it('takes only a measured number for the end-to-end control, not a page that never drew', () => {
+    const line = loweredLine('queue.firstPageMs', 1, 'ms');
+    assert.match(
+      "over budget: queue.firstPageMs is 1,701 ms, budget 1 ms (a queue's first page)",
+      line,
+    );
+    assert.doesNotMatch(
+      "over budget: queue.firstPageMs is not measured, budget 1 ms (a queue's first page)",
+      line,
+    );
+    assert.doesNotMatch(
+      "over budget: queue.firstPageMs is 1,701 ms, budget 10 ms (a queue's first page)",
+      line,
+    );
+    assert.match(
+      'over budget: initialBytes is 3,123,605 bytes, budget 3,123,604 bytes (the initial bundle)',
+      loweredLine('initialBytes', 3_123_604, 'bytes'),
+    );
+  });
+
   it('refuses a lowered budget that names nothing', () => {
     assert.throws(() => lowered(budgets(), 'feature:nothing', 1), /no budget "feature:nothing"/);
     assert.deepEqual(parseLowered(['queue.firstPageMs=100']), [
@@ -374,5 +404,18 @@ describe('the CI job', () => {
     }
     assert.match(job, /--run-checks/);
     assert.match(job, /npm install --no-save/);
+  });
+
+  it('has no way around it: no step or job allowed to fail, and no condition on the job', () => {
+    // The job, to the next one at the same indentation, if a job is ever added after it.
+    const next = job.slice(1).search(/\n {2}[A-Za-z][\w-]*:\s*\n/);
+    const jobBody = next < 0 ? job : job.slice(0, next + 1);
+    assert.doesNotMatch(jobBody, /continue-on-error/);
+    assert.doesNotMatch(jobBody, /^ {4}if:/m, 'the job runs on every event the workflow takes');
+    const steps = jobBody.split('\n      - ').slice(1);
+    for (const step of steps) {
+      if (/^name: Upload the performance budgets' reports/.test(step)) continue;
+      assert.doesNotMatch(step, /\n {8}if:/, `a step that may be skipped: ${step.split('\n')[0]}`);
+    }
   });
 });

@@ -707,10 +707,17 @@ needs to know of this server's apps, read only, in one place. It shows:
   do not change with the page's language, and a Copy button.
 
 **What it leaves out, by construction:** no person, not the administrator asking, not who changed
-the deployment layer, not an app's groups; no property's value but the product's name and version
-and the switches as on or off; and no file's content. Every message is cleaned before it is sent:
-an email address, who a URL signs in as and its query, a home directory's owner and anything shaped
-like a key or a token are replaced ([`Redaction.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/Redaction.java)).
+the deployment layer, not an app's groups; no property is read for it but the product's name and
+version, the package manager's directory, which is not shown, and the switches, shown as on or
+off; and no file's content. One property can still show: with the development overrides on, their
+directory is in their own messages and as the source of their files. Every message is cleaned
+before it is sent: an email address, who a URL signs in as and its query, a home directory's owner,
+what follows a credential's name such as `password=`, an `Authorization` header's value, and
+anything shaped like a key or a token are replaced
+([`Redaction.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/Redaction.java)).
+A package's name and version are held to a name's and a version's form instead, so that a build's
+timestamped version is shown whole. The cleaning is a second line, not a guarantee: read the text
+before sending it.
 
 **Who may read it is decided on the server.** The page reads
 `GET /nuxeo/agentic-ui-apps/diagnostics.json`, after sign-in, below the app registry's servlet:
@@ -719,7 +726,7 @@ like a key or a token are replaced ([`Redaction.java`](../../nuxeo-agentic-core/
 | ------------------------------------------------ | --------------------------------------------- |
 | `GET`, from an administrator (`isAdministrator`) | 200, the report, `Cache-Control: no-store`    |
 | `GET`, from anyone else, any group               | 403, before anything of the server is read    |
-| `GET`, with no sign-in                           | 401                                           |
+| `GET`, with no sign-in                           | 401; 403 on a server with an anonymous user   |
 | Any other method, `HEAD` and `POST` included     | 405, `Allow: GET`, before anyone is looked at |
 
 The page's own route guard only keeps it out of the menu: someone who reaches the page without
@@ -727,7 +734,9 @@ being an administrator sees the server's 403 and nothing of the report. Sources:
 [`DiagnosticsEndpoint.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsEndpoint.java),
 [`DiagnosticsReport.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsReport.java),
 [`InstalledPackages.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/InstalledPackages.java),
-and their tests, `DiagnosticsAccessTest` above all. Its security review waits with the others
+and their tests, `DiagnosticsAccessTest` above all. **Run in its tests only:** no server has the
+build of `nuxeo-agentic-core` that answers it yet, so the local Docker Nuxeo answers 404 there, and
+the report's reads of a running server, `ServerProbe.live()`, have run nowhere. Its security review waits with the others
 ([security-reviews.md](security-reviews.md)). Telemetry, which would send any of this anywhere, is
 not built: [telemetry.md](telemetry.md) is its design, for decision T.
 

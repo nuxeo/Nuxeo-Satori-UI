@@ -22,8 +22,9 @@
  * Exit 0 when every control was seen failing as it should; 1 when one was not; 2 a report missing.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -57,9 +58,11 @@ export function lineControls(judged, budgets, rejudge) {
     const said = failures(over).find((message) =>
       message.startsWith(`over budget: ${line.id} is `),
     );
-    const number = Math.round(line.value).toLocaleString('en');
+    // The measured number and the budget, each where it belongs: they always differ, since the
+    // budget is one below the number rounded up.
+    const number = Math.ceil(line.value).toLocaleString('en');
     const limit = below.toLocaleString('en');
-    if (!said || !said.includes(number) || !said.includes(`budget ${limit}`)) {
+    if (!said || !said.includes(` is ${number} `) || !said.includes(`, budget ${limit} `)) {
       shortfalls.push(
         `${line.id}: its failure does not name ${number} and budget ${limit}: ${said ?? 'none'}`,
       );
@@ -76,15 +79,31 @@ function readReport(path, kind) {
   return report;
 }
 
-/** Runs a check with a budget lowered: it must exit 1, and say the line with its numbers. */
-function runLowered(script, args, expected) {
+/**
+ * The line a check says when `id` is over its budget lowered to `limit`, with a measured number:
+ * "is not measured", which a page that never drew says, does not match it.
+ */
+export function loweredLine(id, limit, unit) {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `^over budget: ${escaped} is [\\d,]+ ${unit}, budget ${limit.toLocaleString('en')} ${unit} `,
+  );
+}
+
+/**
+ * Runs a check with a budget lowered: it must exit 1, and say the line with a measured number and
+ * the lowered budget, `expected` matching the whole line. "is not measured" does not match it, so a
+ * check that failed because it measured nothing, a page that never drew, is not this control seen
+ * working.
+ */
+export function runLowered(script, args, expected) {
   const run = spawnSync(process.execPath, [resolve(HERE, script), ...args], { encoding: 'utf8' });
   const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
   const reasons = [];
   if (run.status !== 1) reasons.push(`${script} exited ${run.status}, not 1`);
-  if (!output.includes(expected)) reasons.push(`${script} did not say "${expected}"`);
-  const said = output.split('\n').find((line) => line.startsWith(expected)) ?? null;
-  return { reasons, said };
+  const said = output.split('\n').find((line) => expected.test(line)) ?? null;
+  if (said === null) reasons.push(`${script} did not say a line matching ${expected}`);
+  return { reasons, said, output };
 }
 
 function main() {
@@ -129,7 +148,7 @@ function main() {
       const { reasons, said } = runLowered(
         'bundles.mjs',
         ['--lower', `initialBytes=${below}`],
-        'over budget: initialBytes is ',
+        loweredLine('initialBytes', below, 'bytes'),
       );
       problems.push(...reasons);
       console.log(
@@ -137,12 +156,32 @@ function main() {
       );
     }
     if (pages) {
+      // With its report, to see that every page drew: what fails it must be the budget alone.
+      const report = join(mkdtempSync(join(tmpdir(), 'page-budgets-control-')), 'pages.json');
       const { reasons, said } = runLowered(
         'pages.mjs',
-        ['--skip-build', '--runs', '1', '--lower', 'queue.firstPageMs=1'],
-        'over budget: queue.firstPageMs is ',
+        ['--skip-build', '--runs', '1', '--lower', 'queue.firstPageMs=1', '--report', report],
+        loweredLine('queue.firstPageMs', 1, 'ms'),
       );
       problems.push(...reasons);
+      const run = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null;
+      const failedChecks = (run?.checks ?? [])
+        .filter((check) => !check.pass)
+        .map((check) => check.name);
+      if (!run) problems.push('pages.mjs, lowered, wrote no report');
+      else if (failedChecks.length > 0) {
+        problems.push(
+          `pages.mjs, lowered, failed for another reason too: ${failedChecks.join('; ')}`,
+        );
+      }
+      const others = (run?.judged?.lines ?? []).filter(
+        (line) => line.id !== 'queue.firstPageMs' && !line.pass,
+      );
+      if (others.length > 0) {
+        problems.push(
+          `pages.mjs, lowered, was over on other lines: ${others.map((line) => line.id).join(', ')}`,
+        );
+      }
       console.log(
         `pages.mjs, queue.firstPageMs lowered to 1: ${said ?? 'did not fail as it should'}`,
       );

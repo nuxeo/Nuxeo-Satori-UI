@@ -193,8 +193,12 @@ export function lowered(budgets, id, limit) {
   return copy;
 }
 
+/**
+ * A number as a failure says it: rounded up, so that a measure just over its budget never reads as
+ * the budget itself, "is 2,501 ms, budget 2,500 ms" for 2500.4 ms.
+ */
 const show = (value, unit) =>
-  value === null ? 'not measured' : `${Math.round(value).toLocaleString('en')} ${unit}`;
+  value === null ? 'not measured' : `${Math.ceil(value).toLocaleString('en')} ${unit}`;
 
 /** The judgement's failures, one line each: the measure, the number and the budget. */
 export function failures(judged) {

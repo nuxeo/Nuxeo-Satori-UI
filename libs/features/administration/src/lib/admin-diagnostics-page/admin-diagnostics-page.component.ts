@@ -210,4 +210,14 @@ export class AdminDiagnosticsPageComponent implements OnInit {
   roleKey(entry: DiagnosticsPackage): string {
     return ROLE_KEYS[entry.role];
   }
+
+  /**
+   * What the server says of a package's signature: `not-recorded` on Nuxeo LTS 2025, and anything
+   * else, which this page does not know, as not known rather than as verified.
+   */
+  signatureKey(entry: DiagnosticsPackage): string {
+    return entry.signature === 'not-recorded'
+      ? 'admin.diagnostics.packages.signature-not-recorded'
+      : 'admin.diagnostics.packages.signature-unknown';
+  }
 }

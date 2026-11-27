@@ -89,6 +89,25 @@ class InstalledPackagesTest {
         assertEquals("id-skipped", listing.problem());
     }
 
+    /** A package's folder, or its package.xml, linked outside the store is not read. */
+    @Test
+    void aDescriptorLinkedOutsideTheStoreIsNotRead(@TempDir Path root) throws IOException {
+        Path outside = root.resolve("outside");
+        write(outside.resolve("package.xml"), "<package name=\"stolen\" version=\"9\"/>");
+        Path packages = root.resolve("packages");
+        write(packages.resolve(".packages"), "linked-1.0=started\nfile-1.0=started\n");
+        Files.createDirectories(packages.resolve("store"));
+        Files.createSymbolicLink(packages.resolve("store/linked-1.0"), outside);
+        Files.createDirectories(packages.resolve("store/file-1.0"));
+        Files.createSymbolicLink(packages.resolve("store/file-1.0/package.xml"), outside.resolve("package.xml"));
+
+        InstalledPackages.Listing listing = InstalledPackages.read(packages);
+
+        assertEquals(List.of("file-1.0", "linked-1.0"), names(listing));
+        assertFalse(listing.toString().contains("stolen"));
+        assertEquals("descriptor-unreadable", listing.problem());
+    }
+
     /** No DTD is read, so no entity can pull a file in: the package is listed by its id alone. */
     @Test
     void aDescriptorWithADoctypeIsNotReadAndNoEntityIsResolved(@TempDir Path root) throws IOException {

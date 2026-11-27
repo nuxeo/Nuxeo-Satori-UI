@@ -2912,8 +2912,10 @@ version), `app` (the `nuxeo-agentic-ui` package's version and `nuxeo-agentic-cor
 `deployment-layer`, `development-overrides`, `operation-allow-list`), `configuration` (the
 bootstrap and manifest fragments and the layouts in force, with their provenance), `apps` (each
 app's package and deployment layers), `diagnostics` (the errors and warnings logged, at most 200,
-each cleaned of anything personal or secret) and `diagnosticsOmitted`. No person is named in it,
-and no property's value but the product's name and version. The page refuses any other `format`.
+each cleaned of what looks personal or secret) and `diagnosticsOmitted`. No person is named in it,
+and no property's value is in it but the product's name and version, and, with the development
+overrides on, their directory in their own messages. The page refuses any other `format`. Run in
+`nuxeo-agentic-core`'s tests only: no server has this build yet.
 
 ---
 

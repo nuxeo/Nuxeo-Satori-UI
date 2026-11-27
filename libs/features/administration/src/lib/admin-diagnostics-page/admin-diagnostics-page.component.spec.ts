@@ -3,8 +3,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { DOCUMENT } from '@angular/common';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import axe from 'axe-core';
-import { Subject, of, throwError } from 'rxjs';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Observable, Subject, of, throwError } from 'rxjs';
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -37,7 +37,7 @@ const text = (root: HTMLElement, selector: string) =>
   (root.querySelector(selector)?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('AdminDiagnosticsPageComponent', () => {
-  let load: ReturnType<typeof vi.fn>;
+  let load: Mock<() => Observable<DiagnosticsReport>>;
 
   async function open(answer: ReturnType<DiagnosticsService['load']>) {
     load = vi.fn().mockReturnValue(answer);
@@ -134,6 +134,23 @@ describe('AdminDiagnosticsPageComponent', () => {
 
     expect(document.activeElement).toBe(page.querySelector('[data-diagnostics-support]'));
     expect(text(page, '[data-diagnostics-copied]')).toContain('copy it yourself');
+  });
+
+  it('shows a signature it does not know as not known, never as verified', async () => {
+    const raw = serverReport();
+    (raw['packages'] as { entries: Record<string, unknown>[] }).entries[1]['signature'] =
+      'verified';
+    const fixture = await open(of(readDiagnosticsReport(raw)!));
+    const page = fixture.nativeElement as HTMLElement;
+
+    const cells = [...page.querySelectorAll('[data-diagnostics-packages] tbody tr')].map((row) =>
+      row.lastElementChild!.textContent!.trim(),
+    );
+    expect(cells).toEqual([
+      'Not recorded by the server',
+      'Not known',
+      'Not recorded by the server',
+    ]);
   });
 
   it('says so when the server keeps no list of packages', async () => {

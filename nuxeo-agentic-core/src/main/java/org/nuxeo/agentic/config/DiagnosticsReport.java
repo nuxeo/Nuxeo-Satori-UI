@@ -32,11 +32,17 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Redaction}; the information-level ones are counted, not listed.</li>
  * </ul>
  *
- * <b>Nothing personal and nothing secret, by construction.</b> No property's value is read but
- * the six this names, none of them a credential, and the switches as booleans. No person is named:
- * not the administrator asking, not who changed the deployment layer (its trail is not read), not
- * an app's groups. A layer's files are listed by path and version, not by content. Every message is
- * cleaned before it is written.
+ * <b>Built to hold nothing personal and nothing secret.</b> The properties read for it are the
+ * product's name and version, shown, the package manager's directory, not shown, and the switches,
+ * shown as on or off; none is a credential. One property's value can still show: with the
+ * development overrides on, their directory is in their own messages and as their files' source,
+ * its owner cleaned. No person is named: not the administrator asking, not who changed the
+ * deployment layer (its trail is not read), not an app's groups. A layer's files are listed by path
+ * and version, not by content. Every message is cleaned ({@link Redaction#clean}); a package's name
+ * and every version are held to their form ({@link Redaction#identifier}, {@link Redaction#version})
+ * rather than cleaned, so that a build's timestamped version is shown whole, and are {@code null}
+ * when they are not of it. The cleaning is a second line: the page asks for the text to be read
+ * before it is sent.
  */
 final class DiagnosticsReport {
 
@@ -69,8 +75,8 @@ final class DiagnosticsReport {
         ObjectNode report = NODES.objectNode().put("format", FORMAT).put("generatedAt", Instant.now(clock).toString());
 
         ObjectNode platform = report.putObject("platform");
-        platform.put("product", text(probe.property(ServerProbe.PRODUCT_NAME_PROPERTY)));
-        platform.put("version", text(probe.property(ServerProbe.PRODUCT_VERSION_PROPERTY)));
+        platform.put("product", Redaction.version(probe.property(ServerProbe.PRODUCT_NAME_PROPERTY)));
+        platform.put("version", Redaction.version(probe.property(ServerProbe.PRODUCT_VERSION_PROPERTY)));
 
         InstalledPackages.Listing listing = InstalledPackages.read(probe.packagesDirectory());
         ObjectNode app = report.putObject("app");
@@ -78,19 +84,21 @@ final class DiagnosticsReport {
         app.put("version", listing.packages()
                                   .stream()
                                   .filter(entry -> "app".equals(entry.role()))
-                                  .map(InstalledPackages.Entry::version)
+                                  .map(entry -> Redaction.version(entry.version()))
                                   .findFirst()
                                   .orElse(null));
-        app.put("core", text(probe.coreVersion()));
+        app.put("core", Redaction.version(probe.coreVersion()));
 
         ObjectNode packages = report.putObject("packages");
         packages.put("recorded", listing.recorded());
         packages.put("problem", listing.problem());
         ArrayNode entries = packages.putArray("entries");
         for (InstalledPackages.Entry entry : listing.packages()) {
+            // Held to a name's and a version's form rather than cleaned: the token rule would take a
+            // build's timestamped version, 2026.0.2-20261126114747-BUILD-local, for a key.
             entries.addObject()
-                   .put("name", Redaction.clean(entry.name()))
-                   .put("version", entry.version() == null ? null : Redaction.clean(entry.version()))
+                   .put("name", Redaction.identifier(entry.name()))
+                   .put("version", Redaction.version(entry.version()))
                    .put("state", entry.state())
                    .put("role", entry.role())
                    .put("signature", entry.signature());
@@ -211,10 +219,6 @@ final class DiagnosticsReport {
 
     private static String textOf(JsonNode node, String field) {
         JsonNode value = node == null ? null : node.get(field);
-        return value != null && value.isTextual() ? Redaction.clean(value.asText()) : null;
-    }
-
-    private static String text(String value) {
-        return value == null || value.isBlank() ? null : Redaction.clean(value.strip());
+        return value != null && value.isTextual() ? Redaction.version(value.asText()) : null;
     }
 }

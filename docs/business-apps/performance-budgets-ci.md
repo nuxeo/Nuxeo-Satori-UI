@@ -54,7 +54,8 @@ with nothing cached, and each time is the page's own clock from navigation to wh
 
 **Why the median of five.** One run slowed by a garbage collection, or by a busy runner, does not
 fail the check; three of five slowed do. A regression that slows every load moves the median at
-once.
+once. The count of runs is odd, so that the median is one run's own time: `--runs` refuses an even
+one. A page that did not draw in a run counts as not measured, and its median then fails.
 
 The run fails, whatever its times, if a page threw, asked for something the stand-in has no answer
 for, or asked a host other than the stand-in and the shell's icon font, which is not resolved.
@@ -63,7 +64,7 @@ for, or asked a host other than the stand-in and the shell's icon font, which is
 
 | Measure                | Budget  | Why there                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `home.firstRenderMs`   | 2500 ms | Web Vitals' "good" largest contentful paint: the cards' figures are what a person opens the home for. Measured at 1512 ms (below), so a regression of a second is caught, and a CI runner slower than the machine it was measured on still passes.                                        |
+| `home.firstRenderMs`   | 2500 ms | Web Vitals' "good" largest contentful paint: the cards' figures are what a person opens the home for. Measured at 1512 ms (below) on a laptop, so a regression of a second is caught, with room for a CI runner slower than that laptop; the job's own numbers are below.                 |
 | `queue.firstPageMs`    | 2500 ms | The same, and the asset library's own budget for its first page, `library.firstPageMs` ([performance-budget.md](performance-budget.md)). Measured at 1700 ms.                                                                                                                             |
 | `record.firstRenderMs` | 3000 ms | The record page loads the document page's code, the largest lazy chunk at 465 kB, and its vocabularies, so half a second more than the other two; within Web Vitals' "needs improvement" band, which ends at 4 seconds, so a page that has fallen into "poor" fails. Measured at 1813 ms. |
 
@@ -153,10 +154,16 @@ into `main`, `integration/**` and `staging/**`, and on every push the workflow t
 The job needs nothing but what every job of the workflow has: the read-only package token, through
 the setup action. It adds no permission and no secret.
 
-## Measured on 27 November 2026
+**It blocks a merge only as a required check.** The workflow has no job that gathers the others, so
+each is required by name in the branch's ruleset, which an administrator of the repository sets:
+`performance-budgets` is to be added there for `staging/**`, `integration/**` and `main`. Until it is,
+a red job is seen on the pull request, and does not stop the merge. This work changes no ruleset.
+
+## Measured on 27 November 2026, locally
 
 On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown, the branch that
-added these budgets with no changes on top:
+added these budgets with no changes on top. Not a CI runner's numbers: those are in the job's
+report, its `performance-budgets` artifact, on every run.
 
 | Measure                | Median of five | The five                     |
 | ---------------------- | -------------- | ---------------------------- |
@@ -164,7 +171,7 @@ added these budgets with no changes on top:
 | `queue.firstPageMs`    | 1700 ms        | 1696, 1698, 1700, 1700, 1702 |
 | `record.firstRenderMs` | 1813 ms        | 1801, 1805, 1813, 1813, 1813 |
 
-The guard, the same day: all 29 bundle budgets and all 3 page budgets, each lowered to one below
+The guard, the same day, locally, as the job runs it on every run: all 29 bundle budgets and all 3 page budgets, each lowered to one below
 its number, failed the judgement with that number and that budget, and each set at its own number
 passed; `bundles.mjs --lower initialBytes=3123604` said "over budget: initialBytes is 3,123,605
 bytes, budget 3,123,604 bytes" and exited 1; `pages.mjs --lower queue.firstPageMs=1` said "over

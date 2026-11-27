@@ -666,8 +666,9 @@ errors, with a "copy for support" text, from `GET /nuxeo/agentic-ui-apps/diagnos
 ([administrator-guide.md](administrator-guide.md), "The diagnostics page"). Performance budgets in
 CI, the `performance-budgets` job on every pull request into a staging branch: the initial bundle
 and each lazy chunk by size, and the home, a queue's first page and a record page's first render
-in Chromium, each the median of five cold loads, every budget seen failing when lowered on purpose
-([performance-budgets-ci.md](performance-budgets-ci.md)). Telemetry is a design only, open decision
+in Chromium, each the median of five cold loads, and the job lowering every budget on purpose to
+see it fail ([performance-budgets-ci.md](performance-budgets-ci.md)); it blocks a merge once the
+ruleset requires it. The endpoint has run in its tests only. Telemetry is a design only, open decision
 T ([telemetry.md](telemetry.md)): nothing sends anything.
 
 **Demo:**

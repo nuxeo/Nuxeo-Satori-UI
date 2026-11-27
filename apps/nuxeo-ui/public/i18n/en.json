@@ -329,7 +329,7 @@
     },
     "diagnostics": {
       "title": "Diagnostics",
-      "intro": "What support needs to know about this server's apps: versions, installed packages, the server checks the apps depend on, the configuration in force and the errors it logged. Nothing here names a person or holds a secret.",
+      "intro": "What support needs to know about this server's apps: versions, installed packages, the server checks the apps depend on, the configuration in force and the errors it logged. It is built to name no person and hold no secret; read it before you send it.",
       "loading": "Loading the diagnostics",
       "failed": "The diagnostics could not be read",
       "unknown": "Not known",
@@ -365,7 +365,8 @@
           "too-many": "More packages are installed than the page lists; the first ones are shown.",
           "descriptor-unreadable": "A package's description could not be read; it is listed by its identifier.",
           "unknown": "The package list could not be read whole."
-        }
+        },
+        "signature-unknown": "Not known"
       },
       "checks": {
         "heading": "Server checks"
@@ -410,7 +411,7 @@
         "deployment-layer": "Deployment layer",
         "deployment-none": "On, with no live file",
         "deployment-file": "{{ path }}, version {{ version }}",
-        "errors": "Configuration errors",
+        "errors": "Configuration errors and warnings",
         "error-count": "{{ count }} logged"
       },
       "errors": {
@@ -429,7 +430,7 @@
       },
       "support": {
         "heading": "Copy for support",
-        "hint": "The same facts as plain text, to paste into a support request. It names no person and holds no secret.",
+        "hint": "The same facts as plain text, to paste into a support request. It is built to name no person and hold no secret, and messages are cleaned of what looks like one; read it before you send it.",
         "label": "Text for support",
         "copy": "Copy",
         "copied": "Copied to the clipboard.",
