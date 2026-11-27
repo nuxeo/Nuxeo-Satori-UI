@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<!-- What a kit and a server give the add-on, for the tests: a record type letters are written on,
+     with values, a date, an amount, a list, several fields, a file and two references; a member it
+     names; a record type without the Correspondence facet; and another of the platform's
+     processors, Identity, which a letter template may not name. -->
+<component name="org.nuxeo.agentic.letters.test.contrib">
+
+  <require>org.nuxeo.agentic.letters.schema</require>
+  <require>org.nuxeo.template.service.TemplateProcessorComponent</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="tclaim" prefix="tclaim" src="schemas/tclaim.xsd" />
+    <schema name="tmember" prefix="tmember" src="schemas/tmember.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- A claim, as the Payers kit's: a record page, letters written on it. -->
+    <doctype name="TestClaim" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <schema name="tclaim" />
+      <facet name="Correspondence" />
+    </doctype>
+    <!-- A member, which a claim names: no letter is written on it. -->
+    <doctype name="TestMember" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="tmember" />
+    </doctype>
+    <!-- A claim of a type without the facet: no letter is written on it. -->
+    <doctype name="TestPlain" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="tclaim" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="TestClaim">default</type>
+      <type name="TestMember">default</type>
+      <type name="TestPlain">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.template.service.TemplateProcessorComponent" point="processor">
+    <templateProcessor name="Identity" label="Identity" default="false"
+      class="org.nuxeo.template.processors.IdentityProcessor" />
+  </extension>
+
+  <!-- The platform's own PDF output format, a conversion by mime type, and one that runs a chain,
+       which a letter template may not name. -->
+  <extension target="org.nuxeo.template.service.TemplateProcessorComponent" point="outputFormat">
+    <outputFormat id="pdf" label="PDF" mimetype="application/pdf" />
+    <outputFormat id="chained" label="Chained" chainId="Test.AnyChain" mimetype="application/pdf" />
+  </extension>
+
+</component>

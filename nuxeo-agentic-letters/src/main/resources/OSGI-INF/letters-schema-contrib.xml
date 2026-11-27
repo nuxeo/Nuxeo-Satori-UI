@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.letters.schema" version="1.0">
+
+  <documentation>
+    The letters' model, on the platform's Template Rendering:
+
+    - Correspondence (correspondence, corr:), on a kit's record type: letters may be written on a
+      record of the type, in its corr:language when a template exists in it.
+    - LetterTemplate, the platform's TemplateSource with the add-on's facet of the same name
+      (letter_template, ltpl:): which letter it is a template of, its language, and the conditions
+      the record must meet. The platform's tmpl:applicableTypes names the record types it is for,
+      and tmpl:templateType the add-on's processor, agenticLetter. Kept by administrators alone.
+    - Letter, a letter as the add-on files it next to its record (letter, letter:), with the
+      platform's TemplateBased facet, which binds it to the template it was written from. Written
+      by the server alone.
+  </documentation>
+
+  <!-- TemplateSource, and the TemplateBased facet: the platform's Template Rendering. -->
+  <require>org.nuxeo.platform.TemplateSources.doctypes</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="correspondence" prefix="corr" src="schemas/correspondence.xsd" />
+    <schema name="letter_template" prefix="ltpl" src="schemas/letter_template.xsd" />
+    <schema name="letter" prefix="letter" src="schemas/letter.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <facet name="Correspondence">
+      <schema name="correspondence" />
+    </facet>
+
+    <facet name="LetterTemplate">
+      <schema name="letter_template" />
+    </facet>
+
+    <!-- A letter template: the platform's template document, and the add-on's facet. -->
+    <doctype name="LetterTemplate" extends="TemplateSource">
+      <facet name="LetterTemplate" />
+    </doctype>
+
+    <!-- A letter, filed next to its record. Not a folder: it holds its file in file:content. -->
+    <doctype name="Letter" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <schema name="letter" />
+      <facet name="Downloadable" />
+      <facet name="TemplateBased" />
+    </doctype>
+
+    <!-- Kept where the platform keeps its templates, as TemplateSource is: an administrator's place. -->
+    <doctype name="TemplateRoot" append="true">
+      <subtypes>
+        <type>LetterTemplate</type>
+      </subtypes>
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="LetterTemplate">default</type>
+      <type name="Letter">default</type>
+    </types>
+  </extension>
+
+</component>
