@@ -36,6 +36,7 @@ import {
 const PARSE_CASES = [
   { locale: 'en', input: '03/04/2026', year: 2026, month: 2, date: 4, why: 'US order, unchanged' },
   { locale: 'fr', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'French is day-first' },
+  { locale: 'es', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Spanish is day-first' },
   { locale: 'it', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Italian is day-first' },
   {
     locale: 'sv',

@@ -17,6 +17,7 @@ import {
   enNZ,
   enUS,
   enZA,
+  es,
   fr,
   frCA,
   frCH,
@@ -33,15 +34,15 @@ import {
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The nine bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The ten bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
  * that are both registered and in `availableLanguages` — and a test asserts they match
  * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
  * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
- * catalogue was enough to admit a locale this map has no entry for (#522).
+ * catalogue was enough to admit a locale for which this map then had no entry (#522).
  *
- * Arabic, Hebrew, Italian and Swedish ship with their catalogues. Spanish remains pending
- * its separate integration. Arabic regional variants are explicit because
+ * All ten target languages ship with their catalogues and date-adapter entries.
+ * Arabic regional variants are explicit because
  * ar-DZ, ar-MA and ar-SA are month-first while bare ar is day-first; ar-EG differs in padding.
  *
  * The regional entries are here for the **published** provider rather than for us. These
@@ -105,6 +106,7 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   it,
   'it-ch': itCH,
   sv,
+  es,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */
@@ -143,8 +145,8 @@ function dateFnsLocaleOrNone(localeId: string): Locale | undefined {
  * This is a **packaged capability**, which is what makes it worth exporting: it depends on which
  * date-fns locales are compiled into the bundle, and nothing a deployment writes in Layer 0 can
  * change it. `availableLanguages` cannot answer the question, because a customer edits that file
- * — a config with `defaultLanguage: 'es'` and `availableLanguages: ['en', 'es']` is perfectly
- * valid and parses fine, and `es` still has no entry above.
+ * — a config with `defaultLanguage: 'pt'` and `availableLanguages: ['en', 'pt']` is perfectly
+ * valid and parses fine, and `pt` has no entry above.
  *
  * That gap is the second half of the #522 review. The first fix tied `LOCALE_ID` to
  * `availableLanguages`, which closed it for the packaged config — `checkAdvertisedLocalesShip`
@@ -238,8 +240,7 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * `DatePipe` never calls `Intl`, so every other date on the page had always shown `2026`. Only
  * the picker disagreed, and only the picker was unparseable by itself.
  *
- * Arabic will raise the milder half of the same split when it lands, so it is recorded here
- * rather than rediscovered then. `Intl` formats `ar-EG` and `ar-SA` with **Arabic-Indic**
+ * Arabic has the milder numeral half of the same split. `Intl` formats `ar-EG` and `ar-SA` with **Arabic-Indic**
  * numerals (`٣/٤/٢٠٢٦`); date-fns' `ar` writes Latin ones (`03/04/2026`). Both resolve to the
  * Gregorian calendar on our ICU — measured, not assumed — so unlike Thai there is no year to get
  * wrong, and the field round-trips what it displays. That round-trip is the property this file

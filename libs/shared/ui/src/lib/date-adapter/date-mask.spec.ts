@@ -22,6 +22,7 @@ const CATALOGUE_MASKS = {
   he: 'יי/חח/שששש',
   it: 'gg/mm/aaaa',
   sv: 'åååå-mm-dd',
+  es: 'dd/mm/aaaa',
 } as const;
 
 describe('dateMaskFor', () => {

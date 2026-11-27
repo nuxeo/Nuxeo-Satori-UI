@@ -132,8 +132,8 @@ jobs:
 
           # Arabic and Hebrew were verified 100% approved after their four placeholder
           # corrections on 24 November 2026. Keep both in ongoing downloads now that
-          # their catalogues ship (NXSAT-754). Italian and Swedish are included as well.
-          # Spanish is requested but its catalogue and enablement still await integration.
+          # their catalogues ship (NXSAT-754). Italian, Swedish and Spanish also ship,
+          # preserving ongoing downloads for all nine non-English target languages.
           # A new catalogue must land with SHIPPED_CATALOGUE_LANGUAGES, both Layer 0
           # availableLanguages defaults, and DATE_FNS_LOCALES; registration alone is insufficient.
           download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es --language=ar --language=he --language=it --language=sv'

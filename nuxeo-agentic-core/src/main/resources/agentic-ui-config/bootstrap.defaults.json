@@ -18,6 +18,6 @@
   "themes": [],
 
   "defaultLanguage": "en",
-  "$availableLanguages": "Only the languages with a catalogue in apps/nuxeo-ui/public/i18n/. The target set is Nuxeo Web UI's ten (ar nl en fr de he it ja es sv), so th and zh were dropped; Arabic, Hebrew, Italian and Swedish ship approved catalogues; Spanish remains unadvertised until its separate catalogue integration lands, because checkAdvertisedLocalesShip fails a language that would render the English fallback throughout. See D8e-webui in docs/i18n-localization-plan.md.",
-  "availableLanguages": ["en", "fr", "de", "ja", "nl", "ar", "he", "it", "sv"]
+  "$availableLanguages": "Only the languages with a catalogue in apps/nuxeo-ui/public/i18n/. The target set is Nuxeo Web UI's ten (ar nl en fr de he it ja es sv), so th and zh were dropped; All ten target languages ship application catalogues and date-adapter entries. Missing individual translations use the normal English fallback. See D8e-webui in docs/i18n-localization-plan.md.",
+  "availableLanguages": ["en", "fr", "de", "ja", "nl", "ar", "he", "it", "sv", "es"]
 }

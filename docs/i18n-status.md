@@ -10,7 +10,25 @@ held 1968 — both figures had a command printed beside them and neither had bee
 
 ## Merge integration — 25 November 2026
 
-PR #696 is merged. This branch preserves Arabic/Hebrew catalogues, RTL startup and date-hint fixes while adding Italian and Swedish, for nine supported languages. Spanish is stacked separately in PR #697. All 39 deferred Crowdin corrections and the English-source audit are tracked in [NXSAT-861](https://hyland.atlassian.net/browse/NXSAT-861); they are not claimed fixed by language enablement. Older dated measurements below remain historical.
+PR #696 is merged. This branch stacks Spanish on the reconciled Italian/Swedish PR #656 and preserves Arabic/Hebrew from merged PR #696. All ten target languages are enabled: English, French, German, Japanese, Dutch, Arabic, Hebrew, Italian, Swedish and Spanish. Keep merge ancestry when merging #656 so this stacked PR remains mergeable. Approved exported files remain unchanged; three newer English keys currently use normal fallback. All 39 deferred Crowdin corrections and the English-source audit are tracked in [NXSAT-861](https://hyland.atlassian.net/browse/NXSAT-861); they are not claimed fixed by language enablement. Older dated measurements below remain historical.
+
+## Spanish enabled independently — 24 November 2026
+
+NXSAT-754 imports only the unchanged Spanish catalogue from Crowdin PR #401 at
+commit 15795c5669393e14f4fd42a483b1680792f2b2a0. No French catalogue is imported or edited.
+Spanish is enabled in the shipped-catalogue list, both Layer 0 defaults and the date adapter;
+its existing ongoing Crowdin download remains requested. It renders left to right and uses
+day-first dates. Startup tests cover the real catalogue request and document/CDK language and
+direction; unsupported-language/customer-override tests continue to use unshipped Italian.
+
+The catalogue has 2,771 keys against 2,772 current English keys. The one newer message,
+browse.create-import-dialog.folder-allows-no-file-types, uses the normal English fallback.
+French validation errors still block the shared PR #401, but do not block this independent
+Spanish integration. Arabic/Hebrew and Italian/Swedish remain in separate PRs #696 and #656;
+retain all enabled language entries when reconciling the shared lists at merge time.
+
+This measured status supersedes the historical Spanish readiness claims below.
+
 
 ## Arabic and Hebrew enabled — 24 November 2026
 
