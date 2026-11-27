@@ -1,4 +1,4 @@
-import { formatDate, formatNumber } from '@angular/common';
+import { formatCurrency, formatDate, formatNumber } from '@angular/common';
 
 import { REGISTERED_LOCALES, registerShippedLocaleData } from './register-locale-data';
 
@@ -23,16 +23,79 @@ describe('registerShippedLocaleData', () => {
     // If these two ever disagree the guardrail is checking the wrong list.
     expect([...REGISTERED_LOCALES].sort()).toEqual([
       'ar',
+      'da',
       'de',
       'es',
+      'fi',
       'fr',
       'he',
       'it',
       'ja',
+      'nb',
       'nl',
       'sv',
     ]);
   });
+
+  /**
+   * Spanish and the Nordic languages of the business apps' phase 7: a date, a number and an amount
+   * in each, as `DatePipe`, `DecimalPipe` and `CurrencyPipe` format them, each in that locale's own
+   * conventions. Danish and Norwegian Bokmål write a date identically, so the date rows alone
+   * could not tell their data apart: the thousands separator does — Danish groups with a full
+   * stop, Norwegian with a no-break space.
+   *
+   * The amount is in the locale's own currency, which `CurrencyPipe` is given rather than reads:
+   * what the locale decides is where the sign goes and which separators are used. Expected values
+   * are Angular's CLDR data, written out rather than computed here, so that data registered under
+   * the wrong name fails rather than agreeing with itself.
+   */
+  /** The no-break space Angular's CLDR data groups digits with, and spaces a sign with. */
+  const NBSP = '\u00A0';
+  const PHASE_7: ReadonlyArray<
+    readonly [
+      locale: string,
+      long: string,
+      short: string,
+      number: string,
+      currency: readonly [code: string, sign: string],
+      amount: string,
+    ]
+  > = [
+    ['es', '14 de julio de 2026', '14/7/26', '1.234.567,5', ['EUR', '€'], `1.234,50${NBSP}€`],
+    [
+      'sv',
+      '14 juli 2026',
+      '2026-07-14',
+      `1${NBSP}234${NBSP}567,5`,
+      ['SEK', 'kr'],
+      `1${NBSP}234,50${NBSP}kr`,
+    ],
+    ['da', '14. juli 2026', '14.07.2026', '1.234.567,5', ['DKK', 'kr.'], `1.234,50${NBSP}kr.`],
+    [
+      'nb',
+      '14. juli 2026',
+      '14.07.2026',
+      `1${NBSP}234${NBSP}567,5`,
+      ['NOK', 'kr'],
+      `1${NBSP}234,50${NBSP}kr`,
+    ],
+    [
+      'fi',
+      '14. heinäkuuta 2026',
+      '14.7.2026',
+      `1${NBSP}234${NBSP}567,5`,
+      ['EUR', '€'],
+      `1${NBSP}234,50${NBSP}€`,
+    ],
+  ];
+  for (const [locale, long, short, number, [code, sign], amount] of PHASE_7) {
+    it(`formats a date, a number and an amount in ${locale}'s own conventions`, () => {
+      expect(formatDate(MIDSUMMER, 'longDate', locale)).toBe(long);
+      expect(formatDate(MIDSUMMER, 'shortDate', locale)).toBe(short);
+      expect(formatNumber(1234567.5, locale, '1.1-1')).toBe(number);
+      expect(formatCurrency(1234.5, locale, sign, code)).toBe(amount);
+    });
+  }
 
   it('formats a date in French rather than throwing NG0701', () => {
     // The literal defect: before registration this threw `Missing locale data for "fr"`.

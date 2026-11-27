@@ -43,6 +43,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * gives, a 404 included, is {@code private}: a shared cache must not hand one person's list to
  * another. The servlet's own 401 is {@code no-store}, and its 405 carries no body.
  *
+ * <b>An app's labels in a language other than English</b>, {@code labels/<language>.json}, are
+ * served over its {@code labels/en.json}, key by key ({@link AppLabels}): every key English has, in
+ * the language where it gives a text and in English where it does not. A language the app has no
+ * file for is 404, as any file it does not have is; the app asks only for a language the listing
+ * names, and falls back to English for the rest itself.
+ *
  * <b>An app's {@code actions.json}</b> is served with only the actions this server's allow-list lets
  * run ({@link AppActions}), and what it leaves out is in the listing's diagnostics, as the app's.
  * The actions it serves that run an operation are the only ones {@code AgenticUi.RunAction} runs
@@ -122,8 +128,12 @@ final class AppRegistryEndpoint {
         for (ConfigSnapshot.App app : snapshot.apps()) {
             Map<String, Resource> byPath = new LinkedHashMap<>();
             byPath.put(APP_FILE, resource(app.appBytes()));
+            ConfigSnapshot.AppFile english = app.files().get(AppLabels.ENGLISH);
             for (ConfigSnapshot.AppFile file : app.files().values()) {
-                if (AppActions.FILE.equals(file.path())) {
+                if (AppLabels.isTranslation(file.path())) {
+                    byPath.put(file.path(),
+                            resource(AppLabels.withEnglish(file.bytes(), english == null ? null : english.bytes())));
+                } else if (AppActions.FILE.equals(file.path())) {
                     AppActions.Served served = AppActions.serve(app.id(), new Provenance(
                             app.provenance().component(), app.provenance().bundle(), file.source()), file.bytes(),
                             allowList);
