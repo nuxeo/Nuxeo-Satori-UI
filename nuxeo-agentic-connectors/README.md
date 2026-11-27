@@ -1,18 +1,19 @@
 # Nuxeo Agentic Connectors
 
-Records that live elsewhere: live data from a system of record on a record page. The first two
-slices of phase 7 of the business apps [development plan](../docs/business-apps/development-plan.md):
-the live data, then its caching and the system of record's change events. Built on the
-recommendation of decision D, "inside Nuxeo as an add-on; a separate service only when one needs
-it" ([decision log](../docs/business-apps/decisions.md)). The decision is still open, and the log's
+Records that live elsewhere: live data from a system of record on a record page, and the record's
+changes sent to other systems. The first three slices of phase 7 of the business apps
+[development plan](../docs/business-apps/development-plan.md): the live data, then its caching and
+the system of record's change events, then outbound webhooks. Built on the recommendation of
+decision D, "inside Nuxeo as an add-on; a separate service only when one needs it"
+([decision log](../docs/business-apps/decisions.md)). The decision is still open, and the log's
 note says what changes if it goes another way.
 
-**Version 0.1.0.** The bundle's version, `Bundle-Version` in its manifest and `connectors.version`
-in its pom; 0.0.1 was the first slice. The jar is still named by the Maven build's version,
-`2026.0.2-SNAPSHOT`.
+**Version 0.2.0.** The bundle's version, `Bundle-Version` in its manifest and `connectors.version`
+in its pom; 0.0.1 was the first slice, 0.1.0 the cache and the change events. The jar is still
+named by the Maven build's version, `2026.0.2-SNAPSHOT`.
 
 **Nothing here is installed on any server yet.** It is proven by its Java tests, some in the Nuxeo
-test framework's runtime and repository, against a stub of the other system on the loopback
+test framework's runtime and repository, against stubs of the other systems on the loopback
 interface, by the client's tests and by the validator. The install and the demo below are for the
 reviewer.
 
@@ -38,24 +39,35 @@ reviewer.
   section 7). The validator checks it: no address anywhere in the card, field names that are
   names, the widgets that show one value as text, and, given the server's connectors, each field
   against its connector's allow-list.
-- **Nothing is sent out of Nuxeo but the reads:** outbound webhooks are not built, and not in this
-  slice's scope ([Outbound webhooks](#outbound-webhooks-not-built)).
+- **The server's configuration may send a document's changes to another system:** an outbound
+  webhook names the events, created, modified, a lifecycle transition or a workflow task done, the
+  document types and the properties it sends. Each server names the receiver and the secret, in
+  `nuxeo.conf`. A delivery is the document's id, type, the event and the named fields, nothing
+  else, signed as the change events are, sent after the transaction commits, in the background, to
+  the address the server names and no other, checked after DNS, no redirect followed. Retried,
+  then a dead letter that only an administrator lists and sends again
+  ([Outbound webhooks](#outbound-webhooks)).
 
 ## What is in it
 
-| File                                                            | What it is                                                                                                                                                                        |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/java/org/nuxeo/agentic/connectors/`                   | The bundle: the descriptor, its checks (`Connector.of`), the component and service, the HTTP call, the operation, the cache, the change events and their servlet, the metrics     |
-| `src/main/resources/OSGI-INF/connectors-service.xml`            | The component `org.nuxeo.agentic.connectors`, its service and its `connectors` extension point                                                                                    |
-| `src/main/resources/OSGI-INF/connectors-operations-contrib.xml` | Registers `Connector.Read`                                                                                                                                                        |
-| `src/main/resources/OSGI-INF/deployment-fragment.xml`           | Maps the change events' servlet on `/agentic-connectors/events/*`, with no authentication filter                                                                                  |
-| `src/test/java/`                                                | 109 tests, with an embedded HTTP stub (`SystemOfRecordStub`); 16 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`) |
-| `demo/core-system.mjs`                                          | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims, and `notify`, which sends a signed change event                               |
-| `demo/change-event.mjs`                                         | How the stand-in signs a change event                                                                                                                                             |
-| `demo/core-system.selftest.mjs`                                 | Its controls, 16 of them                                                                                                                                                          |
-| `demo/payers-claim-payments-config.xml`                         | The demo's connector, `payers.claimPayments`, keyed on `claim:number`                                                                                                             |
-| `demo/Claim.view.layout.json`                                   | A Claim record page with the `external` card, for the development server                                                                                                          |
-| `demo/registered.json`                                          | The connector's fields, as the validator and the package pipeline are given them with `--registered`                                                                              |
+| File                                                                     | What it is                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/main/java/org/nuxeo/agentic/connectors/`                            | The bundle: the descriptor, its checks (`Connector.of`), the component and service, the HTTP call, the operation, the cache, the change events and their servlet, the metrics; and the webhooks (`Webhook*`): their checks, component, listener, work, sender, address checks, store, audit and the two operations |
+| `src/main/resources/OSGI-INF/connectors-service.xml`                     | The component `org.nuxeo.agentic.connectors`, its service and its `connectors` extension point                                                                                                                                                                                                                     |
+| `src/main/resources/OSGI-INF/connectors-operations-contrib.xml`          | Registers `Connector.Read`                                                                                                                                                                                                                                                                                         |
+| `src/main/resources/OSGI-INF/connectors-webhooks-service.xml`            | The component `org.nuxeo.agentic.connectors.webhooks`, its service, its `webhooks` extension point, its post-commit listener and its work queue                                                                                                                                                                    |
+| `src/main/resources/OSGI-INF/connectors-webhooks-operations-contrib.xml` | Registers `Webhook.Deliveries` and `Webhook.Resend`, an administrator's                                                                                                                                                                                                                                            |
+| `src/main/resources/OSGI-INF/deployment-fragment.xml`                    | Maps the change events' servlet on `/agentic-connectors/events/*`, with no authentication filter                                                                                                                                                                                                                   |
+| `src/test/java/`                                                         | 150 tests, with embedded HTTP stubs (`SystemOfRecordStub`, and raw sockets for the webhooks' sender); 25 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`), the webhooks' deliveries made by the work manager                                       |
+| `demo/core-system.mjs`                                                   | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims, and `notify`, which sends a signed change event                                                                                                                                                                |
+| `demo/change-event.mjs`                                                  | How the stand-in signs a change event                                                                                                                                                                                                                                                                              |
+| `demo/core-system.selftest.mjs`                                          | Its controls, 16 of them                                                                                                                                                                                                                                                                                           |
+| `demo/payers-claim-payments-config.xml`                                  | The demo's connector, `payers.claimPayments`, keyed on `claim:number`                                                                                                                                                                                                                                              |
+| `demo/Claim.view.layout.json`                                            | A Claim record page with the `external` card, for the development server                                                                                                                                                                                                                                           |
+| `demo/registered.json`                                                   | The connector's fields, as the validator and the package pipeline are given them with `--registered`                                                                                                                                                                                                               |
+| `demo/payers-claim-webhook-config.xml`                                   | The demo's webhook, `payers.claimUpdates`: a Payers claim's changes, with its number, title and state, for `nxserver/config/`                                                                                                                                                                                      |
+| `demo/webhook-receiver.mjs`                                              | The stand-in receiver: it checks each delivery as a receiver should, and logs what it was about                                                                                                                                                                                                                    |
+| `demo/webhook-receiver.selftest.mjs`                                     | Its controls, 15 of them                                                                                                                                                                                                                                                                                           |
 
 ## How a call goes
 
@@ -247,13 +259,214 @@ this way from a secret derived from a phrase. The stand-in core system sends eve
 `node nuxeo-agentic-connectors/demo/core-system.mjs notify CLAIM-000130 --to <the address above>`,
 with the secret in `CORE_SYSTEM_EVENTS_SECRET`.
 
-## Outbound webhooks: not built
+## Outbound webhooks
 
-The plan's phase 7 names "events and webhooks". This slice builds the events that come in, and
-**only** them. Outbound webhooks, Nuxeo telling another system that a document changed, are out of
-its scope: they send data out of Nuxeo, to addresses outside it, on events the reader did not ask
-for, and need their own design (what is sent and to whom, signing, retries, and their own security
-review). Nothing here sends anything out of Nuxeo but `Connector.Read`'s one `GET`.
+Nuxeo tells another system that a document changed: a webhook names the document events it sends,
+on which types, with which of the document's properties, and each server names where it sends
+them and the secret it signs them with. Nothing else of the document leaves Nuxeo.
+
+### The contribution, in `nxserver/config/`
+
+```xml
+<component name="nuxeo.config.acme-webhooks" version="1.0">
+  <require>org.nuxeo.agentic.connectors.webhooks</require>
+  <extension target="org.nuxeo.agentic.connectors.webhooks" point="webhooks">
+    <webhook id="payers.claimUpdates">
+      <event>created</event>
+      <event>modified</event>
+      <event>transitioned</event>
+      <event>taskCompleted</event>
+      <type>Claim</type>
+      <field name="claimNumber" xpath="claim:number" />
+      <field name="state" xpath="ecm:currentLifeCycleState" />
+      <maxAttempts>6</maxAttempts>
+      <connectTimeout>2000</connectTimeout>
+      <timeout>10000</timeout>
+    </webhook>
+  </extension>
+</component>
+```
+
+| Element          | Required | Rule                                                                                                                                                                                                 |
+| ---------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Yes      | 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter                                                                                                                                     |
+| `event`          | 1 to 4   | `created` (`documentCreated`), `modified` (`documentModified`), `transitioned` (`lifecycle_transition_event`), `taskCompleted` (`workflowTaskCompleted`, a workflow task done on the document)       |
+| `type`           | 1 to 20  | The document types it sends events for, and the only ones                                                                                                                                            |
+| `field`          | 0 to 50  | `name`: letters, digits and `_`, starting with a letter. `xpath`: a document property, `prefix:name`, or `ecm:currentLifeCycleState`. `file:content`, `files:files` and any other `ecm:` are refused |
+| `maxAttempts`    | No       | 1 to 10. Default 6                                                                                                                                                                                   |
+| `connectTimeout` | No       | 100 to 10000 ms. Default 2000                                                                                                                                                                        |
+| `timeout`        | No       | One attempt, whole: 100 to 30000 ms. Default 10000                                                                                                                                                   |
+
+A webhook that breaks a rule is not registered, and the log names every problem. A later
+contribution with the same id replaces it whole, and `enabled="false"` removes it.
+
+| Server property                               | Default    | What it does                                                                                                                                             |
+| --------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nuxeo.agentic.webhooks.<id>.address`         | Unset: off | The receiver's address: `https`, a host, a path, no user, query or fragment                                                                              |
+| `nuxeo.agentic.webhooks.<id>.secret`          | Unset: off | The secret each delivery is signed with, at least 32 characters. Shorter is off                                                                          |
+| `nuxeo.agentic.webhooks.<id>.http.allowed`    | Unset      | `true` lets it send to a plain `http` address. For a demo server only                                                                                    |
+| `nuxeo.agentic.webhooks.<id>.private.allowed` | Unset      | `true` lets the address resolve to a private or loopback address. Link-local, multicast, unspecified and reserved addresses are refused whatever it says |
+
+**No contribution names any of these:** they are the webhook's id under `nuxeo.agentic.webhooks.`,
+which is not under `nuxeo.agentic.connectors.`, so no connector can name one as its credential and
+no webhook can be pointed at another of the server's settings. **Without the address or the
+secret, the webhook sends nothing and keeps nothing**, and the log says so, once a minute.
+
+### What is sent, and when
+
+```
+POST /hooks/claims HTTP/1.1
+Host: hooks.example.com
+User-Agent: nuxeo-agentic-connectors
+Content-Type: application/json
+Content-Length: 214
+Connection: close
+X-Nuxeo-Webhook: payers.claimUpdates
+X-Nuxeo-Connector-Timestamp: 1795680000
+X-Nuxeo-Connector-Nonce: <32 hexadecimal digits>
+X-Nuxeo-Connector-Signature: sha256=<64 hexadecimal digits>
+
+{
+  "delivery": "<32 hexadecimal digits>",
+  "event": "transitioned",
+  "document": { "id": "1f0b7a52-…", "type": "Claim" },
+  "fields": { "claimNumber": "CLAIM-000130", "state": "approved" }
+}
+```
+
+1. **After the commit only.** The listener, `agenticWebhooks`, is post-commit and asynchronous: a
+   transaction that rolls back gives it nothing, so nothing of it is sent or kept. Versions and
+   proxies are not sent.
+2. **Once per transaction:** one delivery per webhook, per document and per event, however often
+   the transaction fired it. Three saves of a claim in one transaction are one `modified`.
+3. **The document as committed:** read again, after the commit, with the system's rights, and the
+   payload built from it. A document deleted before then sends nothing.
+4. **The payload:** the delivery's id, the event, the document's id and type, and each named
+   field, under its name, and nothing else. A field the document does not have, or whose value is
+   empty, is `null`. Only text, numbers, booleans, dates (ISO 8601, UTC) and lists of those are
+   sent: a file, a complex property, or anything else, is sent as `null`, and the log names the
+   field, never its value, once a minute. A file's content, name or digest are never read.
+5. **At most 64 KiB:** a larger payload is not sent, and is kept as a dead letter without it, so
+   that an administrator sees it; it cannot be sent again.
+6. **Kept, then sent:** the delivery is kept in flight with its payload, and its first attempt
+   scheduled in the work manager's queue `agenticWebhooks`, two threads at most, so a slow receiver
+   holds two of them and no more of the server's.
+
+The delivery's id is the same on every attempt and on a resend, so that a receiver takes each
+delivery once. Retries can reorder deliveries: name `dc:modified` as a field to order them.
+
+### How a receiver checks a delivery
+
+The same scheme as the change events Nuxeo takes ([Change events](#change-events)), with the
+webhook's id in place of the connector's:
+
+1. **`X-Nuxeo-Webhook`** is the webhook's id, the one whose secret it holds.
+2. **`X-Nuxeo-Connector-Timestamp`**, whole seconds since 1970, is within 300 seconds of its clock.
+   Each attempt has its own.
+3. **`X-Nuxeo-Connector-Nonce`**, 32 hexadecimal digits, fresh for each attempt, has not been seen
+   while its timestamp could be taken.
+4. **`X-Nuxeo-Connector-Signature`** is `sha256=` and the HMAC-SHA256, keyed with the secret's
+   UTF-8 bytes, of the webhook's id, the timestamp and the nonce, each followed by a line feed,
+   then the body's bytes as received. Compared in constant time.
+5. **Then the body:** a delivery whose `delivery` id it has taken already is answered `2xx` again,
+   and not taken twice.
+
+Any `2xx` is delivered. By hand, with `openssl`:
+
+```bash
+printf '%s\n%s\n%s\n%s' "$WEBHOOK" "$TIMESTAMP" "$NONCE" "$BODY" \
+  | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -r | cut -d' ' -f1
+```
+
+`WebhookSigningTest` holds the add-on's signer to its own inbound check, `ChangeEvents`, and to a
+signer written apart; the stand-in receiver, `demo/webhook-receiver.mjs`, takes what the add-on
+signs (`WebhookReceiverInteropTest`).
+
+### Where it is sent: the address the server names, and no other
+
+- **The address is the server property, read at each attempt:** nothing from the document, the
+  event or the payload reaches it, and an attempt after the server changes it goes to the new one.
+- **The host is resolved once per attempt, and every address it resolves to is checked**
+  (`WebhookAddresses`): one disallowed address among allowed ones refuses the attempt whole. The
+  connection is then made to the address that was checked, with the host name kept for the `Host`
+  header, the TLS SNI and the certificate check, so a second DNS answer cannot move it.
+- **Allowed:** public addresses. Private (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`,
+  `fc00::/7`) and loopback (`127/8`, `::1`) only where the server sets the webhook's
+  `private.allowed`. **Never:** link-local (`169.254/16`, `fe80::/10`, where cloud metadata services
+  answer), unspecified, multicast, broadcast, and the reserved and documentation ranges. An IPv6
+  address that carries an IPv4 one (`::ffff:a.b.c.d`, `::a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4
+  `2002::/16`) is judged by the IPv4 address; Teredo is refused.
+- **No proxy, and no redirect followed:** a `3xx` is the attempt's outcome, its `Location` never
+  read. The add-on writes its own HTTP/1.1 request on the JDK's sockets for this: Java's HTTP client
+  resolves the name itself when it connects.
+- **TLS** with the JVM's default trust, the host name as SNI, and the certificate checked against
+  it as an HTTPS client checks it.
+- **Bounds:** the connect timeout, and one deadline for the whole attempt, the handshake, the
+  request and the status line, which a receiver trickling bytes cannot pass. Only the status line
+  is read, at most 8 KiB of it; the rest of the answer never is.
+
+### Retries and dead letters
+
+| Outcome                                                                    | Then                  |
+| -------------------------------------------------------------------------- | --------------------- |
+| `delivered`: a `2xx`                                                       | Done                  |
+| `failed`: a `5xx`, `408`, `425`, `429`, or an answer that is not HTTP      | Tried again           |
+| `unreachable`: the name does not resolve, or the address cannot be reached | Tried again           |
+| `timeout`: no status within the attempt's deadline                         | Tried again           |
+| `redirected`: a `3xx`, never followed                                      | A dead letter at once |
+| `rejected`: any other `4xx`                                                | A dead letter at once |
+| `tls`: the handshake failed, a certificate not trusted or not the host's   | A dead letter at once |
+| `address-refused`: an address it may not send to; nothing sent             | A dead letter at once |
+| `not-configured`: the address or the secret gone; nothing sent             | A dead letter at once |
+| `unknown-webhook`: the webhook no longer registered; nothing sent          | A dead letter at once |
+| `too-large`: a payload over 64 KiB; nothing sent                           | A dead letter at once |
+
+**The wait:** 30 seconds after the first attempt, then four times longer each time, 2 minutes,
+8, 32, 2 hours 8 minutes, up to 6 hours. With the default six attempts, the last is about 2 hours
+50 minutes after the first. Every server node looks for due deliveries every 30 seconds, and
+claims each attempt with a compare-and-set before it sends it, so two nodes never make one attempt
+twice; an attempt claimed by a node that stopped is taken again after two minutes.
+
+**After its last attempt**, or at once for an outcome no attempt would change, a delivery is a
+**dead letter**: kept with its payload for 30 days, for an administrator to see, fix the cause of,
+and send again from its first attempt, its id and payload as they were, signed afresh, to the
+address the server names then.
+
+**Where they are kept:** the platform's key/value store `agenticWebhooks`: in flight for up to 7
+days, dead letters for 30, delivered ones for a day, without their payload. It is the kind of the
+server's `default` store: on the local LTS 2025.10.18 server, in its database
+(`nxserver/config/sql-kvstore-config.xml`, read from it), so deliveries outlive a restart and every
+node sees them; on a server whose default store is in memory, they do not.
+
+### For an administrator
+
+| Operation            | Params                                                                                                                           | Answers                                                                                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Webhook.Deliveries` | `state`: `pending` (in flight: waiting, or being sent), `delivered` or `dead`, or none for all; `limit`: 1 to 200, 50 by default | `{ "deliveries": [ … ] }`, newest first: each one's id, webhook, event, document id and type, state, attempts, last outcome and status, when, and whether it can be sent again. **Never its payload** |
+| `Webhook.Resend`     | `delivery`: a dead letter's id                                                                                                   | The delivery, pending again. 404 for an id that is not a dead letter's, 409 for one with no payload or already sent again                                                                             |
+
+```bash
+curl -s -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
+  -d '{"params":{"state":"dead"}}' http://localhost:8080/nuxeo/api/v1/automation/Webhook.Deliveries
+```
+
+**Administrators only** (`NuxeoPrincipal.isAdministrator`): anyone else is refused with 403 before
+anything is read or sent, whatever the id they name.
+
+### The audit, the log and the metrics
+
+- **The audit:** the platform's, category `agenticWebhooks`, written as `nuxeo-agentic-embedded`
+  writes its own: `webhookDelivered`, `webhookRetrying` and `webhookDeadLettered` for each
+  attempt's outcome, `webhookResent` for a resend. The comment names the webhook, the delivery,
+  the event, the document's id and type, the attempt, the outcome, the receiver's status, the kind
+  of address refused or the setting missing, and for a resend the administrator. **Never** the
+  secret, the signature, the nonce, the address or a field's value. The entry's principal is the
+  system, and it is not on the document's own history: the document is named in the comment. A
+  failure to write is logged, and the delivery goes on.
+- **The log:** the same, at `INFO` for a delivery, at `WARN` for a retry and a dead letter: never
+  the address, the secret, the signature, the nonce or the payload (`WebhookLogTest`).
+- **The metrics:** `nuxeo.connectors.webhooks.attempts`, tagged with the webhook and the outcome,
+  and `nuxeo.connectors.webhooks.dead`, tagged with the webhook.
 
 ## The contribution
 
@@ -335,9 +548,13 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -pl nuxeo-agentic-connectors -am verify
-# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 109 tests
-node nuxeo-agentic-connectors/demo/core-system.selftest.mjs   # 16 of 16
+# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 150 tests
+node nuxeo-agentic-connectors/demo/core-system.selftest.mjs      # 16 of 16
+node nuxeo-agentic-connectors/demo/webhook-receiver.selftest.mjs # 15 of 15
 ```
+
+`WebhookReceiverInteropTest` runs the stand-in receiver with Node, and is skipped where Node is not
+on the path; the Marketplace build's job has it, and runs the receiver's selftest too.
 
 The Nuxeo test framework's runtime needs what `nuxeo-agentic-documents` and `nuxeo-agentic-assets`
 need for it, and the pom says why: Chronicle 2.25, ASM 9.7 and the JDK packages opened to it. The
@@ -368,10 +585,23 @@ printf '%s.address=http://host.docker.internal:8091\n%s.http.allowed=true\n%s.to
 docker exec -i nuxeo sh -c 'cat >> /etc/nuxeo/nuxeo.conf' < /tmp/70-connectors-demo.conf
 rm /tmp/70-connectors-demo.conf
 
-# 3. Restart, and check the settings and the operation are there: 5 lines, and the operation.
+# 3. The demo's webhook, and its settings: the stand-in receiver's address on the Docker host, a
+#    private address, so private.allowed and, for plain http, http.allowed; and a made-up secret.
+docker cp nuxeo-agentic-connectors/demo/payers-claim-webhook-config.xml \
+  nuxeo:/opt/nuxeo/server/nxserver/config/payers-claim-webhook-config.xml
+export WEBHOOK_SECRET=$(openssl rand -hex 32)
+W=nuxeo.agentic.webhooks.payers.claimUpdates
+printf '%s.address=http://host.docker.internal:8092/nuxeo-webhooks\n%s.http.allowed=true\n%s.private.allowed=true\n%s.secret=%s\n' \
+  "$W" "$W" "$W" "$W" "$WEBHOOK_SECRET" > /tmp/71-webhooks-demo.conf
+docker exec -i nuxeo sh -c 'cat >> /etc/nuxeo/nuxeo.conf' < /tmp/71-webhooks-demo.conf
+rm /tmp/71-webhooks-demo.conf
+
+# 4. Restart, and check the settings and the operations are there: 5 and 4 lines, and the operations.
 docker restart nuxeo
 docker exec nuxeo grep -c '^nuxeo\.agentic\.connectors\.payers\.claimPayments\.' /etc/nuxeo/nuxeo.conf
+docker exec nuxeo grep -c '^nuxeo\.agentic\.webhooks\.payers\.claimUpdates\.' /etc/nuxeo/nuxeo.conf
 curl -s -u "$NUXEO_USER:$NUXEO_PASS" http://localhost:8080/nuxeo/api/v1/automation/Connector.Read | head -c 200
+curl -s -u "$NUXEO_USER:$NUXEO_PASS" http://localhost:8080/nuxeo/api/v1/automation/Webhook.Deliveries | head -c 200
 ```
 
 **Not `/etc/nuxeo/conf.d/`, on a container that has started before.** The image's
@@ -382,11 +612,12 @@ copied there later is never read, and the connector answers 503 for want of its 
 container not started yet, a `conf.d` file works.
 
 The Payers kit must be installed and seeded (its README), so that claims with the numbers the
-stub knows exist. To remove it all: delete the two files, delete the settings' lines from
+stub knows exist. To remove it all: delete the three files, delete the settings' lines from
 `nuxeo.conf`, and restart:
 
 ```bash
 docker exec nuxeo sed -i '/^nuxeo\.agentic\.connectors\.payers\.claimPayments\./d' /etc/nuxeo/nuxeo.conf
+docker exec nuxeo sed -i '/^nuxeo\.agentic\.webhooks\.payers\.claimUpdates\./d' /etc/nuxeo/nuxeo.conf
 ```
 
 ## The demo: a claim with live core-system data
@@ -418,9 +649,33 @@ docker exec nuxeo sed -i '/^nuxeo\.agentic\.connectors\.payers\.claimPayments\./
 Only the Claim page comes from the development server this way: add the kit's other files as its
 README's "Seeing it under nx serve" does, to have the rest of the app beside it.
 
+## The demo: a claim's changes sent to another system
+
+1. **Start the stand-in receiver**, in the shell that holds the webhook's secret:
+   `node nuxeo-agentic-connectors/demo/webhook-receiver.mjs` (port 8092, on 127.0.0.1, reached from
+   the container at `host.docker.internal` as the stand-in core system is).
+2. **Change a claim:** edit `CLAIM-000130`'s title, or follow a transition. Within a few seconds the
+   receiver logs `POST /nuxeo-webhooks 204 accepted <delivery> modified of a Claim <id>
+[claimNumber,title,state]`: the event, the document and the names of the fields it was sent,
+   which are the webhook's three and no other of the claim's.
+3. **Retries, then a dead letter:** restart the receiver with `--answer 503` and change the claim
+   again. Each attempt is logged `503 answered`, 30 seconds, then 2 and 8 minutes apart; set
+   `<maxAttempts>2</maxAttempts>` in the demo's webhook to see the dead letter sooner.
+   `Webhook.Deliveries` with `{"params":{"state":"dead"}}`, as an administrator, lists it, and
+   says it can be sent again; as a Payers demo user, it is refused, 403.
+4. **Send it again:** restart the receiver without `--answer`, then, as an administrator,
+   `Webhook.Resend` with `{"params":{"delivery":"<its id>"}}`. The receiver logs `204 accepted`, the
+   same delivery's id, and the dead letter is gone from the list.
+5. **A wrong secret:** restart the receiver with another `WEBHOOK_SECRET`: it answers `401
+bad-signature`, and the delivery is a dead letter at once, `rejected`, since no attempt would
+   change it.
+6. **The audit:** the server's audit has an entry per attempt, category `agenticWebhooks`, naming the
+   delivery and the outcome, and no field's value.
+
 ## What the security review must check
 
-This calls out of the server, keeps what it read, and takes requests no one signed in to send. The
+This calls out of the server, keeps what it read, takes requests no one signed in to send, and
+sends document data to other systems. The
 plan's phase 7 is not done until its security review is, and the review is deferred until the app
 is finished ([security-reviews.md](../docs/business-apps/security-reviews.md)). These are notes
 for it, not its findings.
@@ -508,6 +763,51 @@ for it, not its findings.
     only, at the proxy in front of Nuxeo. The server's filters on every path, its CORS and CSRF
     filter among them, still run on it, and how they treat a `POST` from a system with no
     `Origin` is the platform's.
+- **Outbound webhooks.** They send document data out of Nuxeo, to addresses outside it, on events
+  no reader asked for, signed with a secret each server holds. Check:
+  - **where they go (server-side request forgery):** only to the host of the address the server
+    sets, `nuxeo.agentic.webhooks.<id>.address`, read at each attempt; nothing from a document, an
+    event or a payload reaches it. The host is resolved once per attempt, every address it resolves
+    to is judged (`WebhookAddresses`), and the connection is made to the address judged, so a
+    second DNS answer cannot move it; no proxy; no redirect followed. Link-local, unspecified,
+    multicast, broadcast and reserved addresses are refused whatever the server sets; private and
+    loopback ones only with the webhook's `private.allowed`. Check: whether `private.allowed` is
+    acceptable on your network, since with it on, a DNS answer for the receiver's name may point
+    the attempt at any private host; whether the reserved ranges listed are complete enough for
+    you; that `http.allowed` stays off outside demos; and that the JVM's trust store is the one
+    you mean, since a webhook trusts what it trusts;
+  - **what they send:** the delivery's id, the event, the document's id and type, and the fields the
+    webhook names, read as the document is stored with the system's rights, so whatever the user
+    who changed it may read. Never a file: `file:content` and `files:files` are refused when
+    contributed, and any value that is not text, a number, a boolean, a date or a list of those is
+    sent as `null` (`WebhookPayload`). Check every webhook's fields against what its receiver may
+    hold, since its receiver sees them for every document of its types;
+  - **the signature:** the change events' scheme, HMAC-SHA256 over the webhook's id, the timestamp,
+    the nonce and the body, with a secret of at least 32 characters in a server property, never
+    logged (`WebhookLogTest`). A fresh timestamp and nonce for each attempt, so a receiver that
+    keeps the nonces it saw for 300 seconds refuses a replay. Rotation is one secret at a time:
+    deliveries between the server's change and the receiver's are refused, then dead letters,
+    and can be sent again;
+  - **at least once, not exactly once:** an attempt claimed by a node that stopped is made again
+    after two minutes, and a node that stops between a `2xx` and recording it sends it again, so a
+    receiver may see a delivery twice. Its `delivery` id is what tells it;
+  - **what is kept, and where:** each delivery's payload, field values included, in the platform's
+    key/value store `agenticWebhooks`, while in flight, up to 7 days, and as a dead letter, 30
+    days; a delivered one, without its payload, a day. On a server whose key/value stores are in
+    its database, that is the database. Check those times against what the fields hold, and who
+    may read that store;
+  - **who sees and resends them:** `Webhook.Deliveries` and `Webhook.Resend`, an administrator's
+    only (`NuxeoPrincipal.isAdministrator`), checked before anything is read; the list never holds
+    a payload. A resend sends the payload as it was kept, to the address the server names when it
+    is sent;
+  - **the audit:** each attempt's outcome and each resend, in the platform's audit, category
+    `agenticWebhooks`, by the system, naming the document by its id in the comment, with no
+    secret, signature, nonce, address or value. The tests record what the add-on gives the audit
+    (`Hooks.Audit`); writing it to the platform's audit is `nuxeo-agentic-embedded`'s code path,
+    not run by a test here;
+  - **the load:** the attempts run in their own queue, two threads, each attempt bounded by its
+    timeout, at most 30 seconds, so a slow receiver holds two threads; but a bulk change makes one
+    delivery per document and event, each kept and sent, with no rate limit of their own.
 
 ## Not done, and not checked
 
@@ -522,11 +822,20 @@ for it, not its findings.
   signatures, read from them, not run there.
 - **Across a cluster:** an event drops the answers of the node it reaches, and remembers its nonce
   there only. Dropping them on every node, through the platform's pub/sub, is not built.
-- **Outbound webhooks:** out of this slice's scope ([above](#outbound-webhooks-not-built)).
+- **The webhooks on a server:** that the post-commit listener, the work queue and the two
+  operations are registered from the bundle's components, and that the platform's audit takes the
+  entries, are Nuxeo's documented behaviour on the 11.5 runtime the tests start, not checked on the
+  2025.10.18 server; their classes and methods are in its jars, with the same signatures, read from
+  them. `taskCompleted` is tested by firing `workflowTaskCompleted` on a document, as the task
+  service fires it on a task's documents, not by running a workflow.
+- **Webhooks through a proxy:** a delivery connects directly, never through a proxy, so a server
+  that reaches the internet only through one cannot send to a receiver outside it.
+- **One receiver per webhook, one secret at a time,** and no ordering: retries can reorder
+  deliveries, and a webhook that names `dc:modified` gives its receiver what it needs to order them.
 - **A Marketplace package** for the add-on, and the pipeline reading a kit's own connector
   contributions instead of a `--registered` file.
 - **Hot reload:** unregistering a contribution that replaced another removes the connector rather
   than bringing the earlier one back, and an `enabled="false"` removal is not undone. Only a
   development server's hot reload unregisters.
-- **The rest of the plan's connectors add-on:** outbound webhooks, fields synced in, a real
-  connector chosen with presales, a query parameter for the key, embedded panels (decision F).
+- **The rest of the plan's connectors add-on:** fields synced in, a real connector chosen with
+  presales, a query parameter for the key, embedded panels (decision F).

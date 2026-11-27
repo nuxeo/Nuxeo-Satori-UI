@@ -379,6 +379,21 @@ way.
     and the card reads the same `age` from it.
   - **If F passes the reader's identity on,** the reader joins the cache's key.
 
+- **D, the connectors add-on's outbound webhooks (27 November 2026).** Built against the same
+  recommendation: the add-on's version 0.2.0 sends a document's events, created, modified, a
+  lifecycle transition or a workflow task done, to a receiver each server names, with the fields
+  the server's configuration names and nothing else, signed in the change events' scheme, after
+  the transaction commits, through the work manager, retried, then kept as a dead letter an
+  administrator lists and sends again
+  ([the connectors README](../../nuxeo-agentic-connectors/README.md#outbound-webhooks)). The
+  deliveries are kept in the platform's key/value store and each outcome in its audit. What
+  changes if D goes another way:
+  - **A separate integration service, reached through Nuxeo:** the listener sends each delivery
+    to the service instead, signed the same way, and the service fans it out and retries; the
+    dead letters move to it.
+  - **A separate service the client calls itself:** no change: webhooks start on the server, from
+    the repository's events, whichever way the client reads.
+
 - **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
   "exchange in phase 7": a record page's panel inside another system's page,
   [embedded-panels.md](embedded-panels.md), and its server's half,

@@ -21,8 +21,12 @@ import com.sun.net.httpserver.HttpServer;
  */
 final class SystemOfRecordStub implements AutoCloseable {
 
-    /** One request as the stub received it. */
-    record Received(String method, String path, String rawQuery, Map<String, List<String>> headers) {
+    /** One request as the stub received it, its body included. */
+    record Received(String method, String path, String rawQuery, Map<String, List<String>> headers, byte[] body) {
+
+        String text() {
+            return new String(body, StandardCharsets.UTF_8);
+        }
 
         String header(String name) {
             for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
@@ -94,7 +98,8 @@ final class SystemOfRecordStub implements AutoCloseable {
 
     private void handle(HttpExchange exchange) throws IOException {
         received.add(new Received(exchange.getRequestMethod(), exchange.getRequestURI().getRawPath(),
-                exchange.getRequestURI().getRawQuery(), Map.copyOf(exchange.getRequestHeaders())));
+                exchange.getRequestURI().getRawQuery(), Map.copyOf(exchange.getRequestHeaders()),
+                exchange.getRequestBody().readNBytes(1024 * 1024)));
         Answer answer = answers.getOrDefault(exchange.getRequestURI().getRawPath(),
                 new Answer(404, "application/json", "{\"error\":\"none\"}".getBytes(StandardCharsets.UTF_8), 0,
                         false, 0, Map.of()));

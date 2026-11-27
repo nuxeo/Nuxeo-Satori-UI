@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!--
+  The demo's outbound webhook: a Payers claim's changes, sent to the stand-in receiver
+  (webhook-receiver.mjs, beside this file). Fictional data only.
+
+  Dropped into the server's nxserver/config/ for the demo. It sends four events on Claim documents
+  only, with the claim's number, its title and its lifecycle state, and nothing else of the claim.
+  The receiver's address is not written here: it is the server property
+  nuxeo.agentic.webhooks.payers.claimUpdates.address, in nuxeo.conf. Nor is the secret each
+  delivery is signed with: it is nuxeo.agentic.webhooks.payers.claimUpdates.secret. Without both,
+  the webhook sends nothing and keeps nothing.
+-->
+<component name="nuxeo.config.payers-claim-webhook-demo" version="1.0">
+  <require>org.nuxeo.agentic.connectors.webhooks</require>
+
+  <extension target="org.nuxeo.agentic.connectors.webhooks" point="webhooks">
+    <webhook id="payers.claimUpdates">
+      <event>created</event>
+      <event>modified</event>
+      <event>transitioned</event>
+      <event>taskCompleted</event>
+      <type>Claim</type>
+      <field name="claimNumber" xpath="claim:number" />
+      <field name="title" xpath="dc:title" />
+      <field name="state" xpath="ecm:currentLifeCycleState" />
+      <maxAttempts>6</maxAttempts>
+      <connectTimeout>2000</connectTimeout>
+      <timeout>10000</timeout>
+    </webhook>
+  </extension>
+</component>
