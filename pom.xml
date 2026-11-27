@@ -24,6 +24,8 @@
     <module>nuxeo-agentic-signature</module>
     <!-- Capture and classification's server add-on, with its own Marketplace package (decision B). -->
     <module>nuxeo-agentic-capture</module>
+    <!-- Embedded panels' token exchange (decision F), an add-on of its own: a server that embeds no panel gets no endpoint. -->
+    <module>nuxeo-agentic-embedded</module>
     <module>nuxeo-agentic-ui-package</module>
   </modules>
 

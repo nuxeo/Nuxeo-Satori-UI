@@ -119,10 +119,20 @@ jobs:
       - name: Build Angular application
         run: npx nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/
 
+      # The embedded panel's one script, which the UI package serves at
+      # /nuxeo/agentic-ui/embedded/v1/ (its assembly reads dist/nuxeo-embedded-panels/browser). The
+      # package's build below does not reach the frontend module, so it is built here, as the app is.
+      - name: Build the embedded panel
+        run: npx nx build nuxeo-embedded-panels --configuration=production
+
       - name: Build Maven package
         run: |
           mvn clean package -pl nuxeo-agentic-ui-package -am -B -V -nsu --no-transfer-progress
           ls nuxeo-agentic-ui-package/target/*.zip
+          # The panel's script travels in the package, or a host page has nothing to load.
+          if ! unzip -l nuxeo-agentic-ui-package/target/*.zip | grep -q 'web/nuxeo.war/agentic-ui/embedded/v1/main.js'; then
+            echo "The UI package does not carry the embedded panel's main.js"; exit 1
+          fi
 
       # The assets module's server add-on is its own Marketplace package (decision B's
       # recommendation), so the UI package's build above does not reach it. Built here so that its
@@ -172,6 +182,17 @@ jobs:
         run: |
           mvn verify -pl nuxeo-agentic-capture -am -B -nsu --no-transfer-progress
           ls nuxeo-agentic-capture/target/nuxeo-agentic-capture-*.zip
+
+      # Embedded panels' token exchange (decision F), an add-on of its own with no Marketplace
+      # package yet: its jar, after its tests, with no Nuxeo runtime. The jar must not carry the
+      # compile-time copy of the platform's authentication plugin interface.
+      - name: Build and test the embedded panels add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-embedded -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-embedded/target/nuxeo-agentic-embedded-*.jar
+          if unzip -l nuxeo-agentic-embedded/target/nuxeo-agentic-embedded-*.jar | grep -q 'org/nuxeo/ecm/'; then
+            echo "The add-on's jar carries the compile-time copy of a platform interface"; exit 1
+          fi
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
