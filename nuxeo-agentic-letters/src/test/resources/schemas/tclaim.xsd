@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- A claim, as a kit's: a few values, a date, an amount, a list, and two references by id. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/test/tclaim/"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tclaim="http://www.nuxeo.org/ecm/schemas/agentic/test/tclaim/">
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+  <xs:complexType name="line">
+    <xs:sequence>
+      <xs:element name="code" type="xs:string" />
+      <xs:element name="amount" type="xs:double" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="lines">
+    <xs:sequence>
+      <xs:element name="item" type="tclaim:line" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="status" type="xs:string" />
+  <xs:element name="diagnosis" type="xs:string" />
+  <!-- A member's id, and a provider's. -->
+  <xs:element name="member" type="xs:string" />
+  <xs:element name="provider" type="xs:string" />
+  <xs:element name="billedAmount" type="xs:double" />
+  <xs:element name="visits" type="xs:long" />
+  <xs:element name="serviceDate" type="xs:date" />
+  <xs:element name="codes" type="tclaim:stringList" />
+  <!-- Several fields: never printed. -->
+  <xs:element name="lines" type="tclaim:lines" />
+  <!-- A file: never printed. -->
+  <xs:element name="scan" type="xs:base64Binary" />
+</xs:schema>

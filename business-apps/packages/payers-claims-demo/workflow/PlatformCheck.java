@@ -312,6 +312,7 @@ public class PlatformCheck {
 
     appealReview(appeal, chainDescriptors);
     operationButtons(bundle, context);
+    letterButtons(bundle, context);
 
     System.out.println(failures == 0 ? "\nAll checks passed." : "\n" + failures + " check(s) failed.");
     System.exit(failures == 0 ? 0 : 1);
@@ -615,6 +616,85 @@ public class PlatformCheck {
     String refer = comments.getOrDefault("Payers.ReferToInvestigations", "");
     said = run(refer, plain);
     check("dana.lee referred the claim to special investigations.".equals(said), "the referral: " + said);
+  }
+
+  /**
+   * Since 0.8.0, the letter buttons' component, payers-claims-demo-letters.xml: its two chains, loaded
+   * by the descriptor class their point declares, each beginning with its guard and then asking
+   * Letter.Generate for its letter, with no REST binding; each chain's language, an expression, run by
+   * the server's MVEL with chain parameters as AgenticUi.RunAction gives them, the language left out
+   * among them; and its vocabulary, loaded by its descriptor class, with its data file in the bundle.
+   * What it does not show: that the server runs the chains, nor what nuxeo-agentic-letters writes,
+   * which the add-on's own tests and an install do.
+   */
+  static void letterButtons(File bundle, Context context) throws Exception {
+    System.out.println("== The letter buttons' chains, since 0.8.0");
+    Class<?> chainType = Class.forName("org.nuxeo.ecm.automation.core.OperationChainContribution");
+    Class<?> directoryType = Class.forName("org.nuxeo.ecm.directory.BaseDirectoryDescriptor");
+    org.w3c.dom.Document xml = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(new File(bundle, "OSGI-INF/payers-claims-demo-letters.xml"));
+    org.w3c.dom.NodeList extensions = xml.getDocumentElement().getElementsByTagName("extension");
+    Map<String, Object> chains = new TreeMap<>();
+    List<Object> directories = new ArrayList<>();
+    Set<String> points = new TreeSet<>();
+    for (int i = 0; i < extensions.getLength(); i++) {
+      org.w3c.dom.Element extension = (org.w3c.dom.Element) extensions.item(i);
+      String key = extension.getAttribute("target") + "#" + extension.getAttribute("point");
+      points.add(key);
+      Class<?> type = switch (key) {
+        case "org.nuxeo.ecm.core.operation.OperationServiceComponent#chains" -> chainType;
+        case "org.nuxeo.ecm.directory.GenericDirectory#directories" -> directoryType;
+        default -> null;
+      };
+      if (type == null) continue;
+      XMap xmap = new XMap();
+      xmap.register(type);
+      for (Object o : xmap.loadAll(context, extension)) {
+        if (type == chainType) chains.put((String) type.getMethod("getId").invoke(o), o);
+        else directories.add(o);
+      }
+    }
+    check(points.equals(new TreeSet<>(List.of(
+            "org.nuxeo.ecm.core.operation.OperationServiceComponent#chains",
+            "org.nuxeo.ecm.core.schema.TypeService#doctype",
+            "org.nuxeo.ecm.directory.GenericDirectory#directories",
+            "org.nuxeo.ecm.platform.query.api.PageProviderService#providers"))),
+        "payers-claims-demo-letters.xml contributes the facet, the vocabulary, the page provider and the chains, and no REST binding: " + points);
+    Map<String, String> letters = Map.of("Payers.WriteDenialLetter", "payers.denial",
+        "Payers.WriteAppealLetter", "payers.appealOutcome");
+    check(chains.keySet().equals(letters.keySet()), "the two letter chains are contributed: " + chains.keySet());
+    for (Map.Entry<String, Object> chain : chains.entrySet()) {
+      List<?> ops = items(chainType.getMethod("getOps").invoke(chain.getValue()));
+      List<String> ids = new ArrayList<>();
+      for (Object op : ops) ids.add((String) op.getClass().getMethod("getId").invoke(op));
+      check(ids.equals(List.of("AgenticUi.RequireRunAction", "Context.FetchDocument", "Letter.Generate")),
+          chain.getKey() + " is its guard, the record fetched, and Letter.Generate: " + ids);
+      check(chain.getKey().equals(param(chains, chain.getKey(), "AgenticUi.RequireRunAction", "operation", 0)),
+          chain.getKey() + " begins with AgenticUi.RequireRunAction for itself, so only a button runs it");
+      check(letters.get(chain.getKey()).equals(param(chains, chain.getKey(), "Letter.Generate", "letter", 0)),
+          chain.getKey() + " asks for the letter " + letters.get(chain.getKey()));
+      String language = param(chains, chain.getKey(), "Letter.Generate", "language", 0);
+      check(language.startsWith("expr:") && !language.contains("@{"),
+          chain.getKey() + "'s language is an expression, not a template: " + language);
+      Map<String, Object> chosen = new HashMap<>();
+      chosen.put("ChainParameters", new HashMap<>(Map.of("language", "es")));
+      check("es".equals(eval(language, chosen)), chain.getKey() + " gives the language chosen: " + eval(language, chosen));
+      Map<String, Object> none = new HashMap<>();
+      // A form's field left empty is not sent: the chain parameter is absent, and so is the language.
+      none.put("ChainParameters", new HashMap<>());
+      check(eval(language, none) == null, chain.getKey() + " gives no language when none was chosen: " + eval(language, none));
+      Map<String, Object> smuggled = new HashMap<>();
+      smuggled.put("ChainParameters", new HashMap<>(Map.of("language", "@{Session.removeDocument(null)}")));
+      check("@{Session.removeDocument(null)}".equals(eval(language, smuggled)),
+          chain.getKey() + " passes a language holding a template on as text: " + eval(language, smuggled));
+    }
+    check(directories.size() == 1, "one vocabulary: " + directories.size());
+    for (Object directory : directories) {
+      String name = (String) directoryType.getField("name").get(directory);
+      check("PayersLetterLanguage".equals(name), "the vocabulary is PayersLetterLanguage: " + name);
+      String data = Files.readString(new File(bundle, "data/vocabularies/PayersLetterLanguage.csv").toPath());
+      check(data.contains("\"en\",") && data.contains("\"es\","), "it offers en and es");
+    }
   }
 
   /** NodeVariables, as the route node holds them: every variable of its schema, null when unset. */
