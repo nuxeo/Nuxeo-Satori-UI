@@ -22,7 +22,9 @@ export {
   type SchemaModel,
 } from './lib/content-model';
 export {
+  HOME_LIST_LIMIT,
   HOME_PAGE,
+  HOME_RECENT_MAX_TYPES,
   HOME_V2_KEYS,
   NAVIGATION_V2_KEYS,
   validateHome,

@@ -6,7 +6,9 @@ Studio Designer package written for Web UI and accounts for everything in it. It
 declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
 definition the package pipeline's validator accepts, proposes each custom element as a Layer 2
 plugin and scaffolds it (M3, the code track, below), and runs the verification harness over the
-result. It prints the report a person approves, with every reported item's owner and decision.
+result. It prints the report a person approves, with every reported item's owner and decision and
+every proposal accepted or rejected, writes what a person accepted, carries decisions to a new
+build of the package, and records the reviewer's approval.
 
 **A customer migrating their own package** runs one command, `migrate`, and follows
 [the guide](../../docs/business-apps/studio-migration-guide.md), which is written for them:
@@ -23,29 +25,34 @@ The commands it runs, one by one:
 
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
-npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>] [--decisions <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>] [--run-plugins] [--observed <file>]
 npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
 npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
-npx tsx tools/studio-migration/src/cli.ts plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>]
+npx tsx tools/studio-migration/src/cli.ts plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>] [--restamp]
 npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 ```
 
 `npm run studio-migration -- <command> …` runs the same, from the repository's root.
 
 - `inventory` says what the package holds, what each part becomes and what someone has to decide.
-- `convert` writes the M1 conversion and its report.
+- `convert` writes the M1 conversion and its report. `--decisions` writes what people accepted in
+  a `decisions.json`, of this build or an earlier one, carried as `decisions --from` carries it.
 - `check` runs the harness on a conversion. Check 9 reads the plugins of the package's custom
   elements from this repository, or the one `--plugins` names; `--run-plugins` runs them too, and
   `--observed` gives what each element shows, for the values half (below, **The code track**).
 - `mutate` writes a deliberately broken copy of a conversion, for the harness to refuse.
 - `decisions` writes the conversion's `decisions.json`, for people to say who owns each reported
-  item and what they decided. `--from` carries the decisions of an earlier file that still hold.
+  item and what they decided, and who accepts or rejects each proposal, and why. `--from` carries
+  the decisions of an earlier file that still hold, of this build or another build of the package.
 - `report` prints the report of the migration document's section 8 (below, **The report**).
+- `approve` records a person's approval of the report and its decisions, in `approval.json`, typed
+  at a terminal; no other command writes one (below, **The report**).
 - `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, in that
   order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
   guided migration**). Given several packages, or a folder, it runs each so into a folder of its
@@ -72,8 +79,9 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 - **2:** the command was wrong; for `lab`, also its environment (below, **Lab mode**).
 
 `convert` and `mutate` write only into a new or empty directory, `decisions` only a
-`decisions.json` the conversion does not hold yet, and `migrate` and `lab` only into a new or
-empty `--out`, so none of them writes over anything.
+`decisions.json` the conversion does not hold yet, `approve` only an `approval.json` it does not
+hold yet, and `migrate` and `lab` only into a new or empty `--out`, so none of them writes over
+anything. `approve` exits 0 once it wrote the approval, and 1 when it refused, writing nothing.
 
 ## The guided migration
 
@@ -86,23 +94,29 @@ them through what it writes.
 - **The steps are the commands.** Each is `main` itself, given the arguments a person would type,
   and what it prints goes into a file of `--out`:
 
-  | Step                              | Command                                | In `--out`                                   |
-  | --------------------------------- | -------------------------------------- | -------------------------------------------- |
-  | 1. The inventory                  | `inventory <package>`                  | `inventory.txt`                              |
-  | 2. The conversion                 | `convert <package> <out>/conversion`   | `conversion/`, `conversion.txt`              |
-  | 3. The checks that need no server | `check <package> <out>/conversion`     | `check.txt`                                  |
-  | 4. The report                     | `report <package> <out>/conversion`    | `report.txt`                                 |
-  | 5. The decisions to fill in       | `decisions <package> <out>/conversion` | `conversion/decisions.json`, `decisions.txt` |
+  | Step                              | Command                                                                      | In `--out`                                   |
+  | --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+  | 1. The inventory                  | `inventory <package>`                                                        | `inventory.txt`                              |
+  | 2. The conversion                 | `convert <package> <out>/conversion`, and `--decisions <from>` with `--from` | `conversion/`, `conversion.txt`              |
+  | 3. The checks that need no server | `check <package> <out>/conversion`                                           | `check.txt`                                  |
+  | 4. The report                     | `report <package> <out>/conversion`                                          | `report.txt`                                 |
+  | 5. The decisions to fill in       | `decisions <package> <out>/conversion`                                       | `conversion/decisions.json`, `decisions.txt` |
 
   `--allow-list` goes to `convert`, `check` and `report`, and `<out>` is given in full, so that
   every path the run prints opens from any folder. So each file is what the command prints by
   hand into the same paths, byte for byte, and the tests hold them to it.
 
-- **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, the decisions
-  step carries the decisions that still hold (`decisions --from`), and runs third, so that the
-  checks and the report count them: inventory, conversion, decisions, checks, report. A first run
-  keeps the decisions last: a scaffold of blank entries changes nothing the checks or the report
-  print.
+- **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, of this build
+  of the package or another, the conversion step writes what people accepted
+  (`convert --decisions`), and the decisions step carries the decisions that still hold
+  (`decisions --from`), and runs third, so that the checks and the report count them: inventory,
+  conversion, decisions, checks, report. Both carry the earlier file the same way, so the
+  conversion is made with exactly the decisions the step then writes beside it. A first run keeps
+  the decisions last: a scaffold of blank entries changes nothing the checks or the report print.
+  A `--from` of another package, or of a first-format file of another build, is refused before
+  anything is written.
+- **It never approves.** No step writes `approval.json`: a reviewer runs `approve` at a terminal
+  once every decision is made, and the next steps say so.
 - **It stops at the first step that refuses,** says why and what to do in plain words, and runs
   nothing after it. A check that fails is not a refusal: the harness ran and found something, which
   the report shows, so the run carries on to the report and the decisions, and exits 1. It knows
@@ -133,8 +147,10 @@ is byte-identical to the commands run by hand into the same paths:
 - **A package that is not a Studio package:** an `addon` package, a zip with no `package.xml`, and
   a file that is no zip. The inventory refuses each, and nothing is written.
 - **A step that refuses:** a theme folder whose name cannot be a file name on every system, which
-  the conversion refuses, so the checks, the report and the decisions do not run; and `--from`
-  holding another build's decisions, which the decisions step refuses before the checks.
+  the conversion refuses, so the checks, the report and the decisions do not run.
+- **A `--from` it cannot carry:** the decisions of another package, or a first-format file of
+  another build, refused before anything is written. Another build of the same package is carried,
+  by each construct's identity, and what it accepted is written.
 - **A re-run that would overwrite:** `migrate` into the `--out` of an earlier run, its decisions
   filled in, which refuses before writing anything and leaves the run byte for byte as it was;
   and a file appearing where a step's output goes during the run, which is not written over.
@@ -143,7 +159,7 @@ is byte-identical to the commands run by hand into the same paths:
 
 `migrate <package.zip or folder>... --out <new-directory>` ([`src/batch.ts`](src/batch.ts)) is the
 second piece of migration M4: a customer with several Studio projects runs them all at once, and
-[the guide](../../docs/business-apps/studio-migration-guide.md), section 8, walks them through it.
+[the guide](../../docs/business-apps/studio-migration-guide.md), section 9, walks them through it.
 One argument that is a package file runs as above, unchanged; several, or a folder, run so.
 
 - **From the command line.** `commandLine` in `cli.ts` runs it, and is `main` for every other
@@ -190,10 +206,12 @@ One argument that is a package file runs as above, unchanged; several, or a fold
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
   folder, found through its `summary.json`: the folder of the same bytes, whatever the package's
   file is called now, or else the one folder of the same build, as `decisions.json` names it,
-  which is what `--from` holds one package's decisions to. When that run held the build under two
-  sets of bytes and none is the package's, neither is taken, and its line says so; one whose run
-  stopped before its decisions step says "Not carried". A package that run did not hold, or holds no decisions for, starts
-  again, and its line says so. A folder name read from that summary is used only when it is one the
+  which is what `--from` holds one package's decisions to; or else the one folder of another build
+  of the same package, by the name its `package.xml` declares, whose decisions are carried by each
+  construct's identity. When that run held the build under two sets of bytes and none is the
+  package's, or several other builds of the package and not this one, none is taken, and its line
+  says so; one whose run stopped before its decisions step says "Not carried". A package that run
+  did not hold, or holds no decisions for, starts again, and its line says so. A folder name read from that summary is used only when it is one the
   run could have made. `--from` a run of one package, or a summary that lists no packages, is
   refused.
 - **It never writes over anything:** `--out` must be new or empty, and each file is written only
@@ -751,12 +769,14 @@ check that did not run does.
   or run, the check is `partial`. A package with no custom element passes it, its configuration
   holding no code.
 
-**Readiness.** A migration is ready only when all ten pass, nothing is pending, nothing proposed
-waits for a decision, and every reported item has an owner and a decision in `decisions.json`,
-with nothing wrong in that file (below, **The report**). Given `--allow-list`, the conversion must
-also have been made with that list, since a reported button's reason names the list it was made
-with. So an M1 run is never ready, and it lists what stands in the way. An id the report lists
-twice is read by its first entry.
+**Readiness.** A migration is ready only when all ten pass, nothing is pending, every proposal is
+accepted or rejected by someone named, for a reason, and the conversion was made with those
+decisions, every reported item has an owner and a decision in `decisions.json`, with nothing wrong
+in that file, and a person has approved the report and its decisions as they are, in
+`approval.json` (below, **The report**). Given `--allow-list`, the conversion must also have been
+made with that list, since a reported button's reason names the list it was made with. So an M1
+run is never ready, and it lists what stands in the way. An id the report lists twice is read by
+its first entry.
 
 **Negative controls.** [`src/mutations.ts`](src/mutations.ts) holds the controls of section 7 for
 the checks that run. Each breaks one thing and names the check that must then fail. The tests
@@ -827,7 +847,7 @@ conversion carries, on a layout field, a tab, a card, a task form's field, an ac
 a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
 M2's corpus included, and check 5 fails for every one.
 
-**Check 9's controls.** Twenty-four more, in the same file as `PLUGIN_MUTATIONS`, break the
+**Check 9's controls.** Twenty-five more, in the same file as `PLUGIN_MUTATIONS`, break the
 plugins or the conversion of the made-up corpus's two custom elements; `src/check-plugins.spec.ts`
 applies each and sees check 9 fail, with a finding it names for each. Ten of them check 9 sees only
 by running the plugin, and the spec runs each from a copy of the plugin's files with the control
@@ -860,6 +880,7 @@ directory, never a plugin.
 | `plugin-from-changed-element` |     | Holds the plugin to another definition of its element                    |
 | `code-in-configuration`       |     | Puts the element's code into the conversion's record page, as a template |
 | `drop-element-entry`          |     | Leaves a custom element out of the report                                |
+| `plugin-needs-no-decision`    |     | Gives an element's plugin as proposed with no decision of its own        |
 
 **The decisions' controls.** Six more, in the same file, break a `decisions.json` filled in against
 its report, in one way each: they take a decision's owner or what was decided off, change the
@@ -884,71 +905,192 @@ so that it cannot pass by breaking one readiness already leaves aside. Each was 
 in, and `check` named it, where the unbroken copy had nothing of the decisions in the way. The
 sample is not in this repository, and was not used.
 
+**The controls of proposals, carrying and the approval.** Seven more, for what this slice holds
+([`src/proposals.spec.ts`](src/proposals.spec.ts), [`src/carry.spec.ts`](src/carry.spec.ts),
+[`src/approval.spec.ts`](src/approval.spec.ts)). The proposals' controls write the app as a
+converter that disobeyed `decisions.json` would, read the package, and fail check 5; the others
+break a carried decisions file or an approved conversion, and readiness must name them:
+
+| Mutation                   | Caught by | Breaks                                                                                          |
+| -------------------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `write-undecided-proposal` | check 5   | Writes a proposal no one has accepted or rejected, as if it were accepted                       |
+| `write-rejected-proposal`  | check 5   | Writes a proposal a person rejected, as if it were accepted                                     |
+| `drop-accepted-proposal`   | check 5   | Leaves out what a person accepted, as a conversion made without the decision would              |
+| `carry-to-other-construct` | decisions | Carries a decision to another construct, with that one's reason, as a carry by place would      |
+| `carry-changed-silently`   | decisions | Carries a changed construct's decision as it was made, rather than offer it for re-confirmation |
+| `approve-other-report`     | approval  | Makes the approval one of another report than the conversion holds                              |
+| `change-after-approval`    | approval  | Changes a reported item's decision after the report was approved                                |
+
+Each is applied by the tests to the made-up package: the proposals' to it with M2's corpus and the
+proposals the tests add, a button under a filter's known expression and a card the favourites
+operation feeds, one proposal accepted, one rejected and one undecided; carrying's to a new build
+of it, a field added above another, a search field relabelled, a theme property removed and the
+view's `dom-if` testing another facet; the approval's to a decided run approved through a stand-in
+for a terminal, and written to disk with `mutate`. Each was seen failing: a check, or readiness
+naming it. The sample is not in this repository, and was not used.
+
+**The controls of the plugins' joins.** Three more, `PLUGIN_JOIN_MUTATIONS`, for where check 9
+meets the decisions and the approval ([`src/plugin-joins.spec.ts`](src/plugin-joins.spec.ts)). Each
+breaks the made-up corpus's migration with both plugins accepted, by name and for a reason, and its
+report approved, and readiness must name what broke while check 9 still passes:
+
+| Mutation                          | Caught by | Breaks                                                                                       |
+| --------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `accept-plugin-undecided`         | decisions | Records a plugin as accepted in the report, with no decision of it in `decisions.json`       |
+| `carry-plugin-to-changed-element` | decisions | Carries a plugin's acceptance to its element changed in a new build, rather than drop it     |
+| `change-plugin-after-approval`    | approval  | Changes a file of an accepted plugin after the report was approved, check 9 passing it still |
+
+The new build for the second gives the exposure element one more comment, so its identity is
+another and carrying drops its acceptance; the control puts it back. Each was seen failing, and
+each guard it holds was broken on purpose and seen to turn the spec red: the plugin's entry with
+no decision, the approval blind to the plugins, the element's identity blind to its definition,
+and a rejected plugin left built in. `mutate` does not apply them.
+
 ## The report
 
 Section 8 of the migration document describes the report a person approves, and step 5 of phase 4's
 demo shows it: 100% of the package accounted for, and every reported item with an owner.
 
 **The decisions** ([`src/decisions.ts`](src/decisions.ts)). `report.json` is the converter's, the
-same for the same package every time. What people decide is kept beside it, in `decisions.json`,
-which no conversion writes, so that converting the same package again, once the catalogue has
-learnt something, loses none of it.
+same for the same package and the same decisions every time. What people decide is kept beside it,
+in `decisions.json`, which no conversion writes, so that converting the same package again, once
+the catalogue has learnt something, loses none of it.
 
 - **For one build of the package.** A file of decisions names the package's name and version,
-  Studio's commit and build time from the bundle's manifest, and the SHA-256 of the bundle, and is
-  taken only for the package `check` or `report` is given, when all five are the same. A
-  construct's id is its place in its file, so another build can give an id to another construct,
-  and a decision would land on it. The bundle's SHA-256 tells two builds apart where the manifest
-  records neither commit nor build time, as when a project keeps its version.
+  Studio's commit and build time from the bundle's manifest, and the SHA-256 of the bundle, and
+  `check` and `report` take it only for the package they are given, when all five are the same.
+  The bundle's SHA-256 tells two builds apart where the manifest records neither commit nor build
+  time, as when a project keeps its version.
 - **`decisions <package> <conversion>`** writes `decisions.json`, in the provisional format
-  `studio-migration-decisions/1`: the build, and an entry for every reported item, in the
-  report's order. Each entry copies what it is made on from the report, the item's
-  label, property, outcome, where it was written, its reason and its rule, and leaves `owner` and
-  `decision` for a person to fill in. It never writes over a `decisions.json` the conversion holds.
-- **`--from <earlier decisions.json>`** carries each decision of a file written for an earlier
-  conversion of the same build, where the decision still holds for this report. It lists each
-  that said something and does not carry, and why; the earlier file is read and never changed, so
-  it still holds them. An entry of the earlier file that says nothing is passed over. It refuses
-  the decisions of another package, version or Studio build. It says how many entries are left
-  to fill in.
+  `studio-migration-decisions/2`: the build, and an entry for every reported item and every
+  proposal that takes a decision, in the report's order. Each entry copies what it is made on from
+  the report, the item's label, property, outcome, where it was written (but for a proposal, where
+  accepting it writes), its reason and its rule, and its construct's `identity` (below). A
+  reported item's entry leaves `owner` and `decision` for a person to fill in; a proposal's,
+  `owner`, the person deciding, `decision`, `accept` or `reject`, and `reason`. It never writes
+  over a `decisions.json` the conversion holds.
+- **A proposal** is a condition's rule in a known JavaScript pattern, marked `proposal` in the
+  report, or a dashboard card an operation feeds. What a condition's proposal guards, a field, an
+  action, a tab or a card under it, is `proposed` too, and takes no decision of its own: it follows
+  its condition's. A proposal is decided once someone named accepts or rejects it, for a reason; a
+  card an operation feeds proposes nothing the converter can write yet, and is rejected or waits.
+- **`convert --decisions <decisions.json>`** writes what people accepted
+  ([`src/convert.ts`](src/convert.ts), `convertWithDecisions`): it converts, carries the file to
+  that report as `decisions --from` does, and converts again with the proposals' decisions, given
+  to the inventory's conditions (`withVerdicts`). An accepted rule is written as the `visibleWhen`
+  of what its condition guards, as a converted condition's is; a rejected one's condition is
+  reported, and so is what it guards, for a decision of its own. The report keeps each proposal
+  `proposed`, as it was proposed, and records `applied`, what the conversion was made with, and
+  `to`, where an accepted one went.
+- **Held three ways.** `runHarness` gives the checks the inventory with the proposals' decisions
+  the report records the conversion was made with (`recordedVerdicts`), so check 5 holds an
+  accepted rule on every row of its truth table, a rule written for a proposal not accepted, or one
+  rejected, as a rule no condition gives, and an accepted rule's field left out as missing
+  (`check-conditions.ts`); an action left out is check 7's. Readiness holds what the report records
+  to `decisions.json` (`madeOtherwise`), so a conversion made before a decision, or with another,
+  is said to be, and passes its checks; and holds `report.json` to the converter, converting the
+  package again with the allow-list and the decisions the report records (`reportDiffers`), so a
+  proposal relabelled `converted` by hand, or any construct the report gives otherwise than the
+  converter does, is said to be. So nothing proposed is written unless a person accepted it, and
+  nothing accepted is left out.
+- **What waits.** Readiness counts a proposal of its own that no one has accepted or rejected as
+  waiting; what a proposed condition guards follows it and is not counted. A name, a decision or
+  a reason holds a letter or a digit: spaces, or characters that show nothing, such as a zero-width
+  space, are none.
+- **A construct's identity** ([`src/constructs.ts`](src/constructs.ts), `identityOf`) is a
+  fingerprint of its kind, its file and what it is there, such as a field's element and the
+  property it binds, a condition's test, a contribution's slot and name, or a card's heading, page
+  provider, operation and parameters and whether it repeats another. Never its place among its
+  file's constructs: Studio names files after what they hold. It is the same in every build where
+  the construct is unchanged, wherever it moved, and shared by constructs a build cannot tell apart
+  (`sharedIdentities`).
+- **`--from <earlier decisions.json>`** carries each decision of an earlier file that still holds:
+  - **of the same build,** by its item, where the decision still holds for this report, as before,
+    and one made on something the report gives otherwise now is offered for re-confirmation;
+  - **of another build of the package,** by its construct's identity: to the construct of this
+    build of the same identity, when what it was made on is unchanged; offered for re-confirmation
+    when that changed, its earlier decision and what it was made on in `earlier`, beside a blank
+    one for a person to fill in; dropped when the construct is gone, or this build or the earlier
+    file holds its identity more than once. The file records them in `carriedFrom`, for the
+    report. Never by place.
+
+  It lists each that said something and did not carry, and why; the earlier file is read and never
+  changed. An entry of the earlier file that says nothing is passed over. It refuses the decisions
+  of another package, and a first-format file of another build, whose items are their places
+  alone. It says how many entries are left to fill in.
+
 - **A decision is taken** only when what it copied still matches the report, whatever the order
-  of a rule's keys. One made on another reason, label, property, place or rule was made on
-  something else, and is not taken: it is decided again. Nor is one of an item the report does not
-  list, or does not report, one listed twice, one holding a key a decision does not take, such as
-  a verdict, or one whose owner or decision is not text. An item the report lists twice is its
-  first entry's, as everywhere else. A file of another format, of another build, or with no list,
-  is taken not at all, and a key of the file other than `format`, `package` and `decisions`, such
-  as an approval, is named. Each is a line of what stands in the way.
+  of a rule's keys, and its `identity` is that of the construct the package holds at its `id`. One
+  made on another reason, label, property, place, rule or construct was made on something else,
+  and is not taken: it is decided again. Nor is one of an item the report does not list, or that
+  takes no decision, one listed twice, one holding a key a decision does not take, such as a
+  verdict, one whose owner, decision or reason is not text, a proposal's decision other than
+  `accept` or `reject`, or an acceptance of a proposal of nothing to write. An item the report
+  lists twice is its first entry's, as everywhere else. A file of another format, of another
+  build, or with no list, is taken not at all, and a key of the file other than `format`, `package`,
+  `decisions` and `carriedFrom`, such as an approval, is named. Each is a line of what stands in the
+  way.
 - **Readiness** then counts the reported items with no owner, and those whose owner says nothing
-  decided, as `check` prints them. An owner or a decision of spaces alone is none.
-- **Only a reported item takes a decision.** Accepting or rejecting a proposal is not built: the
-  converter would have to write what a person accepts, and until it does a proposal waits.
+  decided; the proposals that wait, and those accepted or rejected with no one's name or no reason;
+  and a conversion made with other decisions of its proposals than the file holds now. An owner, a
+  decision or a reason of spaces alone is none.
+
+**The approval** ([`src/approval.ts`](src/approval.ts)).
+`approve <package> <conversion> --by <name>` records a person's approval of the report and its
+decisions in the conversion's `approval.json`, in the provisional format
+`studio-migration-approval/1`: who approved, when, the build, and the SHA-256 of `report.json`, of
+`decisions.json` and of the conversion's other files, `app/` and `themes/` by path and bytes. The
+first two are of each file as the tool reads it and writes it, two-space JSON, which is the file
+byte for byte when the tool wrote it; so a change of what either says voids the approval, and its
+spacing alone does not.
+
+- **Readiness** needs an approval whose digests are those of the conversion as it is now, and of
+  the package given. A decision filled in or changed, the conversion made again, a file edited by
+  hand: each voids it, and the verdict and the report say which. It is never carried to another
+  run.
+- **No run of the tool approves itself.** `approve` is the only command that writes an approval,
+  and no other runs it: `migrate`, for one package or many, never does. It refuses while a decision is still to
+  make. It refuses to run where its input or output is not a terminal, as in a script, a pipeline
+  or an agent's run, and asks the person named with `--by` to type back the first 8 characters of
+  the digest it shows. It writes only an `approval.json` the conversion does not hold.
+- **What it is not:** proof of who typed. Someone at a terminal, or a program driving one, can
+  type any name, and `approval.json` is a file anyone who can write the conversion can write by
+  hand, as `decisions.json` is; the approval is a record of who said they approved, as a signature
+  on paper is, not a cryptographic one.
 
 **The report** ([`src/report.ts`](src/report.ts)): `report <package> <conversion>` prints it, and
-`--json` gives the same as data. It reads the package, the conversion and its decisions, and writes
-nothing.
+`--json` gives the same as data. It reads the package, the conversion, its decisions and its
+approval, and writes nothing.
 
 - **The header:** the package handed in and its version, the platform it targets, its bundle;
   Studio's branch, commit and build time, from its bundle's manifest; the app's id and platform
   range; the converter; the allow-list the harness held the actions to, and whether it is the
-  deployment's, given with `--allow-list`, or the one the conversion recorded. Whether the report
-  is of that package is check 1's.
+  deployment's, given with `--allow-list`, or the one the conversion recorded; and the approval, by
+  whom and when, or why none holds. Whether the report is of that package is check 1's.
 - **The summary:** the package's constructs, as the inventory reads them, by kind, with the outcome
-  of each one's first entry in the report: how many are converted, proposed, reported and of those
-  decided, generated, left on the server, pending, and missing from the report. An entry whose
-  outcome is none is counted apart. The coverage is check 1's: the share of the constructs the
-  report lists, rounded down to a tenth, so that 99.96% never reads as 100%.
+  of each one's first entry in the report: how many are converted, proposed and of those accepted
+  and rejected, reported and of those decided, generated, left on the server, pending, and missing
+  from the report. An entry whose outcome is none is counted apart. The coverage is check 1's: the
+  share of the constructs the report lists, rounded down to a tenth, so that 99.96% never reads as
+  100%.
 - **What the harness found:** the ten checks, and the verdict with what stands in its way.
 - **The decisions needed:** every reported item, with its reason, where it was written, and its
-  owner and decision, each or none; what was not taken from `decisions.json`; and every proposal.
-  What people and the package wrote is printed on one line each, a line break as `\n`, so that no
-  owner's words can print a line of their own, such as an item that looks decided.
-- **Each file:** its constructs by outcome, and where those converted went. What the harness
-  found is not split by file: its findings name the conversion's files rather than the package's,
-  and are given whole, above.
+  owner and decision, each or none; what was not taken from `decisions.json`; every proposal, with
+  who accepted or rejected it and why, where an accepted one was written, or that it waits, or
+  follows its condition's; and, for a file carried from another build, what was carried, each
+  decision offered for re-confirmation with the earlier one, and each dropped, with why. What people
+  and the package wrote is printed on one line each, a line break as `\n`, so that no owner's words
+  can print a line of their own, such as an item that looks decided.
+- **What the harness found, file by file:** each finding under the file it is of
+  (`fileOfFinding`): the file of the conversion it starts by naming, as the checks write them,
+  `layouts/…: …`, `app/labels/…: …`, a theme by its name; else a file of the package it names, as
+  check 1's and check 5's own lines do; else none. Each file of the conversion is given with the
+  package's files whose constructs it holds, from the report's `to`.
+- **Each file of the package:** its constructs by outcome, where those converted went, and what the
+  harness found in the files of the conversion they went to.
 
 Screenshots and request logs are lab mode's, below, which writes them beside its own report; this
-report does not take them in yet. The reviewer's approval is the reviewer's: no command records it.
+report does not take them in.
 
 ## Lab mode
 
@@ -1130,8 +1272,15 @@ app from the template, as every customer library is today: nothing here loads co
    counts of check 1 count the element whole.
 2. **The report proposes each element as its plugin** ([`src/convert-elements.ts`](src/convert-elements.ts)),
    a construct `custom-element:<file>#<n>`, `proposed`, with the plugin's library,
-   `libs/extensions/<element>`, as where it goes. It stays a proposal until a person accepts it, so
-   a plugin that passes check 9 is not ready on that alone. A contribution that holds a custom
+   `libs/extensions/<element>`, as where it goes. It is a proposal as a condition's rule is
+   (**The report**, above): a person accepts or rejects it in `decisions.json`, with their name and
+   reason, held to the element by its identity, the SHA-256 of its definition, and the report
+   records what the conversion was made with, `applied`. Accepting it writes nothing of the
+   conversion. Readiness waits for the decision, so a plugin that passes check 9 is not ready on
+   that alone, and a decision is carried to a new build only while the element is the same.
+   `approve` records, beside the report's digests, the SHA-256 of every file of each accepted
+   plugin's library, `studio-plugin.json` among them, read from this repository or the one
+   `--plugins` names: a plugin changed after the approval voids it. A contribution that holds a custom
    element in a document's actions is reported: an app's toolbar draws actions, not components, so
    where the plugin shows is a person's call. The custom bundle's other code, and customer code in
    a file Studio generates, are reported: M3 writes plugins of elements only.
@@ -1150,7 +1299,8 @@ app from the template, as every customer library is today: nothing here loads co
    code in configuration. Then it adds the provider to the template's `app.config.ts`.
 5. **Check 9** ([`src/check-plugins.ts`](src/check-plugins.ts), [`src/plugin-scan.ts`](src/plugin-scan.ts),
    [`src/plugin-run.ts`](src/plugin-run.ts)) holds each plugin to its element:
-   - **the report** lists the element as its plugin, at its library;
+   - **the report** lists the element as its plugin, a proposal a person decides, at its library;
+     a rejected plugin is not held to its element, and the template must not build it in;
    - **the plugin** is the element's, from its definition as the package holds it now, with its
      interface, built into the template app, with the template's build and test configuration, a
      test of every behaviour the inventory read or a reason in its README's "Not kept";
@@ -1209,6 +1359,8 @@ which were then finished with the skill and built into `apps/nuxeo-satori-templa
 - **Run-time loading** waits for decision 5's spike and its owners; the plugin is built in.
 - **Placing a plugin** is a person's, as they accept it: the conversion writes no manifest entry for
   it, and the record page's layout file holds no component.
+- **The template's own configuration** is not in the approval: it covers each accepted plugin's
+  library, and check 9 holds the template to build each accepted plugin in and no rejected one.
 - **The observed behaviour of a real element** needs Web UI on the migration server.
 - **Another language** than the package's own: the plugin carries its element's texts in that
   language, since the template provides no translation service.
@@ -1609,6 +1761,96 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   for `browse.html`, which is an input, and not for `browse.scss`, which is not. The template the
   test now reads was added to the inputs.
 
+- **For proposals, carrying and the approval, 41 guards**, broken one at a time by a script kept
+  outside the repository that runs the specs meant to catch each and restores the file, each seen
+  turning them red:
+  - **Proposals:** an accepted verdict writing the rule, and only on the rule proposed now; the
+    checks reading the decisions; a proposal decided by someone named, for a reason; one of nothing
+    to write refused acceptance; what a proposal guards taking no decision; a conversion made with
+    other decisions said so; check 5 holding a field under an accepted rule to be there; `convert`
+    writing what was accepted, and `migrate --from` converting with it.
+  - **Carrying:** a decision held to its construct's identity; a changed construct offered, not
+    carried; a construct held twice, and an identity decided twice, carrying nothing; a repeated
+    card told from the card it repeats; another package refused before writing; a batch carrying
+    a new build by its package's name.
+  - **The approval:** readiness needing one; held to the report, the decisions, the files and the
+    package given; `approve` needing a terminal, the digest typed back, every decision made and a
+    name; the real shell giving it no terminal without one.
+  - **The report:** counting accepted and rejected proposals, and putting findings under the file
+    they name.
+
+  The first round, of 30, found two that left the specs green. One, a verdict on another rule than
+  the proposal's, has its test now. The other, a follower proposal counted as waiting in
+  `holdDecisions`, was a second layer behind `readDecisions`, which takes no decision of one, so it
+  could turn nothing red alone: it was removed. The second round, of 41, after the reviews' fixes
+  (below), found two more: a refused file's record of what it carried shown in the report, and an
+  offered proposal counted as confirmed whatever it was decided. Each has its test now, and the
+  report also says what an earlier run of the same build offers again, which it had left out.
+  The 41 add to those above: the report held to the converter; the checks held to the decisions
+  the report records; names of a letter or a digit; the earlier build's own shared identities;
+  offers kept, and what was carried kept, on a run of the same build; a batch carrying by name only
+  from a file of identities; and the controls picking what they break. After the reviews' second
+  rounds, three more, broken the same way, each turned the specs red: a Hangul filler naming no one,
+  and an offer no one confirmed offered again, as it was offered, on another build and on the same
+  one.
+
+- **Two independent reviews of this slice**, by reviewers given the diff and what it is for, one
+  for correctness and one adversarial, asking whether a conversion nobody approved, or a proposal
+  nobody accepted, could reach readiness.
+  - **The adversarial review** found one hole, reproduced with the commands: relabelling the
+    proposals in `report.json`, as `converted` say, took every proposal off the verdict, and with a
+    hand-written `approval.json` every line that needs a person went too. Fixed: readiness converts
+    the package again with the allow-list and the decisions the report records, and names a report
+    that says otherwise of any construct (`reportDiffers`), which closes the same door for a
+    reported item relabelled to hide it. It found weaknesses too. Fixed, each with a test: a name,
+    a decision or a reason of characters that show nothing, such as a zero-width space, was taken
+    as a name; an identity the earlier build held twice still carried when only one of them was
+    decided, which its file now names (`shared`), and decisions of one identity are counted, said
+    something or not. Explained, under **Not done yet**: a decision rests on its entry and its
+    construct, so a layout host whose script changes keeps the acceptance, though the script then
+    stands in the way as customer code; an accepted rule is written on what its condition guards in
+    the new build; and `approval.json` is a file anyone who can write the conversion can write.
+  - **The correctness review** found, reproduced: a batch `--from` a run of the earlier format
+    stopped every package of another build of the same name, now carried by name only from a file
+    of the second format; check 5 failed a conversion made before its decisions were filled in,
+    where the guide says to look at a run with `check`, now the checks hold the conversion to the
+    decisions its report records and readiness holds those to `decisions.json`; an offer for
+    re-confirmation was lost on a second run of the same build, and what had been carried with it,
+    now both kept; the count of proposals waiting took in what a proposal guards, which no one can
+    decide, and read "1 proposals wait"; and the migration document said an agent's run could not
+    approve, though the reviewer approved with a program driving a terminal, as the README said it
+    could. Suspected, and fixed: an offered proposal counted as confirmed whatever it was decided;
+    a refused file's record of a carry shown in the report; and `drop-accepted-proposal` claiming
+    check 5 where an accepted proposal guards only an action, which is check 7's, so the control
+    now picks a field and a test holds the action to check 7.
+- **A second round of the adversarial review**, on the fixes, found relabelling `report.json`, an
+  earlier build's shared identity, forging `applied` with `decisions.json`, relabelling while
+  editing the app files and an id listed twice each still in the way of readiness, by a check or a
+  line of the verdict. It found one more weakness, fixed with a test: three Hangul fillers are
+  Unicode letters that show nothing, and named someone; they name no one now. Left as it is: an
+  earlier build's file edited by hand, its `shared` and its twin entry taken out, carries what a
+  carry cannot check without that build's package.
+- **A second round of the correctness review** confirmed the eight fixed, and found that the third:
+  keeping an offer on a run of the same build, let it pass as an ordinary decision on to a third
+  build, where a blank was counted carried and the earlier decision lost. Fixed, with tests: an offer
+  no one confirmed is offered again on any later run, as it was offered, and is not counted carried.
+  It also found a count of the controls one too many in the migration document, now seven. It ran
+  `migrate` 32 times on the made-up packages and a new build, fresh and with `--from`, accepted and
+  rejected, and the readiness line that holds the report to the converter never fired on a run the
+  tool wrote. Noted rather than changed: readiness converts the package once more for that, about
+  17 ms on the made-up package with M2's corpus, against 158 ms for the harness.
+- **End to end, in a shell,** on the made-up packages, 27 November 2026: `migrate` of Acme-Claims
+  with and without M2's corpus, with and without the allow-list, its decisions filled in, the
+  proposals accepted, and run again with `--from`, which wrote each accepted rule and left nothing
+  of the decisions in the way but the approval; the proposals rejected and carried, which wrote
+  none of them; a new build of the package, another commit in its manifest, carrying every decision
+  by identity; `--from` another package, refused with nothing written; several packages, filled in
+  and run again with `--from`, each carrying its own; a new build among several, carried by its
+  package's name from a run that held one build of it, and carried nothing from a run that held
+  two, saying so; and `approve`, refused in that shell, which is no terminal, with nothing written.
+  The packages' bytes were the same after every run. No real package was run, and no reviewer
+  approved a report by hand.
+
 ## Not done yet
 
 - **The rest of migration M4:** the upload, which validates a package sent to a service and returns
@@ -1693,13 +1935,29 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Version 1 in the package pipeline.** The app-definition validator, and so the pipeline, checks
   nothing in a version 1 layout. Check 10 holds them to the documented contract, but the pipeline
   itself does not, until version 1's reader is shared from `libs/shared/document-layouts`.
-- **Accepting proposals.** A reported item takes an owner and a decision in `decisions.json`; a
-  proposal takes nothing yet. Accepting one means the converter writes what was accepted, a
-  condition's rule or the page provider of a card fed by an operation, so the decisions file would
-  feed `convert`, and check 5 would hold an accepted rule as it holds a converted one. Until then
-  every proposal waits, and the verdict says how many.
-- **A reviewer's approval of the report.** `report` prints what the reviewer approves, and no
-  command records that they did.
+- **A card an operation feeds,** such as the favourites card, proposes nothing the converter can
+  write: no queue takes the list an operation gives, and `home.json` has no card for a user's
+  favourites. It can be rejected, and not accepted, until the mapping agent proposes a target.
+- **Tidy labels as proposals.** A machine-generated label, such as "Hfs Fields Hfs S Object Id", is
+  named in a reported search field's note, and no tidy one is proposed: a tidy label would need
+  check 6 to take a label a person accepted where Web UI's differs.
+- **The approval is no signature.** It records who said they approved, at a terminal; it proves
+  neither who typed nor that a person did, as a cryptographic signature would. A program that
+  drives a terminal can approve. What it guards against is a run approving itself unwatched.
+- **Per-file findings are found by their words.** A finding is put under the file it starts by
+  naming, as the checks write them, or a package file it names: a finding worded otherwise would be
+  of no one file. The tests hold every finding of every control to a file, so a check whose wording
+  changes is seen there.
+- **What a decision rests on, beyond its entry.** A decision is held to what its entry copies
+  from the report, and to its construct's identity. What else it rests on is not held: a condition's
+  proposal rests on the layout's host having Web UI's filter function, and a host whose script
+  changes to define it otherwise keeps the acceptance, though its script then is customer code,
+  pending, which stands in the way of readiness; and a condition's accepted rule is written on what
+  the condition guards in the new build, which may be another field.
+- **Identities across real builds.** A construct's identity holds its file's path, which Studio
+  names after a layout's type and mode, a search's provider, a workflow and step; a project that
+  renames one gets a new identity for everything in it, so its decisions are dropped, never carried
+  to another construct. Two builds of one real project would show how often that happens.
 - **Contrast against the base palette:** a pair is checked only when the theme sets both tokens.
   A pair the theme sets only half of is not checked yet. Checking it needs the compiled palette's
   values, which are Sass and not JSON.

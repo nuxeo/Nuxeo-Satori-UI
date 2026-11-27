@@ -49,6 +49,8 @@ describe('reading home.json', () => {
           bucket: null,
         },
         queue: 'unassigned-claims',
+        tasks: null,
+        recent: null,
         visibleWhen: { type: 'app.rules.inGroup', parameters: ['claims-adjusters'] },
       },
       {
@@ -62,6 +64,8 @@ describe('reading home.json', () => {
           bucket: null,
         },
         queue: null,
+        tasks: null,
+        recent: null,
         visibleWhen: { type: 'app.rules.inGroup', parameters: ['claims-adjusters'] },
       },
       {
@@ -75,6 +79,8 @@ describe('reading home.json', () => {
           bucket: 'pending',
         },
         queue: null,
+        tasks: null,
+        recent: null,
         visibleWhen: { type: 'app.rules.inGroup', parameters: ['claims-supervisors'] },
       },
       {
@@ -83,6 +89,8 @@ describe('reading home.json', () => {
         labelKey: null,
         kpi: null,
         queue: 'unassigned-claims',
+        tasks: null,
+        recent: null,
         visibleWhen: { type: 'app.rules.inGroup', parameters: ['claims-supervisors'] },
       },
     ]);
@@ -97,12 +105,106 @@ describe('reading home.json', () => {
     );
     const result = readHome(sample, REGISTERED);
     expect('home' in result && result.problems).toEqual([]);
-    expect(ids(result)).toEqual(['all', 'contracts', 'by-nature', 'by-author']);
+    expect(ids(result)).toEqual([
+      'all',
+      'contracts',
+      'by-nature',
+      'by-author',
+      'my-tasks',
+      'recent-notes',
+    ]);
+  });
+
+  it('reads a list of tasks and a list of recent records, each with its limit or the default', () => {
+    const result = read([
+      { id: 'mine', tasks: {} },
+      { id: 'reviews', label: 'Reviews', tasks: { workflow: 'SerialDocumentReview', limit: 3 } },
+      { id: 'recent', recent: {} },
+      { id: 'contracts', labelKey: 'x.recent', recent: { types: ['Contract'], limit: 20 } },
+    ]);
+    if (!('home' in result)) throw new Error(`refused: ${result.refused.join('; ')}`);
+    expect(result.problems).toEqual([]);
+    expect(
+      result.home.cards.map(({ id, label, labelKey, kpi, queue, tasks, recent }) => ({
+        id,
+        label,
+        labelKey,
+        kpi,
+        queue,
+        tasks,
+        recent,
+      })),
+    ).toEqual([
+      {
+        id: 'mine',
+        label: null,
+        labelKey: null,
+        kpi: null,
+        queue: null,
+        tasks: { workflow: null, limit: 5 },
+        recent: null,
+      },
+      {
+        id: 'reviews',
+        label: 'Reviews',
+        labelKey: null,
+        kpi: null,
+        queue: null,
+        tasks: { workflow: 'SerialDocumentReview', limit: 3 },
+        recent: null,
+      },
+      {
+        id: 'recent',
+        label: null,
+        labelKey: null,
+        kpi: null,
+        queue: null,
+        tasks: null,
+        recent: { types: [], limit: 5 },
+      },
+      {
+        id: 'contracts',
+        label: null,
+        labelKey: 'x.recent',
+        kpi: null,
+        queue: null,
+        tasks: null,
+        recent: { types: ['Contract'], limit: 20 },
+      },
+    ]);
+  });
+
+  it('leaves out a list an unknown finding names, and keeps a sound one', () => {
+    const result = read([
+      { id: 'typo', recent: { type: 'Contract' } },
+      { id: 'mine', tasks: {} },
+      { id: 'later', tasks: { assignee: 'ada' } },
+    ]);
+    expect(ids(result)).toEqual(['mine']);
+    expect('home' in result && result.problems).toEqual([
+      'cards[0].recent.type: "type" is not a key version 2 has [unknown]; cards[0] left out',
+      'cards[2].tasks.assignee: "assignee" is not a key version 2 has [unknown]; cards[2] left out',
+    ]);
+  });
+
+  it('refuses the whole file for a list of the wrong shape, as for any structure finding', () => {
+    expect(read([{ id: 'mine', tasks: { limit: 50 } }, kpi('a')])).toEqual({
+      refused: [
+        'cards[0].tasks.limit: limit is how many the card shows: a whole number from 1 to 20 [structure]',
+      ],
+    });
+    expect(read([{ id: 'both', tasks: {}, recent: {} }])).toEqual({
+      refused: [
+        'cards[0]: a card shows one thing, and this one has "tasks" and "recent" [structure]',
+      ],
+    });
   });
 
   it('refuses the whole file on a structure finding, and says each', () => {
     expect(read([kpi('a'), { id: 'b' }])).toEqual({
-      refused: ['cards[1]: a card has a "kpi", a "queue", or both [structure]'],
+      refused: [
+        'cards[1]: a card has a "kpi", a "queue", or both; or a "tasks" or a "recent" [structure]',
+      ],
     });
     expect(readHome({ version: 1, cards: [] }, REGISTERED)).toEqual({
       refused: ['version: version must be 2, not 1 [structure]'],

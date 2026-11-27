@@ -138,6 +138,24 @@ export function checkConditions({
           );
       }
     }
+    // What shows under a rule is there: each field the converter writes under its condition's
+    // rule, or in a layout block's card under the block's, an accepted proposal's among them.
+    // Check 2 holds the fields in no condition; a tab on a type with no file is check 2's too.
+    if (place.options.version === 2 && !(place.tabPlan && file === undefined)) {
+      const where = place.tab === null || place.tab === 'view' ? '' : ` tab ${place.tab}`;
+      const planned = planFields({ catalogue, inventory }, place.source, place.options);
+      planned.plans.forEach((plan, position) => {
+        if (plan.kind !== 'write') return;
+        const card = planned.cardPlans[planned.placed[position].card];
+        const ruled =
+          (plan.guard?.kind === 'rule' && plan.guard.rule !== 'core.true') ||
+          (card.kind === 'write' && card.guard !== undefined);
+        if (ruled && !shown.some((candidate) => candidate.field === plan.binding))
+          findings.push(
+            `${place.path}${where}: ${plan.binding} is missing, though ${place.what} shows it while a condition passes, and its rule converts`,
+          );
+      });
+    }
     const tab = place.tabPlan;
     if (tab && !(tab.guard.rule === 'core.true')) {
       const written = tabOf(file, tab.id);

@@ -8,6 +8,7 @@
  * here: the pipeline checks them when the package is built.
  */
 import {
+  HOME_LIST_LIMIT,
   MAX_NESTING,
   PACKAGED_REGISTRIES,
   validateHome,
@@ -24,12 +25,30 @@ export interface HomeKpi {
   readonly bucket: string | null;
 }
 
+/** A list of the person's open tasks, newest first (section 10). */
+export interface HomeTasks {
+  /** Only this workflow model's tasks, or `null` for every workflow's. */
+  readonly workflow: string | null;
+  /** How many it shows. */
+  readonly limit: number;
+}
+
+/** A list of the records the person created or edited last, the latest first (section 10). */
+export interface HomeRecent {
+  /** Only records of these document types, or every type when empty. */
+  readonly types: readonly string[];
+  /** How many it shows. */
+  readonly limit: number;
+}
+
 export interface HomeCard {
   readonly id: string;
   readonly label: string | null;
   readonly labelKey: string | null;
   readonly kpi: HomeKpi | null;
   readonly queue: string | null;
+  readonly tasks: HomeTasks | null;
+  readonly recent: HomeRecent | null;
   readonly visibleWhen: ExtensionRule | null;
 }
 
@@ -62,6 +81,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** A list card's `limit`, or the default when it says none. */
+const limitOf = (list: Record<string, unknown>): number =>
+  typeof list['limit'] === 'number' ? list['limit'] : HOME_LIST_LIMIT.default;
 
 const describe = (finding: Finding): string =>
   `${finding.path || 'the file'}: ${finding.message} [${finding.kind}]`;
@@ -160,6 +183,8 @@ export function readHome(content: unknown, registeredRules: readonly string[]): 
       return;
     }
     const kpi = card['kpi'];
+    const tasks = card['tasks'];
+    const recent = card['recent'];
     cards.push({
       id: card['id'] as string,
       label: text(card['label']),
@@ -173,6 +198,15 @@ export function readHome(content: unknown, registeredRules: readonly string[]): 
           }
         : null,
       queue: text(card['queue']),
+      // With no finding in the card, a list is an object, its limit a whole number in range and
+      // its workflow a name; its types a list of names, when it has one.
+      tasks: isRecord(tasks) ? { workflow: text(tasks['workflow']), limit: limitOf(tasks) } : null,
+      recent: isRecord(recent)
+        ? {
+            types: (recent['types'] as readonly string[] | undefined) ?? [],
+            limit: limitOf(recent),
+          }
+        : null,
       visibleWhen: (card['visibleWhen'] as ExtensionRule | undefined) ?? null,
     });
   });

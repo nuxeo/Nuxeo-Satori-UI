@@ -212,7 +212,9 @@ has been seen failing on purpose (section 7) before it is trusted.
 | 10  | Package                  | The migrated package is valid                                                                                         | The package pipeline's checks: schemas, registered IDs, the operation allow-list, the platform range                                                                                                                                                        |
 
 A migrated package is ready when checks 1 to 10 pass, a person has accepted or rejected every
-"Agent proposes" item, and every "Reported" item has an owner and a decision.
+"Agent proposes" item and the conversion was made with those decisions, every "Reported" item has
+an owner and a decision, and a person has approved the report and its decisions as they are
+(section 8).
 
 **In phase M1** ([`tools/studio-migration`](../../tools/studio-migration/README.md)):
 
@@ -257,8 +259,13 @@ A migrated package is ready when checks 1 to 10 pass, a person has accepted or r
   behaviour does not press. Read from a file of records and what the element showed, with no
   server: lab mode does not record one from Web UI yet. Whenever the plugin runs, it registers its
   component alone.
-- **A plugin not written, or not run,** leaves the check `partial`. A plugin that passes stays a
-  proposal until a person accepts it.
+- **A plugin not written, or not run,** leaves the check `partial`.
+- **A person decides it.** A plugin is a proposal of the report, as a condition's rule is: a person
+  accepts or rejects it in `decisions.json`, by the element's identity, and readiness waits for that
+  (section 8). Check 9 reads the decision as the report records the conversion was made with it. A
+  rejected plugin is not held to its element, and must not be built into the template. The approval
+  covers each accepted plugin's files, `studio-plugin.json` among them, so a plugin changed after
+  it is approved voids the approval.
 
 **Lab mode**, the first slice against a real server (`lab`, in the
 [tool's README](../../tools/studio-migration/README.md), **Lab mode**): it opens documents in Web
@@ -346,7 +353,7 @@ something to break fails its check too. The thirteen that do not say so: `widen-
 condition and no operation button to break there, and eight of M2's nine no task layout, tab or
 layout block.
 
-**In M3**, twenty-four more, for check 9, on the made-up corpus's two custom elements and their
+**In M3**, twenty-five more, for check 9, on the made-up corpus's two custom elements and their
 plugins: a plugin that writes data as HTML, drops a value, fails its own tests, leaves one to
 write, skips them, holds one that asserts nothing, bypasses the app's HTTP service or its
 sanitiser, runs another operation, sends a request as it is drawn, emits another detail, shows a
@@ -354,9 +361,9 @@ button its element does not have, registers more than its component, runs `eval`
 to `[src]`, puts a third-party type in its public API, drops an output, changes its own test
 configuration or its project's targets, is not built into the template, puts code into its
 `studio-plugin.json`, or was written from another definition of its element; a conversion that
-puts an element's code into configuration, or leaves an element out of its report. Each fails
-check 9; the ten that only running a plugin shows run, each from a copy of the plugin with the
-control applied.
+puts an element's code into configuration, leaves an element out of its report, or gives its
+plugin no decision of its own. Each fails check 9; the ten that only running a plugin shows run,
+each from a copy of the plugin with the control applied.
 
 **For the report's decisions** (section 8), six more, which break a `decisions.json` filled in
 against its report: take a decided item's owner off, or its decision; change the reason the report
@@ -365,6 +372,21 @@ item the report does not list, one it
 converts, or one item twice. No check fails then: readiness must name each among what stands in
 its way, and does, on the made-up package with and without M2's corpus. One more, for check 1,
 makes the report one of another version of the package, which check 1 fails.
+
+**For proposals, carrying and the approval** (section 8), seven more. Three write the app as a
+converter that disobeyed `decisions.json` would, and check 5 fails each: a proposal written that no
+one decided, a rejected one written, and an accepted one left out. Two break a decisions file
+carried from another build, and readiness names each: a decision carried to another construct, as
+a carry by place would, and a changed construct's decision carried as it was made, rather than
+offered for re-confirmation. Two break an approved conversion, and readiness names its approval
+void: an approval of another report, and a decision changed after the approval. Each runs on the
+made-up package, with M2's corpus and the proposals the tests add for an action and a card fed by
+an operation, or a new build of it.
+
+**For the plugins' joins** (sections 6 and 8), three more, on the made-up corpus with both plugins
+accepted and its report approved; check 9 still passes each, and readiness must name it: a plugin
+the report accepts with no decision of it in `decisions.json`, a plugin's acceptance carried to its
+element changed in a new build, and a file of an accepted plugin changed after the approval.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -419,28 +441,77 @@ M1. It takes Studio's branch, commit and build time from the bundle's manifest
 it, the same for the same package every time.
 
 **Owners and decisions** are people's, so they are kept beside it, in the conversion's
-`decisions.json` (provisional format `studio-migration-decisions/1`), which no conversion writes:
+`decisions.json` (provisional format `studio-migration-decisions/2`), which no conversion writes:
 converting the same package again, once the catalogue has learnt something, loses none of them.
-The `decisions` command writes the file, an entry for each reported item for a person to fill in
-with its owner and what they decided, and carries those of an earlier file of the same build that
-still hold. A file is for one build of the package, its version, Studio's commit and build time,
-and its bundle's SHA-256, and is taken only for that package, because a construct's id is its
-place in its file and another build can give it to another construct; check 1 holds the report
-to the package given too. Each decision copies what
+The `decisions` command writes the file: an entry for each reported item, for a person to fill in
+with its owner and what they decided, and one for each proposal, for a person to fill in with
+their name, `accept` or `reject`, and their reason. A file is for one build of the package, its
+version, Studio's commit and build time, and its bundle's SHA-256, and `check` and `report` take it
+only for that build; check 1 holds the report to the package given too. Each decision copies what
 it was made on from the report, the item's label, property, outcome, where it was written, its
-reason and its rule; where the report no longer says the same, the decision is not taken, and is
-made again. Readiness needs a decision taken for every reported item, and nothing wrong in the
-file.
+reason and its rule, and its construct's identity (below); where the report no longer says the
+same, or the construct at that place is another, the decision is not taken, and is made again.
+Readiness needs a decision taken for every reported item and every proposal, and nothing wrong in
+the file.
 
-**Printed,** with the `report` command: the header, the summary by kind and outcome with the
-coverage, what the harness found, every reported item with its owner and decision, every proposal,
-and each file with what it became. Lab mode takes the screenshots, beside its own report (section
-6); this report does not take them in yet.
+**Accepting or rejecting a proposal.** A proposal is a condition's rule in a known JavaScript
+pattern, or a card an operation feeds. What it guards, a field under the condition, say, takes no
+decision of its own: it follows its condition's. `convert --decisions <decisions.json>`, which
+`migrate --from` runs, writes what a person accepted, by someone named, for a reason: the rule
+becomes the `visibleWhen` of what the condition guards, and check 5 holds it on every row of its
+truth table, as it holds a converted condition's. What they rejected is written nowhere, and what
+it guards is reported, for a decision of its own. Nothing proposed is written unless a person
+accepted it, held three ways. The report keeps a proposal as `proposed`, records what the
+conversion was made with (`applied`), and says where an accepted one was written. The checks hold
+the conversion to that record, so a rule written for a proposal not accepted fails check 5, and a
+field under an accepted rule that is not written fails it as well. Readiness holds the record to
+`decisions.json`, so a conversion made with other decisions than the file holds now stands in the
+way; and holds `report.json` to the converter, converting the package again with the allow-list
+and the decisions it records, so a proposal relabelled in the report by hand, as converted say, is
+said to be. A card an operation feeds, the favourites
+card, proposes nothing the converter can write yet, as no queue takes the list an operation gives:
+it can be rejected, and not accepted. Tidy labels for machine-generated ones are not proposals yet:
+a search form's field with one is reported, and its note says so.
 
-**Not yet:** accepting or rejecting a proposal, which needs the converter to write what a person
-accepts; recording a reviewer's approval of the report; what the harness found, per file, since
-its findings name the conversion's files; and carrying decisions to a new build of the package,
-which needs constructs known by more than their place.
+**A construct's identity** is a fingerprint of its kind, the file that owns it and what it is there,
+such as a field's element and the property it binds, never its place among the file's constructs:
+Studio names a package's files after what they hold, a layout after its type and mode. It is the
+same in every build where the construct is unchanged, wherever it moved in its file, and shared by
+constructs a build cannot tell apart, as two fields of one layout binding one property are.
+
+**Carrying decisions to a new build.** `decisions --from` an earlier build's file, which `migrate
+--from` runs, carries each decision to the construct of this build of the same identity, when what
+it was made on is unchanged; offers it for re-confirmation, its earlier decision beside a blank one,
+when that changed; and drops it when the construct is gone, or this build or the earlier file
+holds its identity more than once. It never carries one by place. The file records what it
+carried, offered and dropped, and the report says each. A file of the first format names no
+identity, so it is carried to its own build only, by place, as before.
+
+**The reviewer's approval.** `approve <package> <conversion> --by <name>` records who approved the
+report and its decisions, and when, in the conversion's `approval.json`, with the SHA-256 of
+`report.json`, of `decisions.json` and of the conversion's other files. Readiness needs an approval
+whose digests are those of the conversion as it is now: any change voids it, and the report says
+so. `approve` refuses while a decision is still to make. It is the only command that writes an
+approval; `migrate`, for one package or many, never runs it. It needs a person at a terminal, who
+types back the start of the digest it shows, and refuses to run where its input or output is not a
+terminal, as in a script, a pipeline or an agent's run: so no run of the tool approves itself, and a
+run with no terminal cannot approve at all. That is a guard against a run approving itself
+unwatched, not a proof of who typed. A program that drives a terminal can run `approve`, and
+`approval.json` is a file, which anyone who can write the conversion can write by hand, as they
+can `decisions.json`: an approval is a record of who said they approved, as a signature on paper
+is, not a cryptographic one.
+
+**Printed,** with the `report` command: the header, with the approval; the summary by kind and
+outcome, with how many proposals were accepted and rejected, and the coverage; what the harness
+found; every reported item with its owner and decision; every proposal with who accepted or
+rejected it and why, or that it waits; what was carried from an earlier build; what the harness
+found file by file, each finding under the file of the conversion it names, with the package's
+files that became it; and each file of the package with what it became and what was found there.
+Lab mode takes the screenshots, beside its own report (section 6); this report does not take them
+in.
+
+**Not yet:** the screenshots in the report, which stay with lab mode; a target for an operation-fed
+card, which the mapping agent proposes; and tidy labels as proposals.
 
 Evidence (screenshots, request logs, truth tables) is kept outside the repository, like the Beta's
 phase evidence. The summary goes into the pull request that adds the migrated package.
@@ -471,15 +542,25 @@ These sit inside the [development plan](development-plan.md):
 - **Built, and checked on two made-up custom elements only, with no real package.** The inventory
   describes each custom element of the custom bundle: its properties, the bindings it makes, the
   events it fires, the operations it calls and the Web UI behaviours it uses, read without running
-  it. The report proposes each as a Layer 2 plugin at `libs/extensions/<element>`, until a person
-  accepts it. `npm run studio-migration -- plugin <package.zip> <element>` scaffolds the plugin from
+  it. The report proposes each as a Layer 2 plugin at `libs/extensions/<element>`.
+  `npm run studio-migration -- plugin <package.zip> <element>` scaffolds the plugin from
   the template every customer library comes from, with the element's interface and a spec
   skeleton of the behaviours the inventory read, and the Code agent's skill,
   `.cursor/skills/studio-plugin/SKILL.md`, says how to finish it. Check 9 runs as section 6 says,
-  with twenty-four negative controls (section 7), each seen failing. Two independent reviews, one of
+  with twenty-five negative controls (section 7), each seen failing. Two independent reviews, one of
   correctness and one asking whether a wrong or unsafe plugin could pass, found gaps; the ones
   closed have controls of their own, and the tool's README lists what stays open. The scan stays a
   tripwire that a person's review completes.
+- **Decided and approved as any proposal.** Since the report's own slice (below, **Where the report
+  stands**), a plugin is accepted or rejected in `decisions.json` with a person's name and reason,
+  by its element's identity, the SHA-256 of the element's definition: a decision is carried to a new
+  build only while the element is the same, so a changed element's plugin is decided again.
+  Readiness waits for the decision whatever check 9 says, and `approve` records the SHA-256 of every
+  file of each accepted plugin's library beside the report's, so a plugin changed after the
+  approval voids it. Three negative controls hold these joins, each seen failing: a plugin the
+  report accepts with no decision, an acceptance carried to a changed element, and a plugin
+  changed after the approval; and a fourth of check 9's, a plugin the report gives no decision of
+  its own. A third independent review read these joins.
 - **Built in from the template.** As decision 5 keeps it until signed, pinned plugins are proven, a
   plugin is a library the customer's fork of `apps/nuxeo-satori-template` adds with one line. The two
   made-up plugins, `libs/extensions/acme-claim-exposure` and `acme-claim-escalate`, written with the
@@ -495,8 +576,9 @@ These sit inside the [development plan](development-plan.md):
   - run-time loading, which waits for decision 5's spike and its owners;
   - a plugin's place in the app, which the conversion does not write: the person who accepts the
     plugin places it with a manifest entry;
-  - another language than the package's own in a plugin, and accepting a proposal, which another
-    piece of work brings.
+  - another language than the package's own in a plugin;
+  - the template app's own configuration in the approval: it covers each accepted plugin's library,
+    and check 9 holds the template to build each accepted plugin in and no rejected one.
 - **Not checked:** on a real package, or by a person reviewing a migrated plugin for a customer.
 
 **Where M4 stands, 26 November 2026:**
@@ -525,19 +607,40 @@ These sit inside the [development plan](development-plan.md):
 - **Not checked:** on a real package, or by a support engineer on a real case. It was run on the
   made-up packages only.
 
-**Where the report stands, 24 November 2026:**
+**Where the report stands, 27 November 2026:**
 
-- **Built:** most of section 8's report, for step 5 of phase 4's demo. Every reported item takes
-  an owner and a decision in the conversion's `decisions.json`, which readiness holds to the
-  report, and `report` prints the header, the summary by kind and outcome with its coverage, the
-  harness's verdict, the decisions needed and what each file became. Six negative controls break
-  the decisions, one way each, and check 1 now holds the report to the package given, with a
-  control of its own.
-- **Not yet:** accepting or rejecting a proposal; a reviewer's approval, which no command records;
-  what the harness found, file by file, and the screenshots; carrying decisions to a new build of
-  the package.
-- **Not checked:** on a real package. The sample is not in this repository, and the report was
-  run on the made-up package only.
+- **Built:** section 8's report, but for its screenshots, which stay with lab mode.
+  - **Accepting or rejecting a proposal:** each proposal takes a person's name, `accept` or
+    `reject`, and their reason in `decisions.json`, held to the report as a reported item's
+    decision is. `migrate --from`, through `convert --decisions`, writes what was accepted, a
+    condition's rule on what it guards, and reports what was rejected; nothing proposed is written
+    unless a person accepted it, and check 5 holds both ways. Readiness needs every proposal
+    decided, and the conversion made with those decisions.
+  - **The reviewer's approval:** `approve` records who approved the report and its decisions,
+    when, and the SHA-256 of `report.json`, `decisions.json` and the conversion's files.
+    Readiness needs one that matches the conversion as it is; any change voids it, and the report
+    says so. It needs a person at a terminal, so a run with no terminal, an agent's or a
+    pipeline's, cannot approve, and no other command writes one. It is a record, not a signature:
+    a program driving a terminal, or a hand-written `approval.json`, is not told from a person.
+  - **Carrying decisions to a new build,** by each construct's identity: carried when what it was
+    made on is unchanged, offered for re-confirmation when it changed, dropped when the construct
+    is gone or cannot be told apart, each said in the report, and never carried by place. `migrate
+--from` carries them, for one package or many.
+  - **What the harness found, file by file,** under the file of the conversion each finding names,
+    with the package's files it came from.
+  - **Negative controls:** seven more. Three for the proposals, which check 5 fails: a proposal
+    written with no decision, a rejected one written, an accepted one left out. Two for carrying,
+    which readiness names: a decision carried to another construct, and a changed construct's
+    decision carried as it was made. Two for the approval, which readiness names void: an approval
+    of another report, and one a change after it survives. Each is applied by the tests, and was
+    seen failing.
+- **Not yet:** the screenshots in the report; a target the converter can write for a card an
+  operation feeds, which can be rejected and not accepted until the mapping agent proposes one;
+  tidy labels for machine-generated ones, as proposals.
+- **Not checked:** on a real package. The sample is not in this repository, and all of it was run
+  on the made-up packages only, Acme-Claims with and without M2's corpus and a few changes made to
+  them for a new build. No reviewer has approved a report at a terminal by hand: the tests drive
+  `approve` through a stand-in for one, and a real shell with no terminal was seen refusing it.
 
 **Where M2 stands, 23 November 2026:**
 
@@ -627,3 +730,8 @@ These sit inside the [development plan](development-plan.md):
   local server has it.
 - Studio's Git access to the generated UI files, on a real project.
 - The token map from `--nuxeo-*` properties to Satori's tokens.
+- Accepting and rejecting proposals, carrying decisions to a new build and the reviewer's
+  approval, on a real package or by a real reviewer: they were checked on the made-up packages
+  only, and `approve` at a terminal only through a stand-in for one in the tests. Whether a
+  construct's identity stays the same across two real builds of a Studio project, as it does across
+  the made-up ones, waits for two builds of one real project.

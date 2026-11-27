@@ -404,6 +404,10 @@ describe('each control of check 9 fails it', () => {
     ['plugin-bypasses-http', 'takes HttpClient from @angular/common/http'],
     ['drop-element-entry', 'the report lists no plugin for the custom element acme-claim-exposure'],
     [
+      'plugin-needs-no-decision',
+      'the report gives the custom element acme-claim-exposure as proposed with no decision of its own, not as a plugin a person accepts or rejects',
+    ],
+    [
       'code-in-configuration',
       'app/layouts/Claim/view.layout.json at cards[1].fields[0].computed.args[0] holds markup',
     ],

@@ -12,10 +12,12 @@
  * (`lab-cli.ts`) runs what it can of the server halves, against a real server, and never through
  * this file's result.
  *
- * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
- * decision, and every reported item has an owner and a decision, in the conversion's
- * `decisions.json` (`decisions.ts`), with nothing wrong in that file. So an M1 run is never ready,
- * and says what stands in the way.
+ * A migration is ready only when all ten pass, nothing is pending, every proposal is accepted or
+ * rejected by someone named, for a reason, and the conversion was made with those decisions, every
+ * reported item has an owner and a decision, in the conversion's `decisions.json`
+ * (`decisions.ts`), with nothing wrong in that file, and a person has approved the report and its
+ * decisions as they are now (`approval.ts`). So an M1 run is never ready, and says what stands in
+ * the way.
  */
 import { mapThemeProperty, type Catalogue } from './catalogue';
 import { checkConditions } from './check-conditions';
@@ -26,8 +28,9 @@ import { checkPackage } from './check-package';
 import { checkRequests } from './check-requests';
 import { checkSeen } from './check-seen';
 import { contrastRatio, parseColour } from './colour';
-import { constructsOf, countsOf } from './constructs';
-import { holdDecisions } from './decisions';
+import { holdApproval } from './approval';
+import { constructsOf, countsOf, identitiesOf } from './constructs';
+import { holdDecisions, madeOtherwise } from './decisions';
 import {
   EXPLAINED,
   OUTCOMES,
@@ -35,13 +38,16 @@ import {
   platformVersion,
   packageBuildOf,
   readCatalogue,
+  recordedVerdicts,
+  reportDiffers,
   studioBuildOf,
+  withVerdicts,
   type Conversion,
   type MigrationReport,
   type ReportEntry,
 } from './convert';
 import type { Inventory } from './inventory';
-import type { PluginsInput } from './plugins';
+import { pluginFilesOf, type PluginsInput } from './plugins';
 import { secondCount } from './second-count';
 import type { StudioPackage } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -133,12 +139,19 @@ export function runHarness(given: HarnessInput): HarnessResult {
   // An id listed twice is read by its first entry, as the decisions and the report read it.
   const entries = firstEntries(input.conversion.report.constructs ?? []);
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
-  const proposed = entries.filter((entry) => entry.outcome === 'proposed').length;
-  const { unowned, undecided, findings } = holdDecisions(
+  const build = packageBuildOf(input.pkg);
+  const { unowned, undecided, findings, verdicts, waiting, unsigned } = holdDecisions(
     input.conversion.report,
     input.conversion.decisions,
-    packageBuildOf(input.pkg),
+    build,
+    identitiesOf(given.inventory),
   );
+  // A proposal the conversion was made with another decision of than decisions.json gives now:
+  // what it wrote, or did not, is not what was decided.
+  const otherwise = madeOtherwise(input.conversion.report, verdicts);
+  // The report is the converter's, for this package and the decisions it records: one that says
+  // otherwise of a construct, a proposal relabelled converted say, was edited or is out of date.
+  const differs = reportDiffers(given.conversion, given.pkg, given.inventory, given.catalogue);
   // A reason that names the allow-list is the conversion's, so a decision made on it rests on the
   // list the conversion was made with.
   const recorded = [...(input.conversion.report.allowList ?? [])].sort();
@@ -156,7 +169,26 @@ export function runHarness(given: HarnessInput): HarnessResult {
       .filter((check) => check.status === 'not run')
       .map((check) => `check ${check.number} did not run`),
     ...(pending ? [`${pending} constructs are pending a later phase`] : []),
-    ...(proposed ? [`${proposed} proposals wait for a person to accept or reject them`] : []),
+    ...(differs.length > 0
+      ? [
+          `report.json says otherwise than the converter of ${differs.length} of the package's constructs, such as ${differs[0].id}, its ${differs[0].key}: convert the package again, as migrate does`,
+        ]
+      : []),
+    ...(waiting
+      ? [
+          `${waiting} ${waiting === 1 ? 'proposal waits' : 'proposals wait'} for a person to accept or reject ${waiting === 1 ? 'it' : 'them'}`,
+        ]
+      : []),
+    ...(unsigned
+      ? [
+          `${unsigned} ${unsigned === 1 ? 'proposal is' : 'proposals are'} accepted or rejected with no one's name, or no reason`,
+        ]
+      : []),
+    ...(otherwise.length > 0
+      ? [
+          `the conversion was made with ${otherwise.length} of its proposals decided otherwise than decisions.json decides them now, such as ${otherwise[0].id}: convert it again with the decisions, as migrate --from does`,
+        ]
+      : []),
     ...(unowned
       ? [`${unowned} reported ${unowned === 1 ? 'item has' : 'items have'} no owner`]
       : []),
@@ -172,6 +204,8 @@ export function runHarness(given: HarnessInput): HarnessResult {
           `the conversion was made with the allow-list ${recorded.join(', ') || 'none'}, not the deployment's, ${deployment.join(', ') || 'none'}: convert it again with the deployment's`,
         ]
       : []),
+    // Last: a person approves the report once nothing else of the decisions is in the way.
+    ...holdApproval(input.conversion, build, pluginFilesOf(input.plugins)).findings,
   ];
   return { checks, ready: blockers.length === 0, blockers };
 }
@@ -213,10 +247,17 @@ export function runCheck(given: HarnessInput, number: number): CheckResult | und
   return check && runOne(check, completed(given));
 }
 
-/** The input with what was left out filled in: the report's allow-list, the platform's version. */
+/**
+ * The input with what was left out filled in: the report's allow-list, the platform's version;
+ * and the inventory with what people decided of the proposals, as the report records the
+ * conversion was made with (`recordedVerdicts`), so that each check holds an accepted rule where
+ * the converter writes it, and one nobody accepted where it writes nothing. Readiness holds what
+ * the report records to `decisions.json`, and the report to the converter (`runHarness`).
+ */
 function completed(given: HarnessInput): HarnessInput {
   return {
     ...given,
+    inventory: withVerdicts(given.inventory, recordedVerdicts(given.conversion.report)),
     allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
     allowListFromReport: given.allowList === undefined,
     platformVersion: given.platformVersion ?? platformVersion(),

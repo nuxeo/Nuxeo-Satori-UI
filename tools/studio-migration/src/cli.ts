@@ -12,6 +12,9 @@
  *                                                             the decisions file, for people to fill in
  *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the report, for the person who approves it
+ *   approve   <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
+ *                                                             a person's approval of the report and its
+ *                                                             decisions, typed at a terminal (approval.ts)
  *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
  *                                                             all of them in order, for a customer's own
  *                                                             package (migrate.ts)
@@ -28,9 +31,16 @@
  * conversion was made with unless they are given one.
  *
  * `decisions` writes the conversion's `decisions.json` for the package given, an entry for each
- * reported item, for people to say who owns it and what they decided; `--from` carries each
- * decision of an earlier file, for the same build of the package, that still holds. `check` and
- * `report` read it from the conversion, and take it only for the package they are given.
+ * reported item, for people to say who owns it and what they decided, and one for each proposal,
+ * for a person to accept or reject; `--from` carries each decision of an earlier file that still
+ * holds, of the same build by its item, of another build of the package by its construct's
+ * identity. `check` and `report` read it from the conversion, and take it only for the package
+ * they are given. `convert --decisions <decisions.json>` writes what a person accepted.
+ *
+ * `approve` records a person's approval of the report and its decisions, as they are, in
+ * `approval.json`: it needs a terminal, where the person named with `--by` types back the start of
+ * the digest it shows, and no other command runs it, so that a run nobody watches never approves
+ * itself (`approval.ts`).
  *
  * `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, as a
  * person would by hand, keeping what each prints in a file of `--out`, and says what to do next
@@ -47,13 +57,24 @@
  * only a `decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty
  * `--out`.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { account, type Accounting } from './account';
+import {
+  acceptedPlugins,
+  APPROVAL_FILE,
+  ApprovalError,
+  approvalDigest,
+  approvalOf,
+  CONFIRM_LENGTH,
+  digestsOf,
+  type PluginFiles,
+} from './approval';
 import { CatalogueError, loadCatalogue, type How } from './catalogue';
+import { constructsOf, sharedIdentities } from './constructs';
 import {
   allowListOf,
-  convert,
+  convertWithDecisions,
   ConversionError,
   labelsOf,
   OUTCOMES,
@@ -63,25 +84,34 @@ import {
   type Conversion,
   type Outcome,
 } from './convert';
-import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
+import {
+  DECISIONS_FILE,
+  decisionsFor,
+  DecisionsError,
+  everyDecisionMade,
+  holdDecisions,
+} from './decisions';
 import { describeElement } from './elements';
 import { ObservedError, readObserved } from './observed';
 import { nextSteps, PluginError, restampPlugin, scaffoldPlugin } from './plugin';
 import { runPlugin, type PluginRun } from './plugin-run';
-import { readPlugins, WORKSPACE, type PluginsInput } from './plugins';
+import { readLibrary, readPlugins, WORKSPACE, type PluginsInput } from './plugins';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
 import { isDirectory, migrateMany } from './batch';
 import { migrate, type Command } from './migrate';
 import {
+  APPROVAL_MUTATIONS,
+  CARRY_MUTATIONS,
   DECISION_MUTATIONS,
+  PROPOSAL_MUTATIONS,
   MUTATIONS,
   MutationError,
   mutation,
   type DecisionMutation,
   type Mutation,
 } from './mutations';
-import { summarise, TALLIES, type MigrationSummary } from './report';
+import { summarise, TALLIES, type MigrationSummary, type ProposalItem } from './report';
 import { readStudioPackage, StudioPackageError, type StudioPackage } from './studio-package';
 import { ZipError } from './zip';
 
@@ -99,16 +129,25 @@ export interface CliIo {
    * as data, each package's counts of constructs by outcome. Nothing else sets it.
    */
   readonly reported?: (summary: MigrationSummary) => void;
+  /**
+   * A person at a terminal, for `approve`: asks them a question and gives back the line they type,
+   * or `null` when nothing more can be read. Set only when the command's input and output are both
+   * a terminal, so a script, a pipeline or an agent's run, which has none, cannot approve.
+   */
+  readonly terminal?: { readonly ask: (question: string) => string | null };
+  /** The time an approval is made at; the clock's when left out. */
+  readonly now?: () => Date;
 }
 
 const USAGE = `usage:
   studio-migration inventory <package.zip> [--json]
-  studio-migration convert <package.zip> <new-directory> [--allow-list <file>]
+  studio-migration convert <package.zip> <new-directory> [--allow-list <file>] [--decisions <decisions.json>]
   studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>] [--run-plugins] [--observed <file>]
   studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+  studio-migration approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
   studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
   studio-migration plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>] [--restamp]
@@ -127,7 +166,7 @@ const COMMANDS: Readonly<
   >
 > = {
   inventory: { args: 1, flags: ['--json'] },
-  convert: { args: 2, flags: [], valued: ['--allow-list'] },
+  convert: { args: 2, flags: [], valued: ['--allow-list', '--decisions'] },
   check: {
     args: 2,
     flags: ['--json', '--run-plugins'],
@@ -136,6 +175,7 @@ const COMMANDS: Readonly<
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
+  approve: { args: 2, flags: [], valued: ['--by', '--plugins'] },
   migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
   plugin: { args: 2, flags: ['--restamp'], valued: ['--workspace', '--owner'] },
 };
@@ -214,7 +254,13 @@ const step: Command = (argv, io) => main(argv, io);
 export function main(argv: readonly string[], io: CliIo): number {
   const { command, spec, args, flags, values, wrong } = parse(argv);
   if (command === 'mutate' && argv.length === 2 && argv[1] === '--list') {
-    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
+    for (const m of [
+      ...MUTATIONS,
+      ...PROPOSAL_MUTATIONS,
+      ...DECISION_MUTATIONS,
+      ...CARRY_MUTATIONS,
+      ...APPROVAL_MUTATIONS,
+    ])
       io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
     return 0;
   }
@@ -238,9 +284,18 @@ export function main(argv: readonly string[], io: CliIo): number {
       }
       case 'convert': {
         const pkg = readPackage(io, args[0]);
-        const conversion = convert(pkg, inventory(pkg), loadCatalogue(), {
-          allowList: readAllowList(io, allowListFile) ?? new Set(),
-        });
+        const decisionsFile = values.get('--decisions');
+        // What a person accepted is written, and only that: decisions held as `decisions` holds
+        // them, carried from another build by their constructs' identities.
+        const conversion = convertWithDecisions(
+          pkg,
+          inventory(pkg),
+          loadCatalogue(),
+          { allowList: readAllowList(io, allowListFile) ?? new Set() },
+          decisionsFile === undefined
+            ? undefined
+            : { raw: readJson(io, decisionsFile), file: decisionsFile },
+        );
         writeConversion(args[1], conversion);
         io.out(conversionSummary(conversion, args[1]));
         return 0;
@@ -266,7 +321,7 @@ export function main(argv: readonly string[], io: CliIo): number {
         writeConversion(args[2], conversion);
         io.out(
           `${chosen.name}: ${changed}. Written to ${args[2]}; ${
-            chosen.caughtBy === 'decisions'
+            chosen.caughtBy === 'decisions' || chosen.caughtBy === 'approval'
               ? 'what stands in the way of readiness must now show it'
               : `check ${chosen.caughtBy} must now fail`
           }.\n`,
@@ -278,9 +333,12 @@ export function main(argv: readonly string[], io: CliIo): number {
         const conversion = readConversion(args[1]);
         const from = values.get('--from');
         const earlier = from === undefined ? undefined : { raw: readJson(io, from), file: from };
-        const { file, carried, notCarried, blank } = decisionsFor(
+        const constructs = constructsOf(inventory(pkg));
+        const { file, carried, notCarried, reconfirm, blank, otherBuild } = decisionsFor(
           conversion.report,
           packageBuildOf(pkg),
+          new Map(constructs.map((construct) => [construct.id, construct.identity])),
+          sharedIdentities(constructs),
           earlier,
         );
         const path = join(args[1], DECISIONS_FILE);
@@ -294,11 +352,22 @@ export function main(argv: readonly string[], io: CliIo): number {
               : `${path}: ${(error as Error).message}`,
           );
         }
+        const proposals = file.decisions.filter((item) => item.outcome === 'proposed').length;
         const lines = [
-          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them still without an owner or a decision`,
+          `Wrote ${path}: ${plural(file.decisions.length - proposals, 'reported item')} and ${plural(proposals, 'proposal')}, ${blank} of them still to fill in`,
         ];
         if (from !== undefined) {
-          lines.push(`  carried from ${from}: ${carried}`);
+          lines.push(
+            otherBuild === undefined
+              ? `  carried from ${from}: ${carried}`
+              : `  carried from ${from}, of another build of the package, ${otherBuild}, by each construct's identity: ${carried}`,
+          );
+          if (reconfirm > 0)
+            lines.push(
+              `  offered for re-confirmation, the earlier decision beside a blank one: ${reconfirm}`,
+            );
+          if (file.carriedFrom && file.carriedFrom.dropped.length > 0)
+            lines.push(`  dropped: ${file.carriedFrom.dropped.length}`);
           if (notCarried.length > 0) {
             // Printed once: the earlier file is read, never changed, so it still holds each.
             lines.push(`  not carried, and still in ${from}: ${notCarried.length}`);
@@ -323,6 +392,20 @@ export function main(argv: readonly string[], io: CliIo): number {
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
         io.reported?.(summary);
         return 0;
+      }
+      case 'approve': {
+        const by = values.get('--by');
+        if (by === undefined) {
+          io.err(USAGE);
+          return 2;
+        }
+        return approve(
+          io,
+          readPackage(io, args[0]),
+          args[1],
+          by,
+          values.get('--plugins') ?? WORKSPACE,
+        );
       }
       case 'migrate': {
         const out = values.get('--out');
@@ -379,7 +462,8 @@ function refusal(error: unknown, io: CliIo): number {
     error instanceof CatalogueError ||
     error instanceof ConversionError ||
     error instanceof MutationError ||
-    error instanceof DecisionsError
+    error instanceof DecisionsError ||
+    error instanceof ApprovalError
   ) {
     io.err(`${error.message}\n`);
     return 1;
@@ -466,7 +550,103 @@ async function checkRunningPlugins(argv: readonly string[], io: CliIo): Promise<
 
 /** Which part of the harness must refuse what a control breaks. */
 function catcher(control: Mutation | DecisionMutation): string {
-  return control.caughtBy === 'decisions' ? 'decisions' : `check ${control.caughtBy}`;
+  return control.caughtBy === 'decisions' || control.caughtBy === 'approval'
+    ? control.caughtBy
+    : `check ${control.caughtBy}`;
+}
+
+/**
+ * `approve`: a person's approval of the report and its decisions as they are, typed at a
+ * terminal, in `approval.json`, with the files of each plugin the report accepts, read from
+ * `workspace` (this repository, or the one `--plugins` names, as check 9 reads them). Refused,
+ * with nothing written, where there is no terminal, while a decision is still to make, and when
+ * the person does not type back the start of the digest.
+ */
+function approve(
+  io: CliIo,
+  pkg: StudioPackage,
+  directory: string,
+  by: string,
+  workspace: string,
+): number {
+  if (!io.terminal) {
+    io.err(
+      "approve records a person's approval, typed at a terminal, and there is none here: its input or its output is not a terminal, as in a script, a pipeline or an agent's run. Nothing was written. Run it yourself, in a terminal.\n",
+    );
+    return 1;
+  }
+  const conversion = readConversion(directory);
+  const build = packageBuildOf(pkg);
+  const plugins: PluginFiles = (library) => readLibrary(workspace, library);
+  const approval = approvalOf(conversion, build, by, (io.now ?? (() => new Date()))(), plugins);
+  const constructs = constructsOf(inventory(pkg));
+  const held = holdDecisions(
+    conversion.report,
+    conversion.decisions,
+    build,
+    new Map(constructs.map((construct) => [construct.id, construct.identity])),
+  );
+  // An approval of decisions still to make would be void as soon as they are made.
+  if (!everyDecisionMade(conversion.report, held))
+    throw new ApprovalError(
+      `${join(directory, DECISIONS_FILE)} still has decisions to make, or holds some that are not taken, and the conversion must be made with them: the verdict of check or report lists each. Nothing was written: approve once every decision is made, since a change to decisions.json voids an approval`,
+    );
+  const digests = digestsOf(conversion, plugins);
+  const digest = approvalDigest(digests);
+  io.out(
+    [
+      `Approving the report of ${pkg.descriptor.name} ${pkg.descriptor.version}, in ${directory}, as ${approval.approvedBy}:`,
+      `  report.json     SHA-256 ${digests.report}`,
+      `  decisions.json  SHA-256 ${digests.decisions ?? 'none'}`,
+      `  its files       SHA-256 ${digests.files}`,
+      ...(digests.plugins === null
+        ? []
+        : [
+            `  its plugins     SHA-256 ${digests.plugins}, of ${acceptedPlugins(conversion.report).join(', ')}`,
+          ]),
+      `  together        ${digest}`,
+      'A change to any of them voids the approval. Approving clears nothing else that stands in the way.',
+      '',
+    ].join('\n'),
+  );
+  const answer = io.terminal.ask(
+    `Type the first ${CONFIRM_LENGTH} characters of "together" to approve it as ${approval.approvedBy}: `,
+  );
+  if (answer?.trim().toLowerCase() !== digest.slice(0, CONFIRM_LENGTH)) {
+    io.err(`That is not the start of the digest, so nothing was approved, and nothing written.\n`);
+    return 1;
+  }
+  const path = join(directory, APPROVAL_FILE);
+  try {
+    // `wx`: an approval is never written over, void or not.
+    writeFileSync(path, `${JSON.stringify(approval, null, 2)}\n`, { flag: 'wx' });
+  } catch (error) {
+    throw new ApprovalError(
+      (error as NodeJS.ErrnoException).code === 'EEXIST'
+        ? `${path} exists, and is never written over`
+        : `${path}: ${(error as Error).message}`,
+    );
+  }
+  io.out(`Approved by ${approval.approvedBy} at ${approval.approvedAt}: wrote ${path}.\n`);
+  return 0;
+}
+
+/** One line typed at the terminal, read from standard input as it comes; `null` at its end. */
+function typedLine(): string | null {
+  const bytes: number[] = [];
+  const one = Buffer.alloc(1);
+  for (;;) {
+    let read: number;
+    try {
+      read = readSync(0, one, 0, 1, null);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EAGAIN') continue;
+      return null;
+    }
+    if (read === 0) return bytes.length === 0 ? null : Buffer.from(bytes).toString('utf8');
+    if (one[0] === 0x0a) return Buffer.from(bytes).toString('utf8').replace(/\r$/, '');
+    bytes.push(one[0]);
+  }
 }
 
 function readJson(io: CliIo, path: string): unknown {
@@ -568,15 +748,23 @@ export function reportSummary(summary: MigrationSummary): string {
         ? "the deployment's, as given"
         : "as the conversion recorded it, not the deployment's word for it"
     }`,
+    `Approval: ${
+      summary.approval.approved
+        ? `by ${oneLine(summary.approval.by ?? '')} at ${oneLine(summary.approval.at ?? '')}, of this report and these decisions as they are`
+        : summary.approval.findings.map(oneLine).join('; ')
+    }`,
     '',
     `Summary: ${plural(all.total, 'construct')}, by kind and outcome`,
   ];
   // A column for each tally a construct has, and `missing` always: its 0 is what coverage means.
   const tallies = TALLIES.filter((tally) => tally === 'missing' || all.tallies[tally] > 0);
-  const headings = [
-    'total',
-    ...tallies.flatMap((tally) => (tally === 'reported' ? ['reported', 'decided'] : [tally])),
-  ];
+  const columns = (tally: (typeof tallies)[number]): string[] =>
+    tally === 'reported'
+      ? ['reported', 'decided']
+      : tally === 'proposed'
+        ? ['proposed', 'accepted', 'rejected']
+        : [tally];
+  const headings = ['total', ...tallies.flatMap(columns)];
   const first = Math.max('kind'.length, ...summary.kinds.map((count) => count.kind.length));
   const row = (name: string, cells: readonly string[]): string =>
     `  ${name.padEnd(first)}${cells.map((cell, index) => cell.padStart(Math.max(5, headings[index].length) + 2)).join('')}`;
@@ -588,7 +776,9 @@ export function reportSummary(summary: MigrationSummary): string {
         ...tallies.flatMap((tally) =>
           tally === 'reported'
             ? [String(count.tallies.reported), String(count.decided)]
-            : [String(count.tallies[tally])],
+            : tally === 'proposed'
+              ? [String(count.tallies.proposed), String(count.accepted), String(count.rejected)]
+              : [String(count.tallies[tally])],
         ),
       ]),
     );
@@ -623,18 +813,73 @@ export function reportSummary(summary: MigrationSummary): string {
     lines.push('  Not taken from decisions.json:');
     for (const finding of summary.decisionFindings) lines.push(`    - ${oneLine(finding)}`);
   }
+  const status = (name: ProposalItem['status']): number =>
+    summary.proposed.filter((item) => item.status === name).length;
   lines.push(
     '',
     summary.proposed.length === 0
       ? 'Proposals: none'
-      : `Proposals: ${summary.proposed.length}, each waiting for a person to accept or reject it`,
+      : `Proposals: ${summary.proposed.length}: ${status('accepted')} accepted, ${status('rejected')} rejected, ${status('waiting')} waiting for a person to accept or reject them, and ${status('follows')} decided with the condition each shows under`,
   );
-  for (const item of summary.proposed)
+  for (const item of summary.proposed) {
     lines.push(
       `  - ${oneLine(item.label)}, in ${oneLine(item.file)}`,
       `      id: ${oneLine(item.id)}`,
       `      why: ${oneLine(item.note)}`,
     );
+    if (item.status === 'follows')
+      lines.push(
+        '      decided: with the condition it shows under, whose proposal is still to decide, or the conversion is to be made again with its decision',
+      );
+    else if (item.status === 'waiting') lines.push('      decided: nothing yet');
+    else
+      lines.push(
+        `      decided: ${item.status} by ${oneLine(item.owner ?? '')}, because ${oneLine(item.reason ?? '')}`,
+      );
+    if (item.to !== undefined) lines.push(`      written to: ${oneLine(item.to)}`);
+    if (item.status !== 'follows' && item.status !== 'waiting' && item.applied === undefined)
+      lines.push('      not written yet: the conversion was made before it was decided');
+  }
+
+  const { carried } = summary;
+  if (carried !== null) {
+    lines.push(
+      '',
+      carried.from === null
+        ? `Offered for re-confirmation, by an earlier run of this build: ${carried.reconfirm.length}`
+        : `Carried from an earlier build, ${oneLine(carried.from.name)} ${oneLine(carried.from.version)}, bundle ${oneLine(carried.from.bundle.slice(0, 12))}, by each construct's identity: ${carried.carried} carried, ${carried.reconfirm.length} offered for re-confirmation, ${carried.dropped.length} dropped`,
+    );
+    for (const item of carried.reconfirm)
+      lines.push(
+        `  - offered for re-confirmation: ${oneLine(item.label)} (${oneLine(item.id)}), ${item.confirmed ? 'confirmed since' : 'not confirmed yet'}`,
+        `      it was decided by ${oneLine(item.earlier.owner || 'no one')}: ${oneLine(item.earlier.decision || 'nothing')}${item.earlier.reason ? `, because ${oneLine(item.earlier.reason)}` : ''}`,
+        `      made on another ${oneLine(item.earlier.changed.join(' and '))} than this build gives`,
+      );
+    for (const item of carried.dropped)
+      lines.push(
+        `  - dropped: ${oneLine(item.label ?? item.id)} (${oneLine(item.id)}), decided by ${oneLine(item.owner || 'no one')}: ${oneLine(item.decision || 'nothing')}`,
+        `      it ${oneLine(item.why)}`,
+      );
+  }
+
+  // What the harness found, under the file of the conversion each finding names.
+  lines.push(
+    '',
+    summary.byFile.length === 0
+      ? 'What the harness found, file by file: nothing'
+      : 'What the harness found, file by file:',
+  );
+  for (const group of summary.byFile) {
+    lines.push(
+      group.file === null
+        ? '  Of no one file:'
+        : group.of === 'package'
+          ? `  ${oneLine(group.file)}, of the package:`
+          : `  ${oneLine(group.file)}, of the conversion${group.from.length > 0 ? `, from ${group.from.map(oneLine).join(', ')}` : ''}:`,
+    );
+    for (const finding of group.findings)
+      lines.push(`    - check ${finding.check}: ${oneLine(finding.line)}`);
+  }
 
   lines.push('', `Files: ${summary.files.length}`);
   for (const file of summary.files) {
@@ -643,6 +888,10 @@ export function reportSummary(summary: MigrationSummary): string {
       .join(', ');
     lines.push(`  ${oneLine(file.path)} (${file.kind}): ${counted}`);
     for (const place of file.became) lines.push(`      became: ${oneLine(place)}`);
+    for (const finding of file.found)
+      lines.push(
+        `      found, check ${finding.check}, in ${oneLine(finding.file)}: ${oneLine(finding.line)}`,
+      );
   }
   return `${lines.join('\n')}\n`;
 }
@@ -784,6 +1033,17 @@ if (require.main === module) {
     out: (text) => process.stdout.write(text),
     err: (text) => process.stderr.write(text),
     readFile: (path) => readFileSync(path),
+    // A person, only where both ends are a terminal: never a pipe, a file or an agent's shell.
+    ...(process.stdin.isTTY && process.stdout.isTTY
+      ? {
+          terminal: {
+            ask: (question: string) => {
+              process.stdout.write(question);
+              return typedLine();
+            },
+          },
+        }
+      : {}),
   };
   // `lab` drives a browser, so it is asynchronous, and loaded only when it runs (lab-cli.ts).
   if (argv[0] === 'lab')

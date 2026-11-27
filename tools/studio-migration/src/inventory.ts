@@ -116,6 +116,13 @@ export interface Condition {
    * for. A permission test there never passes. True, or left out, elsewhere.
    */
   readonly permissionsInScope?: boolean;
+  /**
+   * What a person decided of the rule proposed for it, taken from `decisions.json`
+   * (`decisions.ts`), for a condition in a known JavaScript pattern: accepted, it decides as its
+   * rule wherever the rule is written; rejected, it is reported. Never set by reading a package:
+   * `withVerdicts` sets it, on a copy, for the converter and the checks alike.
+   */
+  readonly verdict?: { readonly accepted: boolean; readonly rule: unknown };
 }
 
 /** A column of a list of results, or of a dashboard card's list. */

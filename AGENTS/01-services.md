@@ -296,10 +296,12 @@ bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 
 ```typescript
 notifyTasksChanged(): void
-getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>
+getUserTasks(userId: string, pageSize?: number, context?: HttpContext, workflowModelName?: string): Observable<NuxeoTask[]>
   // the newest `pageSize` open tasks, newest `created` first. Nuxeo orders the list by nt:dueDate and
   // ignores sortBy, so when it has more than `pageSize` the rest is read with `offset`, up to 1000 more.
-  // context reaches every request it makes, both task-list reads and any target read for a title
+  // context reaches every request it makes, both task-list reads and any target read for a title.
+  // workflowModelName: only that workflow's, which Nuxeo answers unpaged, all of them; another's is
+  // left out whatever the server sends (the home's list of tasks)
 getTask(taskId: string): Observable<NuxeoTask>
 getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>
 ```
@@ -361,7 +363,9 @@ General document utilities.
 
 ```typescript
 getRecentlyEdited(pageSize?: number): Observable<NuxeoDocumentList>
-getRecentlyViewed(userId: string, pageSize?: number): Observable<NuxeoDocumentList>
+getRecentlyViewed(userId: string, pageSize?: number, types?: readonly string[]): Observable<NuxeoDocumentList>
+  // what the user created or edited last, the latest changed first: Nuxeo records no read. types:
+  // only those document types, `ecm:primaryType IN (...)`, each escaped (the home's recent list)
 getExpiredDocuments(pageSize?: number): Observable<NuxeoDocumentList>
 getById(docId: string): Observable<NuxeoDocument>
 ```
@@ -679,6 +683,28 @@ load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is 
 queueFileUrl(bootstrapUrl: string, id: string): string
 queueLink(id: string): readonly string[]  // ['/queues', id]
 ```
+
+---
+
+## HomeService (`libs/shared/home/src/lib/home.service.ts`)
+
+The home's reads: `home.json` and `navigation.json` through `APP_DEFINITION_FILES`, as a queue's
+file; the KPIs' page providers; and its lists, the person's tasks and recent records, through the
+services the tasks page and Recently viewed use. Each with a 10-second timeout, as the signed-in
+person.
+
+```typescript
+load(): Observable<HomeLoad>              // home.json: file | none (404) | unreadable. Never errors
+loadNavigation(): Observable<HomeLoad>    // navigation.json, the same way
+results(kpi: HomeKpi): Observable<unknown> // GET /search/pp/<pp>/execute, a page of one record
+tasks(list: HomeTasks): Observable<readonly NuxeoTask[]>
+  // TaskService.getUserTasks(user, list.limit, undefined, list.workflow): newest first
+recent(list: HomeRecent): Observable<readonly NuxeoDocument[]>
+  // DocumentService.getRecentlyViewed(user, list.limit, list.types): the latest changed first
+```
+
+`HOME_QUEUE_LINK` and `HOME_TASKS_LINK`, given by the app on its home route, say where a queue,
+the tasks page and a task open; without them, a link to a queue or a list of tasks is not drawn.
 
 ---
 

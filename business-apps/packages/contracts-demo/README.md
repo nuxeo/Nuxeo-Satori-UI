@@ -17,7 +17,8 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
   browser walkthrough found CTR-1007, ended ten days before, and flagged it. The ended
   ones are there on purpose, first, and the record page tells the two apart with its banners.
 - **A home, a menu and labels:** the renewals figure, which links to the queue, for everyone the
-  app is for; the active contracts for contract managers; the terminated ones for legal reviewers.
+  app is for; the active contracts for contract managers; the terminated ones for legal reviewers;
+  and, since 0.2.2, the contracts the person created or edited last, five at most, for everyone.
 - **An `app.json` that names its own groups,** `contract-managers` and `legal-reviewers`, and a
   component that contributes the app to the app registry, so a server with the package installed
   lists it beside the Payers app to a person in a group of each. Its address is `contract-desk`,
@@ -37,7 +38,7 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 | `bundle/agentic-ui-config/layouts/Contract/view.layout.json` | The Contract record page: three banners, four cards and the history                                |
 | `bundle/agentic-ui-config/layouts/Contract/edit.layout.json` | The Edit form, with the field rule and a check that the end is not before the start                |
 | `bundle/agentic-ui-config/queues/up-for-renewal.json`        | The renewals queue                                                                                 |
-| `bundle/agentic-ui-config/home.json`                         | The home: three figures, one for everyone and one for each group                                   |
+| `bundle/agentic-ui-config/home.json`                         | The home: three figures, one for everyone and one for each group, and the recent contracts         |
 | `bundle/agentic-ui-config/navigation.json`                   | The menu: the home and the queue                                                                   |
 | `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English: every key the files above name                                             |
 | `bundle/OSGI-INF/contracts-demo-config.xml`                  | The component that contributes the two layouts and the app                                         |
@@ -50,7 +51,7 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 
 - **No `actions.json`.** Nothing in the app reads one yet, and none was asked for.
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
-- **One version in three places:** 0.2.1, in `package.xml`, `app.json`'s `packageVersion` and the
+- **One version in three places:** 0.2.2, in `package.xml`, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`.
 - **Its address is `contract-desk`,** not its id: `contracts` is the platform's own page,
   `/contracts`, the component showcase (`PLATFORM_ROUTES` in `libs/shared/app-definition`). 0.1.0
@@ -251,7 +252,7 @@ section 9), and no `app-package/*` tag was pushed.
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0
 ```
 
-It writes `dist/contracts-demo-0.2.1.zip`, with no note. Held to its content model:
+It writes `dist/contracts-demo-0.2.2.zip`, with no note. Held to its content model:
 
 ```bash
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0 --model business-apps/packages/contracts-demo/content-model.json
@@ -272,7 +273,10 @@ From 0.1.0 it writes `dist/contracts-demo-0.2.0.changes.md`: the address changed
 breaking, and the component, which is to judge, so 0.2.0, a minor. 0.1.1 is refused at step 3.
 From 0.2.0, `dist/contracts-demo-0.2.1.changes.md`: 3 changes, the queue's and the home figure's
 names changed and `layout.schema.contract`, the Properties panel's heading for the schema, added,
-which need a patch.
+which need a patch. From 0.2.1, `dist/contracts-demo-0.2.2.changes.md`: 2 changes, the home's,
+which gained the list of recent contracts (`"recent": { "types": ["Contract"], "limit": 5 }`,
+app-definition-v2.md, section 10), and its label, `contracts.home.recent`, added, which need a
+patch.
 
 ## Installing it on a local Nuxeo
 
@@ -288,11 +292,11 @@ starts, and removes itself. `nuxeoctl mp-install` refuses while the server runs,
 the container's main process.
 
 ```bash
-docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.2.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.2.2.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.2.1.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.2.2.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
 ```
 
 ```bash
@@ -320,7 +324,7 @@ docker cp /tmp/zz-contracts-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/
 
 A rebuild of a version already installed is skipped as unchanged: in the one-off script, run
 `nuxeoctl mp-remove contracts-demo --accept=true` before `mp-install`. Do the same on a server with
-0.1.0 installed: remove `contracts-demo`, then install `contracts-demo-0.2.1.zip`, in one script.
+0.1.0 installed: remove `contracts-demo`, then install `contracts-demo-0.2.2.zip`, in one script.
 
 ### Removing it
 
@@ -401,7 +405,9 @@ C=business-apps/packages/contracts-demo/bundle/agentic-ui-config && npm run conf
 
 Then start the dev server, or restart it. Signed in as an administrator, the home should show the
 renewals figure, 3 for the seed's contracts, and its link to the queue, which should list
-CTR-1007, CTR-1001 and CTR-1002 in that order. Not seen yet: nothing is installed.
+CTR-1007, CTR-1001 and CTR-1002 in that order, and "Contracts you worked on last": the seed's
+contracts, for the administrator who ran it, five of them, the latest changed first. Not seen yet:
+nothing is installed.
 
 **"Switch app" lists the two apps** (phase 0's demo, step 3) to a person in a group of each, on the
 server, not under `config:dev`, which serves one app's files and wins over the registry. The seed

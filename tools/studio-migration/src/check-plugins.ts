@@ -22,8 +22,14 @@
  * The scan and the configuration need nothing but the files. The tests, the gates and the values
  * need the plugin run (`plugin-run.ts`), which `check --run-plugins` does, and the values the
  * observed behaviour, `--observed`: without them the check runs in part, and says what did not
- * run. A plugin not written yet is in part too, never a failure: an agent writes it next. A plugin
- * passing check 9 is still only proposed, in the report, until a person accepts it.
+ * run. A plugin not written yet is in part too, never a failure: an agent writes it next.
+ *
+ * **A person decides it.** Each element's plugin is a proposal of the report, as a condition's rule
+ * is, which a person accepts or rejects in `decisions.json` (`decisions.ts`). Check 9 reads that
+ * decision as the report records the conversion was made with it, `applied`, and readiness holds
+ * that to `decisions.json`: a plugin passing check 9 is not ready until a person accepts it, and
+ * the approval covers each accepted plugin's files (`approval.ts`). A rejected plugin is not held to
+ * its element, and must not be built in.
  */
 import { isDeepStrictEqual } from 'node:util';
 import { pluginLibraryOf } from './convert-elements';
@@ -56,9 +62,9 @@ export function checkPlugins(input: HarnessInput): CheckOutcome {
     const entry = entries.find((candidate) => candidate.id === id);
     if (!entry)
       findings.push(`the report lists no plugin for the custom element ${element.name} (${id})`);
-    else if (entry.outcome !== 'proposed' && entry.outcome !== 'converted')
+    else if (entry.outcome !== 'proposed' || entry.proposal !== true)
       findings.push(
-        `the report gives the custom element ${element.name} as ${entry.outcome}, not as a plugin`,
+        `the report gives the custom element ${element.name} as ${entry.outcome}${entry.outcome === 'proposed' ? ' with no decision of its own' : ''}, not as a plugin a person accepts or rejects`,
       );
     else if (entry.to !== library)
       findings.push(
@@ -66,6 +72,14 @@ export function checkPlugins(input: HarnessInput): CheckOutcome {
       );
     if (!plugins) continue;
     const source = plugins.sources.find((candidate) => candidate.element === element.name);
+    if (entry?.proposal === true && entry.applied === 'reject') {
+      // Rejected: nothing of it is held to the element, so nothing of it may ship.
+      if (builtIn(plugins.template?.text ?? '', element, source))
+        findings.push(
+          `${plugins.template?.path ?? 'the template'} builds in ${library}, the plugin of ${element.name}, which a person rejected: take it out of the template's providers`,
+        );
+      continue;
+    }
     if (!source) {
       waiting.push(`the plugin of ${element.name}, ${library}, is not written yet`);
       continue;
@@ -477,6 +491,24 @@ function firstLine(text: string): string {
       .filter(Boolean)[0] ??
     ''
   ).slice(0, 300);
+}
+
+/** Whether the template imports the plugin, by its import path or its directory. */
+function builtIn(
+  template: string,
+  element: CustomElement,
+  source: PluginSource | undefined,
+): boolean {
+  const metadata = source ? pluginMetadata(source) : null;
+  const paths = [
+    `@agentic-ui/${element.name}`,
+    ...(typeof metadata?.importPath === 'string' ? [metadata.importPath] : []),
+  ];
+  const code = withoutComments(template);
+  return (
+    paths.some((path) => new RegExp(`['"]${escape(path)}['"]`).test(code)) ||
+    code.includes(pluginLibraryOf(element))
+  );
 }
 
 function escape(text: string): string {

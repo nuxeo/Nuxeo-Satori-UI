@@ -42,6 +42,7 @@ export const SOURCES: Readonly<Record<string, string | Readonly<Record<string, s
   'plugin-scan.ts': 'Check 9',
   'check-package.ts': 'Check 10',
   'decisions.ts': 'decisions.json',
+  'approval.ts': 'approval.json',
   'lab.ts': 'Lab mode: the request-log rule',
   'lab-server.ts': 'Lab mode: the server halves',
   'lab-browser.ts': 'Lab mode: as the same user',

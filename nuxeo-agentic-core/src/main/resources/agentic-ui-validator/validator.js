@@ -525,7 +525,7 @@ var agenticUiValidator = (function () {
             }
             finally { if (e_4) throw e_4.error; }
         }
-        var types = /* @__PURE__ */ new Map();
+        var types2 = /* @__PURE__ */ new Map();
         try {
             for (var _r = __values(Object.entries(doctypes)), _s = _r.next(); !_s.done; _s = _r.next()) {
                 var _t = __read(_s.value, 2), name = _t[0], raw = _t[1];
@@ -584,7 +584,7 @@ var agenticUiValidator = (function () {
                 var parent = raw["parent"];
                 if (parent !== void 0 && typeof parent !== "string")
                     problems.push("".concat(at2, ".parent: must be the name of a type"));
-                types.set(name, {
+                types2.set(name, {
                     name: name,
                     parent: typeof parent === "string" && parent !== "" && parent !== NO_PARENT ? parent : null,
                     facets: lists.facets,
@@ -599,7 +599,7 @@ var agenticUiValidator = (function () {
             }
             finally { if (e_5) throw e_5.error; }
         }
-        return problems.length > 0 ? { problems: problems } : { model: { types: types, facets: facets2, schemas: schemas } };
+        return problems.length > 0 ? { problems: problems } : { model: { types: types2, facets: facets2, schemas: schemas } };
     }
     function propertiesOf(model, type) {
         var e_9, _h, e_10, _j, e_11, _k, e_12, _l;
@@ -1441,11 +1441,11 @@ var agenticUiValidator = (function () {
         var parameters2 = entry2["parameters"];
         if (!isRecord(parameters2))
             return [];
-        var show = parameters2.show, types = parameters2.types;
-        if (typeof show !== "string" || !XPATH.test(show) || !Array.isArray(types))
+        var show = parameters2.show, types2 = parameters2.types;
+        if (typeof show !== "string" || !XPATH.test(show) || !Array.isArray(types2))
             return [];
         var at2 = join(join(path, "parameters"), "show");
-        return types.flatMap(function (linked) {
+        return types2.flatMap(function (linked) {
             var _a;
             if (typeof linked !== "string" || linked === "")
                 return [];
@@ -2886,10 +2886,14 @@ var agenticUiValidator = (function () {
     }
     // libs/shared/app-definition/src/lib/home.ts
     var HOME_KEYS = ["$schema", "version", "label", "labelKey", "cards"];
-    var CARD_KEYS2 = ["id", "label", "labelKey", "kpi", "queue", "visibleWhen"];
+    var CARD_KEYS2 = ["id", "label", "labelKey", "kpi", "queue", "tasks", "recent", "visibleWhen"];
     var KPI_KEYS = ["pageProvider", "parameters", "aggregate", "bucket"];
+    var TASKS_KEYS = ["workflow", "limit"];
+    var RECENT_KEYS = ["types", "limit"];
     var NAVIGATION_KEYS = ["$schema", "version", "entries"];
     var ENTRY_KEYS = ["id", "label", "labelKey", "icon", "order", "queue", "page", "visibleWhen"];
+    var HOME_LIST_LIMIT = { default: 5, max: 20 };
+    var HOME_RECENT_MAX_TYPES = 20;
     var HOME_PAGE = "home";
     function validateHome(content, options) {
         if (options === void 0) { options = {}; }
@@ -2907,7 +2911,7 @@ var agenticUiValidator = (function () {
             c.add("cards", "structure", "needs a list of cards");
             return c.findings;
         }
-        cards.forEach(function (item, index) { return card(c, item, join("cards", index), options.queues); });
+        cards.forEach(function (item, index) { return card(c, item, join("cards", index), options); });
         return c.findings;
     }
     function validateNavigation(content, options) {
@@ -2928,27 +2932,87 @@ var agenticUiValidator = (function () {
         entries.forEach(function (item, index) { return entry(c, item, join("entries", index), options.queues); });
         return c.findings;
     }
-    function card(c, item, path, queues) {
+    var CARD_KINDS = ["kpi", "tasks", "recent"];
+    function card(c, item, path, options) {
         if (!isRecord(item)) {
             c.add(path, "structure", "a card is an object");
             return;
         }
         c.unknownKeys(item, CARD_KEYS2, path);
         c.claim(item["id"], join(path, "id"));
-        var hasKpi = "kpi" in item;
+        var kinds = CARD_KINDS.filter(function (kind) { return kind in item; });
         var hasQueue = "queue" in item;
-        if (!hasKpi && !hasQueue)
-            c.add(path, "structure", 'a card has a "kpi", a "queue", or both');
-        if (hasKpi) {
+        if (kinds.length === 0 && !hasQueue)
+            c.add(path, "structure", 'a card has a "kpi", a "queue", or both; or a "tasks" or a "recent"');
+        if (kinds.length > 1)
+            c.add(path, "structure", "a card shows one thing, and this one has ".concat(kinds.map(function (kind) { return "\"".concat(kind, "\""); }).join(" and ")));
+        var list = kinds.find(function (kind) { return kind !== "kpi"; });
+        if (list !== void 0 && hasQueue)
+            c.add(join(path, "queue"), "structure", "a \"".concat(list, "\" card opens what it lists, not a queue: give the queue a card of its own"));
+        if ("kpi" in item) {
             c.named(item, path);
             kpi(c, item["kpi"], join(path, "kpi"));
         }
         else
             c.label(item, path);
+        if ("tasks" in item)
+            tasks(c, item["tasks"], join(path, "tasks"));
+        if ("recent" in item)
+            recent(c, item["recent"], join(path, "recent"), options.model);
         if (hasQueue)
-            queue(c, item["queue"], join(path, "queue"), queues);
+            queue(c, item["queue"], join(path, "queue"), options.queues);
         if ("visibleWhen" in item)
             c.rule(item["visibleWhen"], join(path, "visibleWhen"));
+    }
+    function limit(c, item, path) {
+        if (!("limit" in item))
+            return;
+        var value = item["limit"];
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > HOME_LIST_LIMIT.max)
+            c.add(join(path, "limit"), "structure", "limit is how many the card shows: a whole number from 1 to ".concat(HOME_LIST_LIMIT.max));
+    }
+    function tasks(c, item, path) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", 'a list of tasks is { "workflow", "limit" }, either or neither');
+            return;
+        }
+        c.unknownKeys(item, TASKS_KEYS, path);
+        if ("workflow" in item && (typeof item["workflow"] !== "string" || !NAME.test(item["workflow"])))
+            c.add(join(path, "workflow"), "structure", 'needs the name of a workflow model defined on the server, such as "SerialDocumentReview"');
+        limit(c, item, path);
+    }
+    function recent(c, item, path, model) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", 'a list of recent records is { "types", "limit" }, either or neither');
+            return;
+        }
+        c.unknownKeys(item, RECENT_KEYS, path);
+        if ("types" in item)
+            types(c, item["types"], join(path, "types"), model);
+        limit(c, item, path);
+    }
+    function types(c, item, path, model) {
+        if (!Array.isArray(item) || item.length === 0) {
+            c.add(path, "structure", "types is a list of document types, one at least");
+            return;
+        }
+        if (item.length > HOME_RECENT_MAX_TYPES) {
+            c.add(path, "structure", "a list of recent records is filtered to ".concat(HOME_RECENT_MAX_TYPES, " document types at most"));
+            return;
+        }
+        var seen = /* @__PURE__ */ new Set();
+        item.forEach(function (type, index) {
+            var at2 = join(path, index);
+            if (typeof type !== "string" || !NAME.test(type))
+                c.add(at2, "structure", 'needs the name of a document type, such as "Contract"');
+            else if (seen.has(type))
+                c.add(at2, "structure", "the type \"".concat(type, "\" is already in the list"));
+            else {
+                seen.add(type);
+                if (model && !model.types.has(type))
+                    c.add(at2, "unknown", "the document type \"".concat(type, "\" is not in the content model"));
+            }
+        });
     }
     function kpi(c, item, path) {
         if (!isRecord(item)) {
@@ -3259,7 +3323,7 @@ var agenticUiValidator = (function () {
             case "navigation":
                 return validateNavigation(content, { registries: registries, queues: context.queues });
             case "home":
-                return validateHome(content, { registries: registries, queues: context.queues });
+                return validateHome(content, { registries: registries, queues: context.queues, model: options.model });
             case "task":
                 return __spreadArray(__spreadArray([], __read(TASK.test(file.name) ? [] : add("", "structure", 'the file name is <workflow>.<step>.layout.json, each of the two letters, digits, "_" or "-"')), false), __read(validateTaskForm(content, { registries: registries })), false);
             case "labels":

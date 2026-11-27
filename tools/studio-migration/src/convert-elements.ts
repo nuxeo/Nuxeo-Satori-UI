@@ -5,8 +5,11 @@
  * app from the template (decision 5 keeps that build until signed, pinned plugins are proven).
  *
  * The conversion writes no plugin and no configuration for one. It names the library the plugin
- * is written to, and the report lists the element as `proposed` with it until a person accepts it,
- * which check 9 must pass first: so a plugin a person has not accepted is never ready.
+ * is written to, and the report lists the element as a proposal, as a condition's rule is: a person
+ * accepts or rejects it in `decisions.json` (`decisions.ts`), and the report records what the
+ * conversion was made with, `applied`. Readiness waits for that decision, check 9 must pass, and
+ * the approval covers each accepted plugin's files (`approval.ts`): so a plugin no one accepted is
+ * never ready, and one changed after its approval voids it.
  */
 import type { ConvertContext } from './convert';
 import type { CustomElement } from './elements';
@@ -30,10 +33,16 @@ export function convertElements(context: ConvertContext): void {
       element.definition === 'polymer'
         ? ''
         : ". Its script is not Polymer's Polymer({ is }) definition, so its properties are a person's to read";
-    context.decide(`custom-element:${element.path}#${element.index + 1}`, {
+    const id = `custom-element:${element.path}#${element.index + 1}`;
+    // Accepting writes nothing of the conversion: the plugin is a library of the repository, which
+    // the approval covers once accepted. What was decided is recorded, as for any proposal.
+    const verdict = context.verdicts.get(id);
+    context.decide(id, {
       outcome: 'proposed',
       to: library,
-      note: `An agent writes it as a Layer 2 plugin, ${library}, with the plugin command, built into the app from the template; check 9 holds the plugin to the element, and a person accepts it. ${used}${read}`,
+      note: `An agent writes it as a Layer 2 plugin, ${library}, with the plugin command, built into the app from the template; check 9 holds the plugin to the element, and a person accepts or rejects it. ${used}${read}`,
+      proposal: true,
+      ...(verdict ? { applied: verdict.accepted ? ('accept' as const) : ('reject' as const) } : {}),
     });
   }
 }

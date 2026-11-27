@@ -5,6 +5,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { PluginFiles } from './approval';
 import { pluginLibraryOf } from './convert-elements';
 import type { Inventory } from './inventory';
 import type { ObservedBehaviour } from './observed';
@@ -60,6 +61,16 @@ export function readLibrary(workspace: string, library: string): Record<string, 
   };
   walk(root, '');
   return files;
+}
+
+/**
+ * The files of each plugin library as check 9 read them, for the approval to be held to
+ * (`approval.ts`): those it ran, from `check --run-plugins`. `undefined` when the plugins were not
+ * read, so nothing is held to them.
+ */
+export function pluginFilesOf(plugins: PluginsInput | undefined): PluginFiles | undefined {
+  if (!plugins) return undefined;
+  return (library) => plugins.sources.find((source) => source.library === library)?.files ?? null;
 }
 
 /** The plugins of the package's custom elements that are in the workspace. */

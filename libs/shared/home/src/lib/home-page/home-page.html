@@ -19,6 +19,55 @@
             <li class="home-card" [attr.data-card-id]="card.id">
               @if (card.kind === 'link') {
                 <a class="home-card__queue" [routerLink]="card.link">{{ card.title }}</a>
+              } @else if (card.list; as list) {
+                <h2 class="home-card__title" [id]="'home-card-' + card.id">{{ card.title }}</h2>
+                @switch (list.state) {
+                  @case ('loading') {
+                    <p class="home-card__note" role="status">
+                      {{
+                        (list.of === 'tasks' ? 'home.tasks.loading' : 'home.recent.loading')
+                          | translate
+                      }}
+                    </p>
+                  }
+                  @case ('failed') {
+                    <p class="home-card__note">{{ 'home.unavailable' | translate }}</p>
+                  }
+                  @case ('empty') {
+                    <nxs-empty-state
+                      class="home-card__empty"
+                      [headingLevel]="3"
+                      [heading]="
+                        (list.of === 'tasks' ? 'home.tasks.empty' : 'home.recent.empty') | translate
+                      "
+                    />
+                  }
+                  @default {
+                    <ul class="home-card__items" [attr.aria-labelledby]="'home-card-' + card.id">
+                      @for (item of list.items; track item.id) {
+                        <li class="home-card__item">
+                          <a class="home-card__item-link" [routerLink]="item.link">{{
+                            item.title
+                          }}</a>
+                          @for (detail of item.details; track $index) {
+                            <span class="home-card__item-detail">{{ detail }}</span>
+                          }
+                          @if (item.when) {
+                            <time class="home-card__item-date" [attr.datetime]="item.date">{{
+                              (list.of === 'tasks' ? 'home.tasks.since' : 'home.recent.changed')
+                                | translate: { date: item.when }
+                            }}</time>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+                }
+                @if (list.more !== null) {
+                  <a class="home-card__link" [routerLink]="list.more">{{
+                    'home.tasks.open-page' | translate
+                  }}</a>
+                }
               } @else {
                 <h2 class="home-card__title" [id]="'home-card-' + card.id">{{ card.title }}</h2>
                 @switch (card.kind) {

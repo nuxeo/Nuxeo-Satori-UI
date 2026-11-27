@@ -52,10 +52,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { CliIo } from './cli';
-import { allowListOf } from './convert';
-import { DECISIONS_FILE, unfilled } from './decisions';
+import { allowListOf, packageBuildOf } from './convert';
+import { DECISIONS_FILE, earlierRefusal, unfilled } from './decisions';
 import type { CheckResult, HarnessResult } from './harness';
 import type { MigrationSummary } from './report';
+import { readStudioPackage } from './studio-package';
 
 /** A command of the tool, as `main` runs it: `migrate` is given `main` itself. */
 export type Command = (argv: readonly string[], io: CliIo) => number;
@@ -198,14 +199,29 @@ export function migrateOne(request: MigrateRequest, io: CliIo, run: Command): Mi
   }
   const from = request.from === undefined ? undefined : decisionsIn(request.from);
   if (from !== undefined) {
+    let raw: unknown;
     try {
-      readFile(from);
+      raw = JSON.parse(readFile(from).toString('utf8'));
     } catch (error) {
       return refused(
         `${request.from} holds no decisions.json migrate can read: ${(error as Error).message}`,
         'give --from the directory of an earlier run, or its conversion/decisions.json.',
       );
     }
+    // Decisions of another package, or of no build this one can take them from, stop the run
+    // before anything is written. The package that cannot be read is the inventory's to refuse.
+    let build: ReturnType<typeof packageBuildOf> | undefined;
+    try {
+      build = packageBuildOf(readStudioPackage(readFile(request.package)));
+    } catch {
+      build = undefined;
+    }
+    const refusal = build === undefined ? null : earlierRefusal(raw, from, build);
+    if (refusal !== null)
+      return refused(
+        refusal,
+        'give --from an earlier run of this package, of this build or another one, or leave --from out and fill in the decisions again.',
+      );
   }
 
   const allow = request.allowList === undefined ? [] : ['--allow-list', request.allowList];
@@ -222,7 +238,14 @@ export function migrateOne(request: MigrateRequest, io: CliIo, run: Command): Mi
     {
       name: 'conversion',
       title: 'The conversion',
-      argv: ['convert', pkg, conversion, ...allow],
+      // With --from, it writes what a person accepted, as the decisions step then carries it.
+      argv: [
+        'convert',
+        pkg,
+        conversion,
+        ...allow,
+        ...(from === undefined ? [] : ['--decisions', from]),
+      ],
       whenRefused: `where the reason names a file, something in your package has a name that cannot be a file name on every system: a limit of this tool, not a mistake of yours. Send this message and ${join(out, STEP_FILES.inventory)} to your Nuxeo contact.`,
     },
     {
@@ -244,7 +267,7 @@ export function migrateOne(request: MigrateRequest, io: CliIo, run: Command): Mi
       whenRefused:
         from === undefined
           ? `the decisions file could not be written. ${defect}`
-          : `the decisions in ${from} cannot be carried to this package, for the reason above: they are for another build of it, or the file is not one migrate wrote. Give --from an earlier run of this same build, or leave --from out and fill in the decisions again.`,
+          : `the decisions in ${from} cannot be carried to this package, for the reason above: the file is not one migrate wrote. Give --from an earlier run of this package, or leave --from out and fill in the decisions again.`,
     },
   ];
   const order: readonly StepName[] =
@@ -364,11 +387,14 @@ export function migrateOne(request: MigrateRequest, io: CliIo, run: Command): Mi
   );
   const left = toFillIn(decisions);
   if (left === 0)
-    todo.push('Every reported item has an owner and a decision: none is left to fill in.');
+    todo.push(
+      'Every item has its decision: none is left to fill in.',
+      `Once nothing else stands in the way, a reviewer approves the report and its decisions, at a terminal, themselves: npm run studio-migration -- approve ${shell(pkg)} ${shell(conversion)} --by "<their name>". No other command approves, and a change to the conversion or its decisions voids it.`,
+    );
   else
     todo.push(
-      `In ${decisions}, write for each reported item still without them who owns it, in "owner", and what they decided, in "decision". Change nothing else in it.`,
-      `To see your decisions counted, run again into a new directory, carrying them: ${again}`,
+      `In ${decisions}, write for each reported item still without them who owns it, in "owner", and what they decided, in "decision"; and for each proposal, who decides it, in "owner", "accept" or "reject", in "decision", and why, in "reason". Change nothing else in it.`,
+      `To see your decisions counted, and what you accepted written, run again into a new directory, carrying them: ${again}`,
     );
   if (server.length > 0)
     todo.push(
