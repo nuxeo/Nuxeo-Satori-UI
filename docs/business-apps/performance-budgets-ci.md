@@ -64,9 +64,9 @@ for, or asked a host other than the stand-in and the shell's icon font, which is
 
 | Measure                | Budget  | Why there                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `home.firstRenderMs`   | 2500 ms | Web Vitals' "good" largest contentful paint: the cards' figures are what a person opens the home for. Measured at 1512 ms (below) on a laptop, so a regression of a second is caught, with room for a CI runner slower than that laptop; the job's own numbers are below.                 |
-| `queue.firstPageMs`    | 2500 ms | The same, and the asset library's own budget for its first page, `library.firstPageMs` ([performance-budget.md](performance-budget.md)). Measured at 1700 ms.                                                                                                                             |
-| `record.firstRenderMs` | 3000 ms | The record page loads the document page's code, the largest lazy chunk at 465 kB, and its vocabularies, so half a second more than the other two; within Web Vitals' "needs improvement" band, which ends at 4 seconds, so a page that has fallen into "poor" fails. Measured at 1813 ms. |
+| `home.firstRenderMs`   | 2500 ms | Web Vitals' "good" largest contentful paint: the cards' figures are what a person opens the home for. Measured at 1530 ms (below) on a laptop, so a regression of a second is caught, with room for a CI runner slower than that laptop; the job's own numbers are below.                 |
+| `queue.firstPageMs`    | 2500 ms | The same, and the asset library's own budget for its first page, `library.firstPageMs` ([performance-budget.md](performance-budget.md)). Measured at 1729 ms.                                                                                                                             |
+| `record.firstRenderMs` | 3000 ms | The record page loads the document page's code, the largest lazy chunk at 465 kB, and its vocabularies, so half a second more than the other two; within Web Vitals' "needs improvement" band, which ends at 4 seconds, so a page that has fallen into "poor" fails. Measured at 1831 ms. |
 
 ## The bundles
 
@@ -101,7 +101,7 @@ line here and in `budgets.json`, with its reason.
 
 | Chunk                                                               | Budget          | Measured        |
 | ------------------------------------------------------------------- | --------------- | --------------- |
-| `initialBytes`                                                      | 3,436,544 bytes | 3,123,605 bytes |
+| `initialBytes`                                                      | 3,436,544 bytes | 3,123,840 bytes |
 | `app:business-apps.actions`                                         | 4,096 bytes     | 787 bytes       |
 | `app:business-apps.menu`                                            | 56,320 bytes    | 46,084 bytes    |
 | `app:business-apps.routes`                                          | 53,248 bytes    | 44,126 bytes    |
@@ -118,7 +118,7 @@ line here and in `budgets.json`, with its reason.
 | `app:settings/profile/profile-page`                                 | 23,552 bytes    | 19,491 bytes    |
 | `app:settings/themes/themes-page`                                   | 7,168 bytes     | 5,911 bytes     |
 | `app:shell/app-shell`                                               | 260,096 bytes   | 216,619 bytes   |
-| `feature:administration`                                            | 158,720 bytes   | 132,237 bytes   |
+| `feature:administration`                                            | 159,744 bytes   | 132,769 bytes   |
 | `feature:assets/asset-search-results`                               | 44,032 bytes    | 35,894 bytes    |
 | `feature:assets/assets-drawer`                                      | 32,768 bytes    | 26,950 bytes    |
 | `feature:browse`                                                    | 224,256 bytes   | 186,269 bytes   |
@@ -162,20 +162,21 @@ a red job is seen on the pull request, and does not stop the merge. This work ch
 ## Measured on 27 November 2026, locally
 
 On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown, the branch that
-added these budgets with no changes on top. Not a CI runner's numbers: those are in the job's
+added these budgets, with staging merged in, no changes on top; each time rounded up to the
+millisecond, as a failure says it. Not a CI runner's numbers: those are in the job's
 report, its `performance-budgets` artifact, on every run.
 
 | Measure                | Median of five | The five                     |
 | ---------------------- | -------------- | ---------------------------- |
-| `home.firstRenderMs`   | 1512 ms        | 1500, 1501, 1512, 1513, 1533 |
-| `queue.firstPageMs`    | 1700 ms        | 1696, 1698, 1700, 1700, 1702 |
-| `record.firstRenderMs` | 1813 ms        | 1801, 1805, 1813, 1813, 1813 |
+| `home.firstRenderMs`   | 1530 ms        | 1514, 1530, 1530, 1533, 1580 |
+| `queue.firstPageMs`    | 1729 ms        | 1715, 1721, 1729, 1730, 1733 |
+| `record.firstRenderMs` | 1831 ms        | 1813, 1817, 1831, 1835, 1842 |
 
 The guard, the same day, locally, as the job runs it on every run: all 29 bundle budgets and all 3 page budgets, each lowered to one below
 its number, failed the judgement with that number and that budget, and each set at its own number
-passed; `bundles.mjs --lower initialBytes=3123604` said "over budget: initialBytes is 3,123,605
-bytes, budget 3,123,604 bytes" and exited 1; `pages.mjs --lower queue.firstPageMs=1` said "over
-budget: queue.firstPageMs is 1,701 ms, budget 1 ms" and exited 1.
+passed; `bundles.mjs --lower initialBytes=3123839` said "over budget: initialBytes is 3,123,840
+bytes, budget 3,123,839 bytes" and exited 1; `pages.mjs --lower queue.firstPageMs=1` said "over
+budget: queue.firstPageMs is 1,718 ms, budget 1 ms" and exited 1.
 
 ## What this does not measure
 
