@@ -33,20 +33,20 @@ describe('taskItem', () => {
     expect(taskItem(task({}), link)).toEqual({
       id: 't1',
       title: 'Document Validation',
-      detail: 'Supply agreement · Serial Document Review',
+      details: ['Supply agreement', 'Serial Document Review'],
       date: '2026-11-03T08:19:19.039Z',
       link: ['/tasks', 't1'],
     });
   });
 
   it('names the workflow by its model where it has no title, and leaves out a record it lacks', () => {
-    expect(taskItem(task({ workflowTitle: '', targetDocTitle: undefined }), link).detail).toBe(
+    expect(taskItem(task({ workflowTitle: '', targetDocTitle: undefined }), link).details).toEqual([
       'Serial Document Review',
-    );
+    ]);
     expect(
       taskItem(task({ workflowTitle: '', workflowModelName: '', targetDocTitle: ' ' }), link)
-        .detail,
-    ).toBeNull();
+        .details,
+    ).toEqual([]);
   });
 
   it('shows an unnamed task by its id, and no date for one it cannot read', () => {
@@ -72,7 +72,7 @@ describe('recordItem', () => {
     expect(recordItem(record({}))).toEqual({
       id: 'c-1',
       title: 'Supply agreement',
-      detail: 'Contract',
+      details: ['Contract'],
       date: '2026-11-20T10:00:00.000Z',
       link: '/doc/c-1',
     });

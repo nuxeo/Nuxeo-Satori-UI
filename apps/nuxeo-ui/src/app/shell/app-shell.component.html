@@ -14,7 +14,7 @@
        Host visible-label workaround from PR 246 removed per product request. IBM input_label_visible
        (4056183850) is expected to recur; track closure via documented a11y exception or upstream
        Satori fix, not by re-adding persistent visible text here. -->
-  <sat-platform-nav>
+  <sat-platform-nav [attr.inert]="adminMenuModal() ? '' : null">
     <sat-platform-nav-menu>
       @for (item of navItems(); track item.id) {
         <a
@@ -43,7 +43,7 @@
   </sat-platform-nav>
 
   <sat-platform-nav-main-content>
-    <sat-app-header>
+    <sat-app-header [attr.inert]="adminMenuModal() ? '' : null">
       <button
         type="button"
         mat-icon-button
@@ -278,6 +278,7 @@
         it, and closing it gives the focus back to the button. Elsewhere it sits beside the page.
       -->
       <mat-sidenav
+        #navDrawer
         id="shell-nav-drawer"
         [mode]="drawerMode()"
         position="start"
@@ -288,6 +289,17 @@
         [attr.aria-modal]="adminMenuCompact() ? 'true' : null"
         [attr.aria-label]="adminMenuCompact() ? ('shell.admin-menu' | translate) : null"
       >
+        @if (adminMenuCompact()) {
+          <button
+            type="button"
+            mat-icon-button
+            class="admin-menu-close"
+            [attr.aria-label]="'shell.admin-menu-close' | translate"
+            (click)="closeAdminMenu()"
+          >
+            <mat-icon svgIcon="x_large" aria-hidden="true" />
+          </button>
+        }
         <app-nav-drawer
           [activeItem]="activeDrawerItem()"
           (itemSelected)="onDrawerItemSelected($event)"
@@ -446,7 +458,7 @@
         </div>
       </mat-sidenav>
 
-      <mat-sidenav-content>
+      <mat-sidenav-content [class.shell-main--admin-compact]="adminMenuCompact()">
         @if (adminMenuCompact()) {
           <div class="admin-menu-bar">
             <button
@@ -458,7 +470,7 @@
               [attr.aria-expanded]="adminMenuOpen()"
               (click)="openAdminMenu()"
             >
-              <mat-icon svgIcon="menu" aria-hidden="true" />
+              <mat-icon svgIcon="bullet_list" aria-hidden="true" />
               {{ 'shell.admin-menu' | translate }}
             </button>
           </div>

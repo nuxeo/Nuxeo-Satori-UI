@@ -33,13 +33,17 @@ export class DocumentService {
     // Escaped, because the id lands inside a quoted literal: `o'brien` was HTTP 400 on Nuxeo.
     // A replacer function, because a replacement string reads `$&` and `$'` in the id as patterns.
     const user = escapeNxqlLiteral(userId);
-    let query = RECENTLY_VIEWED_QUERY.replace(/\{user\}/g, () => user);
+    let query = RECENTLY_VIEWED_QUERY;
     if (types.length > 0) {
-      // Each type escaped too: a name is a literal here, as the user is.
+      // Each type escaped too: a name is a literal here, as the user is. Placed before the user is
+      // put in, so that an id that reads " ORDER BY " cannot be where the types go.
       const listed = types.map((type) => `'${escapeNxqlLiteral(type)}'`).join(', ');
       query = query.replace(' ORDER BY ', () => ` AND ecm:primaryType IN (${listed}) ORDER BY `);
     }
-    return this.api.nxqlSearch(query, pageSize);
+    return this.api.nxqlSearch(
+      query.replace(/\{user\}/g, () => user),
+      pageSize,
+    );
   }
 
   getExpiredDocuments(pageSize = 20): Observable<NuxeoDocumentList> {

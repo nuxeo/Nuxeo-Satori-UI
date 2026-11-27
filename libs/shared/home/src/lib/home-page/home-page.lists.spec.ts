@@ -166,19 +166,22 @@ describe('HomePageComponent: the lists of tasks and of recent records', () => {
         [
           'Document Validation',
           '/tasks/t3',
-          'Contract t3 · Serial Document Review',
+          'Contract t3',
+          'Serial Document Review',
           'Open since Nov 3, 2026',
         ],
         [
           'Document Validation',
           '/tasks/t2',
-          'Contract t2 · Serial Document Review',
+          'Contract t2',
+          'Serial Document Review',
           'Open since Nov 2, 2026',
         ],
         [
           'Document Validation',
           '/tasks/t1',
-          'Contract t1 · Serial Document Review',
+          'Contract t1',
+          'Serial Document Review',
           'Open since Nov 1, 2026',
         ],
       ]);

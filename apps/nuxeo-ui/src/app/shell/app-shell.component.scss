@@ -65,6 +65,30 @@ sat-platform-nav-container.has-selection-topbar {
   color: var(--mat-sys-on-surface);
 }
 
+// The bar's height comes out of the page below it rather than being added on top of it, so the
+// page's own scroll box is the only one: otherwise a window with classic scrollbars, as Windows and
+// Linux draw them, would take a scrollbar's width from every administration page at 320px.
+.shell-main--admin-compact {
+  display: flex;
+  flex-direction: column;
+}
+
+:host ::ng-deep .shell-main--admin-compact > lib-administration-shell {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+// The collapsed menu's own way out, beside its heading: a touch screen with a screen reader hides
+// the backdrop and has no Escape.
+.admin-menu-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  color: var(--mat-sys-on-surface);
+}
+
 .nav-drawer-sidenav {
   width: 280px;
   border-right: none;

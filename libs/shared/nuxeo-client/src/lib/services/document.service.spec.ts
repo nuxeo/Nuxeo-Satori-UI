@@ -137,6 +137,15 @@ describe('DocumentService', () => {
       }
     });
 
+    it('puts the types before the order whatever the user id reads, " ORDER BY " included', () => {
+      service.getRecentlyViewed('jo ORDER BY x', 5, ['Contract']).subscribe();
+      const request = expectNxql();
+      expect(request.request.params.get('query')).toContain(
+        "(dc:creator = 'jo ORDER BY x' OR dc:lastContributor = 'jo ORDER BY x') AND ecm:primaryType IN ('Contract') ORDER BY dc:modified DESC",
+      );
+      request.flush(list());
+    });
+
     it('escapes a type as it escapes the user, and puts it in as written', () => {
       service.getRecentlyViewed('jdoe', 5, ["x') OR ('1", 'a$&b']).subscribe();
       const request = expectNxql();

@@ -139,12 +139,55 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
   const adminPage = (root: HTMLElement) =>
     (root.querySelector('lib-administration-shell') as HTMLElement).getBoundingClientRect();
 
-  async function openMenu(root: HTMLElement): Promise<HTMLButtonElement> {
+  const closeButton = (root: HTMLElement) =>
+    root.querySelector<HTMLButtonElement>('button.admin-menu-close');
+  const header = (root: HTMLElement) => root.querySelector('sat-app-header') as HTMLElement;
+
+  /**
+   * Open the menu with its button. `focused` false is a click that does not focus the button, as
+   * Safari's does not: the drawer then has nothing to give the focus back to, and the shell does.
+   */
+  async function openMenu(root: HTMLElement, focused = true): Promise<HTMLButtonElement> {
     const button = trigger(root) as HTMLButtonElement;
-    button.focus();
+    if (focused) button.focus();
+    else (document.activeElement as HTMLElement | null)?.blur();
     button.click();
     await step();
     return button;
+  }
+
+  /**
+   * The page has the window's width, nothing beside it, and the bar's height comes out of it: the
+   * page and the bar fit the scroll box together, so the bar adds no scroll, and no scrollbar's
+   * width, on a system that draws classic scrollbars.
+   */
+  function expectPageAtWindowWidth(root: HTMLElement): void {
+    const box = content(root);
+    expect(Math.round(box.getBoundingClientRect().left)).toBe(0);
+    expect(Math.round(box.getBoundingClientRect().width)).toBe(window.innerWidth);
+    const page = adminPage(root);
+    expect([Math.round(page.left), Math.round(page.width)]).toEqual([0, box.clientWidth]);
+    const bar = (root.querySelector('.admin-menu-bar') as HTMLElement).getBoundingClientRect();
+    expect(Math.round(bar.height + page.height))
+      .withContext('the bar and the page fit the scroll box')
+      .toBeLessThanOrEqual(box.clientHeight);
+  }
+
+  async function pressEscape(root: HTMLElement): Promise<void> {
+    (document.activeElement ?? drawer(root)).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await step();
+  }
+
+  /** Closed, with the button saying so and holding the focus, and the header usable again. */
+  function expectClosedWithFocusOnButton(root: HTMLElement, button: HTMLButtonElement): void {
+    expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).withContext('the focus is back on the button').toBe(button);
+    expect(header(root).hasAttribute('inert')).toBe(false);
+    // The section stays: the button is still there to open the menu again.
+    expect(trigger(root)).toBe(button);
   }
 
   afterEach(() => {
@@ -173,11 +216,7 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
       expect(document.getElementById(button?.getAttribute('aria-controls') ?? '')).toBe(
         drawer(root),
       );
-      // The page has the window's width: nothing beside it.
-      expect([Math.round(adminPage(root).left), Math.round(adminPage(root).width)]).toEqual([
-        0, 320,
-      ]);
-      expect(content(root).getBoundingClientRect().left).toBe(0);
+      expectPageAtWindowWidth(root);
       expect(await axeViolations(root.querySelector('.shell-content') as Element)).toEqual([]);
     });
 
@@ -195,15 +234,18 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
       ]);
       expect(opened.getAttribute('aria-label')).toBe('Administration menu');
       expect(button.getAttribute('aria-expanded')).toBe('true');
-      expect(opened.contains(document.activeElement))
-        .withContext('the focus moves into the menu')
-        .toBe(true);
-      expect(document.activeElement?.textContent?.trim()).toBe('Analytics');
+      // The focus moves into the menu, to its first control: its own close button.
+      expect(document.activeElement).toBe(closeButton(root));
+      expect(closeButton(root)?.getAttribute('aria-label')).toBe('Close the administration menu');
       // The focus is held in it: the trap's anchors are live on both sides of the drawer.
       const anchors = [opened.previousElementSibling, opened.nextElementSibling].filter((element) =>
         element?.classList.contains('cdk-focus-trap-anchor'),
       );
       expect(anchors.map((anchor) => anchor?.getAttribute('tabindex'))).toEqual(['0', '0']);
+      // Modal to the pointer too: the header and the platform's menu, outside the backdrop, are
+      // inert while it is open.
+      expect(header(root).hasAttribute('inert')).toBe(true);
+      expect(root.querySelector('sat-platform-nav')?.hasAttribute('inert')).toBe(true);
       // The page beneath is not moved: the menu covers it.
       expect(content(root).getBoundingClientRect().left).toBe(0);
       expect(await axeViolations(root.querySelector('.shell-content') as Element)).toEqual([]);
@@ -212,33 +254,71 @@ describe('AppShellComponent: the administration menu at a phone width and on a d
     it('closes on Escape, giving the focus back to the button', async () => {
       const root = await open(320);
       const button = await openMenu(root);
+      await pressEscape(root);
+      expectClosedWithFocusOnButton(root, button);
+    });
+
+    it('gives the focus back to the button itself when the click that opened it did not focus it, as in Safari', async () => {
+      const root = await open(320);
+      const button = await openMenu(root, false);
       expect(drawer(root).contains(document.activeElement)).toBe(true);
-      (document.activeElement as HTMLElement).dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
-      );
+      await pressEscape(root);
+      expectClosedWithFocusOnButton(root, button);
+    });
+
+    it('closes from its own close button, and from the backdrop', async () => {
+      const root = await open(320);
+      const button = await openMenu(root);
+      closeButton(root)?.click();
       await step();
-      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
-      expect(button.getAttribute('aria-expanded')).toBe('false');
-      expect(document.activeElement).toBe(button);
-      // The section stays: the button is still there to open the menu again.
-      expect(trigger(root)).toBe(button);
+      expectClosedWithFocusOnButton(root, button);
+      await openMenu(root);
+      (root.querySelector('.mat-drawer-backdrop') as HTMLElement).click();
+      await step();
+      expectClosedWithFocusOnButton(root, button);
     });
 
     it('closes when a page is chosen in it, opens that page at the window width, and gives the focus back', async () => {
       const root = await open(320);
-      await openMenu(root);
+      const button = await openMenu(root);
       const audit = [
         ...drawer(root).querySelectorAll<HTMLButtonElement>('button.settings-item'),
       ].find((item) => item.textContent?.trim() === 'Audit');
       expect(audit).withContext('the menu lists the audit page').toBeTruthy();
+      audit?.focus();
       audit?.click();
       await step();
       await step();
       expect(TestBed.inject(Router).url).toBe('/administration/audit');
-      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
+      expectClosedWithFocusOnButton(root, button);
+      expectPageAtWindowWidth(root);
+    });
+
+    it("opens the menu when Administration is chosen again in the platform's menu, keeping the section", async () => {
+      const root = await open(320);
+      const entry = root.querySelector<HTMLElement>('[data-nav-id="app.navbar.administration"]');
+      expect(entry).withContext("the platform's menu has the Administration entry").toBeTruthy();
+      entry?.click();
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(true);
+      expect(trigger(root)?.getAttribute('aria-expanded')).toBe('true');
+      expect(TestBed.inject(Router).url).toBe('/administration/vocabularies');
+    });
+
+    it('forgets that it was open when the window widens, so it is collapsed when it narrows again', async () => {
+      const root = await open(320);
+      await openMenu(root);
+      await resizeTo(1280);
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-side')).toBe(true);
+      expect(trigger(root)).toBeNull();
+      await resizeTo(320);
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-opened'))
+        .withContext('collapsed, not open over the page without the focus')
+        .toBe(false);
       expect(trigger(root)?.getAttribute('aria-expanded')).toBe('false');
-      expect(document.activeElement).toBe(trigger(root));
-      expect(Math.round(adminPage(root).width)).toBe(320);
+      expect(header(root).hasAttribute('inert')).toBe(false);
     });
   });
 

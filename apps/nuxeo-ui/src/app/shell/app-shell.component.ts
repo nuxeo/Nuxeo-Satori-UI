@@ -6,6 +6,7 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -114,8 +115,11 @@ export class AppShellComponent implements OnDestroy {
   @ViewChild('globalSearchContainer')
   private globalSearchContainer?: ElementRef<HTMLElement>;
 
-  @ViewChild('adminMenuTrigger')
+  @ViewChild('adminMenuTrigger', { read: ElementRef })
   private adminMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+  @ViewChild('navDrawer', { read: ElementRef })
+  private navDrawer?: ElementRef<HTMLElement>;
 
   private readonly settingsDrawerItem: AppNavItem = {
     id: 'app.navbar.settings',
@@ -226,6 +230,13 @@ export class AppShellComponent implements OnDestroy {
   /** Whether the drawer shows: a collapsed administration menu only while its button opened it. */
   protected readonly drawerShown = computed(
     () => this.drawerOpen() && (!this.adminMenuCompact() || this.adminMenuOpen()),
+  );
+  /**
+   * Whether the collapsed administration menu is open over the page: modal, so the header and the
+   * platform's menu, which its backdrop does not cover, are inert meanwhile.
+   */
+  protected readonly adminMenuModal = computed(
+    () => this.adminMenuCompact() && this.adminMenuOpen(),
   );
   readonly clipboardCount = signal(this.readClipboardCount());
   readonly clipboardBadgeLabel = computed(() => {
@@ -340,6 +351,15 @@ export class AppShellComponent implements OnDestroy {
 
   constructor() {
     this.sessionTimeout.start();
+
+    // The administration menu stops being collapsed without a navigation when the window widens, a
+    // phone is turned, or another drawer replaces it. Its open state is then forgotten, so that it
+    // does not open over the page, without the focus, when the window is a phone's again.
+    effect(() => {
+      if (this.adminMenuCompact()) return;
+      this.adminMenuOpen.set(false);
+      this.adminMenuOpenedByButton = false;
+    });
 
     // The browser tab title is set at application scope by `syncDocumentTitle`, not here: this
     // component only mounts on authenticated routes, so a title written here never reached the
@@ -583,9 +603,7 @@ export class AppShellComponent implements OnDestroy {
       const opened = this.adminMenuOpenedByButton;
       this.adminMenuOpenedByButton = false;
       this.adminMenuOpen.set(false);
-      const trigger = this.adminMenuTrigger?.nativeElement;
-      const focused = document.activeElement;
-      if (opened && trigger && (focused === null || focused === document.body)) trigger.focus();
+      if (opened) this.giveFocusBackToTrigger();
       return;
     }
     this.drawerOpen.set(false);
@@ -593,11 +611,39 @@ export class AppShellComponent implements OnDestroy {
     this.refreshClipboardCount();
   }
 
+  /**
+   * The focus back on the menu button, where the drawer did not put it: left on the body, or on a
+   * control of the drawer, hidden now, which is what a click that does not focus the button leaves,
+   * as Safari's does not. The page under a modal drawer stays inert until shortly after the drawer
+   * has closed (Material lifts it 50 ms after its animation), and an inert button takes no focus, so
+   * this waits for the button to be usable, a quarter of a second at most.
+   */
+  private giveFocusBackToTrigger(attempts = 10): void {
+    const trigger = this.adminMenuTrigger?.nativeElement;
+    if (!trigger?.isConnected || !this.adminMenuCompact() || this.adminMenuOpen()) return;
+    const focused = document.activeElement;
+    const lost =
+      focused === null ||
+      focused === document.body ||
+      this.navDrawer?.nativeElement.contains(focused) === true;
+    if (!lost) return;
+    if (trigger.closest('[inert]') === null) trigger.focus();
+    else if (attempts > 0) setTimeout(() => this.giveFocusBackToTrigger(attempts - 1), 25);
+  }
+
   /** Open the collapsed administration menu over the page; the drawer takes the focus. */
   openAdminMenu(): void {
     if (!this.adminMenuCompact()) return;
     this.adminMenuOpenedByButton = true;
     this.adminMenuOpen.set(true);
+  }
+
+  /**
+   * Close the collapsed administration menu from its own close button: the one way out for a
+   * person on a touch screen with a screen reader, which hides the backdrop and has no Escape.
+   */
+  closeAdminMenu(): void {
+    this.adminMenuOpen.set(false);
   }
 
   onGlobalSearchInput(value: string): void {

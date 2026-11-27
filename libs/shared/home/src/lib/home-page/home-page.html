@@ -49,8 +49,8 @@
                           <a class="home-card__item-link" [routerLink]="item.link">{{
                             item.title
                           }}</a>
-                          @if (item.detail) {
-                            <span class="home-card__item-detail">{{ item.detail }}</span>
+                          @for (detail of item.details; track $index) {
+                            <span class="home-card__item-detail">{{ detail }}</span>
                           }
                           @if (item.when) {
                             <time class="home-card__item-date" [attr.datetime]="item.date">{{

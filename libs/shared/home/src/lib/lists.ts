@@ -19,8 +19,8 @@ export interface ListItem {
   readonly id: string;
   /** What the link says. Never blank: an untitled task or record shows its id. */
   readonly title: string;
-  /** A task's record and workflow, or a record's type; `null` when there is nothing to say. */
-  readonly detail: string | null;
+  /** What is said under the title, each on its own: a task's record and workflow, a record's type. */
+  readonly details: readonly string[];
   /** The date it is listed by, as the server writes it: a task's creation, a record's last change. */
   readonly date: string | null;
   readonly link: RouterTarget;
@@ -56,11 +56,10 @@ export function taskItem(task: NuxeoTask, link: (id: string) => RouterTarget): L
       : readable(task.workflowModelName)
     : readable(task.workflowTitle);
   const record = blank(task.targetDocTitle) ? '' : task.targetDocTitle.trim();
-  const detail = [record, workflow].filter((part) => part !== '').join(' · ');
   return {
     id: task.id,
     title: name || task.id,
-    detail: detail || null,
+    details: [record, workflow].filter((part) => part !== ''),
     date: blank(task.created) ? null : task.created,
     link: link(task.id),
   };
@@ -71,7 +70,7 @@ export function recordItem(record: NuxeoDocument): ListItem {
   return {
     id: record.uid,
     title: blank(record.title) ? record.uid : record.title.trim(),
-    detail: blank(record.type) ? null : record.type,
+    details: blank(record.type) ? [] : [record.type],
     date: blank(record.lastModified) ? null : record.lastModified,
     link: documentNavigationUrl(record),
   };
