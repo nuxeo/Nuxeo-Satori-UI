@@ -38,9 +38,19 @@
       <schema name="file" />
       <facet name="CaptureItem" />
     </doctype>
+    <!-- Mail of a type that keeps versions: no item is restored to one. -->
+    <doctype name="TestVersionedMail" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="uid" />
+      <schema name="file" />
+      <facet name="Versionable" />
+      <facet name="CaptureItem" />
+    </doctype>
     <doctype name="TestInbox" extends="Folder">
       <subtypes>
         <type>TestMail</type>
+        <type>TestVersionedMail</type>
       </subtypes>
     </doctype>
     <doctype name="TestNoteInbox" extends="Folder">
@@ -48,6 +58,15 @@
         <type>TestMail</type>
       </subtypes>
     </doctype>
+  </extension>
+
+  <!-- A listener that refuses every change to a claim while a test says so: a filing whose record
+       is refused, after its claim was taken. -->
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="testRefusals" async="false" postCommit="false" priority="10"
+      class="org.nuxeo.agentic.capture.TestRefusals">
+      <event>beforeDocumentModification</event>
+    </listener>
   </extension>
 
   <extension target="org.nuxeo.agentic.capture" point="providers">
@@ -75,6 +94,18 @@
         <keyword>invoice number</keyword>
         <keyword>amount due</keyword>
         <field name="invoiceNumber" label="Invoice number" />
+      </class>
+    </profile>
+    <profile id="test-versioned">
+      <inboxType>TestInbox</inboxType>
+      <itemType>TestVersionedMail</itemType>
+      <recordType>TestClaim</recordType>
+      <recordPath>/desk</recordPath>
+      <class name="claimLetter" label="Claim letter">
+        <keyword>claim number</keyword>
+        <keyword>policy number</keyword>
+        <keyword>date of loss</keyword>
+        <field name="claimNumber" label="Claim number" match="tclaim:number" format="PC-[0-9]{5}" />
       </class>
     </profile>
     <profile id="test-notes">

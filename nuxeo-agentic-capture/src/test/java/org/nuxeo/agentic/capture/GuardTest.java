@@ -151,6 +151,30 @@ public class GuardTest {
     }
 
     @Test
+    public void anItemThatKeepsVersionsIsNotRestoredToOne() {
+        String claim = Mailroom.claimId(session, "pc-24001");
+        // A versioned item waits, a version of it is checked in, and then a person files it.
+        String id = Mailroom.inTransactionAs(repository, CAROL, s -> {
+            DocumentModel item = s.createDocumentModel(INBOX, "versioned", "TestVersionedMail");
+            item.setPropertyValue("dc:title", "versioned");
+            item.setPropertyValue("file:content", (Serializable) Mailroom.file(Mailroom.letter("PC-24001", 2), "v.txt"));
+            return s.createDocument(item).getId();
+        });
+        Mailroom.settle();
+        assertEquals(Captures.REVIEW, text(Mailroom.stored(repository, id), Captures.STATUS));
+        org.nuxeo.ecm.core.api.DocumentRef version = Mailroom.inTransactionAs(repository, Mailroom.ADMINISTRATOR,
+                s -> s.checkIn(new IdRef(id), org.nuxeo.ecm.core.api.VersioningOption.MINOR, null));
+        Mailroom.decide(repository, ALICE, id, item -> item.setPropertyValue(Captures.DECISION, Captures.CONFIRM));
+        assertEquals(Captures.FILED, text(Mailroom.stored(repository, id), Captures.STATUS));
+        // Restored to the version from before, it would wait again, to be filed a second time.
+        NuxeoException restored = Mailroom.refusedAs(repository, Mailroom.ADMINISTRATOR,
+                s -> s.restoreToVersion(new IdRef(id), version));
+        assertEquals(400, restored.getStatusCode());
+        assertEquals(Captures.FILED, text(Mailroom.stored(repository, id), Captures.STATUS));
+        assertEquals(1, Mailroom.attachments(repository, claim).size());
+    }
+
+    @Test
     public void noItemIsCopiedNorAFolderHoldingOne() {
         String id = Mailroom.mail(repository, CAROL, INBOX, "letter", Mailroom.letter("PC-24001", 3));
         NuxeoException item = Mailroom.refusedAs(repository, Mailroom.ADMINISTRATOR,

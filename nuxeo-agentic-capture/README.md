@@ -68,7 +68,7 @@ no provider at all, and every item waits for a person.
 | `src/main/resources/OSGI-INF/capture-providers-contrib.xml` | Registers `standin` and `ai`                                                                |
 | `src/main/resources/OSGI-INF/capture-listener-contrib.xml`  | The listeners: receiving and the guards, the background capture, the audit's writer         |
 | `src/main/package/`                                         | The Marketplace package, `nuxeo-agentic-capture` 0.1.0                                      |
-| `src/test/java/`                                            | 67 tests: 50 in Nuxeo's test framework, 17 with no runtime                                  |
+| `src/test/java/`                                            | 73 tests: 54 in Nuxeo's test framework, 19 with no runtime                                  |
 
 ## Intake
 
@@ -145,7 +145,9 @@ every property but five, a person's, which they may set while the item waits.
 `CaptureIntakeListener`, in the background once the creation has committed, then `Capture.run`, as
 the system, in a transaction of its own:
 
-1. **Only an item still received** is taken, so a capture run again files nothing twice.
+1. **Only an item still received** is taken, and only under a claim of its capture in the
+   key/value store, so a capture run again, or run twice at once by a redelivery, files nothing
+   twice and writes nothing over the other's.
 2. **The provider** the server names, registered and configured: none, and the item waits,
    `noProvider`.
 3. **Classified,** then, for a class of the profile's, **its fields extracted.** A provider that
@@ -159,8 +161,11 @@ the system, in a transaction of its own:
    the record's attachments (not twice, by its digest), the item marked filed, and the audit's two
    entries. Queued: the item set to wait, with its reason, and an audit entry.
 
-A capture that fails is rolled back, and the item is then set to wait, `notFiled`, in a transaction
-of its own, so that no item stays received.
+Then, whatever happened, in a transaction of its own: an item still received, whose capture this
+run holds or no one does, is set to wait, `notFiled`. So a capture that threw, or whose
+transaction was rolled back without a word, as one a provider or another listener marks for
+rollback is, leaves no item received. A capture lost before it ran at all, as a background job
+lost with its node, does: the item stays received, and is not seen by the queue.
 
 ## The confidence rule
 
@@ -211,16 +216,17 @@ note and the decision; each is the person's to change while it waits, and only t
 
 ## The guards
 
-| What                                   | Who may                                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Create an item                         | Whoever may add to its inbox; only there, with its file, and nothing of `capt:`                              |
-| Change the server's `capt:` properties | The server only, an administrator included: a mark on its own writes, taken off by the write it lets through |
-| Change an item's file                  | No one: it is what came in                                                                                   |
-| Change the person's `capt:` properties | Whoever may write the item, while it waits                                                                   |
-| File an item on a record               | The system, by the rule; or a person who may write the item and the record                                   |
-| Add or remove the `CaptureItem` facet  | No one: it comes with the type                                                                               |
-| Copy an item, or a folder holding one  | No one                                                                                                       |
-| Trash or delete an item                | Whoever the platform lets: a filed item's file stays on its record, and the audit                            |
+| What                                                         | Who may                                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Create an item                                               | Whoever may add to its inbox; only there, with its file, and nothing of `capt:`                              |
+| Change the server's `capt:` properties                       | The server only, an administrator included: a mark on its own writes, taken off by the write it lets through |
+| Change an item's file                                        | No one: it is what came in                                                                                   |
+| Change the person's `capt:` properties                       | Whoever may write the item, while it waits                                                                   |
+| File an item on a record                                     | The system, by the rule; or a person who may write the item and the record                                   |
+| Add or remove the `CaptureItem` facet                        | No one: it comes with the type                                                                               |
+| Copy an item, or a folder holding one                        | No one                                                                                                       |
+| Restore an item of a type that keeps versions to one of them | No one: it would put a filed or rejected item back to waiting                                                |
+| Trash or delete an item                                      | Whoever the platform lets: a filed item's file stays on its record, and the audit                            |
 
 ## The provider interface
 
@@ -307,29 +313,30 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-capture/pom.xml verify
-# target/nuxeo-agentic-capture-0.1.0.zip, the Marketplace package, after 67 tests
+# target/nuxeo-agentic-capture-0.1.0.zip, the Marketplace package, after 73 tests
 ```
 
 The root `pom.xml` lists the module, and the Marketplace workflow (`build-marketplace.yml`) builds
 and tests it on the pull requests it sees; it does not publish it. No test calls an AI service: the
 AI provider's tests call stand-ins for the AI package's two operations, `TestAiOperations`.
 
-| Test                     | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CaptureTest`, 16        | Classified, extracted, matched and filed with the stand-in, audited on the item and the claim with the class and confidence; the threshold's edge; each way an item waits: low confidence, no key or one not of its form, no class, a class with no key, no record, two, one outside the profile's folder, a record with no attachments, no provider, a provider that fails or throws, an answer out of bounds; the same file once; a capture run twice |
-| `ReviewTest`, 11         | Confirmed as proposed, as the person, audited; a claim number corrected and matched again, with the record cleared or left; a record named, its number filled in; a key not the record's, no match, two, out of the folder; a class given; corrections saved and checked; rejected; an item filed or received not decided on; an item being filed at this moment                                                                                        |
-| `GuardTest`, 6           | Created only in an inbox, with its file, no larger than the server takes, with nothing of `capt:`; the server's properties, an administrator's write included; the file; the facet; no copy of an item, or of a folder holding one                                                                                                                                                                                                                      |
-| `PermissionTest`, 5      | Uploading is the inbox's to allow; the scanner's account uploads and the system files; deciding needs the item's write; filing the record's write, checked as the person; a record they may not read refused, by its id or its number                                                                                                                                                                                                                   |
-| `AiProviderTest`, 5      | Not called while it is switched off, however else the server is set, and called once on; only the AI package's operations; what it sends: the id and the profile's definitions, none of the letter; its answer through the same rule; an answer it cannot read, an operation that fails or is absent                                                                                                                                                    |
-| `BundleTest`, 6          | The components, the facet and every property, both providers and the AI one off by default, the profiles found by their types, no Automation operation, the version                                                                                                                                                                                                                                                                                     |
-| `LogTest`, 1             | Every line the add-on logs, at every level, through filings, waits, refusals and failures whose messages quote the letter: no field's value, no text of the letter, no setting                                                                                                                                                                                                                                                                          |
-| `ConfidenceRuleTest`, 7  | The rule alone, with no runtime: each condition, its order, the threshold's edge, values out of bounds, what is kept                                                                                                                                                                                                                                                                                                                                    |
-| `ProfileTest`, 3         | A profile's rules, each broken once                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `StandInProviderTest`, 4 | The stand-in alone: keywords' share, fields after their labels, a PDF's own text, the same answer each time                                                                                                                                                                                                                                                                                                                                             |
-| `KitLetterTest`, 3       | The P&C claims kit's own profile, read from its component, and its two fictional letters: the one about PC-24003 may be filed by itself, the unclear one waits                                                                                                                                                                                                                                                                                          |
-| **Stand-ins**            | `ScriptedProvider`, a provider the tests answer for; `TestAiOperations`, the AI package's two operations, counting their calls                                                                                                                                                                                                                                                                                                                          |
+| Test                     | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CaptureTest`, 19        | Classified, extracted, matched and filed with the stand-in, audited on the item and the claim with the class and confidence; the threshold's edge; each way an item waits: low confidence, no key or one not of its form, no class, a class with no key, no record, two, one outside the profile's folder, a record with no attachments, no provider, a provider that fails or throws, an answer out of bounds; the same file once; a capture run again, on an item filed or waiting; a capture rolled back without a word, or refused after its claim, leaving the item waiting and the claim released; a capture another run holds |
+| `ReviewTest`, 11         | Confirmed as proposed, as the person, audited; a claim number corrected and matched again, with the record cleared or left; a record named, its number filled in; a key not the record's, no match, two, out of the folder; a class given; corrections saved and checked; rejected; an item filed or received not decided on; an item being filed at this moment                                                                                                                                                                                                                                                                     |
+| `GuardTest`, 7           | Created only in an inbox, with its file, no larger than the server takes, with nothing of `capt:`; the server's properties, an administrator's write included; the file; the facet; no copy of an item, or of a folder holding one; no restore of an item to a version                                                                                                                                                                                                                                                                                                                                                               |
+| `PermissionTest`, 5      | Uploading is the inbox's to allow; the scanner's account uploads and the system files; deciding needs the item's write; filing the record's write, checked as the person; a record they may not read refused, by its id or its number                                                                                                                                                                                                                                                                                                                                                                                                |
+| `AiProviderTest`, 5      | Not called while it is switched off, however else the server is set, and called once on; only the AI package's operations; what it sends: the id and the profile's definitions, none of the letter; its answer through the same rule; an answer it cannot read, an operation that fails or is absent                                                                                                                                                                                                                                                                                                                                 |
+| `BundleTest`, 6          | The components, the facet and every property, both providers and the AI one off by default, the profiles found by their types, no Automation operation, the version                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `LogTest`, 1             | Every line the add-on logs, at every level, through filings, waits, refusals and failures whose messages quote the letter: no field's value, no text of the letter, no setting                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `ConfidenceRuleTest`, 7  | The rule alone, with no runtime: each condition, its order, the threshold's edge, values out of bounds, what is kept                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `ProfileTest`, 3         | A profile's rules, each broken once                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `ProfileRegistryTest`, 2 | A profile refused, for a rule or for another's types, takes the earlier one of its id with it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `StandInProviderTest`, 4 | The stand-in alone: keywords' share, fields after their labels, a PDF's own text, the same answer each time                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `KitLetterTest`, 3       | The P&C claims kit's own profile, read from its component, and its two fictional letters: the one about PC-24003 may be filed by itself, the unclear one waits                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Stand-ins**            | `ScriptedProvider`, a provider the tests answer for; `TestAiOperations`, the AI package's two operations, counting their calls                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-**Each guard was seen failing.** Thirty-three mutations of the code, one at a time, each turned at
+**Each guard was seen failing.** Forty mutations of the code, one at a time, each turned at
 least one of these tests red ([below](#how-the-guards-were-seen-failing)).
 
 ## How the guards were seen failing
@@ -342,22 +349,28 @@ write anyway, so the test now asks for the add-on's own refusal), reading the re
 held it, so the test now runs it again on an item that waits for a person). One did not compile as
 first written, and was written again.
 
-| #     | The guard broken                                                                                                                                                                | Went red                            |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1-4   | The threshold lowered by 0.2; a key not of its form trusted; a missing key no reason; a confidence outside 0 to 1 kept                                                          | `ConfidenceRuleTest`, `CaptureTest` |
-| 5-7   | Filed whatever the rule says; two records taken as one; the profile's folder ignored                                                                                            | `CaptureTest`                       |
-| 8-10  | The AI provider's switch ignored; an operation not the AI package's called; the AI call in the capture's own transaction                                                        | `AiProviderTest`, `BundleTest`      |
-| 11-13 | The server's properties writable; the item's file changeable; an item decided on while it does not wait                                                                         | `GuardTest`, `ReviewTest`           |
-| 14-18 | No `Write` check on the record; the record read as the system, not the person; a key not the record's accepted; a corrected key not matched again; no filing claim for a person | `PermissionTest`, `ReviewTest`      |
-| 19-24 | An item copied; a folder holding items copied; an item created outside its inbox; `capt:` given at creation; no size bound; the facet added to another document                 | `GuardTest`                         |
-| 25-26 | A person's value with a control character taken; a field of another class taken                                                                                                 | `ReviewTest`                        |
-| 27-28 | No audit of an automatic filing; the same file attached twice                                                                                                                   | `CaptureTest`                       |
-| 29-30 | A field's value logged; a provider's message logged                                                                                                                             | `LogTest`                           |
-| 31-32 | A profile with a threshold below a half registered; one with a quote in its path                                                                                                | `ProfileTest`                       |
-| 33    | A capture run on an item that is no longer received                                                                                                                             | `CaptureTest`                       |
+| #     | The guard broken                                                                                                                                                                | Went red                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1-4   | The threshold lowered by 0.2; a key not of its form trusted; a missing key no reason; a confidence outside 0 to 1 kept                                                          | `ConfidenceRuleTest`, `CaptureTest`                         |
+| 5-7   | Filed whatever the rule says; two records taken as one; the profile's folder ignored                                                                                            | `CaptureTest`                                               |
+| 8-10  | The AI provider's switch ignored; an operation not the AI package's called; the AI call in the capture's own transaction                                                        | `AiProviderTest`, `BundleTest`                              |
+| 11-13 | The server's properties writable; the item's file changeable; an item decided on while it does not wait                                                                         | `GuardTest`, `ReviewTest`                                   |
+| 14-18 | No `Write` check on the record; the record read as the system, not the person; a key not the record's accepted; a corrected key not matched again; no filing claim for a person | `PermissionTest`, `ReviewTest`                              |
+| 19-24 | An item copied; a folder holding items copied; an item created outside its inbox; `capt:` given at creation; no size bound; the facet added to another document                 | `GuardTest`                                                 |
+| 25-26 | A person's value with a control character taken; a field of another class taken                                                                                                 | `ReviewTest`                                                |
+| 27-28 | No audit of an automatic filing; the same file attached twice                                                                                                                   | `CaptureTest`                                               |
+| 29-30 | A field's value logged; a provider's message logged                                                                                                                             | `LogTest`                                                   |
+| 31-32 | A profile with a threshold below a half registered; one with a quote in its path                                                                                                | `ProfileTest`                                               |
+| 33    | A capture run on an item that is no longer received                                                                                                                             | `CaptureTest`                                               |
+| 34-37 | No fallback once a capture's transaction rolled back; the fallback ignoring another capture's claim; no capture claim; a claim kept when its transaction rolls back             | `CaptureTest`                                               |
+| 38-40 | An item restored to a version; a field's name not checked before it is named in a refusal; a refused replacement keeping the profile it replaced                                | `GuardTest`, `ReviewTest`, `LogTest`, `ProfileRegistryTest` |
 
-The mutations are a script kept outside this repository; each is the replacement of one line or
-condition named above. What was found and fixed while building, the independent review among it,
+Mutations 34 to 40 came with the independent review's findings: the fallback, the capture claim,
+a version's restore, a field's name in a refusal, and a refused replacement profile, each built,
+tested and broken on purpose. The mutations are a script kept outside this repository; each is the
+replacement of one line or condition named above. **Not held by a mutation:** the server's mark on
+its own writes being taken off by the write it lets through (`ServerWrite.consumes`), which no
+client can reach, since it holds an object a client cannot send. What was found and fixed while building, the independent review among it,
 is kept outside this public repository, with the review pack
 ([security-reviews.md](../docs/business-apps/security-reviews.md)).
 
@@ -417,10 +430,20 @@ which is deferred until the app is finished, as every security review is
   which terms, and what it keeps. The data terms are approved before the second setting is set.
 - **What is kept.** The provider's reading, the person's corrections, who decided and when, on the
   item; the file, on the record; the audit's entries, which name ids, the class, the confidence and
-  the outcome, never a field's value. Check the retention each kit's items need: a letter is
+  the outcome, never a field's value; the record's entry also names the file as it was uploaded,
+  which the record's readers see on its attachments anyway. Check the retention each kit's items need: a letter is
   personal data.
-- **Logs.** Ids, reasons and kinds only (`LogTest`). Check the server's own logging of a refused
-  request, which is the platform's.
+- **Logs.** Ids, reasons and kinds only (`LogTest`); a field's name a person gives is checked
+  before any refusal names it. Check the server's own logging of a refused request, which is the
+  platform's.
+- **The claims.** An item's capture and its filing are each claimed in the key/value store
+  `agentic-capture`, the server's default store unless it configures one of that name. On a
+  cluster, that store must be one for every node, or two nodes could each capture one item. Check
+  each server's store.
+- **The stand-in's confidence is not a measure.** It gives 0.97 to any labelled value of the right
+  form, so on a server that names it, a text that quotes a class's phrases and a key of its form is
+  filed by itself on the record with that key. It is for demonstration servers only, as the
+  settings say; nothing but the setting stops a server naming it.
 
 ## Data notes
 

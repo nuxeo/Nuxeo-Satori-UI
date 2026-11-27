@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,15 +43,23 @@ final class Capture {
     private Capture() {
     }
 
+    /** A capture of its own, as a redelivery's would be. */
     static void run(CoreSession system, String itemId) {
-        DocumentModel item;
-        try {
-            item = system.getDocument(new IdRef(itemId));
-        } catch (DocumentNotFoundException e) {
+        run(system, itemId, UUID.randomUUID().toString());
+    }
+
+    /**
+     * The item's capture, as {@code run}, the capture's own token: it claims the item's capture
+     * first, and leaves it to the capture that holds it otherwise.
+     */
+    static void run(CoreSession system, String itemId, String run) {
+        DocumentModel item = receivedItem(system, itemId);
+        if (item == null || !Filing.claimCapture(itemId, run)) {
             return;
         }
-        if (!item.hasFacet(Captures.FACET) || !Captures.isLive(item)
-                || !Captures.RECEIVED.equals(Captures.text(item, Captures.STATUS))) {
+        // Read again under the claim: another capture may have ended before it was taken.
+        item = receivedItem(system, itemId);
+        if (item == null) {
             return;
         }
         CaptureService service = Framework.getService(CaptureService.class);
@@ -121,6 +130,21 @@ final class Capture {
         ServerWrite.ITEM.mark(item);
         DocumentModel saved = system.saveDocument(item);
         Filing.audit(system, null, saved, record, attachment, Captures.AUTOMATIC, Captures.SYSTEM);
+    }
+
+    /** The item, when it is a live capture item still received; otherwise {@code null}. */
+    static DocumentModel receivedItem(CoreSession system, String itemId) {
+        DocumentModel item;
+        try {
+            item = system.getDocument(new IdRef(itemId));
+        } catch (DocumentNotFoundException e) {
+            return null;
+        }
+        if (!item.hasFacet(Captures.FACET) || !Captures.isLive(item)
+                || !Captures.RECEIVED.equals(Captures.text(item, Captures.STATUS))) {
+            return null;
+        }
+        return item;
     }
 
     /** The provider's answer, kept as its proposal, and the person's fields set from it. */

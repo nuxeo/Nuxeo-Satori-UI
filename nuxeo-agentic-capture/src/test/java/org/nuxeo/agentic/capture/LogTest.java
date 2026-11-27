@@ -112,6 +112,8 @@ public class LogTest {
         Mailroom.refusedDecision(repository, BOB, waiting, item -> Mailroom.field(item, "sender",
                 Mailroom.SENDER + " ".repeat(Captures.MAX_VALUE)));
         Mailroom.refusedDecision(repository, BOB, waiting,
+                item -> Mailroom.field(item, Mailroom.SENDER + " " + Mailroom.SENDER_ADDRESS, "x"));
+        Mailroom.refusedDecision(repository, BOB, waiting,
                 item -> item.setPropertyValue(Captures.DECISION, Captures.CONFIRM));
         Mailroom.decide(repository, ALICE, waiting, item -> {
             Mailroom.field(item, "sender", Mailroom.SENDER + ", " + Mailroom.SENDER_ADDRESS);

@@ -340,6 +340,65 @@ public class CaptureTest {
         assertTrue(Mailroom.attachments(repository, claim("pc-24002")).isEmpty());
     }
 
+    @Test
+    public void aCaptureRolledBackWithoutAWordLeavesTheItemWaitingNotReceived() {
+        // A provider that marks the capture's transaction for rollback, and answers as if all
+        // were well: the filing it leads to is rolled back, with no exception to say so.
+        Mailroom.settings("scripted", null);
+        ScriptedProvider.rollbackOnly = true;
+        ScriptedProvider.classification = new Classification("claimLetter", 1);
+        ScriptedProvider.extraction = new Extraction(List.of(new ExtractedField("claimNumber", "PC-24001", 1)));
+        String id = Mailroom.mail(repository, CAROL, INBOX, "letter", "anything");
+        DocumentModel item = Mailroom.stored(repository, id);
+        assertEquals(Captures.REVIEW, text(item, Captures.STATUS));
+        assertEquals(Captures.NOT_FILED, text(item, Captures.REASON));
+        assertTrue(Mailroom.attachments(repository, claim("pc-24001")).isEmpty());
+        assertNull(claimHolder(Filing.claimKey(id)));
+    }
+
+    @Test
+    public void aFilingRefusedAfterItsClaimReleasesItAndTheItemWaits() {
+        String claim = claim("pc-24001");
+        TestRefusals.claims = true;
+        String id = Mailroom.mail(repository, CAROL, INBOX, "letter", Mailroom.letter("PC-24001", 3));
+        DocumentModel item = Mailroom.stored(repository, id);
+        assertEquals(Captures.REVIEW, text(item, Captures.STATUS));
+        assertEquals(Captures.NOT_FILED, text(item, Captures.REASON));
+        assertTrue(Mailroom.attachments(repository, claim).isEmpty());
+        // The claim the filing took went with its transaction: a person files it once the claim's
+        // record takes changes again.
+        assertNull(claimHolder(Filing.claimKey(id)));
+        TestRefusals.claims = false;
+        Mailroom.decide(repository, Mailroom.ALICE, id, i -> {
+            i.setPropertyValue(Captures.CLASS, "claimLetter");
+            i.setPropertyValue(Captures.RECORD, claim);
+            i.setPropertyValue(Captures.DECISION, Captures.CONFIRM);
+        });
+        assertEquals(1, Mailroom.attachments(repository, claim).size());
+    }
+
+    @Test
+    public void aCaptureAnotherRunHoldsIsLeftToIt() {
+        // A redelivery while the first capture holds the item: it does nothing, and its fallback
+        // does not set the item waiting under the first one's feet.
+        String id = Mailroom.inTransactionAs(repository, Mailroom.ADMINISTRATOR, s -> {
+            String created = s.createDocument(Mailroom.model(s, INBOX, "held", Mailroom.file("x", "held.txt"))).getId();
+            org.nuxeo.runtime.api.Framework.getService(org.nuxeo.runtime.kv.KeyValueService.class)
+                                           .getKeyValueStore(CaptureComponent.STORE)
+                                           .put(Filing.captureKey(created), "another-run", 60);
+            return created;
+        });
+        Mailroom.settle();
+        assertEquals(Captures.RECEIVED, text(Mailroom.stored(repository, id), Captures.STATUS));
+        assertEquals("another-run", claimHolder(Filing.captureKey(id)));
+    }
+
+    private static String claimHolder(String key) {
+        return org.nuxeo.runtime.api.Framework.getService(org.nuxeo.runtime.kv.KeyValueService.class)
+                                              .getKeyValueStore(CaptureComponent.STORE)
+                                              .getString(key);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private void audited() {

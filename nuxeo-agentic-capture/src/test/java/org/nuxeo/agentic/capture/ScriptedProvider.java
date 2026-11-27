@@ -19,6 +19,9 @@ public class ScriptedProvider implements CaptureProvider {
 
     static volatile RuntimeException crash;
 
+    /** Marks the capture's transaction for rollback, and answers as if nothing were wrong. */
+    static volatile boolean rollbackOnly;
+
     static final AtomicInteger CALLS = new AtomicInteger();
 
     static void reset() {
@@ -26,6 +29,7 @@ public class ScriptedProvider implements CaptureProvider {
         extraction = new Extraction(List.of());
         failure = null;
         crash = null;
+        rollbackOnly = false;
         CALLS.set(0);
     }
 
@@ -46,6 +50,9 @@ public class ScriptedProvider implements CaptureProvider {
         }
         if (failure != null) {
             throw new CaptureProviderException(failure);
+        }
+        if (rollbackOnly) {
+            org.nuxeo.runtime.transaction.TransactionHelper.setTransactionRollbackOnly();
         }
         return classification;
     }

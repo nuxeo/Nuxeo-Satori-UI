@@ -90,6 +90,7 @@ public class CaptureComponent extends DefaultComponent implements CaptureService
                     && other.itemType().equals(profile.itemType())) {
                 log.error("Capture: the profile {} from {} is not registered: profile {} already captures {} in {}",
                         profile.id(), contributor.getName(), other.id(), profile.itemType(), profile.inboxType());
+                profiles.remove(profile.id());
                 return;
             }
         }
@@ -173,13 +174,13 @@ public class CaptureComponent extends DefaultComponent implements CaptureService
     }
 
     /**
-     * Claim {@code key} for {@code ttlSeconds}, released when the current transaction does not
-     * commit; {@code false} when someone holds it already. No transaction to release it with, no
-     * claim: one that could outlive a rolled-back filing would hold the item until it expired.
+     * Claim {@code key} for {@code ttlSeconds}, as {@code value}, released when the current
+     * transaction does not commit; {@code false} when someone holds it already. No transaction to
+     * release it with, no claim: one that could outlive a rolled-back filing would hold the item
+     * until it expired.
      */
-    boolean claim(String key, long ttlSeconds) {
+    boolean claim(String key, String value, long ttlSeconds) {
         KeyValueStore store = store();
-        String value = "claimed";
         AtomicBoolean claimed = new AtomicBoolean();
         if (!TransactionSynchronizations.unlessCommitted(() -> {
             if (claimed.get()) {
@@ -193,6 +194,11 @@ public class CaptureComponent extends DefaultComponent implements CaptureService
         }
         claimed.set(true);
         return true;
+    }
+
+    /** Who holds {@code key}: the value it was claimed as, or {@code null} when no one does. */
+    String claimed(String key) {
+        return store().getString(key);
     }
 
     private static KeyValueStore store() {

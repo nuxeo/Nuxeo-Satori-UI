@@ -34,6 +34,9 @@ final class Filing {
     /** How long an item's filing claim holds: past any transaction. */
     static final long CLAIM_TTL = 86_400;
 
+    /** How long an item's capture claim holds: past any capture's transaction. */
+    static final long CAPTURE_TTL = 3_600;
+
     private Filing() {
     }
 
@@ -41,9 +44,28 @@ final class Filing {
         return "file." + itemId;
     }
 
+    static String captureKey(String itemId) {
+        return "capture." + itemId;
+    }
+
+    private static CaptureComponent component() {
+        return (CaptureComponent) Framework.getService(CaptureService.class);
+    }
+
     /** Claim the item's filing; {@code false} when another filing of it holds the claim. */
     static boolean claim(DocumentModel item) {
-        return ((CaptureComponent) Framework.getService(CaptureService.class)).claim(claimKey(item.getId()), CLAIM_TTL);
+        return component().claim(claimKey(item.getId()), "claimed", CLAIM_TTL);
+    }
+
+    /**
+     * Claim the item's capture as {@code run}, one capture's own token, so that two captures of it,
+     * a redelivery's and the first, never run at once and never write over each other. Kept once
+     * its transaction commits, by when the item is no longer received; released when it does not.
+     * {@code true} when {@code run} holds it already.
+     */
+    static boolean claimCapture(String itemId, String run) {
+        String key = captureKey(itemId);
+        return run.equals(component().claimed(key)) || component().claim(key, run, CAPTURE_TTL);
     }
 
     /**

@@ -236,6 +236,11 @@ public class ReviewTest {
                 i -> i.setPropertyValue(Captures.RECORD, "../../etc")).getStatusCode());
         assertEquals(400, Mailroom.refusedDecision(repository, BOB, id,
                 i -> i.setPropertyValue(Captures.DECISION, "fileItAnyway")).getStatusCode());
+        // A field's name that is not a name is refused, and not repeated in the refusal.
+        NuxeoException oddName = Mailroom.refusedDecision(repository, BOB, id,
+                i -> Mailroom.field(i, "Rowan Vale\nINFO forged line", "x"));
+        assertEquals(400, oddName.getStatusCode());
+        assertTrue(oddName.getMessage(), !oddName.getMessage().contains("Rowan"));
         assertEquals(Captures.REVIEW, text(Mailroom.stored(repository, id), Captures.STATUS));
     }
 

@@ -42,10 +42,11 @@ Those files were written by hand, not through the write tools, and checked by th
   when the status is Denied", as `app.rules.fieldIn`, and a check that the loss date is not after
   the report date, as `core.notBefore` on the report date. The claim number, the connector's key,
   is read-only there.
-- **Two queues:** open claims, oldest report first, with facets on status, cause of loss,
+- **Three queues:** open claims, oldest report first, with facets on status, cause of loss,
   adjuster and policy, the last showing each policy by its title (#751); and, for claims managers,
   open claims reserved over $50,000, largest reserve first. Both show each claim's policyholder,
-  read from its policy.
+  read from its policy. Since 0.2.0, the third: the mail to confirm
+  ([below](#capture-the-mail-inbox)).
 - **A home, a menu and labels.** Open claims by status and by cause for everyone; the reserves over
   $50,000 for claims managers; the claims reported and not yet investigated for adjusters.
 - **An `app.json` that names its own groups,** `property-claims-adjusters` and
@@ -75,7 +76,7 @@ Those files were written by hand, not through the write tools, and checked by th
 | `bundle/agentic-ui-config/layouts/PropertyPolicy/view.layout.json` | The policy page: two banners, three cards, its claims and its history                                       | `app-layout`, then `write_package_file`                      |
 | `bundle/agentic-ui-config/queues/open-property-claims.json`        | Open claims, oldest report first, with Status, Cause of loss, Adjuster and Policy facets                    | `app-queue`, then `write_package_file`                       |
 | `bundle/agentic-ui-config/queues/high-reserve.json`                | Open claims reserved over $50,000, largest first, for claims managers                                       | `app-queue`, then `write_package_file`                       |
-| `bundle/agentic-ui-config/home.json`, `navigation.json`            | The home's four figures, and the menu: the home and the two queues                                          | `write_package_file`                                         |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`            | The home's four figures, and the menu: the home and the two queues; since 0.2.0, five and three             | `write_package_file`                                         |
 | `bundle/agentic-ui-config/labels/en.json`                          | Every label key the files name, in English, and each schema's Properties heading                            | The generators, then `write_package_file`                    |
 | `bundle/OSGI-INF/pc-claims-demo-config.xml`                        | The component: the three layouts, and the app with the five files the registry serves                       | The generators                                               |
 | `bundle/OSGI-INF/pc-claims-demo-model.xml`, `bundle/schemas/*.xsd` | **The stand-in model:** two types, a search document, three page providers                                  | `app-model`                                                  |
@@ -262,8 +263,9 @@ under the kit's workspace, by itself at a confidence of 85% and above.
 
 With both packages installed and the stand-in configured
 ([the add-on's README](../../../nuxeo-agentic-capture/README.md#installing-it-on-the-local-docker-nuxeo-for-the-demo)),
-the kit seeded, and the adjusters given `ReadWrite` on the inbox. **Not run:** no server has
-either package.
+the kit seeded, and the adjusters given `ReadWrite` on the inbox and on the claims, since a
+confirm files only on a claim the adjuster may read and write. **Not run:** no server has either
+package.
 
 1. **The letters come in,** as a scanner sends them: from the repository's root,
    `NUXEO_USER=<a user who may add to the inbox> NUXEO_PASS=… node business-apps/packages/pc-claims-demo/demo/mail-in.mjs`.

@@ -32,5 +32,6 @@ public class CaptureFeature implements RunnerFeature {
         Mailroom.settings(null, null);
         ScriptedProvider.reset();
         TestAiOperations.reset();
+        TestRefusals.claims = false;
     }
 }

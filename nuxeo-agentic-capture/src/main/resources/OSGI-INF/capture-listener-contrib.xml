@@ -21,6 +21,7 @@
       <event>aboutToCreate</event>
       <event>documentCreatedByCopy</event>
       <event>beforeDocumentModification</event>
+      <event>beforeRestoringDocument</event>
     </listener>
     <listener name="captureIntakeListener" async="true" postCommit="true"
       class="org.nuxeo.agentic.capture.CaptureIntakeListener">

@@ -57,6 +57,8 @@ import org.nuxeo.runtime.api.Framework;
  * it on its record, which the person must be able to write, and reject sets it aside.</li>
  * <li><strong>{@code documentCreatedByCopy}:</strong> an item is not copied, nor a folder holding
  * one: each is one piece of mail, filed once.</li>
+ * <li><strong>{@code beforeRestoringDocument}:</strong> an item of a type that keeps versions is not
+ * restored to one, which would put a filed or rejected item back to waiting.</li>
  * </ul>
  */
 public class CaptureItemListener implements EventListener {
@@ -77,8 +79,14 @@ public class CaptureItemListener implements EventListener {
                 case DocumentEventTypes.ABOUT_TO_CREATE -> aboutToCreate(context, doc);
                 case DocumentEventTypes.BEFORE_DOC_UPDATE -> beforeModification(context, doc);
                 case DocumentEventTypes.DOCUMENT_CREATED_BY_COPY -> copied(context, doc);
+                case DocumentEventTypes.BEFORE_DOC_RESTORE -> {
+                    if (doc.hasFacet(Captures.FACET)) {
+                        throw invalid("A capture item is not restored to a version: what came in, and how it was "
+                                + "decided, stay as they are");
+                    }
+                }
                 default -> {
-                    // Not one of ours: the contribution lists the three above.
+                    // Not one of ours: the contribution lists the four above.
                 }
             }
         } catch (NuxeoException e) {
@@ -212,8 +220,9 @@ public class CaptureItemListener implements EventListener {
         for (Map<String, Serializable> field : fields) {
             String name = field.get("name") instanceof String s && !s.isEmpty() ? s : null;
             String value = field.get("value") instanceof String s ? s : null;
-            if (name == null) {
-                throw invalid("Each of an item's fields has a name");
+            // Checked before it is named in any message, which the server's log repeats.
+            if (name == null || !Captures.NAME.matcher(name).matches()) {
+                throw invalid("Each of an item's fields has a field's name: letters, digits, '_' and '-'");
             }
             if (captureClass == null) {
                 throw invalid("An item's fields are its class's: give the class first");
