@@ -1,0 +1,54 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "film",
+      "labelKey": "media.card.film.film",
+      "fields": [
+        "film:year",
+        "film:director",
+        "film:genre",
+        "film:originalLanguage",
+        { "field": "dc:description", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "windows",
+      "labelKey": "media.card.film.windows",
+      "fields": [
+        {
+          "field": "film:windows",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "film:territory", "labelKey": "media.column.territory" },
+              { "field": "film:channel", "labelKey": "media.column.channel" },
+              { "field": "film:from", "widget": "date", "labelKey": "media.column.from" },
+              { "field": "film:until", "widget": "date", "labelKey": "media.column.until" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "versions",
+      "labelKey": "media.card.film.versions",
+      "span": 2,
+      "related": {
+        "pageProvider": "media_film_versions",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dc:title",
+          "fver:language",
+          { "field": "fver:territories", "widget": "chips" },
+          { "field": "fver:channels", "widget": "chips" },
+          { "field": "dc:expired", "widget": "date", "labelKey": "media.column.rightsEnd" }
+        ],
+        "sort": [{ "field": "fver:language", "order": "asc" }],
+        "pageSize": 20
+      }
+    }
+  ]
+}

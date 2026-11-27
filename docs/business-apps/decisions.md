@@ -211,6 +211,24 @@ way.
     dropped from the kit, and every customer then gets the download permission, which refuses
     nothing until a policy is contributed.
 
+- **B, media rights in the assets add-on (26 November 2026).** Built against the recommendation,
+  "one add-on per domain module": territories, release windows, a localised version reading its
+  film's windows, and delivery packages are
+  [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md#media-rights-territories-windows-and-deliveries)
+  0.4.0, since they are an asset's rights, decided at the same endpoints as its rights end; the
+  media kit, [`media-demo`](../../business-apps/packages/media-demo/README.md), depends on it.
+  A delivery is a document filed, a `MediaDelivery`, which a synchronous listener decides, so
+  decision 3 is not touched: no operation and no button. Decision C is not touched either: a
+  delivery makes no share link and signs no one in. Decision G, tenancy, is not built. Its security
+  review is deferred until the app is finished, as every security review is; it is installed
+  nowhere. What changes if B goes another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and the media kit's
+    `package.xml` depends on that package. The `MediaDelivery` type, the `mdlv` schema and the
+    policy's elements do not change, so no kit's files do.
+  - **A media add-on of its own:** the delivery types and listener move into it, requiring
+    `org.nuxeo.agentic.assets.rights`, whose service decides a delivery; the territories and
+    windows stay in the assets add-on, since every download of an asset is decided there.
+
 - **B, the document control module's server add-on (26 November 2026).** Built against the
   recommendation: numbering, revisions and supersession are
   [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md), a Maven module beside

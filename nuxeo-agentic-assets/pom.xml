@@ -17,8 +17,10 @@
     links. Its download permission refuses the original, a picture view or a rendition that an
     asset's rights do not cover, and its assetRights enricher says why. A share link serves the
     picture views it lists, watermarked on the server, to anyone holding its token, while the link
-    and the asset's rights both hold. Its own Marketplace package, beside nuxeo-agentic-core: one
-    add-on per domain module (decision B's recommendation).
+    and the asset's rights both hold. Media rights: an asset's territories and release windows, a
+    localised version reading its film's windows, and a delivery package refused whole outside
+    them. Its own Marketplace package, beside nuxeo-agentic-core: one add-on per domain module
+    (decision B's recommendation).
   </description>
 
   <properties>
@@ -27,7 +29,7 @@
       nuxeo-agentic-ui, and a package depends on it by this version. The manifest's Bundle-Version
       repeats it, and AddonPackageTest refuses a build where the two differ.
     -->
-    <assets.package.version>0.3.0</assets.package.version>
+    <assets.package.version>0.4.0</assets.package.version>
   </properties>
 
   <!--
@@ -282,6 +284,46 @@
                   <directory>${project.basedir}/../business-apps/packages/brand-assets-demo/bundle/OSGI-INF</directory>
                   <includes>
                     <include>brand-assets-demo-video-rights.xml</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <!--
+            The media kit's own rights policy and schemas, into the test bundle, so that
+            MediaDeliveryTest decides on the policy the kit ships and the fields it declares, as
+            they are. Its model component requires org.nuxeo.runtime.started, which the test
+            runtime does not have, so the test registers the kit's schemas in a component of its
+            own, which KitMediaModelTest holds to the kit's.
+          -->
+          <execution>
+            <id>kit-media-policy</id>
+            <phase>process-test-resources</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.testOutputDirectory}/OSGI-INF/kit</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../business-apps/packages/media-demo/bundle/OSGI-INF</directory>
+                  <includes>
+                    <include>media-demo-rights.xml</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>kit-media-schemas</id>
+            <phase>process-test-resources</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.testOutputDirectory}/schemas/kit</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/../business-apps/packages/media-demo/bundle/schemas</directory>
+                  <includes>
+                    <include>film.xsd</include>
+                    <include>filmversion.xsd</include>
                   </includes>
                 </resource>
               </resources>
