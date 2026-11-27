@@ -74,7 +74,9 @@ describe('the plugin command', () => {
     for (const behaviour of behaviours(exposure))
       expect(spec).toContain(behaviour.title.replace(/'/g, "\\'"));
     expect(spec.match(/it\.todo\(/g)?.length).toBe(behaviours(exposure).length);
-    expect(files['src/lib/texts.ts']).toContain("'label.claim.outstanding': 'Outstanding',");
+    // By the parts of their keys, so that a key is not taken for a registered ID.
+    expect(files['src/lib/texts.ts']).toContain("    claim: {\n      number: 'Claim number',");
+    expect(files['src/lib/texts.ts']).not.toContain("'label.claim.outstanding'");
     expect(JSON.parse(files[PLUGIN_FILE])).toEqual({
       format: 'studio-migration-plugin/1',
       element: 'acme-claim-exposure',

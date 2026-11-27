@@ -365,6 +365,10 @@ function holdRun(element: CustomElement, source: PluginSource, run: PluginRun): 
     findings.push(
       `${source.library} has no spec of ${element.name}'s behaviour, only of its registration`,
     );
+  if (run.guardrail && !run.guardrail.passed)
+    findings.push(
+      `${source.library} fails the platform's customer guardrail, check-extension-library.mjs: ${firstLine(run.guardrail.output) || 'it exited with a failure'}`,
+    );
   for (const [gate, result] of Object.entries(run.gates ?? {}))
     if (!result.passed)
       findings.push(

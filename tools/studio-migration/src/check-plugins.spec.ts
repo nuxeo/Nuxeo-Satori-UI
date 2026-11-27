@@ -124,11 +124,15 @@ describe('check 9, on what needs no run', () => {
         lint: { passed: true, output: '' },
         build: { passed: false, output: 'error TS2322: Type is not assignable' },
       },
+      guardrail: { passed: false, output: 'check-extension-library: FAIL — 1 problem(s)' },
     };
     const runs = Object.fromEntries(M3_ELEMENTS.map((element) => [element, passing]));
     const findings = checkPlugins({ ...m3, plugins: { ...m3.plugins, runs } }).findings;
     expect(findings).toContain(
       'libs/extensions/acme-claim-exposure fails build: error TS2322: Type is not assignable',
+    );
+    expect(findings).toContain(
+      "libs/extensions/acme-claim-exposure fails the platform's customer guardrail, check-extension-library.mjs: check-extension-library: FAIL — 1 problem(s)",
     );
     const unwritten = checkPlugins({
       ...m3,

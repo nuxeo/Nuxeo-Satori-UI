@@ -220,7 +220,7 @@ export function pluginFiles(
       ? [`import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';`]
       : []),
     '',
-    `import { ${names.textsConstant} } from '../texts';`,
+    `import { textOf } from '../texts';`,
     '',
     '/**',
     ` * \`${names.componentId}\`: the plugin of the custom element \`${element.name}\`, from`,
@@ -244,7 +244,7 @@ export function pluginFiles(
     '',
     "  /** A text of the element, in the package's language; the key itself for one it does not hold, as Web UI's `i18n` shows it. */",
     '  protected text(key: string): string {',
-    `    return ${names.textsConstant}[key] ?? key;`,
+    '    return textOf(key);',
     '  }',
     '}',
     '',
@@ -348,16 +348,30 @@ export function pluginFiles(
     '',
   ].join('\n');
 
-  const textEntries = Object.entries(texts);
   const textsFile = [
     '/**',
     ` * The texts the custom element \`${element.name}\` translates with \`i18n\`, in the package's own`,
-    ' * language, as its messages.json gives them. A key it does not hold is shown as the key, as Web',
-    ' * UI shows it. Another language is not carried: the template provides no translation service.',
+    ' * language, as its messages.json gives them, by the parts of their keys: `label.claim.number` is',
+    " * `label`, then `claim`, then `number`. Written so, a key is not taken for one of the plugin's",
+    " * registered IDs, which have the same shape, by the platform's customer guardrail; code reads one",
+    ' * as `TEXTS.label.claim.number`, which the type check holds to the texts. A key it does not hold',
+    ' * is shown as the key, as Web UI shows it. Another language is not carried: the template provides',
+    ' * no translation service.',
     ' */',
-    `export const ${names.textsConstant}: Readonly<Record<string, string>> = Object.freeze({`,
-    ...textEntries.map(([key, value]) => `  ${quoted(key)}: ${quoted(value)},`),
-    '});',
+    `export const ${names.textsConstant} = ${textTree(texts, '')} as const satisfies TextTree;`,
+    '',
+    '/** Texts by the parts of their keys. */',
+    'export interface TextTree {',
+    '  readonly [part: string]: string | TextTree;',
+    '}',
+    '',
+    "/** The text of a key, or the key itself, as Web UI's `i18n` shows one it does not hold. */",
+    'export function textOf(key: string, texts: TextTree = ' + names.textsConstant + '): string {',
+    '  let at: string | TextTree | undefined = texts;',
+    "  for (const part of key.split('.'))",
+    "    at = typeof at === 'object' && Object.hasOwn(at, part) ? at[part] : undefined;",
+    "  return typeof at === 'string' ? at : key;",
+    '}',
     '',
   ].join('\n');
 
@@ -542,6 +556,53 @@ export function templateConfiguration(
       : null;
   }
   return files;
+}
+
+/**
+ * Texts by the parts of their keys, as TypeScript: `{ label: { claim: { number: 'Claim number' } } }`.
+ * A key that is both a text and the start of another's cannot be written so, and is left out: the
+ * plugin then shows the key, and the README's quote of the element names it.
+ */
+function textTree(texts: Readonly<Record<string, string>>, indent: string): string {
+  const tree: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(texts)) {
+    const parts = key.split('.');
+    let at = tree;
+    let fits = parts.every((part) => /^[\w-]+$/.test(part));
+    for (const part of parts.slice(0, -1)) {
+      if (!fits) break;
+      if (!Object.hasOwn(at, part))
+        Object.defineProperty(at, part, {
+          value: {},
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      const next = at[part];
+      if (typeof next !== 'object' || next === null) fits = false;
+      else at = next as Record<string, unknown>;
+    }
+    const last = parts[parts.length - 1];
+    if (fits && !Object.hasOwn(at, last))
+      Object.defineProperty(at, last, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+  }
+  const write = (node: Record<string, unknown>, depth: string): string => {
+    const entries = Object.entries(node);
+    if (entries.length === 0) return '{}';
+    const inner = `${depth}  `;
+    return `{\n${entries
+      .map(
+        ([part, child]) =>
+          `${inner}${/^[A-Za-z_$][\w$]*$/.test(part) ? part : quoted(part)}: ${typeof child === 'string' ? quoted(child) : write(child as Record<string, unknown>, inner)},`,
+      )
+      .join('\n')}\n${depth}}`;
+  };
+  return write(tree, indent);
 }
 
 /** The element's texts, by key, in the package's own language: English, or else the first. */

@@ -13,7 +13,7 @@ import { NxsButtonComponent } from '@nuxeo/satori-platform/components';
 import { DocumentChangesService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { finalize } from 'rxjs';
 
-import { ACME_CLAIM_ESCALATE_TEXTS } from '../texts';
+import { ACME_CLAIM_ESCALATE_TEXTS, textOf } from '../texts';
 import { ClaimEscalationService } from './claim-escalation.service';
 
 /** What `claim-escalated` carries: the claim, and the level the operation answered with. */
@@ -94,7 +94,7 @@ export class AcmeClaimEscalateComponent {
           this.changes.notify();
         },
         error: () => {
-          const message = this.text('label.claim.escalateFailed');
+          const message = ACME_CLAIM_ESCALATE_TEXTS.label.claim.escalateFailed;
           this.failure.set(message);
           this.notify.emit({ message });
         },
@@ -103,7 +103,7 @@ export class AcmeClaimEscalateComponent {
 
   /** A text of the element, in the package's language; the key itself for one it does not hold, as Web UI's `i18n` shows it. */
   protected text(key: string): string {
-    return ACME_CLAIM_ESCALATE_TEXTS[key] ?? key;
+    return textOf(key);
   }
 }
 

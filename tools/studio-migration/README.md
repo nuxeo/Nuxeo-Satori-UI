@@ -1166,7 +1166,8 @@ app from the template, as every customer library is today: nothing here loads co
      test of every behaviour the inventory read, by its title, as Vitest ran it; none left `todo`,
      skipped, or taken away, and no file of them running none; lint, test and typecheck of the
      library, and build of the template app, pass through Nx, once the library on disk is the files
-     the check read, its `project.json` the generator's;
+     the check read, its `project.json` the generator's; and the platform's customer guardrail,
+     `libs/platform/guardrails/check-extension-library.mjs`, passes on its files;
    - **its values** (`--observed`): the harness's own spec, written into the copy and into nothing
      of the plugin, registers the plugin through its provider, resolves its component by ID, shows
      it each record of the observed behaviour with the record and the inputs the file gives, and

@@ -101,6 +101,12 @@ export interface PluginRun {
   readonly seenError?: string;
   /** Lint, test, typecheck and build, through Nx, when they were run. */
   readonly gates?: Readonly<Record<string, GateRun>>;
+  /**
+   * The platform's own customer guardrail, `libs/platform/guardrails/check-extension-library.mjs`,
+   * which a customer runs on a library of theirs: on the plugin's files, before the harness's own
+   * are added.
+   */
+  readonly guardrail?: GateRun;
 }
 
 export interface RunOptions {
@@ -422,7 +428,7 @@ export async function runPlugin(
       setupFiles,
       `setupFiles: ['src/test-setup.ts', '${PROBE_SETUP}']`,
     );
-    files[PROBE_SETUP] = PROBE_SETUP_SOURCE;
+    const harnessFiles: Record<string, string> = { [PROBE_SETUP]: PROBE_SETUP_SOURCE };
     for (const [path, text] of Object.entries(files)) {
       // Not the project file: Nx would find a second project of the same name.
       if (path === 'project.json') continue;
@@ -430,6 +436,18 @@ export async function runPlugin(
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, text);
     }
+    // The customer guardrail the platform ships, on the plugin's own files and the template's.
+    const guard = join(workspace, 'libs', 'platform', 'guardrails', 'check-extension-library.mjs');
+    let guardrail: GateRun | undefined;
+    if (existsSync(guard)) {
+      const guarded = await runNode([guard, copy], workspace, env, 60_000);
+      guardrail = {
+        passed: guarded.status === 0,
+        output: guarded.status === 0 ? '' : lastLines(guarded.output, 12),
+      };
+    }
+    for (const [path, text] of Object.entries(harnessFiles))
+      writeFileSync(join(copy, ...path.split('/')), text);
     // The harness's spec runs whenever the plugin does: what it registers needs only its provider,
     // and what it shows, the observed behaviour.
     const metadata = pluginMetadata(source);
@@ -507,6 +525,7 @@ export async function runPlugin(
       ...(registered !== undefined ? { registered } : {}),
       ...(seenError !== undefined ? { seenError } : {}),
       ...(gates !== undefined ? { gates } : {}),
+      ...(guardrail !== undefined ? { guardrail } : {}),
     };
   } finally {
     rmSync(scratch, { recursive: true, force: true });

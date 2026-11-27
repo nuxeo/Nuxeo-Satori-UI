@@ -69,7 +69,10 @@ line the generator adds; if the generator reorders the file, put the other lines
   from its properties (`_outstanding(amount, reserve)`) is a `computed()`.
 - **Every `.subscribe()` has `takeUntilDestroyed()`.**
 - **Texts** come from `texts.ts` by the element's own keys, as Web UI's `i18n` did, the key itself
-  where the package holds no text. No other English in the template.
+  where the package holds no text: `text('label.claim.escalate')` in a template, and
+  `TEXTS.label.claim.escalateFailed` in code, which the type check holds to the texts. No other
+  English in the template. Never write a key as a quoted string in TypeScript: the platform's
+  customer guardrail takes `'label.claim.x'` for a registered ID, and check 9 runs that guardrail.
 - **The server, through the app's services only.** An operation the element ran goes through a
   service of the plugin, `@Injectable({ providedIn: 'root' })`, that injects `NuxeoApiBase` from
   `@nuxeo/satori-platform/nuxeo-client` and posts `{ input, params, context: {} }` to

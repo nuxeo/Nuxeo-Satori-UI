@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { ACME_CLAIM_EXPOSURE_TEXTS } from '../texts';
+import { textOf } from '../texts';
 
 /**
  * `acme.components.claimExposure`: the plugin of the custom element `acme-claim-exposure`, from
@@ -41,7 +41,7 @@ export class AcmeClaimExposureComponent {
 
   /** A text of the element, in the package's language; the key itself for one it does not hold, as Web UI's `i18n` shows it. */
   protected text(key: string): string {
-    return ACME_CLAIM_EXPOSURE_TEXTS[key] ?? key;
+    return textOf(key);
   }
 }
 
