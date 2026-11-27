@@ -2,8 +2,10 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: Nuxeo Agentic Connectors
 Bundle-SymbolicName: org.nuxeo.agentic.connectors;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.2.0
 Bundle-Vendor: Hyland Software
 Nuxeo-Component: OSGI-INF/connectors-service.xml,
- OSGI-INF/connectors-operations-contrib.xml
+ OSGI-INF/connectors-operations-contrib.xml,
+ OSGI-INF/connectors-webhooks-service.xml,
+ OSGI-INF/connectors-webhooks-operations-contrib.xml
 

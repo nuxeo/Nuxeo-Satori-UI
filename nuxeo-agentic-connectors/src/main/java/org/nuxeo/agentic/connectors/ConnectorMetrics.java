@@ -24,6 +24,10 @@ import io.dropwizard.metrics5.SharedMetricRegistries;
  * A refused event for a connector the server does not have is tagged {@code (unknown)}, which no
  * connector id can be, never with what the request named.</li>
  * <li>{@code .refreshes} is counted only while the connector's cache is on.</li>
+ * <li>{@code nuxeo.connectors.webhooks.attempts}, tagged with the webhook's id and the attempt's
+ * outcome ({@code delivered}, {@code failed}, {@code timeout}, ...), and
+ * {@code nuxeo.connectors.webhooks.dead}, the deliveries given up on, tagged with the webhook's
+ * id.</li>
  * </ul>
  *
  * Nothing here is a key, a credential, a secret or anything a request sent.
@@ -71,6 +75,16 @@ final class ConnectorMetrics {
     void refused(Connector connector, ChangeEvents.Reason reason) {
         registry.counter(name("events", "refused", connector == null ? UNKNOWN : connector.id())
                 .tagged("reason", reason.name().toLowerCase(java.util.Locale.ROOT))).inc();
+    }
+
+    void webhookAttempt(String webhook, String outcome) {
+        registry.counter(MetricName.build("nuxeo", "connectors", "webhooks", "attempts")
+                                   .tagged("webhook", webhook)
+                                   .tagged("outcome", outcome)).inc();
+    }
+
+    void webhookDead(String webhook) {
+        registry.counter(MetricName.build("nuxeo", "connectors", "webhooks", "dead").tagged("webhook", webhook)).inc();
     }
 
     MetricRegistry registry() {

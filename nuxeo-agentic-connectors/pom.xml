@@ -12,7 +12,7 @@
 
   <artifactId>nuxeo-agentic-connectors</artifactId>
   <name>Nuxeo Agentic Connectors</name>
-  <description>OSGi bundle: connectors to systems of record. The Connector.Read Automation operation reads one record from another system by a key held on a Nuxeo document, after the reader's permission on the document, and returns the fields its connector allows, from a cache the server sets per connector. A system of record's signed change events drop what is kept for a record. Addresses, fields, credentials, times to live and events secrets are server configuration only.</description>
+  <description>OSGi bundle: connectors to systems of record. The Connector.Read Automation operation reads one record from another system by a key held on a Nuxeo document, after the reader's permission on the document, and returns the fields its connector allows, from a cache the server sets per connector. A system of record's signed change events drop what is kept for a record. Outbound webhooks send a document event's configured fields, signed, after the commit, with retries and dead letters only administrators see. Addresses, fields, credentials, times to live and secrets are server configuration only.</description>
 
   <properties>
     <!--
@@ -20,7 +20,7 @@
       repeats it, and ConnectorXmlTest refuses a build where the two differ. It is the
       Marketplace package's version once the add-on has one.
     -->
-    <connectors.version>0.1.0</connectors.version>
+    <connectors.version>0.2.0</connectors.version>
   </properties>
 
   <!--
@@ -89,6 +89,35 @@
     <dependency>
       <groupId>org.nuxeo.common</groupId>
       <artifactId>nuxeo-common</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      Since 0.2.0, the outbound webhooks, on the platform's own services, each a jar every Nuxeo server
+      has, none bundled: the event listener and the work manager (nuxeo-core-event), the key/value
+      store the deliveries and dead letters are kept in (nuxeo-runtime-kv), TransactionHelper
+      (nuxeo-runtime-jtajca), and the audit each outcome is written to (nuxeo-platform-audit-api),
+      reached as nuxeo-agentic-embedded reaches it. The local LTS 2025.10.18 server has each one, with
+      the same signatures for every class and method used here; its audit's classes of these names are
+      in nuxeo-platform-audit-core.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-event</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-kv</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-jtajca</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
