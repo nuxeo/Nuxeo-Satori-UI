@@ -1,7 +1,7 @@
 # @nuxeo/satori-cli
 
-The one builder of a customer's Nuxeo Satori configuration: decision K's first step, as section 5
-of `docs/business-apps/extension-model.md` proposes it (pull request #786). A customer keeps all
+The one builder of a customer's Nuxeo Satori configuration: decision K's first step
+([extension-model.md](../../docs/business-apps/extension-model.md), section 5). A customer keeps all
 of their configuration in one repository of their own, and checks and builds it with this tool,
 outside this repository, with Node alone.
 
