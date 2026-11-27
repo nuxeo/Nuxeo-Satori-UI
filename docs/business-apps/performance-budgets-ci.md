@@ -83,8 +83,8 @@ each output imports:
   made for: `feature:<library>` for a feature library's entry, with the file for a second entry,
   `app:<path>` for the app's own, below `apps/nuxeo-ui/src/app`.
 
-Sizes are the files' bytes on disk, not compressed: deterministic, and what Angular's own budgets
-count. The compressed size is in the report, for reading.
+Sizes are the files' bytes on disk, not compressed: deterministic for one platform's build, and
+what Angular's own budgets count. The compressed size is in the report, for reading.
 
 **A lazy chunk with no budget fails,** so a new feature, or a new lazy route, cannot ship without
 one; **a budget for a chunk the build no longer makes fails too**, so the table cannot keep a line
@@ -148,7 +148,8 @@ into `main`, `integration/**` and `staging/**`, and on every push the workflow t
 5. the page budgets;
 6. **the guard:** every budget lowered on purpose below its own measured number, one at a time, and
    seen failing with that number and that budget; then each check run once more with a budget
-   lowered, `initialBytes` to one byte below and `queue.firstPageMs` to 1 ms, and seen exiting 1;
+   lowered, `initialBytes` to one byte below and `queue.firstPageMs` to 1 ms over three loads, and
+   seen exiting 1 on that budget alone;
 7. the reports, uploaded as the run's `performance-budgets` artifact.
 
 The job needs nothing but what every job of the workflow has: the read-only package token, through
@@ -177,6 +178,28 @@ its number, failed the judgement with that number and that budget, and each set 
 passed; `bundles.mjs --lower initialBytes=3123839` said "over budget: initialBytes is 3,123,840
 bytes, budget 3,123,839 bytes" and exited 1; `pages.mjs --lower queue.firstPageMs=1` said "over
 budget: queue.firstPageMs is 1,718 ms, budget 1 ms" and exited 1.
+
+## Measured in CI, 27 November 2026
+
+The job's first run, [45923377218](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/runs/45923377218),
+on `ubuntu-latest`, for this change's pull request:
+
+| Measure                | Median of five | The five, in order           |
+| ---------------------- | -------------- | ---------------------------- |
+| `home.firstRenderMs`   | 1613 ms        | 1652, 1610, 1611, 1612, 2772 |
+| `queue.firstPageMs`    | 1843 ms        | 1843, 1840, 1835, 2468, 2120 |
+| `record.firstRenderMs` | 1961 ms        | 1961, 1910, 1960, 2127, 2374 |
+
+About a tenth slower than the laptop, and noisier: one home load took 2772 ms, over its budget,
+and the median of five kept the check green, as it is meant to. Every lazy chunk measured the same
+bytes as on the laptop; the initial bundle measured 3,129,723 bytes, 5,883 more, so a size is
+deterministic for one platform's build, not across them, which the tenth of headroom covers.
+
+That run's guard went red, on its own control rather than on a budget: the check run once more with
+`queue.firstPageMs` lowered was a single load, and on that load the home page did not draw or
+threw, which the control did not print, so it could not say the budget alone had failed the run.
+The control now runs three loads, judged on their median as the check is, and prints which check
+failed, with its detail, when one does.
 
 ## What this does not measure
 

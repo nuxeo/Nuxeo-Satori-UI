@@ -15,7 +15,7 @@
  *    `over budget: <measure> is <number>, budget <lowered budget>`.
  *
  * With `--run-checks`, it also runs each check itself with one budget lowered, as CI's job does:
- * `bundles.mjs --lower initialBytes=<one below>` and `pages.mjs --skip-build --runs 1 --lower
+ * `bundles.mjs --lower initialBytes=<one below>` and `pages.mjs --skip-build --runs 3 --lower
  * queue.firstPageMs=1`, and requires each to exit 1 with that line in its output. So the job's
  * own exit code, not only the judgement, is seen going red.
  *
@@ -156,18 +156,20 @@ function main() {
       );
     }
     if (pages) {
-      // With its report, to see that every page drew: what fails it must be the budget alone.
+      // With its report, to see that every page drew: what fails it must be the budget alone. Three
+      // runs, judged on their median as the check itself is: one slow load on a busy runner must
+      // not put another line over and fail the control for a reason that is not the guard's.
       const report = join(mkdtempSync(join(tmpdir(), 'page-budgets-control-')), 'pages.json');
       const { reasons, said } = runLowered(
         'pages.mjs',
-        ['--skip-build', '--runs', '1', '--lower', 'queue.firstPageMs=1', '--report', report],
+        ['--skip-build', '--runs', '3', '--lower', 'queue.firstPageMs=1', '--report', report],
         loweredLine('queue.firstPageMs', 1, 'ms'),
       );
       problems.push(...reasons);
       const run = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null;
       const failedChecks = (run?.checks ?? [])
         .filter((check) => !check.pass)
-        .map((check) => check.name);
+        .map((check) => `${check.name}${check.detail ? ` (${check.detail})` : ''}`);
       if (!run) problems.push('pages.mjs, lowered, wrote no report');
       else if (failedChecks.length > 0) {
         problems.push(
@@ -179,7 +181,12 @@ function main() {
       );
       if (others.length > 0) {
         problems.push(
-          `pages.mjs, lowered, was over on other lines: ${others.map((line) => line.id).join(', ')}`,
+          `pages.mjs, lowered, was over on other lines: ${others
+            .map(
+              (line) =>
+                `${line.id} ${line.value === null ? 'not measured' : Math.ceil(line.value)}`,
+            )
+            .join(', ')}; its loads: ${JSON.stringify(run?.times ?? {})}`,
         );
       }
       console.log(
