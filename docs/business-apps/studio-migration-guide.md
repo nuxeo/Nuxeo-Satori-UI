@@ -114,16 +114,15 @@ the made-up package the repository tests with, it ends like this (shortened):
 3. The checks that need no server: done, and no check failed; in /home/me/studio/migration-1/check.txt
 4. The report: done, in /home/me/studio/migration-1/report.txt
 5. The decisions to fill in: done; what it printed is in /home/me/studio/migration-1/decisions.txt
-   Wrote /home/me/studio/migration-1/conversion/decisions.json: 15 reported items and 1 proposal, 16 of them still to fill in
+   Wrote /home/me/studio/migration-1/conversion/decisions.json: 17 reported items and 1 proposal, 18 of them still to fill in
 
 Verdict: not ready. What stands in the way:
   - check 3 ran only in part
   - check 5 ran only in part
   - check 6 ran only in part
   - check 7 ran only in part
-  - 3 constructs are pending a later phase
-  - 2 proposals wait for a person to accept or reject them
-  - 15 reported items have no owner
+  - 1 proposal waits for a person to accept or reject it
+  - 17 reported items have no owner
   - no one has approved the report and its decisions: a person does, with the approve command, once every decision is made
 
 Checks that still need the migration lab server:
@@ -190,7 +189,7 @@ and the allow-list the actions were held to.
 | `reported`  | It does not migrate, or not exactly as Web UI shows it. The report says why. A person decides          |
 | `generated` | Studio's own packaging, records and templates, which need nothing.                                     |
 | `server`    | It stays on the server in your Studio package, and the new app reads it there, such as your data model |
-| `pending`   | A later version of the tool converts it, such as a field under a condition in a form.                  |
+| `pending`   | A later version of the tool converts it, such as a menu entry that opens no list the tool writes yet.  |
 | `missing`   | Not in the report at all. It must be 0.                                                                |
 
 `decided` counts the reported items with an owner and a decision (section 5). **Coverage** is the
@@ -270,6 +269,12 @@ what it shows, such as a field under the condition, becomes a reported item for 
 own. A field under a proposed condition has no entry: it follows the condition's decision. A
 dashboard card fed by an operation, such as the favourites card, proposes nothing the tool can write
 yet: you can reject it, with your reason, and not accept it.
+
+Web UI's **recently viewed** card is proposed too, as the card the entry's `proposes` gives: a card
+of the person's recent records. Nuxeo keeps no list of what a person opens, so that card lists the
+records they created or edited last, which is not what Web UI's card listed. Accept it if that will
+do for your users, and it is written to `home.json` on the next run with `--from`; reject it, and
+the home has no such card.
 
 A custom element of your custom bundle is proposed as a Layer 2 plugin, a library in your copy of
 this repository at the entry's `to`, which an agent or a developer writes and check 9 holds to the

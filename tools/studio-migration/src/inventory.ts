@@ -1250,10 +1250,10 @@ const LIST_PARTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The list a tab's page holds, when its one named element is no layout block and holds a page
- * provider or a table: read as a dashboard card's is, its page providers, views and columns, the
- * conditions around its page provider and its table, and what else it holds. `null` for a page of
- * another make.
+ * The list a tab's page holds, when its one named element holds a page provider or a table: read
+ * as a dashboard card's is, its page providers, views and columns, the conditions around its page
+ * provider and its table, and what else it holds. `null` for a page of another make. A page that is
+ * a layout block is its block's: the tab reads the block first (`convert-tabs.ts`).
  */
 function listingOf(
   roots: readonly Element[],
@@ -1262,7 +1262,6 @@ function listingOf(
 ): PageListing | null {
   if (roots.length !== 1) return null;
   const [root] = roots;
-  if (blocks.has(root)) return null;
   const all = [root, ...elementsOf(root)];
   const providers = all.filter((element) => element.localName === 'nuxeo-page-provider');
   const views = all.filter((element) => RESULT_VIEWS.includes(element.localName));

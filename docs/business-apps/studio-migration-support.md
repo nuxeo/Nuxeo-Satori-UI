@@ -99,9 +99,10 @@ catalogue does not know or cannot map. The report's list, item by item, is the o
 naming the build it is for (name, version, Studio commit, build time and the bundle's SHA-256), and
 an entry for every reported item and every proposal, in the report's order: its `id` and its
 construct's `identity`, and copied from the report its `label`, `outcome`, `note`, and where there
-is one its `property`, `to` or `rule`; then, blank, `owner` and `decision`, and for a proposal
-`reason`. The customer writes those, and nothing else: for a reported item who owns it and what
-they decided; for a proposal, a condition's rule the tool proposes, who decides it, `accept` or
+is one its `property`, `to`, `rule` or `proposes`; then, blank, `owner` and `decision`, and for a
+proposal `reason`. The customer writes those, and nothing else: for a reported item who owns it and
+what they decided; for a proposal, a condition's rule the tool proposes, or the card of recent
+records it proposes for Web UI's recently viewed card, `proposes`, who decides it, `accept` or
 `reject`, and why. What a proposed condition guards, such as a field, has no entry of its own:
 it follows the condition's decision.
 

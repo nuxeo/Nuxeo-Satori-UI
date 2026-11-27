@@ -259,6 +259,15 @@ describe('a tab whose page is a list', () => {
         `<nuxeo-page-provider provider="vehicle_claims" params='{"queryParams": "[[document.title]]"}'></nuxeo-page-provider>${table}`,
         /cannot send/,
       ],
+      [
+        `<nuxeo-page-provider provider="vehicle_claims" sort="[[sort]]"></nuxeo-page-provider>${table}`,
+        /its page provider's sort, \[\[sort\]\], is not JSON/,
+      ],
+      [`<nuxeo-page-provider></nuxeo-page-provider>${table}`, /names no provider/],
+      [
+        `${provider}<nuxeo-filter document="[[document]]" path="/x"><template>${table}</template></nuxeo-filter>`,
+        /no rule reads a path/,
+      ],
     ];
     for (const [inner, note] of cases) {
       const input = prepare(page(inner));
@@ -268,6 +277,48 @@ describe('a tab whose page is a list', () => {
         expect.objectContaining({ outcome: 'reported', note: expect.stringMatching(note) }),
       ]);
     }
+  });
+
+  it('gives the card the rule of a condition inside the page around its list, and holds it there', () => {
+    const files = m2AllFiles();
+    const input = prepare({
+      ...files,
+      [VEHICLES]: files[VEHICLES].replace(
+        '<nuxeo-data-table nx-provider="claimsProvider">',
+        '<nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-data-table nx-provider="claimsProvider">',
+      ).replace(
+        '</nuxeo-data-table>\n        </div>',
+        '</nuxeo-data-table></template></nuxeo-filter>\n        </div>',
+      ),
+    });
+    const card = vehicleTab(input.conversion, 'claims').cards[0];
+    expect(card.visibleWhen).toEqual({
+      type: 'core.every',
+      parameters: [inGroup('adjusters'), vehicle],
+    });
+    for (const number of [2, 5, 6, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+    const widened = edit(input, 'layouts/Vehicle/view.layout.json', (file) => {
+      delete file.tabs[1].cards[0].visibleWhen;
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      "layouts/Vehicle/view.layout.json: its card claims.records shows the list of the tab claims to everyone who sees the tab, though Web UI's page shows the list only while a condition passes",
+    ]);
+  });
+
+  it('writes a list asking a page size a card of related records cannot, asking its own, and reports the tab', () => {
+    const files = m2AllFiles();
+    const input = prepare({
+      ...files,
+      [VEHICLES]: files[VEHICLES].replace('page-size="20"', 'page-size="500"'),
+    });
+    expect(vehicleTab(input.conversion, 'claims').cards[0].related).not.toHaveProperty('pageSize');
+    expect(entry(input.conversion, `slot-contribution:${VEHICLES}#1`)).toMatchObject({
+      outcome: 'reported',
+      to: 'layouts/Vehicle/view.layout.json tabs.claims',
+      note: expect.stringMatching(/its page size, 500, is not one a list of related records takes/),
+    });
+    for (const number of [2, 7]) expect(run(input, number)?.findings).toEqual([]);
   });
 });
 
@@ -393,6 +444,64 @@ describe('conditions on list columns and search tables', () => {
       ),
     });
     for (const number of [2, 5, 7]) expect(run(input, number)?.findings).toEqual([]);
+    // Written all the same, the queue is no list of the package: check 5 says it shows to all, and
+    // check 7 that nothing of the package asks for it.
+    const written = edit(input, 'queues/vehicles.json', () => ({
+      version: 2,
+      label: 'vehicles',
+      pageProvider: 'vehicles',
+      columns: ['ve:plate'],
+    }));
+    expect(run(written, 5)?.findings).toEqual([
+      'queues/vehicles.json: it lists vehicles for everyone, though Web UI shows the table only while a condition passes',
+    ]);
+    expect(run(written, 7)?.findings).toEqual([
+      'queues/vehicles.json: it asks for a list that no screen or card of the package asks for',
+    ]);
+  });
+
+  it('reports a column whose condition reads a document, where no record is open in a queue', () => {
+    const files = m2AllFiles();
+    const input = prepare({
+      ...files,
+      [RESULTS]: files[RESULTS].replace(
+        '<nuxeo-filter user="[[user]]" group="inspectors"><template>[[item.properties.ve:mileage]]',
+        '<nuxeo-filter document="[[document]]" type="Vehicle"><template>[[item.properties.ve:mileage]]',
+      ),
+    });
+    expect(entry(input.conversion, `search-column:${RESULTS}#3`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(
+        /condition on a document passes, and no record is open in a queue/,
+      ),
+    });
+    expect(JSON.stringify(input.conversion.app['queues/vehicles.json'])).not.toContain(
+      've:mileage',
+    );
+    for (const number of [2, 5]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it('keeps a property once, in the column that shows it to everyone, though another shows it under a rule', () => {
+    const files = m2AllFiles();
+    const input = prepare({
+      ...files,
+      [RESULTS]: files[RESULTS].replace(
+        '<nuxeo-data-table-column name="Make" field="ve:make"></nuxeo-data-table-column>',
+        '<nuxeo-data-table-column name="Make" field="ve:make"></nuxeo-data-table-column><nuxeo-data-table-column name="Mileage" field="ve:mileage"></nuxeo-data-table-column>',
+      ),
+    });
+    expect(
+      (input.conversion.app['queues/vehicles.json'] as { columns: unknown[] }).columns,
+    ).toEqual([
+      { field: 've:plate', label: 'Plate' },
+      { field: 've:make', label: 'Make' },
+      { field: 've:mileage', label: 'Mileage' },
+    ]);
+    expect(entry(input.conversion, `search-column:${RESULTS}#4`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/another column of the list shows it to everyone/),
+    });
+    for (const number of [2, 5, 6]) expect(run(input, number)?.findings).toEqual([]);
   });
 
   it('fails a queue that drops its table rule, and one that shows a column it leaves out', () => {
@@ -428,6 +537,26 @@ describe("the dashboard's tasks and recently viewed cards", () => {
       outcome: 'converted',
       to: 'home.json card-3',
     });
+    for (const number of [5, 6, 7, 10]) expect(run(corpus, number)?.findings).toEqual([]);
+  });
+
+  it('fails a card of tasks narrowed to one workflow, shown another way, or under no rule', () => {
+    const narrowed = edit(corpus, 'home.json', (file) => {
+      file.cards[1].tasks = { workflow: 'ClaimReview' };
+      file.cards[3] = { id: 'card-6', label: 'Team tasks', queue: 'home-1-claims' };
+      return file;
+    });
+    expect(run(narrowed, 7)?.findings).toEqual([
+      'home.json: card-3 lists only the tasks of "ClaimReview", where Web UI\'s dashboard card 3 lists every workflow\'s',
+      'home.json: card-6 shows a link to "home-1-claims", where Web UI\'s dashboard card 6 lists the person\'s tasks',
+    ]);
+    const widened = edit(corpus, 'home.json', (file) => {
+      delete file.cards[3].visibleWhen;
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      'home.json: card-6 shows card 6 to everyone, though Web UI shows it only while a condition passes',
+    ]);
   });
 
   it('proposes the recently viewed card as recent records, says why, and writes it nowhere', () => {

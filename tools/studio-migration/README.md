@@ -3,7 +3,8 @@
 Phases M0 to M3 of the migration in
 [docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
-declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
+declarative track (M1, and M2's conditions, task forms, tabs, layout blocks, listing tabs, version 2
+forms and the dashboard's tasks card) into an app
 definition the package pipeline's validator accepts, proposes each custom element as a Layer 2
 plugin and scaffolds it (M3, the code track, below), and runs the verification harness over the
 result. It prints the report a person approves, with every reported item's owner and decision and
@@ -379,7 +380,9 @@ gives the same conversion. A conversion directory holds:
   - `queues/<id>.json`: a search screen's results as `queues/<search folder>.json`, and a dashboard
     card's list as `queues/home-<n>-<provider>.json`.
   - `tasks/<workflow>.<step>.layout.json`, one per workflow task layout (M2, below).
-  - `home.json`: a card for each dashboard card whose list is a queue, naming it.
+  - `home.json`: a card for each dashboard card whose list is a queue, naming it; a card of the
+    person's tasks for each tasks card; and, once a person accepts the card proposed for it, a card
+    of their recent records for the recently viewed card.
   - `navigation.json`: an entry for each left-menu entry that opens a search screen, naming its
     queue.
   - `actions.json`: each operation button whose operation is on the allow-list.
@@ -401,13 +404,18 @@ write it, with the `decisions` command, and no conversion does (below, **The rep
   ([`elements.json`](catalogue/elements.json)), and the catalogue is held to the validator's widget
   registry when it loads. A view that only shows the document viewer gets no file: the app's
   document page shows the preview, as Web UI's did.
-- **`metadata`, `edit` and `create`** are written in version 1. The app refuses version 2 in
-  `metadata` mode and shows the generated panel instead; it draws `edit` and `create` files of
-  version 2 since phase 2, which the converter does not write yet (layout-v2.md, sections 10 and
-  11). Each field keeps its label and, in a form, its required flag:
+- **`edit` and `create`** are written in version 2 too, since 27 November 2026, as the app draws
+  them since phase 2 (layout-v2.md, sections 10 and 11): a card of the layout's own fields, and one
+  for each layout block it uses, each field with its widget, its label and its required flag. A
+  field Web UI only shows, binding it one way, is read-only, `readOnlyWhen: "core.true"`, as in a
+  task form. A field, or a block's card, under a condition carries its rule (**Conditions**,
+  below). A version 2 form shows only what the file lists, as a Web UI layout does: no Dublin Core
+  field is added.
+- **`metadata`** is written in version 1. The app refuses version 2 in `metadata` mode and shows
+  the generated panel instead. Each field keeps its label:
   - **The widget.** Version 1 cannot name a widget: the schema type picks it. A field whose element
-    asks for one version 1 cannot show, such as a user picker, is still written, so that its value
-    stays in the form, and it is reported.
+    asks for one version 1 cannot show, such as a user tag, is still written, so that its value
+    stays in the panel, and it is reported.
   - **What the panel shows itself.** In `metadata`, Title, Description, Nature, Subjects and
     Coverage are the Properties panel's own rows, so the file leaves them out. A metadata layout of
     those alone becomes an empty file, which shows nothing more, where no file would show every
@@ -416,9 +424,9 @@ write it, with the `decisions` command, and no conversion does (below, **The rep
   fields.
 - **Not written:**
   - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is written with the condition's
-    rule only in `view` (see **Conditions**, below). In version 1 it is pending, as version 1 has
-    no rules; where its condition does not convert it is reported, and where the rule is proposed
-    it waits for a person;
+    rule in `view`, `edit` and `create` (see **Conditions**, below). In `metadata`, version 1, it is
+    reported and left out, never shown to everyone, as version 1 has no rules; where its condition
+    does not convert it is reported, and where the rule is proposed it waits for a person;
   - an element the catalogue does not know as a field is reported;
   - a field that binds a property another field already shows is reported, and the property is
     kept once. A field under a condition, or of an unknown element, shows nothing, so a later
@@ -435,22 +443,34 @@ write it, with the `decisions` command, and no conversion does (below, **The rep
 - **Reported:** a queue has no search form. The form and its fields are reported, because the
   queue lists what the page provider returns with the predicates left empty, as Web UI does before
   anyone searches. A grid or justified-grid view is reported too: a queue is a table.
-- **Reported, too:** a column under a condition, which the queue leaves out, and a list whose
-  table sits in one, which gets no queue. M2 converts no condition there, so a person decides
-  each, and neither is shown to everyone meanwhile.
+- **Under a condition** (since 27 November 2026, `columnPlans` and `tableGuard` in
+  [`convert-lists.ts`](src/convert-lists.ts)): a column carries its condition's rule as its
+  `visibleWhen`, and a table its own as the queue's, where the rule reads the user only, since no
+  record is open in a queue. A condition inside a column's template, around its value, is read as
+  the column's. A column or a table whose condition reads a document, `document="[[item]]"` for
+  each row among them, or does not convert, is reported, and the queue leaves it out, or is not
+  written; a column whose property another column shows to everyone is that one's. None is shown
+  to everyone.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
 size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns.
 The card becomes a card of `home.json`, with the card's heading, naming the queue
 ([app-definition-v2.md](../../docs/business-apps/app-definition-v2.md), section 10).
 
-- **Pending:** the tasks card and the recently viewed card: `home.json` has no card for either
-  yet.
+- **The tasks card** (`nuxeo-tasks-list`) becomes a card of the person's tasks, `"tasks": {}`:
+  every workflow's, the newest 5, as `home.json` lists them (app-definition-v2.md, section 10).
+  How many Web UI's list shows at once is not read from the package, and the card's note says so.
+- **Proposed:** the recently viewed card (`nuxeo-document-storage`), as a card of the person's
+  recent records, `"recent": {}`, which the report gives as its `proposes`. It is a proposal, not
+  a conversion: Nuxeo keeps no list of what a person opens, so `home.json`'s recent records are
+  those the person created or edited last, another list than Web UI's, and its note says so. A
+  person accepts or rejects it in `decisions.json`: accepted, the card is written on the next run
+  with `--from`; rejected, nothing is. A change to what it proposes is decided again.
 - **Proposed:** a card fed by an operation, such as the favourites one, which an agent proposes a
   page provider for.
 - **Reported:** a card that repeats another.
-- **Left out:** a column under a condition its table is not in, which the card's note names. M2
-  converts no condition on a list's column, and it is not shown to everyone meanwhile.
+- **A column under a condition** carries its rule, as a search screen's does. One that cannot is
+  left out, and the card, written without it, is reported, its note naming the column and why.
 
 **Slot contributions:**
 
@@ -562,11 +582,16 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
   - in M2, of a tab, of a layout block's card, and of a task form's field;
-  - on the home and the menu, no record is open, so only a rule on the user travels;
-  - not to a version 1 field, which waits for the converter to write version 2 forms;
-  - not to a list's column, which is left out, or a search screen's table, which is reported.
+  - since 27 November 2026, of a field and a block's card of an `edit` or `create` form, of a
+    list's column, of a search screen's queue by its table, and of a listing tab's card of related
+    records and its columns;
+  - on the home, the menu and a queue, no record is open, so only a rule on the user travels; a
+    listing tab's card and columns are on the record page, and may read the open record;
+  - not to a field of the `metadata` layout, version 1, which has no rules: it is reported, and
+    left out.
 - **A condition is `converted` only where its rule was written**, and the report says where.
-  Otherwise it is pending, and each thing it guards says why.
+  Otherwise each thing it guards says why, and it is pending while one of them waits, for a later
+  phase or a person's acceptance, and reported once each is reported.
 
 **Task forms (M2).** A workflow task layout becomes the task form of its step
 ([app-definition-v2.md](../../docs/business-apps/app-definition-v2.md), section 6), read from Web
@@ -587,9 +612,8 @@ UI's own task page (`nuxeo-document-task.js`) and its stock layouts:
   `{{path::event}}` on an element that edits, not a `nuxeo-date`, `nuxeo-user-tag` or `nuxeo-tag`,
   and not one marked `readonly` or `disabled`. A computed or negated `{{…}}`, a `[[…]]` binding
   and text are one way. So in a task form, a variable Web UI does not edit is written
-  `readOnlyWhen: "core.true"`: the app neither edits nor sends what Web UI never changes. Version
-  1 cannot make a field read-only, so in an edit or create layout such a field is written editable
-  and reported.
+  `readOnlyWhen: "core.true"`: the app neither edits nor sends what Web UI never changes. So is a
+  field of an edit or create layout, which are written in version 2 since 27 November 2026.
 - **The document.** Web UI's task page fetches the task with its first target whole
   (`nuxeo-app.js`, `fetch-task: targetDocumentIds`, with every schema): on the reference server it
   holds the document's type, state, facets and properties, but no permissions, since no enricher
@@ -612,9 +636,9 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
   the cards of the layout's own fields before and after it: `fields`, the block's name,
   `fields-2`. Each use, and each of the block's fields there, is a construct of the file that
   uses it, so a block used twice shows its fields twice, each decided where it shows.
-- **A block under a condition** gives its card the condition's rule in version 2. In version 1 it
-  is pending, as a field under a condition is. A field under a condition inside the block carries
-  its own rule.
+- **A block under a condition** gives its card the condition's rule in version 2, in a view, edit
+  or create layout. In the `metadata` layout, version 1, it is reported, as a field under a
+  condition is. A field under a condition inside the block carries its own rule.
 - **Reported:** a block given no document (`document="[[document]]"`), whose fields show nothing
   in Web UI; a block inside another block, since a card holds no card; a block in a search screen,
   the dashboard or a slot contribution that is not a tab's page; a block no layout uses.
@@ -637,15 +661,46 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
   and `priority`; one at a lower priority is ignored. A contribution with no template and no
   earlier one of its name changes one of Web UI's own, such as hiding its Permissions tab, and is
   reported for a person to decide.
-- **What it holds** is its page's layout block, as one card.
+- **What it holds** is its page's layout block, as one card; or, since 27 November 2026, the card
+  of related records its page's list becomes (below).
+- **The page,** as Web UI's document page selects it (`iron-pages`, `attr-for-selected="name"`),
+  is the one element its contribution stamps with a `name`, conditions passed through: never an
+  element inside it, such as a column of its list.
 - **Its rule** is the item's and the page's conditions together, through M2's conditions, as its
   `visibleWhen`.
+- **A page that is a list** ([`listingPlan`](src/convert-tabs.ts)): a `nuxeo-page-provider` and
+  the `nuxeo-data-table` that shows it, in the element the page is, as a dashboard card holds one,
+  becomes the tab's one card, `<tab>.records`, of related records (layout-v2.md, section 7):
+  - **over the same page provider,** with its columns, in order, with their widgets, the sort its
+    `sort` writes, `{"dc:modified": "desc"}`, and its page size when a list takes it (1 to 100);
+  - **its parameters as its `params` give them,** `{"queryParams": …}`, as a dashboard card's are
+    read: a literal stays one, and a value bound whole to the open record, `[[document.uid]]`,
+    `[[document.path]]`, `[[document.type]]`, `[[document.state]]` or
+    `[[document.properties.<prefix>:<name>]]`, is that record's property, `{ "field": "ecm:uuid" }`
+    and so on;
+  - **under a condition:** a condition inside the page around its page provider and its table, beyond
+    the page's own, is the card's `visibleWhen`; a column's is the column's, and may read the open
+    record, as a listing is on the record page;
+  - **reported, never pointed at other records:** a named parameter, which a list of related records
+    cannot send; a query parameter bound to the page otherwise, or with anything around the
+    binding; a sort it cannot read; two page providers, or none; no table; anything in the page
+    besides its list, such as a button or a field; a condition inside the page that does not
+    convert;
+  - **written and reported,** each part said in its note: a grid view, as a card of related records
+    is a table; a column that cannot be written; a page size a list does not take;
+  - **never `create`:** a list as the converter reads it creates nothing, and a page holding a
+    button is reported.
+
+  No package in hand shows how Studio writes a tab whose page is a list, or how a page passes the
+  open record to its page provider: the made-up corpus's form,
+  `params='{"queryParams": "[[document.uid]]"}'`, is an assumption a real package will confirm.
+
 - **Its label.** Web UI translates the item's label as a key, and shows the key itself when no
   catalogue holds it. A key the package translates becomes `labelKey`; any other is written as it
   is, and check 6 lists it as resting on Web UI's catalogue.
 - **Reported, never guessed:** a tab whose conditions test no type, so it shows on every type; a
   condition that does not convert; an item with no page, or more than one; a page no item opens; a
-  page that is not a layout block of the package; a tab named as one of Web UI's own; a tab on a
+  page that is neither a layout block of the package nor a list; a tab named as one of Web UI's own; a tab on a
   type the package writes no view file of, or whose view layout shows only the document's
   preview. A tab on several types, some of which have no view file, is written for the others and
   reported, with where it went.
@@ -657,14 +712,14 @@ is reported: `app.json`'s branding takes a logo and a favicon only.
 
 Every construct of the package is in the report once, with one of these outcomes:
 
-| Outcome     | Meaning                                                                                                                           |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `converted` | Done, with where it went                                                                                                          |
-| `proposed`  | An agent proposes it, and a person accepts it                                                                                     |
-| `reported`  | It does not migrate, with why                                                                                                     |
-| `generated` | Studio's own packaging, records and templates                                                                                     |
-| `server`    | It stays on the server in the Studio package, and the new app reads it                                                            |
-| `pending`   | A later phase converts it, and the note says which: a version 1 field under a condition once the converter writes version 2 forms |
+| Outcome     | Meaning                                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `converted` | Done, with where it went                                                                                                       |
+| `proposed`  | An agent proposes it, and a person accepts it                                                                                  |
+| `reported`  | It does not migrate, with why                                                                                                  |
+| `generated` | Studio's own packaging, records and templates                                                                                  |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                                                         |
+| `pending`   | A later phase converts it, and the note says which: a menu entry that opens no queue, once the mapping agent proposes its page |
 
 A `reported` construct may still have been written, as a field version 1 cannot show as Web UI
 does is: its `to` then says where.
@@ -696,7 +751,10 @@ check that did not run does.
     the same mode, with the same required flag and the expected widget. M2 adds the fields of the
     layout blocks each layout uses; each tab of a view file, which shows its block's fields; and
     each task form, which shows its task layout's variables. A tab or a task form no Web UI one
-    gives fails. Each list shows its columns, in order, with theirs. What Web UI shows is read
+    gives fails. Each list shows its columns, in order, with theirs, a column under its rule among
+    them. Since 27 November 2026, each tab whose page is a list holds its one card of related
+    records, and nothing beside it, with the list's columns; and each `edit` and `create` form is
+    version 2, its fields read-only where Web UI only shows them. What Web UI shows is read
     from the package. The report only excuses a missing field it reports or leaves pending, with
     its reason. A field that sits in a condition, its own or its block's, is check 5's.
   - **4, labels.** Every translation is in its language's labels file, word for word, and nothing
@@ -745,9 +803,13 @@ check that did not run does.
     - Each condition's own rule is held to the same table.
     - Nothing Web UI shows under a condition is shown to everyone: no field, action, home card,
       queue, menu entry, layout block's card or tab loses its rule, and no field of a block under a
-      condition moves out of its card.
+      condition moves out of its card. Since 27 November 2026, neither does a list's column, a
+      search screen's queue under its table's condition, nor a listing tab's card or column; and a
+      column left out under a condition is not shown at all.
     - A rule of a layout or a task form is found by what it sits on: a tab by its id, a block's
-      card by its id, and a field by its property in its card.
+      card by its id, a listing's card by its id and its column by its property, and a field by
+      its property in its card. A queue's column is found by its property, among the columns
+      its list writes (`columnPlans`).
     - The tables prove the mapping against the two sources as written. Evaluating each original
       in Web UI itself, on the migration server, has not run. A package with no condition passes,
       because there is nothing for a table to decide.
@@ -761,8 +823,13 @@ check that did not run does.
   - **7, what the server is asked.** Each list asks the same page provider with the same parameters,
     opening sort and page size. Each action runs the same operation with the same parameters, on
     the record or a selection, as Web UI does: the contribution Web UI's slot keeps, never a
-    disabled, replaced or outranked one. Nothing asks for anything the package does not. The
-    recorded requests and their result counts need the server.
+    disabled, replaced or outranked one. Since 27 November 2026, each listing tab's card of
+    related records asks what Web UI's page asks: the same page provider, parameters, the open
+    record among them where the page passes it, sort and page size; and the home holds a card of
+    the person's tasks, of every workflow, for each tasks card, and one of their recent records
+    only where a person accepted it. Nothing asks for anything the package does not, a card of
+    related records no tab gives among it. The recorded requests and their result counts need the
+    server.
 - **Check 9, plugins,** holds each custom element's plugin to the element (below, **The code
   track**). Its scan of the plugins and of the configuration needs only the files; its tests,
   gates and values run with `check --run-plugins --observed <file>`. Until a plugin is written,
@@ -824,9 +891,22 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `keep-outranked-action`      | 7     | Keeps a button a higher priority one of the same name outranks        |
 | `revive-disabled-menu-entry` | 7     | Makes a menu entry of a disabled one                                  |
 | `change-action-order`        | 6     | Moves an action from the order Web UI's slot gives it                 |
+| `drop-listing-card`          | 2     | Drops the card of related records a listing tab becomes               |
+| `wrong-listing-provider`     | 7     | Points a listing tab's card at another page provider                  |
+| `drop-listing-parameter`     | 7     | Drops the open record from a listing's parameters                     |
+| `drop-form-field-rule`       | 5     | Drops the rule of a field of an edit or create form                   |
+| `drop-column-rule`           | 5     | Shows a list column Web UI hides under a condition to everyone        |
+| `convert-recent-undecided`   | 7     | Writes the recently viewed card's proposal though no one accepted it  |
+| `drop-tasks-card`            | 7     | Drops the card of the person's tasks from the home                    |
 
 The four that write what Web UI leaves out read the package too: `mutate` takes it with
 `--package <package.zip>`, and refuses without it.
+
+**The controls of what M2 left over**, the last seven, `LEFTOVER_MUTATIONS`, break what the made-up
+package with M2's corpus and its leftovers ([`m2-leftovers-corpus.ts`](src/testing/m2-leftovers-corpus.ts))
+converts: harness.spec.ts applies them with every other control to that package, and
+[`m2-leftovers.spec.ts`](src/m2-leftovers.spec.ts) names what each broke. Each was also applied with
+`mutate` to that package's conversion, written to disk, and `check` failed the check it names.
 
 **On the sample**, every one of the 39 controls of the checks there were then was applied to its conversion with `mutate` and
 checked. The 21 that find something to break each fail their check, with a finding of their own,
@@ -1416,6 +1496,16 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   on every type, under a path test, with no page, on a type with no view file, and a page with no
   tab.
 
+  For what M2 left over, [`m2-leftovers-corpus.ts`](src/testing/m2-leftovers-corpus.ts) adds, on a
+  type of its own, Vehicle: three tabs whose page is a list, one that converts, one whose page
+  provider takes a named parameter, and one with a grid view and a column whose test reads each
+  row; edit and create layouts with a field under a group test and a layout block under a facet
+  test; a metadata layout with a field under a condition; a search screen whose table, and two of
+  whose columns, sit in conditions; and a dashboard with the person's tasks twice, once under a
+  condition, a recently viewed card, and a list with a column under a condition and one reading
+  each row. The M1 package's metadata layout gains a user tag, which version 1 cannot show as one,
+  since its edit form, now version 2, names its user picker's widget.
+
 - **A converted task form drawn by the app.** Web UI's own SerialDocumentReview task layouts,
   converted with the variables schemas the reference server holds for them, gave
   `tasks/SerialDocumentReview.Task6d8.layout.json`. Served with `config:dev`, the app's task
@@ -1615,6 +1705,40 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     before the fix and failed there. A second round confirmed the twelve fixed and found two more,
     fixed the same way: a card whose queue a search screen took was held to that screen's queue,
     and two files' unnamed buttons shared an action id.
+  - **For what M2 left over, 52 guards**, broken one at a time by a script kept outside the
+    repository that runs the specs meant to catch each and restores the file, each seen turning
+    them red:
+    - **The listing's reading:** a named parameter refused, a parameter bound otherwise refused,
+      the open record as `ecm:uuid`, a record's property as itself; what else the page holds, one
+      page provider, one table and a provider named, each refused; an unread sort refused; the grid
+      view, a page size and a column left out, each said; an inner condition that does not convert
+      refused, and the card under the one that does; the page named by the element it stamps, a
+      condition stamping in place, and the page's conditions around that element.
+    - **Columns and tables:** no record in a queue; a property another column shows; a column whose
+      condition does not convert left out, and one that converts under its rule; a table's
+      condition on a document; the queue under its table's rule; a conditional table owning its
+      queue only with a rule on the user; a card reported for a column left out.
+    - **The dashboard and the decisions:** the tasks card converted; the recent card proposed, and
+      written only once accepted; accepting what a card proposes; a changed proposal decided again;
+      the card's verdict given to the converter and the checks.
+    - **Forms:** edit in version 2; a version 1 field under a condition left out; a condition
+      nothing carries reported when nothing it guards waits.
+    - **The checks:** check 7's tasks of every workflow, a recent card no one accepted, a home card
+      missing, the listing's page provider, parameters, sort and page size, and a related card no
+      tab gives; check 2's listing tab missing, a card beside it, its card missing and its columns;
+      check 5's listing card under its rule, a ruled column keeping it, a queue column's rule and a
+      listing card's held to their conditions, and a search queue under its table's rule; check 6's
+      listing column's label.
+
+    The first round, of 54, found seven no test reached. Four had no test: a column whose condition
+    reads a document in a queue, a property a column in no condition shows, a conditional table
+    owning its queue, and a card of tasks narrowed to one workflow; each has its test now. One
+    break was the same code another way, a record's property, and was broken again, which turned
+    the specs red. One, a page that is a layout block read as no list, could turn nothing red, as
+    the tab reads the block first: it was removed. The last, a column's conditions leaving out its
+    table's, changes nothing anything reads, since a column's rule takes its table's condition in
+    either way.
+
 - **The two counts were seen disagreeing for real.** On the sample, a viewer element writes
   `role="widget"` twice. The parser keeps one attribute; the first second count counted two
   fields. A field is an element, so the second count now counts tags marked as widgets, and a
@@ -1863,6 +1987,18 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   two, saying so; and `approve`, refused in that shell, which is no terminal, with nothing written.
   The packages' bytes were the same after every run. No real package was run, and no reviewer
   approved a report by hand.
+- **End to end, for what M2 left over, in a shell,** on the made-up packages, 27 November 2026:
+  `migrate` of Acme-Claims with M2's corpus and its leftovers, with the allow-list, which passed
+  checks 1, 2, 4, 8, 9 and 10, ran 3, 5, 6 and 7 in part, and left three proposals waiting, the
+  recently viewed card's among them, and nothing pending; its decisions filled in and the
+  proposals accepted, and run again with `--from`, which carried all 74 decisions, wrote the card
+  of recent records into `home.json`, and left nothing in the way but the approval; the proposals
+  rejected, which wrote none of them, and left the two fields they guard reported for decisions of
+  their own; the three made-up packages, with and without M2's corpus and its leftovers, in one
+  run, filled in, and run again with `--from`, each carrying its own decisions, with nothing in the
+  way but the approval. Each of the seven controls of the leftovers was applied with `mutate` to
+  that conversion, written to disk, and `check` failed the check it names. The packages' bytes
+  were the same after every run. No real package was run.
 
 ## Not done yet
 
@@ -1894,14 +2030,25 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   a made-up package; not fixed here, and the playbook names it.
 - **The rest of M3, the code track** (above): real packages' elements, the observed behaviour read
   from Web UI, a plugin's placement, run-time loading after decision 5, and other languages.
-- **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
-  screen's table. The server half of check 5 needs the migration server.
-- **Version 2 forms.** The app now draws `edit` and `create` files of version 2 (layout-v2.md,
-  section 11), and the converter still writes version 1 there, so a field, or a layout block,
-  under a condition in a form stays pending. Writing those modes in version 2 is the next step.
-- **A tab's listing.** A tab whose page is a page provider and a table, rather than a layout block,
-  is reported: section 3's "a list over the page provider" would be a card of related records
-  (layout-v2.md, section 7), and is not written yet.
+- **Conditions that do not travel:** on a field or a block of the `metadata` layout, which the app
+  reads in version 1 alone, and on a list's column or a search screen's table where the rule reads
+  a document, as no record is open in a queue: each is reported. The server half of check 5 needs
+  the migration server.
+- **A condition in a column's template** is read as the column's: in Web UI it hides that
+  column's cells, and its heading stays for everyone; the app shows the whole column only to those
+  its rule passes for.
+- **A tab whose page is a list, as Studio writes one.** No package in hand shows it, nor how a page
+  passes the open record to its page provider: the converter reads the made-up corpus's form,
+  `params='{"queryParams": "[[document.uid]]"}'`, as a dashboard card's `params` are read, and
+  refuses every other binding. Whether Polymer hands Web UI's `nuxeo-page-provider` the record's id
+  so is not checked. A card of related records is never given **New**, `create`.
+- **What a column's template holds** beyond the value it shows, such as a button, is read for its
+  widget only, as a queue's column is.
+- **The converted forms in the app.** The `edit` and `create` files of version 2 were held to the
+  validator and the harness, and not drawn by the app from a conversion.
+- **What the listing and column checks share with the converter:** `columnPlans`, `tableGuard`
+  and `listingPlan` decide which columns, tables and listings carry which rule, and checks 2, 5,
+  6 and 7 read the same answer, as below.
 - **Web UI's own contributions.** The slot registration sees the package's contributions only.
   One that shares its name with a contribution of Web UI's own replaces it in Web UI, and the app
   keeps its own; a list of Web UI's contributions, by slot and name, would let the converter report
@@ -1938,7 +2085,9 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     (`HOME_QUEUE_LINK` in `libs/shared/home`). Every card M1 writes is one, because Web UI's
     dashboard shows a list where `home.json` would show a figure, and M1 invents no figure.
 
-  The tasks and recently viewed cards wait for card kinds of their own.
+  The tasks card is a card of the person's tasks, which the app draws, and the recently viewed
+  card's proposal, once accepted, a card of their recent records, which it draws too: neither is
+  a link to a queue.
 
 - **A search form.** A queue has none, so a search screen's form and its fields are reported.
 - **Web UI's own label keys.** A dashboard card's heading and its columns are Web UI's translation
@@ -1988,7 +2137,8 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   - **the script Studio generates for a task layout**, whose shape the catalogue does not know, so
     each such script is customer code, reported, until it does;
   - **what Studio Designer writes for a tab:** its item and page, and whether the page is a layout
-    block or an element of its own;
+    block, a list or an element of its own, and how a list's page provider is given the open
+    record;
   - the elements, slots and widgets they use that the catalogue does not know yet;
   - Studio's forms of condition, for M2 and check 5;
   - operation buttons with parameters, for actions and check 7;
