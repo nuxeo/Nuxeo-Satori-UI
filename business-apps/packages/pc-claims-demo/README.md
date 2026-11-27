@@ -713,7 +713,16 @@ candidate. Items the moves kit raised that are fixed now are at the end.
     contribution goes and how `--registered` holds it are only in the connectors README. Candidate:
     a bullet in the skill's step 2, and one in step 3 for `--registered`.
 14. **Dev mode shows a demo kit's shell, not its pages** (the tutorial's item 8, still), and the
-    preview needs a person signed in: no page of this kit was seen.
+    preview needs a person signed in: no page of this kit was seen. **Since fixed:**
+    `npm run kit:stand-in` answers the kit's model, records and page providers from its own files,
+    between the dev server and the local Nuxeo, read-only, and `preview_package` gives its commands
+    ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md#a-demo-kits-pages-in-dev-mode)).
+    Seen that way on 27 November 2026, as the local Nuxeo's guest: the home's two open-claims
+    figures, the open claims queue with its four facets, PC-24003's page with its late-report
+    banner and its policy, and POL-PC-1001's with its two claims. Not answered, HTTP 501, since
+    `EXPECTED` does not list them: the mail capture's `pc_capture_review` and `pc_claim_mail`, so
+    the "Mail to confirm" figure and queue and a claim's mail list show their error. The
+    `external` card's connector is the server's, and is not shown either.
 15. **Nothing in the repository connects an agent to the MCP server without registering it** in
     the person's Claude configuration (the moves kit's item 14, still): this run used a client of
     its own, outside the repository.
