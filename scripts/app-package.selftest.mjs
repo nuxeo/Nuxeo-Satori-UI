@@ -1709,6 +1709,244 @@ expectBuilt('BETWEEN with literal bounds, and a comparison written in CDATA', ({
   }
 }
 
+// What a rule, a computation or a check reads of the open record is a property of its type, held
+// to the content model as a field is: a banner whose rule names a property the type lacks would
+// never show, as the P&C kit's late-report banner on pclaim:reportedDate would not have.
+const CASE = 'bundle/agentic-ui-config/layouts/Case/view.layout.json';
+expectRefused(
+  "a banner's rule naming a property its type does not have",
+  ({ edit }) =>
+    edit(
+      CASE,
+      '"parameters": [{ "field": "case:state" }, "decided", "closed"]',
+      '"parameters": [{ "field": "case:status" }, "decided", "closed"]',
+    ),
+  2,
+  '"case:status" is not a property of the type "Case" or of its facets, so the rule naming it reads nothing [unknown]',
+);
+expectRefused(
+  'a computation naming a property its type does not have',
+  ({ edit }) =>
+    edit(
+      MEMBER,
+      '"parameters": [{ "field": "member:birthDate" }]',
+      '"parameters": [{ "field": "member:birthdate" }]',
+    ),
+  2,
+  'layouts/Member/view.layout.json: cards[0].fields[1].computed.parameters[0].field: "member:birthdate" is not a property of the type "Member" or of its facets, so the computation naming it reads nothing [unknown]',
+);
+
+// A kit's names are compared with the other kits' when it is built, as the release candidate's
+// stage 3 compares them, so that a queue id another kit has is found at the write, not at the
+// candidate (the P&C kit's open-claims, the moves kit's too). The repository's kits by default,
+// for a kit among them; the folder --kits names otherwise.
+const KITS = join(REPO, 'business-apps', 'packages');
+expectBuilt(
+  "the kit compared with the repository's other kits, none of whose names it has",
+  unchanged,
+  ['--kits', KITS],
+  'other kits in ',
+);
+expectRefused(
+  'a kit beside a copy of itself, which has every name it has',
+  ({ directory }) => {
+    const kits = join(dirname(directory), 'kits');
+    cpSync(directory, join(kits, 'payers-copy'), { recursive: true });
+  },
+  2,
+  'bundle/agentic-ui-config/app.json: app id "payers-claims": payers-copy contributes it too [clash]',
+  (scratch) => ['--kits', join(scratch, 'kits')],
+);
+expectRefused(
+  "a queue id another kit's queue has",
+  ({ directory }) => {
+    const other = join(dirname(directory), 'kits', 'other-kit');
+    mkdirSync(join(other, 'bundle', 'agentic-ui-config', 'queues'), { recursive: true });
+    mkdirSync(join(other, 'bundle', 'META-INF'), { recursive: true });
+    mkdirSync(join(other, 'package'), { recursive: true });
+    writeFileSync(
+      join(other, 'package', 'package.xml'),
+      '<package type="addon" name="other-kit" version="1.0.0"></package>\n',
+    );
+    writeFileSync(join(other, 'bundle', 'META-INF', 'MANIFEST.MF'), 'Manifest-Version: 1.0\n');
+    writeFileSync(
+      join(other, 'bundle', 'agentic-ui-config', 'app.json'),
+      '{ "version": 2, "id": "other", "label": "Other" }\n',
+    );
+    writeFileSync(
+      join(other, 'bundle', 'agentic-ui-config', 'queues', 'unassigned-claims.json'),
+      '{ "version": 2 }\n',
+    );
+  },
+  2,
+  'bundle/agentic-ui-config/queues/unassigned-claims.json: queue "unassigned-claims": other-kit contributes it too [clash]',
+  (scratch) => ['--kits', join(scratch, 'kits')],
+  { never: 'app id "payers-claims"' },
+);
+expectRefused(
+  "a label key of another kit's own",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['moves.app'] = 'Moves';
+    }),
+  2,
+  'bundle/agentic-ui-config/labels/en.json: labels["moves.app"]: the label key is moves-demo\'s too',
+  ['--kits', KITS],
+);
+expectBuilt(
+  "a label key another kit has, begun with neither kit's app: one the platform reads by a pattern",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['document-layouts.timeline.event.afterSetLegalHold'] = 'Put on legal hold';
+    }),
+  ['--kits', KITS],
+  'other kits in ',
+);
+expectBuilt(
+  "a platform's label key another kit gives a text too: a layout.field key, and one of the catalogue's",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['layout.field.files:files'] = 'Attachments';
+    }),
+  ['--kits', KITS],
+  'other kits in ',
+);
+
+// A kit's own connector, in connectors/ beside its bundle, as app-connector writes it: the pipeline
+// reads it, holds it to the add-on's rules and the kit's own model, and holds each external card
+// that names it to its fields and its types, as --registered holds a card to a server's
+// connectors. The P&C kit's card and contribution agreed only because its own controls held them
+// to each other (P&C kit feedback, item 3).
+{
+  const PC = join(REPO, 'business-apps', 'packages', 'pc-claims-demo');
+  const SETTING = 'nuxeo.agentic.connectors.pcclaims.policyPayments';
+  const FIELDS = [
+    'policyStatus',
+    'policyNumber',
+    'deductibleMet',
+    'paymentStatus',
+    'paidAmount',
+    'paidOn',
+    'paymentReference',
+  ];
+  const contribution = ({
+    type = 'PropertyClaim',
+    key = 'pclaim:number',
+    fields = FIELDS,
+    address = `<address property="${SETTING}.address" />`,
+  } = {}) => `<?xml version="1.0"?>
+<!-- The P&C kit's connector, as app-connector writes it, for these controls. -->
+<component name="nuxeo.config.pc-claims-demo.connectors" version="1.0">
+  <require>org.nuxeo.agentic.connectors</require>
+  <extension target="org.nuxeo.agentic.connectors" point="connectors">
+    <connector id="pcclaims.policyPayments">
+      <type>${type}</type>
+      ${address}
+      <path>/claims/{key}</path>
+      <key xpath="${key}" />
+      <permission>Read</permission>
+      <credential header="Authorization" prefix="Bearer " property="${SETTING}.token"
+                  env="NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN" />
+${fields.map((field) => `      <field name="${field}" pointer="/${field}" />`).join('\n')}
+    </connector>
+  </extension>
+</component>
+`;
+  const withConnector = (what, xml, expected) => {
+    expected === null ? positive++ : negative++;
+    const scratch = mkdtempSync(join(tmpdir(), 'app-package-pc-'));
+    const directory = join(scratch, 'pc-claims-demo');
+    cpSync(PC, directory, { recursive: true, filter: (path) => basename(path) !== 'dist' });
+    try {
+      mkdirSync(join(directory, 'connectors'));
+      writeFileSync(join(directory, 'connectors', 'pc-claims-demo-connectors-config.xml'), xml);
+      const { status, output } = run(directory, join(scratch, 'out'));
+      const problems = [];
+      if (expected === null) {
+        if (status !== 0) problems.push(`exit ${status}, not 0`);
+      } else {
+        if (status !== 1) problems.push(`exit ${status}, not 1`);
+        if (!output.includes('step 2 refused it')) problems.push('not refused at step 2');
+        if (!output.includes(expected)) problems.push(`no "${expected}"`);
+      }
+      if (problems.length > 0)
+        failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  };
+  withConnector(
+    'the P&C kit with its connector beside its bundle, which its card reads',
+    contribution(),
+    null,
+  );
+  withConnector(
+    "an external card naming a field its kit's connector does not return",
+    contribution({ fields: FIELDS.filter((field) => field !== 'paymentReference') }),
+    'layouts/PropertyClaim/view.layout.json: cards[3].external.fields[6].name: the connector "pcclaims.policyPayments" (connectors/pc-claims-demo-connectors-config.xml) does not return the field "paymentReference"',
+  );
+  withConnector(
+    'an external card on a type its connector does not read',
+    contribution({ type: 'PropertyPolicy' }),
+    'cards[3].external.connector: the connector "pcclaims.policyPayments" (connectors/pc-claims-demo-connectors-config.xml) reads PropertyPolicy, not "PropertyClaim", so the card shows nothing',
+  );
+  withConnector(
+    'a connector keyed on a property its type does not have',
+    contribution({ key: 'pclaim:numero' }),
+    'connectors.pcclaims.policyPayments.key: "pclaim:numero" is not a property of the type "PropertyClaim" or of its facets, so the connector has no key to read [unknown]',
+  );
+  withConnector(
+    'a connector holding its address',
+    contribution({ address: '<address>https://core.example.test</address>' }),
+    'connectors.pcclaims.policyPayments: holds an address: a connector names the server property its address is in, never the address [structure]',
+  );
+  // The add-on's own rules, as Connector.of holds them: each break, which the add-on would refuse.
+  const broken = (from, to) => {
+    const xml = contribution();
+    if (!xml.includes(from))
+      throw new Error(`the connector control's edit does not apply: ${from}`);
+    return xml.replace(from, to);
+  };
+  withConnector(
+    "a credential from one of the server's own settings for the connector, two names down",
+    broken(`property="${SETTING}.token"`, `property="${SETTING}.events.secret"`),
+    `connectors.pcclaims.policyPayments.credential: its property is one of the connector's own, ${SETTING}.<name>, one name`,
+  );
+  withConnector(
+    "a credential from an environment variable of two names, which another connector's could be",
+    broken(
+      'NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN',
+      'NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_VENDOR_TOKEN',
+    ),
+    'connectors.pcclaims.policyPayments.credential: its environment variable is one of the connector',
+  );
+  withConnector(
+    'a credential sent in a header that changes how the request goes',
+    broken('header="Authorization"', 'header="Content-Type"'),
+    'connectors.pcclaims.policyPayments.credential: a credential is sent in a header such as Authorization',
+  );
+  withConnector(
+    'a path with a query',
+    broken('<path>/claims/{key}</path>', '<path>/claims/{key}?all=1</path>'),
+    'connectors.pcclaims.policyPayments.path: a connector has one <path>',
+  );
+  withConnector(
+    "a timeout past the add-on's",
+    broken(
+      '<permission>Read</permission>',
+      '<permission>Read</permission>\n      <timeout>999999</timeout>',
+    ),
+    'connectors.pcclaims.policyPayments.timeout: <timeout> is one whole number from 100 to 30000',
+  );
+  withConnector(
+    "a connector whose address is another connector's setting",
+    contribution({
+      address: '<address property="nuxeo.agentic.connectors.payers.claimPayments.address" />',
+    }),
+    `connectors.pcclaims.policyPayments.address: its property is one of the connector's own, ${SETTING}.<name>, one name`,
+  );
+}
+
 // A `document-link`'s `show` names a property of the types it links to (layout-v2.md, section 12):
 // the claim's move's customer, misspelt, is refused against the kit's own model, naming the type.
 {

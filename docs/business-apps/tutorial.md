@@ -987,9 +987,10 @@ digest it had.
   refuses it ([package-pipeline.md](package-pipeline.md), section 4).
 - **Never weaken a check to pass.** A refusal is fixed in the package.
 - **What it does not check yet:** that a page provider exists, a facet on a page provider of the
-  server's, a queue's or a related list's columns and sorts on a page provider of the server's, the
-  properties a rule or a computation names, and whether NXQL the check of its tokens passes will
-  run. Read those against the model, and the server, yourself.
+  server's, a queue's or a related list's columns and sorts on a page provider of the server's, and
+  whether NXQL the check of its tokens passes will run. Read those against the model, and the
+  server, yourself. Given a model, the properties a rule, a computation or a check names are held
+  to the type, as fields are.
 
 ## Step 9. Preview in dev mode
 

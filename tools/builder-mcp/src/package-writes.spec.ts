@@ -55,7 +55,9 @@ function chmodAll(folder: string): void {
   }
 }
 
-const OPTIONS: WriteOptions = { packageRoots: [packages], workIn: work };
+// Several copies of one kit share the scratch root, so their names are compared with no other
+// kit's here: the comparison has tests of its own, each in a root of its own.
+const OPTIONS: WriteOptions = { packageRoots: [packages], workIn: work, kits: null };
 const CONFIG = 'bundle/agentic-ui-config';
 const LABELS = `${CONFIG}/labels/en.json`;
 const QUEUE = `${CONFIG}/queues/up-for-renewal.json`;
@@ -147,8 +149,12 @@ describe('fileKind', () => {
       'bundle/META-INF/MANIFEST.MF',
       'bundle/OSGI-INF/contracts-demo-config.xml',
       'bundle/schemas/contract.xsd',
+      'connectors/contracts-demo-connectors-config.xml',
     ])
       expect(fileKind(path), path).toBe('generated');
+    // A connector component is app-connector's, at its one place: no other file there.
+    expect(fileKind('connectors/notes.xml')).toHaveProperty('problem');
+    expect(fileKind('connectors/deep/x-connectors-config.xml')).toHaveProperty('problem');
   });
 
   it('refuses every other path, naming why', () => {
@@ -370,6 +376,31 @@ describe('writePackage, refusing before anything runs', () => {
     // The control: a JSON file inside the repository is taken, and the generator is reached.
     expect(await run('package.json')).toBe('a generator ran');
     rmSync(join(scratch, 'model.json'));
+  });
+
+  it('refuses to remove app.json, a generated file, or a path outside the app definition', async () => {
+    const root = kit('contracts-demo', 'remove-refused');
+    const remove = (path: string) =>
+      writePackage({ package: root, changes: [{ kind: 'remove', path }] }, NEVER);
+    await expect(remove(`${CONFIG}/app.json`)).rejects.toThrow('is the app itself');
+    await expect(remove('bundle/OSGI-INF/contracts-demo-config.xml')).rejects.toThrow(
+      'is written by the generators only, and taken out by them',
+    );
+    await expect(remove('build.mjs')).rejects.toThrow('is written by the generators only');
+    await expect(remove('../contracts-demo/README.md')).rejects.toThrow('leaves the package');
+    await expect(remove('demo/seed.mjs')).rejects.toThrow('is code');
+  });
+
+  it('refuses to remove a file the package does not hold, before the pipeline runs', async () => {
+    const root = kit('contracts-demo', 'remove-missing');
+    const before = fingerprint(root);
+    await expect(
+      writePackage(
+        { package: root, changes: [{ kind: 'remove', path: `${CONFIG}/queues/none.json` }] },
+        NEVER,
+      ),
+    ).rejects.toThrow('is not a file of');
+    expect(fingerprint(root)).toEqual(before);
   });
 
   it('refuses a package that does not exist, unless app-package makes it', async () => {
@@ -614,6 +645,131 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       ]);
       expect(read(root, 'bundle/OSGI-INF/contracts-demo-config.xml')).toContain(
         'queues/all-contracts.json',
+      );
+    });
+
+    it('removes a file the component names, with app-registry, once nothing else names it', async () => {
+      const root = kit('contracts-demo', 'remove-queue');
+      const before = fingerprint(root);
+      const component = 'bundle/OSGI-INF/contracts-demo-config.xml';
+      // The menu and the home still open it: refused, and nothing changes.
+      const named = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: QUEUE },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expectRefused(named, root, before);
+      expect(named.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: QUEUE, change: 'removed' },
+      ]);
+      expect(named.validation?.findings.map((finding) => finding.file)).toContain(
+        `${CONFIG}/navigation.json`,
+      );
+      // Given another id: the old file removed, the new one and the two that open it written.
+      const queue = `${CONFIG}/queues/renewals-due.json`;
+      const renamed = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: QUEUE },
+            { kind: 'write', path: queue, content: read(root, QUEUE) },
+            {
+              kind: 'write',
+              path: `${CONFIG}/navigation.json`,
+              content: edited(
+                root,
+                `${CONFIG}/navigation.json`,
+                '"up-for-renewal"',
+                '"renewals-due"',
+              ),
+            },
+            {
+              kind: 'write',
+              path: `${CONFIG}/home.json`,
+              content: edited(root, `${CONFIG}/home.json`, '"up-for-renewal"', '"renewals-due"'),
+            },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expect(renamed.written, JSON.stringify(renamed.validation?.stdout)).toBe(true);
+      expect(renamed.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: `${CONFIG}/home.json`, change: 'updated' },
+        { path: `${CONFIG}/navigation.json`, change: 'updated' },
+        { path: queue, change: 'created' },
+        { path: QUEUE, change: 'removed' },
+      ]);
+      expect(existsSync(join(root, ...QUEUE.split('/')))).toBe(false);
+      expect(read(root, component)).toContain('queues/renewals-due.json');
+      expect(read(root, component)).not.toContain('queues/up-for-renewal.json');
+    });
+
+    it('removes a layout, and app-registry takes it out of the component', async () => {
+      const root = kit('contracts-demo', 'remove-layout');
+      const edit = `${CONFIG}/layouts/Contract/edit.layout.json`;
+      const component = 'bundle/OSGI-INF/contracts-demo-config.xml';
+      expect(read(root, component)).toContain('mode="edit"');
+      const result = await writePackage(
+        {
+          package: root,
+          changes: [
+            { kind: 'remove', path: edit },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+        OPTIONS,
+      );
+      expect(result.written, JSON.stringify(result.validation?.stdout)).toBe(true);
+      expect(result.changes).toEqual([
+        { path: component, change: 'updated' },
+        { path: edit, change: 'removed' },
+      ]);
+      expect(read(root, component)).not.toContain('mode="edit"');
+      expect(result.generatorOutput.join('\n')).toContain(
+        'No longer contributes the layouts, whose files are gone: Contract/edit',
+      );
+    });
+
+    it("compares the package's names with the other kits in its root, and refuses a clash", async () => {
+      const own = mkdtempSync(join(scratch, 'kits-'));
+      const at = (name: string) => {
+        cpSync(join(KITS, 'contracts-demo'), join(own, name), {
+          recursive: true,
+          filter: (source) => relative(join(KITS, 'contracts-demo'), source) !== 'dist',
+        });
+        return join(own, name);
+      };
+      const root = at('contracts-a');
+      const options: WriteOptions = { packageRoots: [own], workIn: work };
+      const content = edited(root, LABELS, '"Contract manager"', '"Account manager"');
+      // Alone in its root, the write passes; beside a copy of itself, every name is the copy's.
+      const alone = await writeFile(root, LABELS, content, options);
+      expect(alone.written, JSON.stringify(alone.validation?.stdout)).toBe(true);
+      expect(alone.validation?.stdout.join('\n')).toContain('Compared with the 0 other kits in');
+      at('contracts-b');
+      const before = fingerprint(root);
+      const beside = await writeFile(
+        root,
+        LABELS,
+        edited(root, LABELS, '"Account manager"', '"Contract owner"'),
+        options,
+      );
+      expectRefused(beside, root, before);
+      expect(beside.validation?.findings).toContainEqual(
+        expect.objectContaining({
+          file: `${CONFIG}/queues/up-for-renewal.json`,
+          place: 'queue "up-for-renewal"',
+          message: 'contracts-b contributes it too',
+          kind: 'clash',
+        }),
       );
     });
 
@@ -1028,6 +1184,115 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       );
       expect(existsSync(join(pkg, 'dist'))).toBe(false);
       expect((await validatePackage({ directory: pkg }, { roots: [packages] })).passed).toBe(true);
+    });
+
+    it('makes a demo kit with a checklist, a facet, a type with no schema of its own and a register, none by hand', async () => {
+      const pkg = join(packages, 'acme-onboard');
+      const model = `${pkg}/content-model.json`;
+      const view = `${CONFIG}/layouts/Customer/view.layout.json`;
+      const generator = (name: string, options: Record<string, unknown>): Change => ({
+        kind: 'generator',
+        generator: name,
+        options,
+      });
+      const result = await writePackage(
+        {
+          package: pkg,
+          changes: [
+            generator('app-package', { owner: 'acme', title: 'Acme Onboarding' }),
+            generator('app-model', {
+              type: 'Customer',
+              properties: 'number,status=Open|Done,steps:checklist,account:document',
+              facets: 'Versionable',
+              attachments: true,
+            }),
+            generator('app-model', { type: 'Request', schemaless: true, facets: 'Versionable' }),
+            generator('app-model', {
+              type: 'CustomerRegister',
+              folder: true,
+              subtypes: 'Customer,Request',
+            }),
+            generator('app-layout', { type: 'Customer', model }),
+          ],
+        },
+        OPTIONS,
+      );
+      expect(result.written, JSON.stringify(result.validation?.stdout ?? result)).toBe(true);
+      const described = JSON.parse(read(pkg, 'content-model.json'));
+      expect(Object.keys(described.doctypes)).toEqual(['Customer', 'Request', 'CustomerRegister']);
+      // The checklist card on the generated record page, held to the property's shape.
+      const page = JSON.parse(read(pkg, view));
+      // Another record's id, which app-layout shows as a link from the model alone.
+      expect(read(pkg, view)).toContain(
+        '{ "field": "customer:account", "widget": "document-link" }',
+      );
+      page.cards.push({
+        id: 'steps',
+        label: 'Steps',
+        checklist: {
+          field: 'customer:steps',
+          tickable: true,
+          items: [{ id: 'identity', label: 'Identity checked' }],
+        },
+      });
+      const card = await writeFile(pkg, view, `${JSON.stringify(page, null, 2)}\n`);
+      expect(card.written, JSON.stringify(card.validation?.stdout)).toBe(true);
+      // On a property that is not a checklist's entries, the same card is refused.
+      page.cards[page.cards.length - 1].checklist.field = 'customer:status';
+      const wrong = await writeFile(pkg, view, `${JSON.stringify(page, null, 2)}\n`);
+      expect(wrong.written).toBe(false);
+      expect(wrong.validation?.findings.map((finding) => finding.message).join('\n')).toContain(
+        'a checklist reads a list of complex values',
+      );
+    });
+
+    it("writes a kit's connector, and holds its external card to the fields it returns", async () => {
+      const root = kit('pc-claims-demo', 'connector');
+      const connector = 'connectors/pc-claims-demo-connectors-config.xml';
+      const options = (fields: string) => ({
+        id: 'pcclaims.policyPayments',
+        type: 'PropertyClaim',
+        key: 'pclaim:number',
+        path: '/claims/{key}',
+        fields,
+      });
+      const all =
+        'policyStatus=/policy/status,policyNumber=/policy/number,deductibleMet=/policy/deductibleMet,' +
+        'paymentStatus=/payment/status,paidAmount=/payment/amount,paidOn=/payment/paidOn,paymentReference=/payment/reference';
+      const before = fingerprint(root);
+      // Without the reference the card shows, refused, and nothing written.
+      const short = await writePackage(
+        {
+          package: root,
+          changes: [
+            {
+              kind: 'generator',
+              generator: 'app-connector',
+              options: options(all.replace(',paymentReference=/payment/reference', '')),
+            },
+          ],
+        },
+        OPTIONS,
+      );
+      expectRefused(short, root, before);
+      expect(short.validation?.findings).toContainEqual(
+        expect.objectContaining({
+          file: `${CONFIG}/layouts/PropertyClaim/view.layout.json`,
+          place: 'cards[3].external.fields[6].name',
+          kind: 'unknown',
+        }),
+      );
+      const written = await writePackage(
+        {
+          package: root,
+          changes: [{ kind: 'generator', generator: 'app-connector', options: options(all) }],
+        },
+        OPTIONS,
+      );
+      expect(written.written, JSON.stringify(written.validation?.stdout)).toBe(true);
+      expect(written.changes).toEqual([{ path: connector, change: 'created' }]);
+      expect(read(root, connector)).toContain('<key xpath="pclaim:number" />');
+      expect(read(root, connector)).not.toMatch(/https?:/);
     });
 
     it("makes a new package on a server's model in one generator, the model a file in the repository", async () => {

@@ -316,13 +316,18 @@ earlier under its id stays. A later contribution with the same id replaces it wh
 **Not done here:** the Payers kit's files are not touched. To show its claims' payments, the kit
 would:
 
-1. **Contribute the connector** in its bundle: a component like
-   `demo/payers-claim-payments-config.xml`, say `bundle/OSGI-INF/payers-claims-demo-connectors.xml`,
-   named in the bundle's `MANIFEST.MF`, with `<require>org.nuxeo.agentic.connectors</require>`.
+1. **Contribute the connector** with the Builder kit's write tools, `app-connector`, which writes
+   it beside the bundle, `connectors/<package>-connectors-config.xml`: a component like
+   `demo/payers-claim-payments-config.xml`, with `<require>org.nuxeo.agentic.connectors</require>`,
+   for a server that has the add-on to take in `nxserver/config/`. Not in the bundle, until the
+   add-on has a package: carried by it, the component would stay pending on a server without the
+   add-on. Once it has one, the bundle can carry it, named in its `MANIFEST.MF`.
 2. **Depend on the add-on's package** in `package/package.xml`, once it has one (below).
 3. **Add the card** to `layouts/Claim/view.layout.json`, as `demo/Claim.view.layout.json`'s
    `payment` card does, with a `labelKey` and its label in `labels/en.json`.
-4. **List the connector for the pipeline**, so that the card's fields are held to the allow-list:
+4. **Nothing to list for the pipeline:** it reads the kit's `connectors/`, and holds each card
+   naming one of them to its fields and types (`docs/business-apps/package-pipeline.md`, section
+   2). A card on a connector the server registers, and not the kit, is held to it with
    `npm run app-package -- business-apps/packages/payers-claims-demo --registered <a file like demo/registered.json>`.
 5. **Say in its README** which server properties each server sets: the address, the credential,
    the time to live and the events secret if it uses them, and, on a demo server only,

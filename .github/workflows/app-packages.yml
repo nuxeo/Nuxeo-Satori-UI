@@ -55,6 +55,8 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      # Step 2 compares a kit's names with the other kits' through the release candidate's reader.
+      - 'scripts/release-candidate-set.mjs'
       # What signs and verifies a zip, and who may sign one.
       - 'scripts/package-signature.mjs'
       - 'scripts/app-package-signature.mjs'
@@ -90,6 +92,8 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      # Step 2 compares a kit's names with the other kits' through the release candidate's reader.
+      - 'scripts/release-candidate-set.mjs'
       # What signs and verifies a zip, and who may sign one.
       - 'scripts/package-signature.mjs'
       - 'scripts/app-package-signature.mjs'
