@@ -1690,7 +1690,7 @@ expectRefused(
       "ecm:primaryType = 'Claim' AND claims:adjuster IS NULL",
     ),
   2,
-  'pageProviders.payers_unassigned_claims.whereClause.fixedPart: "claims:adjuster": no schema of the content model is written "claims:"',
+  'pageProviders.payers_unassigned_claims.whereClause.fixedPart: "claims:adjuster": no schema of the content model is written "claims:", by its prefix or its name, and "claim:" is: a misspelling, which Nuxeo refuses [unknown]',
 );
 expectRefused(
   "a page provider's NXQL naming a property of another type than the one it lists",
@@ -1712,7 +1712,7 @@ expectRefused(
       "ecm:primaryType IN ('Claim', 'Claims') AND claim:member = ?",
     ),
   2,
-  'pageProviders.member_claims.pattern: the type "Claims" is not in the content model, nor one of Nuxeo\'s own',
+  'pageProviders.member_claims.pattern: the type "Claims" is not in the content model, and "Claim" is: a misspelling, so the query lists no record of it [unknown]',
 );
 expectRefused(
   "a page provider's NXQL naming a facet the model does not have",
@@ -1720,10 +1720,10 @@ expectRefused(
     edit(
       PAYERS_MODEL,
       "ecm:primaryType = 'Claim' AND claim:member = ?",
-      "ecm:primaryType = 'Claim' AND claim:member = ? AND ecm:mixinType != 'HiddenInNav'",
+      "ecm:primaryType = 'Claim' AND claim:member = ? AND ecm:mixinType != 'HidenInNavigation'",
     ),
   2,
-  'pageProviders.member_claims.pattern: the facet "HiddenInNav" is not in the content model, nor one of Nuxeo\'s own, so no record has it [unknown]',
+  'pageProviders.member_claims.pattern: the facet "HidenInNavigation" is not in the content model, and "HiddenInNavigation" is: a misspelling, so no record has it [unknown]',
 );
 expectRefused(
   "a page provider's sort on a property the model does not have",
@@ -1738,14 +1738,36 @@ expectRefused(
   2,
   'pageProviders.payers_unassigned_claims.aggregates.claim_status_agg.parameter: "claim:state" is not a property of the schema "claim"',
 );
-// The controls on those: Nuxeo's own facets and the server's own properties pass; and a package
-// held to no model, here the Payers kit without its content-model.json, has nothing to hold its
-// page providers to.
+expectRefused(
+  "a where clause's predicate comparing a property the model does not have",
+  ({ edit }) =>
+    edit(
+      PAYERS_MODEL,
+      "        <fixedPart>\n          ecm:primaryType = 'Claim' AND claim:adjuster IS NULL",
+      '        <predicate parameter="claim:numbr" operator="=">\n' +
+        '          <field schema="payers_claim_search" name="claim_status_agg" />\n' +
+        '        </predicate>\n' +
+        "        <fixedPart>\n          ecm:primaryType = 'Claim' AND claim:adjuster IS NULL",
+    ),
+  2,
+  'pageProviders.payers_unassigned_claims.whereClause.predicates[0].parameter: "claim:numbr" is not a property of the schema "claim"',
+);
+// The controls on those: Nuxeo's own facets and the server's own properties pass, and so do an
+// add-on's type, facet and schema that are near none the model or Nuxeo's lists have, which a
+// stand-in model does not describe; and a package held to no model, here the Payers kit without
+// its content-model.json, has nothing to hold its page providers to.
 expectBuilt("a page provider naming Nuxeo's own facet and the server's properties", ({ edit }) =>
   edit(
     PAYERS_MODEL,
     "ecm:primaryType = 'Claim' AND claim:member = ?",
     "ecm:primaryType = 'Claim' AND claim:member = ? AND ecm:mixinType != 'HiddenInNavigation' AND ecm:currentLifeCycleState != 'deleted'",
+  ),
+);
+expectBuilt("a page provider naming an add-on's type, facet and schema", ({ edit }) =>
+  edit(
+    PAYERS_MODEL,
+    "ecm:primaryType = 'Claim' AND claim:member = ?",
+    "ecm:primaryType = 'Claim' AND claim:member = ? AND ecm:mixinType != 'ExternalSynced' AND ecm:primaryType != 'ExternalRecord' AND extsync:status IS NULL",
   ),
 );
 expectBuilt(
@@ -1764,14 +1786,15 @@ expectBuilt(
 );
 
 // A queue, a related list and a home's figure give a page provider of the package's own as many
-// parameters as its NXQL's ?, which Nuxeo fills in order: too few, and it refuses the query; too
-// many, and the last, a queue's search among them, are never read. Model or none.
+// parameters as its NXQL's ?, which Nuxeo fills in order: too few or too
+// many, and the query fails or runs otherwise than written; a queue's search is the last. Model or
+// none.
 const MY_CLAIMS = 'bundle/agentic-ui-config/queues/my-claims.json';
 expectRefused(
   'a queue giving its page provider fewer parameters than its NXQL takes',
   ({ edit }) => edit(MY_CLAIMS, '"parameters": ["$currentUser"],\n', ''),
   2,
-  'queues/my-claims.json: pageProvider: the page provider "payers_my_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 0: Nuxeo cannot fill the rest, and refuses the query [parameter]',
+  'queues/my-claims.json: pageProvider: the page provider "payers_my_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 0: with fewer, the query fails on the server, or runs otherwise than it is written [parameter]',
 );
 expectRefused(
   'a queue with a search on a page provider whose NXQL takes no more',
@@ -1782,7 +1805,7 @@ expectRefused(
       '"parameters": ["$currentUser"],\n  "search": { "label": "Claim number" },',
     ),
   2,
-  'queues/my-claims.json: parameters: the page provider "payers_my_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 2, its search\'s text last: the last are never read, so a search\'s text changes nothing [parameter]',
+  'queues/my-claims.json: parameters: the page provider "payers_my_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 2, its search\'s text last: with more, the query fails on the server, or runs otherwise than it is written [parameter]',
 );
 expectRefused(
   'a related list giving its page provider more parameters than its NXQL takes, with no model',
@@ -1795,7 +1818,7 @@ expectRefused(
     );
   },
   2,
-  'layouts/Member/view.layout.json: cards[1].related.parameters: the page provider "member_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the related list gives 2: the last are never read [parameter]',
+  'layouts/Member/view.layout.json: cards[1].related.parameters: the page provider "member_claims" (OSGI-INF/payers-claims-demo-model.xml) takes 1 parameter, each a ? filled in order, and the related list gives 2: with more, the query fails on the server, or runs otherwise than it is written [parameter]',
 );
 
 // The vehicle kit's log (its README, "Phase 8 feedback", item 8): the two misspellings in its own

@@ -43,9 +43,10 @@ added on 25 November 2026 (section 10); its server-side half is not built.
   `&&`. A check of its tokens, not a parse: a query it passes may still be refused (section 2).
 - **What a page provider names is in the content model,** given one: each property its NXQL, its
   sorts and its aggregates name, down to a complex property's subfields, in a schema of the model,
-  and on the type its NXQL lists when it says; each type and facet its NXQL names, in the model
-  or one of Nuxeo's own. The vehicle kit's `vdocs:checklist/*/don` and `vtitle:openOn` are
-  refused here, naming the component, the page provider and the property (section 2).
+  and on the type its NXQL lists when it says; and no type, facet or prefix that the model and
+  Nuxeo's own lists lack but is a near miss of one they have. The vehicle kit's
+  `vdocs:checklist/*/don` and `vtitle:openOn` are refused here, naming the component, the page
+  provider and the property (section 2).
 - **A queue, a related list or a home's figure gives a page provider of the package's own as many
   parameters as its NXQL's `?`,** a queue's search its last, with a model or without.
 - **A queue's or a related list's columns and sorts are the listed records' properties,** when
@@ -199,32 +200,39 @@ Given a content model, the one given or a stand-in package's own (section 4), st
 each of those page providers names to it (`nxqlNameProblems` and `propertyNameProblem`, in the
 same file), so that a misspelt name is refused before a server answers the query with an error:
 
-- **Each property** its NXQL names, each `<sort column>` and each aggregate's `parameter`, by the
+- **Each property** its NXQL names, each `<sort column>`, each aggregate's `parameter` and each
+  where clause predicate's `parameter`, by the
   schema its prefix, or its name, writes, as Nuxeo finds it; then down its path: a subfield of a
   complex value, `vdocs:checklist/*/done`, and a list's items, `*`, `*1` or an index. A file's own
   parts, `files:files/*/file/name`, and a complex value whose subfields the model does not list,
   are taken as written. A finding names the property and why: the schema has no such property,
-  the entries of a list have no such subfield, no schema is written with its prefix. The vehicle
+  or the entries of a list have no such subfield. The vehicle
   kit's `vdocs:checklist/*/don` and `vtitle:openOn` passed every check before this one (its
   README, "Phase 8 feedback", items 7 and 8).
 - **On the type it lists,** when its NXQL says, as for columns: the property's schema is one of
   the type's, of a facet it declares, or of a facet of the model, which a record may be given at
   run time. Another type's property lists no record.
-- **Each type and each facet** a pattern's `FROM`, `ecm:primaryType` and `ecm:mixinType` name is
-  in the model, or one of Nuxeo's own (`NUXEO_DOCUMENT_TYPES`, `NUXEO_FACETS`): a stand-in model
-  describes only the kit's, and a server's export holds them all.
+- **A misspelt type, facet or prefix.** Each type a pattern's `FROM` lists or `ecm:primaryType`
+  is compared with, each facet `ecm:mixinType` is compared with, and each prefix a property is
+  written with, that is in neither the model nor Nuxeo's own lists (`NUXEO_DOCUMENT_TYPES`,
+  `NUXEO_FACETS` and the prefixes beside them), is refused when it is a near miss of one that is:
+  the same but for case, or one edit apart, two for a name of more than five letters, such as
+  `VehicleDeals` for `VehicleDeal` or `claims:` for `claim:`. The finding names the near one. A
+  name near none passes: it may be an add-on's that a stand-in model does not describe, such as
+  the template rendering add-on's `TemplateBased`, and the lists cannot hold every add-on.
 
 Not looked for: the server's own `ecm:` properties; a property of one of Nuxeo's own schemas the
-model does not describe, such as `file:content` against a kit's stand-in; and anything without a
-model, such as a customer's package in CI.
+model does not describe, such as `file:content` against a kit's stand-in; a list's `/*` after a
+property that is not a list; a quick filter; and anything without a model, such as a customer's
+package in CI.
 
 Step 2 also counts what fills each page provider of the package's own, model or none
 (`parameterFindings`): a queue's `parameters`, and its search's text after them, a related
 list's and a home figure's `parameters`, must be as many as the `?` of its NXQL, which Nuxeo fills
-in order. Too few, and Nuxeo has a `?` it cannot fill, and refuses the query; too many, and the
-last are never read, so a search whose page provider takes no parameter for it changes nothing.
-A page provider whose NXQL names a parameter, `:name`, is not counted, since a search document
-fills those.
+in order. Nuxeo puts each in the next `?`, so with fewer or more the query fails on the server
+or runs otherwise than it is written: a queue's search with no `?` of its own never searches. A
+page provider whose NXQL names a parameter, `:name`, which a search document fills, or holds a `?`
+in a string, which Nuxeo may count as one, is not counted.
 
 Step 2 holds a queue's columns and sort, and a related list's, to the records their page
 provider lists, given a content model: the one given, or a stand-in package's own (section 4).

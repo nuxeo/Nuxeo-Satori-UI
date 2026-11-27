@@ -175,6 +175,7 @@ describe('serverEnvironment: what call.ts starts the server with', () => {
       PATH: '/usr/bin',
       TMPDIR: '/tmp',
       LANG: 'en_US.UTF-8',
+      NODE_EXTRA_CA_CERTS: '/etc/ssl/company-ca.pem',
       // What a shell holds for other things: another service's settings, a cloud profile.
       OTHER_SERVICE_PASSWORD: 'not-for-the-server',
       AWS_PROFILE: 'default',
@@ -190,6 +191,7 @@ describe('serverEnvironment: what call.ts starts the server with', () => {
       PATH: '/usr/bin',
       TMPDIR: '/tmp',
       LANG: 'en_US.UTF-8',
+      NODE_EXTRA_CA_CERTS: '/etc/ssl/company-ca.pem',
     });
   });
 

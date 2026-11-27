@@ -10,9 +10,9 @@
  *   parse.
  * - **What its NXQL, its sorts and its aggregates name** ({@link nxqlNameProblems},
  *   {@link propertyNameProblem}): each property, down to a complex one's subfields, in a schema of
- *   the content model, and on the type it lists, when it says; each type and each facet in the
- *   model, or one of Nuxeo's own. The vehicle kit's `vdocs:checklist/*\/don` and `vtitle:openOn`
- *   passed every check before this one.
+ *   the content model, and on the type it lists, when it says; and no type, facet or schema
+ *   prefix that the model and Nuxeo's own lists lack but is a near miss of one they have. The
+ *   vehicle kit's `vdocs:checklist/*\/don` and `vtitle:openOn` passed every check before this one.
  * - **The parameters a queue, a related list or a home's figure gives it** ({@link
  *   parameterFindings}): as many as its NXQL's `?`, which Nuxeo fills in order.
  * - **A queue's and a related list's columns and sorts** ({@link listedColumnFindings}), held to
@@ -290,6 +290,8 @@ export const NUXEO_DOCUMENT_TYPES: ReadonlySet<string> = new Set([
   'TaskDoc',
   'TaskRoot',
   'TemplateRoot',
+  'TemplateSource',
+  'ThreeD',
   'UserProfile',
   'UserWorkspacesRoot',
   'Video',
@@ -327,6 +329,8 @@ export const NUXEO_FACETS: ReadonlySet<string> = new Set([
   'SuperSpace',
   'SystemDocument',
   'Task',
+  'TemplateBased',
+  'ThreeD',
   'Thumbnail',
   'Versionable',
   'Video',
@@ -371,14 +375,52 @@ const NUXEO_SCHEMA_PREFIXES: ReadonlySet<string> = new Set([
   'storyboard',
   'strb',
   'task',
+  'template',
+  'threed',
   'thumb',
   'thumbnail',
+  'tmpl',
   'uid',
+  'userprofile',
   'vid',
   'video',
   'webc',
   'webcontainer',
 ]);
+
+/**
+ * How many edits apart `a` and `b` are: a letter added, dropped or changed, or two side by side
+ * swapped.
+ */
+function editsApart(a: string, b: string): number {
+  const rows = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      rows[i][j] = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+    }
+  return rows[a.length][b.length];
+}
+
+/**
+ * The name of `known` that `name`, which is none of them, is likely a misspelling of: the same but
+ * for case, or one edit apart, two for a name of more than five letters. `null` when none is that
+ * near: then `name` may well be an add-on's that neither the model nor Nuxeo's lists here
+ * describe, and is let be.
+ */
+function nearMiss(name: string, known: Iterable<string>): string | null {
+  let best: { name: string; edits: number } | null = null;
+  for (const each of known) {
+    const edits = each.toLowerCase() === name.toLowerCase() ? 0 : editsApart(name, each);
+    if (edits <= (name.length > 5 ? 2 : 1) && (best === null || edits < best.edits))
+      best = { name: each, edits };
+  }
+  return best?.name ?? null;
+}
 
 /** A part of a property's path that steps into a list's items: `*`, `*1`, or an index. */
 const ITEM = /^(?:\*\d*|\d+)$/;
@@ -394,8 +436,10 @@ function quotedList(names: readonly string[]): string {
 /**
  * Why `xpath`, a property a page provider names as NXQL writes one (`vdocs:checklist/*\/done`,
  * `files:files/*\/file/name`), is not one of `model`, or `null` when it is, or when the model
- * cannot tell: the server's own `ecm:` properties, and one of Nuxeo's own schemas the model does
- * not describe. The schema is found by its prefix or its name, as Nuxeo finds it; then each part
+ * cannot tell: the server's own `ecm:` properties, one of Nuxeo's own schemas the model does not
+ * describe, and a prefix that no schema the model or Nuxeo's lists know is written with and that
+ * is near none of them (`nearMiss`), which may be an add-on's. A near miss is a misspelling, and
+ * refused. The schema is found by its prefix or its name, as Nuxeo finds it; then each part
  * of the path: a subfield of a complex value, or an item of a list. What a file holds, its name or
  * length, and a complex value whose subfields the model does not list, are taken as written.
  * Given `type`, the type the page provider lists, the property is also held to that type, its
@@ -415,9 +459,14 @@ export function propertyNameProblem(
   const schema: SchemaModel | undefined =
     [...model.schemas.values()].find((each) => each.prefix === prefix) ?? model.schemas.get(prefix);
   if (!schema) {
-    return NUXEO_SCHEMA_PREFIXES.has(prefix)
+    if (NUXEO_SCHEMA_PREFIXES.has(prefix)) return null;
+    const near = nearMiss(prefix, [
+      ...[...model.schemas.values()].flatMap((each) => [each.prefix, each.name]),
+      ...NUXEO_SCHEMA_PREFIXES,
+    ]);
+    return near === null
       ? null
-      : `"${xpath}": no schema of the content model is written "${prefix}:", by its prefix or its name, nor is it one of Nuxeo's own, so Nuxeo refuses the query`;
+      : `"${xpath}": no schema of the content model is written "${prefix}:", by its prefix or its name, and "${near}:" is: a misspelling, which Nuxeo refuses`;
   }
   let property: PropertyModel | undefined = schema.properties.get(name);
   if (!property) {
@@ -434,10 +483,10 @@ export function propertyNameProblem(
     // A file's own parts, its name, length or type, are Nuxeo's; and what a complex value holds is
     // taken as written when the model lists none of it.
     if (property.type === 'blob' || ITEM.test(part)) return null;
+    if (property.type === 'complex' && (property.fields?.size ?? 0) === 0) return null;
     if (property.type !== 'complex' || !property.fields) {
       return `"${xpath}": "${at}" is a ${propertyTypeOf(property)} property, with no subfield "${part}", so Nuxeo refuses the query`;
     }
-    if (property.fields.size === 0) return null;
     const subfield: PropertyModel | undefined = property.fields.get(part);
     if (!subfield) {
       const whose = property.list ? `the entries of "${at}" have` : `"${at}" has`;
@@ -479,9 +528,11 @@ function comparedWith(tokens: readonly NxqlToken[], at: number): NxqlToken[] {
  * What a page provider's NXQL names that the content model does not have, each said with why:
  * each property ({@link propertyNameProblem}, held to the type it lists when {@link listedType}
  * can tell); each type, in a pattern's `FROM` or compared with `ecm:primaryType`; and each facet
- * compared with `ecm:mixinType`, each in the model or one of Nuxeo's own
- * ({@link NUXEO_DOCUMENT_TYPES}, {@link NUXEO_FACETS}). What `nxqlProblems` finds is not said
- * again: a query it cannot read has nothing here.
+ * compared with `ecm:mixinType`, when it is in neither the model nor Nuxeo's own lists
+ * ({@link NUXEO_DOCUMENT_TYPES}, {@link NUXEO_FACETS}) and is a near miss of a name that is
+ * (`nearMiss`): a misspelling. One near none may be an add-on's, which a stand-in model does not
+ * describe, and is let be. What `nxqlProblems` finds is not said again: a query it cannot read has
+ * nothing here.
  */
 export function nxqlNameProblems(
   nxql: string,
@@ -497,9 +548,11 @@ export function nxqlNameProblems(
   const type = listedType(nxql, options);
   const typeProblem = (name: string, from: boolean) => {
     if (model.types.has(name) || NUXEO_DOCUMENT_TYPES.has(name)) return;
-    say(
-      `the type "${name}" is not in the content model, nor one of Nuxeo's own, so ${from ? 'Nuxeo refuses a query from it' : 'the query lists no record of it'}`,
-    );
+    const near = nearMiss(name, [...model.types.keys(), ...NUXEO_DOCUMENT_TYPES]);
+    if (near !== null)
+      say(
+        `the type "${name}" is not in the content model, and "${near}" is: a misspelling, so ${from ? 'Nuxeo refuses a query from it' : 'the query lists no record of it'}`,
+      );
   };
   tokens.forEach((token, index) => {
     if (token.kind !== 'name') return;
@@ -507,10 +560,13 @@ export function nxqlNameProblems(
       for (const value of comparedWith(tokens, index)) {
         const name = value.text.slice(1, -1);
         if (token.text === 'ecm:primaryType') typeProblem(name, false);
-        else if (!model.facets.has(name) && !NUXEO_FACETS.has(name))
-          say(
-            `the facet "${name}" is not in the content model, nor one of Nuxeo's own, so no record has it`,
-          );
+        else if (!model.facets.has(name) && !NUXEO_FACETS.has(name)) {
+          const near = nearMiss(name, [...model.facets.keys(), ...NUXEO_FACETS]);
+          if (near !== null)
+            say(
+              `the facet "${name}" is not in the content model, and "${near}" is: a misspelling, so no record has it`,
+            );
+        }
       }
       return;
     }
@@ -520,11 +576,14 @@ export function nxqlNameProblems(
     }
   });
   if (options.pattern) {
+    // The types it lists, separated by commas: what comes after, WHERE, ORDER BY or LIMIT, is not.
     const from = tokens.findIndex((token) => token.depth === 0 && keyword(token, 'FROM'));
-    for (let index = from + 1; from >= 0 && index < tokens.length; index++) {
+    for (let index = from + 1; from >= 0 && index < tokens.length; index += 2) {
       const token = tokens[index];
-      if (token.depth === 0 && (keyword(token, 'WHERE') || keyword(token, 'ORDER'))) break;
-      if (token.kind === 'name' && !token.text.includes(':')) typeProblem(token.text, true);
+      if (token.kind !== 'name' || token.text.includes(':')) break;
+      if (['WHERE', 'ORDER', 'LIMIT', 'OFFSET'].some((word) => keyword(token, word))) break;
+      typeProblem(token.text, true);
+      if (tokens[index + 1]?.text !== ',') break;
     }
   }
   return problems;
@@ -533,11 +592,24 @@ export function nxqlNameProblems(
 /**
  * How many parameters a page provider's NXQL takes, each a `?` Nuxeo fills in order with what a
  * queue, a related list or a home's figure gives it; `null` when it names one, `:name`, too, which
- * a search document fills, or when a string is left open, which `nxqlProblems` says.
+ * a search document fills, when a string holds a `?`, which Nuxeo may count as one, or when a
+ * string is left open, which `nxqlProblems` says.
  */
 export function positionalParameters(nxql: string): number | null {
   const { tokens, unclosed } = tokenize(nxql);
-  if (unclosed || tokens.some((token) => token.kind === 'parameter' && token.text !== '?'))
+  if (
+    unclosed ||
+    tokens.some(
+      (token, index) =>
+        (token.kind === 'parameter' && token.text !== '?') ||
+        // `=:name`, written against its operator, reads as the symbol `=:` and a name.
+        (token.kind === 'symbol' &&
+          token.text.endsWith(':') &&
+          tokens[index + 1]?.kind === 'name') ||
+        // Nuxeo may count a ? in a string as a parameter, and this cannot tell.
+        (token.kind === 'string' && token.text.includes('?')),
+    )
+  )
     return null;
   return tokens.filter((token) => token.kind === 'parameter').length;
 }
@@ -551,10 +623,10 @@ export interface ParameterProvider {
 
 /**
  * Each queue, related list and home figure that gives a page provider of the package's own other
- * than as many parameters as its NXQL takes: too few, and Nuxeo has a `?` it cannot fill, and
- * refuses the query; too many, and the last are never read, a queue's search among them, which
- * then finds nothing it would not list anyway. A queue's search is its last parameter, after its
- * own. `path` is the file's, inside `agentic-ui-config/`: `queues/<id>.json`, a layout, or
+ * than as many parameters as its NXQL takes. Nuxeo puts each in the next `?` of the query, so with
+ * too few or too many the query fails on the server, or runs otherwise than it is written: one
+ * written for a queue's search, which is its last parameter, after its own, and has no `?` for
+ * it, never searches. `path` is the file's, inside `agentic-ui-config/`: `queues/<id>.json`, a layout, or
  * `home.json`. A page provider not in `providers`, or whose count is `null`, is not checked; an
  * entry already malformed has its finding from the validator, and is passed over here.
  */
@@ -578,13 +650,7 @@ export function parameterFindings(
     findings.push({
       path: join(at, item['parameters'] === undefined ? 'pageProvider' : 'parameters'),
       kind: 'parameter',
-      message: `${takes}, and ${gives}: ${
-        count < provider.parameters
-          ? 'Nuxeo cannot fill the rest, and refuses the query'
-          : search
-            ? "the last are never read, so a search's text changes nothing"
-            : 'the last are never read'
-      }`,
+      message: `${takes}, and ${gives}: with ${count < provider.parameters ? 'fewer' : 'more'}, the query fails on the server, or runs otherwise than it is written`,
     });
   };
   if (path.startsWith('queues/')) check(content, '', 'the queue', isRecord(content['search']));

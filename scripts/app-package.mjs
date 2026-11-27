@@ -469,7 +469,7 @@ function run({
     for (const finding of unnamed) process.stdout.write(`${finding}\n`);
     return refuse(
       2,
-      "a page provider's NXQL, sort or aggregate names a property, a type or a facet the content model does not have, listed above.",
+      "a page provider's NXQL, sort, aggregate or predicate names a property the content model does not have, or misspells a type, a facet or a prefix, listed above.",
     );
   }
   const unanswered = unansweredAggregates(directory, root);
@@ -1019,8 +1019,8 @@ function pageProvidersOf(directory) {
         const aggregates = aggregateTags
           .map(({ id }) => id)
           .filter((id) => id !== undefined && id !== '');
-        // The properties it names besides its NXQL: what it sorts by, and what each aggregate
-        // groups by.
+        // The properties it names besides its NXQL: what it sorts by, what each aggregate groups
+        // by, and what each predicate compares.
         const named = [
           ...[...definition.matchAll(new RegExp(`<sort${TAG}`, 'g'))]
             .map(([, attributes]) => attributesOf(attributes).column)
@@ -1029,6 +1029,13 @@ function pageProvidersOf(directory) {
             place: `aggregates.${id}.parameter`,
             xpath: parameter,
           })),
+          // A where clause's predicate, the property a search form's field is compared with.
+          ...[...definition.matchAll(new RegExp(`<predicate${TAG}`, 'g'))]
+            .map(([, attributes]) => attributesOf(attributes).parameter)
+            .map((parameter, index) => ({
+              place: `whereClause.predicates[${index}].parameter`,
+              xpath: parameter,
+            })),
         ].filter(({ xpath }) => typeof xpath === 'string' && xpath !== '');
         // Nuxeo builds the query from the where clause whenever there is one, and from the pattern
         // only when there is not.
@@ -1613,8 +1620,8 @@ function modelIn(file) {
  * What each page provider the package defines names that `model`, the content model the validator
  * was given, does not have, as a finding in the validator's form: the component, the page provider
  * and the element, the property, the type or the facet, and why. Its NXQL (`nxqlNameProblems`),
- * its sorts and its aggregates' properties (`propertyNameProblem`), each property held to the type
- * the NXQL lists when it says. A misspelt property in a condition, such as the vehicle kit's
+ * and the properties its sorts, its aggregates and its predicates name (`propertyNameProblem`),
+ * each held to the type the NXQL lists when it says. A misspelt property in a condition, such as the vehicle kit's
  * `vdocs:checklist/*\/don`, is a query the server refuses; a misspelt type or facet one that lists
  * nothing. None without a model.
  */

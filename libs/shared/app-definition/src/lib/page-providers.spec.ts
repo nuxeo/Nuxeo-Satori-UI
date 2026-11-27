@@ -349,7 +349,7 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
 
   it("finds a prefix no schema has, a subfield of a simple property, and another type's property", () => {
     expect(missing("vdeals:status = 'Funded'")).toEqual([
-      `"vdeals:status": no schema of the content model is written "vdeals:", by its prefix or its name, nor is it one of Nuxeo's own, so Nuxeo refuses the query`,
+      `"vdeals:status": no schema of the content model is written "vdeals:", by its prefix or its name, and "vdeal:" is: a misspelling, which Nuxeo refuses`,
     ]);
     expect(missing("vdeal:status/code = 'x'")).toEqual([
       '"vdeal:status/code": "vdeal:status" is a string property, with no subfield "code", so Nuxeo refuses the query',
@@ -359,7 +359,7 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
     ]);
   });
 
-  it('finds a type and a facet neither the model nor Nuxeo has', () => {
+  it('finds a type and a facet neither the model nor Nuxeo has, each a near miss of one they have', () => {
     expect(
       nxqlNameProblems(
         "SELECT * FROM VehicleDeals WHERE vdeal:status = 'Funded'",
@@ -367,17 +367,17 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
         model,
       ),
     ).toEqual([
-      `the type "VehicleDeals" is not in the content model, nor one of Nuxeo's own, so Nuxeo refuses a query from it`,
+      `the type "VehicleDeals" is not in the content model, and "VehicleDeal" is: a misspelling, so Nuxeo refuses a query from it`,
     ]);
     expect(
       nxqlNameProblems(
-        "ecm:primaryType IN ('VehicleDeal', 'VehicleTitles') AND ecm:mixinType <> 'Hidden'",
+        "ecm:primaryType IN ('VehicleDeal', 'vehicleTitle') AND ecm:mixinType <> 'HidenInNavigation'",
         { pattern: false },
         model,
       ),
     ).toEqual([
-      `the type "VehicleTitles" is not in the content model, nor one of Nuxeo's own, so the query lists no record of it`,
-      `the facet "Hidden" is not in the content model, nor one of Nuxeo's own, so no record has it`,
+      `the type "vehicleTitle" is not in the content model, and "VehicleTitle" is: a misspelling, so the query lists no record of it`,
+      `the facet "HidenInNavigation" is not in the content model, and "HiddenInNavigation" is: a misspelling, so no record has it`,
     ]);
   });
 
@@ -405,9 +405,46 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
       "ecm:mixinType NOT IN ('HiddenInNavigation', 'Folderish') AND ecm:primaryType <> 'File'",
     ],
     ['a string that holds a colon, which is no property', "vdeal:notes = 'a:b/c'"],
+    [
+      "an add-on's type, facet and schema, near none the model or Nuxeo's lists have",
+      "ecm:primaryType <> 'LetterTemplate' AND ecm:mixinType <> 'Correspondence' AND letter:status = 'sent'",
+    ],
+    ["the user profile's schema, one of Nuxeo's own", 'userprofile:avatar IS NULL'],
   ];
   it.each(passed)('passes %s', (_, where) => {
     expect(missing(where)).toEqual([]);
+  });
+
+  it('reads the types a pattern lists, and nothing after them', () => {
+    expect(
+      nxqlNameProblems(
+        'SELECT * FROM VehicleDeal, VehicleTitle LIMIT 10',
+        { pattern: true },
+        model,
+      ),
+    ).toEqual([]);
+    expect(
+      nxqlNameProblems('SELECT * FROM VehicleDeal, VehicleTitel', { pattern: true }, model),
+    ).toEqual([
+      'the type "VehicleTitel" is not in the content model, and "VehicleTitle" is: a misspelling, so Nuxeo refuses a query from it',
+    ]);
+  });
+
+  it('takes as written a complex value whose subfields the model does not give', () => {
+    const reading = readContentModel({
+      doctypes: { Party: { parent: 'Document', facets: [], schemas: ['party'] } },
+      facets: [],
+      schemas: [
+        {
+          name: 'party',
+          prefix: 'pty',
+          fields: { address: 'complex', contacts: { type: 'complex[]' } },
+        },
+      ],
+    });
+    if (!reading.model) throw new Error(reading.problems.join('; '));
+    expect(propertyNameProblem('pty:address/street', reading.model, 'Party')).toBeNull();
+    expect(propertyNameProblem('pty:contacts/*/email', reading.model, 'Party')).toBeNull();
   });
 
   it('passes a list of texts, item by item', () => {
@@ -449,10 +486,12 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
 });
 
 describe('positionalParameters and parameterFindings: what a list gives a page provider', () => {
-  it('counts the ? of a query, and none when it names a parameter or leaves a string open', () => {
+  it('counts the ? of a query, and none when it names a parameter, holds a ? in a string, or leaves a string open', () => {
     expect(positionalParameters("ecm:primaryType = 'A' AND a:b = ? AND a:c IN (?, ?)")).toBe(3);
-    expect(positionalParameters("ecm:primaryType = 'A' AND a:b = '?'")).toBe(0);
+    expect(positionalParameters("ecm:primaryType = 'A' AND a:b = 'x'")).toBe(0);
     expect(positionalParameters('a:b = :value AND a:c = ?')).toBeNull();
+    expect(positionalParameters('a:b =:value AND a:c = ?')).toBeNull();
+    expect(positionalParameters("a:b LIKE '%?%' AND a:c = ?")).toBeNull();
     expect(positionalParameters("a:b = 'open")).toBeNull();
   });
 
@@ -466,19 +505,19 @@ describe('positionalParameters and parameterFindings: what a list gives a page p
       (finding) => `${finding.path}: ${finding.message}`,
     );
 
-  it('finds a queue that gives too few, a search never read, and a figure and a related list giving too many', () => {
+  it('finds a queue that gives too few, a search with no ? of its own, and a figure and a related list giving too many', () => {
     expect(at('queues/q.json', { pageProvider: 'one' })).toEqual([
-      'pageProvider: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 0: Nuxeo cannot fill the rest, and refuses the query',
+      'pageProvider: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 0: with fewer, the query fails on the server, or runs otherwise than it is written',
     ]);
     expect(
       at('queues/q.json', { pageProvider: 'one', parameters: ['x'], search: { label: 'Find' } }),
     ).toEqual([
-      'parameters: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 2, its search\'s text last: the last are never read, so a search\'s text changes nothing',
+      `parameters: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the queue gives 2, its search's text last: with more, the query fails on the server, or runs otherwise than it is written`,
     ]);
     expect(
       at('home.json', { cards: [{ id: 'a', kpi: { pageProvider: 'none', parameters: ['x'] } }] }),
     ).toEqual([
-      'cards[0].kpi.parameters: the page provider "none" (OSGI-INF/kit-model.xml) takes 0 parameters, each a ? filled in order, and the figure gives 1: the last are never read',
+      'cards[0].kpi.parameters: the page provider "none" (OSGI-INF/kit-model.xml) takes 0 parameters, each a ? filled in order, and the figure gives 1: with more, the query fails on the server, or runs otherwise than it is written',
     ]);
     expect(
       at('layouts/A/view.layout.json', {
@@ -494,7 +533,7 @@ describe('positionalParameters and parameterFindings: what a list gives a page p
         ],
       }),
     ).toEqual([
-      'tabs[0].cards[0].related.parameters: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the related list gives 2: the last are never read',
+      'tabs[0].cards[0].related.parameters: the page provider "one" (OSGI-INF/kit-model.xml) takes 1 parameter, each a ? filled in order, and the related list gives 2: with more, the query fails on the server, or runs otherwise than it is written',
     ]);
   });
 

@@ -141,15 +141,31 @@ export const SERVER_ENVIRONMENT: readonly string[] = [
 ];
 
 /**
+ * How the server reaches a Nuxeo that is not on this machine, as Node reads it: a certificate
+ * authority of the person's network, and the proxy, when Node is told to use one.
+ */
+export const NETWORK_ENVIRONMENT: readonly string[] = [
+  'NODE_EXTRA_CA_CERTS',
+  'NODE_USE_ENV_PROXY',
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+  'NO_PROXY',
+  'no_proxy',
+];
+
+/**
  * The environment `call.ts` starts the server with: what Node needs to run it ({@link
- * RUN_ENVIRONMENT}) and the variables it reads ({@link SERVER_ENVIRONMENT}), and nothing else of
- * the shell's, no other server's password, no token, no key. The vehicle kit's first client gave
- * the server its whole environment, a token among it, and the session's permission system refused
- * it (its README, "Phase 8 feedback", item 1).
+ * RUN_ENVIRONMENT}), the variables it reads ({@link SERVER_ENVIRONMENT}) and how it reaches the
+ * server ({@link NETWORK_ENVIRONMENT}), and nothing else of the shell's: no other service's
+ * password, no token, no key, and no `NODE_OPTIONS` to load other code into it. The vehicle kit's
+ * first client gave the server its whole environment, a token among it, and the session's
+ * permission system refused it (its README, "Phase 8 feedback", item 1).
  */
 export function serverEnvironment(env: Environment): Record<string, string> {
   return Object.fromEntries(
-    [...RUN_ENVIRONMENT, ...SERVER_ENVIRONMENT]
+    [...RUN_ENVIRONMENT, ...SERVER_ENVIRONMENT, ...NETWORK_ENVIRONMENT]
       .map((key) => [key, env[key]] as const)
       .filter((entry): entry is readonly [string, string] => entry[1] !== undefined),
   );

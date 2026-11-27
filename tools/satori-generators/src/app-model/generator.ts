@@ -626,9 +626,11 @@ function searchOf(
 ): Search {
   const { type, written, aggregated, modelJson } = options;
   const fields = new Map<string, string>();
+  // The type's own schema, which its search document is named after: the first the model gives
+  // it, so that a schema added to the type later names no second search document; else, for a
+  // type this run writes, the one it writes.
   let own: { schema: string; prefix: string } | undefined;
   if (written) {
-    own = { schema: written.schema, prefix: written.prefix };
     for (const property of written.properties) {
       const kind = described(property);
       fields.set(`${written.prefix}:${property.name}`, typeof kind === 'string' ? kind : kind.type);
@@ -662,6 +664,7 @@ function searchOf(
       if (own === undefined && !NUXEO_SCHEMAS.includes(name)) own = { schema: name, prefix };
     }
   }
+  if (own === undefined && written) own = { schema: written.schema, prefix: written.prefix };
   if (own === undefined) {
     throw new Error(
       `--aggregates name ${type}'s properties, and ${modelJson} does not describe ${type} with a schema of its own: write its --properties first.`,
@@ -1183,6 +1186,13 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     options.schema !== undefined &&
     named(typeBody, 'schema', schema).length === 0;
   if (properties.length > 0) {
+    // --force writes again what the type has; a --schema it has not, given with it, is likelier a
+    // misspelt name than a schema to add.
+    if (addsSchema && options.force) {
+      throw new Error(
+        `--force writes again a schema the type has, and ${type} in ${modelFile} has no schema ${schema}: give the --schema it has, or leave --force out to add ${schema} to it.`,
+      );
+    }
     if (hasType && !addsSchema && !options.force) {
       throw new Error(
         `${modelFile} has the type ${type} already. Pass --force to write its schema again from --properties, or give --schema a name the type does not have to add a schema to it.`,

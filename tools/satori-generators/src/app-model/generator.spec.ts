@@ -660,6 +660,46 @@ describe('app-model generator', () => {
         'The type Third in',
       );
       expect(doctype('Third')).not.toContain('<schema name="third" />');
+      // Nor does one given with --force, which writes again what the type has: a misspelt name.
+      await expect(
+        generate({
+          type: 'VehicleDeal',
+          schema: 'vehicledeal_doc',
+          prefix: 'vdoc',
+          properties: 'a',
+          force: true,
+        }),
+      ).rejects.toThrow('--force writes again a schema the type has');
+      expect(doctype('VehicleDeal')).not.toContain('vehicledeal_doc"');
+    });
+
+    it("names the search document after the type's first schema, a schema added with aggregates", async () => {
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal',
+        prefix: 'vdeal',
+        properties: 'number, status=Draft|Contracted',
+        pageProvider: 'deals_by_status',
+        aggregates: 'vdeal:status',
+      });
+      const search = read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`);
+      await generate({
+        type: 'VehicleDeal',
+        schema: 'vehicledeal_docs',
+        prefix: 'vdocs',
+        properties: 'kind=Title|Insurance',
+        pageProvider: 'deals_by_document',
+        aggregates: 'vdocs:kind',
+      });
+      const xml = read(tree, MODEL);
+      // One search document, its schema the first's, with the new aggregate's field added.
+      expect(xml).not.toContain('vehicledeal_docs_search');
+      expect(xml).toContain('<field schema="vehicledeal_search" name="vdocs_kind_agg" />');
+      expect(xml.match(/<doctype name="VehicleDealSearch"/g)).toHaveLength(1);
+      expect(read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`)).not.toBe(search);
+      expect(read(tree, `${ROOT}/bundle/schemas/vehicledealsearch.xsd`)).toContain(
+        '<xs:element name="vdocs_kind_agg" type="nxs:stringList" />',
+      );
     });
 
     it("writes a document property as another record's id, which app-layout shows as a link", async () => {

@@ -50,8 +50,8 @@ step as done that this table says is not built.
   tool through `tools/builder-mcp/src/call.ts`, which starts the same server over stdio for one
   call: `node tools/builder-mcp/src/call.ts <tool> '<arguments as JSON>'`, or `-` to read them
   from standard input. It gives the server the five variables it reads (`NUXEO_URL`,
-  `NUXEO_USER`, `NUXEO_PASS`, `DEV_SERVER_URL`, `BUILDER_PACKAGE_ROOTS`) and what Node needs to
-  run, and nothing else of the shell's: never write a client of your own that passes the whole
+  `NUXEO_USER`, `NUXEO_PASS`, `DEV_SERVER_URL`, `BUILDER_PACKAGE_ROOTS`), what Node needs to
+  run and to reach the server, and nothing else of the shell's: never write a client of your own that passes the whole
   environment. Every rule below holds as it does for the registered server.
 
 ## 1. Read the server
@@ -408,16 +408,18 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   provider the package defines, such as one `app-model --where` wrote, the write is refused for a
   construct Nuxeo's grammar has no place for: `BETWEEN NOW(...)`, for which compare with `>=` and
   `<=`, a string or a parenthesis left open, `==`, `&&`. Given a model, as a demo kit's own always
-  is, it is refused too for a property, a type or a facet the model does not have, in its NXQL,
-  its sorts or its aggregates: `vdocs:checklist/*/don`, a checklist's entries with no subfield
+  is, it is refused too for a property the model does not have, in its NXQL, its sorts, its
+  aggregates or its predicates: `vdocs:checklist/*/don`, a checklist's entries with no subfield
   `don`, or `vtitle:openOn`, a property the schema does not have, each named with its page
-  provider and its component. A property of another type than the one its NXQL lists is refused
-  as well: no record it lists has it. A query it passes may still be refused on install: run it
-  read-only on the development server first, as a search.
+  provider and its component; and for a property of another type than the one its NXQL lists, which
+  no record it lists has. A type, a facet or a prefix that neither the model nor Nuxeo's own lists
+  know is refused only when it is a near miss of one they do, `VehicleDeals` for `VehicleDeal`, and
+  the finding names that one; one near none may be an add-on's, and passes. A query it passes may
+  still be refused on install: run it read-only on the development server first, as a search.
 - **A queue gives its page provider as many parameters as its NXQL's `?`,** its search's text
   last, and so do a related list and a home's figure, on a page provider of the package's own:
-  too few and Nuxeo refuses the query, too many and the last are never read. The write is refused
-  either way, with or without a model.
+  Nuxeo puts each in the next `?`, so with fewer or more the query fails or runs otherwise than it
+  is written. The write is refused either way, with or without a model.
 - **A queue and a banner that say one thing are written twice,** the queue in NXQL and the banner
   in a rule, and nothing holds them together. Write the values out on both, `IN (...)` and
   `app.rules.fieldIn`, and "more than 30 days" as `< NOW('-P31D')` and `dateAfter` 30; then tell
