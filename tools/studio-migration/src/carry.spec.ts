@@ -327,9 +327,7 @@ describe('each deliberate breakage of carrying stands in the way of readiness', 
     ],
     [
       'carry-changed-silently',
-      new RegExp(
-        `^decisions\\.json: search-field:${FORM.replace(/[.]/g, '\\.')}#2 was made on another label than the report gives now, so it is not taken: decide it again$`,
-      ),
+      `decisions.json: search-field:${FORM}#2 was made on another label than the report gives now, so it is not taken: decide it again`,
     ],
   ])('%s names what broke', (name, line) => {
     const mutation = CARRY_MUTATIONS.find((candidate) => candidate.name === name);
@@ -341,7 +339,8 @@ describe('each deliberate breakage of carrying stands in the way of readiness', 
       (blocker) => !sound.includes(blocker) && blocker.startsWith('decisions.json'),
     );
     expect(added).toHaveLength(1);
-    expect(added[0]).toMatch(line);
+    if (typeof line === 'string') expect(added[0]).toBe(line);
+    else expect(added[0]).toMatch(line);
   });
 
   it('says so when there is no decision offered for re-confirmation, or none taken, to break', () => {
@@ -363,12 +362,10 @@ describe('carrying, as the reviews found it', () => {
   it('carries nothing of a construct the earlier build held more than once, whichever was decided', () => {
     // The view's dom-if written twice, alike: one identity for two conditions.
     const twice = {
-      [VIEW]: (FILES[VIEW] ?? '')
-        .replace('<div role="widget"><label>Tags</label>', '<div role="widget"><label>Tags</label>')
-        .replace(
-          '  </template>\n  <script>',
-          `    <template is="dom-if" if="[[hasFacet(document, 'Versionable')]]">\n      <div role="widget"><label>Number again</label><div>[[document.properties.cl:number]]</div></div>\n    </template>\n  </template>\n  <script>`,
-        ),
+      [VIEW]: (FILES[VIEW] ?? '').replace(
+        '  </template>\n  <script>',
+        `    <template is="dom-if" if="[[hasFacet(document, 'Versionable')]]">\n      <div role="widget"><label>Number again</label><div>[[document.properties.cl:number]]</div></div>\n    </template>\n  </template>\n  <script>`,
+      ),
     };
     const earlierInput = prepare(twice);
     const conditions = constructsOf(earlierInput.inventory).filter(

@@ -1294,12 +1294,11 @@ export const DECISION_MUTATIONS: readonly DecisionMutation[] = [
 ];
 
 /**
- * The proposals of a conversion, by id, with what the conversion's `decisions.json` decides of
- * each: the conditions' rules, which the converter writes once accepted.
+ * The proposals of a conversion, by id, with what its report records the conversion was made with
+ * of each: the conditions' rules, which the converter writes once accepted.
  */
 function proposalsOf(
   conversion: Conversion,
-  source: MutationSource,
 ): { readonly id: string; readonly verdict: Verdict | undefined }[] {
   // As the checks hold the conversion: to what its report records it was made with.
   const verdicts = recordedVerdicts(conversion.report);
@@ -1358,7 +1357,7 @@ export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
     caughtBy: 5,
     apply: (conversion, given) => {
       const source = needSource(given);
-      const proposals = proposalsOf(conversion, source);
+      const proposals = proposalsOf(conversion);
       const waiting = proposals.filter((proposal) => proposal.verdict === undefined);
       if (waiting.length === 0)
         throw new MutationError('no proposal of the conversion waits for a person to decide it');
@@ -1377,7 +1376,7 @@ export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
     caughtBy: 5,
     apply: (conversion, given) => {
       const source = needSource(given);
-      const proposals = proposalsOf(conversion, source);
+      const proposals = proposalsOf(conversion);
       const rejected = proposals.find((proposal) => proposal.verdict?.accepted === false);
       if (!rejected?.verdict)
         throw new MutationError('no proposal of the conversion is rejected, as its report records');
@@ -1396,7 +1395,7 @@ export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
     caughtBy: 5,
     apply: (conversion, given) => {
       const source = needSource(given);
-      const proposals = proposalsOf(conversion, source);
+      const proposals = proposalsOf(conversion);
       const accepted = proposals.filter((proposal) => proposal.verdict?.accepted === true);
       if (accepted.length === 0)
         throw new MutationError('no proposal of the conversion is accepted, as its report records');
