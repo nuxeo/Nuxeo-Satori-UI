@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!--
+  Since 0.8.0, the demo server's allow-list for the Payers kit's two letter buttons: the deployment's
+  contribution, which the kit's README has the server's administrators put in nxserver/config/,
+  beside payers-claims-demo-operations-config.xml. Not in the kit's package, and never in one: the
+  package pipeline refuses a package that contributes to org.nuxeo.agentic.ui.operations (plan
+  decision 3, on its recommendation: a per-deployment allow-list).
+
+  It allows each of the kit's letter chains for the Payers app's button alone: the denial letter for
+  claims adjusters who may change the claim, on a denied claim; the appeal outcome letter for member
+  services who may change the case, on a case. Each takes one parameter, the language the button's
+  form sent, which may be left out: the add-on then writes the letter in the record's language.
+  Which appeal a decision letter fits, upheld or overturned, the add-on reads from the stored case,
+  through its templates' conditions, whatever the button's rule said.
+
+  A file of its own, so that a server may allow the operation buttons and not the letters, or the
+  letters and not the buttons. Fictional, like the kit.
+-->
+<component name="payers-claims-demo.deployment.letters" version="1.0">
+  <require>org.nuxeo.agentic.ui.operations</require>
+
+  <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
+    <operation id="Payers.WriteDenialLetter" permission="Write">
+      <!-- Only the Payers app's button, for adjusters, on a denied claim: the server checks each,
+           whatever the button's own rules said. -->
+      <app>payers-claims</app>
+      <group>claims-adjusters</group>
+      <type>Claim</type>
+      <state>denied</state>
+      <!-- The language chosen in the button's form, or none for the claim's own. -->
+      <param name="language" type="string" maxLength="16" source="input" />
+    </operation>
+
+    <operation id="Payers.WriteAppealLetter" permission="Write">
+      <!-- Only the Payers app's button, for member services, on a case. Cases follow the platform's
+           default lifecycle, so no state narrows it: the add-on writes the letter only when one of
+           its templates fits the stored case, a decided appeal. -->
+      <app>payers-claims</app>
+      <group>member-services</group>
+      <type>Case</type>
+      <param name="language" type="string" maxLength="16" source="input" />
+    </operation>
+  </extension>
+</component>

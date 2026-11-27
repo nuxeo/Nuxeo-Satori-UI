@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Decisión sobre su apelación</title>
+<style>
+body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; margin: 2cm; }
+header { margin-bottom: 2em; }
+.fictional { font-size: 9pt; color: gray; }
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { text-align: left; padding: 0.2em 1.5em 0.2em 0; }
+</style>
+</head>
+<body>
+<!-- Una carta ficticia de la demostración del kit Payers: ningún pagador, persona, proveedor ni reclamación es real. -->
+<header>
+<p><strong>Bayside Health Plan</strong><br>Unidad de apelaciones, 100 Example Way, Oakland, CA 94600</p>
+<p class="fictional">Una carta ficticia de la demostración del kit Payers. Ninguna persona, proveedor ni reclamación es real.</p>
+</header>
+<p>{{letter.date}}</p>
+<address>
+{{case:member>member:firstName}} {{case:member>member:lastName}}<br>
+{{case:member>member:address/street}}<br>
+{{case:member>member:address/city}} {{case:member>member:address/zip}}
+</address>
+<h1>Decisión sobre su apelación: se mantiene la denegación</h1>
+<p>Estimado/a {{case:member>member:firstName}} {{case:member>member:lastName}}:</p>
+<p>Recibimos su apelación {{case:number}} el {{case:received}}, sobre la denegación de la reclamación {{case:claim>claim:number}}. Un revisor clínico que no participó en la primera decisión ha examinado su apelación y los documentos que usted y su proveedor enviaron.</p>
+<p>Tras esta revisión, se mantiene la denegación: la reclamación no se pagará.</p>
+<table>
+<tr><th>Apelación</th><td>{{case:number}}</td></tr>
+<tr><th>Reclamación</th><td>{{case:claim>claim:number}}</td></tr>
+<tr><th>Número de miembro</th><td>{{case:member>member:number}}</td></tr>
+</table>
+<p>Si no está de acuerdo con esta decisión, puede solicitar una revisión externa por una organización independiente dentro de los cuatro meses siguientes a la fecha de esta carta. Llame a servicios para miembros al número que figura en su tarjeta de miembro para saber cómo hacerlo.</p>
+<p>Atentamente,</p>
+<p>{{letter.writer}}<br>Unidad de apelaciones, Bayside Health Plan</p>
+</body>
+</html>

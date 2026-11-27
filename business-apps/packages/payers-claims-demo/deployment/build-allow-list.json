@@ -1,3 +1,8 @@
 {
-  "operations": ["Payers.RequestMedicalRecords", "Payers.ReferToInvestigations"]
+  "operations": [
+    "Payers.RequestMedicalRecords",
+    "Payers.ReferToInvestigations",
+    "Payers.WriteDenialLetter",
+    "Payers.WriteAppealLetter"
+  ]
 }
