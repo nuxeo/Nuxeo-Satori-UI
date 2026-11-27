@@ -117,6 +117,26 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   access logging (phase 9), with its kit,
   [records](../../business-apps/packages/records-demo/README.md).
 
+## Tutorials
+
+Phase 10's tutorials, in [`tutorials/`](tutorials/): each a task a presales engineer or an
+administrator does from start to finish, with every command that needs no server run on 27 November
+2026, and each step that needs one marked as a server step, not run.
+
+1. [Build a kit with the app builder skill](tutorials/build-a-kit-with-the-app-builder.md): the
+   vehicle deals kit as the worked example, from a stand-in model through the write tools to a
+   package the pipeline builds, its seed, and a steps file.
+2. [Another system's data on a record page, kept fresh](tutorials/another-systems-data-on-a-record-page.md):
+   a connector, its cache, inbound change events and outbound webhooks, with the stand-in core system.
+3. [Sign and verify a package before installing it](tutorials/sign-and-verify-a-package.md), and
+   what the release candidate refuses.
+4. [Rights, release windows, watermarks and delivery packages for media](tutorials/media-rights-and-deliveries.md).
+5. [Holds, retention and related records on a record page](tutorials/holds-retention-and-related-records.md).
+6. [The capture inbox](tutorials/the-capture-inbox.md): what is filed by itself, what waits for a
+   person, and why the AI path stays off until the data terms are approved.
+7. [Adding a language](tutorials/adding-a-language.md): what the repository does, and what
+   Crowdin's managers must do.
+
 ## Facts that hold
 
 Checked first-hand; build on them rather than re-checking.
