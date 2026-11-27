@@ -2011,6 +2011,45 @@ expectBuilt(
     ),
 );
 
+// A language's labels, `labels/<locale>.json`, as Crowdin writes them beside `labels/en.json`
+// (package-pipeline.md, section 2): a subset of English's keys is built, since each key left out
+// falls back to English, and a key English lacks is refused, by its key. Each is named in the
+// component, as the app-registry generator names it, so that only the rule under test decides.
+const withLanguage =
+  (locale, labels) =>
+  ({ edit, write }) => {
+    write(
+      `bundle/agentic-ui-config/labels/${locale}.json`,
+      JSON.stringify({ version: 2, labels }, null, 2),
+    );
+    edit(
+      COMPONENT,
+      '<file path="labels/en.json" />',
+      `<file path="labels/en.json" />\n      <file path="labels/${locale}.json" />`,
+    );
+  };
+expectBuilt(
+  "a language's labels that are a subset of English's",
+  withLanguage('es', { 'payers.card.claim': 'Reclamación' }),
+);
+expectBuilt("a language's labels that give no key at all", withLanguage('nb', {}));
+expectRefused(
+  "a language's labels with a key English lacks",
+  withLanguage('fi', { 'payers.card.claim': 'Korvaushakemus', 'payers.card.claimz': 'Hakemus' }),
+  2,
+  `labels/fi.json: labels["payers.card.claimz"]: labels/en.json has no text for "payers.card.claimz": a language's labels give a text only to a key English has [unknown]`,
+);
+expectRefused(
+  "a language's labels the component does not name, which the registry would not serve",
+  ({ write }) =>
+    write(
+      'bundle/agentic-ui-config/labels/da.json',
+      JSON.stringify({ version: 2, labels: { 'payers.card.claim': 'Krav' } }),
+    ),
+  2,
+  'does not name labels/da.json in the app payers-claims',
+);
+
 // The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.
 const MODEL = 'content-model.json';

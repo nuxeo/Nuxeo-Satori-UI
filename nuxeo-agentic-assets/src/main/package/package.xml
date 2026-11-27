@@ -3,6 +3,7 @@
   <description>
     <p>The assets module's server add-on. At the platform's download permission hook, for every user, it refuses an asset's original, picture views, renditions, a video's transcoded videos and storyboard that the asset's rights do not cover, and the assetRights document enricher says why. The platform's Video.* operations are replaced by ones of the same ids that ask the same rights of the video they read. It refuses nothing until a package contributes a rights policy for a document type.</p>
     <p>Share links: a user who may manage an asset's permissions makes a link to chosen picture views, and its original where its rights allow, with an end day. Anyone with the link sees those views, watermarked on the server, at /nuxeo/agentic-share/, without signing in, while the link is not revoked or past its day and the asset's rights still allow each one. Every download is logged. Not installed anywhere yet: it needs its security review first.</p>
+    <p>Media rights: a policy may read an asset's territories and release windows, per territory and channel, and a localised version its film's windows; a use is then refused outside them, at the same endpoints. A MediaDelivery, a distributor's delivery of a localised version to a territory, is decided by the version's policy and refused whole when any of its files is outside its window or territory.</p>
   </description>
   <vendor>Hyland Software</vendor>
   <installer restart="true" />

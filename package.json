@@ -117,7 +117,8 @@
     "beta:mirror": "node scripts/mirror-agent-config.mjs check",
     "i18n:pseudo": "node tools/i18n/pseudo-locale.mjs",
     "i18n:audit": "node tools/i18n/pseudo-locale.mjs && node tools/i18n/pseudo-locale-audit.mjs && node tools/i18n/pseudo-locale-deep.mjs",
-    "review:crowdin-selftest": "node tools/i18n/crowdin-push-context.selftest.mjs && node tools/i18n/crowdin-status.selftest.mjs",
+    "i18n:coverage": "node tools/i18n/coverage.mjs",
+    "review:crowdin-selftest": "node tools/i18n/crowdin-push-context.selftest.mjs && node tools/i18n/crowdin-status.selftest.mjs && node tools/i18n/crowdin-sources.selftest.mjs && node tools/i18n/coverage.selftest.mjs",
     "studio-migration": "tsx tools/studio-migration/src/cli.ts"
   },
   "lint-staged": {

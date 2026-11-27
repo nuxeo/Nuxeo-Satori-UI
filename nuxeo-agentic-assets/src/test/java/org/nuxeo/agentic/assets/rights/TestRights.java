@@ -19,4 +19,19 @@ public final class TestRights {
         component.register(Fakes.kitPolicy(), "test");
         return component;
     }
+
+    /**
+     * The kit's policy for {@code AcmeAsset} with territories and release windows of its own, at
+     * {@code acmeasset:territories} and {@code acmeasset:windows}: as a policy for media rights reads
+     * them.
+     */
+    public static AssetRightsComponent territorialKit(Clock clock) {
+        RightsPolicyDescriptor policy = Fakes.kitPolicy();
+        policy.territoriesXpath = "acmeasset:territories";
+        policy.windowsXpath = "acmeasset:windows";
+        AssetRightsComponent component = new AssetRightsComponent(clock, document -> document,
+                (container, types) -> false);
+        component.register(policy, "test");
+        return component;
+    }
 }

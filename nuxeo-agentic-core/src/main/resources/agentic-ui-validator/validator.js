@@ -3157,10 +3157,22 @@ var agenticUiValidator = (function () {
             case "task":
                 return __spreadArray(__spreadArray([], __read(TASK.test(file.name) ? [] : add("", "structure", 'the file name is <workflow>.<step>.layout.json, each of the two letters, digits, "_" or "-"')), false), __read(validateTaskForm(content, { registries: registries })), false);
             case "labels":
-                return __spreadArray(__spreadArray([], __read(LOCALE.test(file.locale) ? [] : add("", "structure", 'the file name is a language tag, such as "en" or "pt-BR"')), false), __read(validateLabels(content)), false);
+                return __spreadArray(__spreadArray(__spreadArray([], __read(LOCALE.test(file.locale) ? [] : add("", "structure", 'the file name is a language tag, such as "en" or "pt-BR"')), false), __read(validateLabels(content)), false), __read(notInEnglish(file.locale, content, context.labels)), false);
             case "module":
                 return __spreadArray(__spreadArray(__spreadArray([], __read(APP_ID.test(file.module) ? [] : add("", "structure", "the file name is the module's id: lower-case letters, digits and \"-\"")), false), __read(validateModuleSettings(content, { module: file.module, registries: registries })), false), __read(turnedOn(file.module, context.app)), false);
         }
+    }
+    function notInEnglish(locale, content, english) {
+        if (locale === "en" || english === void 0 || !isRecord(content))
+            return [];
+        var labels = content["labels"];
+        if (!isRecord(labels))
+            return [];
+        return Object.keys(labels).filter(function (key) { return !english.has(key); }).map(function (key) { return ({
+            path: "labels[".concat(JSON.stringify(key), "]"),
+            kind: "unknown",
+            message: "labels/en.json has no text for \"".concat(key, "\": a language's labels give a text only to a key English has")
+        }); });
     }
     function withPackageActions(registries, actions) {
         var e_42, _h;

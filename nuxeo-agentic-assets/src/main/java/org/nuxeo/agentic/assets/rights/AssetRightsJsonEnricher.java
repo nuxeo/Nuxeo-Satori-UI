@@ -62,6 +62,15 @@ import com.fasterxml.jackson.core.JsonGenerator;
  * channels are written {@code null}, and a decision names no day: a reader of a proxy may not
  * read the live document.
  *
+ * <p>Under a policy with territories, two more fields follow the channels: {@code territories},
+ * where the asset may be delivered, and {@code windows}, its release windows, each
+ * {@code { "territory", "channel", "from", "until" }}; both {@code null} where the channels are,
+ * and the windows {@code null} too when the policy reads them from another document, such as a
+ * localised version's film, which the asset's reader may not read. A download names no territory,
+ * so its decisions are a download's: {@code territory-not-covered} for an asset that may be
+ * delivered nowhere, {@code outside-window} when no window for the use's channel is open in any of
+ * its territories. A policy with no territories writes neither field, as before.
+ *
  * <p>The enricher explains; the download permission is what refuses. Both decide through
  * {@link AssetRights#decide}.
  */
@@ -148,6 +157,12 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
                 jg.writeString(channel);
             }
             jg.writeEndArray();
+        }
+        if (policy.territorial()) {
+            writeTerritories(jg, facts == null || !details ? null : facts,
+                    // Windows read from another document, such as a version's film, are that
+                    // document's: a reader of the asset may not read it.
+                    policy.windowsDocumentXpath() == null);
         }
         jg.writeArrayFieldStart("uses");
         for (Map.Entry<Use, Decision> entry : decided.entrySet()) {
@@ -264,6 +279,38 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         if (details && decision.rightsEnd() != null) {
             writeDay(jg, "rightsEnd", decision.rightsEnd());
         }
+    }
+
+    /**
+     * Under a policy with territories: where the asset may be delivered, and its release windows,
+     * each {@code { territory, channel, from, until }}. Both {@code null} when the rights could not be
+     * read or are a proxy's; the windows {@code null} too when they are another document's.
+     */
+    private static void writeTerritories(JsonGenerator jg, AssetFacts facts, boolean ownWindows) throws IOException {
+        if (facts == null) {
+            jg.writeNullField("territories");
+            jg.writeNullField("windows");
+            return;
+        }
+        jg.writeArrayFieldStart("territories");
+        for (String territory : facts.territories()) {
+            jg.writeString(territory);
+        }
+        jg.writeEndArray();
+        if (!ownWindows) {
+            jg.writeNullField("windows");
+            return;
+        }
+        jg.writeArrayFieldStart("windows");
+        for (AssetFacts.Window window : facts.windows()) {
+            jg.writeStartObject();
+            jg.writeStringField("territory", window.territory());
+            jg.writeStringField("channel", window.channel());
+            writeDay(jg, "from", window.from());
+            writeDay(jg, "until", window.until());
+            jg.writeEndObject();
+        }
+        jg.writeEndArray();
     }
 
     private static void writeDay(JsonGenerator jg, String field, LocalDate day) throws IOException {

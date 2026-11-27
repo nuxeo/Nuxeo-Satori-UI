@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.media-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="film" prefix="film" src="schemas/film.xsd" />
+    <schema name="filmversion" prefix="fver" src="schemas/filmversion.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="Film" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="film" />
+    </doctype>
+    <!-- Not a folder, and holds no file of its own: its attachments are files:files. So it
+         opens as a record page. -->
+    <doctype name="FilmVersion" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <schema name="filmversion" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="Film">default</type>
+    </types>
+    <types>
+      <type name="FilmVersion">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="media_films">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Film'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:title" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="media_film_versions">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'FilmVersion' AND (fver:film = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="fver:language" ascending="true" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

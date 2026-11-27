@@ -8,7 +8,9 @@
  * - a branding image in `assets/` must be in the package;
  * - a queue the home or the menu names must be in `queues/`;
  * - given the platform's catalogue, a label key a file names must have a text in the package's
- *   `labels/en.json` or in that catalogue.
+ *   `labels/en.json` or in that catalogue;
+ * - a language's labels, `labels/<locale>.json`, give a text only to keys `labels/en.json` has:
+ *   a subset, since each key left out falls back to English.
  *
  * Reading files is the caller's: this stays plain TypeScript, for the browser as well as Node.
  */
@@ -238,6 +240,7 @@ function findingsOf(
           ? []
           : add('', 'structure', 'the file name is a language tag, such as "en" or "pt-BR"')),
         ...validateLabels(content),
+        ...notInEnglish(file.locale, content, context.labels),
       ];
     case 'module':
       return [
@@ -252,6 +255,31 @@ function findingsOf(
         ...turnedOn(file.module, context.app),
       ];
   }
+}
+
+/**
+ * Each key of a language's labels that the package's `labels/en.json` does not give a text
+ * (section 7). A language other than English may leave keys out, since each one it leaves out
+ * falls back to English, key by key; it may not add one, since a key English lacks is a misspelt
+ * or stale key that no file names and no translator is ever asked for: Crowdin writes a language's
+ * file from `labels/en.json`, and only with its keys. Not checked without the package's English
+ * labels, as for a file read on its own.
+ */
+function notInEnglish(
+  locale: string,
+  content: unknown,
+  english: ReadonlySet<string> | undefined,
+): Finding[] {
+  if (locale === 'en' || english === undefined || !isRecord(content)) return [];
+  const labels = content['labels'];
+  if (!isRecord(labels)) return [];
+  return Object.keys(labels)
+    .filter((key) => !english.has(key))
+    .map((key) => ({
+      path: `labels[${JSON.stringify(key)}]`,
+      kind: 'unknown' as const,
+      message: `labels/en.json has no text for "${key}": a language's labels give a text only to a key English has`,
+    }));
 }
 
 /**

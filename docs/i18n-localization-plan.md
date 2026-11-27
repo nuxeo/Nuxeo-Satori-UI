@@ -245,7 +245,7 @@ seeded upstream folders  →  our app catalogue  →  manifest `labels`
 ### D2 — Follow the Hyland CIC file layout, not Web UI's
 
 Web UI uses `i18n/messages.json` + `messages-<locale>.json` with a build-time merge script
-(`scripts/merge-messages.js`) and a `crowdin-conf.yml` full of `translation_replace` locale
+(`nuxeo-web-ui/scripts/merge-messages.js`, in that repository) and a `crowdin-conf.yml` full of `translation_replace` locale
 renames. That is a Polymer-era convention carried forward, and the Hyland standard has since
 converged on something different:
 
@@ -841,6 +841,20 @@ at `'true'` (D8g) nothing unapproved reaches the application either way.
 `ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv`. Thai and Chinese were dropped. Arabic,
 Hebrew, Italian, Spanish and Swedish were added to the target, and **five of the ten ship**:
 `en`, `fr`, `de`, `ja`, `nl`.
+
+**Extended, 27 November 2026,** by the business apps' plan, whose phase 7 asks for "Spanish and
+the Nordic languages" ([development-plan.md](business-apps/development-plan.md)): Danish, Finnish and
+Norwegian Bokmål, `da`, `fi` and `nb`, join the target, thirteen languages in all. All three are at
+step 1, registered in `register-locale-data.ts`, and none is a Crowdin target yet. Norwegian Bokmål
+is `nb` in the app whichever of Crowdin's two Norwegians the project targets: `crowdin-conf.yml`
+maps "Norwegian" (`no`) to `nb`, and "Norwegian Bokmal" is `nb` already. The same change makes
+each business app's `labels/en.json` a Crowdin source, written back as `labels/<language>.json`
+beside it, through a config and a pull of their own (`crowdin-kits.yml`, `crowdin-pull-kits.yaml`):
+a kit's file needs a person to name it and version the kit, and in this pull's one pull request
+that would hold every app catalogue red. It also adds the repository's coverage of every language
+to the Crowdin Status report
+(`npm run i18n:coverage`). What a Crowdin manager and a developer each do to add a language is in
+the business apps' administrator's guide, section 4, "Languages".
 
 The useful part of this decision is not the list — it is which touchpoints a language may appear
 in before it has translations. Of the six (five from D8e, plus the one NXSAT-733 added), they
