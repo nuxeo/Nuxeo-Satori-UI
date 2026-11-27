@@ -167,7 +167,12 @@ describe('HomePageComponent: the lists at a phone width and on a desktop', () =>
           [task('t1', 1), task('t2', 2)],
           [
             record('c-1', 'Supply agreement for the northern distribution centres', 20),
-            record('c-2', 'Lease', 18),
+            // A title with nowhere to break, as a file's name has: it must wrap all the same.
+            record(
+              'c-2',
+              'Northwind_Traders_master_services_agreement_v12_final_countersigned.pdf',
+              18,
+            ),
           ],
         );
         expect(root.querySelectorAll('.home-card__item').length).toBe(4);
