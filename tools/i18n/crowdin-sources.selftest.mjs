@@ -200,7 +200,9 @@ reports(
 );
 reports(
   "the push workflow not uploading the kits' config",
-  { pushWorkflow: edited(REAL.pushWorkflow, 'config: crowdin-kits.yml', 'config: crowdin-conf.yml') },
+  {
+    pushWorkflow: edited(REAL.pushWorkflow, 'config: crowdin-kits.yml', 'config: crowdin-conf.yml'),
+  },
   /crowdin-push\.yaml uploads no source from crowdin-kits\.yml/,
 );
 reports(
@@ -245,7 +247,10 @@ reports(
 reports(
   'a kit outside the pattern, under another folder name',
   {
-    files: [...REAL.files, 'business-apps/packages/new-demo/bundle/agentic-ui-config/labels/en.json'],
+    files: [
+      ...REAL.files,
+      'business-apps/packages/new-demo/bundle/agentic-ui-config/labels/en.json',
+    ],
     kitsConfig: edited(
       REAL.kitsConfig,
       KIT_SOURCE,

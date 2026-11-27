@@ -68,7 +68,8 @@ function kitLabels(source) {
   const labels = source?.labels;
   const into = new Map();
   if (typeof labels !== 'object' || labels === null || Array.isArray(labels)) return into;
-  for (const [key, value] of Object.entries(labels)) if (typeof value === 'string') into.set(key, value);
+  for (const [key, value] of Object.entries(labels))
+    if (typeof value === 'string') into.set(key, value);
   return into;
 }
 
@@ -115,7 +116,10 @@ function measure(directory, read, targets) {
       return {
         locale,
         unreadable: content === undefined,
-        coverage: compare(english, content === null || content === undefined ? null : read(content)),
+        coverage: compare(
+          english,
+          content === null || content === undefined ? null : read(content),
+        ),
       };
     }),
   };
@@ -162,7 +166,9 @@ function languageLines({ locale, unreadable, coverage }, { missing: all }) {
   const listed = all ? missing : missing.slice(0, LISTED);
   const lines = [head, ...listed.map((key) => `            - ${key}`)];
   if (listed.length < missing.length)
-    lines.push(`            … and ${missing.length - listed.length} more (--missing lists every one)`);
+    lines.push(
+      `            … and ${missing.length - listed.length} more (--missing lists every one)`,
+    );
   return lines;
 }
 
@@ -181,13 +187,19 @@ export function formatCoverage(result, { missing = false } = {}) {
   if (result.kits.length === 0) lines.push('    no kit has a labels/en.json');
   for (const kit of result.kits) {
     lines.push(`  ${kit.name} (en: ${kit.english} keys)`);
-    const withFile = kit.languages.filter(({ coverage, unreadable }) => coverage !== null || unreadable);
-    const without = kit.languages.filter(({ coverage, unreadable }) => coverage === null && !unreadable);
+    const withFile = kit.languages.filter(
+      ({ coverage, unreadable }) => coverage !== null || unreadable,
+    );
+    const without = kit.languages.filter(
+      ({ coverage, unreadable }) => coverage === null && !unreadable,
+    );
     lines.push(...withFile.flatMap((language) => languageLines(language, { missing })));
     // One line for the languages a kit has no file in, rather than one line each: before Crowdin's
     // first export that is every language of every kit, and the useful rows would be buried.
     if (without.length)
-      lines.push(`    no file in ${without.map(({ locale }) => locale).join(', ')}: every key is English`);
+      lines.push(
+        `    no file in ${without.map(({ locale }) => locale).join(', ')}: every key is English`,
+      );
   }
   return lines.join('\n');
 }
@@ -195,7 +207,9 @@ export function formatCoverage(result, { missing = false } = {}) {
 function main(argv) {
   const unknown = argv.filter((arg) => arg !== '--missing' && arg !== '--json');
   if (unknown.length) {
-    console.error(`usage: node tools/i18n/coverage.mjs [--missing] [--json]\nunknown: ${unknown.join(' ')}`);
+    console.error(
+      `usage: node tools/i18n/coverage.mjs [--missing] [--json]\nunknown: ${unknown.join(' ')}`,
+    );
     return 2;
   }
   const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -211,4 +225,5 @@ function main(argv) {
 // Importable by `crowdin-status.mjs` and the controls without printing anything. `exitCode`, not
 // `process.exit()`: writing to a pipe is asynchronous, and exiting at once cut `--json` and
 // `--missing` off at 64 KiB when piped, mid-string.
-if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] === fileURLToPath(import.meta.url))
+  process.exitCode = main(process.argv.slice(2));

@@ -92,7 +92,11 @@ try {
     missing: ['a.b', 'd'],
     extra: ['z'],
   });
-  check('a language with no file has no coverage, rather than none counted as some', app.fi.coverage, null);
+  check(
+    'a language with no file has no coverage, rather than none counted as some',
+    app.fi.coverage,
+    null,
+  );
   check('a file that is not JSON is said, not counted', app.sv.unreadable, true);
 
   check(
@@ -101,18 +105,38 @@ try {
     ['acme-demo', 'plain-demo'],
   );
   const fi = result.kits[0].languages.find((l) => l.locale === 'fi');
-  check('a kit language is held to its own English', [fi.coverage.present, fi.coverage.total], [1, 14]);
+  check(
+    'a kit language is held to its own English',
+    [fi.coverage.present, fi.coverage.total],
+    [1, 14],
+  );
   check('and a key its English lacks is extra', fi.coverage.extra, ['acme.extra']);
 
   const text = formatCoverage(result);
-  says('a percentage and the counts are printed', text, /es\s+2\/3\s+66\.7%\s+1 missing\s+1 as English/);
+  says(
+    'a percentage and the counts are printed',
+    text,
+    /es\s+2\/3\s+66\.7%\s+1 missing\s+1 as English/,
+  );
   says('the missing keys are named', text, /es[^\n]*\n\s+- a\.c/);
   says('a language with no file says so', text, /fi\s+no file: every key is English/);
   says('a file that is not JSON says so', text, /sv\s+the file is not JSON, so it is not read/);
   says('an extra key is named', text, /nb[^\n]*1 extra: z/);
-  says('a kit with no file in a language says so, in one line', text, /plain-demo \(en: 1 keys\)\n\s+no file in es, fi, nb: every key is English/);
-  says('ten missing keys are listed, then a count', text, /- acme\.k10\n\s+… and 3 more \(--missing lists every one\)/);
-  says('every missing key is listed when asked', formatCoverage(result, { missing: true }), /- acme\.k13/);
+  says(
+    'a kit with no file in a language says so, in one line',
+    text,
+    /plain-demo \(en: 1 keys\)\n\s+no file in es, fi, nb: every key is English/,
+  );
+  says(
+    'ten missing keys are listed, then a count',
+    text,
+    /- acme\.k10\n\s+… and 3 more \(--missing lists every one\)/,
+  );
+  says(
+    'every missing key is listed when asked',
+    formatCoverage(result, { missing: true }),
+    /- acme\.k13/,
+  );
 
   const bare = mkdtempSync(join(tmpdir(), 'i18n-coverage-bare-'));
   try {
@@ -156,11 +180,15 @@ check('it exits 2 on an argument it does not know', run(['--strict']), 2);
 // Through a pipe, as `| jq` or a CI step reads it: the real repository's `--json` is well over the
 // 64 KiB a pipe takes at once, and exiting at once cut it off mid-string.
 {
-  const piped = spawnSync(process.execPath, [join(ROOT, 'tools', 'i18n', 'coverage.mjs'), '--json'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const piped = spawnSync(
+    process.execPath,
+    [join(ROOT, 'tools', 'i18n', 'coverage.mjs'), '--json'],
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
   let whole = false;
   try {
     whole = JSON.parse(piped.stdout).app.english === real.app.english;

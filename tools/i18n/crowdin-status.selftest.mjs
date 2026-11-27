@@ -110,7 +110,10 @@ says(
   const crowdinAt = report.search(/es\s+approved\s+99%/);
   const repositoryAt = report.indexOf('Translation coverage in this repository');
   if (crowdinAt !== -1 && repositoryAt > crowdinAt) passed += 1;
-  else failures.push(`the report holds Crowdin's progress, then the repository's coverage\n      got: ${report}`);
+  else
+    failures.push(
+      `the report holds Crowdin's progress, then the repository's coverage\n      got: ${report}`,
+    );
   if (/Kits — business-apps\/packages\/<kit>\/bundle\/agentic-ui-config\/labels/.test(report))
     passed += 1;
   else failures.push(`the report's repository half covers the kits\n      got: ${report}`);

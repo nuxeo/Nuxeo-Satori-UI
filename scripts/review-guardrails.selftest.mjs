@@ -3903,7 +3903,11 @@ expectRed(
   'checkCrowdinConfig',
   CROWDIN_WITH_KITS,
   (write, git) =>
-    git(['rm', '--quiet', 'business-apps/packages/acme-demo/bundle/agentic-ui-config/labels/en.json']),
+    git([
+      'rm',
+      '--quiet',
+      'business-apps/packages/acme-demo/bundle/agentic-ui-config/labels/en.json',
+    ]),
   /declares the source `\/business-apps\/packages\/\*\/bundle\/agentic-ui-config\/labels\/en\.json` and nothing matches it/,
 );
 // And the root is still a short list: a wider one reaches `node_modules`.
@@ -3948,7 +3952,11 @@ const CROWDIN_KITS = {
     'config: crowdin-kits.yml',
   ),
 };
-expectGreen("the kits' config with a push and a pull of their own", 'checkCrowdinConfig', CROWDIN_KITS);
+expectGreen(
+  "the kits' config with a push and a pull of their own",
+  'checkCrowdinConfig',
+  CROWDIN_KITS,
+);
 expectRed(
   "the kits' pull without its config",
   'checkCrowdinConfig',
@@ -3963,7 +3971,10 @@ expectRed(
   (write) =>
     write(
       '.github/workflows/crowdin-push.yaml',
-      kitsWorkflow('crowdin-conf.yml', `          upload_sources: true\n          command_args: '--delete-obsolete'\n`),
+      kitsWorkflow(
+        'crowdin-conf.yml',
+        `          upload_sources: true\n          command_args: '--delete-obsolete'\n`,
+      ),
     ),
   /crowdin-push\.yaml does not pass `config: crowdin-kits\.yml`/,
 );
@@ -3972,7 +3983,13 @@ expectRed(
   'checkCrowdinConfig',
   CROWDIN_KITS,
   (write) =>
-    write(KITS_PULL, CROWDIN_WORKFLOW(PULL_DOWNLOAD).replace('config: crowdin-conf.yml', 'config: crowdin-kits.yml')),
+    write(
+      KITS_PULL,
+      CROWDIN_WORKFLOW(PULL_DOWNLOAD).replace(
+        'config: crowdin-conf.yml',
+        'config: crowdin-kits.yml',
+      ),
+    ),
   /crowdin-pull-kits\.yaml runs crowdin\/github-action without passing `gpg_private_key`/,
 );
 expectRed(

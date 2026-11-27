@@ -24,7 +24,7 @@
  *
  * Only `node:` built-ins, so `crowdin-status.yaml`, which runs without an install, can import it.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 /**
@@ -69,14 +69,14 @@ export function readCrowdinFiles(text) {
 
 /** A Crowdin source pattern as a regular expression over repository paths: `*` is one segment. */
 export function sourcePattern(source) {
-  const pattern = source.replace(/^\//, '');
-  return new RegExp(
-    `^${pattern
+  // `**` crosses folders and `*` and `?` do not, as `checkCrowdinConfig` reads them. Each piece
+  // between `**` is escaped whole, so nothing in a path is read as a pattern but those three.
+  const segment = (piece) =>
+    piece
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*\*/g, '\u0000')
       .replace(/\*/g, '[^/]*')
-      .replace(/\u0000/g, '.*')}$`,
-  );
+      .replace(/\?/g, '[^/]');
+  return new RegExp(`^${source.replace(/^\//, '').split('**').map(segment).join('.*')}$`);
 }
 
 /** The two-letters code Crowdin writes for `languageId` under `entry`, after its mapping. */
@@ -185,7 +185,9 @@ export function crowdinSourceFindings({
   const sources = files.filter((file) => file === APP_CATALOGUE || KIT_LABELS.test(file));
   const kits = sources.filter((file) => KIT_LABELS.test(file));
   if (!sources.includes(APP_CATALOGUE))
-    findings.push(`${APP_CATALOGUE} is not in the repository, so the app's source was not checked.`);
+    findings.push(
+      `${APP_CATALOGUE} is not in the repository, so the app's source was not checked.`,
+    );
   if (kits.length === 0)
     findings.push('No kit has a labels/en.json, so the kits were not checked: nothing to iterate.');
   const watched = pushPaths(pushWorkflow).map(pathsGlob);
@@ -285,10 +287,12 @@ export function crowdinSourceFindings({
 
 /** The text of each step of `workflow` that runs the Crowdin action with `config: <name>`. */
 function crowdinStepsWith(workflow, name) {
-  const config = new RegExp(`^\\s*config:\\s*${name.replace(/\./g, '\\.')}\\s*$`, 'm');
+  // A line compared as text, not a pattern built from `name`: nothing in it has to be escaped.
+  const config = (step) =>
+    step.split('\n').some((line) => line.trim().replace(/\s+/g, ' ') === `config: ${name}`);
   return workflow
     .split(/\n(?=\s*- (?:name|uses):)/)
-    .filter((step) => /uses:\s*crowdin\/github-action@/.test(step) && config.test(step));
+    .filter((step) => /uses:\s*crowdin\/github-action@/.test(step) && config(step));
 }
 
 /** The `localization_branch_name` a pull workflow writes, as written. */
@@ -304,7 +308,8 @@ export const KITS_CONFIG = 'crowdin-kits.yml';
 export const APP_CATALOGUE = 'apps/nuxeo-ui/public/i18n/en.json';
 
 /** A kit's English labels (docs/business-apps/app-definition-v2.md, section 7). */
-export const KIT_LABELS = /^business-apps\/packages\/[^/]+\/bundle\/agentic-ui-config\/labels\/en\.json$/;
+export const KIT_LABELS =
+  /^business-apps\/packages\/[^/]+\/bundle\/agentic-ui-config\/labels\/en\.json$/;
 
 /**
  * The name the app reads each Crowdin language id as, where the two differ: Norwegian, which a

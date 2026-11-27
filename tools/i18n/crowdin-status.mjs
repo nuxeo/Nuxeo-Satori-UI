@@ -72,7 +72,9 @@ export function formatProgress(rows) {
   const width = Math.max(8, ...rows.map((row) => row.languageId.length));
   const lines = rows
     .slice()
-    .sort((a, b) => b.approvalProgress - a.approvalProgress || a.languageId.localeCompare(b.languageId))
+    .sort(
+      (a, b) => b.approvalProgress - a.approvalProgress || a.languageId.localeCompare(b.languageId),
+    )
     .map(
       (row) =>
         `  ${row.languageId.padEnd(width)}  approved ${String(row.approvalProgress).padStart(3)}%` +
