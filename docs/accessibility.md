@@ -283,8 +283,10 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   it. Card view, and the journey's screens other than those six, have never been measured at
   320px with the drawer closed. Since 27 November 2026 the administration drawer is the exception:
   below 600px (`PHONE_WIDTH_QUERY` in `app-shell.component.ts`) it collapses into an
-  "Administration menu" button above the page, which opens it over the page, modal, with the focus
-  held in it and given back to the button; each administration page then has the window's width.
+  "Administration menu" button above the page, which opens it over the page, modal: the focus is
+  held in it and given back to the button, the header and the platform's menu are inert meanwhile,
+  and Escape, the backdrop, its own close button or a page chosen in it closes it. Each
+  administration page then has the window's width.
   `app-shell-admin-menu-phone.spec.ts` holds it in Chrome at 320 and 1280 CSS pixels, with axe.
   Every other drawer still sits beside its page at 320px. Found there, not fixed: the NXQL search
   page's results table scrolls inside `.nxql-table-wrap`, which a keyboard cannot reach, at 320

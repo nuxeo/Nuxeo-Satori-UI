@@ -851,15 +851,19 @@ neither:
 
 A list of recent records, `"recent": { "types": ["Contract"], "limit": 5 }`, either key or neither:
 
-| Key     | What it is                                                                                                                       |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `types` | Document types, 1 to 20, each once: only records of these show. Each must be in the content model when the pipeline is given one |
-| `limit` | How many show, a whole number from 1 to 20. 5 when left out                                                                      |
+| Key     | What it is                                                                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `types` | Document types, 1 to 20, each once: only records of these types themselves show, not of their subtypes. Each must be in the content model when the pipeline is given one |
+| `limit` | How many show, a whole number from 1 to 20. 5 when left out                                                                                                              |
 
 - **What a list of tasks shows:** the person's open tasks, newest first, each with the record it is
-  about, its workflow and the day it was given them, each opening on the tasks page, and a link to
-  the tasks page under them. It is the tasks page's read, `GET /api/v1/task` for the person, with
-  `workflowModelName` when the card names a workflow (api-integrations.md, section 3).
+  about, its workflow and the day the task was created, each opening on the tasks page, and a link
+  to the tasks page under them. It is the tasks page's read, `GET /api/v1/task` for the person, with
+  `workflowModelName` when the card names a workflow (api-integrations.md, section 3). For one
+  workflow the server sends every such task of the person, unpaged, and the card keeps the newest.
+- **A workflow or a type the server does not have** shows an empty list, as one with nothing in it
+  does: the validator checks a workflow's name for its form only, since no list of workflows is in
+  the content model, and a type against the content model only when the pipeline is given one.
 - **What a list of recent records shows:** the records the person created or edited last, the
   latest changed first, each with its type and the day it last changed, each opening its record
   page. It is what the app's Recently viewed lists (api-integrations.md, section 4): **Nuxeo records

@@ -3176,7 +3176,7 @@
   "home.tasks.title": "Heading of a home page card that lists the signed-in user's open workflow tasks, when the configuration gives the card no title of its own.",
   "home.tasks.loading": "Status text, read by screen readers, in the home page card of the user's tasks while they are being read from the server.",
   "home.tasks.empty": "Heading shown in the home page card of the user's tasks when they have no open task. Short, no full stop.",
-  "home.tasks.since": "Line under a task in the home page card of the user's tasks: the day the task was given to them. {{date}} is the day, already written for the language, such as \"3 Nov 2026\".",
+  "home.tasks.since": "Line under a task in the home page card of the user's tasks: the day the task was created, for most tasks the day it was given to them. {{date}} is the day, already written for the language, such as \"3 Nov 2026\".",
   "home.tasks.open-page": "Link at the bottom of the home page card of the user's tasks that opens the tasks page, where every open task is listed and can be worked on.",
   "home.recent.title": "Heading of a home page card that lists the records the signed-in user created or edited last, when the configuration gives the card no title of its own. The same name as the app's Recently viewed menu entry, which lists the same records.",
   "home.recent.loading": "Status text, read by screen readers, in the home page card of the user's recent records while they are being read from the server. A record is a business document, such as a contract.",

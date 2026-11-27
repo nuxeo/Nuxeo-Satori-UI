@@ -162,7 +162,9 @@ fields at all (`{"entity-type": "tasks", "entries": [...]}`), whatever `pageSize
 the user's (`userId=nobodyxyz&workflowModelName=SerialDocumentReview` was empty); and none for a
 model the server does not have. The service sorts that list newest first and keeps the first
 `pageSize`, as above, reading titles only for those it keeps, and leaves out a task of another
-workflow whatever the server sends.
+workflow whatever the server sends. So a person with many tasks of that workflow downloads them all
+for a card that shows five; the unfiltered read is bounded at `pageSize` + 1000. A model the server
+does not have answers an empty list, which reads as no task: nothing tells the two apart.
 
 **Request Headers:**
 
