@@ -87,6 +87,9 @@ public final class ConfigSnapshot {
 
     private final List<Diagnostic> diagnostics;
 
+    /** When it was built, which is when the server logged its diagnostics. */
+    private final java.time.Instant builtAt = java.time.Instant.now();
+
     private ConfigSnapshot(List<Fragment> fragments, List<Layout> layouts, List<Asset> assets, List<App> apps,
             List<Diagnostic> diagnostics) {
         this.fragments = List.copyOf(fragments);
@@ -94,6 +97,11 @@ public final class ConfigSnapshot {
         this.assets = List.copyOf(assets);
         this.apps = List.copyOf(apps);
         this.diagnostics = List.copyOf(diagnostics);
+    }
+
+    /** When it was built: the server logs every one of its {@link #diagnostics} then, once. */
+    java.time.Instant builtAt() {
+        return builtAt;
     }
 
     /** Fragments of one layer, in the order the browser applies them. */

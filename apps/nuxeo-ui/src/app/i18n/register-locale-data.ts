@@ -1,11 +1,14 @@
 import { registerLocaleData } from '@angular/common';
 import localeAr from '@angular/common/locales/ar';
+import localeDa from '@angular/common/locales/da';
 import localeDe from '@angular/common/locales/de';
 import localeEs from '@angular/common/locales/es';
+import localeFi from '@angular/common/locales/fi';
 import localeFr from '@angular/common/locales/fr';
 import localeHe from '@angular/common/locales/he';
 import localeIt from '@angular/common/locales/it';
 import localeJa from '@angular/common/locales/ja';
+import localeNb from '@angular/common/locales/nb';
 import localeNl from '@angular/common/locales/nl';
 import localeSv from '@angular/common/locales/sv';
 
@@ -60,9 +63,12 @@ import localeSv from '@angular/common/locales/sv';
  *   silently — but that also means it cannot lead.
  *
  * A language sits between the two steps for as long as translation takes. That is the normal
- * state, not an unfinished one: nine non-English languages are registered here, the set Nuxeo
- * Web UI supports — `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` — and **five of them
- * are mid-flight**, with `ar`, `es`, `he`, `it` and `sv` requested and awaiting Crowdin.
+ * state, not an unfinished one: twelve non-English languages are registered here — the nine Nuxeo
+ * Web UI supports, `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv`, and the Nordic three the
+ * business apps' plan adds in its phase 7, `da`, `fi` and `nb` (Norwegian Bokmål, which Crowdin
+ * may call `no`; `crowdin-conf.yml` maps it) — and **eight of them have no catalogue here yet**:
+ * `ar`, `es`, `he`, `it` and `sv` are arriving from Crowdin, and `da`, `fi` and `nb` are not yet
+ * Crowdin targets. `npm run i18n:coverage` says how far each has reached the repository.
  *
  * Registration leading is the harmless direction, which is the whole reason step 1 can run
  * early: `checkLocaleDataRegistered` only *warns* about locale data with no catalogue behind it,
@@ -80,12 +86,15 @@ import localeSv from '@angular/common/locales/sv';
  */
 const LOCALE_DATA: ReadonlyArray<readonly [locale: string, data: unknown]> = [
   ['ar', localeAr],
+  ['da', localeDa],
   ['de', localeDe],
   ['es', localeEs],
+  ['fi', localeFi],
   ['fr', localeFr],
   ['he', localeHe],
   ['it', localeIt],
   ['ja', localeJa],
+  ['nb', localeNb],
   ['nl', localeNl],
   ['sv', localeSv],
 ];

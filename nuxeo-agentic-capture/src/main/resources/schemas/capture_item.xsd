@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A captured item (capt:), the CaptureItem facet's schema: a file that came into an inbox, what the
+  provider made of it, the record it was matched to, and how it was filed.
+
+  The server writes every property but five, and refuses anyone else's write of them
+  (CaptureItemListener). While the item waits for a person, status review, a person may set class,
+  fields, record, note and decision: confirm files it, reject sets it aside.
+-->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/capture_item/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/schemas/agentic/capture_item/">
+
+  <xs:include schemaLocation="core-types.xsd" />
+
+  <!-- The server's: where the item is. received, then filed or review, then filed or rejected. -->
+  <xs:element name="status" type="xs:string" />
+  <!-- Why it waits for a person: lowConfidence, unknownClass, missingKey, unmatched, ambiguous,
+       noProvider, providerFailed, notFiled. None once it is filed. -->
+  <xs:element name="reason" type="xs:string" />
+  <!-- The capture profile, by id, and the provider that classified it, by id. -->
+  <xs:element name="profile" type="xs:string" />
+  <xs:element name="provider" type="xs:string" />
+  <xs:element name="receivedAt" type="xs:date" />
+  <xs:element name="classifiedAt" type="xs:date" />
+  <!-- The file's digest as the platform keeps it, when it came in: the file may not change. -->
+  <xs:element name="digest" type="xs:string" />
+
+  <!-- The provider's proposal, kept as it was: its class and that class's confidence; each
+       field's value and confidence; the item's confidence, the least of the class's and its match
+       keys'; and the one record that matched, by id. -->
+  <xs:element name="proposedClass" type="xs:string" />
+  <xs:element name="classConfidence" type="xs:double" />
+  <xs:element name="confidence" type="xs:double" />
+  <xs:element name="extracted" type="nxs:extracted" />
+  <xs:complexType name="extracted">
+    <xs:sequence>
+      <xs:element name="field" type="nxs:extractedField" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="extractedField">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" />
+      <xs:element name="value" type="xs:string" />
+      <xs:element name="confidence" type="xs:double" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="proposedRecord" type="xs:string" />
+
+  <!-- A person's, while it waits: the class, the fields and the record, set from the proposal
+       when it is made, and corrected; a note; and the decision, confirm or reject, which the
+       server acts on and empties. -->
+  <xs:element name="class" type="xs:string" />
+  <xs:element name="fields" type="nxs:fields" />
+  <xs:complexType name="fields">
+    <xs:sequence>
+      <xs:element name="field" type="nxs:field" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="field">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" />
+      <xs:element name="value" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="record" type="xs:string" />
+  <xs:element name="note" type="xs:string" />
+  <xs:element name="decision" type="xs:string" />
+
+  <!-- The server's, once decided: automatic, confirmed, corrected or rejected; who decided,
+       system for an automatic filing, and when; and the file's name on the record. -->
+  <xs:element name="outcome" type="xs:string" />
+  <xs:element name="decidedBy" type="xs:string" />
+  <xs:element name="decidedAt" type="xs:date" />
+  <xs:element name="attachment" type="xs:string" />
+</xs:schema>

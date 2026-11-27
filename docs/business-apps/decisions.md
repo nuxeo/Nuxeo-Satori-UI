@@ -15,14 +15,16 @@ another way. Acting on a recommendation takes no decision: each stays open, and 
 still decide it another way. The security reviews wait until then too
 ([security-reviews.md](security-reviews.md)).
 
-Four recommendations need someone outside the work before anything can follow them, so they wait
+Five recommendations need someone outside the work before anything can follow them, so they wait
 for their owners rather than being acted on:
 
 - **4,** the security review of the registered computations and rules, which waits with the
   others;
 - **6,** access to the Satori design system for presales, which its owners grant;
 - **G,** tenancy, which is designed with the platform team;
-- **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales.
+- **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales;
+- **T,** telemetry, whose recommendation is to build nothing until its privacy and security reviews
+  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md)).
 
 **I,** protecting fields such as an insurance number, is a platform decision from the feasibility
 report. Until it is taken, a field that must not be shown to a group is left out of that group's
@@ -336,6 +338,30 @@ way.
     so the servlet would be switched on by a setting instead, off by default, and the facets would
     stay, inert until a type carries one.
 
+- **B, capture and classification's server add-on (27 November 2026).** Built against the
+  recommendation, "one add-on per domain module": capture is
+  [`nuxeo-agentic-capture`](../../nuxeo-agentic-capture/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [P&C claims kit](../../business-apps/packages/pc-claims-demo/README.md) 0.2.0 depends on; nothing
+  of it went into `nuxeo-agentic-core`. A kit's item type carries the add-on's `CaptureItem` facet,
+  and a kit's profile names its inbox, the record type and the keys it is matched by: an item
+  uploaded into the inbox is read in the background, and filed on the one record its keys match
+  when its class and keys are at least the profile's threshold, or waits for a person who confirms,
+  corrects or rejects it. Through a provider interface, with a deterministic stand-in and a
+  provider that calls the AI package's `AI.*` operations, off until a server turns it on, which is
+  to be done only once the AI data terms are approved, the plan's phase 7 condition. The AI package's
+  two capture operations, and its Claude provider, are not built: they are the AI package's, and the
+  plan's "Needs". Decision 3 is not touched: the add-on registers no Automation operation, and a
+  person decides through the item's Edit form. Its security review is deferred until the app is
+  finished, as every security review is; it is installed nowhere. What changes if B goes another
+  way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and the kit's
+    `package.xml` depends on that package in place of `nuxeo-agentic-capture`. The component, facet,
+    schema and setting names do not change, so no kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then run the listeners on every document
+    created and changed; they stay inert until a type carries the facet, and the provider stays
+    unset, so nothing is read until a server names one.
+
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
   serves some of an asset's picture views, and its original where its rights allow, watermarked on
@@ -431,6 +457,15 @@ way.
   It loads no customer code into the shipped app, and the decision stays open. Once it is taken,
   the prototype can go, with its two guards: `checkPluginSpikeIsolated` and the `type:spike` probes
   in `scripts/beta-harness/module-boundaries.mjs`.
+
+## Open: from phase 10
+
+Raised by the [development plan](development-plan.md)'s phase 10, "telemetry and the diagnostics
+page".
+
+| #   | Decision                                                 | Recommendation                                                                                                                                                                                                                                                           | Owner                    | Needed by |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ | --------- |
+| T   | Telemetry: whether the app sends any, what, and where to | Opt-in and off by default: sent by the server, never the browser, to the customer's own OpenTelemetry collector, only the closed list of fields in [telemetry.md](telemetry.md), never to Hyland's without a contract; built only after its privacy and security reviews | Product, security, legal | Phase 10  |
 
 ## From the Studio parity plan
 

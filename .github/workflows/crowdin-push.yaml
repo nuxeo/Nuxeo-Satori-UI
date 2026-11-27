@@ -27,6 +27,11 @@ on:
       # yet started nothing. Crowdin then held stale context until some later catalogue change or a
       # manual run — and stale context is worse than none, because a translator believes it.
       - 'libs/**/i18n/en.context.json'
+      # Each business app's English labels, the source in `crowdin-kits.yml`. A kit's labels
+      # change in its own pull request, so without this a new or reworded label would wait for the
+      # next change to the app's catalogue before translators saw it. `crowdin-sources.selftest.mjs`
+      # holds every source in the config to a glob here.
+      - 'business-apps/packages/*/bundle/agentic-ui-config/labels/en.json'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -104,3 +109,29 @@ jobs:
           CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
         run: node tools/i18n/crowdin-push-context.mjs
+
+      # The business apps' labels, from their own config, which `crowdin-pull-kits.yaml` downloads
+      # into a pull request of its own (see the head of `crowdin-kits.yml` for why). LAST, so that a
+      # failure here cannot skip the app's sources or their context: a failed step skips every step
+      # after it.
+      #
+      # `--delete-obsolete` runs twice against one project, once per config, and that is safe only
+      # because the CLI scopes it to each entry's own patterns. Read, not assumed, in the CLI this
+      # action runs: its Dockerfile at the pinned SHA is `FROM crowdin/cli:4.14.2`, and in 4.14.2
+      # `UploadSourcesAction` calls `DeleteObsoleteProjectFilesSubAction.act(file.getSource(),
+      # file.getIgnore(), file.getTranslation(), …)` for each entry, whose
+      # `ObsoleteSourcesUtils.findObsoleteProjectFiles` keeps only project files that match that
+      # source pattern and its translation pattern. So this upload never deletes the app's
+      # catalogue, and the one above never deletes a kit's. Re-read it when the pin moves. A manual
+      # run with `dry_run` lists what each would delete, without deleting it.
+      - name: Upload the kits' labels to Crowdin
+        uses: crowdin/github-action@8868a33591d21088edfc398968173a3b98d51706 # v2.16.2
+        with:
+          config: crowdin-kits.yml
+          upload_sources: true
+          upload_sources_args: ${{ inputs.dry_run && '--delete-obsolete --dryrun' || '--delete-obsolete' }}
+          download_translations: false
+          create_pull_request: false
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}

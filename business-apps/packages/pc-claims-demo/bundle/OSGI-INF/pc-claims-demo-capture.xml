@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN, written by hand: what app-model cannot write, apart from the model component it writes,
+  so that app-model may write that one again. The README's log for 0.2.0 says why each is by hand.
+
+  Capture and classification, on nuxeo-agentic-capture, which the package depends on:
+  - PropertyClaimInbox, the claims mail inbox, a folder that takes only mail;
+  - PropertyClaimMail, a piece of mail: its file, and the add-on's CaptureItem facet, so that it is
+    classified, its fields extracted, and filed on its claim, or waits for a person;
+  - two page providers, the mail waiting for a person and a claim's filed mail;
+  - the capture profile, pc-claims-mail: a claim letter's fields, matched to a claim by its number,
+    filed by itself at 85% and above.
+
+  Fictional, like the kit. Replaced with the stand-in model when a real one arrives.
+-->
+<component name="nuxeo.config.pc-claims-demo.capture" version="1.0">
+  <require>nuxeo.config.pc-claims-demo.model</require>
+  <!-- The CaptureItem facet and its schema, and the profiles' extension point: nuxeo-agentic-capture's. -->
+  <require>org.nuxeo.agentic.capture.schema</require>
+  <require>org.nuxeo.agentic.capture</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Holds a file of its own, file:content, so it opens on the file: the letter beside its
+         properties. Not versioned: what came in does not change. -->
+    <doctype name="PropertyClaimMail" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="file" />
+      <facet name="CaptureItem" />
+    </doctype>
+    <doctype name="PropertyClaimInbox" extends="Folder">
+      <subtypes>
+        <type>PropertyClaimMail</type>
+      </subtypes>
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="PropertyClaimMail">default</type>
+      <type name="PropertyClaimInbox">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The mail waiting for a person, oldest first. The repository answers: no lag. -->
+    <coreQueryPageProvider name="pc_capture_review">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'PropertyClaimMail' AND (capt:status = 'review')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="capt:receivedAt" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <!-- A claim's mail, filed on it, latest first. -->
+    <coreQueryPageProvider name="pc_claim_mail">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'PropertyClaimMail' AND (capt:record = ? AND capt:status = 'filed')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="capt:decidedAt" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+
+  <!-- The capture profile: what the inbox takes, and how it files. The threshold is the add-on's
+       default, written out so that a reader sees it. -->
+  <extension target="org.nuxeo.agentic.capture" point="profiles">
+    <profile id="pc-claims-mail">
+      <inboxType>PropertyClaimInbox</inboxType>
+      <itemType>PropertyClaimMail</itemType>
+      <recordType>PropertyClaim</recordType>
+      <recordPath>/default-domain/workspaces/pc-claims-demo</recordPath>
+      <threshold>0.85</threshold>
+      <class name="claimLetter" label="Claim letter">
+        <description>A letter from a policyholder or their representative about an existing property claim</description>
+        <keyword>claim number</keyword>
+        <keyword>policy number</keyword>
+        <keyword>date of loss</keyword>
+        <field name="claimNumber" label="Claim number" match="pclaim:number" format="PC-[0-9]{5}"
+          description="The claim's number, PC- and five digits" />
+        <field name="policyNumber" label="Policy number" format="POL-PC-[0-9]{4}"
+          description="The policy's number, POL-PC- and four digits" />
+        <field name="lossDate" label="Date of loss" description="When the loss happened, as the letter says it" />
+        <field name="sender" label="From" description="Who wrote the letter" />
+      </class>
+    </profile>
+  </extension>
+</component>

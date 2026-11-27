@@ -32,6 +32,9 @@ added on 25 November 2026 (section 10); its server-side half is not built.
   (section 4).
 - **Every label key has a text,** in the package's `labels/en.json` or in the platform's English
   catalogue. One with neither is refused, by its key and its file.
+- **A language's labels are a subset of English's.** `labels/<language>.json`, which Crowdin writes
+  beside `labels/en.json`, may leave keys out, since each falls back to English; a key
+  `labels/en.json` has no text for is refused, by its key and its file.
 - **A facet names an aggregate its page provider defines,** when the package's own model defines
   that page provider; so does a home's figure. Only the search index answers aggregates, and a facet
   on anything else is left out of the queue, said only in the browser's console.
@@ -70,6 +73,10 @@ root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v
   never asks for it. The registry serves the app after sign-in, to the groups its `app.json` names.
 - **What it carries for later:** `modules/`, which the registry does not serve until a domain
   module exists, and `actions.json`, which the registry serves and nothing in the app reads yet.
+- **What sits beside the bundle, unpackaged:** a demo kit's `content-model.json`, which
+  `app-model` writes to describe its stand-in model, and `connectors/`, the connectors of the kit's
+  own that `app-connector` writes for a server with the connectors add-on to take in
+  `nxserver/config/`. Step 2 reads both; no zip carries either.
 - **No bootstrap fragment.** On a server that runs several apps, a bootstrap fragment would
   rebrand every one of them. An app's branding is in its `app.json`. The pipeline does not check
   this yet.
@@ -96,16 +103,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version, the platform's English catalogue, and a content model: the one given, or a stand-in package's own (section 4). Every label key has a text; a facet or a figure on the package's own page provider names an aggregate it defines, and a column or a sort on one names a property of the type its NXQL lists; the NXQL of a page provider the package defines holds nothing Nuxeo's grammar has no place for, by a check of its tokens; the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
-| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8), and the upgrade keeps every customer configuration (section 10), the platform's side too given `--previous-platform`                                                                                                                                                                                                                                                                                                                                                     |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| 7. Signed         | Keyless, through Sigstore: `actions/attest` signs a statement of the package, its version, the zip's SHA-256, the commit and the run, which `app-package-signature.mjs verify` checks against the trusted signers at once; and a build provenance attestation, as before. Skipped, with a warning, when the run has no identity or is no trusted signer (section 9)                                                                                                                                                                                                                                                                                                                                                                           |
-| 8. Published      | Only a signed zip, its signature verified again first: Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version, the platform's English catalogue, and a content model: the one given, or a stand-in package's own (section 4). Every label key has a text, and a language's labels give only keys English has; a facet or a figure on the package's own page provider names an aggregate it defines, and a column or a sort on one names a property of the type its NXQL lists; the NXQL of a page provider the package defines holds nothing Nuxeo's grammar has no place for, by a check of its tokens; the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files; and no name the kit gives is another kit's, compared with the kits beside it |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8), and the upgrade keeps every customer configuration (section 10), the platform's side too given `--previous-platform`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 7. Signed         | Keyless, through Sigstore: `actions/attest` signs a statement of the package, its version, the zip's SHA-256, the commit and the run, which `app-package-signature.mjs verify` checks against the trusted signers at once; and a build provenance attestation, as before. Skipped, with a warning, when the run has no identity or is no trusted signer (section 9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 8. Published      | Only a signed zip, its signature verified again first: Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -138,6 +145,16 @@ dots. A key with a text in neither is a finding, with the key, the file and the 
 card would show its id made readable, and a field its property's name. Only English is checked,
 the language every other falls back to. The validator checks keys only when it is given the
 catalogue, `--catalogue`, which the pipeline always gives.
+
+Step 2 holds each other language's labels to English's: every key `labels/<language>.json` gives
+must have a text in `labels/en.json`. A subset passes, none at all included: a key a language
+leaves out falls back to English, key by key, on the server (app-definition-v2.md, section 7) and
+in the app. A key English lacks is a finding, `unknown`, with the key and the file: it is a
+misspelt or stale key, which no file names, and which Crowdin, writing a language's file from
+`labels/en.json`, never asks a translator for. As every file of the app, a language's file is named
+in the component (`<file path="labels/<language>.json" />`, which the `app-registry` generator
+writes), or refused, since the registry would never serve it; and a new one is an addition, so
+the version rises at least a minor (section 10).
 
 Step 2 holds a queue's facets, and a home's figures, to the page providers the package defines. A
 facet is one of its page provider's aggregates, and only a page provider of the search index
@@ -188,6 +205,60 @@ one whose NXQL does not say its type, such as one with an `OR` at its top, or wh
 model does not have; a package given no content model, such as a customer's in CI; the server's
 own properties, `ecm:`; and a column a computation fills
 (`libs/shared/app-definition/src/lib/page-providers.ts`).
+
+Step 2 holds what a layout's rules, computations and checks read to the content model too, given
+one: each property of the open record that a rule, a computation, a check, a widget's parameter
+or a related list's parameter names must be one of the type's or of a facet it declares, as a
+field must (`layout-model.ts`). A banner whose rule names a property the type lacks would never
+show, and the P&C kit's late-report banner, on `pclaim:reportedDate`, passed the pipeline before.
+A finding names the place and what reads it. Not looked for: the server's own `ecm:` properties,
+a task form's `var:` variables, a property a facet of the model brings that the type does not
+declare, which a record given that facet at run time has, as a rule guarded by
+`app.rules.hasFacet` reads it, and what a table's or a related list's column computes or gives a
+widget, which may be the row's; a column's `visibleWhen`, which is the open record's, is. The
+command line, and so the pipeline, asks for this check; the server's validator does not, since it
+holds every live deployment layer to the model again on each rebuild and drops one it refuses for
+the package's own file, which a check added after the layer was written must not do.
+
+Step 2 reads the connectors the kit contributes itself: each `<connector>` of a component in
+`connectors/`, beside the bundle, which `app-connector` writes as
+`connectors/<package>-connectors-config.xml`. No zip carries it: it requires
+`org.nuxeo.agentic.connectors`, which has no Marketplace package yet, so a bundle carrying it would
+leave it pending on a server without the add-on, and a server with the add-on takes it in
+`nxserver/config/`. Each connector is held to the add-on's rules, as `Connector.of` in
+`nuxeo-agentic-connectors` holds them: an id of its form, once; its address only as a server
+property of its own, `nuxeo.agentic.connectors.<id>.<name>`, one name after its prefix, and no
+address anywhere in it; a path of the add-on's form; a permission's name; a credential, if any, in
+a header the add-on takes, named by a property of its own or an environment variable
+`NUXEO_CONNECTOR_<ID>_<NAME>`, `<NAME>` in capitals and digits, never written; its timeouts and
+limits within the add-on's bounds; 1 to 20 types and 1 to 50 fields of the add-on's form, each
+pointer from `/`; and a key, `<prefix>:<name>`. Given
+a content model, each type is in it and the key is a property of each, one value. Then each
+`external` card of a layout that names one of these connectors is held to it, as `--registered`
+holds a card to a server's: the layout's type is one the connector reads, and each field is one it
+returns. One that is not is a finding naming the card's place, the connector and its file. A card
+naming a connector the kit does not contribute is the server's, and is held to its form only, or to
+`--registered`. The add-on's own checks on the server, its permission and its limits among them,
+are not repeated here.
+
+Step 2 compares the kit's names with the other kits', as the release candidate's stage 3 does for
+the zips (section 11), so that a clash is found when the kit is built or written, not at the
+candidate: the P&C kit's queue `open-claims`, the moves kit's too, passed every write. The kits
+are every folder with an app definition in `--kits <folder>`, but the one named as the package's
+own folder is; given no `--kits`, a kit in the repository's `business-apps/packages/` is compared
+with the others there, as CI builds it, and a package anywhere else with none. What is compared,
+read by `readKitFolder` in `release-candidate-set.mjs`: the package's name; the app's id and
+address; each queue and each action; what its components register, the layouts by type and mode,
+the document types, schemas, facets, page providers and the rest stage 3 knows; its connectors
+(below); and a label key both kits have that is begun with the app's name of one of them, which
+makes it that app's own (app-definition-v2.md, section 7). A label key is not a clash on a server,
+where each app reads its own, and is refused all the same: another kit that has an app's own key is
+most often a copied one. A key begun with neither kit's name, such as one the platform reads by a
+pattern, `document-layouts.timeline.event.<id>`, and the platform's own keys, the catalogue's and
+the `layout.` ones, are not compared. Each clash is a finding,
+`<file>: <kind> "<name>": <kit> contributes it too [clash]`. A kit folder that holds a link, or
+that cannot be read, is not compared, and a note names it, by the kind of error only. The write tools give `--kits` the folder the package
+is in, so a staging copy is compared as the package itself would be.
 
 Step 2 holds the app the component contributes to the same files. The package contributes its app
 once, under the id its `app.json` gives, from `agentic-ui-config/app.json`, the file the validator
@@ -368,7 +439,15 @@ reaches only when the integration branch does, and a tag names exactly what is p
   provider the package does not define is not checked: `describe_page_provider` lists a server's
   aggregates. Nor is an aggregate's type, a terms aggregate on a date, say.
 - **Label keys in other languages.** A key with an English text passes; one missing from
-  `labels/fr.json` falls back to English, and is not refused.
+  `labels/fr.json` falls back to English, and is not refused. A file whose every text is English's,
+  which is what Crowdin's approved-only export writes before anything is approved, passes too:
+  `npm run i18n:coverage` counts such texts as "as English", and nothing refuses them. The app's
+  catalogues have guards against a destructive pull (`checkCataloguesAreTranslated`,
+  `checkTranslationCatalogues`); a kit's files have only the validator's, which refuses a blank
+  text. A pull that turns a kit's real translations back into English passes every check, and the
+  kits' pull request body asks its reviewer to look for exactly that.
+- **Removing a key from a language's labels** is still rated breaking (section 10), as removing it
+  from English is, though the key then shows in English rather than as itself.
 - **A facet a record gains at run time.** A field whose property only such a facet brings is
   refused when a model is given, and the message names the facet. The record page shows it on a
   record that has the facet. Whether the pipeline should accept it, perhaps when a rule shows the
@@ -378,9 +457,12 @@ reaches only when the integration branch does, and a tag names exactly what is p
   a server's page providers, and quick filters, are not read at all. Whether to carry Nuxeo's
   grammar, and so parse a query as the server does, is open.
 - **Not held to the model yet:** a queue's or a related list's columns and sorts on the server's
-  page provider, or on one whose NXQL does not say plainly which type it lists (section 2); the
-  properties a computation, a rule or a widget parameter names; a task form's fields; and a
+  page provider, or on one whose NXQL does not say plainly which type it lists (section 2); what a
+  table's or a related list's column computes or gives a widget; a task form's fields; and a
   vocabulary widget's `directory` against the one its property is bound to.
+- **Kits outside the folder a kit is built in** are not compared with it: a customer's kit in
+  another repository, and a package built alone, outside `business-apps/packages/` and with no
+  `--kits`. The release candidate still compares every kit it carries (section 11).
 
 ## 8. Versions
 

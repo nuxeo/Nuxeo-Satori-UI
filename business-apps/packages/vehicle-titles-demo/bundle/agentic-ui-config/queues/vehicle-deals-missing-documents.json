@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "vehicle-titles.queue.vehicle-deals-missing-documents",
+  "pageProvider": "vtitles_deals_missing_documents",
+  "columns": [
+    "vdeal:number",
+    "vdeal:buyer",
+    "vdeal:year",
+    "vdeal:make",
+    "vdeal:model",
+    {
+      "field": "vdeal:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Working": "info",
+          "Contracted": "warning",
+          "Funded": "positive",
+          "Delivered": "positive",
+          "Cancelled": "negative"
+        }
+      }
+    },
+    { "field": "vdeal:soldOn", "widget": "date" },
+    { "field": "vdeal:salesperson", "widget": "user" },
+    {
+      "id": "titleStatus",
+      "labelKey": "vehicle-titles.field.titleStatus",
+      "field": "vdeal:title",
+      "widget": "document-link",
+      "parameters": { "types": ["VehicleTitle"], "show": "vtitle:status" }
+    }
+  ],
+  "sort": [{ "field": "vdeal:soldOn", "order": "asc" }],
+  "pageSize": 50
+}

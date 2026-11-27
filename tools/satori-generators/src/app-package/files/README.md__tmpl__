@@ -20,8 +20,10 @@ What each file may say is [app-definition-v2.md](<%= docs %>/app-definition-v2.m
 
 ## Adding to it
 
-Each of these generators writes its file and has the component name it. From the repository's
-root:
+The package has none of these yet: each is the next step only if the app needs it. The Builder
+kit's agent writes each through the Builder MCP server's write tools, which check the package
+first (`.cursor/skills/app-builder/SKILL.md`); by hand, each generator writes its file and has
+the component name it. From the repository's root:
 
 ```bash
 # A record page, and an Edit form
@@ -29,9 +31,37 @@ npx nx g ./tools/satori-generators:app-layout --package=<%= projectRoot %> --typ
 npx nx g ./tools/satori-generators:app-form --package=<%= projectRoot %> --type=<Type> --mode=edit --model=<content-model.json>
 # A queue, queues/<id>.json
 npx nx g ./tools/satori-generators:app-queue --package=<%= projectRoot %> --id=<queue> --pageProvider=<page provider>
-# A button, in actions.json
+# A button on a record or a queue's rows, in actions.json, if the app has one
 npx nx g ./tools/satori-generators:app-action --package=<%= projectRoot %> --id=<%= appId %>.<name> --transition=<transition>
+# A card of another system's fields: its connector, beside the bundle
+npx nx g ./tools/satori-generators:app-connector --package=<%= projectRoot %> --id=<%= appId %>.<name> --type=<Type> --key=<prefix>:<name> --path=/<path>/{key} --fields=<name>,...
 ```
+
+## Languages
+
+`labels/en.json` is the app's English, and the only labels file written here. Every other language
+comes from Crowdin: the repository's `crowdin-kits.yml` reads each kit's `labels/en.json` as a
+source and writes its approved translations beside it, as `labels/<language>.json`, and the
+"Crowdin Pull, kit labels" workflow brings them in a pull request of its own. Do not write one by
+hand; the next pull from Crowdin replaces it. Adding a language on Crowdin's side is the
+administrator's guide's, [section 4, "Languages"](<%= docs %>/administrator-guide.md#languages).
+
+- **A language gives a subset of English's keys.** Each key it leaves out shows in English, key by
+  key: the app registry serves the file over `labels/en.json`, and the app falls back to English
+  besides. The pipeline refuses a key that `labels/en.json` has no text for.
+- **When that pull request brings this kit's first file in a language,** name the file in the
+  component and raise the version, a minor, in the same pull request; when it changes a file's
+  texts, raise it a patch. Until then the pipeline refuses the package, since the registry would
+  never serve a file it does not name:
+
+  ```bash
+  npx nx g ./tools/satori-generators:app-registry --package=<%= projectRoot %>
+  ```
+
+- **A label whose meaning changes gets a new key.** Crowdin keeps the translations of a key whose
+  English text changes, so a key reused for something else keeps translations of the old meaning.
+- **`npm run i18n:coverage`** says how much of each language this kit holds, and which keys each
+  is missing.
 
 ## Checking and building it
 
