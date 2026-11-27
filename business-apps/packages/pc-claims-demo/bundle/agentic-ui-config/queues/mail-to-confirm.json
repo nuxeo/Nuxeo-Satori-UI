@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "pc-claims.queue.mail-to-confirm",
+  "pageProvider": "pc_capture_review",
+  "columns": [
+    { "field": "dc:title", "labelKey": "pc-claims.field.mailTitle" },
+    {
+      "field": "capt:reason",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "lowConfidence": "warning",
+          "unknownClass": "warning",
+          "missingKey": "warning",
+          "unmatched": "negative",
+          "ambiguous": "negative",
+          "noProvider": "neutral",
+          "providerFailed": "negative",
+          "notFiled": "negative"
+        }
+      }
+    },
+    "capt:proposedClass",
+    { "field": "capt:confidence", "widget": "percent", "parameters": { "scale": 1 } },
+    {
+      "id": "proposedClaim",
+      "field": "capt:proposedRecord",
+      "widget": "document-link",
+      "parameters": { "types": ["PropertyClaim"], "show": "pclaim:number" }
+    },
+    { "field": "capt:receivedAt", "widget": "relative-date" }
+  ],
+  "sort": [{ "field": "capt:receivedAt", "order": "asc" }],
+  "pageSize": 50
+}

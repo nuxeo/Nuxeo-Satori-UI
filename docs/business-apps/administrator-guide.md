@@ -19,12 +19,13 @@ wait for a security review, and some are built on open decisions
 | `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page, kept per connector, and change events. **A bundle, no package yet**                                                                           | No package                                                                                  | 0.1.0, its jar 2026.0.2-SNAPSHOT | Nowhere                                           |
 | `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it                                                                                  | Nothing                                                                                     | 0.1.0                            | Nowhere                                           |
 | `nuxeo-agentic-signature`   | The e-signature step: a record's file sent to its signers, the callback authenticated, the signed file filed. A stand-in provider only                                                                            | Nothing                                                                                     | 0.1.0                            | Nowhere                                           |
+| `nuxeo-agentic-capture`     | Capture: mail uploaded into an inbox classified, its fields extracted, matched and filed on its record, or queued for a person                                                                                    | Nothing                                                                                     | 0.1.0                            | Nowhere                                           |
 | `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons                                                                                    | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.7.0                            | 0.6.1 on the local server; 0.7.0 nowhere          |
 | `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                                                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.3.0`                                   | 0.2.4                            | 0.2.0 on the local server; 0.1.1 to 0.2.4 nowhere |
 | `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                                                                                                  | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.2.1                            | Nowhere                                           |
 | `facilities-demo`           | The tutorial's work-order app                                                                                                                                                                                     | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.1.1                            | Nowhere                                           |
 | `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                                                                                                     | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.2.0                            | Nowhere                                           |
-| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, two queues, a core-system card                                                                                                      | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.1.0                            | Nowhere                                           |
+| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, three queues, a core-system card, a claims mail inbox                                                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-capture:0.1.0`                                  | 0.2.0                            | Nowhere                                           |
 | `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents                                                                                   | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0`                                | 0.1.0                            | Nowhere                                           |
 | `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging; physical records; a legal hold kept beyond the platform's, released with a reason | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package                                 | 0.4.0                            | Nowhere                                           |
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                                                                                                | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`                                  | 0.1.1                            | Nowhere                                           |
@@ -53,8 +54,9 @@ installed on any server yet"), and the kits' READMEs:
 [vehicle titles](../../business-apps/packages/vehicle-titles-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
 the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
-on any server") and the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
-("Nothing here is installed on any server").
+on any server"), the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
+("Nothing here is installed on any server") and the [capture add-on's README](../../nuxeo-agentic-capture/README.md)
+("Nothing here is installed on any server yet").
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.
@@ -287,6 +289,10 @@ Two places, both the server's and never a package's:
 | `nuxeo.agentic.signature.provider`                                                                                                   | Unset: every request refused, 503         | The e-signature provider requests are sent through, by its id: `standin`, the stand-in, is the only one there is, and signs nothing                                                                                               | For a demonstration server only                                                                                         |
 | The stand-in's `nuxeo.agentic.signature.standin.address`, `.apiKey`, `.callbackSecret` and `.callbackSecret.previous`                | Unset: not configured, nothing sent       | Its service's address (`https`, or `http` with `.http.allowed=true`), the key sent to it, and the secret its callbacks are signed with, 32 characters at least, and the one before while it is rotated                            | Never logged; the key and secrets also from the environment. Review pending                                             |
 | `nuxeo.agentic.signature.callback.window`                                                                                            | 300                                       | How far a callback's signed time may be from the server's, in seconds, 30 to 3600                                                                                                                                                 | A callback's id is kept twice as long                                                                                   |
+| `nuxeo.agentic.capture.provider`                                                                                                     | Unset: nothing read, every item waits     | The capture provider items are read through, by its id: `standin`, which reads the file's own text and calls nothing, or `ai`, the AI package's ([below](#capture))                                                               | `standin` for a demonstration server only                                                                               |
+| `nuxeo.agentic.capture.ai.enabled`                                                                                                   | Off; on only when `true`                  | Lets the `ai` provider run: the AI package then sends each item's content to its model provider                                                                                                                                   | **Set it only once the AI data terms are approved** for that server's data. Review pending                              |
+| `nuxeo.agentic.capture.ai.classifyOperation`, `.extractOperation`                                                                    | `AI.CaptureClassify`, `AI.CaptureExtract` | The AI package's two operations the `ai` provider calls                                                                                                                                                                           | Only an id beginning `AI.` is used; any other leaves the provider unconfigured                                          |
+| `nuxeo.agentic.capture.maxBytes`                                                                                                     | 20971520                                  | The largest file an inbox takes, in bytes, 1024 to 104857600; anything else is the default                                                                                                                                        | None                                                                                                                    |
 
 Sources, row by row:
 [`LayerSettings.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerSettings.java)
@@ -306,7 +312,10 @@ and [`45-agentic-ui-url.sample.conf`](../../nuxeo-conf/45-agentic-ui-url.sample.
 where a value out of range is the default;
 [`SignatureSettings.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/SignatureSettings.java),
 [`StandInProvider.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/standin/StandInProvider.java)
-and [`SignatureComponent.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/SignatureComponent.java). The layer's
+and [`SignatureComponent.java`](../../nuxeo-agentic-signature/src/main/java/org/nuxeo/agentic/signature/SignatureComponent.java);
+[`CaptureSettings.java`](../../nuxeo-agentic-capture/src/main/java/org/nuxeo/agentic/capture/CaptureSettings.java)
+and [`AiPackageProvider.java`](../../nuxeo-agentic-capture/src/main/java/org/nuxeo/agentic/capture/ai/AiPackageProvider.java),
+whose switch counts only `true`, in any letter case. The layer's
 two switches use Java's `Boolean.parseBoolean`, so `TRUE` counts too; `http.allowed` counts only
 `true`.
 
@@ -779,6 +788,36 @@ On Docker, the server log is `/var/log/nuxeo/server.log` in the container:
 `docker exec nuxeo grep -A20 "Component Loading Status" /var/log/nuxeo/server.log | tail -25`, as
 the [Payers README](../../business-apps/packages/payers-claims-demo/README.md) checks it.
 
+### Capture
+
+A kit contributes a capture profile to `org.nuxeo.agentic.capture`, point `profiles`: its inbox
+and item types, the record type it files on and the folder it matches under, a threshold, and its
+classes with their fields, a key field naming the record's property it must equal
+([capture README](../../nuxeo-agentic-capture/README.md#the-model)). The server sets the provider.
+
+- **Mail comes in as an upload into an inbox,** through the REST API, by whoever may add to it
+  (`AddChildren`): a scanner's account, a mail gateway's, or a person. No mail server and no drop
+  folder. Give the inbox's `AddChildren` only to the accounts that should file mail, and its
+  `Write` to the people who confirm.
+- **Each item is read in the background, as the system,** and filed by itself only when its class
+  and keys are at least the profile's threshold, 0.85 unless it says otherwise and never below 0.5,
+  and exactly one record matches. Anything else waits for a person, who files only on a record they
+  may write ([capture README](../../nuxeo-agentic-capture/README.md#the-confidence-rule)).
+- **With no provider set,** nothing is read, and every item waits for a person: the inbox still
+  works as a queue.
+- **The stand-in, `standin`,** is for a demonstration server: it reads the file's own text and sends
+  it nowhere.
+- **The AI package's provider, `ai`, is off by default.** It needs the AI package installed, with
+  its capture operations, which it does not have yet, and both `provider=ai` and `ai.enabled=true`.
+  **Set the second only once the AI data terms are approved:** the AI package sends each item's
+  content to its model provider ([capture README](../../nuxeo-agentic-capture/README.md#before-the-ai-provider-is-switched-on)).
+- **A profile that breaks a rule is not registered,** and the log names the rule; nothing in its
+  inbox is then received.
+- **An item left received,** its capture lost with its node, is not in any queue, and nothing
+  reads it again: look for items with `capt:status = 'received'` older than an hour, and upload
+  each again ([capture README](../../nuxeo-agentic-capture/README.md#how-a-capture-goes)).
+- **Its security review is pending.**
+
 ### The diagnostics page
 
 **Administration, Diagnostics**, at `/administration/diagnostics`, for administrators: what support
@@ -846,15 +885,15 @@ not built: [telemetry.md](telemetry.md) is its design, for decision T.
 Each piece below is built on a decision's recommendation, and the decision stays open: its owner
 may still take it another way, and the [decision log](decisions.md)'s notes say what would change.
 
-| Decision                                   | What is built on its recommendation                                |
-| ------------------------------------------ | ------------------------------------------------------------------ |
-| 2, workflow and business records in scope  | The Payers kit's claims review workflow and appeals                |
-| 3, buttons bound to Automation chains      | The operation buttons and their allow-list                         |
-| 5, customer code at run time               | A spike only                                                       |
-| B, the packaging of the server tier        | The registry and the layer in core; the assets and records add-ons |
-| C, outside users                           | Share links, in `nuxeo-agentic-assets` 0.2.0                       |
-| D, connectors                              | The connectors add-on                                              |
-| E, app definitions after sign-in, by group | The app registry and the deployment layer                          |
+| Decision                                   | What is built on its recommendation                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| 2, workflow and business records in scope  | The Payers kit's claims review workflow and appeals                                               |
+| 3, buttons bound to Automation chains      | The operation buttons and their allow-list                                                        |
+| 5, customer code at run time               | A spike only                                                                                      |
+| B, the packaging of the server tier        | The registry and the layer in core; the assets, records, documents, signature and capture add-ons |
+| C, outside users                           | Share links, in `nuxeo-agentic-assets` 0.2.0                                                      |
+| D, connectors                              | The connectors add-on                                                                             |
+| E, app definitions after sign-in, by group | The app registry and the deployment layer                                                         |
 
 Decision 4, the security review of the registered computations and rules, is open too. Tenants,
 decision G, are not built: the registry knows groups only
@@ -895,7 +934,9 @@ outside a development or demonstration server.
   0.2.1 to 0.2.3; the facilities and records kits; `nuxeo-agentic-records`, whose disposition runs
   only in its tests, and which needs `nuxeo-retention` from the Marketplace; `nuxeo-agentic-signature`
   and the onboarding kit, the e-signature step run in its tests and against the stand-in service
-  only, decision H choosing no vendor yet; every kit's removal.
+  only, decision H choosing no vendor yet; `nuxeo-agentic-capture` and the P&C claims kit 0.2.0,
+  capture run in its tests only, with the stand-in and stand-ins for the AI package's operations;
+  every kit's removal.
 - **The demo server:** built, and not run against Docker
   ([demo server README](../../business-apps/demo-server/README.md)).
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push

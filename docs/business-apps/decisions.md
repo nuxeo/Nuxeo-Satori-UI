@@ -345,6 +345,30 @@ way.
     so the servlet would be switched on by a setting instead, off by default, and the facets would
     stay, inert until a type carries one.
 
+- **B, capture and classification's server add-on (27 November 2026).** Built against the
+  recommendation, "one add-on per domain module": capture is
+  [`nuxeo-agentic-capture`](../../nuxeo-agentic-capture/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [P&C claims kit](../../business-apps/packages/pc-claims-demo/README.md) 0.2.0 depends on; nothing
+  of it went into `nuxeo-agentic-core`. A kit's item type carries the add-on's `CaptureItem` facet,
+  and a kit's profile names its inbox, the record type and the keys it is matched by: an item
+  uploaded into the inbox is read in the background, and filed on the one record its keys match
+  when its class and keys are at least the profile's threshold, or waits for a person who confirms,
+  corrects or rejects it. Through a provider interface, with a deterministic stand-in and a
+  provider that calls the AI package's `AI.*` operations, off until a server turns it on, which is
+  to be done only once the AI data terms are approved, the plan's phase 7 condition. The AI package's
+  two capture operations, and its Claude provider, are not built: they are the AI package's, and the
+  plan's "Needs". Decision 3 is not touched: the add-on registers no Automation operation, and a
+  person decides through the item's Edit form. Its security review is deferred until the app is
+  finished, as every security review is; it is installed nowhere. What changes if B goes another
+  way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and the kit's
+    `package.xml` depends on that package in place of `nuxeo-agentic-capture`. The component, facet,
+    schema and setting names do not change, so no kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then run the listeners on every document
+    created and changed; they stay inert until a type carries the facet, and the provider stays
+    unset, so nothing is read until a server names one.
+
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
   serves some of an asset's picture views, and its original where its rights allow, watermarked on

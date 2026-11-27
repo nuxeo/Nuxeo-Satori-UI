@@ -9,9 +9,66 @@
       "parent": "Document",
       "facets": [],
       "schemas": ["common", "dublincore", "files", "propertyclaim"]
+    },
+    "PropertyClaimMail": {
+      "parent": "Document",
+      "facets": ["CaptureItem"],
+      "schemas": ["common", "dublincore", "file", "capture_item"]
+    },
+    "PropertyClaimInbox": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore"]
     }
   },
-  "facets": [],
+  "facets": [
+    {
+      "name": "CaptureItem",
+      "schemas": [
+        {
+          "name": "capture_item",
+          "prefix": "capt",
+          "@prefix": "capt",
+          "fields": {
+            "status": "string",
+            "reason": "string",
+            "profile": "string",
+            "provider": "string",
+            "receivedAt": "date",
+            "classifiedAt": "date",
+            "digest": "string",
+            "proposedClass": "string",
+            "classConfidence": "double",
+            "confidence": "double",
+            "extracted": {
+              "type": "complex[]",
+              "fields": {
+                "name": "string",
+                "value": "string",
+                "confidence": "double"
+              }
+            },
+            "proposedRecord": "string",
+            "class": "string",
+            "fields": {
+              "type": "complex[]",
+              "fields": {
+                "name": "string",
+                "value": "string"
+              }
+            },
+            "record": "string",
+            "note": "string",
+            "decision": "string",
+            "outcome": "string",
+            "decidedBy": "string",
+            "decidedAt": "date",
+            "attachment": "string"
+          }
+        }
+      ]
+    }
+  ],
   "schemas": [
     {
       "name": "common",
@@ -90,6 +147,53 @@
         "adjuster": "string",
         "reserve": "double",
         "denialReason": "string"
+      }
+    },
+    {
+      "name": "file",
+      "fields": {
+        "content": "blob"
+      }
+    },
+    {
+      "name": "capture_item",
+      "prefix": "capt",
+      "@prefix": "capt",
+      "fields": {
+        "status": "string",
+        "reason": "string",
+        "profile": "string",
+        "provider": "string",
+        "receivedAt": "date",
+        "classifiedAt": "date",
+        "digest": "string",
+        "proposedClass": "string",
+        "classConfidence": "double",
+        "confidence": "double",
+        "extracted": {
+          "type": "complex[]",
+          "fields": {
+            "name": "string",
+            "value": "string",
+            "confidence": "double"
+          }
+        },
+        "proposedRecord": "string",
+        "class": "string",
+        "fields": {
+          "type": "complex[]",
+          "fields": {
+            "name": "string",
+            "value": "string"
+          }
+        },
+        "record": "string",
+        "note": "string",
+        "decision": "string",
+        "outcome": "string",
+        "decidedBy": "string",
+        "decidedAt": "date",
+        "attachment": "string"
       }
     }
   ]

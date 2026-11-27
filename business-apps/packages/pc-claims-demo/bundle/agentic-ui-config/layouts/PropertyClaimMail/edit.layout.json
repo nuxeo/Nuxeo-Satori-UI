@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "decision",
+      "labelKey": "pc-claims.card.propertyClaimMail.decision",
+      "fields": [
+        {
+          "field": "capt:decision",
+          "labelKey": "pc-claims.field.mailDecision",
+          "widget": "status-badge",
+          "parameters": { "tones": { "confirm": "positive", "reject": "negative" } },
+          "readOnlyWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "capt:status" }, "review"] }
+            ]
+          }
+        },
+        { "field": "capt:note", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "reading",
+      "labelKey": "pc-claims.card.propertyClaimMail.reading",
+      "fields": [
+        {
+          "field": "capt:class",
+          "readOnlyWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "capt:status" }, "review"] }
+            ]
+          }
+        },
+        {
+          "field": "capt:fields",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "capt:name", "labelKey": "pc-claims.field.mailFieldName" },
+              { "field": "capt:value", "labelKey": "pc-claims.field.mailFieldValue" }
+            ]
+          },
+          "readOnlyWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "capt:status" }, "review"] }
+            ]
+          }
+        },
+        {
+          "field": "capt:record",
+          "widget": "document-link",
+          "parameters": { "types": ["PropertyClaim"] },
+          "readOnlyWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "capt:status" }, "review"] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mail",
+      "labelKey": "pc-claims.card.propertyClaimMail.mail",
+      "fields": [{ "field": "dc:title", "labelKey": "pc-claims.field.mailTitle", "required": true }]
+    }
+  ]
+}

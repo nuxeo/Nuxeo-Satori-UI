@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: pc-claims-demo
 Bundle-SymbolicName: nuxeo.config.pc-claims-demo;singleton:=true
-Bundle-Version: 0.1.0
-Nuxeo-Component: OSGI-INF/pc-claims-demo-model.xml,OSGI-INF/pc-claims-demo-config.xml
+Bundle-Version: 0.2.0
+Nuxeo-Component: OSGI-INF/pc-claims-demo-model.xml,OSGI-INF/pc-claims-demo-capture.xml,OSGI-INF/pc-claims-demo-config.xml
