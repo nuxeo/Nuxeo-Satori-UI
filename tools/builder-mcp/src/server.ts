@@ -477,7 +477,10 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         ' that does not pass is not served. Returns the address to open first and each page,' +
         ' the files it could not serve and why (app.json, actions.json, modules, assets), and' +
         ' whether the dev server answers every file as it was written, which it is given a few' +
-        ' seconds to do; one it still does not answer needs a restart. Writes nothing but that' +
+        ' seconds to do; one it still does not answer needs a restart. For a demo kit, whose stand-in' +
+        ' model and records no server holds, it also says how to see its pages anyway: the' +
+        ' commands that start npm run kit:stand-in and point the dev server at it, and what the' +
+        ' stand-in answers and does not. Writes nothing but that' +
         " folder and, while it runs, a folder of its own in the package's dist/. Paths are" +
         ' relative to the repository, and must be inside it.',
       inputSchema: z.object({

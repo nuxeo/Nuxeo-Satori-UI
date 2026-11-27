@@ -58,6 +58,12 @@
  * dev server: under a second), so later runs need no restart; reload the page. A bare configuration
  * object is not accepted by the application, which is why copying a defaults file there no longer
  * works.
+ *
+ * These files draw what the server holds. A demo kit's types, page providers and records are on no
+ * server until its package is installed and seeded, so for one they draw its shell alone.
+ * `npm run kit:stand-in` answers the rest from the kit's own files, between the dev server and the
+ * Nuxeo (`scripts/kit-stand-in.mjs`; docs/business-apps/package-pipeline.md, "A demo kit's pages in
+ * dev mode").
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

@@ -456,9 +456,16 @@ Then call `preview_package` with the package folder, as `validate_package`. Read
 - **`devServer`**: whether it answers every file as written. Tell the person when it is not
   running, or must be restarted.
 - **Each preview replaces the last.** Say so when the person had something else served.
+- **`standIn`**, for a demo kit: no server holds its model or records, so the dev server alone
+  shows its shell. When `reads` is true, give the person its two `commands`: `npm run kit:stand-in`
+  and the dev server pointed at it. The stand-in answers the kit's types, its records, read-only,
+  and its page providers from the kit's own files, and forwards the rest. Name what it does not
+  show: the page providers in `notAnswered`, which answer HTTP 501, an `external` card, and anything
+  a write would change (`package-pipeline.md`, "A demo kit's pages in dev mode"). `records` gives a
+  record page of each type to open. When `reads` is false, say why.
 
 The person signs in to the app with their own account, on the Nuxeo server the dev server proxies
-to. A server in dev mode could preview the layouts only, by hand (`tools/builder-mcp/README.md`,
+to, through the stand-in when one runs. A server in dev mode could preview the layouts only, by hand (`tools/builder-mcp/README.md`,
 "Previewing a package"): never write to a server or a container without the person's go-ahead.
 
 - **Drawn:** a record page from each `view` layout, its related lists included, and the home.
@@ -474,8 +481,9 @@ to. A server in dev mode could preview the layouts only, by hand (`tools/builder
     schema) keeps its own view and preview, not the record page.
 - **Not drawn at all yet:** the package's actions (`actions.json` is carried, not read),
   `app.json`, and module settings.
-- **The records must exist on the server,** with the types the package names. Seeding them is the
-  kit's (the Payers kit has `demo/seed.mjs`), with fictional data.
+- **The records must exist on the server,** with the types the package names, or, for a demo kit
+  the stand-in reads, in the stand-in. Seeding them on a server is the kit's (the Payers kit has
+  `demo/seed.mjs`), with fictional data.
 - **Installing the package into a Nuxeo** is the person's decision: ask before installing anything
   into a server or a container. The Payers kit's README, "Installing it on a local Nuxeo", shows how
   on the local Docker one.

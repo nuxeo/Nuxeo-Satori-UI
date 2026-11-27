@@ -320,6 +320,22 @@ providers. The pages to open are `#/home`, `#/queues/vehicle-deals-missing-docum
 `#/queues/vehicle-titles-overdue` and `#/queues/vehicle-titles-awaiting-lien-release`. The layouts
 are held instead by the layout designer's round trip, which opens each, and by the pipeline.
 
+**Since then, the pages can be seen with no server holding the kit** (feedback, item 13). The
+stand-in answers the kit's model, its sixteen records and its five page providers from the kit's
+own files, between the dev server and the local Nuxeo:
+
+```bash
+npm run kit:stand-in -- business-apps/packages/vehicle-titles-demo
+NUXEO_PROXY_TARGET=http://localhost:8091 npx ng serve nuxeo-ui --configuration=development,remote
+```
+
+Seen that way, on 27 November 2026, as the local Nuxeo's guest: the home's two figures, 3 and 2;
+the missing-documents queue, VD-5002, VD-5004 and VD-5008; TTL-6002's page, with its overdue banner
+and the two deals that sold it; and VD-5004's, with its not-funded banner, its two titles and its
+required documents, 4 of 6 done, with no Edit or tick. The lien release queue and its figure are for title
+clerks, and the guest is not one: "This queue is not shown to you". What the stand-in does not
+show is in [package-pipeline.md](../../../docs/business-apps/package-pipeline.md#a-demo-kits-pages-in-dev-mode).
+
 ### Step 5. Publish to pre-production
 
 **Not done, and not built in the MCP server.** No `app-package/*` tag was pushed. The kit is not
@@ -525,13 +541,14 @@ and the title sold twice, on the app at `APP_URL` (`http://localhost:4200` by de
 
 ## What a server shows, and what the dev server does
 
-| Part                         | Served by the package on a server    | Under `config:dev`                    |
-| ---------------------------- | ------------------------------------ | ------------------------------------- |
-| The model and page providers | Yes                                  | From the server, so not yet           |
-| The two layouts              | Yes, to everyone                     | Yes                                   |
-| The home, menu, queues       | From the registry, to the two groups | Yes, and they win over the registry's |
-| `labels/en.json`             | From the registry, to the two groups | Yes, and it wins over the registry's  |
-| `app.json`                   | From the registry: it lists the app  | No                                    |
+| Part                         | Served by the package on a server    | Under `config:dev`                    | With `kit:stand-in` as well                                     |
+| ---------------------------- | ------------------------------------ | ------------------------------------- | --------------------------------------------------------------- |
+| The model and page providers | Yes                                  | From the server, so not yet           | From `content-model.json`, and the five from `EXPECTED`         |
+| The records                  | The seed's, on the server            | The server's, so none of the kit's    | The seed's sixteen, from `demo/data.mjs`, read-only             |
+| The two layouts              | Yes, to everyone                     | Yes                                   | Yes, as under `config:dev`                                      |
+| The home, menu, queues       | From the registry, to the two groups | Yes, and they win over the registry's | Yes, as under `config:dev`, with the stand-in's records in them |
+| `labels/en.json`             | From the registry, to the two groups | Yes, and it wins over the registry's  | Yes, as under `config:dev`                                      |
+| `app.json`                   | From the registry: it lists the app  | No                                    | No                                                              |
 
 Seeing an app is not a security control: Nuxeo's permissions still decide which deals and titles
 anyone reads and who may tick a checklist, and the seed sets none, so its workspace has the
@@ -591,7 +608,12 @@ candidate for the tools' owners.
 12. **The scaffolded README still offers a button** (`app-action`) for a package with none (the
     moves kit's item 13, the P&C claims kit's 16, still).
 13. **Dev mode shows a demo kit's shell, not its pages** (the tutorial's item 8, still), and the
-    preview needs a person signed in: no page of this kit was seen.
+    preview needs a person signed in: no page of this kit was seen. **Since fixed:**
+    `npm run kit:stand-in` answers the kit's model, records and page providers from its own files,
+    between the dev server and the local Nuxeo, read-only, and `preview_package` gives its commands
+    ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md#a-demo-kits-pages-in-dev-mode)).
+    The local Nuxeo opens the app as its guest, so its pages show with no account: step 4 above
+    says which were seen. A queue or a card for a group still needs an account in it.
 14. **What went well:** every write answered with its files and the pipeline's own lines in 1 to 7
     seconds; each refusal named the file, the place and the reason and left the package as it was;
     the demo-kit order worked first time in one call of 9 changes; a missing Properties heading came

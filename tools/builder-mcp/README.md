@@ -287,10 +287,19 @@ as dev mode would on a server:
    up, since it reads no record: open one from a queue or a search. Each layout is named by what it
    draws, by its mode: the record page (`view`), its Properties panel (`metadata`), the Edit form
    (`edit`) or the Create form (`create`).
+6. **For a demo kit, it says how to see the pages anyway,** in `standIn`. A package with a stand-in
+   model, `content-model.json`, has types no server holds, so the dev server alone shows its shell. The tool runs `scripts/kit-stand-in.mjs --check`, which reads
+   the kit's files and sends nothing, and answers with the two commands to run: the stand-in,
+   `npm run kit:stand-in`, and the dev server pointed at it. Then a record page of each type, by
+   its address, the page providers the stand-in answers, and those it answers HTTP 501. For a kit
+   whose data the stand-in does not read, `reads` is false, with the reason. `null` for another
+   package.
 
 The app still signs in to the Nuxeo server the dev server proxies to
 (`apps/nuxeo-ui/proxy.conf.json`), and draws what that server holds: the types, page providers,
-workflows and records the package names must be there.
+workflows and records the package names must be there. With the stand-in in between, it draws the
+kit's types, records and page providers from the kit's own files, and the rest from that server
+([package-pipeline.md, "A demo kit's pages in dev mode"](../../docs/business-apps/package-pipeline.md#a-demo-kits-pages-in-dev-mode)).
 
 **What it writes, and nothing else:** the dev folder, through the script; and, while it runs, a
 folder of its own in the package's `dist/`, for the pipeline's zip and what step 5 unpacks to read
