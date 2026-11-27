@@ -15,7 +15,7 @@ import {
   type Construct,
 } from './constructs';
 import { convertWithDecisions, packageBuildOf } from './convert';
-import { decisionsFor, holdDecisions, type DecisionsFile } from './decisions';
+import { decisionsFor, holdDecisions, legible, type DecisionsFile } from './decisions';
 import { runHarness, type HarnessInput } from './harness';
 import { inventory } from './inventory';
 import { CARRY_MUTATIONS, MutationError } from './mutations';
@@ -504,5 +504,33 @@ describe('what the report says it carried', () => {
     const summary = summarise(other);
     expect(summary.decisionFindings[0]).toMatch(/so none of it is taken$/);
     expect(summary.carried).toBeNull();
+  });
+});
+
+describe('a name that shows nothing', () => {
+  it('names no one, as Unicode letters that show nothing, such as Hangul fillers, do not', () => {
+    for (const text of ['ㅤ', 'ﾠᅟ', 'ᅠ ㅤ', '​⠀'])
+      expect([JSON.stringify(text), legible(text)]).toEqual([JSON.stringify(text), false]);
+    for (const text of ['Dana', 'ㄱ', '7', 'Ünal']) expect(legible(text)).toBe(true);
+    const input = prepare();
+    const file = filled(input);
+    const filler = 'ㅤㅤ';
+    const blank = {
+      ...file,
+      decisions: file.decisions.map((item) =>
+        item.outcome === 'proposed'
+          ? { ...item, owner: filler, reason: filler }
+          : { ...item, owner: filler },
+      ),
+    };
+    const held = holdDecisions(
+      input.conversion.report,
+      blank,
+      packageBuildOf(input.pkg),
+      identitiesOf(input.inventory),
+    );
+    expect(held.verdicts.size).toBe(0);
+    expect(held.unsigned).toBe(1);
+    expect(held.unowned).toBe(file.decisions.filter((item) => item.outcome === 'reported').length);
   });
 });

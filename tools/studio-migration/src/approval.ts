@@ -21,7 +21,7 @@
 import { createHash } from 'node:crypto';
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import type { Conversion } from './convert';
-import { LEGIBLE, type DecisionsBuild } from './decisions';
+import { legible, type DecisionsBuild } from './decisions';
 
 export const APPROVAL_FORMAT = 'studio-migration-approval/1';
 
@@ -103,7 +103,7 @@ export function approvalOf(
 ): Approval {
   const name = by.trim();
   // eslint-disable-next-line no-control-regex
-  if (!LEGIBLE.test(name) || /[\u0000-\u001f\u007f]/.test(name) || name.length > 200)
+  if (!legible(name) || /[\u0000-\u001f\u007f]/.test(name) || name.length > 200)
     throw new ApprovalError(
       'an approval names the person who approves, in --by, as one line of up to 200 characters, with a letter or a digit in it',
     );
@@ -145,7 +145,7 @@ export function holdApproval(conversion: Conversion, build: DecisionsBuild): Hel
   }
   const by = typeof raw['approvedBy'] === 'string' ? raw['approvedBy'].trim() : '';
   const at = typeof raw['approvedAt'] === 'string' ? raw['approvedAt'] : '';
-  if (!LEGIBLE.test(by) || at === '' || Number.isNaN(Date.parse(at))) {
+  if (!legible(by) || at === '' || Number.isNaN(Date.parse(at))) {
     findings.push(
       `${APPROVAL_FILE} names no one who approved it, or no time, so it approves nothing`,
     );

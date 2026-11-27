@@ -229,7 +229,7 @@ describe('approving the report', () => {
       );
       // No name, or a blank one.
       expect(run(['approve', 'acme.zip', conversion], { terminal: right }).code).toBe(2);
-      for (const name of ['   ', '\u200b \u200b']) {
+      for (const name of ['   ', '\u200b \u200b', '\u3164\uffa0']) {
         const blank = run(['approve', 'acme.zip', conversion, '--by', name], { terminal: right });
         expect(blank.code).toBe(1);
         expect(blank.err).toMatch(/^an approval names the person who approves, in --by/);

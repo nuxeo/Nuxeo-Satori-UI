@@ -653,20 +653,28 @@ export class DecisionsError extends Error {
 
 /** Whether an owner or a decision says anything: text that is not only spaces. */
 function saysSomething(value: unknown): boolean {
-  return typeof value === 'string' && LEGIBLE.test(value);
+  return typeof value === 'string' && legible(value);
 }
 
+/** A letter or a digit. */
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+/** Hangul fillers: Unicode counts them letters, and they show nothing. */
+const FILLERS = /[\u115f\u1160\u3164\uffa0]/gu;
+
 /**
- * What says something a person can read: a letter or a digit. Spaces alone, or characters that
- * show nothing, such as a zero-width space, say nothing, and name no one.
+ * Whether a text says something a person can read: a letter or a digit that shows. Spaces alone,
+ * or characters that show nothing, such as a zero-width space or a Hangul filler, say nothing, and
+ * name no one.
  */
-export const LEGIBLE = /[\p{L}\p{N}]/u;
+export function legible(text: string): boolean {
+  return LETTER_OR_DIGIT.test(text.replace(FILLERS, ''));
+}
 
 /** An entry that says nothing has nothing to carry, and nothing to lose, unless it is an offer. */
 function silentEntry(item: unknown): boolean {
   if (!isRecord(item) || item['earlier'] !== undefined) return false;
   return [item['owner'], item['decision'], item['reason']].every(
-    (value) => value === undefined || (typeof value === 'string' && !LEGIBLE.test(value)),
+    (value) => value === undefined || (typeof value === 'string' && !legible(value)),
   );
 }
 

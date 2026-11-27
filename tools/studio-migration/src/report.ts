@@ -36,7 +36,7 @@ import {
   type Outcome,
   type ReportEntry,
 } from './convert';
-import { holdDecisions, LEGIBLE, type CarriedFrom, type EarlierDecision } from './decisions';
+import { holdDecisions, legible, type CarriedFrom, type EarlierDecision } from './decisions';
 import { coverage, runHarness, type CheckResult, type HarnessInput } from './harness';
 import type { FileKind } from './inventory';
 
@@ -206,7 +206,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
   const held = holdDecisions(report, conversion.decisions, build, identitiesOf(inventory));
   const isDecided = (id: string): boolean => {
     const taken = held.taken.get(id);
-    return Boolean(taken && LEGIBLE.test(taken.owner) && LEGIBLE.test(taken.decision));
+    return Boolean(taken && legible(taken.owner) && legible(taken.decision));
   };
 
   const count = (kind: KindCount['kind'], ids: readonly string[]): KindCount => {
@@ -250,8 +250,8 @@ export function summarise(input: HarnessInput): MigrationSummary {
         file: entry.file,
         note: entry.note ?? '',
         ...(entry.to !== undefined ? { to: entry.to } : {}),
-        owner: taken && LEGIBLE.test(taken.owner) ? taken.owner : null,
-        decision: taken && LEGIBLE.test(taken.decision) ? taken.decision : null,
+        owner: taken && legible(taken.owner) ? taken.owner : null,
+        decision: taken && legible(taken.decision) ? taken.decision : null,
       };
     });
   const proposed = entries
@@ -274,8 +274,8 @@ export function summarise(input: HarnessInput): MigrationSummary {
         note: entry.note ?? '',
         ...(entry.rule !== undefined ? { rule: entry.rule } : {}),
         status,
-        owner: taken && LEGIBLE.test(taken.owner) ? taken.owner : null,
-        reason: taken?.reason !== undefined && LEGIBLE.test(taken.reason) ? taken.reason : null,
+        owner: taken && legible(taken.owner) ? taken.owner : null,
+        reason: taken?.reason !== undefined && legible(taken.reason) ? taken.reason : null,
         ...(entry.applied !== undefined ? { applied: entry.applied } : {}),
         ...(entry.to !== undefined ? { to: entry.to } : {}),
       };
@@ -389,7 +389,7 @@ function reconfirmItems(
     const confirmed =
       first.get(item['id'])?.outcome === 'proposed'
         ? held.verdicts.has(item['id'])
-        : Boolean(decision && LEGIBLE.test(decision.owner) && LEGIBLE.test(decision.decision));
+        : Boolean(decision && legible(decision.owner) && legible(decision.decision));
     const changed = Array.isArray(earlier['changed'])
       ? earlier['changed'].filter((word): word is string => typeof word === 'string')
       : [];
