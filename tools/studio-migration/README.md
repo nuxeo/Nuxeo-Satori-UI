@@ -1191,10 +1191,10 @@ which were then finished with the skill and built into `apps/nuxeo-satori-templa
 
 - **In the tests:** both plugins run, their own tests and the harness's spec, and check 9 finds
   nothing, `partial` only because lint, build and typecheck do not run there. Every control fails it.
-- **By hand, on 27 November 2026:** `check <the corpus's package> <its conversion> --run-plugins
---observed <its observed behaviour>` ran both plugins' gates through Nx too, and check 9 passed on
-  both. That run is not repeated by any test or CI job: CI runs the plugins' lint, test, build and
-  typecheck as the repository's gates, and the tests above.
+- **By hand, on 27 November 2026:** `check --run-plugins --observed`, on the corpus's package, its
+  conversion and its observed behaviour, ran both plugins' gates through Nx too, and check 9 passed
+  on both. That run is not repeated by any test or CI job: CI runs the plugins' lint, test, build
+  and typecheck as the repository's gates, and the tests above.
 - **One thing shown differently:** the escalate element's `notify` was a toast in Web UI; a slot
   binds none of the plugin's outputs and the template app has no toast, so the plugin shows the
   message beside its button. Its README says so.

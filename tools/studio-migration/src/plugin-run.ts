@@ -357,7 +357,7 @@ describe('check 9, what the plugin shows', () => {
     note(registered());
     writeFileSync(input.out, JSON.stringify({ seen: results, registered: added }));
     expect(results.length).toBe(input.seen.length);
-  });
+  }, 120_000);
 });
 `;
 }
@@ -465,6 +465,10 @@ export async function runPlugin(
         join(copy, 'vite.config.mts'),
         '--reporter=json',
         `--outputFile=${report}`,
+        // Vitest's five seconds are a test's own; on a busy machine an Angular library's first
+        // render takes longer, and a timeout would read as a plugin that fails.
+        '--testTimeout=120000',
+        '--hookTimeout=120000',
       ],
       workspace,
       env,

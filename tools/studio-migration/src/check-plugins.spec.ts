@@ -431,7 +431,7 @@ describe('each control of check 9 fails it', () => {
       withSubject((mutation as (typeof PLUGIN_MUTATIONS)[number]).apply(subject).subject),
       9,
     )?.findings;
-    expect(findings?.some((line) => line.includes(expected))).toBe(true);
+    expect(findings).toEqual(expect.arrayContaining([expect.stringContaining(expected)]));
   });
 });
 
@@ -441,7 +441,9 @@ describe('each control of check 9 fails it', () => {
  * They run side by side; each is a Vitest run of an Angular library, so this takes a while.
  */
 describe('check 9, on the plugins run', () => {
-  const RUNS = 300_000;
+  const RUNS = 900_000;
+  /** How many runs at once: each is a Vitest run of an Angular library, and CI's runners are small. */
+  const AT_ONCE = 3;
   const running = PLUGIN_MUTATIONS.filter((mutation) => mutation.needsRun);
   const runs = new Map<string, Record<string, PluginRun>>();
 
@@ -456,17 +458,20 @@ describe('check 9, on the plugins run', () => {
   };
 
   beforeAll(async () => {
-    const jobs: [string, Promise<Record<string, PluginRun>>][] = [
-      ['as written', runAll(subject.plugins)],
+    const jobs: [string, readonly PluginSource[]][] = [
+      ['as written', subject.plugins],
       ...running.map(
         (mutation) =>
-          [mutation.name, runAll(changedOnly(mutation.apply(subject).subject))] as [
-            string,
-            Promise<Record<string, PluginRun>>,
-          ],
+          [mutation.name, changedOnly(mutation.apply(subject).subject)] as [string, PluginSource[]],
       ),
     ];
-    for (const [name, job] of jobs) runs.set(name, await job);
+    const queue = [...jobs];
+    await Promise.all(
+      Array.from({ length: AT_ONCE }, async () => {
+        for (let job = queue.shift(); job; job = queue.shift())
+          runs.set(job[0], await runAll(job[1]));
+      }),
+    );
   }, RUNS);
 
   /** Only the plugins a control changed need running again: the others ran as written. */
@@ -559,6 +564,6 @@ describe('check 9, on the plugins run', () => {
       withSubject(broken, { ...runs.get('as written'), ...runs.get(name) }),
       9,
     )?.findings;
-    expect(findings?.some((line) => line.includes(expected))).toBe(true);
+    expect(findings).toEqual(expect.arrayContaining([expect.stringContaining(expected)]));
   });
 });
