@@ -79,6 +79,7 @@ import {
   ruleRefusal,
   showKey,
   showOf,
+  showWidgetOf,
 } from './record-layout';
 import {
   LookupCollector,
@@ -750,9 +751,16 @@ export class RecordListComponent {
       const linked = this.linkedOf(column);
       if (linked === undefined) return { kind: 'records', records: [] };
       if (linked === null) return { kind: 'empty' };
+      const { widget, parameters } = showWidgetOf(column);
+      // A widget that does not show the linked property's type leaves the cell to its type's view.
       return showLinkedProperty(
         row.properties[column.xpath],
-        { xpath: show, definition: linked.definition },
+        {
+          xpath: show,
+          definition: linked.definition,
+          widget: widget !== null && widgetAccepts(widget, linked.definition) ? widget : null,
+          parameters,
+        },
         context,
       );
     }

@@ -1,4 +1,10 @@
-import { formatDate, formatNumber, formatPercent } from '@angular/common';
+import {
+  NumberSymbol,
+  formatDate,
+  formatNumber,
+  formatPercent,
+  getLocaleNumberSymbol,
+} from '@angular/common';
 import { isStoredCalendarDay } from '@agentic-ui/shared/computations';
 import type { TrustedHtmlConfig } from '@nuxeo/satori-platform/nuxeo-client';
 import DOMPurify from 'dompurify';
@@ -89,6 +95,11 @@ export type Tone = 'positive' | 'warning' | 'negative' | 'info' | 'neutral';
  */
 export interface RecordLink {
   readonly text: string;
+  /**
+   * For a `document-link`'s `show` through `status-badge` (layout-v2.md, section 12): the shown
+   * value's tone, which the record page draws as a badge inside the link. Absent otherwise.
+   */
+  readonly tone?: Tone;
   /**
    * The app's route to the record, opened through the router: `/doc/<uid>`, or browse for a folder
    * and the collection page for a collection, as a row opens one. `null` where there is none.
@@ -215,7 +226,20 @@ function asVersion1(
   return field.kind === 'empty' ? EMPTY : { kind: 'layout', field };
 }
 
-function numberText(value: number, locale: string, decimals: unknown): string {
+function numberText(
+  value: number,
+  locale: string,
+  decimals: unknown,
+  grouping: unknown = true,
+): string {
+  const written = groupedNumberText(value, locale, decimals);
+  // `grouping: false` (layout-v2.md, section 3): the locale's own digits and decimal sign, without
+  // its group separator, so a model year shows as 2024, not 2,024. Only that one symbol is taken
+  // out, so a locale whose separator is a space keeps every other space it writes.
+  return grouping === false ? written.split(groupSeparator(locale)).join('') : written;
+}
+
+function groupedNumberText(value: number, locale: string, decimals: unknown): string {
   if (typeof decimals === 'number') return formatNumber(value, locale, `1.${decimals}-${decimals}`);
   // Version 1's view writes a number out exactly, never rounded; without `decimals`, so does this.
   const view = describeField('', '', { type: 'double' }, value, {
@@ -223,6 +247,11 @@ function numberText(value: number, locale: string, decimals: unknown): string {
     vocabulary: (_, id) => id,
   });
   return view.value && 'text' in view.value ? view.value.text : String(value);
+}
+
+/** The locale's group separator, as Angular's `formatNumber` writes it: `,` in English. */
+function groupSeparator(locale: string): string {
+  return getLocaleNumberSymbol(locale, NumberSymbol.Group);
 }
 
 /** `currency`'s code: the literal, or the one held by the property the parameter names. */
@@ -361,7 +390,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   'rich-text': ({ value }) => ({ kind: 'html', html: textOf(value) }),
   number: ({ value, parameters }, { locale }) =>
     typeof value === 'number'
-      ? text(numberText(value, locale, parameters['decimals']))
+      ? text(numberText(value, locale, parameters['decimals'], parameters['grouping']))
       : text(textOf(value)),
   currency: ({ value, parameters }, context) => {
     if (typeof value !== 'number') return text(textOf(value));
@@ -531,12 +560,20 @@ export interface ShownProperty {
   readonly xpath: string;
   /** The property in the linked type's schema, which it is shown by. */
   readonly definition: LayoutFieldType;
+  /**
+   * The widget it is shown through, one of the validator's `SHOWN_WIDGETS`, held to the
+   * property's type by the caller; `null` or absent for the schema type's own view.
+   */
+  readonly widget?: string | null;
+  /** That widget's parameters, each a literal. */
+  readonly parameters?: Readonly<Json>;
 }
 
 /**
  * What a `document-link` with `show` shows (layout-v2.md, section 12): for each record the value
- * names, in its order, the property `show` names, by its schema type, as a field with no widget
- * shows one, as a link that opens that record. A record still being read is not listed yet, so the
+ * names, in its order, the property `show` names, through its widget, or by its schema type as a
+ * field with no widget shows one, as a link that opens that record. A `status-badge` gives the link
+ * its tone, which the record page draws as a badge inside it, and a list as its text. A record still being read is not listed yet, so the
  * field shows nothing until it is, never the stored id. One the reader may not read, that no longer
  * exists, or a value that is not a document's id, shows the unavailable text and no value. A record
  * read without the property is left out, and a field whose every record is read and lacks it is
@@ -567,14 +604,19 @@ export function showLinkedProperty(
         key: shown.xpath,
         label: shown.xpath,
         value: property,
-        parameters: {},
+        parameters: shown.parameters ?? {},
         definition: shown.definition,
       },
-      null,
-      context,
+      shown.widget ?? null,
+      // A parameter that names a property reads none: the validator refuses one here, since it
+      // would be the open record's, not the linked one's.
+      { ...context, property: () => undefined },
     );
     const text = viewText(view, context.flagText);
-    if (view.kind !== 'empty' && text !== '') records.push({ text, url: link.url });
+    if (view.kind === 'empty' || text === '') continue;
+    records.push(
+      view.kind === 'badge' ? { text, url: link.url, tone: view.tone } : { text, url: link.url },
+    );
   }
   return records.length === 0 && !reading ? EMPTY : { kind: 'records', records };
 }

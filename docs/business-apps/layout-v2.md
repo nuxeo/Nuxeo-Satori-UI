@@ -412,7 +412,7 @@ or a stand-in package's own), and by the layout designer, which will not save th
 | `text`          | `string`                       |                                                                          | A text field                     |
 | `long-text`     | `string`                       | `rows`                                                                   | A text area                      |
 | `rich-text`     | `string`                       |                                                                          | A rich text editor               |
-| `number`        | `long`, `double`               | `decimals`                                                               | A number field                   |
+| `number`        | `long`, `double`               | `decimals`; `grouping`: `true` (2,024), the default, or `false` (2024)   | A number field                   |
 | `currency`      | `long`, `double`               | `currency`: an ISO 4217 code, or a field holding one                     | A number field with the currency |
 | `percent`       | `long`, `double`               | `scale`: `1` (0.12 is 12%) or `100` (12 is 12%)                          | A number field                   |
 | `date`          | `date`                         | `format`: `short` or `long`                                              | A date picker                    |
@@ -431,6 +431,12 @@ or a stand-in package's own), and by the layout designer, which will not save th
 | `image`         | `blob`                         |                                                                          | An image upload                  |
 | `file-list`     | `blob[]`, `complex[]` of files |                                                                          | File uploads                     |
 
+- **A number is grouped as the reader's locale groups it,** `2,024` in English, `2 024` in French.
+  `"grouping": false` writes it with no group separator, `2024`, and keeps the locale's decimal
+  sign: for a model year, or a number that is a code rather than an amount. **Added on 27 November
+  2026** for the vehicle kit's model year (its
+  [README](../../business-apps/packages/vehicle-titles-demo/README.md), "Phase 8 feedback", item 5).
+  A number field in a form is unchanged: what is typed is what is stored.
 - **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders,
   and keeps formatting, lists, quotes, code and links only: no image, form, style or frame. It is
   the only widget that renders HTML.

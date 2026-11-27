@@ -214,7 +214,8 @@ function layout(
       },
     ];
   }
-  const c = createChecker(registries, { task });
+  // A rule may read a linked record's property on a record page only (layout-v2.md, section 5).
+  const c = createChecker(registries, { task, linked: mode === 'view' && !task });
   const view = mode === 'view';
   const form = mode === 'edit' || mode === 'create';
 
@@ -352,6 +353,7 @@ function layout(
         model.model,
         registries,
         model.references ? c.references : [],
+        c.linkedReads,
       ),
     );
   return c.findings;

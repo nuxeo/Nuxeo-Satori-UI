@@ -142,3 +142,60 @@ describe('the rule context', () => {
     expect(service.context().user.groups).toEqual(['members', 'member-services']);
   });
 });
+
+describe("a linked record's property (layout-v2.md, section 5)", () => {
+  const TITLE = 'f027e437-0795-4ec7-8e6c-4bb1dd4c75cc';
+  const status = { field: 'deal:title', types: ['Title'], show: 'title:status' };
+  const openedOn = { field: 'deal:title', types: ['Title'], show: 'title:openedOn' };
+  /** What the record page read of the linked titles, as the reader: one title, by its id. */
+  const read: Record<string, Record<string, unknown>> = {
+    [TITLE]: { 'title:status': 'Awaiting lien release', 'title:openedOn': '2026-10-01' },
+  };
+  const linked = (id: string, xpath: string): unknown => read[id]?.[xpath];
+  const deal = (title: unknown): ExtensionRuleContext => ({
+    ...on(claim({ 'deal:title': title, 'title:status': 'Issued' })),
+    linked,
+    today: new Date('2026-11-27T12:00:00Z'),
+    timeZone: '+0000',
+  });
+
+  it("compares the linked record's property, not the open record's", () => {
+    expect(evaluate('app.rules.fieldIn', deal(TITLE), status, 'Awaiting lien release')).toBe(true);
+    // The open record's own title:status is not read for it.
+    expect(evaluate('app.rules.fieldIn', deal(TITLE), status, 'Issued')).toBe(false);
+  });
+
+  it('reads a linked date as the date rules read any', () => {
+    expect(evaluate('app.rules.dateAfter', deal(TITLE), 'today', openedOn, 30)).toBe(true);
+    expect(evaluate('app.rules.dateAfter', deal(TITLE), 'today', openedOn, 60)).toBe(false);
+    expect(evaluate('app.rules.datePassed', deal(TITLE), openedOn)).toBe(true);
+    expect(evaluate('app.rules.dateWithin', deal(TITLE), openedOn, 5)).toBe(false);
+  });
+
+  it('reads no value for a record the page did not read, or the reader may not', () => {
+    const unread = 'a72723a2-73cf-4d88-8804-5b58a360ab3e';
+    expect(evaluate('app.rules.fieldIn', deal(unread), status, 'Awaiting lien release')).toBe(
+      false,
+    );
+    expect(evaluate('app.rules.datePassed', deal(unread), openedOn)).toBe(false);
+  });
+
+  it('reads no value from a reference holding no id, or a list of them', () => {
+    for (const title of [undefined, null, '', [TITLE], 42])
+      expect(evaluate('app.rules.fieldIn', deal(title), status, 'Awaiting lien release')).toBe(
+        false,
+      );
+  });
+
+  it('reads no value where the context gives no linked records: every slot but the record page', () => {
+    const elsewhere: ExtensionRuleContext = { ...deal(TITLE), linked: undefined };
+    expect(evaluate('app.rules.fieldIn', elsewhere, status, 'Awaiting lien release')).toBe(false);
+    expect(evaluate('app.rules.datePassed', elsewhere, openedOn)).toBe(false);
+  });
+
+  it('still reads a plain property as before', () => {
+    expect(evaluate('app.rules.fieldIn', deal(TITLE), { field: 'title:status' }, 'Issued')).toBe(
+      true,
+    );
+  });
+});

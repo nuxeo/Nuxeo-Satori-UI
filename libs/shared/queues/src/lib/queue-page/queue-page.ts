@@ -97,8 +97,9 @@ interface DrawnFacet {
   readonly buckets: readonly {
     readonly key: string;
     /**
-     * What the bucket shows: its key, or for a `document-link` facet the title of the record its
-     * key names, and the key where that record cannot be read.
+     * What the bucket shows: its key; for a `document-link` facet the title of the record its key
+     * names, and for a `user` or `group` facet the display name of the person or group it names,
+     * and the key where either cannot be read.
      */
     readonly text: string;
     readonly count: string | null;
@@ -108,6 +109,11 @@ interface DrawnFacet {
 }
 
 type Chosen = Readonly<Record<string, readonly string[]>>;
+
+type PrincipalKind = 'user' | 'group';
+
+/** A user's or a group's key among the buckets' names: a line break is in no Nuxeo name. */
+const principalKey = (kind: PrincipalKind, id: string): string => `${kind}\n${id}`;
 
 /** A bulk action the queue offers over every result of its query, as the person sees it. */
 interface WholeQueryAction {
@@ -455,6 +461,57 @@ export class QueuePageComponent {
     { initialValue: NO_RECORDS },
   );
 
+  /**
+   * The users and groups the buckets of the `user` and `group` facets name, each once, sorted, as
+   * `<kind>\n<id>`: the keys of every such facet's buckets, chosen ones included.
+   */
+  private readonly bucketPrincipals = computed<readonly string[]>(
+    () => {
+      const queue = this.queue();
+      const aggregations = this.aggregations();
+      if (queue === null || aggregations === undefined) return [];
+      const chosen = this.chosen();
+      const keys = queue.facets.flatMap((facet) => {
+        if (facet.widget !== 'user' && facet.widget !== 'group') return [];
+        const read = facetBuckets(aggregations, facet.aggregate, chosen[facet.aggregate] ?? []);
+        return read.kind === 'buckets'
+          ? read.buckets
+              .filter((bucket) => bucket.key !== '')
+              .map((bucket) => principalKey(facet.widget as PrincipalKind, bucket.key))
+          : [];
+      });
+      return [...new Set(keys)].sort();
+    },
+    { equal: (a, b) => a.length === b.length && a.every((key, index) => key === b[index]) },
+  );
+
+  /**
+   * Their display names, as a `user` or `group` column shows them, read through the layout
+   * service, which reads each once a session: none at first, then all at once. A bucket shows its
+   * key until its name is read, and where it cannot be, as a column shows the stored id.
+   */
+  private readonly bucketNames = toSignal(
+    toObservable(this.bucketPrincipals).pipe(
+      switchMap((keys): Observable<ReadonlyMap<string, string>> => {
+        if (keys.length === 0) return of(new Map());
+        return forkJoin(
+          keys.map((key) => {
+            const [kind, id] = key.split('\n') as [PrincipalKind, string];
+            return this.layouts
+              .principalLabel(kind, id)
+              .pipe(map((name): [string, string | null] => [key, name]));
+          }),
+        ).pipe(
+          map(
+            (pairs) => new Map(pairs.filter((pair): pair is [string, string] => pair[1] !== null)),
+          ),
+          startWith(new Map<string, string>()),
+        );
+      }),
+    ),
+    { initialValue: new Map<string, string>() },
+  );
+
   protected readonly facets = computed<readonly DrawnFacet[]>(() => {
     this.translations();
     const queue = this.queue();
@@ -462,6 +519,7 @@ export class QueuePageComponent {
     if (queue === null || aggregations === undefined) return [];
     const chosen = this.chosen();
     const records = this.bucketRecords();
+    const names = this.bucketNames();
     const drawn: DrawnFacet[] = [];
     queue.facets.forEach((facet, index) => {
       const keys = chosen[facet.aggregate] ?? [];
@@ -478,7 +536,9 @@ export class QueuePageComponent {
           text:
             facet.widget === 'document-link'
               ? (records.get(bucket.key)?.title ?? bucket.key)
-              : bucket.key,
+              : facet.widget === 'user' || facet.widget === 'group'
+                ? (names.get(principalKey(facet.widget, bucket.key)) ?? bucket.key)
+                : bucket.key,
           count: bucket.count === null ? null : this.format(bucket.count),
           chosen: keys.includes(bucket.key),
         })),

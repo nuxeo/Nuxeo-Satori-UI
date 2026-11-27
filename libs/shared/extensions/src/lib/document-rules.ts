@@ -40,13 +40,34 @@ function fieldOf(parameter: unknown): string | null {
 }
 
 /**
- * What `app.rules.fieldIn` compares: the property's value when the first parameter names one, and
- * the parameter itself otherwise. Only a text, a number or a boolean can then match, so a
- * computation, which this library does not evaluate, matches nothing.
+ * A linked record's property, as a layout's rule names one (layout-v2.md, section 5): the open
+ * record's `field` holding the linked record's id, and the linked record's `show`. `null` for any
+ * other parameter. `types` is the page's, which reads the linked record with their schemas.
  */
-function subjectOf(document: NuxeoDocument | null, parameter: unknown): unknown {
+function linkedOf(parameter: unknown): { field: string; show: string } | null {
+  if (typeof parameter !== 'object' || parameter === null || Array.isArray(parameter)) return null;
+  const { field, show } = parameter as Record<string, unknown>;
+  return typeof field === 'string' && typeof show === 'string' ? { field, show } : null;
+}
+
+/**
+ * What `app.rules.fieldIn` compares: the property's value when the first parameter names one, the
+ * linked record's when it names one of that, and the parameter itself otherwise. Only a text, a
+ * number or a boolean can then match, so a computation, which this library does not evaluate,
+ * matches nothing.
+ *
+ * A linked record's property is read through the context's `linked`, which the record page gives:
+ * for the one record whose id the open record's `field` holds, never a list of them, and only what
+ * the page read as the reader. Anywhere else, or for a record not read, it is no value.
+ */
+function subjectOf(context: ExtensionRuleContext, parameter: unknown): unknown {
+  const linked = linkedOf(parameter);
+  if (linked !== null) {
+    const id = context.document?.properties?.[linked.field];
+    return typeof id === 'string' && id !== '' ? context.linked?.(id, linked.show) : undefined;
+  }
   const field = fieldOf(parameter);
-  return field !== null ? document?.properties?.[field] : parameter;
+  return field !== null ? context.document?.properties?.[field] : parameter;
 }
 
 /**
@@ -54,8 +75,8 @@ function subjectOf(document: NuxeoDocument | null, parameter: unknown): unknown 
  * day, and anything else as the other date rules read it. Only the literal is today: a property
  * whose value is the text `"today"` names no date.
  */
-function dateOrToday(document: NuxeoDocument | null, parameter: unknown): unknown {
-  return parameter === 'today' ? TODAY : subjectOf(document, parameter);
+function dateOrToday(context: ExtensionRuleContext, parameter: unknown): unknown {
+  return parameter === 'today' ? TODAY : subjectOf(context, parameter);
 }
 
 /**
@@ -160,7 +181,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    */
   'app.rules.fieldIn': (context, parameters) => {
     const [subject, ...values] = parameters;
-    const value = subjectOf(context.document, subject);
+    const value = subjectOf(context, subject);
     const items: readonly unknown[] = Array.isArray(value) ? value : [value];
     return items.some((item) => values.some((wanted) => sameValue(item, wanted)));
   },
@@ -173,7 +194,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    * gives from its own clock; without them, the browser's.
    */
   'app.rules.datePassed': (context, parameters) => {
-    const days = daysFromContextToday(context, subjectOf(context.document, parameters[0]));
+    const days = daysFromContextToday(context, subjectOf(context, parameters[0]));
     return days !== null && days < 0;
   },
   /**
@@ -184,7 +205,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   'app.rules.dateWithin': (context, parameters) => {
     const [subject, ahead] = parameters;
     if (!isDays(ahead)) return false;
-    const days = daysFromContextToday(context, subjectOf(context.document, subject));
+    const days = daysFromContextToday(context, subjectOf(context, subject));
     return days !== null && days >= 0 && days <= ahead;
   },
   /**
@@ -201,8 +222,8 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const [later, earlier, days] = parameters;
     if (!isDays(days)) return false;
     const between = daysBetween(
-      dateOrToday(context.document, later),
-      dateOrToday(context.document, earlier),
+      dateOrToday(context, later),
+      dateOrToday(context, earlier),
       context.today ?? new Date(),
       context.timeZone,
     );

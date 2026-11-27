@@ -16,6 +16,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { isLinkedReference, type LinkedReference } from '@agentic-ui/shared/app-definition';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import {
   NXS_PRIMITIVE_IDS,
@@ -64,7 +65,7 @@ import {
   subfieldDefinition,
   viewText,
 } from './record-field-view';
-import type { LinkedProperty } from './linked-record';
+import { isDocumentId, type LinkedProperty } from './linked-record';
 import { listParameters } from './list-parameters';
 import {
   type RecordChecklistItemShown,
@@ -107,6 +108,7 @@ import {
   propertiesReadBy,
   showKey,
   showOf,
+  showWidgetOf,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
@@ -166,6 +168,11 @@ export interface RecordFieldShown {
   readonly value: RecordValueView;
   /** For a `badge`: the inputs of the design system's status tag. */
   readonly tag?: { readonly label: string; readonly status: NxsTagStatus };
+  /**
+   * For `records` shown through `status-badge` (layout-v2.md, section 12): each record's status
+   * tag, by its place among them, drawn inside its link; `null` for one with no tone.
+   */
+  readonly tags?: readonly ({ readonly label: string; readonly status: NxsTagStatus } | null)[];
   /** For `html`: the value through the platform's sanitiser, never the raw text. */
   readonly html?: SafeHtml;
 }
@@ -333,8 +340,70 @@ function showEntries(layout: ResolvedRecordLayout): RecordPropertyField[] {
 }
 
 /**
- * What each `show` on the page reads, by its entry (`showKey`): `null` where none of its types has
- * it. An entry not in it is still being read.
+ * Every rule of the page, as written: the banners', the tabs', the cards' and their fields', a
+ * computation's (whose `core.choose` takes one), a table's columns', a related list's columns' and
+ * the fields' of a card from another system. Each is evaluated for the open record.
+ */
+function rulesOf(layout: ResolvedRecordLayout): unknown[] {
+  const rules: unknown[] = [];
+  for (const banner of layout.banners) rules.push(banner.visibleWhen);
+  for (const tab of layout.tabs ?? []) rules.push(tab.visibleWhen);
+  for (const card of cardsOf(layout)) {
+    rules.push(card.visibleWhen);
+    for (const field of card.fields) {
+      rules.push(field.visibleWhen);
+      if (field.kind === 'computed') rules.push(field.computed);
+      for (const column of tableColumns(field.parameters['columns']))
+        rules.push(column.visibleWhen);
+    }
+    for (const column of card.related?.columns ?? []) rules.push(column.visibleWhen);
+    for (const field of card.external?.fields ?? []) rules.push(field.visibleWhen);
+  }
+  return rules;
+}
+
+/**
+ * How deep the walk for a rule's linked records goes: the validator reads no deeper, and the rule
+ * registry answers fewer levels still, so nothing it evaluates lies below.
+ */
+const MAX_RULE_WALK = 256;
+
+/**
+ * The linked records' properties `rules` read (layout-v2.md, section 5), each once, in the order
+ * met: every `{ "field", "types", "show" }` among their parameters. Walked with a stack, not by
+ * recursion, and no deeper than {@link MAX_RULE_WALK}.
+ */
+function linkedReadsIn(rules: readonly unknown[]): LinkedReference[] {
+  const found = new Map<string, LinkedReference>();
+  const stack: [unknown, number][] = rules.map((rule) => [rule, 0]);
+  while (stack.length > 0) {
+    const [value, depth] = stack.pop() as [unknown, number];
+    if (isLinkedReference(value)) {
+      found.set(ruleReadKey(value), value);
+      continue;
+    }
+    if (depth >= MAX_RULE_WALK) continue;
+    if (Array.isArray(value)) for (const item of value) stack.push([item, depth + 1]);
+    else if (isRecord(value))
+      for (const item of Object.values(value)) stack.push([item, depth + 1]);
+  }
+  return [...found.values()];
+}
+
+/** What a rule's linked property is read for: the types and the property, as a `show` is. */
+function ruleReadKey(reference: LinkedReference): string {
+  return JSON.stringify(['rule', reference.field, reference.show, reference.types]);
+}
+
+/** The linked properties a rule reads, itself or nested, by {@link ruleReadKey}. */
+function ruleReadKeys(rule: unknown): string[] {
+  return linkedReadsIn([rule]).map(ruleReadKey);
+}
+
+/**
+ * What each `show` on the page reads, by its entry (`showKey`), and each linked property its rules
+ * read, by {@link ruleReadKey}: `null` where none of its types has it. An entry not in it is still
+ * being read.
  */
 type Shows = ReadonlyMap<string, LinkedProperty | null>;
 
@@ -551,6 +620,12 @@ export class RecordPageComponent {
         if (definition && !fieldShowing(layout, xpath))
           named(null, {}, definition, properties[xpath]);
       }
+      // The record each linked property a rule reads is on, named as a `document-link` field
+      // names it, whatever the rule's outcome: read once for the page, with the schemas above.
+      for (const reference of linkedReadsIn(rulesOf(layout))) {
+        if (usableShow(this.shows()?.get(ruleReadKey(reference))))
+          named('document-link', {}, { type: 'string' }, properties[reference.field]);
+      }
       // The record each banner links to, named as a `document-link` field names it, whether or
       // not the banner's rule passes yet: as a field's, it is read once for the page.
       for (const banner of layout.banners) {
@@ -584,15 +659,23 @@ export class RecordPageComponent {
   private readonly shows = toSignal(
     toObservable(this.layout).pipe(
       switchMap((layout): Observable<Shows> => {
-        const entries = showEntries(layout);
+        // The fields' and lists' `show`s, and the linked properties the page's rules read.
+        const entries = [
+          ...showEntries(layout).map((entry) => ({
+            key: showKey(entry),
+            types: linkedTypesOf(entry),
+            show: showOf(entry) as string,
+          })),
+          ...linkedReadsIn(rulesOf(layout)).map((reference) => ({
+            key: ruleReadKey(reference),
+            types: [...reference.types],
+            show: reference.show,
+          })),
+        ];
         if (entries.length === 0) return of(new Map());
         return forkJoin(
-          entries.map((entry) =>
-            this.layouts.linkedProperty(linkedTypesOf(entry), showOf(entry) as string),
-          ),
-        ).pipe(
-          map((read) => new Map(entries.map((entry, index) => [showKey(entry), read[index]]))),
-        );
+          entries.map((entry) => this.layouts.linkedProperty(entry.types, entry.show)),
+        ).pipe(map((read) => new Map(entries.map((entry, index) => [entry.key, read[index]]))));
       }),
     ),
     { initialValue: null },
@@ -612,7 +695,12 @@ export class RecordPageComponent {
    */
   private readonly showsKnown = computed(() => {
     const shows = this.shows();
-    return shows !== null && showEntries(this.layout()).every((entry) => shows.has(showKey(entry)));
+    const layout = this.layout();
+    return (
+      shows !== null &&
+      showEntries(layout).every((entry) => shows.has(showKey(entry))) &&
+      linkedReadsIn(rulesOf(layout)).every((reference) => shows.has(ruleReadKey(reference)))
+    );
   });
 
   private readonly records = toSignal(
@@ -921,24 +1009,61 @@ export class RecordPageComponent {
     records: LinkedRecords,
   ): RecordValueContext {
     const today = this.today();
+    const lookups = recordLookups(
+      records,
+      this.translate.instant('document-layouts.record.unavailable'),
+    );
     const ruleContext = {
       ...this.ruleContext.context(),
       document,
       today,
       timeZone: this.timeZone,
+      // A linked record's property, for a rule that reads one (layout-v2.md, section 5): only what
+      // the page's search returned to the reader for that record, as a `show` shows it.
+      linked: lookups.linkedValue,
     };
     return {
       locale: this.locale,
       today,
       timeZone: this.timeZone,
       ...labelLookups(labels),
-      ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),
+      ...lookups,
       property: (xpath) => document.properties[xpath],
       label: (label) => this.text(label),
       flagText: (flag) =>
         this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
-      rule: (rule) => rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext),
+      rule: (rule) =>
+        rule === null ||
+        (this.linkedDecided(rule, document, records) &&
+          this.rules.evaluate(rule as ExtensionRule, ruleContext)),
     };
+  }
+
+  /**
+   * Whether a rule that reads a linked record's property can be decided yet (layout-v2.md, section
+   * 5): its linked types are read, one of them has the property, which is no reference, and the
+   * record the open record names is read, or known to be unreadable, or the value is no id. Until
+   * then it does not pass, so what it shows waits rather than showing for a moment; and one whose
+   * property none of its types has does not pass at all, and the console says why, as a `show` is
+   * left out. A rule with no linked property is decided at once.
+   */
+  private linkedDecided(rule: unknown, document: NuxeoDocument, records: LinkedRecords): boolean {
+    const keys = ruleReadKeys(rule);
+    if (keys.length === 0) return true;
+    const shows = this.shows();
+    for (const reference of linkedReadsIn([rule])) {
+      const linked = shows?.get(ruleReadKey(reference));
+      if (linked === undefined) return false;
+      if (!usableShow(linked)) {
+        this.tell(
+          `a rule reading ${reference.show} of the record ${reference.field} names does not pass: none of the types it links to, ${reference.types.join(', ')}, has it, it is a reference, or their schemas could not be read`,
+        );
+        return false;
+      }
+      const id = document.properties[reference.field];
+      if (isDocumentId(id) && !records.has(id)) return false;
+    }
+    return true;
   }
 
   /** What a computation reads of the record: its values, their display, its rules and today. */
@@ -1040,12 +1165,19 @@ export class RecordPageComponent {
       );
       return [];
     }
+    const { widget, parameters } = showWidgetOf(field);
+    if (widget !== null && !widgetAccepts(widget, linked.definition)) {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: the widget "${widget}" does not show ${show}, a ${linked.definition.type} property`,
+      );
+      return [];
+    }
     const value = showLinkedProperty(
       document.properties[field.xpath],
-      { xpath: show, definition: linked.definition },
+      { xpath: show, definition: linked.definition, widget, parameters },
       context,
     );
-    return [{ place: field.place, key, label, value }];
+    return [this.withExtras({ place: field.place, key, label, value })];
   }
 
   /**
@@ -1080,6 +1212,16 @@ export class RecordPageComponent {
     const { value } = field;
     if (value.kind === 'badge')
       return { ...field, tag: { label: value.text, status: TAG_STATUS[value.tone] } };
+    // A linked record's value through `status-badge`: each a badge, drawn inside its link.
+    if (value.kind === 'records' && value.records.some((record) => record.tone !== undefined))
+      return {
+        ...field,
+        tags: value.records.map((record) =>
+          record.tone === undefined
+            ? null
+            : { label: record.text, status: TAG_STATUS[record.tone] },
+        ),
+      };
     if (value.kind === 'html') {
       return { ...field, html: renderTrustedHtml(this.sanitizer, value.html, RICH_TEXT_HTML) };
     }

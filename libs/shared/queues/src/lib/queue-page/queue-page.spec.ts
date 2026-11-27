@@ -1,3 +1,4 @@
+import axe from 'axe-core';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
@@ -111,6 +112,10 @@ describe('QueuePageComponent', () => {
       ) => Observable<ReadonlyMap<string, unknown> | null>
     >
   >;
+  /** A user's or group's display name, as the layout service reads one. */
+  let principalLabel: ReturnType<
+    typeof vi.fn<(kind: 'user' | 'group', id: string) => Observable<string | null>>
+  >;
   /** What a column's `show` reads of the types it links to. */
   let linkedProperty: ReturnType<
     typeof vi.fn<
@@ -156,7 +161,7 @@ describe('QueuePageComponent', () => {
                 ]),
               ),
             vocabularyLabel: () => of(null),
-            principalLabel: () => of(null),
+            principalLabel: (kind: 'user' | 'group', id: string) => principalLabel(kind, id),
             linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
               schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
             linkedProperty: (types: readonly string[], show: string) => linkedProperty(types, show),
@@ -233,6 +238,7 @@ describe('QueuePageComponent', () => {
     });
     warnings = [];
     linkedRecords = vi.fn(() => of(new Map()));
+    principalLabel = vi.fn(() => of(null));
     linkedProperty = vi.fn(() => of(null));
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
       warnings.push(String(message)),
@@ -422,6 +428,89 @@ describe('QueuePageComponent', () => {
       await answer([claim(1)], MOVES);
       expect(facets()[0][1]).toBe(`[ ] ${FIRST} (2)`);
       expect(linkedRecords).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a facet on people or groups, its buckets shown by their names', () => {
+    const BY_ADJUSTER = {
+      ...UNASSIGNED,
+      facets: [
+        { aggregate: 'claim_adjuster_agg', label: 'Adjuster', widget: 'user' },
+        { aggregate: 'claim_team_agg', label: 'Team', widget: 'group' },
+        { aggregate: 'claim_type_agg', label: 'Claim type' },
+      ],
+    };
+    const PEOPLE = {
+      ...AGGREGATIONS,
+      claim_adjuster_agg: {
+        type: 'terms',
+        buckets: [
+          { key: 'noor.halvorsen', docCount: 3 },
+          { key: 'left.company', docCount: 1 },
+        ],
+      },
+      claim_team_agg: {
+        type: 'terms',
+        buckets: [{ key: 'property-claims-adjusters', docCount: 4 }],
+      },
+    };
+    const NAMES: Readonly<Record<string, string>> = {
+      'user\nnoor.halvorsen': 'Noor Halvorsen',
+      'group\nproperty-claims-adjusters': 'Property claims adjusters',
+    };
+
+    beforeEach(() => {
+      files = { 'claims-by-adjuster': { kind: 'file', content: BY_ADJUSTER } };
+      principalLabel = vi.fn((kind: 'user' | 'group', id: string) =>
+        of(NAMES[`${kind}\n${id}`] ?? null),
+      );
+    });
+
+    it('shows each bucket by its display name, the stored name where it cannot be read, and filters by it', async () => {
+      create();
+      await open('claims-by-adjuster');
+      await answer([claim(1)], PEOPLE);
+      expect(facets()).toEqual([
+        ['Adjuster', '[ ] Noor Halvorsen (3)', '[ ] left.company (1)'],
+        ['Team', '[ ] Property claims adjusters (4)'],
+        ['Claim type', '[ ] medical (1,200)', '[ ] dental (34)'],
+      ]);
+      // Each name read once, as a user or a group by its facet's widget; the plain facet's never.
+      expect(principalLabel.mock.calls.map(([kind, id]) => `${kind} ${id}`).sort()).toEqual([
+        'group property-claims-adjusters',
+        'user left.company',
+        'user noor.halvorsen',
+      ]);
+      await tick('claim_adjuster_agg', 'Noor Halvorsen');
+      // The bucket's key goes back to the page provider, never the name shown.
+      expect(lastRequest()[1].aggregates).toEqual({ claim_adjuster_agg: ['noor.halvorsen'] });
+    });
+
+    it('shows the stored name while the names are read', async () => {
+      const answered = new Subject<string | null>();
+      principalLabel = vi.fn(() => answered);
+      create();
+      await open('claims-by-adjuster');
+      await answer([claim(1)], PEOPLE);
+      expect(facets()[0]).toEqual(['Adjuster', '[ ] noor.halvorsen (3)', '[ ] left.company (1)']);
+    });
+
+    it('passes axe at WCAG 2.2 AA with the names drawn', async () => {
+      create();
+      await open('claims-by-adjuster');
+      await answer([claim(1)], PEOPLE);
+      const results = await axe.run(
+        page().querySelector('.queue-facet')?.closest('aside, section, form, div') as HTMLElement,
+        {
+          runOnly: {
+            type: 'tag',
+            values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
+          },
+          // jsdom lays nothing out, so contrast cannot be measured here.
+          rules: { 'color-contrast': { enabled: false } },
+        },
+      );
+      expect(results.violations).toEqual([]);
     });
   });
 
