@@ -73,8 +73,9 @@ const INSTRUCTIONS =
   ' with GET requests: none writes, runs an operation or starts a workflow. Use the content model' +
   ' tools before writing a layout, so every field is one the type has; describe_page_provider' +
   ' before writing a queue or a related-records card; describe_workflow before a task form. Write' +
-  ' every package file with write_package_file, apply_generator or apply_package_changes, never' +
-  ' with your own file tools: each validates the package as it would be, writes it only when the' +
+  ' every package file with write_package_file, remove_package_file, apply_generator or' +
+  ' apply_package_changes, never with your own file tools: each validates the package as it would' +
+  ' be, its names compared with the other kits beside it, writes it only when the' +
   ' pipeline passes with no finding, and otherwise returns the findings and changes nothing. A' +
   ' refused write is the answer: fix what it names, and never rename an id to get a pass.' +
   ' validate_package checks a package as it is. preview_package validates a package and serves it' +

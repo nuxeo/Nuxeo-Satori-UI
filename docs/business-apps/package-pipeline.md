@@ -70,6 +70,10 @@ root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v
   never asks for it. The registry serves the app after sign-in, to the groups its `app.json` names.
 - **What it carries for later:** `modules/`, which the registry does not serve until a domain
   module exists, and `actions.json`, which the registry serves and nothing in the app reads yet.
+- **What sits beside the bundle, unpackaged:** a demo kit's `content-model.json`, which
+  `app-model` writes to describe its stand-in model, and `connectors/`, the connectors of the kit's
+  own that `app-connector` writes for a server with the connectors add-on to take in
+  `nxserver/config/`. Step 2 reads both; no zip carries either.
 - **No bootstrap fragment.** On a server that runs several apps, a bootstrap fragment would
   rebrand every one of them. An app's branding is in its `app.json`. The pipeline does not check
   this yet.
