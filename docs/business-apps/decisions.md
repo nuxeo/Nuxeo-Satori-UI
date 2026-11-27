@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 26 November 2026.
+Updated 27 November 2026.
 
 ## Until the app is finished: every open decision on its recommendation
 
@@ -15,14 +15,16 @@ another way. Acting on a recommendation takes no decision: each stays open, and 
 still decide it another way. The security reviews wait until then too
 ([security-reviews.md](security-reviews.md)).
 
-Four recommendations need someone outside the work before anything can follow them, so they wait
+Five recommendations need someone outside the work before anything can follow them, so they wait
 for their owners rather than being acted on:
 
 - **4,** the security review of the registered computations and rules, which waits with the
   others;
 - **6,** access to the Satori design system for presales, which its owners grant;
 - **G,** tenancy, which is designed with the platform team;
-- **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales.
+- **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales;
+- **T,** telemetry, whose recommendation is to build nothing until its privacy and security reviews
+  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md)).
 
 **I,** protecting fields such as an insurance number, is a platform decision from the feasibility
 report. Until it is taken, a field that must not be shown to a group is left out of that group's
@@ -438,6 +440,15 @@ way.
   It loads no customer code into the shipped app, and the decision stays open. Once it is taken,
   the prototype can go, with its two guards: `checkPluginSpikeIsolated` and the `type:spike` probes
   in `scripts/beta-harness/module-boundaries.mjs`.
+
+## Open: from phase 10
+
+Raised by the [development plan](development-plan.md)'s phase 10, "telemetry and the diagnostics
+page".
+
+| #   | Decision                                                 | Recommendation                                                                                                                                                                                                                                                           | Owner                    | Needed by |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ | --------- |
+| T   | Telemetry: whether the app sends any, what, and where to | Opt-in and off by default: sent by the server, never the browser, to the customer's own OpenTelemetry collector, only the closed list of fields in [telemetry.md](telemetry.md), never to Hyland's without a contract; built only after its privacy and security reviews | Product, security, legal | Phase 10  |
 
 ## From the Studio parity plan
 

@@ -11,7 +11,7 @@ import {
   parseJson,
   readAppPackage,
   schemaFor,
-  writeJson,
+  writeDesignedJson,
   XPATH,
 } from '../app-package/package-files';
 
@@ -91,7 +91,7 @@ export default async function appQueueGenerator(tree: Tree, options: AppQueueSch
   if (!isRecord(previous)) throw new Error(`${file} is not a queue to write again.`);
 
   const labelKey = `${pkg.appId}.queue.${options.id}`;
-  writeJson(tree, file, {
+  writeDesignedJson(tree, file, {
     $schema: schemaFor(file, 'queue.schema.json'),
     ...previous,
     version: 2,

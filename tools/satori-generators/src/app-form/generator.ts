@@ -11,7 +11,7 @@ import {
   listOption,
   readAppPackage,
   schemaFor,
-  writeJson,
+  writeDesignedJson,
   XPATH,
 } from '../app-package/package-files';
 
@@ -203,7 +203,7 @@ export default async function appFormGenerator(tree: Tree, options: AppFormSchem
 
   // First, since it may refuse: nothing is written before it has.
   contributeLayout(tree, pkg, options.type, mode);
-  writeJson(tree, file, {
+  writeDesignedJson(tree, file, {
     $schema: schemaFor(file, 'layout-v2.schema.json'),
     version: 2,
     cards,

@@ -30,6 +30,7 @@ wait for a security review, and some are built on open decisions
 | `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                                                                                                | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`                                  | 0.1.1                            | Nowhere                                           |
 | `onboarding-demo`           | The onboarding kit: cases with their KYC checklist and an e-signature step, disputes with their legal hold, raised from a case, three queues                                                                      | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-signature:0.1.0`, `nuxeo-agentic-records:0.4.0` | 0.2.0                            | Nowhere                                           |
 | `media-demo`                | The media kit: a film's page with its release windows and localised versions, a version's page, the deliveries and a delivery's page                                                                              | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.4.0`                                   | 0.1.0                            | Nowhere                                           |
+| `vehicle-titles-demo`       | The vehicle titles kit: vehicle deals with their checklist of required documents and phone capture, titles and their liens, three queues                                                                          | `nuxeo-agentic-ui:2026.0.2`                                                                 | 0.1.0                            | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -47,8 +48,9 @@ installed on any server yet"), and the kits' READMEs:
 [P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
 [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md),
 [records](../../business-apps/packages/records-demo/README.md),
-[onboarding](../../business-apps/packages/onboarding-demo/README.md) and
-[media](../../business-apps/packages/media-demo/README.md); the
+[onboarding](../../business-apps/packages/onboarding-demo/README.md),
+[media](../../business-apps/packages/media-demo/README.md) and
+[vehicle titles](../../business-apps/packages/vehicle-titles-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
 the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
 on any server") and the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
@@ -479,11 +481,12 @@ groups give them, and gets every diagnostic.
 | `records`                         | `records-managers`, `records-approvers`                     |
 | `onboarding`                      | `onboarding-officers`, `kyc-analysts`, `dispute-analysts`   |
 | `media`                           | `media-distribution`, `media-rights`                        |
+| `vehicle-titles`                  | `vehicle-deal-desk`, `vehicle-title-clerks`                 |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
 - **Create the groups yourself.** The contracts, brand assets, moves, P&C claims, controlled
-  documents and records seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
+  documents, records and vehicle titles seeds create no user and no group; the Payers seed creates its fictional demo people and its groups,
   for a demo server.
 - **Seeing an app is not a security control.** Nuxeo's permissions decide which records its
   queues, homes and pages show.
@@ -692,7 +695,8 @@ installed.
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
    `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo`,
-   `/default-domain/workspaces/pc-claims-demo`, `/default-domain/workspaces/records-demo` and `/default-domain/workspaces/media-demo`; the records kit's seed also writes `/disposition-runs`
+   `/default-domain/workspaces/pc-claims-demo`, `/default-domain/workspaces/records-demo`,
+   `/default-domain/workspaces/media-demo` and `/default-domain/workspaces/vehicle-titles-demo`; the records kit's seed also writes `/disposition-runs`
    and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.
@@ -774,6 +778,66 @@ Read from [`demo-server-plan.mjs`](../../scripts/demo-server-plan.mjs), which al
 On Docker, the server log is `/var/log/nuxeo/server.log` in the container:
 `docker exec nuxeo grep -A20 "Component Loading Status" /var/log/nuxeo/server.log | tail -25`, as
 the [Payers README](../../business-apps/packages/payers-claims-demo/README.md) checks it.
+
+### The diagnostics page
+
+**Administration, Diagnostics**, at `/administration/diagnostics`, for administrators: what support
+needs to know of this server's apps, read only, in one place. It shows:
+
+- **the versions:** the platform's, Nuxeo's product name and version; the app's, the installed
+  `nuxeo-agentic-ui` package; and the `nuxeo-agentic-core` bundle's own build;
+- **the installed packages,** each with its version, its state and whether it is the app, a kit
+  (a package that depends on the app) or another add-on, as the package manager records them in
+  `nuxeo.mp.dir`. **Signature: "Not recorded by the server",** for every package: Nuxeo LTS 2025's
+  package manager keeps no record of a signature, so verify each one before installing it
+  ([section 3](#3-installing-in-order); [package-pipeline.md](package-pipeline.md), section 9.1);
+- **the server checks the apps depend on:** Nuxeo's retention module (its `RetentionRule` facet
+  registered), Template Rendering (its `TemplateBased` facet), the AI package (any `AI.*`
+  operation), the deployment layer on or off, the development overrides on or off, and the
+  operation allow-list in force or replaced;
+- **the configuration in force:** server-wide, the bootstrap and manifest fragments, in the order
+  the browser applies them, with the bundle each came from, and how many layouts; for each app, its
+  package version, the platform it needs, the bundle and files it is served from, its deployment
+  layer's live files with their versions, and how many configuration errors were logged for it;
+- **the configuration's errors and warnings** the server logged when it built the configuration in
+  force, and when the registry served each app's actions, each with its app, its code, its message
+  and the file it is about. Those for information only are counted, not listed;
+- **a "copy for support" text:** the same facts as plain text, a fact a line, in field names that
+  do not change with the page's language, and a Copy button.
+
+**What it leaves out, by construction:** no person, not the administrator asking, not who changed
+the deployment layer, not an app's groups; no property is read for it but the product's name and
+version, the package manager's directory, which is not shown, and the switches, shown as on or
+off; and no file's content. One property can still show: with the development overrides on, their
+directory is in their own messages and as the source of their files. Every message is cleaned
+before it is sent: an email address, who a URL signs in as and its query, a home directory's owner,
+what follows a credential's name such as `password=`, an `Authorization` header's value, and
+anything shaped like a key or a token are replaced
+([`Redaction.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/Redaction.java)).
+A package's name and version are held to a name's and a version's form instead, so that a build's
+timestamped version is shown whole. The cleaning is a second line, not a guarantee: read the text
+before sending it.
+
+**Who may read it is decided on the server.** The page reads
+`GET /nuxeo/agentic-ui-apps/diagnostics.json`, after sign-in, below the app registry's servlet:
+
+| Request                                          | Answer                                        |
+| ------------------------------------------------ | --------------------------------------------- |
+| `GET`, from an administrator (`isAdministrator`) | 200, the report, `Cache-Control: no-store`    |
+| `GET`, from anyone else, any group               | 403, before anything of the server is read    |
+| `GET`, with no sign-in                           | 401; 403 on a server with an anonymous user   |
+| Any other method, `HEAD` and `POST` included     | 405, `Allow: GET`, before anyone is looked at |
+
+The page's own route guard only keeps it out of the menu: someone who reaches the page without
+being an administrator sees the server's 403 and nothing of the report. Sources:
+[`DiagnosticsEndpoint.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsEndpoint.java),
+[`DiagnosticsReport.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/DiagnosticsReport.java),
+[`InstalledPackages.java`](../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/InstalledPackages.java),
+and their tests, `DiagnosticsAccessTest` above all. **Run in its tests only:** no server has the
+build of `nuxeo-agentic-core` that answers it yet, so the local Docker Nuxeo answers 404 there, and
+the report's reads of a running server, `ServerProbe.live()`, have run nowhere. Its security review waits with the others
+([security-reviews.md](security-reviews.md)). Telemetry, which would send any of this anywhere, is
+not built: [telemetry.md](telemetry.md) is its design, for decision T.
 
 ## 9. What is not production-ready yet
 

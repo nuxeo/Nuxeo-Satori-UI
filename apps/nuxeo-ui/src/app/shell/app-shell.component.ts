@@ -234,6 +234,7 @@ export class AppShellComponent implements OnDestroy {
         'cloud-services': 'admin.page-title.cloud-services',
         'nxql-search': 'drawer.administration-nxql-search',
         'layout-designer': 'drawer.administration-layout-designer',
+        diagnostics: 'drawer.administration-diagnostics',
       };
       return this.translate.instant(titles[seg] ?? 'admin.page-title.administration');
     }

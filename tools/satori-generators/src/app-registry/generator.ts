@@ -1,6 +1,10 @@
 import { formatFiles, type Tree } from '@nx/devkit';
 
-import { contributeApp, readAppPackage } from '../app-package/package-files';
+import {
+  contributeApp,
+  readAppPackage,
+  uncontributeMissingLayouts,
+} from '../app-package/package-files';
 
 export interface AppRegistrySchema {
   package: string;
@@ -18,13 +22,15 @@ export interface AppRegistrySchema {
  * `app-action` keep it in step when they add a file. Run this one for a package that has none, and
  * after writing a file by hand, such as the home, the menu or a task form: it adds the files the
  * element does not name yet, and takes out those the package no longer holds. Layouts are not the
- * registry's: each is a `<layout>` of its own (app-layout, app-form).
+ * registry's: each is a `<layout>` of its own (app-layout, app-form), and one whose file the
+ * package no longer holds, removed with the write tools, is taken out of the component here too.
  *
  * The registry serves the app to the groups its `app.json` names, after sign-in. That is not a
  * security control: Nuxeo's permissions still decide which records anyone reads.
  */
 export default async function appRegistryGenerator(tree: Tree, options: AppRegistrySchema) {
   const pkg = readAppPackage(tree, options.package);
+  const layouts = uncontributeMissingLayouts(tree, pkg);
   const result = contributeApp(tree, pkg, { create: true });
 
   await formatFiles(tree);
@@ -33,6 +39,9 @@ export default async function appRegistryGenerator(tree: Tree, options: AppRegis
     const changes = [
       ...(result.added.length > 0 ? [`  Now names:      ${result.added.join(', ')}`] : []),
       ...(result.removed.length > 0 ? [`  No longer names: ${result.removed.join(', ')}`] : []),
+      ...(layouts.length > 0
+        ? [`  No longer contributes the layouts, whose files are gone: ${layouts.join(', ')}`]
+        : []),
     ];
     console.log(`
 ${

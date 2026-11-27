@@ -82,6 +82,12 @@ export interface PackageOptions {
    * own temporary files, and removed afterwards. Default: the system's temporary folder.
    */
   readonly workIn?: string;
+  /**
+   * The folder of the kits the package's names are compared with, the pipeline's `--kits`: the
+   * write tools give the one the package is in, since its staging copy is elsewhere. Without it,
+   * the pipeline compares a kit in `business-apps/packages/` with the others there, as CI does.
+   */
+  readonly kits?: string;
 }
 
 export interface Finding {
@@ -259,6 +265,7 @@ export async function validatePackage(
     platform,
     ...(allowList ? ['--allow-list', allowList] : []),
     ...(registered ? ['--registered', registered] : []),
+    ...(options.kits === undefined ? [] : ['--kits', options.kits]),
   ];
   try {
     mkdirSync(temporary);

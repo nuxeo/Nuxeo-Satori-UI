@@ -176,10 +176,14 @@ it, page 200 at 50 a page; and HTTP 500, with Nuxeo's message, for a page that e
 where the results run out first. The selftest holds it to the measured answers, page for page.
 
 The asset page's other reads are answered too: the record with its enrichers, its type and schemas
-from the kit's `content-model.json`, its picture views as PNGs drawn by the kit's `png.mjs` and
+from the kit's `content-model.json`, its share links and their downloads (none, since the kit's
+0.2.2 turned the panel on), its picture views as PNGs drawn by the kit's `png.mjs` and
 padded to the size the record gives each view, its
 history, the review's annotations (none), and the three vocabularies the document page reads, as
 large as Nuxeo's stock ones: 251, 58 and 37 entries.
+
+The same stand-in serves the [CI budgets](performance-budgets-ci.md), which give it a home of their
+own with `home`, since the kit has none.
 
 ## The negative controls
 

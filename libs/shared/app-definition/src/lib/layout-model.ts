@@ -25,10 +25,17 @@
  * tolerantly, would leave out the field it is in and show the rest. It runs once the file's own
  * checks have: an entry that is malformed already has a finding, and is passed over here.
  *
+ * - **What a rule, a computation, a check, a widget's parameter or a related list's parameter
+ *   reads** of the open record is a property of the type, as the checker collected them
+ *   (`PropertyReference`), when the caller asks (`ValidationOptions.references`): a banner whose
+ *   rule names one it lacks would never show. The server's own `ecm:` properties are in no
+ *   schema, and are not looked for; a property a facet of the model brings is read on a record
+ *   given that facet at run time, and is let be.
+ *
  * Not checked against the model: a related list's columns, which are the listed records' and not
- * this type's, but for their `show`; the properties a computation, a rule or a widget parameter
- * names, `show` excepted; and a vocabulary widget's `directory` against the one the property is
- * bound to. Nor whether a `document-link`'s property, or the one its `show` names, is a document
+ * this type's, but for their `show`; what a table's or a related list's column computes or gives a
+ * widget, which may be the row's; and a vocabulary widget's `directory` against the one the
+ * property is bound to. Nor whether a `document-link`'s property, or the one its `show` names, is a document
  * reference: the model reader does not read resolvers. The record page refuses a `show` naming a
  * reference, which it can tell from the linked type's schema.
  *
@@ -37,7 +44,7 @@
  * table inside a table's column is held to its subfield's subfields, though the page does not draw
  * one yet.
  */
-import { join, type Finding } from './checker';
+import { join, type Finding, type PropertyReference } from './checker';
 import {
   propertiesOf,
   propertyTypeOf,
@@ -112,6 +119,7 @@ export function againstModel(
   type: string | undefined,
   model: ContentModel,
   registries: Registries,
+  references: readonly PropertyReference[] = [],
 ): Finding[] {
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
@@ -407,6 +415,22 @@ export function againstModel(
     });
   };
   if (isRecord(file['capture'])) capture(file['capture']);
+  // What a rule, a computation, a check or a parameter reads of the open record: a property it
+  // does not have reads nothing, so a banner whose rule names one never shows, and a required
+  // field never is. The server's own `ecm:` properties are in no schema. A property a facet of the
+  // model brings, which the type does not declare, is read on a record given that facet at run
+  // time, as a rule guarded by `app.rules.hasFacet` reads it, and is let be.
+  const facetProperties = new Set<string>();
+  for (const facet of model.facets.values())
+    for (const schema of facet.schemas) {
+      const read = model.schemas.get(schema);
+      for (const name of read?.properties.keys() ?? [])
+        facetProperties.add(`${read?.prefix}:${name}`);
+    }
+  for (const { xpath, path, by } of references) {
+    if (xpath.startsWith('ecm:') || properties.has(xpath) || facetProperties.has(xpath)) continue;
+    add(path, 'unknown', `${whyMissing(model, type, xpath)}, so the ${by} naming it reads nothing`);
+  }
   return findings;
 }
 

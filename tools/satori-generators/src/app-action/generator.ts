@@ -11,6 +11,7 @@ import {
   parseJson,
   readAppPackage,
   schemaFor,
+  writeDesignedJson,
   writeJson,
 } from '../app-package/package-files';
 
@@ -233,7 +234,7 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
       if (!list.includes(id)) list.push(id);
       queue[key] = list;
     }
-    writeJson(tree, queueFile, queue);
+    writeDesignedJson(tree, queueFile, queue);
   }
   // Written again with fewer places, the action leaves the queues that offered it there: a queue
   // naming a row action that no longer shows on rows is refused by the pipeline.
@@ -253,7 +254,7 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
         else delete other[key];
       }
       if (changed) {
-        writeJson(tree, path, other);
+        writeDesignedJson(tree, path, other);
         pruned.push(path);
       }
     }
