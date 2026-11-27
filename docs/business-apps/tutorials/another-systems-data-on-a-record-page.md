@@ -305,7 +305,7 @@ send() {
   TIMESTAMP=$(date +%s); NONCE=$(openssl rand -hex 16)
   BODY='{"delivery":"'"$DELIVERY"'","event":"modified","document":{"id":"00000000-0000-4000-8000-000000000130","type":"Claim"},"fields":{"claimNumber":"CLAIM-000130","title":"A fictional claim","state":"approved"}}'
   SIGNATURE=$(printf '%s\n%s\n%s\n%s' "$WEBHOOK" "$TIMESTAMP" "$NONCE" "$BODY" | openssl dgst -sha256 -hmac "$1" -r | cut -d' ' -f1)
-  curl -s -o /dev/null -w 'HTTP %{http_code}\n' -X POST http://127.0.0.1:8092/nuxeo-webhooks \
+  curl -s --fail-with-body -o /dev/null -w 'HTTP %{http_code}\n' -X POST http://127.0.0.1:8092/nuxeo-webhooks \
     -H 'Content-Type: application/json' -H "X-Nuxeo-Webhook: $WEBHOOK" \
     -H "X-Nuxeo-Connector-Timestamp: $TIMESTAMP" -H "X-Nuxeo-Connector-Nonce: $NONCE" \
     -H "X-Nuxeo-Connector-Signature: sha256=$SIGNATURE" --data-binary "$BODY"
