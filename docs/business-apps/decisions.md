@@ -15,7 +15,7 @@ another way. Acting on a recommendation takes no decision: each stays open, and 
 still decide it another way. The security reviews wait until then too
 ([security-reviews.md](security-reviews.md)).
 
-Five recommendations need someone outside the work before anything can follow them, so they wait
+Six recommendations need someone outside the work before anything can follow them, so they wait
 for their owners rather than being acted on:
 
 - **4,** the security review of the registered computations and rules, which waits with the
@@ -24,7 +24,8 @@ for their owners rather than being acted on:
 - **G,** tenancy, which is designed with the platform team;
 - **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales;
 - **T,** telemetry, whose recommendation is to build nothing until its privacy and security reviews
-  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md)).
+  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md));
+- **K,** how customers and partners get the Builder kit, since publishing it is a product decision.
 
 **I,** protecting fields such as an insurance number, is a platform decision from the feasibility
 report. Until it is taken, a field that must not be shown to a group is left out of that group's
