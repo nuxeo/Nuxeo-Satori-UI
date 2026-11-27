@@ -9,6 +9,12 @@
  * The seed must never file a delivery: that is the demo's, a distribution coordinator's. The last
  * controls hold the demo's four cases in data.mjs to the seeded data, on the stand-in's decision,
  * which is the add-on's as its own tests hold it.
+ *
+ * Since the kit's 0.2.0, the watermark, as the stand-in applies the kit's policy: the delivery's key
+ * art marked for its distributor and the master and the subtitles not; a delivery whose key art is
+ * no picture refused whole; the still refused unmarked to an outside partner and to an
+ * administrator, served as it is to staff, and served marked, naming its reader, by
+ * `Asset.GetWatermarked`.
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -18,17 +24,21 @@ import { fileURLToPath } from 'node:url';
 import {
   DEMO,
   DELIVERIES,
+  FILES,
   FILM,
   FILMS,
   GRANTS,
+  GROUPS,
   LOCALISED,
   VERSIONS,
   WORKSPACE,
+  filesOf,
   todayUtc,
   versionName,
+  watermarkText,
   windowsFrom,
 } from './data.mjs';
-import { basic, kitPolicy, startStandIn } from './stand-in.mjs';
+import { basic, fillWatermark, jpegComment, kitPolicy, startStandIn } from './stand-in.mjs';
 
 const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
 /** The stand-in's one password, made for each run: no credential is written in the repository. */
@@ -45,7 +55,34 @@ const USERS = {
   admin: { password: PASSWORD, administrator: true },
   coordinator: { password: PASSWORD, groups: ['media-distribution'] },
   outsider: { password: PASSWORD, groups: [] },
+  partner: { password: PASSWORD, groups: [GROUPS.partners] },
 };
+
+/** A GET of `path` under the stand-in's address, as `user`: its status, type and bytes. */
+async function download(stub, user, path) {
+  const response = await fetch(`${stub.url}${path}`, {
+    headers: { Authorization: basic(user, PASSWORD) },
+  });
+  return {
+    status: response.status,
+    type: response.headers.get('content-type'),
+    bytes: Buffer.from(await response.arrayBuffer()),
+  };
+}
+
+/** `Asset.GetWatermarked` of `use` of `doc`, as `user`. */
+async function marked(stub, user, doc, use) {
+  const response = await fetch(`${stub.url}/nuxeo/api/v1/automation/Asset.GetWatermarked`, {
+    method: 'POST',
+    headers: { Authorization: basic(user, PASSWORD), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: `doc:${doc.uid}`, params: { use } }),
+  });
+  return {
+    status: response.status,
+    type: response.headers.get('content-type'),
+    bytes: Buffer.from(await response.arrayBuffer()),
+  };
+}
 
 function run(url, { env = {} } = {}) {
   return new Promise((resolve) => {
@@ -112,7 +149,7 @@ const today = todayUtc();
   await stub.close();
 }
 
-// 3. The assets add-on 0.4.0 not installed: refused, naming it.
+// 3. The assets add-on 0.5.0 not installed: refused, naming it.
 {
   const stub = await startStandIn({
     users: USERS,
@@ -122,7 +159,7 @@ const today = todayUtc();
   const result = await run(stub.url);
   check(
     'no assets add-on: exit 2, naming it',
-    result.status === 2 && result.output.includes('nuxeo-agentic-assets 0.4.0'),
+    result.status === 2 && result.output.includes('nuxeo-agentic-assets 0.5.0'),
     result.output,
   );
   check('no assets add-on: nothing written', writes(stub.requests).length === 0);
@@ -156,13 +193,21 @@ const today = todayUtc();
     );
     const files = doc?.properties['files:files'] ?? [];
     check(
-      `seeded: the ${version.language} version's master, subtitles and key art, in that order, each stored`,
-      files.length === 3 &&
+      `seeded: the ${version.language} version's master, subtitles, key art and still, in that order, each stored`,
+      files.length === 4 &&
         files.every((entry) => entry.file?.digest) &&
         /master/.test(files[0].file.name) &&
         /subtitles/.test(files[1].file.name) &&
-        /key-art/.test(files[2].file.name),
+        /key-art/.test(files[2].file.name) &&
+        /still/.test(files[3].file.name),
       JSON.stringify(files.map((entry) => entry.file?.name)),
+    );
+    check(
+      `seeded: the ${version.language} version's key art and still are PNG pictures, as drawn`,
+      files[2]?.file?.['mime-type'] === 'image/png' &&
+        files[3]?.file?.['mime-type'] === 'image/png' &&
+        Number(files[3].file.length) === filesOf(version)[3].bytes.length,
+      JSON.stringify(files.map((entry) => entry.file?.['mime-type'])),
     );
   }
   const deliveries = stub.docs.get(`${ROOT}/${DELIVERIES.name}`);
@@ -207,6 +252,29 @@ const today = todayUtc();
     inside.body.properties?.['mdlv:files']?.length === 3 &&
       inside.body.properties['mdlv:files'].every((each) => each.digest),
   );
+  const delivered = inside.body.properties?.['mdlv:files'] ?? [];
+  check(
+    'the demo: the key art marked for its distributor, the master and the subtitles not',
+    JSON.stringify(delivered.map((each) => each.watermarked)) ===
+      JSON.stringify([false, false, true]) &&
+      delivered[2].watermarkedFor === DEMO.inside.distributor &&
+      delivered[2].watermark === watermarkText(DEMO.inside.distributor, 'coordinator', today) &&
+      delivered.slice(0, 2).every((each) => each.watermarkedFile === null),
+    JSON.stringify(
+      delivered.map(({ watermarked, watermarkedFor, watermark }) => ({
+        watermarked,
+        watermarkedFor,
+        watermark,
+      })),
+    ),
+  );
+  check(
+    "the demo: the delivery holds the key art marked, a JPEG apart from the version's",
+    delivered[2]?.watermarkedFile?.['mime-type'] === 'image/jpeg' &&
+      delivered[2].watermarkedFile.digest &&
+      delivered[2].watermarkedFile.digest !== delivered[2].digest,
+    JSON.stringify(delivered[2]?.watermarkedFile),
+  );
   for (const [name, refusal] of [
     ['outside', DEMO.outside],
     ['whole', DEMO.whole],
@@ -237,6 +305,63 @@ const today = todayUtc();
     'the demo: one delivery made, the one inside its windows',
     made.length === 1 && made[0].properties['mdlv:territory'] === DEMO.inside.territory,
   );
+
+  // The still, a preview the watermark marks for anyone outside the kit's staff.
+  const french = stub.docs.get(
+    `${ROOT}/${VERSIONS.name}/${versionName(LOCALISED.find((each) => each.key === 'french'))}`,
+  );
+  const stillPath = `/nuxeo/api/v1/id/${french.uid}/@blob/${FILES.still}`;
+  const stillBytes = filesOf(LOCALISED.find((each) => each.key === 'french'))[3].bytes;
+  const partnerStill = await download(stub, 'partner', stillPath);
+  check(
+    'the still: refused unmarked to an outside partner, 403 watermark-required',
+    partnerStill.status === 403 && partnerStill.bytes.toString().includes('watermark-required'),
+    `${partnerStill.status} ${partnerStill.bytes.toString().slice(0, 200)}`,
+  );
+  const nxfile = await download(
+    stub,
+    'partner',
+    `/nuxeo/nxfile/default/${french.uid}/${FILES.still}`,
+  );
+  check('the still: refused at /nxfile/ too', nxfile.status === 403, String(nxfile.status));
+  check(
+    'the still: refused unmarked to an administrator, whom no group exempts',
+    (await download(stub, 'admin', stillPath)).status === 403,
+  );
+  const staffStill = await download(stub, 'coordinator', stillPath);
+  check(
+    'the still: served as it is to a distribution coordinator',
+    staffStill.status === 200 &&
+      staffStill.type === 'image/png' &&
+      staffStill.bytes.equals(stillBytes),
+    `${staffStill.status} ${staffStill.type}`,
+  );
+  const forPartner = await marked(stub, 'partner', french, `blob:${FILES.still}`);
+  check(
+    'the still: served marked to the partner, a JPEG naming them',
+    forPartner.status === 200 &&
+      forPartner.type === 'image/jpeg' &&
+      forPartner.bytes[0] === 0xff &&
+      forPartner.bytes[1] === 0xd8 &&
+      !forPartner.bytes.equals(stillBytes) &&
+      jpegComment(forPartner.bytes) === watermarkText('partner', 'partner', today),
+    `${forPartner.status} ${forPartner.type} ${jpegComment(forPartner.bytes)}`,
+  );
+  check(
+    'the key art is not marked for a download: not served by Asset.GetWatermarked, 404',
+    (await marked(stub, 'partner', french, `blob:${FILES.keyArt}`)).status === 404,
+  );
+  const textArt = french.properties['files:files'][2].file;
+  french.properties['files:files'][2].file = { ...textArt, 'mime-type': 'text/plain' };
+  const unmarkable = await file(stub, 'coordinator', DEMO.inside);
+  check(
+    'a delivery whose key art is no picture: refused whole, watermark-unavailable',
+    unmarkable.status === 403 &&
+      String(unmarkable.body.message).includes(FILES.keyArt) &&
+      String(unmarkable.body.message).includes('cannot be marked'),
+    JSON.stringify(unmarkable.body),
+  );
+  french.properties['files:files'][2].file = textArt;
 
   // The stand-in refuses as the add-on does what the add-on refuses: a window it cannot read, a
   // film of another type, and a distributor's name with a control character in it.
@@ -304,6 +429,28 @@ const today = todayUtc();
     policy.rules.get('original') === 'SVOD' &&
       policy.rules.get('blob files:files/1/file') === 'SVOD' &&
       policy.rules.get('blob files:files/2/file') === 'Marketing',
+  );
+  check(
+    'the kit policy: the still a preview, the thumbnail too',
+    policy.previews.has(`blob ${FILES.still}`) && policy.previews.has('rendition thumbnail'),
+  );
+  check(
+    'the kit policy: the watermark marks the still on previews, the key art on deliveries, and no download',
+    JSON.stringify(policy.watermark?.previews) === JSON.stringify([`blob ${FILES.still}`]) &&
+      JSON.stringify(policy.watermark?.deliveries) === JSON.stringify([`blob ${FILES.keyArt}`]) &&
+      policy.watermark?.downloads === undefined,
+    JSON.stringify(policy.watermark),
+  );
+  check(
+    "the kit policy: the watermark exempts the kit's staff, and not its partners",
+    JSON.stringify(policy.watermark?.except) ===
+      JSON.stringify([GROUPS.rights, GROUPS.distribution]),
+  );
+  check(
+    'the kit policy: its text is the one data.mjs expects, naming its recipient and the day',
+    fillWatermark(policy.watermark, { recipient: 'Someone', user: 'u', day: '2026-11-27' }) ===
+      watermarkText('Someone', 'u', '2026-11-27'),
+    policy.watermark?.text,
   );
   check(
     'the kit policy: a delivery carries all three',

@@ -290,6 +290,8 @@ describe('RecordPageComponent', () => {
     fetchBlobByXpath: ReturnType<typeof vi.fn>;
     /** A picture's review: its annotations on the views. */
     getAnnotationDocuments: ReturnType<typeof vi.fn>;
+    /** What the server lets the reader decide of the review: none here, as a server without the add-on. */
+    fetchAssetReview: ReturnType<typeof vi.fn>;
     /** A video's transcoded files, which a page with the video's preview fetches by name. */
     fetchRendition: ReturnType<typeof vi.fn>;
   };
@@ -305,6 +307,7 @@ describe('RecordPageComponent', () => {
       createComment: vi.fn(),
       fetchBlobByXpath: vi.fn(() => new Subject()),
       getAnnotationDocuments: vi.fn(() => of([])),
+      fetchAssetReview: vi.fn(() => of(null)),
       fetchRendition: vi.fn(() => new Subject()),
     };
     shareLinks = { list: vi.fn(() => of([])), downloads: vi.fn(() => new Subject()) };

@@ -2587,14 +2587,23 @@ test pictures of our own (2026-11-25):**
   `Read`, and nothing more, for a comment and an annotation alike (bytecode of
   `nuxeo-platform-comment-2025.10.18.jar`). Nuxeo defines a `Comment` permission, which neither
   `Read` nor `ReadWrite` includes, and does not check it there. Editing or deleting one is for its
-  author, or a holder of `Everything`. So the page's offers (Add a pin to `Comment` or `Write`,
-  Close round to `Write`) are not a control: a reader may still post either through the REST API.
+  author, or a holder of `Everything`. So the page's offer of Add a pin, to `Comment` or `Write`,
+  is not a control: a reader may still post a pin through the REST API.
+- **Decisions are held on the server, since `nuxeo-agentic-assets` 0.5.0.** A round's close (Send
+  back), and `"kind": "decision"` with `"decision": "approved"` or `"rejected"` (Approve and
+  Reject), are refused by the add-on's review listener, `403` with the reason in the message,
+  unless the reader is in one of the review policy's reviewer groups and is granted the add-on's
+  `ReviewAsset` permission on the asset, an administrator included; `409` once the review is
+  approved or rejected; `400` for a decision not of the review's form. The page offers them only
+  when `GET /nuxeo/api/v1/id/:id` with `enrichers.document: assetReview` answers
+  `"mayDecide": true`. Not run against a server yet: no server has 0.5.0.
 
 **Errors:** a failed read shows the error state beside the picture, with Retry for a server
-error; a failed read after a write keeps what is shown. A refused write (`403`) says the user may
-not; any other failure, a `401` included, says the pin or the close could not be saved, keeping
-what was typed, and so does a pin saved that does not read back as one, or a close that opened no
-round.
+error; a failed read after a write keeps what is shown. A refused pin (`403`) says the user may
+not; a refused decision says the server's refusal, `403` that the user may not decide, `409` that
+the review is already concluded, and the review is read again. Any other failure, a `401`
+included, says the pin, the send back or the decision could not be saved, keeping what was typed,
+and so does a pin saved that does not read back as one, or a close that opened no round.
 
 ---
 

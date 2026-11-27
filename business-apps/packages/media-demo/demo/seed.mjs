@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server for the media kit: a fictional film with its release windows, its three
- * localised versions, each with its own rights and its three files, and the folder deliveries are
- * filed in, with the kit's two groups' permissions. It files no delivery: that is the demo's, by a
+ * localised versions, each with its own rights and its four files, and the folder deliveries are
+ * filed in, with the kit's three groups' permissions. It files no delivery: that is the demo's, by a
  * distribution coordinator (the kit's README, "The demo").
  *
  *   node business-apps/packages/media-demo/demo/seed.mjs
  *
- * Needs, installed first: the assets add-on (nuxeo-agentic-assets) 0.4.0, whose MediaDelivery the
- * deliveries are and whose rights policy decides them, and this kit, whose stand-in types, Film and
- * FilmVersion, the film and its versions are.
+ * Needs, installed first: the assets add-on (nuxeo-agentic-assets) 0.5.0, whose MediaDelivery the
+ * deliveries are, whose rights policy decides them and whose watermark marks the key art and the
+ * still, and this kit, whose stand-in types, Film and FilmVersion, the film and its versions are.
  *
  * Writes, under /default-domain/workspaces/media-demo:
  *   - films/, the film of data.mjs, its release windows days from today in UTC;
  *   - versions/, its localised versions, each naming the film, with its language, territories,
- *     channels and rights end, and its master, subtitles and key art as its attachments, in the
- *     order the kit's rights policy names them;
+ *     channels and rights end, and its master, subtitles, key art and still as its attachments, in
+ *     the order the kit's rights policy names them, the two pictures drawn by png.mjs;
  *   - deliveries/, empty;
- *   - on each folder, the permissions data.mjs grants the kit's two groups.
+ *   - on each folder, the permissions data.mjs grants the kit's three groups: the outside partners,
+ *     media-partners, read the versions, and are served the still marked.
  *
  * Environment:
  *   NUXEO_USER, NUXEO_PASS   required, with no default: an administrator's, since the seed grants
@@ -25,7 +26,8 @@
  *   NUXEO_URL                the server, default http://localhost:8080
  *   NUXEO_TIMEOUT_MS         how long one request may take, its body included, default 30000
  *
- * **It creates no user and no group.** media-rights and media-distribution are the server's.
+ * **It creates no user and no group.** media-rights, media-distribution and media-partners are the
+ * server's.
  *
  * **Safe to run twice.** A film or a version already there is left as it is, its windows and files
  * included, and said: the demo's cases hold for 30 days after the seed that wrote them (the
@@ -181,7 +183,7 @@ async function preflight() {
       `${username} is not an administrator: only an administrator grants the kit's permissions.`,
     );
   for (const [type, from] of [
-    ['MediaDelivery', 'the assets add-on, nuxeo-agentic-assets 0.4.0'],
+    ['MediaDelivery', 'the assets add-on, nuxeo-agentic-assets 0.5.0'],
     ['Film', 'this kit, media-demo'],
     ['FilmVersion', 'this kit, media-demo'],
   ]) {

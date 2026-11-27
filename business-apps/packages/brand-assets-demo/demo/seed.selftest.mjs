@@ -13,9 +13,13 @@
  * Each control runs `seed.mjs` as a command, as a person would, and holds it to its exit code and
  * to what it wrote:
  *
- * - **refused before writing (exit 2):** no credentials; credentials refused; the package not
- *   installed; a document at one of its places that does not carry its marker; one of another type;
- *   an argument it does not take;
+ * - **refused before writing (exit 2):** no credentials; credentials refused; not an
+ *   administrator, who cannot grant the reviewer group its permission; the package not installed; a
+ *   document at one of its places that does not carry its marker; one of another type; an argument
+ *   it does not take;
+ * - **the reviewer group's permission, since 0.2.5:** ReviewAsset granted to creative-review on the
+ *   assets folder, by one `Document.AddPermission` on that folder alone, and not again on a second
+ *   run; `--preview` grants nothing, and needs no administrator;
  * - **`--preview` (exit 0), with no kit type on the server:** the six pictures as `Picture`s under
  *   the workspace's `preview` folder, with Dublin Core's properties and its marker only;
  * - **seeded (exit 0):** twenty-two documents, six pictures and two videos on an empty server, all
@@ -47,7 +51,17 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 
-import { ASSETS, MARKER, PRODUCTS, SHOTS, VIDEOS, WORKSPACE, shotName } from './data.mjs';
+import {
+  ASSETS,
+  GRANTS,
+  MARKER,
+  PRODUCTS,
+  REVIEWERS,
+  SHOTS,
+  VIDEOS,
+  WORKSPACE,
+  shotName,
+} from './data.mjs';
 import { crc32, picturePng } from './png.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +100,7 @@ function control(name, condition, detail = '') {
  * Nuxeo, none.
  */
 function standIn({
+  administrator = true,
   installed = true,
   viewsMade = true,
   fault = null,
@@ -105,6 +120,7 @@ function standIn({
       type,
       isTrashed: false,
       properties: { ...properties },
+      acl: [],
     };
     docs.set(path, doc);
     return doc;
@@ -119,6 +135,7 @@ function standIn({
   const view = (doc) => {
     const out = structuredClone(doc);
     delete out.blob;
+    delete out.acl;
     if (pictures.includes(doc.type)) out.facets = ['Picture', 'Versionable'];
     if (videos.includes(doc.type))
       out.facets = fault === 'not-a-video' ? ['Versionable'] : ['Video', 'HasStoryboard'];
@@ -164,7 +181,23 @@ function standIn({
     if (req.headers.authorization !== expected) return send(401, { message: 'Unauthorized' });
     const json = () => JSON.parse(body.toString('utf8') || '{}');
 
-    if (req.method === 'GET' && path === '/me') return send(200, { id: USER });
+    if (req.method === 'GET' && path === '/me')
+      return send(200, { id: USER, isAdministrator: administrator });
+    if (req.method === 'GET' && /^\/id\/[^/]+\/@acl$/.test(path)) {
+      const doc = byUid(path.split('/')[2]);
+      return doc ? send(200, { acl: [{ name: 'local', aces: doc.acl }] }) : send(404);
+    }
+    if (req.method === 'POST' && path === '/automation/Document.AddPermission') {
+      if (!administrator) return send(403, { message: 'Privilege WriteSecurity is not granted' });
+      const { input, params } = json();
+      call.input = String(input).slice('doc:'.length);
+      call.params = params;
+      const doc = byUid(call.input);
+      if (!doc) return send(404);
+      for (const user of params.users)
+        doc.acl.push({ username: user, permission: params.permission, granted: true });
+      return send(200, view(doc));
+    }
     if (req.method === 'GET' && path.startsWith('/config/types/')) {
       const type = path.slice('/config/types/'.length);
       return installed || !KIT_TYPES.includes(type) ? send(200, { name: type }) : send(404);
@@ -363,6 +396,17 @@ const othersOf = (stand) =>
   control('credentials refused: nothing written', writes(stand).length === 0);
 }
 {
+  const stand = standIn({ administrator: false });
+  const run = await runSeed(stand);
+  control('not an administrator: exit 2', run.code === 2, `${run.code}: ${run.output}`);
+  control(
+    'not an administrator: says the reviewer group needs one to grant its permission',
+    run.output.includes('only an administrator grants') && run.output.includes('ReviewAsset'),
+    run.output,
+  );
+  control('not an administrator: nothing written', writes(stand).length === 0);
+}
+{
   const stand = standIn({ installed: false });
   const run = await runSeed(stand);
   control('package not installed: exit 2', run.code === 2, `${run.code}: ${run.output}`);
@@ -464,6 +508,29 @@ const othersOf = (stand) =>
         : shotAt(shot).properties['acmeshot:asset'] === assetAt(shot.asset).uid,
     ),
   );
+  const grants = writes(stand).filter((call) => call.path === '/automation/Document.AddPermission');
+  const assetsFolder = stand.docs.get(`${ROOT}/assets`);
+  control(
+    'the reviewer group granted ReviewAsset on the assets folder, by one AddPermission on it alone',
+    GRANTS.length === 1 &&
+      grants.length === 1 &&
+      grants[0].input === assetsFolder.uid &&
+      JSON.stringify(grants[0].params?.users) === JSON.stringify([REVIEWERS]) &&
+      grants[0].params?.permission === 'ReviewAsset' &&
+      JSON.stringify(assetsFolder.acl) ===
+        JSON.stringify([{ username: REVIEWERS, permission: 'ReviewAsset', granted: true }]),
+    JSON.stringify({ grants, acl: assetsFolder.acl }),
+  );
+  control(
+    'no other document given a permission',
+    ours(stand).every((doc) => doc === assetsFolder || doc.acl.length === 0),
+  );
+  control(
+    'the first run says it granted one permission',
+    first.output.includes('1 permission(s) granted') &&
+      first.output.includes(`granted  ReviewAsset on ${ROOT}/assets to ${REVIEWERS}`),
+    first.output.split('\n').find((line) => line.startsWith('Done')),
+  );
   stand.calls.length = 0;
   const second = await runSeed(stand);
   control('a second run: exit 0', second.code === 0, `${second.code}: ${second.output}`);
@@ -480,6 +547,13 @@ const othersOf = (stand) =>
     second.output.split('\n').find((line) => line.startsWith('Done')),
   );
   control('a second run: still that many documents', ours(stand).length === expected);
+  control(
+    'a second run: the permission is not granted twice',
+    !writes(stand).some((call) => call.path === '/automation/Document.AddPermission') &&
+      second.output.includes('0 permission(s) granted') &&
+      stand.docs.get(`${ROOT}/assets`).acl.length === 1,
+    JSON.stringify(stand.docs.get(`${ROOT}/assets`).acl),
+  );
 
   // Trashed at its place: restored, not created again.
   assetAt(ASSETS[0].id).isTrashed = true;
@@ -573,9 +647,14 @@ const othersOf = (stand) =>
 
 // ── The preview, before the package is installed ──────────────────────────────────────────────
 {
-  const stand = standIn({ installed: false });
+  // By someone who is no administrator: the preview grants nothing, so it needs none.
+  const stand = standIn({ installed: false, administrator: false });
   const run = await runSeed(stand, {}, ['--preview']);
   control('--preview with no kit type: exit 0', run.code === 0, `${run.code}: ${run.output}`);
+  control(
+    '--preview: no permission granted, by someone who is no administrator',
+    !writes(stand).some((call) => call.path === '/automation/Document.AddPermission'),
+  );
   const preview = [...stand.docs.values()].filter((doc) => doc.path.startsWith(`${ROOT}/preview/`));
   control(
     `--preview: ${ASSETS.length} Pictures under the workspace's preview folder, no video, and nothing else`,

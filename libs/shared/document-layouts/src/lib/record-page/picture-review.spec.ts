@@ -1,8 +1,13 @@
-import type { NuxeoAnnotation, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import type {
+  AssetReviewAnswer,
+  NuxeoAnnotation,
+  NuxeoDocument,
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   MAX_ROUNDS,
   REVIEW_ORIGIN,
+  decisionPayload,
   fromAnnotationDocument,
   fromCreatedAnnotation,
   type ReviewAnnotation,
@@ -36,6 +41,11 @@ const pin = (round: number, x: number, y: number, overrides: Partial<ReviewAnnot
   annotation(pinPayload(round, x, y), overrides);
 const closed = (round: number, overrides: Partial<ReviewAnnotation> = {}) =>
   annotation(roundClosedPayload(round), overrides);
+const decided = (
+  round: number,
+  decision: 'approved' | 'rejected',
+  overrides: Partial<ReviewAnnotation> = {},
+) => annotation(decisionPayload(round, decision), overrides);
 
 beforeEach(() => {
   seconds = 0;
@@ -143,6 +153,10 @@ describe('readPictureReview', () => {
       { kind: 'pin', version: 1, round: 1, x: '0.5', y: 0.5 },
       { kind: 'pin', version: 1, round: 1 },
       { kind: 'arrow', version: 1, round: 1, x: 0.5, y: 0.5 },
+      // A decision with no word, or one the server does not write.
+      { kind: 'decision', version: 1, round: 1 },
+      { kind: 'decision', version: 1, round: 1, decision: 'maybe' },
+      { kind: 'decision', version: 2, round: 1, decision: 'approved' },
     ];
     const review = readPictureReview([
       ...shapes.map((shape) => annotation(shape)),
@@ -152,6 +166,36 @@ describe('readPictureReview', () => {
     expect(review.unreadable).toBe(shapes.length + 1);
     expect(review.pins).toHaveLength(1);
     expect(review.pins[0].number).toBe(1);
+  });
+
+  it('concludes the review at its first approval or rejection, in the round open then', () => {
+    const review = readPictureReview([
+      pin(1, 0.1, 0.1),
+      closed(1),
+      pin(2, 0.2, 0.2),
+      decided(2, 'approved', { author: 'lead1' }),
+    ]);
+    expect(review.conclusion).toEqual({
+      decision: 'approved',
+      by: 'lead1',
+      at: expect.any(String),
+      round: 2,
+    });
+    expect(review.round).toBe(2);
+    expect(review.unreadable).toBe(0);
+    expect(readPictureReview([pin(1, 0.1, 0.1)]).conclusion).toBeNull();
+  });
+
+  it('changes nothing for a close or a decision written after the conclusion, as the server refuses them', () => {
+    const review = readPictureReview([
+      decided(1, 'rejected', { author: 'lead1' }),
+      closed(1),
+      decided(1, 'approved', { author: 'lead2' }),
+    ]);
+    expect(review.conclusion?.decision).toBe('rejected');
+    expect(review.conclusion?.by).toBe('lead1');
+    expect(review.round).toBe(1);
+    expect(review.rounds).toHaveLength(1);
   });
 
   it('orders by when the repository wrote each, not by the order they are answered in', () => {
@@ -237,6 +281,13 @@ describe('the payloads', () => {
       version: 1,
       round: 3,
     });
+    // As nuxeo-agentic-assets' ReviewPayload reads a decision.
+    expect(JSON.parse(decisionPayload(2, 'rejected'))).toEqual({
+      kind: 'decision',
+      version: 1,
+      round: 2,
+      decision: 'rejected',
+    });
   });
 
   it('read back what they write', () => {
@@ -264,35 +315,44 @@ describe('reviewOffers', () => {
     contextParameters: permissions === undefined ? {} : { permissions },
     ...extra,
   });
+  const reviewer: AssetReviewAnswer = {
+    type: 'AcmeAsset',
+    mayDecide: true,
+    reason: null,
+    permission: 'ReviewAsset',
+  };
+  const outsider: AssetReviewAnswer = { ...reviewer, mayDecide: false, reason: 'not-a-reviewer' };
 
-  it('offers a pin to a holder of Comment or Write, and closing a round to a holder of Write', () => {
-    expect(reviewOffers(record(['Read', 'Comment']), false)).toEqual({ pin: true, close: false });
-    expect(reviewOffers(record(['Read', 'ReadWrite', 'Write']), false)).toEqual({
+  it('offers a pin to a holder of Comment or Write, from the record permissions', () => {
+    expect(reviewOffers(record(['Read', 'Comment']), false, null)).toEqual({
       pin: true,
-      close: true,
+      decide: false,
     });
-    expect(reviewOffers(record(['Everything']), false)).toEqual({ pin: true, close: true });
+    expect(reviewOffers(record(['Read', 'ReadWrite', 'Write']), false, null).pin).toBe(true);
+    expect(reviewOffers(record(['Everything']), false, null).pin).toBe(true);
   });
 
-  it('offers a reader nothing, and nothing when the permissions did not come with the record', () => {
-    expect(reviewOffers(record(['Read', 'Browse', 'ReadProperties']), false)).toEqual({
+  it("offers a decision only when the server's review enricher says the reader may decide", () => {
+    // Write is no longer enough: the server holds every decision to ReviewAsset and its groups.
+    expect(reviewOffers(record(['Everything']), false, null).decide).toBe(false);
+    expect(reviewOffers(record(['Everything']), false, outsider).decide).toBe(false);
+    expect(reviewOffers(record(['Read']), false, reviewer)).toEqual({ pin: false, decide: true });
+  });
+
+  it('offers a reader nothing, and no pin when the permissions did not come with the record', () => {
+    expect(reviewOffers(record(['Read', 'Browse', 'ReadProperties']), false, null)).toEqual({
       pin: false,
-      close: false,
+      decide: false,
     });
-    expect(reviewOffers(record(undefined), false)).toEqual({ pin: false, close: false });
-    expect(reviewOffers(record('Write'), false)).toEqual({ pin: false, close: false });
+    expect(reviewOffers(record(undefined), false, null)).toEqual({ pin: false, decide: false });
+    expect(reviewOffers(record('Write'), false, null)).toEqual({ pin: false, decide: false });
   });
 
   it('offers nothing on a read-only page, a version or a record in the trash', () => {
     const all = ['Everything', 'Write', 'Comment'];
-    expect(reviewOffers(record(all), true)).toEqual({ pin: false, close: false });
-    expect(reviewOffers(record(all, { isVersion: true }), false)).toEqual({
-      pin: false,
-      close: false,
-    });
-    expect(reviewOffers(record(all, { isTrashed: true }), false)).toEqual({
-      pin: false,
-      close: false,
-    });
+    const nothing = { pin: false, decide: false };
+    expect(reviewOffers(record(all), true, reviewer)).toEqual(nothing);
+    expect(reviewOffers(record(all, { isVersion: true }), false, reviewer)).toEqual(nothing);
+    expect(reviewOffers(record(all, { isTrashed: true }), false, reviewer)).toEqual(nothing);
   });
 });

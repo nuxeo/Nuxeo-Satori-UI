@@ -179,6 +179,11 @@ export function rightsRefusal(
       return { reason: 'not-cleared', key: key('not-cleared'), params: {} };
     case 'policy-error':
       return { reason: 'policy-error', key: key('policy-error'), params: {} };
+    // Since nuxeo-agentic-assets 0.5.0: served only marked for this reader, or not markable.
+    case 'watermark-required':
+      return { reason: 'watermark-required', key: key('watermark-required'), params: {} };
+    case 'watermark-unavailable':
+      return { reason: 'watermark-unavailable', key: key('watermark-unavailable'), params: {} };
   }
 }
 
@@ -195,7 +200,13 @@ function viewRefusal(
 
 type Shown =
   | { readonly key: string; readonly status: 'loading' }
-  | { readonly key: string; readonly status: 'ready'; readonly url: string }
+  | {
+      readonly key: string;
+      readonly status: 'ready';
+      readonly url: string;
+      /** Whether the server sent it marked for this reader, as the asset's rights require. */
+      readonly watermarked: boolean;
+    }
   | {
       readonly key: string;
       readonly status: 'failed';
@@ -221,6 +232,13 @@ type Shown =
  * asks the server why, through the `assetRights` enricher, and says the server's reason in place of
  * the view. It hides no button and greys none: each view is asked for, and the server decides. A
  * 403 the rights do not explain, such as one from the record's permissions, is said as any 403 is.
+ *
+ * **A view the rights serve only watermarked** (`watermark-required`, since `nuxeo-agentic-assets`
+ * 0.5.0) is then asked of the server marked for the reader, through
+ * `DocumentDetailService.fetchWatermarked`, and shown so, with a note that it is. That is asked only
+ * after the server's 403 and its own answer why, never to decide what to offer; a refusal of it is
+ * said as the refusal it is: 409, a mark the server could not draw, as the rights' own reason, and
+ * any other as its status.
  */
 @Component({
   selector: 'lib-record-picture-views',
@@ -280,6 +298,12 @@ export class RecordPictureViewsComponent {
     return shown?.status === 'failed' ? shown.error : null;
   });
 
+  /** Whether the selected view was sent watermarked for the reader. */
+  readonly watermarked = computed(() => {
+    const shown = this.shown();
+    return shown?.status === 'ready' && shown.watermarked;
+  });
+
   /** The server's rights' reason for refusing the selected view, when they are why. */
   readonly refusal = computed<RightsRefusal | null>(() => {
     const shown = this.shown();
@@ -288,6 +312,8 @@ export class RecordPictureViewsComponent {
 
   /** The blob URL of each view fetched, by its key: what is revoked. */
   private readonly urls = new Map<string, string>();
+  /** The keys of the views fetched watermarked, so that one shown again says so. */
+  private readonly marked = new Set<string>();
 
   constructor() {
     // The same view asked again only by Retry: a record reloaded with the same views asks nothing.
@@ -333,14 +359,20 @@ export class RecordPictureViewsComponent {
 
   private fetch(uid: string, view: PictureViewEntry): Observable<Shown> {
     const known = this.urls.get(view.key);
-    if (known) return of({ key: view.key, status: 'ready', url: known });
+    if (known)
+      return of({
+        key: view.key,
+        status: 'ready',
+        url: known,
+        watermarked: this.marked.has(view.key),
+      });
     return concat(
       of<Shown>({ key: view.key, status: 'loading' }),
       this.documents.fetchBlobByXpath(uid, `picture:views/${view.index}/content`).pipe(
         map((blob): Shown => {
           const url = URL.createObjectURL(blob);
           this.urls.set(view.key, url);
-          return { key: view.key, status: 'ready', url };
+          return { key: view.key, status: 'ready', url, watermarked: false };
         }),
         catchError((error: unknown) => this.failed(uid, view, nxsErrorStatus(error))),
       ),
@@ -360,8 +392,52 @@ export class RecordPictureViewsComponent {
     });
     if (error !== 403) return of(shown(null));
     return this.documents.fetchAssetRights(uid).pipe(
-      map((rights) => shown(viewRefusal(rights, view, this.locale))),
-      catchError(() => of(shown(null))),
+      catchError(() => of(null)),
+      switchMap((rights) =>
+        rights &&
+        assetRightsDecision(rights, { kind: 'view', name: view.title }).reason ===
+          'watermark-required'
+          ? this.fetchMarked(uid, view, rights)
+          : of(shown(viewRefusal(rights, view, this.locale))),
+      ),
+    );
+  }
+
+  /**
+   * The view, marked for the reader, once the server's rights said it is served only so. A 409 is
+   * the server saying it could not draw the mark, which is the rights' own reason; anything else is
+   * said as its status.
+   */
+  private fetchMarked(
+    uid: string,
+    view: PictureViewEntry,
+    rights: AssetRightsExplanation,
+  ): Observable<Shown> {
+    return this.documents.fetchWatermarked(uid, `view:${view.title}`).pipe(
+      map((blob): Shown => {
+        const url = URL.createObjectURL(blob);
+        this.urls.set(view.key, url);
+        this.marked.add(view.key);
+        return { key: view.key, status: 'ready', url, watermarked: true };
+      }),
+      catchError((failure: unknown) => {
+        const status =
+          typeof failure === 'object' && failure !== null && 'status' in failure
+            ? failure.status
+            : undefined;
+        const unavailable: AssetRightsDecision = {
+          allowed: false,
+          reason: 'watermark-unavailable',
+          channel: null,
+          rightsEnd: null,
+        };
+        return of<Shown>({
+          key: view.key,
+          status: 'failed',
+          error: nxsErrorStatus(failure),
+          refusal: status === 409 ? rightsRefusal(unavailable, rights.channels, this.locale) : null,
+        });
+      }),
     );
   }
 
@@ -371,6 +447,7 @@ export class RecordPictureViewsComponent {
       if (keep.has(key)) continue;
       URL.revokeObjectURL(url);
       this.urls.delete(key);
+      this.marked.delete(key);
     }
   }
 }

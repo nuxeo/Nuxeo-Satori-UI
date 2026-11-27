@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.4 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.5 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, and the two videos
@@ -27,6 +27,12 @@ generated from a test pattern, not photographed, filmed or downloaded.
   review goes in rounds, the earlier rounds' pins marked as past. The pins are Nuxeo's own
   annotations on the asset (layout-v2.md, "Review"). Phase 5's demo step 4, as a steps file of its
   own: [`scripts/beta-harness/steps/brand-assets-review.mjs`](../../../scripts/beta-harness/steps/brand-assets-review.mjs).
+- **The review decided on the server, from 0.2.5** (below, "The review held on the server"):
+  sending a round back, approving and rejecting an asset's review are held by
+  `nuxeo-agentic-assets` 0.5.0 to its own permission, `ReviewAsset`, which the seed grants the
+  kit's reviewer group, `creative-review`, on the assets folder, and to that group, which the kit's
+  review policy names. Anyone else is refused, 403, administrators included. A pin stays anyone's
+  whom Nuxeo lets comment on the asset.
 - **A product page:** a product's details, its shots, and the shots its shot list still misses,
   each a related list over a page provider.
 - **Share links on the asset page,** turned on by the layout file's `"shareLinks": {}`, with no
@@ -56,7 +62,7 @@ generated from a test pattern, not photographed, filmed or downloaded.
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
   there. Read only, on 25 November 2026, that server's package list shows 0.2.0 started, with
-  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 to 0.2.4 are installed nowhere,
+  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 to 0.2.5 are installed nowhere,
   so no share link and no video page has run on a server. The product page, the queues and the
   demo script have not run on a shared server.
 
@@ -77,6 +83,7 @@ generated from a test pattern, not photographed, filmed or downloaded.
 | `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                                  |
 | `bundle/OSGI-INF/brand-assets-demo-rights.xml`                  | The rights policy for `AcmeAsset`, which `nuxeo-agentic-assets` enforces                                            |
 | `bundle/OSGI-INF/brand-assets-demo-video-rights.xml`            | The rights policy for `AcmeVideo`, which `nuxeo-agentic-assets` enforces                                            |
+| `bundle/OSGI-INF/brand-assets-demo-review.xml`                  | The review policy for `AcmeAsset`: its reviewer group, `creative-review`, for `nuxeo-agentic-assets` 0.5.0          |
 | `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                                    |
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                                     |
 | `demo/videos/*.webm`                                            | The two videos, a few kilobytes each, generated (below, "The videos"). Not packaged                                 |
@@ -125,11 +132,34 @@ asked of the add-on's `assetRights` enricher after the 403. No view is hidden or
 asked for, and the server decides. The Annotations tab's viewer asks for the original, which the
 server refuses on assets 503 and 505.
 
+## The review held on the server
+
+From 0.2.5, with `nuxeo-agentic-assets` 0.5.0, which the package depends on. The review's
+decisions, **Send back** (the round closed and the next opened), **Approve** and **Reject**, are
+the server's to allow, not the page's:
+
+- **The kit's review policy,** `bundle/OSGI-INF/brand-assets-demo-review.xml`, names the reviewer
+  group of `AcmeAsset`: `creative-review`, one of the app's two groups.
+- **The seed grants the add-on's permission,** `ReviewAsset`, to `creative-review` on the
+  `assets` folder, which every asset there inherits (below, "Seeding it"). The add-on reads it from
+  the asset's own permissions, so `Everything`, or being an administrator, does not hold it.
+- **A decision needs both:** a member of `creative-review` where `ReviewAsset` is granted to them.
+  Anyone else is refused, 403, with the reason, an administrator included unless they are put in
+  the group. Each decision is written to the platform's audit, on the asset, and shows in its
+  history.
+- **The page offers Send back, Approve and Reject** only to those the server lets decide, as the
+  add-on's `assetReview` enricher says; the server refuses the rest whatever the page offers.
+- **A pin is anyone's whom Nuxeo lets comment on the asset,** as before: the add-on holds the
+  decisions, not the pins.
+
+What a member of the group needs on the server: the group in its directory, as `brand-team` and
+`creative-review` are for the app's menu, and Read on the workspace, which the seed does not grant.
+
 ## Share links
 
 The asset layout's `"shareLinks": {}` turns on the asset page's share links (layout-v2.md,
 section 2, "Share links"). From 0.2.2 the package depends on `nuxeo-agentic-assets` 0.2.0, and
-from 0.2.4 on 0.3.0, which holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
+from 0.2.4 on 0.3.0, and from 0.2.5 on 0.5.0, which holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
 contributes nothing of its own to them.
 
 - **Who sees them:** the page asks the server for the asset's links, and draws nothing of them for
@@ -289,7 +319,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.4.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.5.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -313,7 +343,8 @@ them first should check each step's outcome as step 3 says. The local Nuxeo is t
 [Payers kit's README](../payers-claims-demo/README.md#installing-it-on-a-local-nuxeo) says.
 
 **From 0.2.0 it also depends on `nuxeo-agentic-assets`,** the add-on that enforces its rights
-policy, and from 0.2.2 on its version 0.2.0, which adds the share links. Install the two in one
+policy, from 0.2.2 on its version 0.2.0, which adds the share links, and from 0.2.5 on its 0.5.0,
+which holds the review. Install the two in one
 restart, as the
 [add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says:
 build the add-on with `mvn -pl nuxeo-agentic-assets -am package`, copy both zips in, and name both
@@ -332,11 +363,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.4.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.5.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.4.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.5.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -381,7 +412,10 @@ node business-apps/packages/brand-assets-demo/demo/seed.mjs
 - **Only there, and only its own.** Every document it writes carries `data.mjs`'s marker as its
   `dc:source`. Before anything is written it reads every place it would write, and a document there
   without the marker, or of another type, stops the run with exit 2, untouched. It creates no user
-  and no group, and grants no permission: anyone who may read the workspace sees the kit.
+  and no group. **It grants one permission,** from 0.2.5: `ReviewAsset`, the assets add-on's, to
+  `creative-review` on the `assets` folder, once, added to the folder's own permissions when they do
+  not hold it, so that the group may decide the assets' reviews (above, "The review held on the
+  server"). Anyone who may read the workspace sees the kit.
 - **Dates count from the day it runs.** One asset's rights end in 20 days, so its page shows the
   warning banner; one's ended 10 days ago; the others are clear. Run it again on the day of a demo.
 - **Safe to run twice.** A record already there is put back to `data.mjs`'s values, dates
@@ -398,9 +432,11 @@ node business-apps/packages/brand-assets-demo/demo/seed.mjs
 - **It says what the server made of the videos,** and does not check it: their facts, their
   transcoded videos and their storyboards, which Nuxeo makes with ffmpeg a while after the upload,
   or, on a server without it, none (above, "The videos").
-- **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default.
-  `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met: no
-  credentials, no server, credentials refused, the package not installed, no
+- **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default,
+  and are an administrator's, from 0.2.5, since the seed grants the reviewer group its permission;
+  `--preview` grants nothing, and needs no administrator. `NUXEO_URL` defaults to
+  `http://localhost:8080`. Exit 2 means a precondition is not met: no credentials, no server,
+  credentials refused, not an administrator, the package not installed, no
   `/default-domain/workspaces`, or a document at one of its places that is not its own.
 
 Its controls run with Node alone, against a stand-in for the REST API it calls, so they prove the
@@ -537,18 +573,23 @@ ends, whatever happened. The seeded records are not touched.
 
 1. a pin placed by clicking the picture, with a note, drawn where it was clicked and listed beside
    the picture; choosing it in the list highlights it on the picture;
-2. round 1 closed and round 2 opened, round 1's pins still there, marked as past;
+2. round 1 sent back and round 2 opened, round 1's pins still there, marked as past;
 3. a pin placed with the keyboard alone, and the pins reached with the arrow keys;
 4. the REST API's annotations, the same pins after a reload, and each pin on its point on a view
    of another size;
-5. a reader, offered no pin, and a holder of `Comment`, offered a pin and not Close round: the
-   record's permissions answered in the browser, since the kit has no people. Hiding the control is
-   not the control: Nuxeo 2025 accepts an annotation from anyone who may read the asset.
+5. a reader, offered no pin, and a holder of `Comment`, offered a pin and no decision: the
+   record's permissions answered in the browser, since the kit has no people. A pin is still
+   anyone's whom Nuxeo lets comment; a decision is the server's to allow (above, "The review held
+   on the server");
+6. since 0.2.5, the reviewer offered Send back, Approve and Reject, a holder of `Write` the server
+   says may not decide offered none, the REST API refusing a decision where `ReviewAsset` is not
+   granted, 403, and approving concluding the review, a later decision refused, 409.
 
 **What it needs:** the dev server serving the kit's asset layout for the type it uses: `AcmeAsset`
 where the package is installed, else the platform's `Picture` (the README's two `config:dev`
 commands above); Playwright; picture conversion on the server; and `NUXEO_USER` and `NUXEO_PASS`,
-someone who may create a folder and a picture and change it, so that Close round is offered. It
+a member of `creative-review` who may create a folder and a picture and change it, so that the
+decisions are offered. It
 creates a workspace of its own under `/default-domain/workspaces`, or works in a folder of
 `REVIEW_WORKSPACE`, a workspace path, when that is given.
 
@@ -599,8 +640,16 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   are read by `nuxeo-agentic-assets`'s own tests, through XMap as the runtime reads a
   contribution, and decide the demo's uses as this README's tables say; giving `OriginalJpeg`
   another channel turns them red, and so does giving `MP4 480p` the Print channel.
-- **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in: 107 of them, the
-  videos' among them, each of those seen failing with its guard broken on purpose.
+- **0.2.5 holds the review on the server,** with `nuxeo-agentic-assets` 0.5.0: the review policy
+  for `AcmeAsset`, `brand-assets-demo-review.xml`, in the manifest, and `package.xml`'s dependency
+  raised to 0.5.0. Held to 0.2.4 on the staging branch with `--previous`: the manifest, the new
+  component and `package.xml` to judge, a patch. The add-on's `AssetReviewTest` decides on the kit's
+  own review policy file, which its build copies. Not installed on a server.
+- **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in: 115 of them, the
+  videos' and, from 0.2.5, the reviewer group's permission among them, each of those seen failing
+  with its guard broken on purpose: the administrator not asked for, the permission granted on
+  every run, to another group, on another folder or not at all, and `--preview` asking for an
+  administrator.
 - **On the local Nuxeo 2025.10.18, before it had the package:** the seed stops with exit 2 and writes
   nothing; `--preview` wrote the six pictures into the kit's workspace, twice, the second time
   updating and uploading nothing, and Nuxeo made each one's views. In headless Chromium, under the
@@ -613,7 +662,7 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1 to 0.2.4 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
+- **Versions 0.1.1 to 0.2.5 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
   server, not a shared one: the review was seen with its layout from `config:dev`, and the
   product page, the queues, the full seed and the demo have not run on a shared server. No video
   page has run on a server, and the videos' steps file has not run past its first precondition.
@@ -634,8 +683,10 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   `nuxeo-agentic-assets` does at the platform's download endpoints, on the local server only, at
   0.1.0, and waiting for its security review.
 - **Regions are not weighed:** `acmeasset:regions` is free text, and no rule reads it.
-- **The review is not held to who may review on the server:** Nuxeo 2025 takes a pin, or a round's
-  close, from anyone who may read the asset, whatever the page offers.
+- **The review's pins are anyone's who may comment:** from 0.2.5 the server holds the decisions,
+  Send back, Approve and Reject, to `ReviewAsset` and `creative-review`, and a pin still from anyone
+  Nuxeo lets read the asset, whatever the page offers. The server-held review has not run on a
+  server: no server has `nuxeo-agentic-assets` 0.5.0.
 - **The review moves or removes nothing, and reopens no round.** Each pin is also one of the
   asset's comments, which the Comments panel lists, and where Nuxeo lets a comment's author, or an
   administrator, edit or delete it: editing its text there keeps it a pin, on its place and round.

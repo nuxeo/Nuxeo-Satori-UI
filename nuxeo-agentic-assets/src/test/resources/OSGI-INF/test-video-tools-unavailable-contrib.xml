@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- In place of the platform's video tools service: one on a server without ffmpeg, whose tools
+     are not available, so that a video a policy marks is refused, never served unmarked. -->
+<component name="org.nuxeo.agentic.assets.test.video-tools-unavailable">
+
+  <implementation class="org.nuxeo.agentic.assets.watermark.UnavailableVideoTools" />
+
+  <service>
+    <provide interface="org.nuxeo.ecm.platform.video.tools.VideoToolsService" />
+  </service>
+
+</component>

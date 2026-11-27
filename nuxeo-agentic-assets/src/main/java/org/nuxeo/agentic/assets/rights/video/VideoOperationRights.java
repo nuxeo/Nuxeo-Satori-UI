@@ -121,7 +121,7 @@ public final class VideoOperationRights {
     }
 
     /** How many documents a stored file is decided for: one held by more is refused. */
-    static final int HOLDERS_LIMIT = 100;
+    public static final int HOLDERS_LIMIT = 100;
 
     /**
      * Refuses, with a {@link DocumentSecurityException}, an operation reading {@code blob} when it
@@ -168,7 +168,7 @@ public final class VideoOperationRights {
      * Every document of {@code types} whose blob fields hold {@code key}, as one query, or
      * {@code null} when no covered type has a blob field.
      */
-    static String holdersQuery(Set<String> types, String key) {
+    public static String holdersQuery(Set<String> types, String key) {
         SchemaManager schemas = Framework.getService(SchemaManager.class);
         Set<String> covered = new TreeSet<>();
         Set<String> paths = new TreeSet<>();
@@ -268,7 +268,7 @@ public final class VideoOperationRights {
      * a schema with no prefix, which {@link Property#getXPath} leaves out, by the schema's name, as
      * {@code file:content}.
      */
-    static String canonicalXpath(Property property) {
+    public static String canonicalXpath(Property property) {
         // The schema's own property, whose parent is the document's part, the root.
         Property top = property;
         while (top.getParent() != null && top.getParent().getParent() != null) {

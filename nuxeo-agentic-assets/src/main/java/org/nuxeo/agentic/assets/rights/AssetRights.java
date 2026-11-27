@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 
 import org.nuxeo.agentic.assets.rights.Decision.Reason;
 import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 
 /**
  * The decision itself, from a policy, an asset's rights and a use, with no Nuxeo in it: the one
@@ -31,7 +32,9 @@ import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
  * territory the asset may be delivered to;</li>
  * <li>otherwise the use is served: {@code cleared}.</li>
  * </ol>
- * Nothing here asks who the user is: an administrator is refused as anyone else is.
+ * Nothing here asks who the user is: an administrator is refused as anyone else is. Since 0.5.0,
+ * {@link #watermarked} reads the user's groups, to exempt a member of one the watermark names from a
+ * mark the policy requires, and only for that.
  */
 public final class AssetRights {
 
@@ -94,5 +97,25 @@ public final class AssetRights {
             }
         }
         return Decision.allow(Reason.CLEARED, rule.channel());
+    }
+
+    /**
+     * {@code decision}, a download's, held to the policy's watermark for {@code person}, since 0.5.0:
+     * a use it serves, a preview or one cleared for a channel, that the watermark marks for them, is
+     * refused unmarked, {@code watermark-required}, its channel kept. The marked file is
+     * {@code Asset.GetWatermarked}'s to serve. A refusal stays as it is; with no person, no one is
+     * exempt. This reads the person's groups, and only to exempt them from a mark: never to serve what
+     * the rights refuse.
+     */
+    public static Decision watermarked(RightsPolicy policy, Use use, Decision decision, NuxeoPrincipal person) {
+        Watermark watermark = policy.watermark();
+        if (watermark == null || !decision.allowed()) {
+            return decision;
+        }
+        Watermark.Occasion occasion = decision.reason() == Reason.PREVIEW ? Watermark.Occasion.PREVIEW
+                : Watermark.Occasion.DOWNLOAD;
+        return watermark.requiredFor(occasion, use, person)
+                ? Decision.refuse(Reason.WATERMARK_REQUIRED, decision.channel(), null)
+                : decision;
     }
 }

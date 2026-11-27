@@ -21,6 +21,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.agentic.assets.rights.Decision.Reason;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.io.marshallers.json.enrichers.AbstractJsonEnricher;
 import org.nuxeo.ecm.core.io.registry.reflect.Setup;
 import org.nuxeo.runtime.api.Framework;
@@ -71,8 +72,12 @@ import com.fasterxml.jackson.core.JsonGenerator;
  * delivered nowhere, {@code outside-window} when no window for the use's channel is open in any of
  * its territories. A policy with no territories writes neither field, as before.
  *
+ * <p>Since 0.5.0, a use the policy's watermark marks for the reader, who is in none of its exempt
+ * groups, is written {@code "allowed": false, "reason": "watermark-required"}, with its channel: the
+ * download endpoints refuse it unmarked, and {@code Asset.GetWatermarked} serves it marked.
+ *
  * <p>The enricher explains; the download permission is what refuses. Both decide through
- * {@link AssetRights#decide}.
+ * {@link AssetRights#decide} and {@link AssetRights#watermarked}.
  */
 @Setup(mode = SINGLETON, priority = REFERENCE)
 public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel> {
@@ -127,11 +132,14 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
             }
             return known;
         };
+        // Since 0.5.0, for the reader: a use the watermark marks for them is refused unmarked, as the
+        // permission refuses it, watermark-required.
+        NuxeoPrincipal reader = reader(document);
         Map<Use, Decision> decided = new LinkedHashMap<>();
         for (Use use : uses(document, policy)) {
             Decision decision;
             try {
-                decision = AssetRights.decide(policy, read, use, today);
+                decision = AssetRights.watermarked(policy, use, AssetRights.decide(policy, read, use, today), reader);
             } catch (UnreadableRights e) {
                 decision = Decision.refuse(Reason.POLICY_ERROR);
             }
@@ -177,6 +185,15 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         writeDecision(jg, otherwise, details);
         jg.writeEndObject();
         jg.writeEndObject();
+    }
+
+    /** Who is reading: the document's session's user; {@code null}, exempt from no mark, when there is none. */
+    private static NuxeoPrincipal reader(DocumentModel document) {
+        try {
+            return document.getCoreSession() == null ? null : document.getCoreSession().getPrincipal();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** Thrown to the decision by rights that could not be read, and caught for that use alone. */

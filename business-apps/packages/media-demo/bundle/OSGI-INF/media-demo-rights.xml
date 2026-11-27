@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- The kit's rights policy, for nuxeo-agentic-assets 0.4.0: a film's localised version is an
+<!-- The kit's rights policy, for nuxeo-agentic-assets 0.5.0: a film's localised version is an
      asset of its own, with its own rights, on the stand-in model's fields. Its rights end is
      dc:expired, its channels fver:channels, and where it may be delivered fver:territories; its
      release windows are its film's, film:windows, read from the film fver:film names.
@@ -10,7 +10,13 @@
      channel has a window open in the delivery's territory today, the territory is the version's,
      its channels hold each channel and its rights have not ended. A download, which names no
      territory, is served while a window for its channel is open in any of the version's
-     territories. The thumbnail the lists show is a preview. -->
+     territories. The thumbnail the lists show is a preview.
+
+     Since the kit's 0.2.0, for nuxeo-agentic-assets 0.5.0: a fourth file, a still from the film,
+     a preview, for screening; and a watermark. The still is served marked to anyone outside the
+     kit's two groups, an outside partner, its text naming them; the key art of a delivery is marked
+     for its distributor, naming its filer too, and the delivery holds it marked. Staff in media-rights or
+     media-distribution download the still as it is. -->
 <component name="nuxeo.config.media-demo.rights">
 
   <require>org.nuxeo.agentic.assets.rights</require>
@@ -25,12 +31,27 @@
       <original xpath="files:files/0/file" channel="SVOD" />
       <blob xpath="files:files/1/file" channel="SVOD" />
       <blob xpath="files:files/2/file" channel="Marketing" />
+      <!-- The still, for screening: a preview, served whatever the rights. -->
+      <blob xpath="files:files/3/file" preview="true" />
       <rendition name="thumbnail" preview="true" />
       <delivery>
         <original />
         <blob xpath="files:files/1/file" />
         <blob xpath="files:files/2/file" />
       </delivery>
+      <!-- The still, marked for anyone outside the kit's groups; the key art, marked for the
+           distributor of each delivery. The master and the subtitles are not marked: a subtitle
+           file holds no picture, and the master is the distributor's to mark. -->
+      <watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
+        <previews>
+          <blob xpath="files:files/3/file" />
+        </previews>
+        <deliveries>
+          <blob xpath="files:files/2/file" />
+        </deliveries>
+        <except group="media-rights" />
+        <except group="media-distribution" />
+      </watermark>
     </policy>
   </extension>
 

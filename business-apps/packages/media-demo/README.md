@@ -1,18 +1,19 @@
 # Media rights (demo)
 
-The media kit, version 0.1.0 ([development plan](../../../docs/business-apps/development-plan.md),
+The media kit, version 0.2.0 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 9, "Media rights, records at scale", its builds' "Media rights and distribution: territories,
 release windows, localised versions, delivery packages, watermarks", and its demo step 1: "A
 localised film delivered to a distributor inside its window, and refused outside it"). It is the app
 of the media rights of the assets add-on,
 [`nuxeo-agentic-assets`](../../../nuxeo-agentic-assets/README.md#media-rights-territories-windows-and-deliveries)
-0.4.0. All its data is fictional: no real studio, distributor, person or film, for the fictional
+0.5.0, and, from 0.2.0, of its watermarks: a delivery's key art marked for its distributor, and a
+still from the film marked for an outside partner. All its data is fictional: no real studio, distributor, person or film, for the fictional
 Acme Pictures.
 
 **Installed nowhere.** The package passes the pipeline, and the add-on's decisions are held by its
 Java tests in Nuxeo's own test framework, on H2; not held there: the REST API's answer to a refused
 delivery, and a check-in or a restore of a delivery, which is not versionable. No server has the
-add-on 0.4.0 or this kit: the local Nuxeo has the add-on's 0.1.0, and is not written to here. So its
+add-on 0.5.0 or this kit: the local Nuxeo has the add-on's 0.1.0, and is not written to here. So its
 pages have not been drawn on a server's records, and its seed and its demo's steps file have run
 only on the kit's stand-in server, `demo/stand-in.mjs`.
 
@@ -24,7 +25,11 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
   end.
 - **A localised version's page:** its film, linked; its language; its own rights, the territories it
   may be delivered to, its channels and its rights end, under a banner once they have ended; its
-  files, the master, the subtitles and the key art; and its deliveries, a related list.
+  files, the master, the subtitles, the key art and, from 0.2.0, a still from the film; and its
+  deliveries, a related list.
+- **Watermarks, from 0.2.0** (below, "The watermark"): a delivery's key art is marked for its
+  distributor, and the delivery holds it marked; the still is served marked to an outside partner,
+  a member of `media-partners`, naming them, and as it is to the kit's staff.
 - **The queue of deliveries,** the latest first, and **a delivery's page:** the distributor, the
   territory and the version, linked; when it was delivered and by whom; and what was delivered,
   file by file, with each one's channel, name, type, size and digest.
@@ -36,12 +41,13 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 - **A stand-in model:** two fictional types, `Film` and `FilmVersion`, the version's files its
   attachments. The delivery is the add-on's type, `MediaDelivery`, not the kit's.
 - **A rights policy** for `FilmVersion`, for the add-on (below, "The rights").
-- **A seed** that writes the film, its windows and its three versions with their files, and the
-  deliveries folder, with the kit's two groups' permissions. It files no delivery.
+- **A seed** that writes the film, its windows and its three versions with their files, the key art
+  and the still drawn as pictures, and the deliveries folder, with the kit's three groups'
+  permissions. It files no delivery.
 
 ## The rights
 
-`bundle/OSGI-INF/media-demo-rights.xml`, for `nuxeo-agentic-assets` 0.4.0:
+`bundle/OSGI-INF/media-demo-rights.xml`, for `nuxeo-agentic-assets` 0.5.0:
 
 | A version's     | Where                                     |
 | --------------- | ----------------------------------------- |
@@ -50,12 +56,13 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 | Territories     | `fver:territories`                        |
 | Release windows | its film's `film:windows`, by `fver:film` |
 
-| File                            | Cleared by  | In a delivery |
-| ------------------------------- | ----------- | ------------- |
-| `files:files/0/file`, master    | `SVOD`      | Yes           |
-| `files:files/1/file`, subtitles | `SVOD`      | Yes           |
-| `files:files/2/file`, key art   | `Marketing` | Yes           |
-| The `thumbnail` rendition       | A preview   | No            |
+| File                            | Cleared by  | In a delivery | Watermarked                                 |
+| ------------------------------- | ----------- | ------------- | ------------------------------------------- |
+| `files:files/0/file`, master    | `SVOD`      | Yes           | No                                          |
+| `files:files/1/file`, subtitles | `SVOD`      | Yes           | No                                          |
+| `files:files/2/file`, key art   | `Marketing` | Yes           | In a delivery, for its distributor          |
+| `files:files/3/file`, still     | A preview   | No            | When downloaded by anyone outside the staff |
+| The `thumbnail` rendition       | A preview   | No            | No                                          |
 
 - **Each version has its own rights:** its own territories, channels and rights end. Its release
   windows are its film's: a window is the title's, the same for each of its language versions.
@@ -71,9 +78,41 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 - **The film is named by its id, and must be a `Film`:** the policy's `<windows type="Film">`. A
   version naming a document of another type, a proxy, one in the trash or none is refused every use
   that needs its windows.
+- **The still is a preview,** from 0.2.0: served whatever the version's rights, as a screener is,
+  and marked for anyone outside the kit's staff (below, "The watermark").
 - **The files are the attachments, by place.** The stand-in model has no file field of its own for
   each, so the master must be the first attachment, as the seed writes it. A real model gives each
   its own field, and the policy names those.
+
+## The watermark
+
+From 0.2.0, the policy's `<watermark>`, which `nuxeo-agentic-assets` 0.5.0 applies on the server:
+
+```xml
+<watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
+  <previews><blob xpath="files:files/3/file" /></previews>
+  <deliveries><blob xpath="files:files/2/file" /></deliveries>
+  <except group="media-rights" />
+  <except group="media-distribution" />
+</watermark>
+```
+
+- **A delivery's key art is marked for its distributor,** its text `ACME PICTURES · FOR <the
+distributor> · <the filer> · <the day>`, whoever files it: the add-on requires a delivery's mark to
+  name its filer too, since the distributor's name is the filer's to write. The delivery records, for each file, whether it was
+  marked, for whom and with what text, and holds the key art marked, a JPEG drawn on the server; the
+  master and the subtitles are recorded unmarked, and not held. A key art that cannot be marked,
+  such as one that is not a picture, refuses the delivery whole, `watermark-unavailable`.
+- **The still is marked for outside partners.** The download endpoints refuse it unmarked, 403
+  `watermark-required`, to anyone in neither `media-rights` nor `media-distribution`, an
+  administrator included; `Asset.GetWatermarked` serves it to them marked, the text naming them.
+  The kit's staff download it as it is.
+- **The partners' group,** `media-partners`, reads the versions, which the seed grants: a
+  festival's programmers, say, or a distributor's buyer before a deal. Their accounts are the
+  server's.
+- **Not marked:** the master and the subtitles. A subtitle file holds no picture, and the kit's
+  master is a text placeholder; a real master would be marked through the server's video tools,
+  which need ffmpeg (below, "What it does not do").
 
 ## What is in it
 
@@ -89,13 +128,14 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 | `bundle/agentic-ui-config/labels/en.json`                         | Every label key the files name, and the fields' names                                               | The generators, then by hand  |
 | `bundle/OSGI-INF/media-demo-config.xml`                           | The component: the three layouts, and the app with the files the registry serves                    | The generators                |
 | `bundle/OSGI-INF/media-demo-model.xml`, `bundle/schemas/`         | **The stand-in model:** `Film`, `FilmVersion`, and their page providers; the film's windows by hand | `app-model`, then by hand     |
-| `bundle/OSGI-INF/media-demo-rights.xml`                           | The rights policy for `FilmVersion`                                                                 | By hand                       |
+| `bundle/OSGI-INF/media-demo-rights.xml`                           | The rights policy for `FilmVersion`, with its watermark from 0.2.0                                  | By hand                       |
 | `bundle/OSGI-INF/media-demo-queues.xml`                           | The two page providers over the add-on's deliveries. Not the stand-in's: they stay when it goes     | By hand                       |
 | `content-model.json`                                              | The stand-in, and the add-on's `MediaDelivery`, as a server with both installed is to answer        | `app-model`, then by a script |
 | `demo/seed.mjs`, `demo/data.mjs`                                  | The seed and its fictional film. Not packaged                                                       | By hand                       |
+| `demo/png.mjs`                                                    | The key art and the still, drawn: the brand kit's PNG writer, copied, with shapes of its own        | By hand                       |
 | `demo/stand-in.mjs`                                               | The stand-in server the seed's controls and the demo's steps file run on. Not packaged              | By hand                       |
 | `demo/seed.selftest.mjs`                                          | The seed's controls, and the demo's four cases held to the seeded data. Not packaged                | By hand                       |
-| `package/package.xml`                                             | The Marketplace package; it depends on `nuxeo-agentic-ui` and `nuxeo-agentic-assets` 0.4.0          | `app-package`, then by hand   |
+| `package/package.xml`                                             | The Marketplace package; it depends on `nuxeo-agentic-ui` and `nuxeo-agentic-assets` 0.5.0          | `app-package`, then by hand   |
 | `build.mjs`                                                       | Version 1's builder: the generator's, byte for byte                                                 | `app-package`                 |
 
 - **The film's windows are written by hand** in `bundle/schemas/film.xsd`: a complex list, which
@@ -116,20 +156,28 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 npm run app-package -- business-apps/packages/media-demo --platform 0.2.0
 ```
 
-It writes `dist/media-demo-0.1.0.zip` and its checksum. The kit is new, so `--previous` holds it to
-nothing yet: the staging branch has no `media-demo`. The pipeline holds the kit to its own
+It writes `dist/media-demo-0.2.0.zip` and its checksum. The pipeline holds the kit to its own
 `content-model.json`, since it ships a stand-in model.
+
+**0.2.0, held to 0.1.0 on the staging branch with `--previous`:** its two changes, the rights
+policy's still and watermark and `package.xml`'s dependency raised to `nuxeo-agentic-assets` 0.5.0,
+need a patch; 0.2.0 raises the minor, as a kit that newly needs its add-on's watermarks, a fourth
+file on each version and a new group should. The upgrade check,
+`npm run app-upgrade -- business-apps/packages/media-demo --since origin/staging/enterprise-grade-app`,
+keeps every configuration. `content-model.json`'s `MediaDelivery` gains the add-on 0.5.0's four
+fields of a delivered file, `watermarked`, `watermarkedFor`, `watermark` and `watermarkedFile`,
+added by hand from the add-on's XSD, as its others were.
 
 ## Installing it, on a server of your own
 
 Not done on any server. In this order:
 
-1. **The assets add-on,** `nuxeo-agentic-assets` 0.4.0, built by Maven
+1. **The assets add-on,** `nuxeo-agentic-assets` 0.5.0, built by Maven
    ([its README](../../../nuxeo-agentic-assets/README.md)), and **this kit**, with
    `nuxeoctl mp-install`, then a restart. The add-on's share links open a path that needs no
    sign-in: its README's install section says what must be in place first.
-2. **The groups** `media-rights` and `media-distribution`, and the people in them, in the server's
-   directory.
+2. **The groups** `media-rights`, `media-distribution` and, from 0.2.0, `media-partners`, and the
+   people in them, in the server's directory.
 3. **The seed,** as an administrator: `node business-apps/packages/media-demo/demo/seed.mjs`, with
    `NUXEO_USER` and `NUXEO_PASS` exported.
 
@@ -156,7 +204,9 @@ when it refuses. `<version>` is the localised version's id, which its page shows
 
    Delivered. The delivery's page names the distributor, the territory and the version, and lists
    the master and the subtitles for SVOD and the key art for Marketing, each with its digest; it is
-   first in the queue of deliveries, and on the version's page.
+   first in the queue of deliveries, and on the version's page. From 0.2.0 its record says the key
+   art was marked for Acme Distribution France, with the text `ACME PICTURES · FOR Acme
+Distribution France · <the coordinator> · <the day>`, and holds it marked; the master and the subtitles were not.
 
 2. **Outside its window.** The German version, `"mdlv:territory":"DE"`, to Acme Verleih
    Deutschland: refused, 403, `outside-window` for the master and the subtitles, since SVOD in
@@ -169,14 +219,37 @@ when it refuses. `<version>` is the localised version's id, which its page shows
 4. **A version's own rights.** The French version to Germany, where the film's Marketing window is
    open: refused, `territory-not-covered`. The German version may go there; the French one may not.
 
-The steps file runs these four, on the kit's stand-in, or with `MEDIA_DEMO_SERVER` on a server:
+5. **The still, for an outside partner,** from 0.2.0. The coordinator downloads the French
+   version's still as it is, a PNG. A member of `media-partners` is refused it unmarked, 403
+   `watermark-required`, and is served it marked, a JPEG naming them, by the add-on's operation:
+
+   ```bash
+   curl -sS --fail-with-body -u "$PARTNER" -H 'Content-Type: application/json' -o still.jpg \
+     -X POST "$NUXEO_URL/nuxeo/api/v1/automation/Asset.GetWatermarked" \
+     -d '{"input":"doc:<the French version>","params":{"use":"blob:files:files/3/file"}}'
+   ```
+
+The steps file runs these five, on the kit's stand-in, or with `MEDIA_DEMO_SERVER` on a server,
+where the fifth's partner checks need `MEDIA_PARTNER_USER` and `MEDIA_PARTNER_PASS`, a member of
+`media-partners`, and are not run without them:
 
 ```bash
 npm run beta:evidence -- media-delivery
 ```
 
-On 26 November 2026, on the stand-in: 26 of 26 checks passed. It proves the demo's script and its
-data, not the server: the server's decision is the add-on's `MediaDeliveryTest`'s.
+On 27 November 2026, on the stand-in: 33 of 33 checks passed. It proves the demo's script and its
+data, not the server: the server's decision is the add-on's `MediaDeliveryTest`'s, and its marks the
+add-on's `MediaDeliveryTest` and `WatermarkPolicyTest`'s. **The stand-in's marked file is not the
+server's:** where the add-on draws the text across the picture, the stand-in answers an 8 by 8 grey
+JPEG holding the text in a comment, so that its text can be read back there; on a server the steps
+file checks only that a JPEG apart from the still is served. The seed's controls,
+`demo/seed.selftest.mjs`, 64 of them, hold the watermark's cases on the stand-in too, and each of
+the new ones was seen failing with its guard broken on purpose: a delivery marking nothing, or
+naming its filer, a key art that is not a picture delivered, the staff not exempt, or everyone, the
+operation serving the still unmarked, the policy's watermark read as its rules, `/nxfile/`
+undecided, no still uploaded, the key art left a text file, and the partners not granted Read; the
+steps file went red too with a delivery marking nothing, everyone exempt, and the operation serving
+the still unmarked.
 
 ## What it does not do
 
@@ -184,7 +257,12 @@ data, not the server: the server's decision is the add-on's `MediaDeliveryTest`'
   digests, to whom, where and when. It moves no byte. The add-on's share links serve watermarked
   pictures only, and a film's files are not pictures, so a delivery makes no share link (the
   add-on's README, "What deliveries do not do").
-- **Watermark a film.** The share links' watermark is drawn on a picture; a video watermark needs
-  the server's video conversions, which no server here can run.
+- **Watermark the master.** The kit's master is a text placeholder, so its delivery marks the key
+  art only. The add-on marks a video through the platform's video tools, which need ffmpeg on the
+  server (its README, "Watermarks"); the local Nuxeo has none, and a real master would be marked
+  synchronously, as the delivery is filed, which a feature's length would hold for as long as its
+  conversion takes.
+- **Mark the lists' thumbnails,** or anything but the still: the watermark names the still alone
+  among the previews.
 - **Pages in the browser, on the stand-in.** The stand-in serves the REST API the seed and the steps
   file call, not the app.

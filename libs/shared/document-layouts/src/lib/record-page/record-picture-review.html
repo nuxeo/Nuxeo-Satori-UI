@@ -81,9 +81,18 @@
         />
       }
       @case ('loaded') {
-        <p class="record-review__status">
-          {{ 'document-layouts.review.round-open' | translate: { round: round() } }}
-        </p>
+        @if (conclusion(); as concluded) {
+          <p class="record-review__conclusion" [attr.data-decision]="concluded.decision">
+            {{
+              'document-layouts.review.concluded-' + concluded.decision
+                | translate: { user: concluded.by, when: when(concluded.at) }
+            }}
+          </p>
+        } @else {
+          <p class="record-review__status">
+            {{ 'document-layouts.review.round-open' | translate: { round: round() } }}
+          </p>
+        }
         <div class="record-review__actions">
           @if (may.pin && pictureShown() && !shownDraft) {
             <button
@@ -105,7 +114,29 @@
               [disabled]="saving()"
               (click)="closeRound()"
             >
-              {{ 'document-layouts.review.close-round' | translate: { round: round() } }}
+              {{ 'document-layouts.review.send-back' | translate: { round: round() } }}
+            </button>
+          }
+          @if (decidable() && !shownDraft) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="record-review__approve"
+              disabledInteractive
+              [disabled]="saving()"
+              (click)="decide('approved')"
+            >
+              {{ 'document-layouts.review.approve' | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="record-review__reject"
+              disabledInteractive
+              [disabled]="saving()"
+              (click)="decide('rejected')"
+            >
+              {{ 'document-layouts.review.reject' | translate }}
             </button>
           }
         </div>

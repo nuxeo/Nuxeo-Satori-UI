@@ -36,11 +36,16 @@
   object-fit: contain;
 }
 
-.record-picture__caption {
+.record-picture__caption,
+.record-picture__watermarked {
   margin-top: 8px;
   font-size: 13px;
   line-height: 1.4;
   color: var(--mat-sys-on-surface-variant);
+}
+
+.record-picture__watermarked {
+  margin-bottom: 0;
 }
 
 .record-picture__views {

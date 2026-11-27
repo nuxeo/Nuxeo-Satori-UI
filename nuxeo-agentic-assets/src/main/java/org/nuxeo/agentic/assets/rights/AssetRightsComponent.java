@@ -27,6 +27,15 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.IdRef;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
+import org.nuxeo.agentic.assets.rights.video.VideoOperationRights;
+import org.nuxeo.ecm.core.api.PartialList;
+import org.nuxeo.ecm.core.api.model.Property;
+import org.nuxeo.ecm.core.api.repository.RepositoryManager;
+import org.nuxeo.ecm.core.blob.ManagedBlob;
+import org.nuxeo.ecm.core.utils.BlobsExtractor;
+import org.nuxeo.runtime.api.Framework;
+import org.nuxeo.runtime.transaction.TransactionHelper;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
 
@@ -304,6 +313,88 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
 
     @Override
     public DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition) {
+        return decideDownload(document, xpath, blob, rendition, null);
+    }
+
+    @Override
+    public DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition,
+            NuxeoPrincipal person) {
+        DownloadDecision decided = decideHere(document, xpath, blob, rendition, person);
+        if (decided == null || !decided.decision().allowed() || !(blob instanceof ManagedBlob stored)
+                || stored.getKey() == null) {
+            return decided;
+        }
+        RightsPolicy policy = policyFor(document.getType());
+        if (policy == null || policy.watermark() == null) {
+            return decided;
+        }
+        // Since 0.5.0, under a policy with a watermark: the same file is decided wherever a covered
+        // document holds it, so that a copy whose view is retitled, or whose files are reordered, serves
+        // nothing the asset it was copied from would mark.
+        DownloadDecision elsewhere = holders(document.getRepositoryName(), stored, person);
+        return elsewhere == null ? decided : new DownloadDecision(decided.use(), elsewhere.decision());
+    }
+
+    @Override
+    public DownloadDecision decideStored(Blob blob, NuxeoPrincipal person) {
+        if (!(blob instanceof ManagedBlob stored) || stored.getKey() == null || policies.isEmpty()) {
+            return null;
+        }
+        RepositoryManager repositories = Framework.getService(RepositoryManager.class);
+        String repository = repositories == null ? null : repositories.getDefaultRepositoryName();
+        if (repository == null) {
+            return new DownloadDecision(Use.unknown(null), Decision.refuse(Reason.POLICY_ERROR));
+        }
+        return holders(repository, stored, person);
+    }
+
+    /**
+     * The first refusal any document of a covered type holding {@code blob}'s file gives
+     * {@code person}, at each place it holds it, as a download there is decided: read with the
+     * system's rights, since an asset's rights do not depend on who reads its file. {@code null} when
+     * none refuses. A file held by more than {@value VideoOperationRights#HOLDERS_LIMIT} such documents,
+     * or a failure, refuses.
+     */
+    DownloadDecision holders(String repository, ManagedBlob blob, NuxeoPrincipal person) {
+        Use unknown = Use.unknown(null);
+        try {
+            String query = VideoOperationRights.holdersQuery(Set.copyOf(coveredTypes()), blob.getKey());
+            if (query == null) {
+                return null;
+            }
+            java.util.function.Supplier<DownloadDecision> work = () -> CoreInstance.doPrivileged(repository,
+                    (Function<CoreSession, DownloadDecision>) privileged -> {
+                        PartialList<Map<String, Serializable>> rows = privileged.queryProjection(query,
+                                VideoOperationRights.HOLDERS_LIMIT + 1L, 0);
+                        if (rows.size() > VideoOperationRights.HOLDERS_LIMIT) {
+                            return new DownloadDecision(unknown, Decision.refuse(Reason.POLICY_ERROR));
+                        }
+                        for (Map<String, Serializable> row : rows) {
+                            DocumentModel holder = privileged.getDocument(new IdRef((String) row.get("ecm:uuid")));
+                            for (Property property : new BlobsExtractor().getBlobsProperties(holder)) {
+                                if (property.getValue() instanceof ManagedBlob held && blob.getKey().equals(held.getKey())) {
+                                    DownloadDecision there = decideHere(holder,
+                                            VideoOperationRights.canonicalXpath(property), held, null, person);
+                                    if (there != null && !there.decision().allowed()) {
+                                        return there;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    });
+            return TransactionHelper.isTransactionActiveOrMarkedRollback() ? work.get()
+                    : TransactionHelper.runInTransaction(work);
+        } catch (RuntimeException e) {
+            log.error("Asset rights: the documents holding a stored file could not be read, so its download is refused",
+                    e);
+            return new DownloadDecision(unknown, Decision.refuse(Reason.POLICY_ERROR));
+        }
+    }
+
+    /** The download decided at its place on its document, as before 0.5.0, then held to the watermark. */
+    private DownloadDecision decideHere(DocumentModel document, String xpath, Blob blob, String rendition,
+            NuxeoPrincipal person) {
         if (document == null) {
             return null;
         }
@@ -323,7 +414,7 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
             use = DownloadUse.classify(document, policy, xpath, blob, rendition);
             // Read only when the decision needs them: a preview is served without.
             Decision decision = AssetRights.decide(policy, () -> facts(document, policy), use, today());
-            return new DownloadDecision(use, decision);
+            return new DownloadDecision(use, AssetRights.watermarked(policy, use, decision, person));
         } catch (RuntimeException e) {
             log.error("Asset rights: the rights of {} ({}) could not be read, so its {} is refused", id(document),
                     type, use, e);

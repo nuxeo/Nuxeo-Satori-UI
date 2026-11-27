@@ -1,5 +1,6 @@
 import {
   hasDocumentPermission,
+  type AssetReviewAnswer,
   type NuxeoAnnotation,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -38,11 +39,16 @@ export interface ReviewAnnotation {
  *   in the round open when it was written, whatever round its payload names: a page that had not
  *   yet seen a round closed writes the round before, and its pin goes into the next one all the
  *   same.
- * - **Rounds move one at a time.** Each close closes the round open then, and opens the next. One
- *   that names a round already closed, as a second person closing the same round at once writes,
- *   changes nothing; one that names a later round still closes only the open one. So a close
- *   deleted from the record's comments renumbers the rounds after it, and merges none. Past
- *   {@link MAX_ROUNDS}, a close changes nothing.
+ * - **Rounds move one at a time.** Each close, a round sent back, closes the round open then, and
+ *   opens the next. One that names a round already closed, as a second person closing the same
+ *   round at once writes, changes nothing; one that names a later round still closes only the open
+ *   one. So a close deleted from the record's comments renumbers the rounds after it, and merges
+ *   none. Past {@link MAX_ROUNDS}, a close changes nothing.
+ * - **A decision concludes the review.** The first approval or rejection written is the review's
+ *   conclusion, in the round open then; a close or a decision written after it changes nothing,
+ *   as `nuxeo-agentic-assets` 0.5.0 refuses one, 409 `concluded`. Since that version the server
+ *   holds every close and decision to the add-on's `ReviewAsset` permission and the review
+ *   policy's groups, and keeps each as written.
  * - **What it reads is anyone's.** Whoever may comment on the record may write an annotation of
  *   this origin, with any payload, so each one is held to its form here, and one that is not a pin
  *   or a close is left out and counted. Nuxeo 2025 makes the signed-in user its author whatever the
@@ -81,6 +87,17 @@ export interface ReviewPin {
   readonly created: string;
 }
 
+/** How a review is concluded: the payload's word, as the server reads and audits it. */
+export type ReviewDecision = 'approved' | 'rejected';
+
+/** The review's conclusion: its first approval or rejection, who wrote it, when, and in which round. */
+export interface ReviewConclusion {
+  readonly decision: ReviewDecision;
+  readonly by: string;
+  readonly at: string;
+  readonly round: number;
+}
+
 /** A round of the review: the open one, or one closed, with who closed it and when. */
 export interface ReviewRound {
   readonly number: number;
@@ -95,13 +112,19 @@ export interface PictureReview {
   readonly round: number;
   /** Every round, the open one last. */
   readonly rounds: readonly ReviewRound[];
-  /** Annotations of the review's origin that are neither a pin nor a round's close: left out. */
+  /** The first approval or rejection, which ends the review; `null` while there is none. */
+  readonly conclusion: ReviewConclusion | null;
+  /** Annotations of the review's origin that are neither a pin, a round's close nor a decision: left out. */
   readonly unreadable: number;
 }
 
 type Payload =
   | { readonly kind: 'pin'; readonly round: number; readonly x: number; readonly y: number }
-  | { readonly kind: 'round-closed'; readonly round: number };
+  | { readonly kind: 'round-closed'; readonly round: number }
+  | { readonly kind: 'decision'; readonly round: number; readonly decision: ReviewDecision };
+
+const isDecision = (value: unknown): value is ReviewDecision =>
+  value === 'approved' || value === 'rejected';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -156,6 +179,8 @@ function payloadOf(annotation: ReviewAnnotation): Payload | null {
   if (parsed['kind'] === 'pin' && isFraction(parsed['x']) && isFraction(parsed['y']))
     return { kind: 'pin', round: parsed['round'], x: parsed['x'], y: parsed['y'] };
   if (parsed['kind'] === 'round-closed') return { kind: 'round-closed', round: parsed['round'] };
+  if (parsed['kind'] === 'decision' && isDecision(parsed['decision']))
+    return { kind: 'decision', round: parsed['round'], decision: parsed['decision'] };
   return null;
 }
 
@@ -184,9 +209,18 @@ export function readPictureReview(annotations: readonly ReviewAnnotation[]): Pic
   const rounds: ReviewRound[] = [];
   const pins: ReviewPin[] = [];
   let round = 1;
+  let conclusion: ReviewConclusion | null = null;
   for (const { annotation, payload } of ours) {
-    if (payload?.kind === 'round-closed') {
-      if (payload.round < round || round >= MAX_ROUNDS) continue;
+    if (payload?.kind === 'decision') {
+      // The first concludes the review; any after it changes nothing.
+      conclusion ??= {
+        decision: payload.decision,
+        by: annotation.author,
+        at: annotation.written,
+        round,
+      };
+    } else if (payload?.kind === 'round-closed') {
+      if (conclusion !== null || payload.round < round || round >= MAX_ROUNDS) continue;
       rounds.push({ number: round, closedBy: annotation.author, closedAt: annotation.written });
       round++;
     } else if (payload?.kind === 'pin') {
@@ -204,7 +238,7 @@ export function readPictureReview(annotations: readonly ReviewAnnotation[]): Pic
   }
   rounds.push({ number: round, closedBy: null, closedAt: null });
   const unreadable = ours.filter(({ payload }) => payload === null).length;
-  return { pins, round, rounds, unreadable };
+  return { pins, round, rounds, conclusion, unreadable };
 }
 
 /** A fraction rounded to four places, as a pin is written: a tenth of a pixel on a 1000px view. */
@@ -224,9 +258,14 @@ export function pinPayload(round: number, x: number, y: number): string {
   });
 }
 
-/** A round's close, as `createAnnotation` writes it in `entity`. */
+/** A round's close, the round sent back, as `createAnnotation` writes it in `entity`. */
 export function roundClosedPayload(round: number): string {
   return JSON.stringify({ kind: 'round-closed', version: PAYLOAD_VERSION, round });
+}
+
+/** The review approved or rejected, as `createAnnotation` writes it in `entity`. */
+export function decisionPayload(round: number, decision: ReviewDecision): string {
+  return JSON.stringify({ kind: 'decision', version: PAYLOAD_VERSION, round, decision });
 }
 
 /** A fraction as the whole percentage the page says it in: `0.4213` is 42. */
@@ -235,22 +274,27 @@ export function percent(fraction: number): number {
 }
 
 /**
- * What the page offers the signed-in user, from the record's `permissions` enricher. Hiding a
- * control is not a security control: Nuxeo 2025's comment service accepts an annotation from
- * anyone who may read the record, through the REST API, whatever this page offers.
+ * What the page offers the signed-in user. Hiding a control is not a security control.
  *
- * - **A pin** to a holder of Nuxeo's `Comment` permission, or of `Write`, on the record.
- * - **Closing a round** to a holder of `Write`: whoever may change the asset decides a round is over.
- * - **Nothing** on a version or a record in the trash, when the page is read-only, as the layout
- *   designer's preview is, or when the record came without its permissions.
+ * - **A pin** to a holder of Nuxeo's `Comment` permission, or of `Write`, on the record, from its
+ *   `permissions` enricher. Nuxeo 2025's comment service accepts a pin from anyone who may read the
+ *   record, through the REST API, whatever this page offers.
+ * - **A decision,** sending the round back, approving or rejecting the review, only when the
+ *   server's `assetReview` enricher says the reader may decide: `nuxeo-agentic-assets` 0.5.0, which
+ *   holds each decision to its `ReviewAsset` permission and the review policy's groups, and refuses
+ *   anyone else, administrators included. With no answer, from a server without it, none is offered.
+ *   Whether the review is concluded is the component's to add: see `readPictureReview`.
+ * - **Nothing** on a version or a record in the trash, or when the page is read-only, as the layout
+ *   designer's preview is.
  */
 export function reviewOffers(
   document: NuxeoDocument,
   readOnly: boolean,
-): { readonly pin: boolean; readonly close: boolean } {
+  review: AssetReviewAnswer | null,
+): { readonly pin: boolean; readonly decide: boolean } {
   if (readOnly || document.isVersion === true || document.isTrashed === true)
-    return { pin: false, close: false };
+    return { pin: false, decide: false };
   const may = (permission: string): boolean => hasDocumentPermission(document, permission);
   const write = may('Write') || may('Everything');
-  return { pin: write || may('Comment'), close: write };
+  return { pin: write || may('Comment'), decide: review?.mayDecide === true };
 }

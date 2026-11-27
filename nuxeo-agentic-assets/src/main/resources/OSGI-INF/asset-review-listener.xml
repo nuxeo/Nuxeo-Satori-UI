@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.review.listener" version="1.0">
+
+  <documentation>
+    The review listener, synchronous, in the transaction of the change that fires it, as the user
+    who makes it, or the one a privileged session acts for, as Nuxeo's comment manager opens one to
+    write an annotation: it refuses a decision written by anyone the review policy and ReviewAsset
+    do not let decide, one not of the review's form, one on a version, a proxy or an asset in the
+    trash, and one after the review was approved or rejected; it writes the person as its author;
+    and it keeps a decision as it was written, refusing a change to it, a move, a copy, a trash and
+    a deletion but an administrator's, and an import. Every refusal marks the transaction for
+    rollback. No Automation operation.
+
+    Each decision written fires assetReviewDecided, which the writer below adds to the platform's
+    audit, on the asset, once its transaction has committed.
+
+    The assetReview document enricher says whether the reader may decide, so that the asset page
+    offers the decisions only to them. It explains; the listener refuses.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.review</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticAssetReview" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.assets.review.AssetReviewListener">
+      <event>aboutToCreate</event>
+      <event>documentCreated</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>documentTrashed</event>
+      <event>aboutToMove</event>
+      <event>aboutToCopy</event>
+      <event>aboutToImport</event>
+    </listener>
+    <!-- The add-on's audit entries for decisions, written in the background, after the commit. -->
+    <listener name="agenticAssetReviewAuditWriter" async="true" postCommit="true"
+      class="org.nuxeo.agentic.assets.review.ReviewAuditWriter">
+      <event>assetReviewDecided</event>
+    </listener>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.io.MarshallerRegistry" point="marshallers">
+    <register class="org.nuxeo.agentic.assets.review.AssetReviewJsonEnricher" enable="true" />
+  </extension>
+
+</component>

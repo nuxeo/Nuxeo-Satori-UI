@@ -20,6 +20,20 @@ export const WORKSPACE = {
 export const FOLDERS = { products: 'Products', assets: 'Assets', shots: 'Shot list' };
 
 /**
+ * The kit's reviewer group, which the server's directory holds and the kit's review policy names
+ * (`bundle/OSGI-INF/brand-assets-demo-review.xml`): its members may send an asset's review back,
+ * approve it or reject it, where they are granted the assets add-on's ReviewAsset permission.
+ */
+export const REVIEWERS = 'creative-review';
+
+/**
+ * The one permission the seed grants, since 0.2.5: ReviewAsset to the reviewer group on the assets
+ * folder, which every asset there inherits. Without it no one, an administrator included, may decide
+ * a review on the server.
+ */
+export const GRANTS = [{ folder: 'assets', group: REVIEWERS, permission: 'ReviewAsset' }];
+
+/**
  * Every document the seed writes carries this as its `dc:source`, and the seed changes no
  * document at one of its places that does not: one without it is someone else's.
  */
