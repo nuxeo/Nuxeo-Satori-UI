@@ -151,7 +151,9 @@ const quoted = (text: string): string => `'${text.replace(/\\/g, '\\\\').replace
 export function elementSource(pkg: StudioPackage, element: CustomElement): string {
   const text = pkg.bundleFiles.get(element.path)?.toString('utf8') ?? '';
   const start = text.search(
-    new RegExp(`<dom-module\\s[^>]*id\\s*=\\s*["']${element.name.replace(/[.]/g, '\\.')}["']`),
+    new RegExp(
+      `<dom-module\\s[^>]*id\\s*=\\s*["']${element.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`,
+    ),
   );
   if (start === -1) return '';
   const end = text.indexOf('</dom-module>', start);

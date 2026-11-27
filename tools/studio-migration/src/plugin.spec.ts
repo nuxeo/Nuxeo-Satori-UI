@@ -72,7 +72,8 @@ describe('the plugin command', () => {
     expect(component).not.toMatch(/_outstanding|toFixed/);
     const spec = files['src/lib/acme-claim-exposure/acme-claim-exposure.spec.ts'];
     for (const behaviour of behaviours(exposure))
-      expect(spec).toContain(behaviour.title.replace(/'/g, "\\'"));
+      // As the skeleton quotes it: its backslashes, then its quotes, escaped.
+      expect(spec).toContain(behaviour.title.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
     expect(spec.match(/it\.todo\(/g)?.length).toBe(behaviours(exposure).length);
     // By the parts of their keys, so that a key is not taken for a registered ID.
     expect(files['src/lib/texts.ts']).toContain("    claim: {\n      number: 'Claim number',");
