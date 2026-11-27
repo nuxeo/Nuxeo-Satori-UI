@@ -9,8 +9,10 @@
  *   node tools/builder-mcp/src/call.ts <tool> - < arguments.json
  *
  * It starts the server as an MCP client does, `node tools/builder-mcp/src/main.ts` over stdio,
- * with this shell's environment, so `NUXEO_URL`, `NUXEO_USER`, `NUXEO_PASS`, `DEV_SERVER_URL` and
- * `BUILDER_PACKAGE_ROOTS` are read there as they are for a registered server, and never here;
+ * with this shell's `NUXEO_URL`, `NUXEO_USER`, `NUXEO_PASS`, `DEV_SERVER_URL` and
+ * `BUILDER_PACKAGE_ROOTS`, which are read there as they are for a registered server, and never
+ * here, and what Node needs to run, and nothing else of the shell's (`serverEnvironment`): no
+ * token or key the shell holds for something else reaches it;
  * opens the session, calls the one tool, prints its answer to stdout, its JSON indented, and
  * stops the server. `-` reads the arguments from standard input, for a layout's whole content.
  *
@@ -21,6 +23,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { serverEnvironment } from './config.ts';
 
 const ENTRY = fileURLToPath(new URL('./main.ts', import.meta.url));
 const USAGE =
@@ -50,7 +53,7 @@ if (tool !== '--list' && given !== undefined) {
 }
 
 const child = spawn(process.execPath, [ENTRY], {
-  env: process.env,
+  env: serverEnvironment(process.env),
   stdio: ['pipe', 'pipe', 'pipe'],
 });
 let stderr = '';

@@ -7,7 +7,7 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the business-app generators' specs run as commands or read, which nothing in the project graph links to this project: the package pipeline and its helpers, the app definition's validator, the Payers kit's exported model, and the layout designer's JSON writer, which src/util/json-file-text.ts copies. Without them an edit to any of them would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the business-app generators' specs run as commands or read, which nothing in the project graph links to this project: the package pipeline and its helpers, the app definition's validator, the Payers kit's exported model, the vehicle kit's hand-written checklist schema and model, which app-model's spec writes again, and the layout designer's JSON writer, which src/util/json-file-text.ts copies. Without them an edit to any of them would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
@@ -21,6 +21,8 @@
         "{workspaceRoot}/scripts/beta-harness/nuxeo-credentials.mjs",
         "{workspaceRoot}/libs/shared/app-definition/src/**/*",
         "{workspaceRoot}/business-apps/packages/payers-claims-demo/content-model.json",
+        "{workspaceRoot}/business-apps/packages/vehicle-titles-demo/content-model.json",
+        "{workspaceRoot}/business-apps/packages/vehicle-titles-demo/bundle/schemas/vehicledeal_docs.xsd",
         "{workspaceRoot}/libs/features/layout-designer/src/lib/json-file-text.ts"
       ],
       "options": { "reportsDirectory": "coverage/tools/satori-generators" }
