@@ -331,6 +331,11 @@
                   {{ 'layout-designer.shows-checklist' | translate }}
                 </p>
               }
+              @case ('holds') {
+                <p class="layout-designer__message">
+                  {{ 'layout-designer.shows-holds' | translate }}
+                </p>
+              }
             }
           </section>
         }

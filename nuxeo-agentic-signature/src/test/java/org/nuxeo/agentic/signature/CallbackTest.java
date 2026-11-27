@@ -117,6 +117,33 @@ public class CallbackTest {
         assertEquals(Signatures.SIGNED, text(version, Signatures.SGN_STATUS));
     }
 
+    /**
+     * A record under a legal hold keeps its files, which the records add-on refuses to change for
+     * anyone: signed, its signed file is kept on the request, the record says it is signed, and the
+     * callback is taken, not left to be retried for ever.
+     */
+    @Test
+    public void aRecordUnderALegalHoldKeepsItsFilesAndTheSignedFileStaysOnTheRequest() {
+        org.nuxeo.ecm.core.api.IdRef ref = new org.nuxeo.ecm.core.api.IdRef(caseId);
+        session.makeRecord(ref);
+        session.setLegalHold(ref, true, "A dispute about the account");
+        session.save();
+        org.nuxeo.runtime.transaction.TransactionHelper.commitOrRollbackTransaction();
+        org.nuxeo.runtime.transaction.TransactionHelper.startTransaction();
+
+        assertEquals(CallbackEndpoint.RECEIVED, signed("evt_held"));
+        DocumentModel request = Desk.stored(repository, requestId);
+        assertEquals(Signatures.SIGNED, text(request, Signatures.STATUS));
+        assertArrayEquals(StandInStub.signed(PDF, envelope),
+                Desk.bytes((Blob) request.getPropertyValue(Signatures.SIGNED_FILE)));
+        assertNull(request.getPropertyValue(Signatures.SIGNED_VERSION));
+        DocumentModel record = Desk.stored(repository, caseId);
+        assertEquals("agreement.pdf", ((Blob) record.getPropertyValue("files:files/1/file")).getFilename());
+        assertEquals(2, ((List<?>) record.getPropertyValue("files:files")).size());
+        assertEquals(Signatures.SIGNED, text(record, Signatures.SGN_STATUS));
+        assertEquals(0, Desk.versions(repository, caseId).size());
+    }
+
     @Test
     public void theMainFileIsFiledInItsPlace() {
         String agreement = Desk.newRecord(repository, "TestAgreement", "agreement", PDF, "application/pdf");

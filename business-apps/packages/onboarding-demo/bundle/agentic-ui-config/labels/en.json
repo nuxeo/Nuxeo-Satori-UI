@@ -87,6 +87,7 @@
     "layout.field.dsp:dueOn": "Due on",
     "layout.field.dsp:analyst": "Dispute analyst",
     "layout.field.dsp:resolution": "Resolution",
+    "layout.field.dsp:case": "Onboarding case",
     "layout.field.sgn:status": "Signature",
     "layout.field.sgn:signers": "Signers",
     "layout.field.sgn:sentAt": "Sent",
@@ -109,6 +110,17 @@
     "layout.field.sigreq:sentDigest": "SHA-256 of the file sent",
     "layout.field.sigreq:signedDigest": "SHA-256 of the signed file",
     "layout.field.sigreq:evidenceDigest": "SHA-256 of the evidence",
-    "layout.field.sigreq:event": "Callback"
+    "layout.field.sigreq:event": "Callback",
+    "onboarding.card.onboardingCase.disputes": "Disputes",
+    "onboarding.card.disputeCase.holds": "Legal hold",
+    "onboarding.action.newDispute": "New dispute",
+    "onboarding.action.placeHold": "Place legal hold",
+    "onboarding.action.placeHold.confirm": "Place a legal hold on this dispute? While it holds, nobody can delete the dispute, put it in the trash or change its files.",
+    "onboarding.action.placeHold.done": "The legal hold is placed.",
+    "onboarding.action.releaseHold": "Release legal hold",
+    "onboarding.action.releaseHold.confirm": "Release this dispute's legal hold? It can then be deleted again, as its permissions allow.",
+    "onboarding.action.releaseHold.done": "The legal hold is released.",
+    "onboarding.field.holdReason": "Reason for the hold",
+    "onboarding.field.releaseReason": "Reason for releasing it"
   }
 }

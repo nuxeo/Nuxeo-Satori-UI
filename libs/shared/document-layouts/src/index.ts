@@ -35,7 +35,7 @@ export {
   type RecordPropertyField,
 } from './lib/record-page/record-layout';
 export type { ResolvedRecordLayout } from './lib/record-page/resolve-record-layout';
-export { readValidationFailure } from './lib/validation-failure';
+export { readServerRefusal, readValidationFailure } from './lib/validation-failure';
 export { APP_ACTION_RUN_OPERATION, AppActionsService } from './lib/app-actions/app-actions.service';
 export {
   readAppActions,

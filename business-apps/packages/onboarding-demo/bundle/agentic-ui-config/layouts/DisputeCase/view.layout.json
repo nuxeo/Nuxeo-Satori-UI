@@ -70,7 +70,12 @@
             }
           }
         },
-        { "field": "dsp:analyst", "widget": "user" }
+        { "field": "dsp:analyst", "widget": "user" },
+        {
+          "field": "dsp:case",
+          "widget": "document-link",
+          "parameters": { "types": ["OnboardingCase"] }
+        }
       ]
     },
     {
@@ -93,6 +98,16 @@
           }
         }
       ]
+    },
+    {
+      "id": "holds",
+      "labelKey": "onboarding.card.disputeCase.holds",
+      "span": 2,
+      "holds": {
+        "place": "onboarding.dispute.placeHold",
+        "release": "onboarding.dispute.releaseHold",
+        "pageSize": 5
+      }
     },
     {
       "id": "resolution",

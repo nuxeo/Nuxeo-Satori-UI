@@ -18,12 +18,17 @@ export const REGISTERS = {
 /**
  * Who may do what, on each register: the officers send cases' agreements for signature and the
  * KYC analysts tick their checklists, so both write the onboarding register; the dispute analysts
- * write the disputes. The groups are the server's: the seed creates none.
+ * write the disputes, read the cases a dispute is raised on, and place and release a dispute's
+ * legal hold, with the retention module's `ManageLegalHold`. No officer may add to the disputes
+ * register: a dispute raised from a case is the analysts'. The groups are the server's: the seed
+ * creates none.
  */
 export const GRANTS = [
   { register: 'onboarding', group: 'onboarding-officers', permission: 'ReadWrite' },
   { register: 'onboarding', group: 'kyc-analysts', permission: 'ReadWrite' },
+  { register: 'onboarding', group: 'dispute-analysts', permission: 'Read' },
   { register: 'disputes', group: 'dispute-analysts', permission: 'ReadWrite' },
+  { register: 'disputes', group: 'dispute-analysts', permission: 'ManageLegalHold' },
 ];
 
 /** A checklist entry, as layout version 2's checklist card reads one. */
@@ -121,6 +126,8 @@ export const DISPUTES = [
     dueOn: -2,
     analyst: 'sana.whitlock',
     resolution: '',
+    // Raised on the coffee roaster's onboarding case, which lists it among its disputes.
+    case: 'ONB-1001',
   },
   {
     number: 'DSP-2003',

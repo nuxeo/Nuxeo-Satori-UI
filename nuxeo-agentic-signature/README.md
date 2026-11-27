@@ -57,7 +57,7 @@ the service's selftest. The install and the demo below are for the reviewer.
 | `src/main/resources/OSGI-INF/signature-listener-contrib.xml` | The listener: sending, cancelling, and the guards                                                    |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`        | The callback's servlet, at `/nuxeo/agentic-signature/*`, with no authentication filter               |
 | `src/main/package/`                                          | The Marketplace package, `nuxeo-agentic-signature` 0.1.0                                             |
-| `src/test/java/`                                             | 73 tests: 59 in Nuxeo's test framework, 12 with no runtime, 2 against the stand-in service           |
+| `src/test/java/`                                             | 74 tests: 60 in Nuxeo's test framework, 12 with no runtime, 2 against the stand-in service           |
 | `demo/esign-stand-in.mjs`                                    | The stand-in e-signature service: takes envelopes, a demo signer signs or declines, it calls back    |
 | `demo/esign-stand-in.selftest.mjs`                           | Its controls, 16 of them                                                                             |
 
@@ -155,7 +155,12 @@ callback, the request or the record.
    file takes the sent file's place, named `<name>-signed.<ext>`, when the record's file there is
    still the bytes sent, by their SHA-256; otherwise it goes beside it, as a new attachment, and
    nothing is written over. The evidence goes in `sgn:evidence`, and the record is checked in as a
-   new major version, as the system. **Declined:** `status`, with the server's credential: the
+   new major version, as the system. **A record under a legal hold** keeps its files as they are,
+   which `nuxeo-agentic-records` refuses to change for anyone: the signed file is kept on the
+   request alone, the record says it is signed, no version is made, and the callback is taken
+   rather than refused and retried for ever
+   (`aRecordUnderALegalHoldKeepsItsFilesAndTheSignedFileStaysOnTheRequest`, seen failing with the
+   check taken out: the callback answered 503). **Declined:** `status`, with the server's credential: the
    service must say the envelope is declined, or it is 502 and nothing ends; then the request and
    the record say so, with the reason, control characters dropped, 1,000 characters at most.
    **Anything else** the provider sends is taken, and changes nothing.
@@ -255,7 +260,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-signature/pom.xml verify
-# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 73 tests
+# target/nuxeo-agentic-signature-0.1.0.zip, the Marketplace package, after 74 tests
 ```
 
 The root `pom.xml` lists the module, and the Marketplace workflow (`build-marketplace.yml`) builds

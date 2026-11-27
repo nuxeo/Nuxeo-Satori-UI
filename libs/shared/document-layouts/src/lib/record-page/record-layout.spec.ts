@@ -186,6 +186,112 @@ describe('readRecordLayout', () => {
     });
   });
 
+  it("reads a related list's New: the type, the reference, its words and its folder", () => {
+    const file = read({
+      version: 2,
+      cards: [
+        {
+          id: 'disputes',
+          related: {
+            pageProvider: 'onboarding_case_disputes',
+            parameters: [{ field: 'ecm:uuid' }],
+            columns: ['dc:title'],
+            create: {
+              type: 'DisputeCase',
+              field: 'dsp:case',
+              labelKey: 'onboarding.action.newDispute',
+              in: { pageProvider: 'onboarding_dispute_registers' },
+            },
+          },
+        },
+        {
+          id: 'requests',
+          related: {
+            pageProvider: 'onboarding_case_signatures',
+            columns: ['dc:title'],
+            create: { type: 'ESignatureRequest', field: 'sigreq:case' },
+          },
+        },
+        { id: 'claims', related: { pageProvider: 'member_claims', columns: ['dc:title'] } },
+      ],
+    });
+    expect(file.problems).toEqual([]);
+    expect(file.cards.map((card) => card.create)).toEqual([
+      {
+        type: 'DisputeCase',
+        field: 'dsp:case',
+        label: { keys: ['onboarding.action.newDispute'], fallback: null },
+        folder: 'onboarding_dispute_registers',
+      },
+      {
+        type: 'ESignatureRequest',
+        field: 'sigreq:case',
+        label: { keys: [], fallback: null },
+        folder: null,
+      },
+      null,
+    ]);
+  });
+
+  it('leaves out a New a later platform writes another way, and keeps its list', () => {
+    const file = read({
+      version: 2,
+      cards: [
+        {
+          id: 'disputes',
+          related: {
+            pageProvider: 'onboarding_case_disputes',
+            columns: ['dc:title'],
+            create: { type: 'DisputeCase', field: 'dsp:case', prefill: { 'dsp:status': 'Open' } },
+          },
+        },
+      ],
+    });
+    expect(file.cards).toHaveLength(1);
+    expect(file.cards[0].related?.pageProvider).toBe('onboarding_case_disputes');
+    expect(file.cards[0].create).toBeNull();
+    expect(file.problems).toEqual([
+      'cards[0].related.create.prefill: "prefill" is not a key version 2 has; cards[0].related.create left out',
+    ]);
+    expect(entryOf('cards[0].related.create')).toBe('cards[0].related.create');
+    expect(entryOf('cards[0].related.create.in.pageProvider')).toBe('cards[0].related.create');
+    expect(entryOf('cards[0].related.columns[1].widget')).toBe('cards[0].related.columns[1]');
+  });
+
+  it('reads a holds card: the actions it offers and how many holds it shows', () => {
+    const file = read({
+      version: 2,
+      cards: [
+        {
+          id: 'holds',
+          labelKey: 'onboarding.card.disputeCase.holds',
+          holds: {
+            place: 'onboarding.dispute.placeHold',
+            release: 'onboarding.dispute.releaseHold',
+          },
+        },
+        { id: 'quiet', holds: { pageSize: 3 } },
+        // A key a later platform has leaves out that card alone, as a checklist's does.
+        { id: 'later', holds: { transfer: 'kit.transfer' } },
+      ],
+    });
+    expect(file.cards.map((card) => [card.id, card.holds, card.fields])).toEqual([
+      [
+        'holds',
+        {
+          place: 'onboarding.dispute.placeHold',
+          release: 'onboarding.dispute.releaseHold',
+          pageSize: 10,
+        },
+        [],
+      ],
+      ['quiet', { place: null, release: null, pageSize: 3 }, []],
+    ]);
+    expect(file.problems).toEqual([
+      'cards[2].holds.transfer: "transfer" is not a key version 2 has; cards[2] left out',
+    ]);
+  });
+
   it('shows ten records on a page when the file gives no page size', () => {
     const file = read({
       version: 2,
@@ -308,7 +414,7 @@ describe('readRecordLayout', () => {
         ),
       ).toEqual({
         invalid:
-          'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist"',
+          'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds"',
       });
     });
   });

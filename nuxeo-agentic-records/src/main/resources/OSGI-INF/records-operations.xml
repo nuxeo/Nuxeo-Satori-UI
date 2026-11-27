@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.records.operations" version="1.0">
+
+  <documentation>
+    Records.ReleaseLegalHold: releases the input document's legal hold with a reason, which the
+    platform keeps as the comment of its afterRemoveLegalHold audit entry. The retention module's
+    Document.Unhold takes no reason; its Document.Hold, which places a hold with a description,
+    stays the way a hold is placed. It runs as the person, and the platform checks their
+    ManageLegalHold. Meant for an operation button that the deployment's allow-list names (plan
+    decision 3); a package never names it there.
+  </documentation>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.records.ReleaseLegalHoldOperation" />
+  </extension>
+
+</component>

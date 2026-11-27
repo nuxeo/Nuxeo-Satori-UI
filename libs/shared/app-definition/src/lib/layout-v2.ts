@@ -87,9 +87,32 @@ const CARD_CONTENTS = [
   'comments',
   'external',
   'checklist',
+  'holds',
 ] as const;
 const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', ...CARD_CONTENTS];
-const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
+const RELATED_KEYS = [
+  'pageProvider',
+  'parameters',
+  'columns',
+  'sort',
+  'pageSize',
+  'rowActions',
+  'create',
+];
+/**
+ * A related list's "New": the type it creates, the property of the new record that takes the open
+ * record's id, its button's words, and where the new record is filed (layout-v2.md, section 7).
+ */
+const RELATED_CREATE_KEYS = ['type', 'field', 'label', 'labelKey', 'in'];
+/** Where a related list's new record is filed: the first folder a page provider finds. */
+const RELATED_CREATE_IN_KEYS = ['pageProvider'];
+/**
+ * A holds card: the record's retention and its legal holds, from the platform, and the actions of
+ * the package's `actions.json` that place and release a hold (layout-v2.md, section 7).
+ */
+const HOLDS_KEYS = ['place', 'release', 'pageSize'];
+/** A document type, as Nuxeo names one: a letter, then letters, digits, "_" or "-". */
+export const DOCUMENT_TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
 const COMMENTS_KEYS = ['pageSize'];
 /** A review takes no options yet: `"review": {}` turns it on (layout-v2.md, section 2). */
@@ -143,6 +166,9 @@ export const LAYOUT_V2_KEYS = {
   externalField: EXTERNAL_FIELD_KEYS,
   checklist: CHECKLIST_KEYS,
   checklistItem: CHECKLIST_ITEM_KEYS,
+  holds: HOLDS_KEYS,
+  relatedCreate: RELATED_CREATE_KEYS,
+  relatedCreateIn: RELATED_CREATE_IN_KEYS,
   check: CHECK_KEYS,
 } as const;
 
@@ -219,7 +245,7 @@ function layout(
       c.add(
         path,
         'structure',
-        'a card has one of "fields", "related", "timeline", "comments", "external" or "checklist"',
+        'a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds"',
       );
     if ('fields' in item) {
       const fields = item['fields'];
@@ -253,6 +279,10 @@ function layout(
       if (!view)
         c.add(join(path, 'checklist'), 'structure', 'a checklist belongs in view mode only');
       else checklist(c, item['checklist'], join(path, 'checklist'));
+    }
+    if ('holds' in item) {
+      if (!view) c.add(join(path, 'holds'), 'structure', 'holds belong in view mode only');
+      else holds(c, item['holds'], join(path, 'holds'));
     }
   };
 
@@ -474,6 +504,93 @@ function related(c: Checker, item: unknown, path: string): void {
   }
   c.unknownKeys(item, RELATED_KEYS, path);
   c.list(item, path, { openRecord: true });
+  if ('create' in item) relatedCreate(c, item['create'], join(path, 'create'));
+}
+
+/**
+ * A related list's "New <type>" (layout-v2.md, section 7): the create form of `type`, with the
+ * property `field` given the open record's id, read-only, filed in the open record's folder or in
+ * the first folder `in`'s page provider finds. The person's own permissions decide whether the
+ * server takes it, as for any create. `field` is a property the new record stores, never one of
+ * the repository's (`ecm:`) nor a task variable (`var:`).
+ */
+function relatedCreate(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'create is an object: { "type", "field" }');
+    return;
+  }
+  c.unknownKeys(item, RELATED_CREATE_KEYS, path);
+  c.label(item, path);
+  const type = item['type'];
+  if (typeof type !== 'string' || !DOCUMENT_TYPE.test(type))
+    c.add(
+      join(path, 'type'),
+      'structure',
+      'needs the document type it creates: a letter, then letters, digits, "_" or "-"',
+    );
+  const field = item['field'];
+  if (typeof field !== 'string' || !XPATH.test(field))
+    c.add(
+      join(path, 'field'),
+      'structure',
+      'needs the property "<prefix>:<name>" of the new record that holds the open record\'s id',
+    );
+  else if (field.startsWith('ecm:') || field.startsWith('var:'))
+    c.add(
+      join(path, 'field'),
+      'structure',
+      `${field} is not a property a new record stores: the reference is one of its own`,
+    );
+  if ('in' in item) {
+    const place = item['in'];
+    const at = join(path, 'in');
+    if (!isRecord(place)) c.add(at, 'structure', 'in is { "pageProvider" }');
+    else {
+      c.unknownKeys(place, RELATED_CREATE_IN_KEYS, at);
+      if (typeof place['pageProvider'] !== 'string' || !NAME.test(place['pageProvider']))
+        c.add(
+          join(at, 'pageProvider'),
+          'structure',
+          'needs the name of a page provider defined on the server, whose first record is the folder',
+        );
+    }
+  }
+}
+
+/**
+ * A holds card (layout-v2.md, section 7): the record's retention and legal holds, which the
+ * platform keeps, and the package's actions on a card that place and release a hold. Each is an
+ * action of the package's `actions.json` shown `on` a card, so that what runs is decision 3's,
+ * held to the server's allow-list; given the package's actions, one it does not have is refused.
+ * The card may name neither, and then only shows.
+ */
+function holds(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'holds is an object');
+    return;
+  }
+  c.unknownKeys(item, HOLDS_KEYS, path);
+  const known = c.registries.cardActions;
+  for (const key of ['place', 'release']) {
+    if (!(key in item)) continue;
+    const id = item[key];
+    const at = join(path, key);
+    if (typeof id !== 'string' || !ID.test(id))
+      c.add(
+        at,
+        'structure',
+        `${key} names an action of the package's actions.json: 1 to 64 letters, digits, ".", "_" or "-"`,
+      );
+    else if (known !== null && !known.has(id))
+      c.add(
+        at,
+        'unknown',
+        `the action "${id}" is not one of the package's actions.json that shows on a card ("on": ["card"])`,
+      );
+  }
+  if (typeof item['place'] === 'string' && item['place'] === item['release'])
+    c.add(join(path, 'release'), 'structure', 'place and release name two different actions');
+  pageSize(c, item, path);
 }
 
 /**

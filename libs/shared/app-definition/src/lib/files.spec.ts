@@ -424,6 +424,13 @@ describe('actions.json', () => {
     ).toEqual([]);
   });
 
+  it("passes an operation on a card, one record's, with its form and a field of the record", () => {
+    expect(show(validateActions(actions(withForm({ on: ['card'] })), { operations }))).toEqual([]);
+    expect(
+      show(validateActions(actions(withForm({ on: ['record', 'card'] })), { operations })),
+    ).toEqual([]);
+  });
+
   const rows: readonly Row[] = [
     {
       what: 'an enabled rule nobody registered',
@@ -595,17 +602,24 @@ describe('actions.json', () => {
     {
       what: 'no place to show',
       input: actions(approve({ on: [] })),
-      found: ['actions[0].on: on lists where it shows: "record", "row" or "bulk" [structure]'],
+      found: [
+        'actions[0].on: on lists where it shows: "record", "row", "card" or "bulk" [structure]',
+      ],
     },
     {
       what: 'a place there is not',
       input: actions(approve({ on: ['toolbar'] })),
-      found: ['actions[0].on[0]: "toolbar" is not "record", "row" or "bulk" [structure]'],
+      found: ['actions[0].on[0]: "toolbar" is not "record", "row", "card" or "bulk" [structure]'],
     },
     {
       what: 'a place twice',
       input: actions(approve({ on: ['row', 'row'] })),
       found: ['actions[0].on[1]: "row" is listed twice [structure]'],
+    },
+    {
+      what: 'a lifecycle button on a card, which offers what runs an operation',
+      input: actions(approve({ on: ['card'] })),
+      found: ['actions[0].on: a card offers an action that runs an operation [structure]'],
     },
     {
       what: 'a confirmation that is not a message',

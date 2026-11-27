@@ -327,6 +327,58 @@ describe('DocumentLayoutFormComponent, with a version 2 file', () => {
     });
   });
 
+  it("shows a value its host fixes read-only, by the host's text, which rules read and nothing sends", async () => {
+    // A related list's New: the claim refers to the member whose page it was created from.
+    const create = {
+      version: 2,
+      cards: [
+        {
+          id: 'claim',
+          label: 'Claim',
+          fields: [
+            { field: 'claim:member', widget: 'document-link', required: true },
+            'claim:number',
+            {
+              field: 'claim:notes',
+              label: 'Notes',
+              required: {
+                type: 'app.rules.fieldIn',
+                parameters: [{ field: 'claim:member' }, MEMBER],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    await render(
+      {
+        mode: 'create',
+        type: 'Claim',
+        parentPath: '/ws',
+        fixed: { 'claim:member': { value: MEMBER, text: 'Wei Chen' } },
+      },
+      create,
+    );
+    expect(input$('claim:member')).toBeNull();
+    const shown = host().querySelector('[data-xpath="claim:member"]');
+    expect(shown?.textContent).toContain('Wei Chen');
+    expect(host().textContent).not.toContain(MEMBER);
+    // The rule reads the fixed value: the notes are required for this member.
+    expect(form.validate()).toBe(false);
+    await type('claim:notes', 'Raised from the member');
+    expect(form.validate()).toBe(true);
+    expect(form.changedProperties()).toEqual({ 'claim:notes': 'Raised from the member' });
+  });
+
+  it('fixes nothing in an edit form, where the record holds its own values', async () => {
+    await render({
+      mode: 'edit',
+      document: CLAIM,
+      fixed: { 'claim:number': { value: 'CLM-X', text: 'Fixed' } },
+    });
+    expect(input$('claim:number')?.value).toBe('CLM-1');
+  });
+
   it('keeps reading what was typed in a create form when its folder changes', async () => {
     await render({ mode: 'create', type: 'Claim', parentPath: '/ws' });
     await type('claim:billed', '1000');

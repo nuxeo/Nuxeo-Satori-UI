@@ -278,7 +278,8 @@ export function resolveRecordLayout(
       // A card of related records has no fields of its own: its columns are its rows' properties,
       // held to the rows' types when they are drawn. Nor has a timeline or comments, nor a card
       // from another system, whose fields are that system's, not the record's, nor a checklist,
-      // whose property was held to the type above.
+      // whose property was held to the type above, nor a holds card, which reads what the
+      // platform keeps of any record.
       .filter(
         (card) =>
           card.related !== null ||
@@ -286,6 +287,7 @@ export function resolveRecordLayout(
           card.comments !== null ||
           card.external !== null ||
           card.checklist !== null ||
+          card.holds !== null ||
           card.fields.length > 0,
       );
 
