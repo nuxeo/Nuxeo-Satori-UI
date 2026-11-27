@@ -22,6 +22,8 @@
     <module>nuxeo-agentic-documents</module>
     <!-- The e-signature step's server add-on, provider-neutral, with its own Marketplace package (decision B). -->
     <module>nuxeo-agentic-signature</module>
+    <!-- Capture and classification's server add-on, with its own Marketplace package (decision B). -->
+    <module>nuxeo-agentic-capture</module>
     <!-- Embedded panels' token exchange (decision F), an add-on of its own: a server that embeds no panel gets no endpoint. -->
     <module>nuxeo-agentic-embedded</module>
     <!-- The letters module's server add-on, on the platform's Template Rendering, with its own Marketplace package (decision B). -->

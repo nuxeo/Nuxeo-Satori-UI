@@ -74,6 +74,13 @@ provided as `'/nuxeo'` in `apps/nuxeo-ui/src/app/app.config.ts`. URL constructio
 | `AI.AuditSummarize` | Summarise a set of audit events        |
 | `AI.AuditNlFilter`  | Natural language filter over the audit |
 
+**A server-side caller, outside this client:** the capture add-on,
+[`nuxeo-agentic-capture`](../nuxeo-agentic-capture/README.md#the-ai-packages-provider), calls two
+operations it asks the AI package for, `AI.CaptureClassify` and `AI.CaptureExtract`, in the
+server's process, through the Automation service. Neither is in the AI package yet; the add-on's
+provider is off until a server turns it on, which is to be done only once the AI data terms are
+approved. The client's feature flag does not gate it: it is a server setting.
+
 ---
 
 ## Feature Flag System
@@ -150,7 +157,7 @@ If your local Nuxeo does not have the package, AI calls return 500 and the rest 
 application is unaffected. Verify with:
 
 ```bash
-curl -u Administrator:Administrator -X POST \
+curl --fail-with-body -u "$NUXEO_USER:$NUXEO_PASS" -X POST \
   -H "Content-Type: application/json" -d '{"params":{}}' \
   http://localhost:8080/nuxeo/api/v1/automation/AI.Insights
 ```

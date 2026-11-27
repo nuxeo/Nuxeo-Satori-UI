@@ -535,7 +535,7 @@ describe('nesting deeper than the validator reads', () => {
       actions: [{ id: 'a', label: 'A', transition: 'go', on: [nestedValue()] }],
     };
     expect(deepest(validateActions(actions))).toEqual([
-      '{…} is not "record", "row" or "bulk" [structure]',
+      '{…} is not "record", "row", "card" or "bulk" [structure]',
     ]);
   });
 

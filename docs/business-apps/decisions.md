@@ -298,6 +298,26 @@ way.
     requiring the module's, and the review would be switched on by a setting instead, off by
     default.
 
+- **B and 3, legal holds on the record page (27 November 2026).** Built against both
+  recommendations. B, "one add-on per domain module": a hold's guard beyond the platform's and its
+  release with a reason went into the records module's add-on,
+  [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md) 0.4.0, which the onboarding kit
+  0.2.0 now depends on, and nothing into `nuxeo-agentic-core`. The platform refuses to delete a
+  held record; the add-on refuses, too, its trash, a folder's holding one, and a change of its
+  files, for everyone, administrators included. 3, "through a per-deployment allow-list": layout
+  version 2's holds card offers Place and Release legal hold as actions of the kit's `actions.json`
+  on a new placement, `"on": ["card"]`, which the registry and `AgenticUi.RunAction` treat as one
+  record's, run through the deployment's allow-list with `ManageLegalHold`. Placing is the retention
+  module's own `Document.Hold`; releasing is the add-on's one Automation operation,
+  `Records.ReleaseLegalHold`, since the module's `Document.Unhold` takes no reason and the audit of
+  a release would carry none. Its security review is deferred, as every one is. What changes if a
+  decision goes another way:
+  - **3, no:** the card shows the retention and the holds, and offers nothing; the kit's
+    `actions.json` and its deployment allow-list go, a minor version below 1.0.0. The guard stays:
+    it is the server's, and runs no button.
+  - **B, one large add-on or core:** the guard and the operation move with the records bundle, as
+    the note below says of the rest of it.
+
 - **B, the e-signature step's server add-on (26 November 2026).** Built against the
   recommendation, "one add-on per domain module": the e-signature step is
   [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md), a Maven module beside
@@ -324,6 +344,30 @@ way.
     `/nuxeo/agentic-signature/`, with no sign-in, and run the listener on every document change;
     so the servlet would be switched on by a setting instead, off by default, and the facets would
     stay, inert until a type carries one.
+
+- **B, capture and classification's server add-on (27 November 2026).** Built against the
+  recommendation, "one add-on per domain module": capture is
+  [`nuxeo-agentic-capture`](../../nuxeo-agentic-capture/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which the
+  [P&C claims kit](../../business-apps/packages/pc-claims-demo/README.md) 0.2.0 depends on; nothing
+  of it went into `nuxeo-agentic-core`. A kit's item type carries the add-on's `CaptureItem` facet,
+  and a kit's profile names its inbox, the record type and the keys it is matched by: an item
+  uploaded into the inbox is read in the background, and filed on the one record its keys match
+  when its class and keys are at least the profile's threshold, or waits for a person who confirms,
+  corrects or rejects it. Through a provider interface, with a deterministic stand-in and a
+  provider that calls the AI package's `AI.*` operations, off until a server turns it on, which is
+  to be done only once the AI data terms are approved, the plan's phase 7 condition. The AI package's
+  two capture operations, and its Claude provider, are not built: they are the AI package's, and the
+  plan's "Needs". Decision 3 is not touched: the add-on registers no Automation operation, and a
+  person decides through the item's Edit form. Its security review is deferred until the app is
+  finished, as every security review is; it is installed nowhere. What changes if B goes another
+  way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and the kit's
+    `package.xml` depends on that package in place of `nuxeo-agentic-capture`. The component, facet,
+    schema and setting names do not change, so no kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then run the listeners on every document
+    created and changed; they stay inert until a type carries the facet, and the provider stays
+    unset, so nothing is read until a server names one.
 
 - **B, the letters module's server add-on (27 November 2026).** Built against the recommendation,
   "one add-on per domain module": letters are
@@ -405,6 +449,21 @@ way.
   - **A separate service the client calls itself:** the cache and the events move to the service,
     and the card reads the same `age` from it.
   - **If F passes the reader's identity on,** the reader joins the cache's key.
+
+- **D, the connectors add-on's outbound webhooks (27 November 2026).** Built against the same
+  recommendation: the add-on's version 0.2.0 sends a document's events, created, modified, a
+  lifecycle transition or a workflow task done, to a receiver each server names, with the fields
+  the server's configuration names and nothing else, signed in the change events' scheme, after
+  the transaction commits, through the work manager, retried, then kept as a dead letter an
+  administrator lists and sends again
+  ([the connectors README](../../nuxeo-agentic-connectors/README.md#outbound-webhooks)). The
+  deliveries are kept in the platform's key/value store and each outcome in its audit. What
+  changes if D goes another way:
+  - **A separate integration service, reached through Nuxeo:** the listener sends each delivery
+    to the service instead, signed the same way, and the service fans it out and retries; the
+    dead letters move to it.
+  - **A separate service the client calls itself:** no change: webhooks start on the server, from
+    the repository's events, whichever way the client reads.
 
 - **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
   "exchange in phase 7": a record page's panel inside another system's page,

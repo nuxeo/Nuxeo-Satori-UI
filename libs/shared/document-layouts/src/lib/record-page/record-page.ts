@@ -42,6 +42,7 @@ import {
   DocumentChangesService,
   NuxeoDocument,
   canWriteDocument,
+  docTypeLabel,
   renderTrustedHtml,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, filter, forkJoin, map, merge, of, switchMap } from 'rxjs';
@@ -90,11 +91,15 @@ import {
   sameIds,
   sameLookups,
 } from './record-lookups';
+import { RecordCreateComponent } from './record-create';
 import { RecordExternalComponent } from './record-external';
+import { RecordHoldsComponent } from './record-holds';
 import {
   type RecordBannerTone,
   type RecordCommentsEntry,
+  type RecordCreateEntry,
   type RecordExternalEntry,
+  type RecordHoldsEntry,
   type RecordListEntry,
   type RecordPropertyField,
   type RecordTimelineEntry,
@@ -175,6 +180,15 @@ export interface RecordRelatedShown {
   readonly label: string;
   /** Where it is written, for the console. */
   readonly source: string;
+  /** Its New, with the button's words translated; `null` when the file offers none. */
+  readonly create: { readonly entry: RecordCreateEntry; readonly label: string } | null;
+}
+
+/** A holds card, as the page hands it to `lib-record-holds`. */
+export interface RecordHoldsShown {
+  readonly holds: RecordHoldsEntry;
+  /** The list of holds' name for assistive technology: the card's heading, or its id. */
+  readonly label: string;
 }
 
 /** A timeline's card, as the page hands it to the timeline. */
@@ -257,6 +271,8 @@ export interface RecordCardShown {
   readonly external: RecordExternalShown | null;
   /** For a checklist's card; `null` for any other card. */
   readonly checklist: RecordChecklistCardShown | null;
+  /** For a holds card; `null` for any other card. */
+  readonly holds: RecordHoldsShown | null;
 }
 
 export interface RecordPageShown {
@@ -363,7 +379,9 @@ function usableShow(linked: LinkedProperty | null | undefined): linked is Linked
     NxsCommentsComponent,
     NxsIconComponent,
     NxsSpinnerComponent,
+    RecordCreateComponent,
     RecordExternalComponent,
+    RecordHoldsComponent,
     RecordListComponent,
     RecordPictureReviewComponent,
     RecordPictureViewsComponent,
@@ -656,6 +674,7 @@ export class RecordPageComponent {
             related: card.related
               ? this.showRelated(card, card.related, heading, layout, document, passes)
               : null,
+            holds: card.holds ? { holds: card.holds, label: heading ?? humanize(card.id) } : null,
             timeline: card.timeline
               ? { timeline: card.timeline, label: heading ?? humanize(card.id) }
               : null,
@@ -695,7 +714,8 @@ export class RecordPageComponent {
             card.timeline !== null ||
             card.comments !== null ||
             (card.external?.external.fields.length ?? 0) > 0 ||
-            card.checklist !== null,
+            card.checklist !== null ||
+            card.holds !== null,
         );
     if (layout.tabs) {
       const tabs = layout.tabs
@@ -876,6 +896,16 @@ export class RecordPageComponent {
       parameters: 'values' in read ? read.values : null,
       label: heading ?? humanize(card.id),
       source,
+      create: card.create
+        ? {
+            entry: card.create,
+            label:
+              this.text(card.create.label) ??
+              this.translate.instant('document-layouts.create.new', {
+                type: docTypeLabel(card.create.type, (key) => this.translate.instant(key)),
+              }),
+          }
+        : null,
     };
   }
 

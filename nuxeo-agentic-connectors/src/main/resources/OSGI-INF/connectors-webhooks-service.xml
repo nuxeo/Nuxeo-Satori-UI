@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.connectors.webhooks" version="1.0">
+
+  <documentation>
+    Outbound webhooks: a document event, on a document of a webhook's types, sent to the receiver the
+    server names, signed, once its transaction has committed, in the background.
+
+    The server's configuration contributes a webhook here, in nxserver/config/: which events, on which
+    types, with which of the document's properties. What each server sets, never a contribution:
+    the receiver's address, nuxeo.agentic.webhooks.(the webhook's id).address, https only unless
+    nuxeo.agentic.webhooks.(id).http.allowed is true; the secret each delivery is signed with,
+    nuxeo.agentic.webhooks.(id).secret, at least 32 characters; and whether the address may be a
+    private or loopback one, nuxeo.agentic.webhooks.(id).private.allowed. Without the address or the
+    secret, the webhook sends nothing and keeps nothing.
+
+    A delivery is signed as the change events Nuxeo takes are: X-Nuxeo-Connector-Timestamp, -Nonce
+    and -Signature, sha256= and the HMAC-SHA256 of the webhook's id, the timestamp and the nonce, each
+    followed by a line feed, then the body. It is retried with a growing wait, then kept as a dead
+    letter, which only an administrator lists (Webhook.Deliveries) and sends again (Webhook.Resend).
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.connectors.WebhookComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.connectors.WebhookService" />
+  </service>
+
+  <extension-point name="webhooks">
+    <documentation>
+      One webhook per element. Only id, at least one event and at least one type are required. The
+      events are created, modified, transitioned (a lifecycle transition) and taskCompleted (a
+      workflow task done on the document). A field names a document property, prefix:name, or
+      ecm:currentLifeCycleState; file:content and files:files are refused.
+
+      <code>
+        <webhook id="payers.claimUpdates">
+          <event>created</event>
+          <event>modified</event>
+          <event>transitioned</event>
+          <event>taskCompleted</event>
+          <type>Claim</type>
+          <field name="claimNumber" xpath="claim:number" />
+          <field name="state" xpath="ecm:currentLifeCycleState" />
+          <maxAttempts>6</maxAttempts>
+          <connectTimeout>2000</connectTimeout>
+          <timeout>10000</timeout>
+        </webhook>
+      </code>
+
+      The payload is the delivery's id, the event, the document's id and type, and these fields, each
+      under its name, and nothing else; a value that is not text, a number, a boolean, a date or a list
+      of those is sent as null. maxAttempts is 1 to 10, 6 by default. The timeouts are in milliseconds,
+      up to 10000 to connect and 30000 for the whole attempt. A webhook that fails a check is not
+      registered, and the log says why. A later contribution with the same id replaces it whole, and
+      enabled="false" removes it.
+    </documentation>
+    <object class="org.nuxeo.agentic.connectors.WebhookDescriptor" />
+  </extension-point>
+
+  <!-- The events, once their transaction has committed: a rolled-back transaction sends nothing. -->
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticWebhooks" async="true" postCommit="true"
+      class="org.nuxeo.agentic.connectors.WebhookListener">
+      <event>documentCreated</event>
+      <event>documentModified</event>
+      <event>lifecycle_transition_event</event>
+      <event>workflowTaskCompleted</event>
+    </listener>
+  </extension>
+
+  <!-- The attempts, in a queue of their own, so that a slow receiver holds two threads at most. -->
+  <extension target="org.nuxeo.ecm.core.work.service" point="queues">
+    <queue id="agenticWebhooks">
+      <name>Outbound webhook deliveries</name>
+      <maxThreads>2</maxThreads>
+      <category>agenticWebhooks</category>
+    </queue>
+  </extension>
+
+</component>

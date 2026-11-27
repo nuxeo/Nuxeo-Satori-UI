@@ -16,6 +16,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsMetadataEditorComponent,
   NxsSpinnerComponent,
+  type NxsEditorSection,
   type NxsEditorValues,
   type NxsHeadingLevel,
 } from '@nuxeo/satori-platform/components';
@@ -88,6 +89,18 @@ function variableValues(task: NuxeoTask | null): Record<string, unknown> {
 }
 
 const NO_VALUES: NxsEditorValues = {};
+
+/**
+ * A value a create form's host fixes, as a related list's New gives the new record the open
+ * record's id: shown read-only, as `text`, and never edited. The host sends it with the rest.
+ */
+export interface FixedFormValue {
+  readonly value: unknown;
+  /** What the form shows for it, already in the reader's words: the linked record's title. */
+  readonly text: string;
+}
+
+const NO_FIXED: Readonly<Record<string, FixedFormValue>> = {};
 const NO_ERRORS: Readonly<Record<string, string>> = {};
 const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
 
@@ -155,6 +168,12 @@ export class DocumentLayoutFormComponent {
   readonly type = input<string | null>(null);
   /** The folder a new document is created in. */
   readonly parentPath = input<string | null>(null);
+  /**
+   * A create form's values its host fixes, by `<prefix>:<name>`: each starts the form with its
+   * value, and its field, wherever the layout shows it, is read-only with its `text`. The host
+   * sends them; `changedProperties()` does not, since nothing was entered.
+   */
+  readonly fixed = input<Readonly<Record<string, FixedFormValue>>>(NO_FIXED);
   /** While saving, or in the layout designer's preview: every input is read-only. */
   readonly disabled = input(false);
   /**
@@ -423,14 +442,36 @@ export class DocumentLayoutFormComponent {
     () => {
       this.translations();
       const view = this.view();
-      if (view) return view.sections;
       const layout = this.layout();
-      return layout && !isVersion2(layout)
-        ? toEditorSections(layout, (label) => layoutLabelText(this.translate, label))
-        : [];
+      const sections = view
+        ? view.sections
+        : layout && !isVersion2(layout)
+          ? toEditorSections(layout, (label) => layoutLabelText(this.translate, label))
+          : [];
+      return this.withFixed(sections);
     },
     { equal: sameJson },
   );
+
+  /** The sections with each field the host fixes read-only, showing the host's text for it. */
+  private withFixed(sections: readonly NxsEditorSection[]): readonly NxsEditorSection[] {
+    const fixed = this.mode() === 'create' ? this.fixed() : NO_FIXED;
+    if (Object.keys(fixed).length === 0) return sections;
+    return sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((field) => {
+        const value = Object.hasOwn(fixed, field.xpath) ? fixed[field.xpath] : undefined;
+        return value
+          ? {
+              ...field,
+              definition: { ...field.definition, required: undefined },
+              readOnly: true,
+              readOnlyText: value.text,
+            }
+          : field;
+      }),
+    }));
+  }
 
   protected readonly display = computed(() => {
     const layout = this.layout();
@@ -439,9 +480,19 @@ export class DocumentLayoutFormComponent {
   });
 
   /** The failed checks of a version 2 file, by field. */
-  protected readonly fieldErrors = computed(() => this.view()?.errors ?? NO_ERRORS, {
-    equal: sameJson,
-  });
+  protected readonly fieldErrors = computed(
+    () => {
+      const errors = this.view()?.errors ?? NO_ERRORS;
+      const fixed = this.mode() === 'create' ? this.fixed() : NO_FIXED;
+      // A fixed value is the host's, and nothing the person can correct.
+      return Object.keys(fixed).some((xpath) => Object.hasOwn(errors, xpath))
+        ? Object.fromEntries(
+            Object.entries(errors).filter(([xpath]) => !Object.hasOwn(fixed, xpath)),
+          )
+        : errors;
+    },
+    { equal: sameJson },
+  );
 
   /** A version 2 file draws only what it lists; any other layout comes after the Dublin Core fields. */
   protected readonly dublinCore = computed(() => {
@@ -468,7 +519,14 @@ export class DocumentLayoutFormComponent {
   /** The document's properties; in a task form, the task's variables too, as `var:<name>`. */
   protected readonly values = computed<NxsEditorValues>(() => {
     const mode = this.mode();
-    if (mode === 'create') return NO_VALUES;
+    if (mode === 'create') {
+      const fixed = Object.entries(this.fixed());
+      return fixed.length === 0
+        ? NO_VALUES
+        : (Object.fromEntries(
+            fixed.map(([xpath, { value }]) => [xpath, value]),
+          ) as NxsEditorValues);
+    }
     const properties = this.document()?.properties ?? NO_VALUES;
     return mode === 'task' ? { ...properties, ...this.taskValues() } : properties;
   });

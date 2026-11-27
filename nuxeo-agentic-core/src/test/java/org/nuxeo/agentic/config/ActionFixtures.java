@@ -119,6 +119,15 @@ final class ActionFixtures {
         return new AppRegistryEndpoint(snapshot(actions), allowList);
     }
 
+    /** The registry of another app, {@code app}, for {@code group}, with its {@code actions.json}. */
+    static AppRegistryEndpoint registry(String app, String group, String actions, AllowList allowList) {
+        ContributionRegistry registry = new ContributionRegistry();
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("actions.json", actions);
+        registry.add(app(app, app, appJson(app, group), files));
+        return new AppRegistryEndpoint(ConfigSnapshot.build(registry.resolve()), allowList);
+    }
+
     static NuxeoPrincipal principal(String name, String... groups) {
         return (NuxeoPrincipal) Proxy.newProxyInstance(ActionFixtures.class.getClassLoader(),
                 new Class<?>[] { NuxeoPrincipal.class }, (proxy, method, args) -> switch (method.getName()) {

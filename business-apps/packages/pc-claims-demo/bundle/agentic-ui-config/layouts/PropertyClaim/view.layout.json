@@ -152,6 +152,29 @@
       "fields": [{ "field": "files:files", "widget": "file-list" }]
     },
     {
+      "id": "mail",
+      "labelKey": "pc-claims.card.propertyClaim.mail",
+      "span": 2,
+      "related": {
+        "pageProvider": "pc_claim_mail",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          { "field": "dc:title", "labelKey": "pc-claims.field.mailTitle" },
+          "capt:class",
+          { "field": "capt:confidence", "widget": "percent", "parameters": { "scale": 1 } },
+          {
+            "field": "capt:outcome",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": { "automatic": "info", "confirmed": "positive", "corrected": "warning" }
+            }
+          },
+          "capt:decidedBy",
+          { "field": "capt:decidedAt", "widget": "relative-date" }
+        ]
+      }
+    },
+    {
       "id": "denial",
       "labelKey": "pc-claims.card.propertyClaim.denial",
       "span": 2,

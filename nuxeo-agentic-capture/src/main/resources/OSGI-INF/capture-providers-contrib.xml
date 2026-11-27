@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.capture.providers" version="1.0">
+
+  <documentation>
+    The two providers. standin, for development and demonstration servers: deterministic, it reads
+    the file's own text and nothing else, and calls nothing. ai, the AI package's: it calls the
+    package's AI.* operations in the server's process, and is unused until the server both names it
+    in nuxeo.agentic.capture.provider and sets nuxeo.agentic.capture.ai.enabled to true, which is
+    to be done only once the AI data terms are approved (README, "Before the AI provider is
+    switched on").
+  </documentation>
+
+  <require>org.nuxeo.agentic.capture</require>
+
+  <extension target="org.nuxeo.agentic.capture" point="providers">
+    <provider id="standin" class="org.nuxeo.agentic.capture.standin.StandInProvider" />
+    <provider id="ai" class="org.nuxeo.agentic.capture.ai.AiPackageProvider" />
+  </extension>
+
+</component>

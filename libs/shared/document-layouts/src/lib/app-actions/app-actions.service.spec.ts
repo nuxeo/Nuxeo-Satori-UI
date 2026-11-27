@@ -291,4 +291,91 @@ describe('AppActionsService', () => {
     // Its own question has no text in this catalogue, so the platform's names the action.
     expect(opened[0].data.question).toBe('document-layouts.action.confirm');
   });
+
+  describe('an action on a card', () => {
+    // A holds card's actions: placing a hold, for records managers, with a reason.
+    const HOLDS = {
+      version: 2,
+      actions: [
+        {
+          id: 'kit.placeHold',
+          label: 'Place legal hold',
+          icon: 'gavel',
+          on: ['card'],
+          visibleWhen: { type: 'app.rules.isType', parameters: ['Claim'] },
+          enabledWhen: { type: 'app.rules.inGroup', parameters: ['records-managers'] },
+          operation: 'Document.Hold',
+          parameters: { description: { field: 'var:reason' } },
+          form: [{ field: 'var:reason', label: 'Reason', widget: 'long-text', required: true }],
+        },
+      ],
+    };
+    const manager = (document: NuxeoDocument): ExtensionRuleContext => ({
+      ...adjuster(document),
+      user: { username: 'robin.lee', isAdministrator: false, groups: ['records-managers'] },
+    });
+
+    it('is in no slot, and is offered to the card that names it, with its words and its rules', () => {
+      expect(service().cardAction('kit.placeHold', manager(claim('inReview')))).toBeNull();
+      expect(service().register('onboarding', HOLDS)).toEqual(['kit.placeHold']);
+      expect(slots().registeredIds(EXTENSION_SLOTS.toolbar)).toEqual([]);
+      expect(slots().registeredIds(EXTENSION_SLOTS.rowActions)).toEqual([]);
+      expect(service().cardAction('kit.placeHold', manager(claim('inReview')))).toEqual({
+        id: 'kit.placeHold',
+        label: 'Place legal hold',
+        icon: 'gavel',
+        enabled: true,
+      });
+      // Its enabled rule does not pass for an adjuster, and its visible rule not on a member.
+      expect(service().cardAction('kit.placeHold', adjuster(claim('inReview')))?.enabled).toBe(
+        false,
+      );
+      expect(
+        service().cardAction('kit.placeHold', manager({ ...claim('inReview'), type: 'Member' })),
+      ).toBeNull();
+      expect(service().cardAction('kit.other', manager(claim('inReview')))).toBeNull();
+    });
+
+    it('runs as a toolbar button does: its dialog and form, then the server with what was entered', async () => {
+      service().register('onboarding', HOLDS);
+      service().runOnCard('kit.placeHold', manager(claim('inReview')));
+      expect(opened).toHaveLength(1);
+      expect(opened[0].data.title).toBe('Place legal hold');
+      expect(opened[0].data.form).not.toBeNull();
+      const { outcome } = await run({ reason: 'Chargeback dispute' }, claim('inReview'));
+      const sent = http.expectOne(RUN_URL);
+      expect(sent.request.body).toEqual({
+        input: 'doc:c1',
+        params: {
+          app: 'onboarding',
+          action: 'kit.placeHold',
+          values: JSON.stringify({ reason: 'Chargeback dispute' }),
+        },
+        context: {},
+      });
+      sent.flush({ status: 'done', action: 'kit.placeHold' });
+      expect(await outcome).toEqual({ kind: 'done' });
+      // Nothing the app registry did not serve is run.
+      service().runOnCard('kit.releaseHold', manager(claim('inReview')));
+      expect(opened).toHaveLength(1);
+    });
+
+    it("says the server's reason for a conflict, such as a hold released meanwhile", async () => {
+      service().register('onboarding', HOLDS);
+      service().runOnCard('kit.placeHold', manager(claim('inReview')));
+      const { outcome } = await run({ reason: 'Chargeback dispute' }, claim('inReview'));
+      http.expectOne(RUN_URL).flush(
+        {
+          'entity-type': 'exception',
+          status: 409,
+          message: 'This record is under no legal hold.',
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+      expect(await outcome).toEqual({
+        kind: 'failed',
+        message: 'This record is under no legal hold.',
+      });
+    });
+  });
 });

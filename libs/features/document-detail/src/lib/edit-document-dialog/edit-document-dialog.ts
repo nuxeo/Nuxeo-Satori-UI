@@ -16,6 +16,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import {
   DocumentLayoutFormComponent,
+  readServerRefusal,
   readValidationFailure,
 } from '@agentic-ui/shared/document-layouts';
 import { BrowseService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -102,6 +103,10 @@ export class EditDocumentDialogComponent {
       return unplaced.length ? unplaced.join(' ') : null;
     }
     const forbidden = failure instanceof HttpErrorResponse && failure.status === 403;
+    // The server's own reason when it refused the save for another reason than a permission, such
+    // as a legal hold's on the record's files (409).
+    const refused = forbidden ? null : readServerRefusal(failure);
+    if (refused) return refused;
     return this.translate.instant(
       forbidden
         ? 'document-detail.edit-document-dialog.save-forbidden'

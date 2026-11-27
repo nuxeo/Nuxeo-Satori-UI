@@ -1,0 +1,124 @@
+@let current = retention();
+<dl class="record-holds__facts">
+  <div class="record-holds__fact" data-fact="retention">
+    <dt class="record-holds__label">{{ 'document-layouts.holds.retention' | translate }}</dt>
+    <dd class="record-holds__value">{{ retentionText() }}</dd>
+  </div>
+  @if (rule(); as rule) {
+    <div class="record-holds__fact" data-fact="rule">
+      <dt class="record-holds__label">{{ 'document-layouts.holds.rule' | translate }}</dt>
+      <dd class="record-holds__value">
+        @if (rule.url !== null) {
+          <a class="record-holds__link" [routerLink]="rule.url">{{ rule.text }}</a>
+        } @else {
+          <span class="record-holds__unavailable">{{ rule.text }}</span>
+        }
+      </dd>
+    </div>
+  }
+  <div class="record-holds__fact" data-fact="hold" [attr.data-held]="current.held">
+    <dt class="record-holds__label">{{ 'document-layouts.holds.hold' | translate }}</dt>
+    <dd class="record-holds__value">
+      @if (current.held) {
+        <span class="record-holds__held">
+          <nxs-icon name="gavel" />
+          {{ 'document-layouts.holds.held' | translate }}
+        </span>
+      } @else {
+        {{ 'document-layouts.holds.not-held' | translate }}
+      }
+    </dd>
+  </div>
+</dl>
+
+@if (action(); as offered) {
+  <!-- Offered by the file, served by the app registry under the server's allow-list, to someone
+       the record's permissions let manage its hold. The server decides whether it runs. -->
+  <div class="record-holds__actions">
+    <nxs-button
+      appearance="outlined"
+      [icon]="offered.icon ?? (current.held ? 'lock_open' : 'gavel')"
+      [disabled]="!offered.enabled"
+      [attr.data-action]="offered.id"
+      (press)="run(offered)"
+      >{{ offered.label }}</nxs-button
+    >
+  </div>
+}
+
+<section class="record-holds__history" [attr.aria-labelledby]="'record-holds-history-' + cardId()">
+  @switch (headingLevel()) {
+    @case (5) {
+      <h5 class="record-holds__subheading" [id]="'record-holds-history-' + cardId()">
+        {{ 'document-layouts.holds.history' | translate }}
+      </h5>
+    }
+    @case (6) {
+      <h6 class="record-holds__subheading" [id]="'record-holds-history-' + cardId()">
+        {{ 'document-layouts.holds.history' | translate }}
+      </h6>
+    }
+    @default {
+      <h4 class="record-holds__subheading" [id]="'record-holds-history-' + cardId()">
+        {{ 'document-layouts.holds.history' | translate }}
+      </h4>
+    }
+  }
+  @let state = history();
+  <div class="record-holds__body" [attr.aria-busy]="state.status === 'loading'">
+    @switch (state.status) {
+      @case ('failed') {
+        <nxs-error-state
+          [status]="state.error"
+          [heading]="'document-layouts.holds.failed' | translate"
+          [headingLevel]="stateHeadingLevel()"
+          [retryable]="state.error === 500"
+          (retry)="retry()"
+        />
+      }
+      @case ('loaded') {
+        @if (entries().length === 0) {
+          <p class="record-holds__empty">{{ 'document-layouts.holds.empty' | translate }}</p>
+        } @else {
+          <ol class="record-holds__entries" [attr.aria-label]="label()">
+            @for (entry of entries(); track entry.id) {
+              <li
+                class="record-holds__entry"
+                [attr.data-entry-id]="entry.id"
+                [attr.data-placed]="entry.placed"
+              >
+                <p class="record-holds__what">
+                  {{
+                    (entry.placed
+                      ? 'document-layouts.holds.placed'
+                      : 'document-layouts.holds.released'
+                    ) | translate
+                  }}
+                </p>
+                <p class="record-holds__meta">
+                  <span class="record-holds__who">{{ entry.who }}</span>
+                  <span class="cdk-visually-hidden">, </span>
+                  <time class="record-holds__when" [attr.datetime]="entry.datetime">{{
+                    entry.when
+                  }}</time>
+                </p>
+                @if (entry.reason) {
+                  <p class="record-holds__reason">
+                    <span class="cdk-visually-hidden"
+                      >{{ 'document-layouts.holds.reason' | translate }}: </span
+                    >{{ entry.reason }}
+                  </p>
+                }
+              </li>
+            }
+          </ol>
+        }
+      }
+      @default {
+        <div class="record-holds__loading">
+          <nxs-spinner diameter="24" [label]="'document-layouts.holds.loading' | translate" />
+        </div>
+      }
+    }
+  </div>
+</section>

@@ -329,7 +329,13 @@ final class CallbackEndpoint {
         if (record != null) {
             String xpath = text(request, FILE);
             String filedAt = null;
-            if (isTheFileSent(record, xpath, text(request, Signatures.SENT_DIGEST), provider.maxBytes())) {
+            if (system.hasLegalHold(record.getRef())) {
+                // Under a legal hold, the record keeps its files as they are: the records add-on refuses
+                // a change to them, whoever asks, and a refusal here would leave the callback retried for
+                // ever. The signed file is kept on the request, and the record says it is signed.
+                log.warn("E-signature: the record {} is under a legal hold; the signed file of request {} is kept "
+                        + "on the request only", recordId, request.getId());
+            } else if (isTheFileSent(record, xpath, text(request, Signatures.SENT_DIGEST), provider.maxBytes())) {
                 // In its place: the record's file is still the one sent.
                 record.setPropertyValue(xpath, (Serializable) signedFile);
                 filedAt = xpath;

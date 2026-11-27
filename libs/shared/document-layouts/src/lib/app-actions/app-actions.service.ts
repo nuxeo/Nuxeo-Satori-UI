@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
 import { NxsToastService } from '@nuxeo/satori-platform/components';
@@ -19,6 +19,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, TimeoutError, catchError, map, of, switchMap, timeout } from 'rxjs';
 
+import { readServerRefusal } from '../validation-failure';
 import { appActionForm } from './app-action-form';
 import {
   AppActionDialogComponent,
@@ -58,6 +59,16 @@ function warn(message: string): void {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** One of the app's actions shown on a card, as the card offers it for one record. */
+export interface AppCardAction {
+  readonly id: string;
+  /** Its words, translated: its literal, else its key's text, else its id. */
+  readonly label: string;
+  readonly icon: string | null;
+  /** Whether its `enabledWhen` passes for the record: shown, and not offered, while it does not. */
+  readonly enabled: boolean;
+}
+
 /**
  * An app's operation buttons (docs/business-apps/app-definition-v2.md, section 5): each action of its
  * `actions.json` that runs an operation on one record, offered on the record page's toolbar and on
@@ -78,6 +89,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *   serves it, checks its allow-list and the person's permissions again, and refuses anything else.
  * - **Afterwards,** unless the action says `"refresh": false`, every list reads its page again, and
  *   the document page the record again (`DocumentChangesService`).
+ * - **An action on `card`** is in no slot: the card of the record page that names it offers it
+ *   ({@link cardAction}), as a holds card offers the actions that place and release a hold, and
+ *   runs it the same way ({@link runOnCard}).
  *
  * Hiding or disabling a button is not a security control. The server's allow-list, Nuxeo's
  * permissions and the lifecycle decide what runs.
@@ -94,6 +108,13 @@ export class AppActionsService {
   private readonly changes = inject(DocumentChangesService);
   /** As the platform's row actions do: the environment's, when a host provides one. */
   private readonly toast = inject(NxsToastService, { optional: true }) ?? new NxsToastService();
+  /** The actions the app registry served on `card`, by id, with the app whose they are. */
+  private readonly cards = new Map<
+    string,
+    { readonly app: string; readonly action: AppActionDefinition }
+  >();
+  /** Bumped when actions are registered, so that a card drawn before then offers them once they are. */
+  private readonly registrations = signal(0);
 
   /**
    * Registers the actions of `content`, the `actions.json` of the app `app`, and answers their ids.
@@ -132,7 +153,9 @@ export class AppActionsService {
         this.extensions.register(EXTENSION_SLOTS.toolbar, [descriptor]);
       if (action.placements.includes('row'))
         this.extensions.register(EXTENSION_SLOTS.rowActions, [descriptor]);
+      if (action.placements.includes('card')) this.cards.set(action.id, { app, action });
     }
+    this.registrations.update((count) => count + 1);
     this.handlers.registerPackaged(
       Object.fromEntries(
         read.actions.map((action) => [
@@ -142,6 +165,34 @@ export class AppActionsService {
       ),
     );
     return read.actions.map((action) => action.id);
+  }
+
+  /**
+   * The app's action on a card, by id, as the card offers it for the record in `context`: `null`
+   * when the app registry served no such action on `card`, or its `visibleWhen` does not pass for
+   * the record. Not a security control: the server's allow-list and the person's permissions
+   * decide whether it runs.
+   */
+  cardAction(id: string, context: ExtensionRuleContext): AppCardAction | null {
+    this.registrations();
+    const entry = this.cards.get(id);
+    if (!entry || !this.extensions.evaluateRule(entry.action.visibleWhen, context)) return null;
+    const { action } = entry;
+    return {
+      id,
+      label: this.text({ label: action.label, labelKey: action.labelKey }) ?? action.id,
+      icon: action.icon,
+      enabled: this.extensions.evaluateRule(action.enabledWhen, context),
+    };
+  }
+
+  /**
+   * Runs the app's action on a card for the record in `context`, as a toolbar's runs: its rules
+   * again, its dialog, the record read again, then the server. Nothing when none was served.
+   */
+  runOnCard(id: string, context: ExtensionRuleContext): void {
+    const entry = this.cards.get(id);
+    if (entry) this.start(entry.app, entry.action, context);
   }
 
   /** Whether the action's own rules pass, as `actions.json` writes them, for this context. */
@@ -242,6 +293,9 @@ export class AppActionsService {
                 } satisfies AppActionOutcome);
               }
               warn(`"${action.id}" not run: HTTP ${status}`);
+              // A conflict is the server's to explain, as a legal hold released meanwhile is.
+              const reason = status === 409 ? readServerRefusal(error) : null;
+              if (reason) return of({ kind: 'failed', message: reason } satisfies AppActionOutcome);
               return of(this.failed(FAILURE_KEYS[status] ?? 'document-layouts.action.failed'));
             }),
           );

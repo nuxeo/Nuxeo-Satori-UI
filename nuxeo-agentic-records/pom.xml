@@ -28,7 +28,7 @@
       nuxeo-agentic-ui. The manifest's Bundle-Version repeats it, and BundleTest refuses a build
       where the two differ.
     -->
-    <records.package.version>0.3.0</records.package.version>
+    <records.package.version>0.4.0</records.package.version>
 
     <!--
       The retention module the add-on reads, as Nuxeo publishes it for LTS 2025: its jar is on the
@@ -127,6 +127,15 @@
     <dependency>
       <groupId>org.nuxeo.ecm.core</groupId>
       <artifactId>nuxeo-core-io</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      Automation, for the add-on's one operation, Records.ReleaseLegalHold, which an operation button
+      runs (plan decision 3): its annotations and, in the tests, its service. In the server's bundles.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-core</artifactId>
       <scope>provided</scope>
     </dependency>
 

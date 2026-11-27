@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!-- What a server's nxserver/config/ gives the webhooks, for the tests: one webhook on claims, with
+     the fields it names, a second on modifications only, whose address no test sets, and the default
+     lifecycle on the Claim type so that a transition can be followed. The addresses, the secrets and
+     the two switches are server properties each test sets: never in a contribution. -->
+<component name="org.nuxeo.agentic.connectors.test.webhooks">
+
+  <require>org.nuxeo.agentic.connectors.webhooks</require>
+  <require>org.nuxeo.agentic.connectors.test.contrib</require>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="Claim">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.agentic.connectors.webhooks" point="webhooks">
+    <webhook id="test.claimUpdates">
+      <event>created</event>
+      <event>modified</event>
+      <event>transitioned</event>
+      <event>taskCompleted</event>
+      <type>Claim</type>
+      <field name="claimNumber" xpath="claim:number" />
+      <field name="title" xpath="dc:title" />
+      <field name="subjects" xpath="dc:subjects" />
+      <field name="state" xpath="ecm:currentLifeCycleState" />
+      <field name="scan" xpath="claim:scan" />
+      <field name="adjuster" xpath="claim:adjuster" />
+      <maxAttempts>3</maxAttempts>
+      <connectTimeout>1000</connectTimeout>
+      <timeout>3000</timeout>
+    </webhook>
+    <webhook id="test.unconfigured">
+      <event>modified</event>
+      <type>Claim</type>
+      <field name="claimNumber" xpath="claim:number" />
+    </webhook>
+  </extension>
+
+</component>

@@ -75,7 +75,8 @@ class ConnectorXmlTest {
     @Test
     void everyComponentTheManifestNamesIsWellFormedXml() throws Exception {
         List<String> components = components();
-        assertEquals(List.of("OSGI-INF/connectors-service.xml", "OSGI-INF/connectors-operations-contrib.xml"),
+        assertEquals(List.of("OSGI-INF/connectors-service.xml", "OSGI-INF/connectors-operations-contrib.xml",
+                "OSGI-INF/connectors-webhooks-service.xml", "OSGI-INF/connectors-webhooks-operations-contrib.xml"),
                 components);
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
@@ -242,5 +243,93 @@ class ConnectorXmlTest {
             }
         }
         assertEquals(allowed, shown);
+    }
+
+    private static final Pattern WEBHOOKS = Pattern.compile(
+            "<extension target=\"org\\.nuxeo\\.agentic\\.connectors\\.webhooks\" point=\"webhooks\">.*?</extension>",
+            Pattern.DOTALL);
+
+    private static List<WebhookDescriptor> loadWebhooks(String xml) throws Exception {
+        XMap xmap = new XMap();
+        xmap.register(WebhookDescriptor.class);
+        List<WebhookDescriptor> loaded = new ArrayList<>();
+        for (Object each : xmap.loadAll(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))) {
+            loaded.add((WebhookDescriptor) each);
+        }
+        return loaded;
+    }
+
+    /**
+     * The webhooks' component: its service and extension point, its listener post-commit and
+     * asynchronous on exactly the four triggers' events, so that a transaction that rolls back sends
+     * nothing, and its work queue, the one its attempts are scheduled in.
+     */
+    @Test
+    void theWebhooksComponentDeclaresItsPointItsPostCommitListenerAndItsQueue() throws Exception {
+        String service = resource("OSGI-INF/connectors-webhooks-service.xml");
+        assertTrue(service.contains("<component name=\"org.nuxeo.agentic.connectors.webhooks\""));
+        assertTrue(service.contains("<implementation class=\"" + WebhookComponent.class.getName() + "\" />"));
+        assertTrue(service.contains("<provide interface=\"" + WebhookService.class.getName() + "\" />"));
+        assertTrue(service.contains("<extension-point name=\"" + WebhookComponent.XP_WEBHOOKS + "\">"));
+        assertTrue(service.contains("<object class=\"" + WebhookDescriptor.class.getName() + "\" />"));
+
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        org.w3c.dom.Document xml = factory.newDocumentBuilder()
+                                          .parse(new ByteArrayInputStream(service.getBytes(StandardCharsets.UTF_8)));
+        org.w3c.dom.NodeList listeners = xml.getElementsByTagName("listener");
+        assertEquals(1, listeners.getLength());
+        org.w3c.dom.Element listener = (org.w3c.dom.Element) listeners.item(0);
+        assertEquals(WebhookListener.class.getName(), listener.getAttribute("class"));
+        assertEquals("true", listener.getAttribute("postCommit"));
+        assertEquals("true", listener.getAttribute("async"));
+        List<String> events = new ArrayList<>();
+        org.w3c.dom.NodeList named = listener.getElementsByTagName("event");
+        for (int i = 0; i < named.getLength(); i++) {
+            events.add(named.item(i).getTextContent().trim());
+        }
+        assertEquals(java.util.Arrays.stream(Webhook.Trigger.values()).map(t -> t.event).toList(), events);
+        org.w3c.dom.Element queue = (org.w3c.dom.Element) xml.getElementsByTagName("queue").item(0);
+        assertEquals(WebhookWork.CATEGORY, queue.getAttribute("id"));
+        assertEquals(List.of(WebhookWork.CATEGORY), texts(xml, "category"));
+
+        String operations = resource("OSGI-INF/connectors-webhooks-operations-contrib.xml");
+        assertTrue(operations.contains("<operation class=\"" + ListWebhookDeliveriesOperation.class.getName() + "\" />"));
+        assertTrue(operations.contains("<operation class=\"" + ResendWebhookDeliveryOperation.class.getName() + "\" />"));
+        assertEquals("Webhook.Deliveries", ListWebhookDeliveriesOperation.class.getAnnotation(Operation.class).id());
+        assertEquals("Webhook.Resend", ResendWebhookDeliveryOperation.class.getAnnotation(Operation.class).id());
+    }
+
+    @Test
+    void theWebhooksDocumentedExampleIsAWebhookTheServerRegisters() throws Exception {
+        Matcher code = CODE.matcher(resource("OSGI-INF/connectors-webhooks-service.xml"));
+        assertTrue(code.find());
+        List<WebhookDescriptor> loaded = loadWebhooks(
+                "<extension target=\"org.nuxeo.agentic.connectors.webhooks\" point=\"webhooks\">" + code.group(1)
+                        + "</extension>");
+        assertEquals(1, loaded.size());
+        Webhook webhook = Webhook.of(loaded.get(0));
+        assertEquals("payers.claimUpdates", webhook.id());
+        assertEquals(4, webhook.triggers().size());
+    }
+
+    /** The demo's webhook, as a server's nxserver/config/ would hold it: registered, and no address in it. */
+    @Test
+    void theDemoWebhookIsOneTheServerRegisters() throws Exception {
+        Path demo = Path.of("demo", "payers-claim-webhook-config.xml");
+        String xml = Files.readString(demo);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        assertDoesNotThrow(() -> factory.newDocumentBuilder().parse(demo.toFile()));
+        assertTrue(xml.contains("<require>org.nuxeo.agentic.connectors.webhooks</require>"));
+        Matcher extension = WEBHOOKS.matcher(xml);
+        assertTrue(extension.find(), "no contribution to org.nuxeo.agentic.connectors.webhooks in " + demo);
+        List<WebhookDescriptor> loaded = loadWebhooks(extension.group());
+        assertEquals(1, loaded.size());
+        Webhook webhook = Webhook.of(loaded.get(0));
+        assertEquals("payers.claimUpdates", webhook.id());
+        assertEquals(List.of("Claim"), webhook.types());
+        assertFalse(xml.contains("http://") || xml.contains("https://"),
+                "the demo webhook's address is a server property, never in the contribution");
     }
 }

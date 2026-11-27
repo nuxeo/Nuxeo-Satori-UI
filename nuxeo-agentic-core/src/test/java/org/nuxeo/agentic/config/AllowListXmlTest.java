@@ -127,6 +127,53 @@ class AllowListXmlTest {
     }
 
     @Test
+    void theOnboardingKitServedWithItsDemoDeploymentOffersItsHoldsCardsTwoActions() throws Exception {
+        Path root = Path.of("..", "business-apps", "packages", "onboarding-demo");
+        String xml = Files.readString(root.resolve("deployment/onboarding-demo-operations-config.xml"));
+        Matcher extension = EXTENSION.matcher(xml);
+        assertTrue(extension.find(), "the onboarding kit's deployment contributes to no allow-list");
+        OperationAllowListComponent component = new OperationAllowListComponent();
+        load("<x>" + extension.group(1) + "</x>").forEach(d -> component.register(d, "deployment"));
+        AllowList allowList = component.getAllowList();
+        // The retention module's own operation to place a hold; the records add-on's to release one
+        // with a reason, which the module's Document.Unhold does not take.
+        assertEquals(Set.of("Document.Hold", "Records.ReleaseLegalHold"), allowList.operations().keySet());
+        for (String id : List.of("Document.Hold", "Records.ReleaseLegalHold")) {
+            AllowedOperation operation = allowList.get(id);
+            assertEquals("ManageLegalHold", operation.permission(), id);
+            assertEquals(Set.of("dispute-analysts"), operation.groups(), id);
+            assertEquals(Set.of("onboarding"), operation.apps(), id);
+        }
+        assertEquals(List.of("description"), List.copyOf(allowList.get("Document.Hold").parameters().keySet()));
+        assertEquals(List.of("reason"),
+                List.copyOf(allowList.get("Records.ReleaseLegalHold").parameters().keySet()));
+        assertTrue(xml.contains("<require>org.nuxeo.agentic.ui.operations</require>"));
+
+        String actions = Files.readString(root.resolve("bundle/agentic-ui-config/actions.json"));
+        AppRegistryEndpoint registry = ActionFixtures.registry("onboarding", "dispute-analysts", actions, allowList);
+        AppRegistryEndpoint.Viewer analyst = new AppRegistryEndpoint.Viewer("sana.whitlock",
+                Set.of("members", "dispute-analysts"), false);
+        com.fasterxml.jackson.databind.JsonNode served = ConfigSnapshot.JSON.readTree(
+                registry.respond("/apps/onboarding/actions.json", analyst, null).body());
+        List<String> ids = new ArrayList<>();
+        served.get("actions").forEach(action -> ids.add(action.get("id").asText()));
+        assertEquals(List.of("onboarding.dispute.placeHold", "onboarding.dispute.releaseHold"), ids);
+        RunnableAction place = registry.action("onboarding", "onboarding.dispute.placeHold", analyst);
+        assertEquals("Document.Hold", place.operation());
+        assertEquals(new RunnableAction.Input("reason"), place.parameters().get("description"));
+        assertTrue(place.runsOnOneRecord(), "an action on a card runs on the record it shows");
+        RunnableAction release = registry.action("onboarding", "onboarding.dispute.releaseHold", analyst);
+        assertEquals("Records.ReleaseLegalHold", release.operation());
+        assertEquals(new RunnableAction.Input("reason"), release.parameters().get("reason"));
+        // The kit contributes no allow-list of its own.
+        for (Path file : List.of(root.resolve("bundle/OSGI-INF/onboarding-demo-config.xml"),
+                root.resolve("bundle/OSGI-INF/onboarding-demo-model.xml"),
+                root.resolve("bundle/OSGI-INF/onboarding-demo-signature.xml"))) {
+            assertFalse(Files.readString(file).contains("org.nuxeo.agentic.ui.operations\" point"), file.toString());
+        }
+    }
+
+    @Test
     void theRunEndpointIsTheOperationTheContributionRegisters() throws Exception {
         assertEquals(RunAppActionOperation.ID, RunAppActionOperation.class.getAnnotation(Operation.class).id());
         String contribution = resource("OSGI-INF/agentic-ui-operations-contrib.xml");
