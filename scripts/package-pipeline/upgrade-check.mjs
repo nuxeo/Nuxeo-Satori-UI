@@ -1820,10 +1820,9 @@ export function platformSnapshot(platform) {
     version: platform.version,
     surface: [...platform.surface].sort(),
     sources: Object.fromEntries(
-      [...platform.sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([item, from]) => [
-        item,
-        [...from].sort(),
-      ]),
+      [...platform.sources]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([item, from]) => [item, [...from].sort()]),
     ),
     missing: [...platform.missing].sort(),
     catalogue: [...platform.catalogue].sort(),
@@ -1847,9 +1846,7 @@ export function platformFromSnapshot(snapshot, root) {
     root,
     version: snapshot.version,
     surface: new Set(snapshot.surface),
-    sources: new Map(
-      Object.entries(snapshot.sources).map(([item, from]) => [item, new Set(from)]),
-    ),
+    sources: new Map(Object.entries(snapshot.sources).map(([item, from]) => [item, new Set(from)])),
     missing: [...snapshot.missing],
     catalogue: new Set(snapshot.catalogue),
   };

@@ -1,0 +1,77 @@
+{
+  "name": "@nuxeo/satori-cli",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/satori-cli/src",
+  "projectType": "library",
+  "tags": ["type:tool"],
+  "$tagsComment": "A Node tool, and nothing may import it: no depConstraint in eslint.config.mjs lists `type:tool`. Its sources are .mjs, which the module-boundary rule does not read; what they import is the package pipeline in scripts/package-pipeline/, the helpers beside it in scripts/, and libs/shared/app-definition, the app definition's contract, which a tool may use. build.mjs bundles all of it with esbuild into dist/tools/satori-cli/, which runs with Node alone and has no dependency: the build refuses one from node_modules.",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "$inputsComment": "Everything the bundle is made from, which nothing in the project graph links to this project: the pipeline's modules and helpers, the app definition's library and its schemas, the config-package generator's builder, scaffolder and templates, the platform's English catalogue, the sources the upgrade check reads of the platform for platform/platform.json, and the server's validator.js, which the build holds to the library.",
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/package-pipeline/**/*",
+        "{workspaceRoot}/scripts/verify-package-zip.mjs",
+        "{workspaceRoot}/scripts/release-candidate-set.mjs",
+        "{workspaceRoot}/scripts/package-signature.mjs",
+        "{workspaceRoot}/scripts/nuxeo-content-model.mjs",
+        "{workspaceRoot}/scripts/beta-harness/nuxeo-credentials.mjs",
+        "{workspaceRoot}/libs/shared/app-definition/src/**/*",
+        "{workspaceRoot}/tools/satori-generators/src/config-package/create.mjs",
+        "{workspaceRoot}/tools/satori-generators/src/config-package/files/**/*",
+        "{workspaceRoot}/apps/nuxeo-ui/public/i18n/en.json",
+        "{workspaceRoot}/docs/extension-reference.md",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/OSGI-INF/**/*",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/java/**/*",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/agentic-ui-validator/validator.js",
+        "{workspaceRoot}/apps/nuxeo-ui/src/app/business-apps.menu.ts",
+        "{workspaceRoot}/libs/platform/package.json"
+      ],
+      "outputs": ["{workspaceRoot}/dist/tools/satori-cli"],
+      "options": {
+        "cwd": "",
+        "command": "node tools/satori-cli/build.mjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "$comment": "selftest.mjs builds the tool into a scratch folder of its own, packs it with npm, and runs it outside this repository under Node's permission model, so it needs no build target first.",
+      "$inputsComment": "The build's inputs, plus what the controls compare the tool with and run it on: scripts/app-package.mjs and the entry points beside it, the validator's bin.mjs, every kit, the npm launcher the pack goes through, and the generator's own copy of the names Satori uses.",
+      "inputs": [
+        "default",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/scripts/app-package.mjs",
+        "{workspaceRoot}/scripts/app-upgrade-check.mjs",
+        "{workspaceRoot}/scripts/app-package-model.mjs",
+        "{workspaceRoot}/scripts/package-pipeline/**/*",
+        "{workspaceRoot}/scripts/verify-package-zip.mjs",
+        "{workspaceRoot}/scripts/release-candidate-set.mjs",
+        "{workspaceRoot}/scripts/package-signature.mjs",
+        "{workspaceRoot}/scripts/nuxeo-content-model.mjs",
+        "{workspaceRoot}/scripts/beta-harness/nuxeo-credentials.mjs",
+        "{workspaceRoot}/scripts/beta-harness/package-command.mjs",
+        "{workspaceRoot}/libs/shared/app-definition/src/**/*",
+        "{workspaceRoot}/tools/satori-generators/src/config-package/**/*",
+        "{workspaceRoot}/apps/nuxeo-ui/public/i18n/en.json",
+        "{workspaceRoot}/business-apps/packages/**/*",
+        "{workspaceRoot}/docs/extension-reference.md",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/OSGI-INF/**/*",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/java/**/*",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/agentic-ui-validator/validator.js",
+        "{workspaceRoot}/apps/nuxeo-ui/src/app/business-apps.menu.ts",
+        "{workspaceRoot}/libs/platform/package.json"
+      ],
+      "options": {
+        "cwd": "",
+        "command": "node tools/satori-cli/selftest.mjs"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "$comment": "Declared rather than inferred: @nx/eslint/plugin infers `eslint:lint`, which `nx affected -t lint` does not match (see tools/satori-generators/project.json)."
+    }
+  }
+}

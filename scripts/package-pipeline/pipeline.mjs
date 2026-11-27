@@ -349,19 +349,22 @@ function validator(host, args) {
   });
 }
 
-function run({
-  directory,
-  out,
-  tag,
-  'allow-list': allowList,
-  registered,
-  platform,
-  model,
-  unread,
-  previous,
-  'previous-platform': previousPlatform,
-  kits,
-}, host) {
+function run(
+  {
+    directory,
+    out,
+    tag,
+    'allow-list': allowList,
+    registered,
+    platform,
+    model,
+    unread,
+    previous,
+    'previous-platform': previousPlatform,
+    kits,
+  },
+  host,
+) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
   const refuse = (step, message) => {

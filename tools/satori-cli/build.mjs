@@ -31,7 +31,15 @@
  *
  * The output is the same bytes from the same sources. Exit codes: 0, built; 1, refused.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import '../../libs/shared/app-definition/src/typescript-hook.mjs';
@@ -39,7 +47,9 @@ import '../../libs/shared/app-definition/src/typescript-hook.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const at = process.argv.indexOf('--out');
-const OUT = resolve(at > 0 && process.argv[at + 1] ? process.argv[at + 1] : join(REPO, 'dist', 'tools', 'satori-cli'));
+const OUT = resolve(
+  at > 0 && process.argv[at + 1] ? process.argv[at + 1] : join(REPO, 'dist', 'tools', 'satori-cli'),
+);
 const GENERATOR = join(REPO, 'tools', 'satori-generators', 'src', 'config-package');
 const DEFINITION = join(REPO, 'libs', 'shared', 'app-definition', 'src');
 
@@ -106,10 +116,15 @@ for (const layer of ['bootstrap', 'manifest'])
     join(GENERATOR, 'files', 'schema', `${layer}.schema.json__tmpl__`),
     join(OUT, 'schemas', `${layer}.schema.json`),
   );
-for (const schema of readdirSync(DEFINITION).filter((name) => name.endsWith('.schema.json')).sort())
+for (const schema of readdirSync(DEFINITION)
+  .filter((name) => name.endsWith('.schema.json'))
+  .sort())
   cpSync(join(DEFINITION, schema), join(OUT, 'schemas', schema));
 mkdirSync(join(OUT, 'platform'), { recursive: true });
-cpSync(join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json'), join(OUT, 'platform', 'en.json'));
+cpSync(
+  join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json'),
+  join(OUT, 'platform', 'en.json'),
+);
 cpSync(join(HERE, 'templates'), join(OUT, 'templates'), { recursive: true });
 cpSync(join(HERE, 'README.md'), join(OUT, 'README.md'));
 

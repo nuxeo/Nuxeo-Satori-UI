@@ -249,7 +249,10 @@ async function upgradeCheck(args) {
     const before = readKit(resolve(previous));
     const deployment = options.deployment === undefined ? null : readDeployment(options.deployment);
     const current = platformFromSnapshot(PLATFORM, join(HERE, 'platform', 'platform.json'));
-    return report([check(before, kit, { previous: null, current, notes: null }, deployment)], options.json);
+    return report(
+      [check(before, kit, { previous: null, current, notes: null }, deployment)],
+      options.json,
+    );
   } catch (error) {
     if (!(error instanceof Usage)) throw error;
     console.error(`satori upgrade-check: ${error.message}\n${UPGRADE_USAGE}`);
@@ -274,7 +277,9 @@ function packageOfZip(zip, scratch) {
     return { problem: error.message };
   }
   const bundles = join(unpacked, 'install', 'bundles');
-  const jars = isDirectory(bundles) ? readdirSync(bundles).filter((name) => name.endsWith('.jar')) : [];
+  const jars = isDirectory(bundles)
+    ? readdirSync(bundles).filter((name) => name.endsWith('.jar'))
+    : [];
   if (jars.length !== 1 || !isFile(join(unpacked, 'package.xml')))
     return {
       problem: `a configuration package's zip holds package.xml and one bundle, install/bundles/<name>.jar, and this one holds ${jars.length} bundle(s)${isFile(join(unpacked, 'package.xml')) ? '' : ' and no package.xml'}.`,

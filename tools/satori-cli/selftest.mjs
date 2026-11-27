@@ -51,8 +51,9 @@ import { SATORI_NAMES } from '../../scripts/package-pipeline/configuration.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const KITS = join(REPO, 'business-apps', 'packages');
-const PLATFORM = JSON.parse(readFileSync(join(REPO, 'libs', 'platform', 'package.json'), 'utf8'))
-  .version;
+const PLATFORM = JSON.parse(
+  readFileSync(join(REPO, 'libs', 'platform', 'package.json'), 'utf8'),
+).version;
 const PIPELINE = join(REPO, 'scripts', 'app-package.mjs');
 const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs');
 const PAYERS = join(KITS, 'payers-claims-demo');
@@ -103,13 +104,22 @@ function oneBuilder(satori, tool) {
     const ours = buildWith(satori, directory, join(scratch, 'tool-out', kit), ['build']);
     const [was, is] = [digestOf(pipeline), digestOf(ours)];
     if (pipeline.status !== 0 || ours.status !== 0)
-      fail(kit, `app-package.mjs exited ${pipeline.status}, the tool ${ours.status}`, pipeline.output + ours.output);
+      fail(
+        kit,
+        `app-package.mjs exited ${pipeline.status}, the tool ${ours.status}`,
+        pipeline.output + ours.output,
+      );
     else if (was === null || was !== is)
       fail(kit, `app-package.mjs built ${was}, and the tool ${is}`);
     else held++;
     // The validator's report, through bin.mjs and through the tool's bundle of the same source.
     const root = join(directory, 'bundle', 'agentic-ui-config');
-    const flags = ['--platform', PLATFORM, '--catalogue', join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json')];
+    const flags = [
+      '--platform',
+      PLATFORM,
+      '--catalogue',
+      join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json'),
+    ];
     if (existsSync(join(directory, 'content-model.json')))
       flags.push('--model', join(directory, 'content-model.json'));
     const allowList = join(directory, 'deployment', 'build-allow-list.json');
@@ -118,7 +128,11 @@ function oneBuilder(satori, tool) {
       node([file, 'validate', root, ...flags]),
     );
     if (source.status !== bundled.status || source.output !== bundled.output)
-      fail(`${kit}'s validation`, 'bin.mjs and the tool\'s validator.mjs answer differently', `${source.output}\n---\n${bundled.output}`);
+      fail(
+        `${kit}'s validation`,
+        "bin.mjs and the tool's validator.mjs answer differently",
+        `${source.output}\n---\n${bundled.output}`,
+      );
     else held++;
   }
   // The control on the comparison: one byte of the builder changed changes the digest.
@@ -127,13 +141,20 @@ function oneBuilder(satori, tool) {
   const builder = join(changed, 'builder', 'build.mjs');
   const text = readFileSync(builder, 'utf8');
   const date = 'const DOS_DATE = (0 << 9) | (1 << 5) | 1;';
-  if (!text.includes(date)) fail('the control on the comparison', `the builder no longer has ${date}`);
+  if (!text.includes(date))
+    fail('the control on the comparison', `the builder no longer has ${date}`);
   else {
     writeFileSync(builder, text.replace(date, 'const DOS_DATE = (0 << 9) | (1 << 5) | 2;'));
-    const other = buildWith(join(changed, 'satori.mjs'), PAYERS, join(scratch, 'changed-out'), ['build']);
+    const other = buildWith(join(changed, 'satori.mjs'), PAYERS, join(scratch, 'changed-out'), [
+      'build',
+    ]);
     const pipeline = buildWith(PIPELINE, PAYERS, join(scratch, 'pipeline-again'));
     if (other.status !== 0 || digestOf(other) === digestOf(pipeline))
-      fail('the control on the comparison', 'a tool whose builder differs by a byte built the same zip, or none', other.output);
+      fail(
+        'the control on the comparison',
+        'a tool whose builder differs by a byte built the same zip, or none',
+        other.output,
+      );
     else held++;
   }
 }
@@ -156,13 +177,18 @@ function outsideTheRepository(tool, kitDigest) {
   }
   const outside = join(scratch, 'outside');
   mkdirSync(join(outside, 'tmp'), { recursive: true });
-  const untar = spawnSync('tar', ['-xzf', join(packed, tarball), '-C', outside], { encoding: 'utf8' });
+  const untar = spawnSync('tar', ['-xzf', join(packed, tarball), '-C', outside], {
+    encoding: 'utf8',
+  });
   if (untar.status !== 0) {
     fail('the tarball', 'tar could not unpack it', untar.stderr);
     return;
   }
   const bin = join(outside, 'package', 'satori.mjs');
-  if (existsSync(join(outside, 'node_modules')) || existsSync(join(outside, 'package', 'node_modules')))
+  if (
+    existsSync(join(outside, 'node_modules')) ||
+    existsSync(join(outside, 'package', 'node_modules'))
+  )
     fail('the tarball', 'a node_modules folder is beside the tool');
   cpSync(PAYERS, join(outside, 'payers-claims-demo'), {
     recursive: true,
@@ -177,9 +203,16 @@ function outsideTheRepository(tool, kitDigest) {
     NODE_OPTIONS: `--permission --allow-fs-read=${outside} --allow-fs-write=${outside} --allow-child-process`,
   };
   const confined = (args) => node(args, { cwd: outside, env });
-  const probe = confined(['-e', `require('node:fs').readFileSync(${JSON.stringify(join(REPO, 'package.json'))})`]);
+  const probe = confined([
+    '-e',
+    `require('node:fs').readFileSync(${JSON.stringify(join(REPO, 'package.json'))})`,
+  ]);
   if (probe.status === 0 || !probe.output.includes('ERR_ACCESS_DENIED'))
-    fail('the control on the confinement', "a Node process confined to the folder read this repository's package.json", probe.output);
+    fail(
+      'the control on the confinement',
+      "a Node process confined to the folder read this repository's package.json",
+      probe.output,
+    );
   else held++;
 
   const allowList = join(outside, 'payers-claims-demo', 'deployment', 'build-allow-list.json');
@@ -193,28 +226,65 @@ function outsideTheRepository(tool, kitDigest) {
   ]);
   const digest = digestOf({ ...kit, out: join(outside, 'payers-out') });
   if (kit.status !== 0 || digest !== kitDigest)
-    fail('a kit, outside the repository', `exit ${kit.status}, digest ${digest}, and app-package.mjs's is ${kitDigest}`, kit.output);
+    fail(
+      'a kit, outside the repository',
+      `exit ${kit.status}, digest ${digest}, and app-package.mjs's is ${kitDigest}`,
+      kit.output,
+    );
   else held++;
 
-  const created = confined([bin, 'create', join(outside, 'acme-satori'), '--name', 'acme-config', '--owner', 'acme']);
+  const created = confined([
+    bin,
+    'create',
+    join(outside, 'acme-satori'),
+    '--name',
+    'acme-config',
+    '--owner',
+    'acme',
+  ]);
   const repository = join(outside, 'acme-satori');
-  const expected = ['package.json', 'AGENTS.md', '.gitignore', '.github/workflows/satori.yml', 'config-packages/acme-config/package/package.xml'];
+  const expected = [
+    'package.json',
+    'AGENTS.md',
+    '.gitignore',
+    '.github/workflows/satori.yml',
+    'config-packages/acme-config/package/package.xml',
+  ];
   const missing = expected.filter((file) => !existsSync(join(repository, ...file.split('/'))));
   if (created.status !== 0 || missing.length > 0)
-    fail('satori create, outside the repository', `exit ${created.status}, missing ${missing.join(', ') || 'nothing'}`, created.output);
+    fail(
+      'satori create, outside the repository',
+      `exit ${created.status}, missing ${missing.join(', ') || 'nothing'}`,
+      created.output,
+    );
   else held++;
   const manifest = JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8'));
-  if (manifest.devDependencies?.['@nuxeo/satori-cli'] !== JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version)
+  if (
+    manifest.devDependencies?.['@nuxeo/satori-cli'] !==
+    JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version
+  )
     fail('satori create', 'package.json does not pin the tool as a dev dependency');
   else held++;
   if (existsSync(join(repository, 'config-packages', 'acme-config', 'project.json')))
     fail('satori create', "the generator's project.json, which is Nx's, was kept");
   for (const step of ['validate', 'build']) {
     const run = node(
-      [bin, step, 'config-packages/acme-config', ...(step === 'build' ? ['--out', 'dist'] : []), '--kits', 'config-packages'],
+      [
+        bin,
+        step,
+        'config-packages/acme-config',
+        ...(step === 'build' ? ['--out', 'dist'] : []),
+        '--kits',
+        'config-packages',
+      ],
       { cwd: repository, env },
     );
-    if (run.status !== 0) fail(`satori ${step} of the scaffold, outside the repository`, `exit ${run.status}`, run.output);
+    if (run.status !== 0)
+      fail(
+        `satori ${step} of the scaffold, outside the repository`,
+        `exit ${run.status}`,
+        run.output,
+      );
     else held++;
   }
   if (!existsSync(join(repository, 'dist', 'acme-config-1.0.0.zip')))
@@ -242,7 +312,8 @@ function refusals(satori) {
     const edit = (file, was, is) => {
       const path = join(directory, ...file.split('/'));
       const text = readFileSync(path, 'utf8');
-      if (!text.includes(was)) throw new Error(`the control's edit does not apply to ${file}: ${was}`);
+      if (!text.includes(was))
+        throw new Error(`the control's edit does not apply to ${file}: ${was}`);
       writeFileSync(path, text.replace(was, is));
     };
     const write = (file, text) => {
@@ -256,7 +327,8 @@ function refusals(satori) {
     const directory = changed(from, change);
     const run = node([satori, 'validate', directory, ...args(directory)]);
     if (run.status !== 1) fail(what, `exit ${run.status}, not 1`, run.output);
-    else if (!run.output.includes(`step ${step} refused it`)) fail(what, `not refused at step ${step}`, run.output);
+    else if (!run.output.includes(`step ${step} refused it`))
+      fail(what, `not refused at step ${step}`, run.output);
     else if (!run.output.includes(reason)) fail(what, `no "${reason}"`, run.output);
     else held++;
   };
@@ -264,7 +336,8 @@ function refusals(satori) {
     const directory = changed(from, change);
     const run = node([satori, 'validate', directory, ...args(directory)]);
     if (run.status !== 0) fail(what, `exit ${run.status}, not 0`, run.output);
-    else if (says !== undefined && !run.output.includes(says)) fail(what, `no "${says}"`, run.output);
+    else if (says !== undefined && !run.output.includes(says))
+      fail(what, `no "${says}"`, run.output);
     else held++;
     return directory;
   };
@@ -273,12 +346,14 @@ function refusals(satori) {
     return existsSync(file) ? ['--allow-list', file] : [];
   };
   const none = () => [];
-  const json = (path, change) => ({ directory }) => {
-    const file = join(directory, ...path.split('/'));
-    const value = JSON.parse(readFileSync(file, 'utf8'));
-    change(value);
-    writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-  };
+  const json =
+    (path, change) =>
+    ({ directory }) => {
+      const file = join(directory, ...path.split('/'));
+      const value = JSON.parse(readFileSync(file, 'utf8'));
+      change(value);
+      writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+    };
   const MANIFEST = 'bundle/agentic-ui-config/manifest.json';
   const BOOTSTRAP = 'bundle/agentic-ui-config/bootstrap.json';
   const COMPONENT = 'bundle/OSGI-INF/acme-config-config.xml';
@@ -313,7 +388,10 @@ function refusals(satori) {
     "a preset's Layer 1 key the application does not read",
     first,
     json(BOOTSTRAP, (value) => {
-      value.presales = { presetSwitching: true, presets: { demo: { label: 'Demo', manifest: { lables: {} } } } };
+      value.presales = {
+        presetSwitching: true,
+        presets: { demo: { label: 'Demo', manifest: { lables: {} } } },
+      };
     }),
     2,
     'presales.presets.demo.manifest.lables: "lables" is not a key',
@@ -340,7 +418,12 @@ function refusals(satori) {
   refused(
     "a fragment named as Satori's own",
     first,
-    ({ edit }) => edit(COMPONENT, '<fragment name="acme-config" layer="manifest"', '<fragment name="defaults" layer="manifest"'),
+    ({ edit }) =>
+      edit(
+        COMPONENT,
+        '<fragment name="acme-config" layer="manifest"',
+        '<fragment name="defaults" layer="manifest"',
+      ),
     2,
     '"defaults" is a name Satori itself uses',
     none,
@@ -367,7 +450,11 @@ function refusals(satori) {
   refused(
     'a symbolic link in the package',
     first,
-    ({ directory }) => symlinkSync(join(directory, MANIFEST), join(directory, 'bundle', 'agentic-ui-config', 'linked.json')),
+    ({ directory }) =>
+      symlinkSync(
+        join(directory, MANIFEST),
+        join(directory, 'bundle', 'agentic-ui-config', 'linked.json'),
+      ),
     1,
     'is a symbolic link, which is not followed',
     none,
@@ -376,12 +463,24 @@ function refusals(satori) {
   // A name Satori uses, refused by create before anything is written.
   const reserved = join(scratch, 'reserved');
   const named = node([satori, 'create', reserved, '--name', 'defaults', '--owner', 'acme']);
-  if (named.status !== 1 || !named.output.includes('"defaults" is a name Satori itself uses') || existsSync(reserved))
-    fail('satori create --name defaults', `exit ${named.status}, the folder ${existsSync(reserved) ? 'written' : 'not written'}`, named.output);
+  if (
+    named.status !== 1 ||
+    !named.output.includes('"defaults" is a name Satori itself uses') ||
+    existsSync(reserved)
+  )
+    fail(
+      'satori create --name defaults',
+      `exit ${named.status}, the folder ${existsSync(reserved) ? 'written' : 'not written'}`,
+      named.output,
+    );
   else held++;
   const occupied = node([satori, 'create', scaffold, '--name', 'other', '--owner', 'acme']);
   if (occupied.status !== 1 || !occupied.output.includes('is not empty'))
-    fail('satori create into a folder that is not empty', `exit ${occupied.status}`, occupied.output);
+    fail(
+      'satori create into a folder that is not empty',
+      `exit ${occupied.status}`,
+      occupied.output,
+    );
   else held++;
 
   // The command's own errors.
@@ -398,16 +497,33 @@ function refusals(satori) {
   }
 
   // What passes: the scaffold, as it is and mixing every layer; an old build.mjs, not run.
-  const sound = passes('the scaffold', first, () => undefined, 'No app definition: bundle/agentic-ui-config/ has no app.json');
+  const sound = passes(
+    'the scaffold',
+    first,
+    () => undefined,
+    'No app definition: bundle/agentic-ui-config/ has no app.json',
+  );
   if (existsSync(join(sound, 'dist'))) fail('satori validate', 'it wrote into the package');
   passes(
     'a package of Layer 0, Layer 1, a version 1 layout and an app definition',
     first,
     ({ edit, write }) => {
-      write('bundle/agentic-ui-config/app.json', `${JSON.stringify({ version: 2, id: 'acme', labelKey: 'acme.app', packageVersion: '1.0.0', platform: `>=${PLATFORM} <1.0.0`, address: 'acme', groups: ['members'] }, null, 2)}\n`);
-      write('bundle/agentic-ui-config/navigation.json', '{ "version": 2, "entries": [{ "id": "home", "labelKey": "acme.nav.home", "icon": "home", "page": "home" }] }\n');
-      write('bundle/agentic-ui-config/labels/en.json', '{ "version": 2, "labels": { "acme.app": "Acme", "acme.nav.home": "Home" } }\n');
-      write('bundle/agentic-ui-config/layouts/File/metadata.layout.json', '{ "version": 1, "display": "sections", "sections": [{ "id": "main", "label": "Main", "fields": ["dc:title"] }] }\n');
+      write(
+        'bundle/agentic-ui-config/app.json',
+        `${JSON.stringify({ version: 2, id: 'acme', labelKey: 'acme.app', packageVersion: '1.0.0', platform: `>=${PLATFORM} <1.0.0`, address: 'acme', groups: ['members'] }, null, 2)}\n`,
+      );
+      write(
+        'bundle/agentic-ui-config/navigation.json',
+        '{ "version": 2, "entries": [{ "id": "home", "labelKey": "acme.nav.home", "icon": "home", "page": "home" }] }\n',
+      );
+      write(
+        'bundle/agentic-ui-config/labels/en.json',
+        '{ "version": 2, "labels": { "acme.app": "Acme", "acme.nav.home": "Home" } }\n',
+      );
+      write(
+        'bundle/agentic-ui-config/layouts/File/metadata.layout.json',
+        '{ "version": 1, "display": "sections", "sections": [{ "id": "main", "label": "Main", "fields": ["dc:title"] }] }\n',
+      );
       edit(
         COMPONENT,
         '  </extension>',
@@ -418,7 +534,7 @@ function refusals(satori) {
     '1 in version 1, which this does not check',
   );
   passes(
-    'a package whose build.mjs is not the tool\'s',
+    "a package whose build.mjs is not the tool's",
     first,
     ({ edit }) => edit('build.mjs', '#!/usr/bin/env node', '#!/usr/bin/env node\n// an older copy'),
     'note: build.mjs is not the builder this tool carries',
@@ -427,13 +543,20 @@ function refusals(satori) {
   // The upgrade check: against a folder and a zip of the kit as it is, and a queue removed.
   const payersZip = join(scratch, 'payers-zip');
   const builtPayers = buildWith(satori, PAYERS, payersZip, ['build']);
-  const zip = join(payersZip, readdirSync(payersZip).find((name) => name.endsWith('.zip')) ?? 'none.zip');
+  const zip = join(
+    payersZip,
+    readdirSync(payersZip).find((name) => name.endsWith('.zip')) ?? 'none.zip',
+  );
   for (const [what, previous] of [
     ['the kit held to itself, a folder', PAYERS],
     ['the kit held to its own zip', zip],
   ]) {
     const run = node([satori, 'upgrade-check', PAYERS, '--previous', previous]);
-    if (builtPayers.status !== 0 || run.status !== 0 || !run.output.includes('every configuration is kept'))
+    if (
+      builtPayers.status !== 0 ||
+      run.status !== 0 ||
+      !run.output.includes('every configuration is kept')
+    )
       fail(`satori upgrade-check, ${what}`, `exit ${run.status}`, run.output);
     else held++;
   }
@@ -443,10 +566,24 @@ function refusals(satori) {
   });
   const lost = node([satori, 'upgrade-check', withoutQueue, '--previous', zip]);
   if (lost.status !== 1 || !lost.output.includes('kit, queue '))
-    fail('satori upgrade-check, a queue removed at the same version', `exit ${lost.status}`, lost.output);
+    fail(
+      'satori upgrade-check, a queue removed at the same version',
+      `exit ${lost.status}`,
+      lost.output,
+    );
   else held++;
-  const held2 = node([satori, 'build', PAYERS, '--out', join(scratch, 'held'), '--previous', zip, ...withAllowList(PAYERS)]);
-  if (held2.status !== 0) fail('satori build --previous <zip>', `exit ${held2.status}`, held2.output);
+  const held2 = node([
+    satori,
+    'build',
+    PAYERS,
+    '--out',
+    join(scratch, 'held'),
+    '--previous',
+    zip,
+    ...withAllowList(PAYERS),
+  ]);
+  if (held2.status !== 0)
+    fail('satori build --previous <zip>', `exit ${held2.status}`, held2.output);
   else held++;
 }
 
@@ -494,7 +631,10 @@ async function modelPull(satori) {
       fail('satori model pull', `read without the credentials: ${unauthorised.join(', ')}`);
     else if (readFileSync(out, 'utf8').includes(secret))
       fail('satori model pull', 'the file holds the password');
-    else if (JSON.stringify(JSON.parse(readFileSync(out, 'utf8')).doctypes) !== JSON.stringify(model.doctypes))
+    else if (
+      JSON.stringify(JSON.parse(readFileSync(out, 'utf8')).doctypes) !==
+      JSON.stringify(model.doctypes)
+    )
       fail('satori model pull', 'the file is not the model the server answered');
     else held++;
     const carried = await nodeAsync(
@@ -509,7 +649,11 @@ async function modelPull(satori) {
       ],
       { env },
     );
-    if (carried.status !== 2 || carried.output.includes(secret) || existsSync(join(scratch, 'refused.json')))
+    if (
+      carried.status !== 2 ||
+      carried.output.includes(secret) ||
+      existsSync(join(scratch, 'refused.json'))
+    )
       fail(
         'satori model pull, an address carrying credentials',
         `exit ${carried.status}`,
@@ -528,10 +672,15 @@ function reservedNames() {
   for (const file of ['generator.ts', 'create.mjs']) {
     const text = readFileSync(join(generator, file), 'utf8');
     const block = /SATORI_NAMES = new Map\(\[([\s\S]*?)\]\);/.exec(text)?.[1] ?? '';
-    const names = [...block.matchAll(/\[\s*'([^']+)',\s*'([^']+)',?\s*\]/g)].map(([, name, why]) => [name, why]);
+    const names = [...block.matchAll(/\[\s*'([^']+)',\s*'([^']+)',?\s*\]/g)].map(
+      ([, name, why]) => [name, why],
+    );
     const ours = [...SATORI_NAMES];
     if (JSON.stringify(names) !== JSON.stringify(ours))
-      fail(`the names Satori uses, against ${file}`, `${file} has ${JSON.stringify(names)}, and configuration.mjs ${JSON.stringify(ours)}`);
+      fail(
+        `the names Satori uses, against ${file}`,
+        `${file} has ${JSON.stringify(names)}, and configuration.mjs ${JSON.stringify(ours)}`,
+      );
     else held++;
   }
 }
@@ -540,7 +689,11 @@ function reservedNames() {
 
 /** A Node command, with its output as one text. */
 function node(args, options = {}) {
-  const result = spawnSync(process.execPath, args, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, ...options });
+  const result = spawnSync(process.execPath, args, {
+    encoding: 'utf8',
+    maxBuffer: OUTPUT_LIMIT,
+    ...options,
+  });
   return { status: result.status, output: `${result.stdout ?? ''}\n${result.stderr ?? ''}` };
 }
 
@@ -578,5 +731,7 @@ function digestOf({ out }) {
   if (!existsSync(out)) return null;
   const zips = readdirSync(out).filter((name) => name.endsWith('.zip'));
   if (zips.length !== 1) return null;
-  return createHash('sha256').update(readFileSync(join(out, zips[0]))).digest('hex');
+  return createHash('sha256')
+    .update(readFileSync(join(out, zips[0])))
+    .digest('hex');
 }

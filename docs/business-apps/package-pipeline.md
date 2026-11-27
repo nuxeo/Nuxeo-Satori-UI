@@ -65,6 +65,10 @@ added on 25 November 2026 (section 10); its server-side half is not built.
   not count as met, two kits contributing the same name, a kit whose version did not move since the
   commit it is held to. It runs offline on every push to a staging branch, which holds each kit to
   the commit before the push, since no kit has a release yet (section 11).
+- **One builder for a customer's whole configuration.** The configuration package's builder and
+  this pipeline are one implementation, which `@nuxeo/satori-cli` runs outside this repository on a
+  package of Layer 0, Layer 1, assets, version 1 layouts and an app definition, to the same zip
+  (section 12). The tool is not published.
 
 ## 1. What an app definition package is
 
@@ -1413,3 +1417,50 @@ would show once it runs: from a candidate's output directory, on a server it mak
 one `nuxeoctl mp-install` of every package in dependency order, at one start, then the deployment's
 configuration, the seeds, and the steps files' commands printed. Built on 25 November 2026, its
 controls and its dry run run offline; it has not been run against Docker yet.
+
+## 12. One implementation: the pipeline and the configuration builder
+
+Until 27 November 2026 a configuration package had two builders. The configuration package's own
+`build.mjs`, the `config-package` generator's, checked Layer 0, Layer 1, assets and version 1
+layouts, and none of version 2's files. This pipeline checked version 2's files, and ran only from
+this repository. They are now one implementation, which two commands run:
+
+- [`scripts/app-package.mjs`](../../scripts/app-package.mjs), the pipeline CI and every kit build
+  with, as sections 2 to 11 describe, with the same steps, messages and exit codes as before;
+- [`@nuxeo/satori-cli`](../../tools/satori-cli/README.md), `satori validate` and `satori build`,
+  the builder a customer runs on their own configuration repository, outside this one, with Node
+  alone. It is not published: publishing waits for decision K.
+
+Both run the steps in [`scripts/package-pipeline/pipeline.mjs`](../../scripts/package-pipeline/pipeline.mjs).
+Each gives it where the validator, the upgrade check, the builder, the English catalogue and the
+schemas are, and nothing in it reads where it is: `app-package.mjs` gives it this repository's,
+through the TypeScript hook, and the tool gives it what it carries, bundled by esbuild into plain
+JavaScript. The upgrade check is one implementation the same way,
+[`upgrade-check.mjs`](../../scripts/package-pipeline/upgrade-check.mjs), behind
+`app-upgrade-check.mjs` and `satori upgrade-check`, and so is the model export,
+[`model-export.mjs`](../../scripts/package-pipeline/model-export.mjs), behind
+`app-package-model.mjs` and `satori model pull`.
+
+**The configuration builder is step 4 of both.** `app-package.mjs` runs the package's own
+`build.mjs`, which step 1 holds to the generator's byte for byte. The tool runs the generator's
+`build.mjs` it carries, the same bytes, on the package, so a package needs no copy of its own.
+
+**Step 2 now checks the configuration too,** in both
+([`configuration.mjs`](../../scripts/package-pipeline/configuration.mjs)): a key of a Layer 0 or
+Layer 1 fragment that the platform's schemas do not have, down through its sections and a preset's,
+which the application would ignore in silence; and a fragment named `defaults`, Satori's own. Step
+3 refuses a package named `defaults` or `nuxeo-agentic-ui`, the names the generator refuses. No kit
+has a fragment or such a name, so every kit builds to the same zip as before.
+
+**What differs, on purpose.** A package with no `app.json` is built by the tool as configuration
+alone, and refused by `app-package.mjs`; one with a file of an app definition and no `app.json` is
+refused by both. The tool's platform is the one it carries: `--platform` is its version unless
+given, and `--previous-platform` stays with `app-package.mjs`, which has the platform's sources.
+The tool compares a package's names with other packages only when `--kits` names their folder.
+
+**Its controls,** `tools/satori-cli/selftest.mjs`, each seen failing first: every kit builds through
+both to the same SHA-256; the tool, packed with `npm pack` and run from a folder with no
+`node_modules` under Node's permission model, builds a kit to the same digest and a repository
+`satori create` writes; and each refusal is made at its own step. The tool's validator is bundled
+from the same library as the server's `validator.js`, and the tool is not built when that file is
+not what the library builds now.

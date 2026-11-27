@@ -38,10 +38,7 @@ process.exit(
       ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
       ' [--model <file> | --model-server <address>] [--previous <package directory>]' +
       ' [--previous-platform <repository>] [--kits <folder>]',
-    validator: [
-      process.execPath,
-      join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs'),
-    ],
+    validator: [process.execPath, join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs')],
     upgradeCheck: [process.execPath, join(REPO, 'scripts', 'app-upgrade-check.mjs')],
     catalogue: join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json'),
     kits: join(REPO, 'business-apps', 'packages'),
