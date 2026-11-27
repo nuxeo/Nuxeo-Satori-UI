@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Aviso de denegación de reclamación</title>
+<style>
+body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; margin: 2cm; }
+header { margin-bottom: 2em; }
+.fictional { font-size: 9pt; color: gray; }
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { text-align: left; padding: 0.2em 1.5em 0.2em 0; }
+</style>
+</head>
+<body>
+<!-- Una carta ficticia de la demostración del kit Payers: ningún pagador, persona, proveedor ni reclamación es real. -->
+<header>
+<p><strong>Bayside Health Plan</strong><br>Servicios para miembros, 100 Example Way, Oakland, CA 94600</p>
+<p class="fictional">Una carta ficticia de la demostración del kit Payers. Ninguna persona, proveedor ni reclamación es real.</p>
+</header>
+<p>{{letter.date}}</p>
+<address>
+{{claim:member>member:firstName}} {{claim:member>member:lastName}}<br>
+{{claim:member>member:address/street}}<br>
+{{claim:member>member:address/city}} {{claim:member>member:address/zip}}
+</address>
+<h1>Aviso de denegación de reclamación</h1>
+<p>Estimado/a {{claim:member>member:firstName}} {{claim:member>member:lastName}}:</p>
+<p>Hemos revisado la reclamación {{claim:number}} por los servicios que recibió de {{claim:provider>dc:title}}. No podemos pagar esta reclamación.</p>
+<table>
+<tr><th>Reclamación</th><td>{{claim:number}}</td></tr>
+<tr><th>Número de miembro</th><td>{{claim:member>member:number}}</td></tr>
+<tr><th>Fecha del servicio</th><td>{{claim:serviceDate}}</td></tr>
+<tr><th>Importe facturado</th><td>USD {{claim:billedAmount}}</td></tr>
+</table>
+<p>Puede apelar esta decisión. Para apelar, escríbanos dentro de los 180 días siguientes a la fecha de esta carta y explíquenos por qué cree que debería pagarse la reclamación. Incluya una copia de esta carta y cualquier documento que respalde su apelación.</p>
+<p>Si tiene preguntas, llame a servicios para miembros al número que figura en su tarjeta de miembro.</p>
+<p>Atentamente,</p>
+<p>{{letter.writer}}<br>Departamento de reclamaciones, Bayside Health Plan</p>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.letters.processor" version="1.0">
+
+  <documentation>
+    The add-on's template processor, agenticLetter, registered with the platform's template
+    processor service, as the platform registers its own (Freemarker, XSLT, XDocReport). It fills
+    a letter template's placeholders and runs nothing: a template is text and {{...}} placeholders,
+    each a property of the record, one hop through a reference, or a letter value. It names no mime
+    type and no extension, so the platform never chooses it for a file by itself; and it renders only
+    while Letter.Generate writes a letter, and only that letter: rendered any other way, through the
+    platform's TemplateProcessor.Render or a rendition, it refuses.
+  </documentation>
+
+  <require>org.nuxeo.template.service.TemplateProcessorComponent</require>
+
+  <extension target="org.nuxeo.template.service.TemplateProcessorComponent" point="processor">
+    <templateProcessor name="agenticLetter" label="Letter: placeholders only" default="false"
+      class="org.nuxeo.agentic.letters.LetterProcessor" />
+  </extension>
+
+</component>

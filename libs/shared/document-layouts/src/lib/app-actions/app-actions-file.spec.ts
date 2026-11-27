@@ -37,6 +37,8 @@ describe('readAppActions', () => {
     expect(read.actions.map((action) => action.id)).toEqual([
       'payers.claim.requestRecords',
       'payers.claim.referToInvestigations',
+      'payers.claim.writeDenialLetter',
+      'payers.case.writeAppealLetter',
     ]);
     const [requestRecords, refer] = read.actions;
     expect(requestRecords).toMatchObject({

@@ -7,13 +7,13 @@
     },
     "Claim": {
       "parent": "Document",
-      "facets": [],
-      "schemas": ["common", "dublincore", "claim"]
+      "facets": ["Correspondence"],
+      "schemas": ["common", "dublincore", "claim", "correspondence"]
     },
     "Case": {
       "parent": "Document",
-      "facets": [],
-      "schemas": ["common", "dublincore", "case"]
+      "facets": ["Correspondence"],
+      "schemas": ["common", "dublincore", "case", "correspondence"]
     },
     "Provider": {
       "parent": "Document",
@@ -40,6 +40,11 @@
         "facetedTag",
         "relatedtext"
       ]
+    },
+    "Letter": {
+      "parent": "Document",
+      "facets": ["TemplateBased"],
+      "schemas": ["common", "dublincore", "file", "letter", "templatesupport"]
     }
   },
   "facets": [
@@ -90,6 +95,38 @@
     },
     {
       "name": "Downloadable"
+    },
+    {
+      "name": "Correspondence",
+      "schemas": [
+        {
+          "name": "correspondence",
+          "@prefix": "corr",
+          "fields": {
+            "language": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TemplateBased",
+      "schemas": [
+        {
+          "name": "templatesupport",
+          "@prefix": "nxts",
+          "fields": {
+            "bindings": {
+              "fields": {
+                "templateName": "string",
+                "templateId": "string",
+                "templateData": "string",
+                "useMainContentAsTemplate": "boolean"
+              },
+              "type": "complex[]"
+            }
+          }
+        }
+      ]
     }
   ],
   "schemas": [
@@ -1114,6 +1151,155 @@
                 {
                   "entity-type": "validation_constraint",
                   "name": "string",
+                  "parameters": {}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "correspondence",
+      "prefix": "corr",
+      "@prefix": "corr",
+      "fields": {
+        "language": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "letter",
+      "prefix": "letter",
+      "@prefix": "letter",
+      "fields": {
+        "record": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "letter": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "template": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "templateName": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "writtenBy": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "writtenAt": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "templatesupport",
+      "prefix": "nxts",
+      "@prefix": "nxts",
+      "fields": {
+        "bindings": {
+          "type": "complex[]",
+          "fields": {
+            "templateName": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "templateId": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "templateData": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "useMainContentAsTemplate": {
+              "type": "boolean",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "boolean",
                   "parameters": {}
                 }
               ]

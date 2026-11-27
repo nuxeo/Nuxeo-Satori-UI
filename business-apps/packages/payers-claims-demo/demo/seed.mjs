@@ -44,6 +44,16 @@
  * Since 0.7.0 a decided appeal's decision is written to `case:decision`, and every other case's
  * emptied; an appeal decided with none, or one open with one, stops the run the same way.
  *
+ * **The letters,** since 0.8.0. Each claim and case gets its member's language, `data.mjs`'s, in
+ * `corr:language`, nuxeo-agentic-letters' `Correspondence` facet. The six letter templates of
+ * `LETTER_TEMPLATES` are kept, as the administrator the seed runs as, in the workspace's letter
+ * templates folder, which every demo group reads and none may change: each a `LetterTemplate`,
+ * its text the file of `demo/letters/` it names, uploaded only when the template does not already
+ * hold those bytes. Before anything is asked of the server, each template is held to what the
+ * add-on takes (`letters.mjs`): a template it would refuse stops the run with exit 1, naming it.
+ * The letters a demo writes are filed beside their records, in the claims and cases folders; the
+ * seed neither reads nor removes them.
+ *
  * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
  * and password. The seeded workspace and its folders give the demo's groups the permissions
  * `data.mjs` names, and only those: one of theirs it does not name is removed. Anyone else's stays.
@@ -51,8 +61,10 @@
  * checklist on its page.
  *
  * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
- * the rights `GRANTS` implies on a claim and on a case, and none to change a member; each claim is
- * in the state its status names; each case holds the checklist it was given, entry for entry, and
+ * the rights `GRANTS` implies on a claim and on a case, and none to change a member, and since 0.8.0
+ * reads every letter template and may change none; each claim is in the state its status names;
+ * each claim and case holds its member's language, and each template what it was given; each case
+ * holds the checklist it was given, entry for entry, and
  * since 0.7.0 its decision; then the kit's eight page providers return what it wrote, the four
  * queues' aggregates count it, and each adjuster's claims are what `payers_my_claims` returns to
  * them, asked as they are, through `$currentUser`. So a run that passes has run each of them on the server.
@@ -60,13 +72,17 @@
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
- * Exit codes: 0, seeded and checked; 1, `data.mjs` disagrees with the Case page's checklist, the
- * server refused a write, stopped answering part way, or a check failed; 2, a precondition, found
- * before anything is written: no credentials, no demo password, no server, credentials refused or
- * not an administrator's, the package not installed or older than 0.7.0, no
+ * Exit codes: 0, seeded and checked; 1, `data.mjs` disagrees with the Case page's checklist, or a
+ * letter template with what nuxeo-agentic-letters takes, the server refused a write, stopped
+ * answering part way, or a check failed; 2, a precondition, found before anything is written: no
+ * credentials, no demo password, no server, credentials refused or not an administrator's, the
+ * package not installed or older than 0.8.0, nuxeo-agentic-letters not installed, no
  * /default-domain/workspaces, or a user or a group of the demo's names that the seed did not
  * create.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   OPEN_APPEALS,
   appealProblems,
@@ -81,10 +97,12 @@ import {
   CLAIMS,
   GRANTS,
   GROUPS,
+  LETTER_TEMPLATES,
   MEMBERS,
   PROVIDERS,
   USERS,
 } from './data.mjs';
+import { LETTERS_DIR, LETTER_PROCESSOR, letterProblems, offered } from './letters.mjs';
 import { pathBetween, readLifecycle } from './lifecycle.mjs';
 
 const EXIT_PRECONDITION = 2;
@@ -104,7 +122,15 @@ const FOLDERS = {
   claims: 'Claims',
   cases: 'Cases',
   documents: 'Claim documents',
+  // Since 0.8.0: the letter templates, which an administrator keeps.
+  templates: 'Letter templates',
 };
+/**
+ * Since 0.8.0: nuxeo-agentic-letters' template type, which tells the add-on is installed, and its
+ * facet on the kit's Claim and Case, which tells the kit is 0.8.0.
+ */
+const LETTER_TEMPLATE_TYPE = 'LetterTemplate';
+const CORRESPONDENCE = 'Correspondence';
 /** The stand-in model's types; `PayersClaimSearch` is version 0.3.0's, which the queues need. */
 const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'];
 /**
@@ -200,6 +226,16 @@ async function seed() {
     throw new Error(
       `data.mjs disagrees with the Case page's checklist:\n  ${disagreeing.join('\n  ')}`,
     );
+  // Since 0.8.0: a letter template nuxeo-agentic-letters would refuse, or could not choose, is
+  // data.mjs's fault too.
+  const unwritable = letterProblems(LETTER_TEMPLATES, {
+    records: { Claim: CLAIMS, Case: CASES },
+    offered,
+  });
+  if (unwritable.length > 0)
+    throw new Error(
+      `data.mjs's letter templates are not what nuxeo-agentic-letters takes:\n  ${unwritable.join('\n  ')}`,
+    );
   await preflight();
   preflighting = false;
 
@@ -220,6 +256,8 @@ async function seed() {
   for (const [place, document] of places) await grant(place, document);
 
   const members = new Map();
+  /** Since 0.8.0, each member's language, by number, which their claims' and cases' letters are in. */
+  const languages = new Map(MEMBERS.map((member) => [member.number, member.language]));
   for (const member of MEMBERS) {
     const document = await ensure(`${ROOT}/members`, nameOf(member.number), 'Member', {
       'dc:title': `${member.firstName} ${member.lastName}`,
@@ -267,6 +305,8 @@ async function seed() {
       'claim:status': claim.status,
       'claim:adjuster': claim.adjuster,
       'claim:diagnosis': claim.diagnosis,
+      // Since 0.8.0: the language the claim's letters are written in, its member's.
+      'corr:language': languages.get(claim.member) ?? null,
     });
     await settle(document, claim);
     claims.set(claim.number, document.uid);
@@ -288,8 +328,28 @@ async function seed() {
       'case:checklist': checklistOf(kase),
       // Since 0.7.0: a decided appeal's decision, and none on any other case.
       'case:decision': kase.decision ?? null,
+      // Since 0.8.0: the language the case's letters are written in, its member's.
+      'corr:language': languages.get(kase.member) ?? null,
     });
     cases.set(kase.number, document.uid);
+  }
+
+  // Since 0.8.0: the letter templates, kept as the administrator the seed runs as, each with its
+  // text from demo/letters/, uploaded only when the template does not hold those bytes already.
+  const templates = new Map();
+  for (const template of LETTER_TEMPLATES) {
+    const document = await ensure(
+      `${ROOT}/templates`,
+      template.name,
+      LETTER_TEMPLATE_TYPE,
+      templateProperties(template),
+      {
+        fileName: template.file,
+        bytes: readFileSync(join(LETTERS_DIR, template.file)),
+        mimeType: 'text/html',
+      },
+    );
+    templates.set(template.name, document.uid);
   }
 
   const documents = new Map();
@@ -313,7 +373,7 @@ async function seed() {
     documents.set(file.number, document.uid);
   }
 
-  await check({ members, providers, claims, cases, documents });
+  await check({ members, providers, claims, cases, documents, templates });
 
   const { created, updated, restored, uploaded, transitions } = tally;
   console.log(
@@ -332,6 +392,27 @@ async function seed() {
   for (const kase of CASES.filter((each) => each.category === 'appeal'))
     console.log(`An appeal's record page, ${kase.number}: ${APP}/#/doc/${cases.get(kase.number)}`);
   console.log(`The open appeals, for member services: ${APP}/#/queues/open-appeals`);
+  for (const claim of CLAIMS.filter((each) => offered('payers.denial', 'Claim', each)))
+    console.log(
+      `A denied claim, ${claim.number}, whose letter is in ${languages.get(claim.member)}: ` +
+        `${APP}/#/doc/${claims.get(claim.number)}`,
+    );
+}
+
+/**
+ * Since 0.8.0, a letter template's properties as nuxeo-agentic-letters reads them: the platform's
+ * template rendering ones, `tmpl:`, with the add-on's processor, and the add-on's own, `ltpl:`.
+ */
+function templateProperties(template) {
+  return {
+    'dc:title': template.title,
+    'tmpl:templateName': template.name,
+    'tmpl:applicableTypes': template.types,
+    'tmpl:templateType': LETTER_PROCESSOR,
+    'ltpl:letter': template.letter,
+    'ltpl:language': template.language,
+    'ltpl:conditions': template.conditions,
+  };
 }
 
 /**
@@ -350,9 +431,9 @@ function checklistOf(kase) {
 /**
  * The server answers, the credentials are accepted and are an administrator's, the package's
  * types are installed, version 0.3.0's search type among them, version 0.4.0's claims review
- * workflow, version 0.4.1's case:checklist, version 0.6.0's open-appeals queue and version 0.7.0's
- * appeal review, and no user or group of the demo's names is someone
- * else's.
+ * workflow, version 0.4.1's case:checklist, version 0.6.0's open-appeals queue, version 0.7.0's
+ * appeal review, and version 0.8.0's letters, with nuxeo-agentic-letters, and no user or group of
+ * the demo's names is someone else's.
  */
 async function preflight() {
   let me;
@@ -376,7 +457,7 @@ async function preflight() {
     throw new Precondition(
       missing.length === 1 && missing[0] === 'PayersClaimSearch'
         ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
-            'PayersClaimSearch type for its queues: upgrade it to 0.7.0 ' +
+            'PayersClaimSearch type for its queues: upgrade it to 0.8.0 ' +
             '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
         : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
             'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
@@ -385,14 +466,14 @@ async function preflight() {
     throw new Precondition(
       `${SERVER} has version 0.3.0 or older of the payers-claims-demo package, with no ` +
         `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
-        '0.7.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+        '0.8.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // The Case type's schemas, as the record page reads them: the property is on the type, under
   // the schema whose prefix the field names, whatever that schema is called.
   if (!checklistOnType(await find('/config/types/Case'), CHECKLIST.field))
     throw new Precondition(
       `${SERVER} has version 0.4.0 or older of the payers-claims-demo package, with no ` +
-        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.7.0 ` +
+        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.8.0 ` +
         '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // Version 0.6.0's open-appeals queue: its facets' fields on the queues' search document, as the
@@ -404,7 +485,7 @@ async function preflight() {
   )
     throw new Precondition(
       `${SERVER} has version 0.5.1 or older of the payers-claims-demo package, with no ` +
-        'open-appeals queue: upgrade it to 0.7.0 ' +
+        'open-appeals queue: upgrade it to 0.8.0 ' +
         '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // Version 0.7.0's appeal review, which comes with the case's decision the seed writes.
@@ -412,7 +493,21 @@ async function preflight() {
     throw new Precondition(
       `${SERVER} has version 0.6.1 or older of the payers-claims-demo package, with no ` +
         `${APPEAL_MODEL} workflow and no case:decision for an appeal's decision: upgrade it to ` +
-        '0.7.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+        '0.8.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  // Version 0.8.0's letters: nuxeo-agentic-letters' template type, and its facet on claims.
+  if ((await find(`/config/types/${LETTER_TEMPLATE_TYPE}`)) === null)
+    throw new Precondition(
+      `${SERVER} has no ${LETTER_TEMPLATE_TYPE} type: install nuxeo-agentic-letters, and the ` +
+        "platform's Template Rendering it depends on, then the payers-claims-demo package 0.8.0 " +
+        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  const claimType = await find('/config/types/Claim');
+  if (!(Array.isArray(claimType?.facets) && claimType.facets.includes(CORRESPONDENCE)))
+    throw new Precondition(
+      `${SERVER} has version 0.7.0 or older of the payers-claims-demo package, with no letters ` +
+        `on claims (the ${CORRESPONDENCE} facet): upgrade it to 0.8.0 ` +
+        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
@@ -632,15 +727,18 @@ async function holds(document, file) {
   return bytes.equals(file.bytes);
 }
 
-/** A text file uploaded to a new batch, as the value a document's `file:content` takes. */
-async function upload({ fileName, bytes }) {
+/**
+ * A file uploaded to a new batch, as the value a document's `file:content` takes: text, unless
+ * `mimeType` says otherwise, as a letter template's HTML does.
+ */
+async function upload({ fileName, bytes, mimeType = 'text/plain' }) {
   const { batchId } = await call('POST', '/upload/');
   await call('POST', `/upload/${batchId}/0`, {
     body: bytes,
     headers: {
       'Content-Type': 'application/octet-stream',
       'X-File-Name': encodeURIComponent(fileName),
-      'X-File-Type': 'text/plain',
+      'X-File-Type': mimeType,
       'X-File-Size': String(bytes.length),
     },
   });
@@ -677,6 +775,11 @@ async function check(seeded) {
     throw new Error(
       `The cases' checklists or decisions are not as seeded:\n  ${unchecked.join('\n  ')}`,
     );
+  const unlettered = await correspondence(seeded);
+  if (unlettered.length > 0)
+    throw new Error(
+      `The letters' languages or templates are not as seeded:\n  ${unlettered.join('\n  ')}`,
+    );
   const deadline = Date.now() + INDEX_WAIT_MS;
   for (;;) {
     const problems = await disagreements(seeded);
@@ -699,11 +802,13 @@ async function check(seeded) {
  * a case and on a member exactly the rights `GRANTS` implies: adjusters and supervisors may change
  * a claim (`WriteProperties`) and move its lifecycle (`WriteLifeCycle`, which approving needs);
  * member services may change a case, and so tick an appeal's checklist, and no one else may; no one
- * may change a member, whose Edit form would list the social security number. Read through the
+ * may change a member, whose Edit form would list the social security number. Since 0.8.0, each
+ * reads every letter template, which writing a letter needs, and may change none: only an
+ * administrator keeps them. Read through the
  * `permissions` enricher, as each user, so a permission from anywhere counts: an inherited one, or
  * one given to `members`.
  */
-async function staff({ members, claims, cases }) {
+async function staff({ members, claims, cases, templates }) {
   const problems = [];
   const memberId = members.get(MEMBERS[0].number);
   const claimId = claims.get(CLAIMS[0].number);
@@ -765,6 +870,53 @@ async function staff({ members, claims, cases }) {
         );
     if (onMember.includes('WriteProperties'))
       problems.push(`${user.username} may change a member, and would see its Edit form`);
+    for (const [name, id] of templates) {
+      let onTemplate;
+      try {
+        onTemplate = await rights(id);
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+        problems.push(
+          `${user.username} cannot read the letter template ${name} (${error.status}), so cannot write its letter`,
+        );
+        continue;
+      }
+      if (onTemplate.includes('WriteProperties'))
+        problems.push(`${user.username} may change the letter template ${name}`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Since 0.8.0: each seeded claim and case, read again from the repository, holding its member's
+ * language, which its letters are written in; and each letter template holding what it was given,
+ * its text among them, by name and length, and its processor, the add-on's.
+ */
+async function correspondence({ claims, cases, templates }) {
+  const problems = [];
+  const languages = new Map(MEMBERS.map((member) => [member.number, member.language]));
+  const records = [
+    ...CLAIMS.map((claim) => [claim.number, claims.get(claim.number), claim.member]),
+    ...CASES.map((kase) => [kase.number, cases.get(kase.number), kase.member]),
+  ];
+  for (const [number, id, member] of records) {
+    const held = (await call('GET', `/id/${id}`))?.properties?.['corr:language'] ?? null;
+    if (held !== (languages.get(member) ?? null))
+      problems.push(`${number}'s letters are in ${held}, not ${languages.get(member)}`);
+  }
+  for (const template of LETTER_TEMPLATES) {
+    const document = await call('GET', `/id/${templates.get(template.name)}`);
+    const held = document?.properties ?? {};
+    for (const [property, value] of Object.entries(templateProperties(template)))
+      if (JSON.stringify(held[property] ?? null) !== JSON.stringify(value))
+        problems.push(
+          `${template.name}'s ${property} is ${JSON.stringify(held[property] ?? null)}, not ${JSON.stringify(value)}`,
+        );
+    const bytes = readFileSync(join(LETTERS_DIR, template.file));
+    const file = held['file:content'];
+    if (file?.name !== template.file || Number(file?.length) !== bytes.length)
+      problems.push(`${template.name} does not hold ${template.file}`);
   }
   return problems;
 }

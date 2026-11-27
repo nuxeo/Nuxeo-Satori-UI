@@ -110,6 +110,19 @@ if (process.versions.node.split('.')[0] !== pinned) {
 }
 const { parse } = await import('acorn');
 const HEAD = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).stdout.trim();
+/**
+ * The Payers kit's deployment configuration at the commit, as the plan reads it: each
+ * `deployment/*-config.xml`, in the tree's order. The operation buttons' allow-list, and since the
+ * kit's 0.8.0 its letters' beside it.
+ */
+const PAYERS_CONFIG = spawnSync(
+  'git',
+  ['ls-tree', '--name-only', HEAD, 'business-apps/packages/payers-claims-demo/deployment/'],
+  { cwd: REPO, encoding: 'utf8' },
+)
+  .stdout.split('\n')
+  .map((path) => path.slice(path.lastIndexOf('/') + 1))
+  .filter((name) => /-config\.xml$/.test(name));
 
 const failures = [];
 let negative = 0;
@@ -401,18 +414,18 @@ function thePlan() {
     false,
   );
   check(
-    "the operation buttons' allow-list is the deployment configuration, read from the commit",
-    plan.config.length === 1 &&
-      plan.config[0].name === 'payers-claims-demo-operations-config.xml' &&
-      plan.config[0].text ===
-        spawnSync(
-          'git',
-          [
-            'show',
-            `${HEAD}:business-apps/packages/payers-claims-demo/deployment/payers-claims-demo-operations-config.xml`,
-          ],
-          { cwd: REPO, encoding: 'utf8' },
-        ).stdout,
+    "the operation buttons' allow-list, and since the kit's 0.8.0 its letters', is the deployment configuration, read from the commit",
+    JSON.stringify(plan.config.map((each) => each.name)) === JSON.stringify(PAYERS_CONFIG) &&
+      PAYERS_CONFIG.includes('payers-claims-demo-operations-config.xml') &&
+      plan.config.every(
+        (each) =>
+          each.text ===
+          spawnSync(
+            'git',
+            ['show', `${HEAD}:business-apps/packages/payers-claims-demo/deployment/${each.name}`],
+            { cwd: REPO, encoding: 'utf8' },
+          ).stdout,
+      ),
     JSON.stringify(plan.config.map((each) => each.source)),
     false,
   );
@@ -1848,7 +1861,7 @@ async function theCommand() {
         JSON.stringify(
           [
             'bundles/nuxeo-agentic-connectors-2026.0.2.jar',
-            'config/payers-claims-demo-operations-config.xml',
+            ...PAYERS_CONFIG.map((name) => `config/${name}`),
             'packages/brand-assets-demo-0.2.0.zip',
             'packages/contracts-demo-0.2.0.zip',
             'packages/facilities-demo-0.1.0.zip',
