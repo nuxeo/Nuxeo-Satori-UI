@@ -15,7 +15,7 @@ another way. Acting on a recommendation takes no decision: each stays open, and 
 still decide it another way. The security reviews wait until then too
 ([security-reviews.md](security-reviews.md)).
 
-Five recommendations need someone outside the work before anything can follow them, so they wait
+Six recommendations need someone outside the work before anything can follow them, so they wait
 for their owners rather than being acted on:
 
 - **4,** the security review of the registered computations and rules, which waits with the
@@ -24,7 +24,8 @@ for their owners rather than being acted on:
 - **G,** tenancy, which is designed with the platform team;
 - **H,** the e-signature service and the CAD and BIM viewer, chosen with procurement and presales;
 - **T,** telemetry, whose recommendation is to build nothing until its privacy and security reviews
-  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md)).
+  are done, so nothing that sends anything is built meanwhile ([telemetry.md](telemetry.md));
+- **K,** how customers and partners get the Builder kit, since publishing it is a product decision.
 
 **I,** protecting fields such as an insurance number, is a platform decision from the feasibility
 report. Until it is taken, a field that must not be shown to a group is left out of that group's
@@ -517,6 +518,15 @@ way.
   It loads no customer code into the shipped app, and the decision stays open. Once it is taken,
   the prototype can go, with its two guards: `checkPluginSpikeIsolated` and the `type:spike` probes
   in `scripts/beta-harness/module-boundaries.mjs`.
+
+## Open: from phase 3
+
+Raised on 27 November 2026, from phase 3's Done when: "someone outside the team builds a small app
+with the agent in a day".
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Owner                          | Needed by |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | --------- |
+| K   | How customers and partners get the Builder kit, without this repository: the pipeline, the generators, the MCP server and the app builder skill. Today all four run only from a clone of this public repository, after `npm ci` with a read token for Hyland's packages on GitHub Packages (`@nuxeo-satori/builder-mcp` and `@nuxeo-satori/generators` are private). Only this repository's `app-packages.yml` can sign a package (`business-apps/trusted-signers.json`). And Nuxeo-Satori-Config's builder checks no version 2 file | **Publish the Builder kit** as one versioned package, run with `npx`: the pipeline's command, the generators, the MCP server, and the skill inside it. **Ship a starter repository for a customer's app package:** a workflow that checks every change and signs with the customer's own identity, and a trusted-signers file naming it, which the verifier already takes with `--trusted-signers`. **Customers keep their packages in their own repository,** from the starter, or in Nuxeo-Satori-Config once its builder checks version 2; the product's own kits stay here (Settled, 26 November 2026). Preview, which runs the app's dev server, keeps needing the app until a hosted preview exists | Product, engineering, presales | Phase 3   |
 
 ## Open: from phase 10
 

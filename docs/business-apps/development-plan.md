@@ -332,7 +332,10 @@ faxes wait for capture, in phase 7.
 **Needs:**
 
 - Claude seats approved under Hyland's AI use requirements;
-- a development server with the Satori package.
+- a development server with the Satori package;
+- decision K, how customers and partners get the Builder kit without this repository. Today it
+  runs only from a clone of it, and only this repository's CI signs a package
+  ([decisions.md](decisions.md)).
 
 ### Phase 4. Studio migration (6 weeks)
 
