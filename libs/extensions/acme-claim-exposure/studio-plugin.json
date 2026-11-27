@@ -5,7 +5,7 @@
     "name": "Acme-Claims",
     "version": "1.0.0"
   },
-  "definition": "9a030c6664914cb82a02e51f281ad329c939038a77cc93dfa8b4a0aace5e90bb",
+  "definition": "62d573dcbc2ce59f6c5534b1c432d25dd2303e76141260e4b66ebe828f16fba5",
   "project": "acme-claim-exposure",
   "importPath": "@agentic-ui/acme-claim-exposure",
   "provider": "provideAcmeClaimExposurePlugin",

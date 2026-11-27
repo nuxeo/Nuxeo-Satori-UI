@@ -5,7 +5,7 @@
     "name": "Acme-Claims",
     "version": "1.0.0"
   },
-  "definition": "ae35e77abee4646a7df92b707c1226037eff6315668cd5c1dddde9c1e6e47464",
+  "definition": "2103d88810446adeeda3ed0a399865bc44fff79c07cc5524e3617b30548f7ac5",
   "project": "acme-claim-escalate",
   "importPath": "@agentic-ui/acme-claim-escalate",
   "provider": "provideAcmeClaimEscalatePlugin",

@@ -24,6 +24,7 @@
 import { createHash } from 'node:crypto';
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { PLUGIN_DIRECTORY } from './convert-elements';
+import { ELEMENT_NAME } from './elements';
 import type { Conversion, MigrationReport } from './convert';
 import { legible, type DecisionsBuild } from './decisions';
 
@@ -56,8 +57,14 @@ export interface ApprovedDigests {
  */
 export type PluginFiles = (library: string) => Readonly<Record<string, string>> | null;
 
-/** A library a plugin is written to, `libs/extensions/<element>`: no other directory is read. */
-const PLUGIN_LIBRARY = new RegExp(`^${PLUGIN_DIRECTORY}/[a-z][a-z0-9]*(-[a-z0-9]+)+$`);
+/**
+ * True for a library a plugin is written to, `libs/extensions/<element>`, of every element name
+ * the inventory takes: no other directory is read.
+ */
+function isPluginLibrary(library: string): boolean {
+  const prefix = `${PLUGIN_DIRECTORY}/`;
+  return library.startsWith(prefix) && ELEMENT_NAME.test(library.slice(prefix.length));
+}
 
 /**
  * The libraries of the plugins the report accepts, sorted: each custom element's proposal that
@@ -87,7 +94,7 @@ function pluginsDigest(libraries: readonly string[], plugins: PluginFiles): stri
   const lines: string[] = [];
   for (const library of libraries) {
     // A library the report names elsewhere than a plugin's directory is read from nowhere.
-    const files = PLUGIN_LIBRARY.test(library) ? plugins(library) : null;
+    const files = isPluginLibrary(library) ? plugins(library) : null;
     if (files === null) {
       lines.push(`${library}\u0000missing\n`);
       continue;
@@ -257,6 +264,11 @@ export function holdApproval(
     );
     return { findings, approval, approved: false };
   }
+  // A plugin the report accepts elsewhere than a plugin's library is covered by nothing.
+  for (const library of libraries.filter((candidate) => !isPluginLibrary(candidate)))
+    findings.push(
+      `the report accepts a plugin at ${library || 'no library'}, which is no plugin's library, so the approval covers nothing of it`,
+    );
   const now = digestsOf(conversion, plugins);
   const changed = [
     ...(raw['report'] !== now.report ? ['report.json'] : []),

@@ -30,7 +30,7 @@ npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-direct
 npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
 npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
-npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
 npx tsx tools/studio-migration/src/cli.ts approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
@@ -1267,17 +1267,17 @@ app from the template, as every customer library is today: nothing here loads co
    its template's bindings, the document properties they read, its conditions and the elements it
    uses; its listeners; the events it fires with `this.fire` or `new CustomEvent`; the operations
    its `nuxeo-operation` and `nuxeo-operation-button` run; its texts; where the package uses it;
-   and the SHA-256 of its definition. `inventory` prints it under "Custom elements". What an
+   and the SHA-256 of what it reaches in the package: its definition, the custom bundle's code outside its elements and slot contributions, where a behaviour or a mixin it uses is defined, and the files of the package either names in a `src` or an `href`, read once and not followed further. `inventory` prints it under "Custom elements". What an
    element holds is the element's: its scripts and conditions are not among the file's, and both
    counts of check 1 count the element whole.
 2. **The report proposes each element as its plugin** ([`src/convert-elements.ts`](src/convert-elements.ts)),
    a construct `custom-element:<file>#<n>`, `proposed`, with the plugin's library,
    `libs/extensions/<element>`, as where it goes. It is a proposal as a condition's rule is
    (**The report**, above): a person accepts or rejects it in `decisions.json`, with their name and
-   reason, held to the element by its identity, the SHA-256 of its definition, and the report
+   reason, held to the element by its identity, of that SHA-256, and the report
    records what the conversion was made with, `applied`. Accepting it writes nothing of the
    conversion. Readiness waits for the decision, so a plugin that passes check 9 is not ready on
-   that alone, and a decision is carried to a new build only while the element is the same.
+   that alone, and a decision is carried to a new build only while what the element reaches in the package is the same: what it reaches beyond it, Web UI's own behaviours, is not in it.
    `approve` records, beside the report's digests, the SHA-256 of every file of each accepted
    plugin's library, `studio-plugin.json` among them, read from this repository or the one
    `--plugins` names: a plugin changed after the approval voids it. A contribution that holds a custom
@@ -1300,9 +1300,9 @@ app from the template, as every customer library is today: nothing here loads co
 5. **Check 9** ([`src/check-plugins.ts`](src/check-plugins.ts), [`src/plugin-scan.ts`](src/plugin-scan.ts),
    [`src/plugin-run.ts`](src/plugin-run.ts)) holds each plugin to its element:
    - **the report** lists the element as its plugin, a proposal a person decides, at its library;
-     a rejected plugin is not held to its element, and the template must not build it in;
+     a rejected plugin is not held to its element, and its library must be gone;
    - **the plugin** is the element's, from its definition as the package holds it now, with its
-     interface, built into the template app, with the template's build and test configuration, a
+     interface, built into the template app from its own library, as the template's `tsconfig.app.json` resolves its import path, with no directory check 9 does not read, `node_modules` or `.git`, with the template's build and test configuration, a
      test of every behaviour the inventory read or a reason in its README's "Not kept";
    - **a scan** of its shipped code finds no data written as HTML, no sanitiser bypassed, no text
      run as code, no URL bound to `[src]` that is not a blob URL it revokes, no Nuxeo URL in a
@@ -1360,7 +1360,7 @@ which were then finished with the skill and built into `apps/nuxeo-satori-templa
 - **Placing a plugin** is a person's, as they accept it: the conversion writes no manifest entry for
   it, and the record page's layout file holds no component.
 - **The template's own configuration** is not in the approval: it covers each accepted plugin's
-  library, and check 9 holds the template to build each accepted plugin in and no rejected one.
+  library, and check 9 holds the template to build each accepted plugin in, from its own library as `tsconfig.app.json` resolves its import path, and a rejected plugin's library to be gone from the repository. Check 9 reads no other file of the template app: the rest of the fork is the customer's own code, which their review holds.
 - **The observed behaviour of a real element** needs Web UI on the migration server.
 - **Another language** than the package's own: the plugin carries its element's texts in that
   language, since the template provides no translation service.

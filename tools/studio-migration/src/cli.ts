@@ -10,7 +10,7 @@
  *   mutate    --list                                          the mutations, and what must refuse each
  *   decisions <package.zip> <conversion-directory> [--from <decisions.json>]
  *                                                             the decisions file, for people to fill in
- *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+ *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
  *                                                             the report, for the person who approves it
  *   approve   <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
  *                                                             a person's approval of the report and its
@@ -146,7 +146,7 @@ const USAGE = `usage:
   studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
-  studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+  studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
   studio-migration approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
   studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
@@ -174,7 +174,7 @@ const COMMANDS: Readonly<
   },
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
-  report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
+  report: { args: 2, flags: ['--json'], valued: ['--allow-list', '--plugins'] },
   approve: { args: 2, flags: [], valued: ['--by', '--plugins'] },
   migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
   plugin: { args: 2, flags: ['--restamp'], valued: ['--workspace', '--owner'] },
@@ -387,7 +387,7 @@ export function main(argv: readonly string[], io: CliIo): number {
           catalogue: loadCatalogue(),
           conversion: readConversion(args[1]),
           ...(allowList ? { allowList } : {}),
-          plugins: readPlugins(WORKSPACE, read),
+          plugins: readPlugins(values.get('--plugins') ?? WORKSPACE, read),
         });
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
         io.reported?.(summary);

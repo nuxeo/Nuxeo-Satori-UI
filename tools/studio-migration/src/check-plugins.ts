@@ -29,7 +29,9 @@
  * decision as the report records the conversion was made with it, `applied`, and readiness holds
  * that to `decisions.json`: a plugin passing check 9 is not ready until a person accepts it, and
  * the approval covers each accepted plugin's files (`approval.ts`). A rejected plugin is not held to
- * its element, and must not be built in.
+ * its element, so its library must be gone, and the template must not import it. An accepted one
+ * is built from its own library, as the template's `tsconfig.app.json` resolves its import path.
+ * Check 9 reads no other file of the template app: the rest of the fork is the customer's code.
  */
 import { isDeepStrictEqual } from 'node:util';
 import { pluginLibraryOf } from './convert-elements';
@@ -45,7 +47,7 @@ import {
 } from './plugin';
 import { pluginMetadata, type PluginRun } from './plugin-run';
 import { scanConfiguration, scanPlugin, scanPublicApi, shipped } from './plugin-scan';
-import type { PluginSource, PluginsInput } from './plugins';
+import { TEMPLATE_TSCONFIG, type PluginSource, type PluginsInput } from './plugins';
 import * as ts from 'typescript';
 
 export function checkPlugins(input: HarnessInput): CheckOutcome {
@@ -73,7 +75,12 @@ export function checkPlugins(input: HarnessInput): CheckOutcome {
     if (!plugins) continue;
     const source = plugins.sources.find((candidate) => candidate.element === element.name);
     if (entry?.proposal === true && entry.applied === 'reject') {
-      // Rejected: nothing of it is held to the element, so nothing of it may ship.
+      // Rejected: nothing of it is held to the element, so nothing of it may stay where it can be
+      // built in. Its library gone, no import of it builds, whichever file of the app holds it.
+      if (source)
+        findings.push(
+          `${library}, the plugin of ${element.name}, which a person rejected, is still in the repository: remove it, with its import path and its provider, so that nothing builds it in`,
+        );
       if (builtIn(plugins.template?.text ?? '', element, source))
         findings.push(
           `${plugins.template?.path ?? 'the template'} builds in ${library}, the plugin of ${element.name}, which a person rejected: take it out of the template's providers`,
@@ -199,6 +206,23 @@ function holdPlugin(
   )
     findings.push(
       `${template.path} does not build ${source.library} in: import ${String(metadata.provider)} from ${String(metadata.importPath)} and call it among its providers`,
+    );
+  // From its own library: the import path resolves, for the template, to the library's entry point.
+  const entryPoint = `${source.library}/src/index.ts`;
+  const resolved =
+    typeof metadata.importPath === 'string' ? plugins.aliases?.[metadata.importPath] : undefined;
+  if (plugins.aliases === null || plugins.aliases === undefined)
+    findings.push(
+      `${TEMPLATE_TSCONFIG} could not be read, so where the template builds ${source.library} from is not known`,
+    );
+  else if (resolved?.length !== 1 || resolved[0] !== entryPoint)
+    findings.push(
+      `${TEMPLATE_TSCONFIG} resolves ${String(metadata.importPath)} to ${resolved?.join(', ') || 'nothing'}, not to ${entryPoint}: the template builds the plugin from its own library`,
+    );
+  // What is not read is held by nothing.
+  for (const path of source.skipped ?? [])
+    findings.push(
+      `${source.library}/${path} is a directory check 9 does not read: a plugin holds no installed packages and no repository of its own`,
     );
 
   // Tested and built as the template sets a library up, which the run uses whatever these say.

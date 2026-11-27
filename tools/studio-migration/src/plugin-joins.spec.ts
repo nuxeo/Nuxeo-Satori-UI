@@ -170,15 +170,29 @@ describe('a plugin is a proposal a person decides', () => {
     expect(runCheck(accepted, 9)?.findings).toEqual([]);
   });
 
-  it('holds nothing of a rejected plugin to its element, and refuses one still built in', () => {
+  it('holds nothing of a rejected plugin to its element, and refuses one still there or built in', () => {
     const rejected = decided(corpus, decide(first.file, [ESCALATE]));
     expect(
       rejected.conversion.report.constructs.find((entry) => entry.id === ESCALATE),
     ).toMatchObject({ applied: 'reject' });
     expect(runCheck(rejected, 9)?.findings).toEqual([
+      'libs/extensions/acme-claim-escalate, the plugin of acme-claim-escalate, which a person rejected, is still in the repository: remove it, with its import path and its provider, so that nothing builds it in',
       `${TEMPLATE_CONFIG} builds in libs/extensions/acme-claim-escalate, the plugin of acme-claim-escalate, which a person rejected: take it out of the template's providers`,
     ]);
-    // Taken out of the template, and broken, as a rejected plugin may be: nothing of it is held.
+    // Its library gone, no file of the app can build it in, whichever imports it; and the
+    // template's line naming it is refused too.
+    const gone: Input = {
+      ...rejected,
+      plugins: {
+        ...rejected.plugins,
+        sources: rejected.plugins.sources.filter(
+          (source) => source.element !== 'acme-claim-escalate',
+        ),
+      },
+    };
+    expect(runCheck(gone, 9)?.findings).toEqual([
+      `${TEMPLATE_CONFIG} builds in libs/extensions/acme-claim-escalate, the plugin of acme-claim-escalate, which a person rejected: take it out of the template's providers`,
+    ]);
     const template = rejected.plugins.template?.text ?? '';
     const without = template
       .split('\n')
@@ -186,18 +200,48 @@ describe('a plugin is a proposal a person decides', () => {
       .join('\n');
     expect(without).not.toBe(template);
     const out: Input = {
-      ...rejected,
+      ...gone,
+      plugins: { ...gone.plugins, template: { path: TEMPLATE_CONFIG, text: without } },
+    };
+    expect(runCheck(out, 9)?.findings).toEqual([]);
+    expect(peoples(runHarness(out).blockers).filter((line) => /proposal/.test(line))).toEqual([]);
+  });
+
+  it('builds an accepted plugin from its own library: an import path resolved elsewhere fails check 9', () => {
+    const exposure = '@agentic-ui/acme-claim-exposure';
+    expect(accepted.plugins.aliases?.[exposure]).toEqual([
+      'libs/extensions/acme-claim-exposure/src/index.ts',
+    ]);
+    const elsewhere: Input = {
+      ...accepted,
       plugins: {
-        ...rejected.plugins,
-        template: { path: TEMPLATE_CONFIG, text: without },
-        sources: rejected.plugins.sources.map((source) =>
-          source.element === 'acme-claim-escalate'
-            ? { ...source, files: { ...source.files, 'src/index.ts': 'eval("1");\n' } }
+        ...accepted.plugins,
+        aliases: { ...accepted.plugins.aliases, [exposure]: ['libs/other/src/index.ts'] },
+      },
+    };
+    expect(runCheck(elsewhere, 9)?.findings).toEqual([
+      'apps/nuxeo-satori-template/tsconfig.app.json resolves @agentic-ui/acme-claim-exposure to libs/other/src/index.ts, not to libs/extensions/acme-claim-exposure/src/index.ts: the template builds the plugin from its own library',
+    ]);
+    // The approval still holds, as it covers the library: check 9 is what stands in the way.
+    expect(runHarness(elsewhere).blockers).toContain('check 9 failed');
+    expect(peoples(runHarness(elsewhere).blockers)).toEqual([]);
+  });
+
+  it('refuses a directory it does not read in a plugin, installed packages or a repository', () => {
+    const nested: Input = {
+      ...accepted,
+      plugins: {
+        ...accepted.plugins,
+        sources: accepted.plugins.sources.map((source) =>
+          source.element === 'acme-claim-exposure'
+            ? { ...source, skipped: ['src/node_modules'] }
             : source,
         ),
       },
     };
-    expect(runCheck(out, 9)?.findings).toEqual([]);
+    expect(runCheck(nested, 9)?.findings).toEqual([
+      'libs/extensions/acme-claim-exposure/src/node_modules is a directory check 9 does not read: a plugin holds no installed packages and no repository of its own',
+    ]);
   });
 });
 
@@ -252,6 +296,62 @@ describe("the approval covers each accepted plugin's files", () => {
   it('names no plugin of a conversion that accepts none', () => {
     const none = decided(corpus, decide(first.file, [EXPOSURE, ESCALATE]));
     expect(digestsOf(none.conversion).plugins).toBeNull();
+  });
+
+  it("covers a plugin of every element name the inventory takes, and none outside a plugin's library", () => {
+    // A name the plugin command would not write, but the inventory reads: still covered.
+    const odd = (files: Record<string, string>): string | null =>
+      digestsOf(
+        {
+          ...accepted.conversion,
+          report: {
+            ...accepted.conversion.report,
+            constructs: accepted.conversion.report.constructs.map((entry) =>
+              entry.id === EXPOSURE ? { ...entry, to: 'libs/extensions/acme_claim-x.v2' } : entry,
+            ),
+          },
+        },
+        (library) => (library === 'libs/extensions/acme_claim-x.v2' ? files : null),
+      ).plugins;
+    expect(odd({ 'src/index.ts': 'a' })).not.toBe(odd({ 'src/index.ts': 'b' }));
+    const outside: Conversion = {
+      ...accepted.conversion,
+      report: {
+        ...accepted.conversion.report,
+        constructs: accepted.conversion.report.constructs.map((entry) =>
+          entry.id === EXPOSURE ? { ...entry, to: 'libs/extensions/../../tools' } : entry,
+        ),
+      },
+    };
+    expect(holdApproval(outside, build, pluginFilesOf(accepted.plugins)).findings).toContain(
+      "the report accepts a plugin at libs/extensions/../../tools, which is no plugin's library, so the approval covers nothing of it",
+    );
+  });
+
+  it('voids the approval for a file added to an accepted plugin, or taken away', () => {
+    const withFiles = (change: (files: Record<string, string>) => Record<string, string>) =>
+      holdApproval(
+        accepted.conversion,
+        build,
+        pluginFilesOf({
+          ...accepted.plugins,
+          sources: accepted.plugins.sources.map((source) =>
+            source.element === 'acme-claim-escalate'
+              ? { ...source, files: change({ ...source.files }) }
+              : source,
+          ),
+        }),
+      ).approved;
+    expect(withFiles((files) => files)).toBe(true);
+    expect(withFiles((files) => ({ ...files, 'src/lib/extra.ts': 'export const x = 1;\n' }))).toBe(
+      false,
+    );
+    expect(
+      withFiles((files) => {
+        const { 'README.md': _readme, ...rest } = files;
+        return rest;
+      }),
+    ).toBe(false);
   });
 
   it('reads no directory but a plugin library, whatever the report names', () => {
@@ -327,6 +427,39 @@ describe('each deliberate breakage of the joins stands in the way of readiness',
     expect(bundle[M3_CUSTOM_BUNDLE]).not.toBe(corpus[M3_CUSTOM_BUNDLE]);
     return decided(bundle, accepted.conversion.decisions as DecisionsFile);
   };
+
+  it('makes an element another when what it can reach in the package changes, not its slot contribution', () => {
+    const bundleText = corpus[M3_CUSTOM_BUNDLE] ?? '';
+    const identities = (bundle: Record<string, string>) => {
+      const read = identitiesOf(inventory(readStudioPackage(syntheticPackage({ bundle }))));
+      return [read.get(EXPOSURE), read.get(ESCALATE)];
+    };
+    const [exposure, escalate] = identities(corpus);
+    // The bundle's code outside its elements, where a behaviour either uses may be defined.
+    const scripted = {
+      ...corpus,
+      [M3_CUSTOM_BUNDLE]: `${bundleText}\n<script>window.Acme = { ClaimBehavior: {} };</script>\n`,
+    };
+    const [exposure2, escalate2] = identities(scripted);
+    expect([exposure2 === exposure, escalate2 === escalate]).toEqual([false, false]);
+    // A file the element names, by its bytes.
+    const naming = (code: string) => ({
+      ...corpus,
+      [M3_CUSTOM_BUNDLE]: bundleText.replace(
+        '<dom-module id="acme-claim-exposure">',
+        '<dom-module id="acme-claim-exposure">\n  <script src="acme-claim-helpers.js"></script>',
+      ),
+      'web/nuxeo.war/ui/acme-claim-helpers.js': code,
+    });
+    expect(identities(naming('var a = 1;'))[0]).not.toBe(identities(naming('var a = 2;'))[0]);
+    // A slot contribution is configuration, not code an element runs.
+    const reordered = {
+      ...corpus,
+      [M3_CUSTOM_BUNDLE]: bundleText.replace('order="30"', 'order="40"'),
+    };
+    expect(reordered[M3_CUSTOM_BUNDLE]).not.toBe(bundleText);
+    expect(identities(reordered)).toEqual([exposure, escalate]);
+  });
 
   it('carries no acceptance of a plugin to its element changed in a new build', () => {
     const later = changedBuild();

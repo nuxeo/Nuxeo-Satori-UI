@@ -274,8 +274,7 @@ yet: you can reject it, with your reason, and not accept it.
 A custom element of your custom bundle is proposed as a Layer 2 plugin, a library in your copy of
 this repository at the entry's `to`, which an agent or a developer writes and check 9 holds to the
 element. Accept it once check 9 passes and you have read the plugin: the conversion writes nothing
-for it, and your acceptance is what readiness waits for. Reject it, and it must not be built into
-your app. The approval covers each plugin you accepted, file by file, so changing one afterwards
+for it, and your acceptance is what readiness waits for. Reject it, and delete its library, so that nothing builds it into your app. The approval covers each plugin you accepted, file by file, so changing one afterwards
 means approving again. A changed element in a new build of your package is another element: its
 earlier decision is not carried, and you decide its plugin again.
 

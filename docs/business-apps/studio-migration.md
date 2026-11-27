@@ -262,8 +262,7 @@ an owner and a decision, and a person has approved the report and its decisions 
 - **A plugin not written, or not run,** leaves the check `partial`.
 - **A person decides it.** A plugin is a proposal of the report, as a condition's rule is: a person
   accepts or rejects it in `decisions.json`, by the element's identity, and readiness waits for that
-  (section 8). Check 9 reads the decision as the report records the conversion was made with it. A
-  rejected plugin is not held to its element, and must not be built into the template. The approval
+  (section 8). Check 9 reads the decision as the report records the conversion was made with it. A rejected plugin is not held to its element, and its library must be gone from the repository. The approval
   covers each accepted plugin's files, `studio-plugin.json` among them, so a plugin changed after
   it is approved voids the approval.
 
@@ -553,8 +552,7 @@ These sit inside the [development plan](development-plan.md):
   tripwire that a person's review completes.
 - **Decided and approved as any proposal.** Since the report's own slice (below, **Where the report
   stands**), a plugin is accepted or rejected in `decisions.json` with a person's name and reason,
-  by its element's identity, the SHA-256 of the element's definition: a decision is carried to a new
-  build only while the element is the same, so a changed element's plugin is decided again.
+  by its element's identity, the SHA-256 of what the element reaches in the package (its definition, the custom bundle's code outside its elements, and the package's files it names): a decision is carried to a new build only while all of that is the same, so a changed element's plugin is decided again. What it reaches beyond the package, Web UI's own behaviours, is not in it.
   Readiness waits for the decision whatever check 9 says, and `approve` records the SHA-256 of every
   file of each accepted plugin's library beside the report's, so a plugin changed after the
   approval voids it. Three negative controls hold these joins, each seen failing: a plugin the
@@ -578,7 +576,7 @@ These sit inside the [development plan](development-plan.md):
     plugin places it with a manifest entry;
   - another language than the package's own in a plugin;
   - the template app's own configuration in the approval: it covers each accepted plugin's library,
-    and check 9 holds the template to build each accepted plugin in and no rejected one.
+    and check 9 holds the template to build each accepted plugin in from its own library, through `tsconfig.app.json`'s import path, and a rejected plugin's library to be gone; the rest of the fork is the customer's own code, which check 9 does not read.
 - **Not checked:** on a real package, or by a person reviewing a migrated plugin for a customer.
 
 **Where M4 stands, 26 November 2026:**

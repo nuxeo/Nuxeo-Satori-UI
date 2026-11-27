@@ -7,6 +7,8 @@
  * `unrecognised` rather than skipped; a file that cannot be read is listed in `problems` rather
  * than ending the run.
  */
+import { createHash } from 'node:crypto';
+import { posix } from 'node:path';
 import {
   attributesOf,
   childLabel,
@@ -427,6 +429,42 @@ export function classify(
   return BUNDLE_KINDS.find(([pattern]) => pattern.test(path))?.[1] ?? 'unrecognised';
 }
 
+/**
+ * The SHA-256 of what a custom element can reach in the package: its definition, `own`; the code of
+ * its custom bundle outside its elements and slot contributions, `bundle`; and each file of the
+ * package either names, with its bytes, or "absent" for one the package does not hold, such as
+ * Web UI's own. Read once, not followed further.
+ */
+function reachOf(
+  element: Pick<CustomElement, 'sha256'>,
+  bundle: { readonly markup: string; readonly named: readonly string[] } | undefined,
+  own: readonly string[],
+  file: (path: string) => Buffer | undefined,
+): string {
+  const hash = createHash('sha256').update(`definition\u0000${element.sha256}\n`);
+  hash.update(`bundle\u0000${bundle?.markup ?? ''}\n`);
+  for (const path of [...new Set([...own, ...(bundle?.named ?? [])])].sort()) {
+    const bytes = file(path);
+    hash.update(
+      `${path}\u0000${bytes ? createHash('sha256').update(bytes).digest('hex') : 'absent'}\n`,
+    );
+  }
+  return hash.digest('hex');
+}
+
+/** The files of the package the elements given name in a `src` or an `href`, from `path`'s folder. */
+function namedFiles(path: string, elements: readonly Element[]): string[] {
+  const folder = posix.dirname(path);
+  return elements.flatMap((element) =>
+    ['src', 'href'].flatMap((attribute) => {
+      const value = element.getAttribute(attribute)?.trim() ?? '';
+      // A URL of another origin, a fragment or a data URL is no file of the package.
+      if (value === '' || /^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(value)) return [];
+      return [posix.normalize(posix.join(folder, value.split(/[?#]/)[0] ?? ''))];
+    }),
+  );
+}
+
 export function inventory(pkg: StudioPackage): Inventory {
   // Every path asked for comes from the bundle's own listing, so it is always there.
   const read = (path: string): string =>
@@ -488,6 +526,8 @@ export function inventory(pkg: StudioPackage): Inventory {
   /** Each block use's element, for the slot contribution that holds it. */
   const useAt = new Map<Element, BlockUse>();
   const customElements: CustomElement[] = [];
+  /** The package's files each custom element names in a `src` or an `href`, for its SHA-256. */
+  const named = new Map<CustomElement, readonly string[]>();
   /** The custom elements each Web UI file uses, by name, for each element's `uses`. */
   const usedIn = new Map<string, Set<string>>();
   const webUi = (
@@ -500,13 +540,13 @@ export function inventory(pkg: StudioPackage): Inventory {
     // that its scripts, conditions and elements are not counted as the rest of the package's.
     if (options.customBundle)
       for (const module of elementModules(document)) {
-        customElements.push(
-          readCustomElement(
-            path,
-            customElements.filter((element) => element.path === path).length,
-            module,
-          ),
+        const element = readCustomElement(
+          path,
+          customElements.filter((candidate) => candidate.path === path).length,
+          module,
         );
+        customElements.push(element);
+        named.set(element, namedFiles(path, [module, ...elementsOf(module)]));
         module.remove();
       }
     conditions.push(
@@ -695,6 +735,8 @@ export function inventory(pkg: StudioPackage): Inventory {
 
   // Judged on the parsed file, where comments are nodes of their own, rather than by cutting
   // comments out of the text, which a malformed comment can survive.
+  /** Each custom bundle's code outside its elements and slot contributions, as markup. */
+  const bundleCode = new Map<string, { markup: string; named: readonly string[] }>();
   const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => {
     const rest = parseHtml(read(path));
     for (const module of elementModules(rest)) module.remove();
@@ -702,6 +744,10 @@ export function inventory(pkg: StudioPackage): Inventory {
       (element) => element.localName === 'nuxeo-slot-content',
     ))
       contribution.remove();
+    bundleCode.set(path, {
+      markup: rest.documentElement.outerHTML,
+      named: namedFiles(path, elementsOf(rest)),
+    });
     return {
       path,
       hasCode: hasContent(parseHtml(read(path))),
@@ -815,6 +861,13 @@ export function inventory(pkg: StudioPackage): Inventory {
     // Where each is used: the package's files, and the templates of its other elements.
     customElements: customElements.map((element) => ({
       ...element,
+      // What it can reach in the package: its definition, the custom bundle's code outside its
+      // elements, where a behaviour or a mixin it uses is defined, and the package's files either
+      // names in a `src` or an `href`. A change to any of them makes it another element, whose
+      // plugin is decided again (its identity, `constructs.ts`) and restamped (check 9).
+      sha256: reachOf(element, bundleCode.get(element.path), named.get(element) ?? [], (file) =>
+        pkg.bundleFiles.get(file),
+      ),
       uses: [
         ...(usedIn.get(element.name) ?? []),
         ...customElements

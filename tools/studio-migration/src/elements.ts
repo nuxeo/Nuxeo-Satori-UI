@@ -93,8 +93,11 @@ export interface CustomElement {
   /** The files of the package that use it, outside its own definition. */
   readonly uses: readonly string[];
   /**
-   * The SHA-256 of its definition's markup, script included: a plugin records the one it was
-   * written from, and check 9 tells it when the element has changed since.
+   * The SHA-256 of what it can reach in the package: its definition's markup, script included,
+   * and, once the inventory has read the whole package, the custom bundle's code outside its
+   * elements and the package's files it names (`inventory.ts`, `reachOf`). A plugin records the one
+   * it was written from, check 9 tells it when the element has changed since, and the element's
+   * identity is of it, so a decision is not carried to a changed element.
    */
   readonly sha256: string;
 }
@@ -108,10 +111,16 @@ export function definesElement(module: Element): boolean {
   const id = module.getAttribute('id')?.trim() ?? '';
   return (
     module.localName === 'dom-module' &&
-    /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/.test(id) &&
+    ELEMENT_NAME.test(id) &&
     elementsOf(module).some((child) => child.localName === 'script')
   );
 }
+
+/**
+ * A custom element's name, as `definesElement` takes one: a letter, then letters, digits, dots,
+ * underscores and hyphens, with a hyphen among them. Never `.` or `..`, so a directory of it is one.
+ */
+export const ELEMENT_NAME = /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/;
 
 /** The `dom-module`s of a parsed custom bundle that define elements, in document order. */
 export function elementModules(document: Document): Element[] {
