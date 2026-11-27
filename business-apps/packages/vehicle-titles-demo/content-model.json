@@ -1,0 +1,130 @@
+{
+  "doctypes": {
+    "VehicleTitle": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "vehicletitle"]
+    },
+    "VehicleDeal": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "files", "vehicledeal", "vehicledeal_docs"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "vehicletitle",
+      "prefix": "vtitle",
+      "@prefix": "vtitle",
+      "fields": {
+        "number": "string",
+        "issuingState": "string",
+        "vin": "string",
+        "vehicle": "string",
+        "owner": "string",
+        "status": "string",
+        "lienHolder": "string",
+        "payoffSentOn": "date",
+        "lienReleasedOn": "date",
+        "openedOn": "date",
+        "submittedOn": "date",
+        "issuedOn": "date",
+        "clerk": "string",
+        "notes": "string"
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "vehicledeal",
+      "prefix": "vdeal",
+      "@prefix": "vdeal",
+      "fields": {
+        "number": "string",
+        "buyer": "string",
+        "buyerEmail": "string",
+        "buyerPhone": "string",
+        "vin": "string",
+        "year": "string",
+        "make": "string",
+        "model": "string",
+        "price": "double",
+        "financeType": "string",
+        "lender": "string",
+        "amountFinanced": "double",
+        "termMonths": "long",
+        "tradeIn": "boolean",
+        "tradeInVehicle": "string",
+        "tradeInVin": "string",
+        "tradeInAllowance": "double",
+        "tradeInPayoff": "double",
+        "tradeInTitle": "string",
+        "title": "string",
+        "status": "string",
+        "salesperson": "string",
+        "financeManager": "string",
+        "soldOn": "date",
+        "deliveredOn": "date",
+        "notes": "string"
+      }
+    },
+    {
+      "name": "vehicledeal_docs",
+      "prefix": "vdocs",
+      "@prefix": "vdocs",
+      "fields": {
+        "checklist": {
+          "type": "complex[]",
+          "fields": {
+            "item": "string",
+            "done": "boolean",
+            "doneBy": "string",
+            "doneOn": "date"
+          }
+        }
+      }
+    }
+  ]
+}

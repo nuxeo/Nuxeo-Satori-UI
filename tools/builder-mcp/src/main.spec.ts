@@ -27,7 +27,12 @@ const NUXEO_TOOLS = [
   'list_operations',
   'describe_operation',
 ];
-const WRITE_TOOLS = ['write_package_file', 'apply_generator', 'apply_package_changes'];
+const WRITE_TOOLS = [
+  'write_package_file',
+  'remove_package_file',
+  'apply_generator',
+  'apply_package_changes',
+];
 
 /** The environment without any Nuxeo setting or package root, so each test says which it gives. */
 function environment(extra: Record<string, string> = {}): NodeJS.ProcessEnv {

@@ -88,6 +88,7 @@ describe("the Properties panel's generated headings in each business-apps kit", 
         'payers-claims-demo',
         'pc-claims-demo',
         'records-demo',
+        'vehicle-titles-demo',
       ]),
     );
   });

@@ -3,6 +3,8 @@ import { join, posix } from 'node:path';
 
 import { workspaceRoot, type Tree } from '@nx/devkit';
 
+import { jsonFileText } from '../util/json-file-text';
+
 /**
  * What the business-app generators share: finding the app definition package they add to, and the
  * two files more than one of them writes into, its labels and its component.
@@ -111,6 +113,16 @@ export function parseJson(text: string, file: string): unknown {
 /** `value` as the generators write JSON. `formatFiles` then formats it as the repository does. */
 export function writeJson(tree: Tree, file: string, value: unknown): void {
   tree.write(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/**
+ * A file the layout designer opens, a type's record page or form, or a queue, written as the
+ * designer writes it (`util/json-file-text.ts`): so that the designer opens it and saves it back
+ * byte for byte, as `round-trip.spec.ts` holds every kit's files to. Written with `writeJson`, an
+ * entry that fits on a line, `{ "field": "dc:title", "required": true }`, is kept across four.
+ */
+export function writeDesignedJson(tree: Tree, file: string, value: unknown): void {
+  tree.write(file, jsonFileText(value));
 }
 
 /**
@@ -308,6 +320,69 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   if (end < 0) throw new Error(`${pkg.component} has no </component>.`);
   const lineStart = markup.lastIndexOf('\n', end) + 1;
   tree.write(pkg.component, `${xml.slice(0, lineStart)}\n${extension}${xml.slice(lineStart)}`);
+}
+
+/**
+ * Takes out of the package's component each `<layout>` of its configuration extensions whose file,
+ * `agentic-ui-config/layouts/<Type>/<mode>.layout.json`, the package no longer holds: the pipeline
+ * refuses a contribution whose file is gone, and the server would serve nothing for it. Answers the
+ * layouts taken out, as `<Type>/<mode>`. An entry is taken out with its line when it is the only
+ * thing on it, as the generators write it; then an extension left holding nothing but blank lines
+ * goes too, with its own lines. A disabled entry is taken out the same way, since it names a file
+ * that is gone.
+ */
+export function uncontributeMissingLayouts(tree: Tree, pkg: AppPackage): string[] {
+  const read = tree.read(pkg.component, 'utf-8');
+  if (read === null) throw new Error(`Cannot read ${pkg.component}.`);
+  let xml: string = read;
+  const removed: string[] = [];
+  /** The whole lines from `from` to `to`, when nothing else is on them; else `null`. */
+  const lines = (markup: string, from: number, to: number): [number, number] | null => {
+    const start = markup.lastIndexOf('\n', from - 1) + 1;
+    const next = markup.indexOf('\n', to);
+    const end = next < 0 ? markup.length : next + 1;
+    return markup.slice(start, from).trim() === '' && markup.slice(to, end).trim() === ''
+      ? [start, end]
+      : null;
+  };
+  for (;;) {
+    const markup = markupOnly(xml);
+    const extensions = configurationExtensions(pkg, markup);
+    let inside: Extension | undefined;
+    const gone = [...markup.matchAll(startTag('layout'))].find((match) => {
+      const at = match.index ?? 0;
+      const src = attribute(match[0], 'src');
+      inside = extensions.find(({ start, close }) => at > start && at < close);
+      return (
+        inside !== undefined &&
+        src !== undefined &&
+        match[0].endsWith('/>') &&
+        /^agentic-ui-config\/layouts\/[^/]+\/[^/]+\.layout\.json$/.test(src) &&
+        !tree.exists(`${pkg.root}/bundle/${src}`)
+      );
+    });
+    if (gone === undefined || inside === undefined) break;
+    const at = gone.index ?? 0;
+    const end = at + gone[0].length;
+    removed.push(`${attribute(gone[0], 'type') ?? '?'}/${attribute(gone[0], 'mode') ?? '?'}`);
+    const own = lines(markup, at, end);
+    const [from, to] = own ?? [at, end];
+    // The extension it was in, when it would hold nothing else, goes with it, its lines and all.
+    const body = `${markup.slice(inside.start, from)}${markup.slice(to, inside.close)}`.replace(
+      /^<extension\b(?:[^>"']|"[^"]*"|'[^']*')*>/,
+      '',
+    );
+    const closeEnd = markup.indexOf('>', inside.close) + 1;
+    const whole = body.trim() === '' ? lines(markup, inside.start, closeEnd) : null;
+    if (whole) {
+      const [wholeFrom, wholeTo] = whole;
+      // With the blank line before it, when one is left between two others.
+      const blank = wholeFrom >= 2 && markup.slice(wholeFrom - 2, wholeFrom) === '\n\n' ? 1 : 0;
+      xml = `${xml.slice(0, wholeFrom - blank)}${xml.slice(wholeTo)}`;
+    } else xml = `${xml.slice(0, from)}${xml.slice(to)}`;
+  }
+  if (removed.length > 0) tree.write(pkg.component, xml);
+  return removed;
 }
 
 /** An element's start tag, as the pipeline's `TAG` reads one: its attributes, quoted either way. */

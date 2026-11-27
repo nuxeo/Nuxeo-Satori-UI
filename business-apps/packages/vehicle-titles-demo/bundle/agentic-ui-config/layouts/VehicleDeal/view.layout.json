@@ -1,0 +1,259 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "capture": { "property": "files:files", "findBy": ["vdeal:number", "vdeal:vin"] },
+  "banners": [
+    {
+      "id": "cancelled",
+      "tone": "negative",
+      "labelKey": "vehicle-titles.banner.deal.cancelled",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "vdeal:status" }, "Cancelled"]
+      }
+    },
+    {
+      "id": "not-funded",
+      "tone": "warning",
+      "labelKey": "vehicle-titles.banner.deal.notFunded",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vdeal:status" }, "Contracted"]
+          },
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+          },
+          {
+            "type": "app.rules.dateAfter",
+            "parameters": ["today", { "field": "vdeal:soldOn" }, 10]
+          }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "deal",
+      "labelKey": "vehicle-titles.card.vehicleDeal.deal",
+      "fields": [
+        "vdeal:number",
+        { "field": "dc:title", "labelKey": "vehicle-titles.field.dealTitle" },
+        {
+          "field": "vdeal:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Working": "info",
+              "Contracted": "warning",
+              "Funded": "positive",
+              "Delivered": "positive",
+              "Cancelled": "negative"
+            }
+          }
+        },
+        { "field": "vdeal:soldOn", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "vdeal:deliveredOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysSinceSale",
+          "labelKey": "vehicle-titles.field.daysSinceSale",
+          "widget": "number",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "vdeal:soldOn" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "core.not",
+            "parameters": [
+              {
+                "type": "app.rules.fieldIn",
+                "parameters": [{ "field": "vdeal:status" }, "Working", "Delivered", "Cancelled"]
+              }
+            ]
+          }
+        },
+        { "field": "vdeal:salesperson", "widget": "user" },
+        { "field": "vdeal:financeManager", "widget": "user" }
+      ]
+    },
+    {
+      "id": "buyer",
+      "labelKey": "vehicle-titles.card.vehicleDeal.buyer",
+      "fields": [
+        "vdeal:buyer",
+        { "field": "vdeal:buyerEmail", "widget": "email" },
+        { "field": "vdeal:buyerPhone", "widget": "phone" }
+      ]
+    },
+    {
+      "id": "vehicle",
+      "labelKey": "vehicle-titles.card.vehicleDeal.vehicle",
+      "fields": ["vdeal:vin", "vdeal:year", "vdeal:make", "vdeal:model"]
+    },
+    {
+      "id": "price",
+      "labelKey": "vehicle-titles.card.vehicleDeal.price",
+      "fields": [
+        { "field": "vdeal:price", "widget": "currency", "parameters": { "currency": "USD" } },
+        {
+          "field": "vdeal:financeType",
+          "widget": "status-badge",
+          "parameters": { "tones": { "Cash": "neutral", "Loan": "info", "Lease": "info" } }
+        },
+        {
+          "field": "vdeal:lender",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+          }
+        },
+        {
+          "field": "vdeal:amountFinanced",
+          "widget": "currency",
+          "parameters": { "currency": "USD" },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+          }
+        },
+        {
+          "field": "vdeal:termMonths",
+          "widget": "number",
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "trade-in",
+      "labelKey": "vehicle-titles.card.vehicleDeal.tradeIn",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "vdeal:tradeIn" }, true]
+      },
+      "fields": [
+        "vdeal:tradeInVehicle",
+        "vdeal:tradeInVin",
+        {
+          "field": "vdeal:tradeInAllowance",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "vdeal:tradeInPayoff",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "vdeal:tradeInTitle",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"] }
+        },
+        {
+          "id": "tradeInTitleStatus",
+          "field": "vdeal:tradeInTitle",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:status" }
+        },
+        {
+          "id": "tradeInLienHolder",
+          "field": "vdeal:tradeInTitle",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:lienHolder" }
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "labelKey": "vehicle-titles.card.vehicleDeal.title",
+      "fields": [
+        {
+          "field": "vdeal:title",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"] }
+        },
+        {
+          "id": "titleNumber",
+          "field": "vdeal:title",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:number" }
+        },
+        {
+          "id": "titleState",
+          "field": "vdeal:title",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:issuingState" }
+        },
+        {
+          "id": "titleStatus",
+          "field": "vdeal:title",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:status" }
+        },
+        {
+          "id": "titleLienHolder",
+          "field": "vdeal:title",
+          "widget": "document-link",
+          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:lienHolder" }
+        }
+      ]
+    },
+    {
+      "id": "documents",
+      "labelKey": "vehicle-titles.card.vehicleDeal.documents",
+      "checklist": {
+        "field": "vdocs:checklist",
+        "tickable": true,
+        "items": [
+          { "id": "driversLicense", "labelKey": "vehicle-titles.document.driversLicense" },
+          { "id": "insurance", "labelKey": "vehicle-titles.document.insurance" },
+          { "id": "buyersOrder", "labelKey": "vehicle-titles.document.buyersOrder" },
+          { "id": "odometer", "labelKey": "vehicle-titles.document.odometer" },
+          { "id": "titleApplication", "labelKey": "vehicle-titles.document.titleApplication" },
+          { "id": "deliveryReceipt", "labelKey": "vehicle-titles.document.deliveryReceipt" }
+        ]
+      }
+    },
+    {
+      "id": "finance-documents",
+      "labelKey": "vehicle-titles.card.vehicleDeal.financeDocuments",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "vdeal:financeType" }, "Loan", "Lease"]
+      },
+      "checklist": {
+        "field": "vdocs:checklist",
+        "tickable": true,
+        "items": [
+          { "id": "creditApplication", "labelKey": "vehicle-titles.document.creditApplication" },
+          { "id": "financeContract", "labelKey": "vehicle-titles.document.financeContract" },
+          { "id": "lenderApproval", "labelKey": "vehicle-titles.document.lenderApproval" }
+        ]
+      }
+    },
+    {
+      "id": "attachments",
+      "labelKey": "vehicle-titles.card.vehicleDeal.attachments",
+      "span": 2,
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "notes",
+      "labelKey": "vehicle-titles.card.vehicleDeal.notes",
+      "span": 2,
+      "fields": [{ "field": "vdeal:notes", "widget": "long-text" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "vehicle-titles.card.vehicleDeal.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

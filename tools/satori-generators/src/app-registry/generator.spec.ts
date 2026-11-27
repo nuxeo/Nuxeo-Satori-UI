@@ -98,6 +98,39 @@ describe('app-registry generator', () => {
     expect(component(tree)).toBe(before);
   });
 
+  it('takes out a layout whose file is gone, and its extension when that held nothing else', async () => {
+    await appLayoutGenerator(tree, { package: ROOT, type: 'Contract', model: CONTRACTS_MODEL });
+    const before = component(tree);
+    await appFormGenerator(tree, { package: ROOT, type: 'Contract', model: CONTRACTS_MODEL });
+    expect(component(tree)).toContain('<layout type="Contract" mode="edit"');
+    // The Edit form removed: its entry goes, its line with it, and the record page's stays.
+    tree.delete(`${CONFIG}/layouts/Contract/edit.layout.json`);
+    await generate();
+    expect(component(tree)).toBe(before);
+    // The record page removed too: the extension that held the layouts goes, and the app's stays.
+    tree.delete(`${CONFIG}/layouts/Contract/view.layout.json`);
+    await generate();
+    expect(component(tree)).not.toContain('<layout ');
+    expect(component(tree)).toBe(
+      before.replace(
+        /\n {2}<extension target="org\.nuxeo\.agentic\.ui\.config" point="configuration">\n {4}<layout [^\n]*\n {2}<\/extension>\n/,
+        '',
+      ),
+    );
+    expect(named(tree)).toEqual(['labels/en.json']);
+  });
+
+  it('leaves a layout whose file is there, and one contributed from elsewhere, to the pipeline', async () => {
+    await appLayoutGenerator(tree, { package: ROOT, type: 'Contract', model: CONTRACTS_MODEL });
+    const xml = component(tree).replace(
+      '<layout type="Contract" mode="view"',
+      '<layout type="Other" mode="view" src="other/place.json" />\n    <layout type="Contract" mode="view"',
+    );
+    tree.write(COMPONENT, xml);
+    await generate();
+    expect(component(tree)).toBe(xml);
+  });
+
   it('writes one for a package that has none, and keeps what else the component holds', async () => {
     const xml = component(tree);
     const at = xml.indexOf('\n  <extension');

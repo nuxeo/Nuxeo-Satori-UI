@@ -115,6 +115,8 @@ export interface PackageOptions {
   readonly mode?: LayoutMode;
   /** The server's content model: each layout is held to the type its path names. */
   readonly model?: ContentModel;
+  /** With a model, what a layout's rules read held to it too (`ValidationOptions.references`). */
+  readonly references?: boolean;
   /**
    * The keys of the platform's English catalogue. Given, with the package's labels, every
    * `labelKey` a file names must have a text in one or the other: a key with neither shows a
@@ -202,6 +204,7 @@ function findingsOf(
         registries,
         model: options.model,
         type: file.type,
+        references: options.references,
       });
     case 'queue':
       return [

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional vehicletitle schema of the VehicleTitle type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/vehicle-titles-demo/vehicletitle"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/vehicle-titles-demo/vehicletitle">
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="issuingState" type="xs:string" />
+  <xs:element name="vin" type="xs:string" />
+  <xs:element name="vehicle" type="xs:string" />
+  <xs:element name="owner" type="xs:string" />
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Awaiting title" />
+        <xs:enumeration value="Awaiting lien release" />
+        <xs:enumeration value="In hand" />
+        <xs:enumeration value="Submitted to state" />
+        <xs:enumeration value="Issued" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="lienHolder" type="xs:string" />
+  <xs:element name="payoffSentOn" type="xs:date" />
+  <xs:element name="lienReleasedOn" type="xs:date" />
+  <xs:element name="openedOn" type="xs:date" />
+  <xs:element name="submittedOn" type="xs:date" />
+  <xs:element name="issuedOn" type="xs:date" />
+  <xs:element name="clerk" type="xs:string" />
+  <xs:element name="notes" type="xs:string" />
+</xs:schema>

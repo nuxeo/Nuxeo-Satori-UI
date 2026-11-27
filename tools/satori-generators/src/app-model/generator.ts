@@ -1,4 +1,7 @@
-import { formatFiles, type Tree } from '@nx/devkit';
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
+
+import { formatFiles, workspaceRoot, type Tree } from '@nx/devkit';
 
 import { NUXEO_SCHEMAS, TYPE } from '../app-layout/generator';
 import {
@@ -27,7 +30,13 @@ export interface AppModelSchema {
   sort?: string;
   pageSize?: number;
   aggregates?: string | string[];
+  buckets?: number;
   attachments?: boolean;
+  facets?: string | string[];
+  model?: string;
+  schemaless?: boolean;
+  folder?: boolean;
+  subtypes?: string | string[];
   force?: boolean;
 }
 
@@ -133,6 +142,32 @@ const VALUE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
 const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
 /** The simple types a stand-in property may have, and a list of each but `boolean`. */
 const SIMPLE = ['string', 'long', 'double', 'boolean', 'date'];
+/**
+ * A checklist's entries, as layout version 2's checklist card reads them (layout-v2.md, section
+ * 7, and `CHECKLIST_SUBFIELDS` in libs/shared/app-definition): one entry per item done or under
+ * way, its id, whether it is done, who did it and the day.
+ */
+const CHECKLIST = { item: 'string', done: 'boolean', doneBy: 'string', doneOn: 'date' } as const;
+/** A facet's name, as a doctype names one. */
+const FACET = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+/**
+ * Nuxeo's own facets that bring no schema, which a stand-in type may declare without a content
+ * model describing them. `Versionable` keeps versions, and is given the `uid` schema too, whose
+ * major and minor numbers a version's label is made of, as Nuxeo's `File` has them both.
+ */
+const PLATFORM_FACETS = new Set([
+  'Commentable',
+  'HiddenInNavigation',
+  'NotFulltextIndexable',
+  'Orderable',
+  'Publishable',
+  'Versionable',
+]);
+/** Nuxeo's `uid` schema, as the export describes it: no prefix, its properties named `uid:`. */
+const UID = {
+  name: 'uid',
+  fields: { uid: 'string', major_version: 'long', minor_version: 'long' },
+};
 /** The property types a terms aggregate groups by value: not a date or a double, which range. */
 const BUCKETED = /^(?:string|long|integer|boolean)(?:\[\])?$/;
 /** An aggregate's id, which a facet sends back as a parameter's name. */
@@ -147,7 +182,7 @@ interface Property {
   readonly values: readonly string[];
 }
 
-/** `name[:type][=value|value...]`, as `--properties` writes each one. */
+/** `name[:type][=value|value...]`, as `--properties` writes each one; `checklist` a type too. */
 function parseProperty(text: string): Property {
   const match = /^([^:=]+)(?::([^=]+))?(?:=(.*))?$/.exec(text.trim());
   const name = match?.[1]?.trim() ?? '';
@@ -159,9 +194,11 @@ function parseProperty(text: string): Property {
   const written = (match?.[2] ?? 'string').trim();
   const list = written.endsWith('[]');
   const type = list ? written.slice(0, -2) : written;
+  if ((type === 'checklist' || type === 'document') && !list && match?.[3] === undefined)
+    return { name, type, list: false, values: [] };
   if (!SIMPLE.includes(type) || (list && type === 'boolean')) {
     throw new Error(
-      `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[].`,
+      `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[]; checklist, a checklist card's entries; or document, another record's id.`,
     );
   }
   const values =
@@ -188,6 +225,23 @@ function parseProperty(text: string): Property {
   return { name, type, list, values };
 }
 
+/** A property as the content model describes it: its type, or a checklist's entries. */
+function described(
+  property: Property,
+):
+  | string
+  | { type: string; fields: Record<string, string> }
+  | { type: string; constraints: { name: string; parameters: Record<string, string> }[] } {
+  if (property.type === 'checklist') return { type: 'complex[]', fields: { ...CHECKLIST } };
+  // Another record's id, as Nuxeo's documentResolver stores it: app-layout shows it as a link.
+  if (property.type === 'document')
+    return {
+      type: 'string',
+      constraints: [{ name: 'documentResolver', parameters: { store: 'id' } }],
+    };
+  return `${property.type}${property.list ? '[]' : ''}`;
+}
+
 /** `text` safe inside an XML element or a double-quoted attribute. */
 function escapeXml(text: string): string {
   return text
@@ -211,6 +265,36 @@ function schemaFile(
       `  <xs:simpleType name="${item}List">\n    <xs:list itemType="xs:${item}" />\n  </xs:simpleType>\n`,
   );
   const elements = properties.map((property) => {
+    if (property.type === 'checklist') {
+      const entries = `${property.name}Entries`;
+      const entry = `${property.name}Entry`;
+      return (
+        `  <!-- A checklist card's entries: one per item done or under way. -->\n` +
+        `  <xs:element name="${property.name}" type="nxs:${entries}" />\n` +
+        `  <xs:complexType name="${entries}">\n` +
+        '    <xs:sequence>\n' +
+        `      <xs:element name="entry" type="nxs:${entry}" minOccurs="0" maxOccurs="unbounded" />\n` +
+        '    </xs:sequence>\n' +
+        '  </xs:complexType>\n' +
+        `  <xs:complexType name="${entry}">\n` +
+        '    <xs:sequence>\n' +
+        Object.entries(CHECKLIST)
+          .map(([field, kind]) => `      <xs:element name="${field}" type="xs:${kind}" />\n`)
+          .join('') +
+        '    </xs:sequence>\n' +
+        '  </xs:complexType>\n'
+      );
+    }
+    if (property.type === 'document') {
+      return (
+        `  <!-- Another record's id, which Nuxeo resolves to the document it names. -->\n` +
+        `  <xs:element name="${property.name}">\n` +
+        '    <xs:simpleType>\n' +
+        '      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />\n' +
+        '    </xs:simpleType>\n' +
+        '  </xs:element>\n'
+      );
+    }
     if (property.values.length > 0) {
       return (
         `  <xs:element name="${property.name}">\n` +
@@ -235,6 +319,9 @@ function schemaFile(
     '<xs:schema\n' +
     `  targetNamespace="${namespace}"\n` +
     '  xmlns:xs="http://www.w3.org/2001/XMLSchema"\n' +
+    (properties.some((property) => property.type === 'document')
+      ? '  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/"\n'
+      : '') +
     `  xmlns:nxs="${namespace}">\n\n` +
     (listTypes.length > 0 ? `${listTypes.join('\n')}\n` : '') +
     elements.join('') +
@@ -407,11 +494,10 @@ function searchOf(
   let own: { schema: string; prefix: string } | undefined;
   if (written) {
     own = { schema: written.schema, prefix: written.prefix };
-    for (const property of written.properties)
-      fields.set(
-        `${written.prefix}:${property.name}`,
-        `${property.type}${property.list ? '[]' : ''}`,
-      );
+    for (const property of written.properties) {
+      const kind = described(property);
+      fields.set(`${written.prefix}:${property.name}`, typeof kind === 'string' ? kind : kind.type);
+    }
   }
   const text = tree.read(modelJson, 'utf-8');
   const model = text === null ? undefined : parseJson(text, modelJson);
@@ -428,7 +514,15 @@ function searchOf(
       const prefix = declared ?? name;
       for (const [field, kind] of Object.entries(entry['fields'])) {
         const xpath = `${prefix}:${field}`;
-        if (!fields.has(xpath)) fields.set(xpath, typeof kind === 'string' ? kind : 'complex');
+        if (!fields.has(xpath))
+          fields.set(
+            xpath,
+            typeof kind === 'string'
+              ? kind
+              : isRecord(kind) && typeof kind['type'] === 'string'
+                ? kind['type']
+                : 'complex',
+          );
       }
       if (own === undefined && !NUXEO_SCHEMAS.includes(name)) own = { schema: name, prefix };
     }
@@ -490,6 +584,7 @@ function searchPageProvider(
   sort: { readonly column: string; readonly ascending: boolean },
   pageSize: number,
   search: Search,
+  buckets: number,
 ): string {
   return (
     `<genericPageProvider name="${name}"\n    class="${SEARCH_PAGE_PROVIDER}">\n` +
@@ -507,7 +602,7 @@ function searchPageProvider(
           `    <aggregate id="${aggregate.id}" type="terms" parameter="${aggregate.property}">\n` +
           `      <field schema="${search.schema}" name="${aggregate.id}" />\n` +
           '      <properties>\n' +
-          '        <property name="size">10</property>\n' +
+          `        <property name="size">${buckets}</property>\n` +
           '      </properties>\n' +
           '    </aggregate>\n',
       )
@@ -518,6 +613,132 @@ function searchPageProvider(
     '  <maxPageSize>100</maxPageSize>\n' +
     '</genericPageProvider>'
   );
+}
+
+/** A schema as a content model describes it, by its name. */
+type DescribedSchema = Record<string, unknown> & { readonly name: string };
+
+/**
+ * What each of `facets` brings, the schemas a content model describes it with: the first of
+ * `sources` that describes it, the kit's own model first; or none, for one of Nuxeo's own facets
+ * that bring no schema. A facet no source describes is refused, since the layouts naming its
+ * properties could not be held to it.
+ */
+function describedFacets(
+  facets: readonly string[],
+  sources: readonly { readonly model: unknown; readonly from: string }[],
+): Map<string, DescribedSchema[]> {
+  const found = new Map<string, DescribedSchema[]>();
+  for (const facet of facets) {
+    let brought: DescribedSchema[] | undefined;
+    for (const { model, from } of sources) {
+      const list = isRecord(model) && Array.isArray(model['facets']) ? model['facets'] : [];
+      const entry = list.find((item) => isRecord(item) && item['name'] === facet);
+      if (!isRecord(entry)) continue;
+      const schemas = entry['schemas'] === undefined ? [] : entry['schemas'];
+      if (
+        !Array.isArray(schemas) ||
+        !schemas.every(
+          (each) => isRecord(each) && typeof each['name'] === 'string' && isRecord(each['fields']),
+        )
+      ) {
+        throw new Error(
+          `${from} describes the facet ${facet} otherwise than a content model does, { name, schemas: [{ name, prefix, fields }] }.`,
+        );
+      }
+      brought = schemas as DescribedSchema[];
+      break;
+    }
+    if (brought === undefined && PLATFORM_FACETS.has(facet)) brought = [];
+    if (brought === undefined) {
+      throw new Error(
+        `--facets: "${facet}" is not one of Nuxeo's own facets that bring no schema (${[...PLATFORM_FACETS].join(', ')}), and no content model given describes it. Give --model, one that does, such as the model of a server with the add-on that registers it, exported into the checkout's tmp/ with npm run app-package:model.`,
+      );
+    }
+    found.set(facet, brought);
+  }
+  return found;
+}
+
+/** The content model file `--model` names, read: from the workspace's root unless absolute. */
+function readModelFile(path: string): unknown {
+  const file = isAbsolute(path) ? path : resolve(workspaceRoot, path);
+  if (!existsSync(file)) throw new Error(`--model ${path} does not exist.`);
+  return parseJson(readFileSync(file, 'utf-8'), path);
+}
+
+/**
+ * `xml` with each of `lines`, a `<facet>` or a `<schema>` of `type`'s doctype, that it does not
+ * hold yet, added before its `</doctype>`, and each of `subtypes` it does not list yet added to
+ * its `<subtypes>`, which is added when there is none: for a type that extends Folder.
+ */
+function addedToDoctype(
+  xml: string,
+  file: string,
+  type: string,
+  lines: readonly string[],
+  subtypes: readonly string[],
+): string {
+  const markup = markupOnly(xml);
+  const [doctype] = named(markup, 'doctype', type);
+  const start = doctype.index ?? 0;
+  if (doctype[0].endsWith('/>')) {
+    throw new Error(
+      `${file} writes the type ${type} as an empty element: give it its schemas first.`,
+    );
+  }
+  const found = /<\/doctype[ \t\r\n]*>/.exec(markup.slice(start));
+  if (found === null) throw new Error(`${file}: the type ${type} is never closed.`);
+  const close = start + found.index;
+  const body = markup.slice(start, close);
+  if (subtypes.length > 0 && attribute(doctype[0], 'extends') !== 'Folder') {
+    throw new Error(
+      `--subtypes are what a folder's Create menu offers, and ${type} in ${file} does not extend Folder.`,
+    );
+  }
+  const missing = lines.filter((line) => {
+    const [, element = '', name = ''] = /^<(\w+) name="([^"]+)"/.exec(line) ?? [];
+    return named(body, element, name).length === 0;
+  });
+  const opened = /<subtypes(?=[ \t\r\n>])[^>]*>/.exec(body);
+  const subtypesClose = opened === null ? -1 : body.indexOf('</subtypes>', opened.index);
+  const listed = (name: string) =>
+    opened !== null &&
+    new RegExp(`<type>\\s*${name}\\s*</type>`).test(body.slice(opened.index, subtypesClose));
+  const newSubtypes = subtypes.filter((name) => !listed(name));
+  /** The indentation of the line `at` is on, when only it is on it before `at`. */
+  const indentAt = (at: number) => {
+    const before = markup.slice(markup.lastIndexOf('\n', at - 1) + 1, at);
+    return /^[ \t]*$/.test(before) ? before : null;
+  };
+  const outer = indentAt(close) ?? '    ';
+  const inner = `${outer}  `;
+  /** `text` with `added`, each on a line of its own, before the line `at` is on. */
+  const insert = (text: string, at: number, added: readonly string[], indent: string) => {
+    const lineStart = markup.lastIndexOf('\n', at - 1) + 1;
+    const where = indentAt(at) === null ? at : lineStart;
+    const block = added.map((line) => `${indent}${line}\n`).join('');
+    return `${text.slice(0, where)}${indentAt(at) === null ? `\n${block}` : block}${text.slice(where)}`;
+  };
+  let out = xml;
+  // The later place first, so the earlier keeps its offset.
+  const atEnd = [
+    ...missing,
+    ...(opened === null && newSubtypes.length > 0
+      ? ['<subtypes>', ...newSubtypes.map((name) => `  <type>${name}</type>`), '</subtypes>']
+      : []),
+  ];
+  if (atEnd.length > 0) out = insert(out, close, atEnd, inner);
+  if (opened !== null && newSubtypes.length > 0) {
+    const at = start + subtypesClose;
+    out = insert(
+      out,
+      at,
+      newSubtypes.map((name) => `<type>${name}</type>`),
+      `${indentAt(at) ?? inner}  `,
+    );
+  }
+  return out;
 }
 
 /** The configuration component's `name`, which the model component's is made from. */
@@ -608,11 +829,44 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     );
   }
   const properties = listOption(options.properties).map(parseProperty);
-  if (properties.length === 0 && options.pageProvider === undefined) {
+  const facets = listOption(options.facets);
+  const subtypes = listOption(options.subtypes);
+  const schemaless = options.schemaless === true;
+  const folder = options.folder === true;
+  if (
+    properties.length === 0 &&
+    options.pageProvider === undefined &&
+    facets.length === 0 &&
+    subtypes.length === 0 &&
+    !schemaless &&
+    !folder
+  ) {
     throw new Error(
-      'Give the type its properties with --properties, a page provider over it with --pageProvider, or both.',
+      'Give the type its properties with --properties, a page provider over it with --pageProvider, facets with --facets, or write it with no schema of its own, --schemaless, or as a --folder.',
     );
   }
+  if (schemaless && properties.length > 0) {
+    throw new Error(
+      '--schemaless writes a type with no schema of its own, and --properties writes its schema: give one of the two.',
+    );
+  }
+  const badFacet = facets.find((facet) => !FACET.test(facet));
+  if (badFacet !== undefined) throw new Error(`--facets: "${badFacet}" is not a facet's name.`);
+  const twiceFacet = facets.find((facet, i) => facets.indexOf(facet) !== i);
+  if (twiceFacet !== undefined) throw new Error(`--facets lists "${twiceFacet}" twice.`);
+  if (facets.includes('Folderish')) {
+    throw new Error(
+      '--facets: Folderish makes a folder, which is more than a facet: write the type with --folder, which extends Folder, and --subtypes for what its Create menu offers.',
+    );
+  }
+  if (options.model !== undefined && facets.length === 0) {
+    throw new Error('--model describes the facets --facets names: give those too.');
+  }
+  const badSubtype = subtypes.find((name) => !TYPE.test(name));
+  if (badSubtype !== undefined)
+    throw new Error(`--subtypes: "${badSubtype}" is not a document type's name.`);
+  const twiceSubtype = subtypes.find((name, i) => subtypes.indexOf(name) !== i);
+  if (twiceSubtype !== undefined) throw new Error(`--subtypes lists "${twiceSubtype}" twice.`);
   const repeated = properties.find((p, i) => properties.findIndex((q) => q.name === p.name) !== i);
   if (repeated) throw new Error(`--properties lists "${repeated.name}" twice.`);
   const schema = options.schema ?? type.toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -631,9 +885,9 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   if (properties.length === 0 && (options.schema ?? options.prefix) !== undefined) {
     throw new Error('--schema and --prefix name the schema --properties writes: give those too.');
   }
-  if (properties.length === 0 && options.attachments) {
+  if (properties.length === 0 && !schemaless && !folder && options.attachments) {
     throw new Error(
-      '--attachments gives the type --properties writes the files schema: give those too.',
+      '--attachments gives the type --properties, --schemaless or --folder writes the files schema: give one of those too.',
     );
   }
   const pageProvider = options.pageProvider;
@@ -675,6 +929,14 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   const aggregated = listOption(options.aggregates);
   if (aggregated.length > 0 && pageProvider === undefined) {
     throw new Error('--aggregates describe a page provider: give its --pageProvider too.');
+  }
+  // Nuxeo's own default, ten: a facet then lists the ten most frequent values, and no more.
+  const buckets = options.buckets ?? 10;
+  if (options.buckets !== undefined && aggregated.length === 0) {
+    throw new Error('--buckets is how many buckets each of --aggregates answers: give those too.');
+  }
+  if (!(Number.isInteger(buckets) && buckets >= 1 && buckets <= 1000)) {
+    throw new Error(`--buckets ${buckets} must be a whole number from 1 to 1000.`);
   }
   if (aggregated.length > 0 && where?.includes('?')) {
     throw new Error(
@@ -736,8 +998,31 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   // Whether the type has Nuxeo's files schema, its attachments: given when it is first written,
   // and kept, as the component has it, when its own schema is written again.
   let attachments = options.attachments === true;
+  const hasType = named(markup, 'doctype', type).length > 0;
+  /** Whether this run writes the type anew: its schema, none of its own, or a folder. */
+  const writesType = properties.length > 0 || schemaless || folder;
+  if (hasType && (schemaless || folder)) {
+    throw new Error(
+      `${modelFile} has the type ${type} already, and --schemaless and --folder write a new one: give --facets or --subtypes alone to add to it.`,
+    );
+  }
+  if (!hasType && !writesType && (facets.length > 0 || subtypes.length > 0)) {
+    throw new Error(
+      `${modelFile} has no type ${type} to add ${facets.length > 0 ? '--facets' : '--subtypes'} to: write it first, with --properties, --schemaless or --folder, or give them then.`,
+    );
+  }
+  const modelText = tree.read(modelJson, 'utf-8');
+  const kitModel = modelText === null ? undefined : parseJson(modelText, modelJson);
+  // What each facet brings, as a content model describes it: the kit's own, the one --model names,
+  // or none, for the platform's own that bring no schema.
+  const facetSchemas = describedFacets(facets, [
+    { model: kitModel, from: modelJson },
+    ...(options.model === undefined
+      ? []
+      : [{ model: readModelFile(options.model), from: options.model }]),
+  ]);
+  const versionable = facets.includes('Versionable');
   if (properties.length > 0) {
-    const hasType = named(markup, 'doctype', type).length > 0;
     if (hasType && !options.force) {
       throw new Error(
         `${modelFile} has the type ${type} already. Pass --force to write its schema again from --properties.`,
@@ -783,33 +1068,68 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
         `${modelFile} registers the schema ${schema} with another prefix. Give the same --prefix, or change it there.`,
       );
     }
-    if (!hasType) {
-      xml = addToExtension(
-        xml,
-        modelFile,
-        'org.nuxeo.ecm.core.schema.TypeService',
-        'doctype',
-        (attachments
-          ? `<!-- Not a folder, and holds no file of its own: its attachments are files:files. So it\n` +
-            `     opens as a record page. -->\n`
-          : `<!-- Not a folder and holds no file, so it opens as a record page. -->\n`) +
-          `<doctype name="${type}" extends="Document">\n` +
-          '  <schema name="common" />\n' +
-          '  <schema name="dublincore" />\n' +
-          (attachments ? '  <schema name="files" />\n' : '') +
-          `  <schema name="${schema}" />\n` +
-          '</doctype>',
-      );
-      xml = addToExtension(
-        xml,
-        modelFile,
-        'org.nuxeo.ecm.core.lifecycle.LifeCycleService',
-        'types',
-        `<types>\n  <type name="${type}">default</type>\n</types>`,
-      );
-    }
     tree.write(schemaPath, schemaFile(pkgName, schema, type, properties));
     written.push(schemaPath);
+  }
+  // A folder's subtypes are types the package's model has, or Nuxeo's own.
+  const modelTypes =
+    isRecord(kitModel) && isRecord(kitModel['doctypes']) ? kitModel['doctypes'] : {};
+  const unknownSubtype = subtypes.find(
+    (name) => !NUXEO_TYPES.has(name) && !Object.hasOwn(modelTypes, name) && name !== type,
+  );
+  if (unknownSubtype !== undefined) {
+    throw new Error(
+      `--subtypes: "${unknownSubtype}" is no type of ${modelJson}, nor one of Nuxeo's own: write it with app-model first, in the same call.`,
+    );
+  }
+  const facetLines = [
+    ...(versionable ? ['<schema name="uid" />'] : []),
+    ...facets.map((facet) => `<facet name="${facet}" />`),
+  ];
+  if (!hasType && writesType) {
+    const subtypesLines =
+      folder && subtypes.length > 0
+        ? ['<subtypes>', ...subtypes.map((name) => `  <type>${name}</type>`), '</subtypes>']
+        : [];
+    if (!folder && subtypes.length > 0) {
+      throw new Error(
+        "--subtypes are what a folder's Create menu offers: write the type with --folder too.",
+      );
+    }
+    const comment = folder
+      ? '<!-- A folder: its Create menu offers its subtypes. -->\n'
+      : attachments
+        ? `<!-- Not a folder, and holds no file of its own: its attachments are files:files. So it\n` +
+          `     opens as a record page. -->\n`
+        : `<!-- Not a folder and holds no file, so it opens as a record page. -->\n`;
+    xml = addToExtension(
+      xml,
+      modelFile,
+      'org.nuxeo.ecm.core.schema.TypeService',
+      'doctype',
+      comment +
+        `<doctype name="${type}" extends="${folder ? 'Folder' : 'Document'}">\n` +
+        [
+          // A folder has Nuxeo's common and dublincore from Folder; a document's are written.
+          ...(folder ? [] : ['<schema name="common" />', '<schema name="dublincore" />']),
+          ...(attachments ? ['<schema name="files" />'] : []),
+          ...(properties.length > 0 ? [`<schema name="${schema}" />`] : []),
+          ...facetLines,
+          ...subtypesLines,
+        ]
+          .map((line) => `  ${line}\n`)
+          .join('') +
+        '</doctype>',
+    );
+    xml = addToExtension(
+      xml,
+      modelFile,
+      'org.nuxeo.ecm.core.lifecycle.LifeCycleService',
+      'types',
+      `<types>\n  <type name="${type}">default</type>\n</types>`,
+    );
+  } else if (hasType && (facets.length > 0 || subtypes.length > 0)) {
+    xml = addedToDoctype(xml, modelFile, type, facetLines, subtypes);
   }
 
   if (pageProvider !== undefined) {
@@ -824,7 +1144,7 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     }
     const parameters = where?.includes('?') ?? false;
     const element = search
-      ? searchPageProvider(pageProvider, type, where, sort, pageSize, search)
+      ? searchPageProvider(pageProvider, type, where, sort, pageSize, search, buckets)
       : `<coreQueryPageProvider name="${pageProvider}">\n` +
         `  <pattern${parameters ? ' quoteParameters="true" escapeParameters="true"' : ''}>\n` +
         `    SELECT * FROM Document WHERE ecm:primaryType = '${type}'${where ? ` AND (${escapeXml(where)})` : ''}\n` +
@@ -922,11 +1242,11 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
     written.push(manifestFile);
   }
 
-  // The content model, in the shape the export writes, for the generators and the pipeline.
-  if (properties.length > 0) {
-    const text = tree.read(modelJson, 'utf-8');
-    const current =
-      text === null ? { doctypes: {}, facets: [], schemas: [] } : parseJson(text, modelJson);
+  // The content model, in the shape the export writes, for the generators and the pipeline: the
+  // type's entry kept as it was, with what this run gave it, so that a schema or a facet another
+  // run added stays.
+  if (writesType || facets.length > 0) {
+    const current = kitModel === undefined ? { doctypes: {}, facets: [], schemas: [] } : kitModel;
     if (
       !isRecord(current) ||
       !isRecord(current['doctypes']) ||
@@ -937,30 +1257,55 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       );
     }
     if (!Array.isArray(current['facets'])) current['facets'] = [];
-    (current['doctypes'] as Record<string, unknown>)[type] = {
-      parent: 'Document',
-      facets: [],
-      schemas: ['common', 'dublincore', ...(attachments ? ['files'] : []), schema],
+    const doctypes = current['doctypes'] as Record<string, unknown>;
+    const entry = isRecord(doctypes[type]) ? doctypes[type] : undefined;
+    const names = (value: unknown): string[] =>
+      Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+    const unique = (list: readonly string[]) => [...new Set(list)];
+    doctypes[type] = {
+      parent:
+        typeof entry?.['parent'] === 'string' ? entry['parent'] : folder ? 'Folder' : 'Document',
+      facets: unique([...names(entry?.['facets']), ...(folder ? ['Folderish'] : []), ...facets]),
+      schemas: unique([
+        ...(entry ? names(entry['schemas']) : ['common', 'dublincore']),
+        ...(attachments ? ['files'] : []),
+        ...(properties.length > 0 ? [schema] : []),
+        ...(versionable ? ['uid'] : []),
+        ...[...facetSchemas.values()].flatMap((list) => list.map((each) => each.name)),
+      ]),
     };
     const schemas = current['schemas'] as unknown[];
-    const nameOf = (entry: unknown) => (isRecord(entry) ? entry['name'] : undefined);
-    for (const own of [COMMON, DUBLIN_CORE, ...(attachments ? [FILES] : [])]) {
-      if (!schemas.some((entry) => nameOf(entry) === own.name)) schemas.push(own);
+    const nameOf = (item: unknown) => (isRecord(item) ? item['name'] : undefined);
+    for (const own of [
+      COMMON,
+      DUBLIN_CORE,
+      ...(attachments ? [FILES] : []),
+      ...(versionable ? [UID] : []),
+      ...[...facetSchemas.values()].flat(),
+    ]) {
+      if (!schemas.some((item) => nameOf(item) === own.name)) schemas.push(own);
     }
-    const described = {
-      name: schema,
-      prefix,
-      '@prefix': prefix,
-      fields: Object.fromEntries(
-        properties.map((property) => [
-          property.name,
-          `${property.type}${property.list ? '[]' : ''}`,
-        ]),
-      ),
-    };
-    const at = schemas.findIndex((entry) => nameOf(entry) === schema);
-    if (at >= 0) schemas[at] = described;
-    else schemas.push(described);
+    const facetList = current['facets'] as unknown[];
+    for (const [facet, brought] of [
+      ...(folder ? [['Folderish', []] as const] : []),
+      ...facetSchemas.entries(),
+    ]) {
+      if (!facetList.some((item) => nameOf(item) === facet))
+        facetList.push({ name: facet, schemas: brought });
+    }
+    if (properties.length > 0) {
+      const own = {
+        name: schema,
+        prefix,
+        '@prefix': prefix,
+        fields: Object.fromEntries(
+          properties.map((property) => [property.name, described(property)]),
+        ),
+      };
+      const at = schemas.findIndex((item) => nameOf(item) === schema);
+      if (at >= 0) schemas[at] = own;
+      else schemas.push(own);
+    }
     writeJson(tree, modelJson, current);
     written.push(modelJson);
   }
@@ -985,7 +1330,8 @@ Wrote the stand-in model, for a demo:
 
   ${written.join('\n  ')}
 
-  Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : `${type}, unchanged`}
+  Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties${attachments ? ', and its attachments, files:files' : ''}` : writesType ? `${type}, ${folder ? 'a folder' : 'no schema of its own'}${attachments ? ', and its attachments, files:files' : ''}` : `${type}${facets.length > 0 || subtypes.length > 0 ? ', added to' : ', unchanged'}`}
+${facets.length > 0 ? `  Facets:         ${facets.join(', ')}${versionable ? ', with the uid schema its versions are numbered in' : ''}\n` : ''}${subtypes.length > 0 ? `  Subtypes:       ${subtypes.join(', ')}, which its Create menu offers\n` : ''}
   Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
 ${properties.length > 0 ? `  Heading:        ${heading} in labels/en.json, the Properties panel's heading for the schema${keptHeading ? ', its text kept as labels/en.json had it' : `, "${humanize(type)}"`}\n` : ''}
 ${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}

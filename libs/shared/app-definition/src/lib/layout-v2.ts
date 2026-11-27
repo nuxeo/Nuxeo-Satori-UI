@@ -52,6 +52,14 @@ export interface ValidationOptions {
   readonly model?: ContentModel;
   /** The document type the file lays out, as its path names it: `layouts/<Type>/<mode>.layout.json`. */
   readonly type?: string;
+  /**
+   * With a model: hold what a rule, a computation, a check or a parameter reads of the open record
+   * to it too (`layout-model.ts`). The package pipeline and the command line ask for it. The
+   * server's validator does not: it holds every live deployment layer to the model again on each
+   * rebuild, and a layer refused there is dropped for the package's own file, so a check added
+   * here must not drop a layer that was served.
+   */
+  readonly references?: boolean;
 }
 
 const FILE_KEYS = [
@@ -140,7 +148,9 @@ export const LAYOUT_V2_KEYS = {
 
 export function validateLayoutV2(content: unknown, options: ValidationOptions): Finding[] {
   const registries = options.registries ?? PACKAGED_REGISTRIES;
-  const model = options.model ? { model: options.model, type: options.type } : null;
+  const model = options.model
+    ? { model: options.model, type: options.type, references: options.references === true }
+    : null;
   return layout(content, options.mode, registries, false, model);
 }
 
@@ -160,7 +170,11 @@ function layout(
   mode: LayoutMode,
   registries: Registries,
   task: boolean,
-  model: { readonly model: ContentModel; readonly type: string | undefined } | null,
+  model: {
+    readonly model: ContentModel;
+    readonly type: string | undefined;
+    readonly references: boolean;
+  } | null,
 ): Finding[] {
   const stop = unreadable(content, task ? 'a task form' : 'a layout file');
   if (stop) return stop;
@@ -300,7 +314,16 @@ function layout(
         cards(tab['cards'], join(path, 'cards'), columns);
       });
   }
-  if (model) c.findings.push(...againstModel(file, model.type, model.model, registries));
+  if (model)
+    c.findings.push(
+      ...againstModel(
+        file,
+        model.type,
+        model.model,
+        registries,
+        model.references ? c.references : [],
+      ),
+    );
   return c.findings;
 }
 

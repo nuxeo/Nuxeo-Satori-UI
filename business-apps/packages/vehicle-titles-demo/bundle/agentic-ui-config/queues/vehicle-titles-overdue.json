@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "vehicle-titles.queue.vehicle-titles-overdue",
+  "pageProvider": "vtitles_overdue_titles",
+  "columns": [
+    "vtitle:number",
+    "vtitle:vehicle",
+    "vtitle:vin",
+    {
+      "field": "vtitle:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "Awaiting title": "warning",
+          "Awaiting lien release": "warning",
+          "In hand": "info",
+          "Submitted to state": "info",
+          "Issued": "positive"
+        }
+      }
+    },
+    { "field": "vtitle:openedOn", "widget": "date" },
+    "vtitle:lienHolder",
+    { "field": "vtitle:clerk", "widget": "user" }
+  ],
+  "sort": [{ "field": "vtitle:openedOn", "order": "asc" }],
+  "pageSize": 50
+}
