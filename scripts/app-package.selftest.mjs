@@ -1690,7 +1690,7 @@ expectRefused(
       "ecm:primaryType = 'Claim' AND claims:adjuster IS NULL",
     ),
   2,
-  'pageProviders.payers_unassigned_claims.whereClause.fixedPart: "claims:adjuster": no schema of the content model is written "claims:", by its prefix or its name, and "claim:" is: a misspelling, which Nuxeo refuses [unknown]',
+  `pageProviders.payers_unassigned_claims.whereClause.fixedPart: "claims:adjuster": no schema of the content model is written "claims:", by its prefix or its name, and the model's "claim:" is near it: a misspelling, which Nuxeo refuses [unknown]`,
 );
 expectRefused(
   "a page provider's NXQL naming a property of another type than the one it lists",
@@ -1712,7 +1712,7 @@ expectRefused(
       "ecm:primaryType IN ('Claim', 'Claims') AND claim:member = ?",
     ),
   2,
-  'pageProviders.member_claims.pattern: the type "Claims" is not in the content model, and "Claim" is: a misspelling, so the query lists no record of it [unknown]',
+  `pageProviders.member_claims.pattern: the type "Claims" is not in the content model, and the model's "Claim" is near it: a misspelling, so the query lists no record of it [unknown]`,
 );
 expectRefused(
   "a page provider's NXQL naming a facet the model does not have",
@@ -1723,7 +1723,7 @@ expectRefused(
       "ecm:primaryType = 'Claim' AND claim:member = ? AND ecm:mixinType != 'HidenInNavigation'",
     ),
   2,
-  'pageProviders.member_claims.pattern: the facet "HidenInNavigation" is not in the content model, and "HiddenInNavigation" is: a misspelling, so no record has it [unknown]',
+  `pageProviders.member_claims.pattern: the facet "HidenInNavigation" is not in the content model, and Nuxeo's own "HiddenInNavigation" is near it: a misspelling, so no record has it [unknown]`,
 );
 expectRefused(
   "a page provider's sort on a property the model does not have",

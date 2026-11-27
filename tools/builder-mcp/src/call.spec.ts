@@ -3,7 +3,7 @@
  * the real entry point over stdio. No Nuxeo is read: the environment has no credentials.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,19 +64,23 @@ describe('call.ts', () => {
       probe,
       `if ((process.argv[1] || '').endsWith('main.ts')) require('node:fs').writeFileSync(${JSON.stringify(seen)}, Object.keys(process.env).sort().join('\\n'));\n`,
     );
-    const run = spawnSync(process.execPath, [CALL, '--list'], {
-      encoding: 'utf8',
-      env: {
-        PATH: process.env['PATH'],
-        NODE_OPTIONS: `--require ${probe}`,
-        UNRELATED_SETTING: 'for another tool',
-      },
-      timeout: 120_000,
-    });
-    expect(run.status, run.stderr).toBe(0);
-    expect(run.stdout).toContain('get_content_model: Content model');
-    // Given the whole environment, the server would have loaded the probe, and written its keys.
-    expect(existsSync(seen) ? readFileSync(seen, 'utf8') : 'not loaded').toBe('not loaded');
+    try {
+      const run = spawnSync(process.execPath, [CALL, '--list'], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env['PATH'],
+          NODE_OPTIONS: `--require ${probe}`,
+          UNRELATED_SETTING: 'for another tool',
+        },
+        timeout: 120_000,
+      });
+      expect(run.status, run.stderr).toBe(0);
+      expect(run.stdout).toContain('get_content_model: Content model');
+      // Given the whole environment, the server would have loaded the probe, and written its keys.
+      expect(existsSync(seen) ? readFileSync(seen, 'utf8') : 'not loaded').toBe('not loaded');
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it.skipIf(!PIPELINE_TESTS_RUN)('validates a kit, its arguments read from standard input', () => {

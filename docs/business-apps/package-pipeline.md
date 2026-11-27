@@ -216,7 +216,8 @@ same file), so that a misspelt name is refused before a server answers the query
   is compared with, each facet `ecm:mixinType` is compared with, and each prefix a property is
   written with, that is in neither the model nor Nuxeo's own lists (`NUXEO_DOCUMENT_TYPES`,
   `NUXEO_FACETS` and the prefixes beside them), is refused when it is a near miss of one that is:
-  the same but for case, or one edit apart, two for a name of more than five letters, such as
+  the same but for case, or, for a name of four letters or more, one edit apart, two for one of
+  more than five, such as
   `VehicleDeals` for `VehicleDeal` or `claims:` for `claim:`. The finding names the near one. A
   name near none passes: it may be an add-on's that a stand-in model does not describe, such as
   the template rendering add-on's `TemplateBased`, and the lists cannot hold every add-on.

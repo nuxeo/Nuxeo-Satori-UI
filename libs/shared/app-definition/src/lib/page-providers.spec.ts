@@ -349,7 +349,7 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
 
   it("finds a prefix no schema has, a subfield of a simple property, and another type's property", () => {
     expect(missing("vdeals:status = 'Funded'")).toEqual([
-      `"vdeals:status": no schema of the content model is written "vdeals:", by its prefix or its name, and "vdeal:" is: a misspelling, which Nuxeo refuses`,
+      `"vdeals:status": no schema of the content model is written "vdeals:", by its prefix or its name, and the model's "vdeal:" is near it: a misspelling, which Nuxeo refuses`,
     ]);
     expect(missing("vdeal:status/code = 'x'")).toEqual([
       '"vdeal:status/code": "vdeal:status" is a string property, with no subfield "code", so Nuxeo refuses the query',
@@ -367,7 +367,7 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
         model,
       ),
     ).toEqual([
-      `the type "VehicleDeals" is not in the content model, and "VehicleDeal" is: a misspelling, so Nuxeo refuses a query from it`,
+      `the type "VehicleDeals" is not in the content model, and the model's "VehicleDeal" is near it: a misspelling, so Nuxeo refuses a query from it`,
     ]);
     expect(
       nxqlNameProblems(
@@ -376,8 +376,8 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
         model,
       ),
     ).toEqual([
-      `the type "vehicleTitle" is not in the content model, and "VehicleTitle" is: a misspelling, so the query lists no record of it`,
-      `the facet "HidenInNavigation" is not in the content model, and "HiddenInNavigation" is: a misspelling, so no record has it`,
+      `the type "vehicleTitle" is not in the content model, and the model's "VehicleTitle" is near it: a misspelling, so the query lists no record of it`,
+      `the facet "HidenInNavigation" is not in the content model, and Nuxeo's own "HiddenInNavigation" is near it: a misspelling, so no record has it`,
     ]);
   });
 
@@ -410,6 +410,10 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
       "ecm:primaryType <> 'LetterTemplate' AND ecm:mixinType <> 'Correspondence' AND letter:status = 'sent'",
     ],
     ["the user profile's schema, one of Nuxeo's own", 'userprofile:avatar IS NULL'],
+    [
+      "short prefixes an edit from the model's or Nuxeo's, which may be an add-on's",
+      "doc:status = 'x' AND nx:flag = 1 AND rnd:kind = 'y'",
+    ],
   ];
   it.each(passed)('passes %s', (_, where) => {
     expect(missing(where)).toEqual([]);
@@ -426,7 +430,7 @@ describe("nxqlNameProblems: what a page provider's NXQL names, held to the conte
     expect(
       nxqlNameProblems('SELECT * FROM VehicleDeal, VehicleTitel', { pattern: true }, model),
     ).toEqual([
-      'the type "VehicleTitel" is not in the content model, and "VehicleTitle" is: a misspelling, so Nuxeo refuses a query from it',
+      `the type "VehicleTitel" is not in the content model, and the model's "VehicleTitle" is near it: a misspelling, so Nuxeo refuses a query from it`,
     ]);
   });
 

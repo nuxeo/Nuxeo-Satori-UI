@@ -407,19 +407,31 @@ function editsApart(a: string, b: string): number {
 }
 
 /**
- * The name of `known` that `name`, which is none of them, is likely a misspelling of: the same but
- * for case, or one edit apart, two for a name of more than five letters. `null` when none is that
- * near: then `name` may well be an add-on's that neither the model nor Nuxeo's lists here
- * describe, and is let be.
+ * The name `name`, which is none of the model's (`own`) nor Nuxeo's (`nuxeo`), is likely a
+ * misspelling of, said as a message says it: one the same but for case, or, for a name of four
+ * letters or more, one edit apart, and two for one of more than five. A name of two or three
+ * letters, such as a prefix, is near too many others to tell a misspelling from another schema's.
+ * `null` when none is that near: then `name` may well be an add-on's that neither the model nor
+ * Nuxeo's lists here describe, and is let be.
  */
-function nearMiss(name: string, known: Iterable<string>): string | null {
-  let best: { name: string; edits: number } | null = null;
-  for (const each of known) {
-    const edits = each.toLowerCase() === name.toLowerCase() ? 0 : editsApart(name, each);
-    if (edits <= (name.length > 5 ? 2 : 1) && (best === null || edits < best.edits))
-      best = { name: each, edits };
-  }
-  return best?.name ?? null;
+function nearMiss(
+  name: string,
+  own: Iterable<string>,
+  nuxeo: Iterable<string>,
+  suffix = '',
+): string | null {
+  const allowed = name.length < 4 ? 0 : name.length > 5 ? 2 : 1;
+  let best: { said: string; edits: number } | null = null;
+  const look = (names: Iterable<string>, said: (each: string) => string) => {
+    for (const each of names) {
+      const edits = each.toLowerCase() === name.toLowerCase() ? 0 : editsApart(name, each);
+      if (edits <= allowed && (best === null || edits < best.edits))
+        best = { said: said(each), edits };
+    }
+  };
+  look(own, (each) => `the model's "${each}${suffix}"`);
+  look(nuxeo, (each) => `Nuxeo's own "${each}${suffix}"`);
+  return (best as { said: string } | null)?.said ?? null;
 }
 
 /** A part of a property's path that steps into a list's items: `*`, `*1`, or an index. */
@@ -460,13 +472,15 @@ export function propertyNameProblem(
     [...model.schemas.values()].find((each) => each.prefix === prefix) ?? model.schemas.get(prefix);
   if (!schema) {
     if (NUXEO_SCHEMA_PREFIXES.has(prefix)) return null;
-    const near = nearMiss(prefix, [
-      ...[...model.schemas.values()].flatMap((each) => [each.prefix, each.name]),
-      ...NUXEO_SCHEMA_PREFIXES,
-    ]);
+    const near = nearMiss(
+      prefix,
+      [...model.schemas.values()].flatMap((each) => [each.prefix, each.name]),
+      NUXEO_SCHEMA_PREFIXES,
+      ':',
+    );
     return near === null
       ? null
-      : `"${xpath}": no schema of the content model is written "${prefix}:", by its prefix or its name, and "${near}:" is: a misspelling, which Nuxeo refuses`;
+      : `"${xpath}": no schema of the content model is written "${prefix}:", by its prefix or its name, and ${near} is near it: a misspelling, which Nuxeo refuses`;
   }
   let property: PropertyModel | undefined = schema.properties.get(name);
   if (!property) {
@@ -548,10 +562,10 @@ export function nxqlNameProblems(
   const type = listedType(nxql, options);
   const typeProblem = (name: string, from: boolean) => {
     if (model.types.has(name) || NUXEO_DOCUMENT_TYPES.has(name)) return;
-    const near = nearMiss(name, [...model.types.keys(), ...NUXEO_DOCUMENT_TYPES]);
+    const near = nearMiss(name, model.types.keys(), NUXEO_DOCUMENT_TYPES);
     if (near !== null)
       say(
-        `the type "${name}" is not in the content model, and "${near}" is: a misspelling, so ${from ? 'Nuxeo refuses a query from it' : 'the query lists no record of it'}`,
+        `the type "${name}" is not in the content model, and ${near} is near it: a misspelling, so ${from ? 'Nuxeo refuses a query from it' : 'the query lists no record of it'}`,
       );
   };
   tokens.forEach((token, index) => {
@@ -561,10 +575,10 @@ export function nxqlNameProblems(
         const name = value.text.slice(1, -1);
         if (token.text === 'ecm:primaryType') typeProblem(name, false);
         else if (!model.facets.has(name) && !NUXEO_FACETS.has(name)) {
-          const near = nearMiss(name, [...model.facets.keys(), ...NUXEO_FACETS]);
+          const near = nearMiss(name, model.facets.keys(), NUXEO_FACETS);
           if (near !== null)
             say(
-              `the facet "${name}" is not in the content model, and "${near}" is: a misspelling, so no record has it`,
+              `the facet "${name}" is not in the content model, and ${near} is near it: a misspelling, so no record has it`,
             );
         }
       }
