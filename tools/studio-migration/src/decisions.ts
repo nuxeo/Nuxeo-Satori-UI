@@ -434,7 +434,10 @@ function carrySameBuild(
     const moved = reading.moved.get(entry.id);
     if (!moved) return blankOf(entry);
     reconfirm++;
-    return { ...blankOf(entry), earlier: earlierOf(moved.item, build.bundle, moved.changed) };
+    return {
+      ...blankOf(entry),
+      earlier: offerOf(moved.item) ?? earlierOf(moved.item, build.bundle, moved.changed),
+    };
   });
   // One whose item changed is offered for re-confirmation, and says so, rather than to decide it.
   const offered = new Map([...reading.moved.values()].map((moved) => [moved.finding, moved]));
@@ -565,6 +568,11 @@ function carryOtherBuild(
       );
       continue;
     }
+    // An offer no one confirmed is offered again, its earlier decision as it was offered.
+    if (offerOf(item)) {
+      offered.set(entry.id, { item, changed: [] });
+      continue;
+    }
     const changed = (proposal ? PROPOSAL_PINNED : PINNED).filter(
       (key) => !same(item[key], entry[key]),
     );
@@ -587,10 +595,16 @@ function carryOtherBuild(
     }
     const moved = offered.get(entry.id);
     if (!moved) return blankOf(entry);
+    const again = offerOf(moved.item);
     notCarried.push(
-      `${file}: ${String(moved.item['id'])} was made on another ${moved.changed.map((key) => PINNED_WORDS[key]).join(' and ')} than this build's report gives ${entry.id}, so it is offered for re-confirmation, beside it`,
+      again
+        ? `${file}: ${String(moved.item['id'])} was offered for re-confirmation there, and no one confirmed it, so it is offered again, beside ${entry.id}`
+        : `${file}: ${String(moved.item['id'])} was made on another ${moved.changed.map((key) => PINNED_WORDS[key]).join(' and ')} than this build's report gives ${entry.id}, so it is offered for re-confirmation, beside it`,
     );
-    return { ...blankOf(entry), earlier: earlierOf(moved.item, earlierBundle, moved.changed) };
+    return {
+      ...blankOf(entry),
+      earlier: again ?? earlierOf(moved.item, earlierBundle, moved.changed),
+    };
   });
   const reconfirmIds = decisions.filter((item) => item.earlier).map((item) => item.id);
   return {
@@ -668,6 +682,17 @@ const FILLERS = /[\u115f\u1160\u3164\uffa0]/gu;
  */
 export function legible(text: string): boolean {
   return LETTER_OR_DIGIT.test(text.replace(FILLERS, ''));
+}
+
+/**
+ * The earlier decision an entry offers for re-confirmation, when no one has confirmed it yet:
+ * carried on as it was offered, never as the blank beside it.
+ */
+function offerOf(item: Readonly<Record<string, unknown>>): EarlierDecision | undefined {
+  return isRecord(item['earlier']) &&
+    ![item['owner'], item['decision'], item['reason']].some(saysSomething)
+    ? (item['earlier'] as unknown as EarlierDecision)
+    : undefined;
 }
 
 /** An entry that says nothing has nothing to carry, and nothing to lose, unless it is an offer. */

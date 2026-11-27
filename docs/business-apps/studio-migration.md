@@ -541,7 +541,7 @@ These sit inside the [development plan](development-plan.md):
 --from` carries them, for one package or many.
   - **What the harness found, file by file,** under the file of the conversion each finding names,
     with the package's files it came from.
-  - **Negative controls:** eight more. Three for the proposals, which check 5 fails: a proposal
+  - **Negative controls:** seven more. Three for the proposals, which check 5 fails: a proposal
     written with no decision, a rejected one written, an accepted one left out. Two for carrying,
     which readiness names: a decision carried to another construct, and a changed construct's
     decision carried as it was made. Two for the approval, which readiness names void: an approval

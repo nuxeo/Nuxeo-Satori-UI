@@ -1629,6 +1629,22 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     a refused file's record of a carry shown in the report; and `drop-accepted-proposal` claiming
     check 5 where an accepted proposal guards only an action, which is check 7's, so the control
     now picks a field and a test holds the action to check 7.
+- **A second round of the adversarial review**, on the fixes, found relabelling `report.json`, an
+  earlier build's shared identity, forging `applied` with `decisions.json`, relabelling while
+  editing the app files and an id listed twice each still in the way of readiness, by a check or a
+  line of the verdict. It found one more weakness, fixed with a test: three Hangul fillers are
+  Unicode letters that show nothing, and named someone; they name no one now. Left as it is: an
+  earlier build's file edited by hand, its `shared` and its twin entry taken out, carries what a
+  carry cannot check without that build's package.
+- **A second round of the correctness review** confirmed the eight fixed, and found that the third:
+  keeping an offer on a run of the same build, let it pass as an ordinary decision on to a third
+  build, where a blank was counted carried and the earlier decision lost. Fixed, with tests: an offer
+  no one confirmed is offered again on any later run, as it was offered, and is not counted carried.
+  It also found a count of the controls one too many in the migration document, now seven. It ran
+  `migrate` 32 times on the made-up packages and a new build, fresh and with `--from`, accepted and
+  rejected, and the readiness line that holds the report to the converter never fired on a run the
+  tool wrote. Noted rather than changed: readiness converts the package once more for that, about
+  17 ms on the made-up package with M2's corpus, against 158 ms for the harness.
 - **End to end, in a shell,** on the made-up packages, 27 November 2026: `migrate` of Acme-Claims
   with and without M2's corpus, with and without the allow-list, its decisions filled in, the
   proposals accepted, and run again with `--from`, which wrote each accepted rule and left nothing

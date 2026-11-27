@@ -534,3 +534,46 @@ describe('a name that shows nothing', () => {
     expect(held.unowned).toBe(file.decisions.filter((item) => item.outcome === 'reported').length);
   });
 });
+
+describe('an offer no one confirmed', () => {
+  const b = carriedTo(prepare(NEW_BUILD), filled(prepare()));
+  const id = `search-field:${FORM}#2`;
+
+  it('is offered again on a third build, as it was offered, and is not counted carried', () => {
+    const third = {
+      ...NEW_BUILD,
+      'META-INF/MANIFEST.MF':
+        'Manifest-Version: 1.0\nBundle-SymbolicName: studio.extensions.Acme-Claims\nStudio-Git-Commit-Hash: 3c2d\n',
+    };
+    const d = carriedTo(prepare(third), b.file);
+    expect(d.otherBuild).toBeDefined();
+    expect(d.file.decisions.find((item) => item.id === id)).toMatchObject({
+      owner: '',
+      decision: '',
+      earlier: {
+        owner: 'Migration lead',
+        decision: 'Decided on cl_status ("Status")',
+        madeOn: { label: 'cl_status ("Status")' },
+      },
+    });
+    expect(d.file.carriedFrom?.carried).not.toContain(id);
+    expect(d.reconfirm).toBe(1);
+    expect(d.notCarried).toContain(
+      `earlier.json: ${id} was offered for re-confirmation there, and no one confirmed it, so it is offered again, beside ${id}`,
+    );
+  });
+
+  it('is offered again on the same build as it was offered, though what it shows changed again', () => {
+    const changed = {
+      ...b.file,
+      decisions: b.file.decisions.map((item) =>
+        item.id === id ? { ...item, label: 'cl_status ("Another label")' } : item,
+      ),
+    };
+    const c = carriedTo(prepare(NEW_BUILD), changed);
+    expect(c.file.decisions.find((item) => item.id === id)).toMatchObject({
+      owner: '',
+      earlier: { owner: 'Migration lead', madeOn: { label: 'cl_status ("Status")' } },
+    });
+  });
+});
