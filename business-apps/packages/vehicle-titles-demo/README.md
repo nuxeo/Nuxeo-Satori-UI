@@ -194,7 +194,7 @@ files photos on a record whose layout turns it on. **The deal's does**
 
 ## How it was built: the log
 
-Run on 27 November 2026, from 00:27 to 02:30 IST, before the pull request, in a worktree of
+Run on 27 November 2026, from 00:27 to 05:55 IST, before the pull request, in a worktree of
 `staging/enterprise-grade-app` at `886188ba6`, on Node 24.22.1, the major `.nvmrc` pins, for every
 command, `npm ci` included, as the skill's agent. The agent spoke to the Builder MCP server over
 stdio, as Claude Code does once the server is registered, through a small client of its own outside
@@ -302,7 +302,7 @@ the designer's bytes for its value:
 
 | Check                                                                                                                                                                                                                                                    | Result                                                                                                                                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run app-package -- business-apps/packages/vehicle-titles-demo --platform 0.2.0 --model business-apps/packages/vehicle-titles-demo/content-model.json`                                                                                               | Passed: 2 layouts held to the model, 9 files passed, sha256 `7d1d34c7…aea6f`, the last write's                                                                                                                                     |
+| `npm run app-package -- business-apps/packages/vehicle-titles-demo --platform 0.2.0 --model business-apps/packages/vehicle-titles-demo/content-model.json`                                                                                               | Passed: 2 layouts held to the model, 9 files passed, sha256 `7d1d34c7…aea6f`, the last write's then (`c451afe3…0e168` after the review's)                                                                                          |
 | `validate_package`                                                                                                                                                                                                                                       | `passed: true`, `asCi: true`, no finding, the same SHA-256: the same check again, as the MCP server runs it                                                                                                                        |
 | By hand, what the pipeline does not check (skill, step 3): every property a field, a column, a sort, a rule, a computation, a checklist, the capture, a `show` or a page provider's NXQL names, against its type, its page provider's or the linked type | 134 references, none missing. Seen failing, on a copy: `vtitle:openOn` in the overdue banner's rule, `vdeal:buyerName` in a related list and `vdocs:checklist/*/don` in the NXQL, all three named                                  |
 | The pipeline on that broken copy                                                                                                                                                                                                                         | **Refused the related list's column,** and, that put right, **passed the rule and the NXQL:** a banner whose rule names a property the type does not have never shows, and a query naming one fails on a server (feedback, item 8) |
@@ -358,15 +358,24 @@ number were both `title`, so one replaced the other; the summary is `summary` no
 - **The release candidate,** `node scripts/release-candidate.mjs --out /tmp/vt-agent/rc-1 --since origin/staging/enterprise-grade-app --unsigned-kits`:
   assembled whole, from 01:21 to 01:26, with this kit among the ten, new and held to nothing. Its stage 3, the kits as a set, compared the kit's 26 names with the other nine kits' and found no clash; Maven's packages and tests passed, `DeploymentValidatorParityTest` among them, on the parity corpus with this kit. Nothing was signed, tagged or published.
 
-### The gate, the pre-PR review and the independent review
+### The gate, the pre-PR review and the independent review (01:25 to 05:52)
 
 - **The gate,** `npm run beta:gate -- --base origin/staging/enterprise-grade-app --gates
 lockfile,guardrails,sanitizer-audit,lint,test,spec-types,api-surface,reference-drift,published-links,module-boundaries,agent-mirror`:
-  GATE_RUNS
+  run three times. **The first,** from 01:25 to 02:10, with the release candidate's Maven build
+  and the reviewer beside it on a machine at load average 10 to 15, passed nine gates and **failed
+  `module-boundaries`:** Nx's `@nx/eslint/plugin` and `@nx/vitest` timed out loading after ten
+  minutes, and `agent-mirror` did not run. Alone, at 05:34, `module-boundaries` passed in 41
+  seconds. **The second,** at 05:42, after the review's edits and staging's merge, **failed `test`**
+  on one of the generators' specs, `config-package/generator.spec.ts`, which timed out at 7.1
+  seconds against its 5, at load average 23; alone it passed, 180 of 180. **The third,** from 05:48 to
+  05:51, passed 11 of 11.
+- **`NODE_OPTIONS=--no-experimental-webstorage npx nx affected -t build typecheck --base=origin/staging/enterprise-grade-app`:**
+  10 tasks succeeded, at 05:52.
 - **`node scripts/pre-pr-review.mjs --base origin/staging/enterprise-grade-app`:** no mechanisable
   defect, on 8 changed files, at 01:27. Its skill's four comparisons, worked by hand, left the
   independent review to find what they missed, below.
-- **A reviewer agent,** given the request, the skill and the documents, and not this log, read the
+- **A reviewer agent,** from 01:27 to 05:26, given the request, the skill and the documents, and not this log, read the
   kit and its diff, recomputed the queues' contents and orders from the data and the model, ran the
   pipeline, the controls and breaks of its own, and checked every claim it could re-run. It found one
   thing blocking, this section's placeholders and the gate's failed first run, unreported; the rest
