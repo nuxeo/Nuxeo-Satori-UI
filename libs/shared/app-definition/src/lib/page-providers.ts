@@ -8,6 +8,13 @@
  *   NXQL says so plainly; otherwise none, and nothing is checked.
  * - **What in its NXQL Nuxeo refuses** ({@link nxqlProblems}), by a check of its tokens, not a
  *   parse.
+ * - **What its NXQL, its sorts and its aggregates name** ({@link nxqlNameProblems},
+ *   {@link propertyNameProblem}): each property, down to a complex one's subfields, in a schema of
+ *   the content model, and on the type it lists, when it says; each type and each facet in the
+ *   model, or one of Nuxeo's own. The vehicle kit's `vdocs:checklist/*\/don` and `vtitle:openOn`
+ *   passed every check before this one.
+ * - **The parameters a queue, a related list or a home's figure gives it** ({@link
+ *   parameterFindings}): as many as its NXQL's `?`, which Nuxeo fills in order.
  * - **A queue's and a related list's columns and sorts** ({@link listedColumnFindings}), held to
  *   that type as a layout's fields are held to the type its path names (`layout-model.ts`): each
  *   property on the type or a facet it declares, and each column's widget showing its property's
@@ -17,7 +24,13 @@
  * Plain TypeScript, so that the pipeline runs it with Node alone, as it runs the validator.
  */
 import { join, type Finding } from './checker';
-import { propertiesOf, propertyTypeOf, type ContentModel } from './content-model';
+import {
+  propertiesOf,
+  propertyTypeOf,
+  type ContentModel,
+  type PropertyModel,
+  type SchemaModel,
+} from './content-model';
 import { linkedShowFindings } from './layout-model';
 import { isRecord, PACKAGED_REGISTRIES, XPATH, type Registries } from './registries';
 
@@ -241,6 +254,365 @@ export function nxqlProblems(nxql: string, options: { readonly pattern: boolean 
       'a pattern is a whole query, SELECT * FROM <type> WHERE ..., and this one does not start with SELECT',
     );
   return problems;
+}
+
+/**
+ * Nuxeo's own document types, which a kit's page provider may name though the kit's stand-in model
+ * describes only its own: the platform's, and those of the add-ons a server runs by default. A
+ * server's exported model holds them all, and its own besides.
+ */
+export const NUXEO_DOCUMENT_TYPES: ReadonlySet<string> = new Set([
+  'AdministrativeStatus',
+  'AdministrativeStatusContainer',
+  'Annotation',
+  'Audio',
+  'Collection',
+  'Collections',
+  'Comment',
+  'DefaultSearch',
+  'Document',
+  'DocumentRoute',
+  'DocumentRouteInstancesRoot',
+  'DocumentRouteModelsRoot',
+  'Domain',
+  'Favorites',
+  'File',
+  'Folder',
+  'HiddenFolder',
+  'Note',
+  'OrderedFolder',
+  'Picture',
+  'Relation',
+  'Root',
+  'RouteNode',
+  'Section',
+  'SectionRoot',
+  'TaskDoc',
+  'TaskRoot',
+  'TemplateRoot',
+  'UserProfile',
+  'UserWorkspacesRoot',
+  'Video',
+  'Workspace',
+  'WorkspaceRoot',
+]);
+
+/** Nuxeo's own facets, as {@link NUXEO_DOCUMENT_TYPES} are its types. */
+export const NUXEO_FACETS: ReadonlySet<string> = new Set([
+  'Asset',
+  'Audio',
+  'BigFolder',
+  'ColdStorage',
+  'Collection',
+  'CollectionMember',
+  'Commentable',
+  'DocumentRoute',
+  'Downloadable',
+  'Folderish',
+  'ForceAudit',
+  'HasRelatedText',
+  'HasStoryboard',
+  'HasVideoPreview',
+  'HiddenInNavigation',
+  'Immutable',
+  'MultiviewPicture',
+  'NXTag',
+  'NotCollectionMember',
+  'NotFulltextIndexable',
+  'Orderable',
+  'Picture',
+  'Publishable',
+  'Record',
+  'RoutingTask',
+  'SuperSpace',
+  'SystemDocument',
+  'Task',
+  'Thumbnail',
+  'Versionable',
+  'Video',
+]);
+
+/**
+ * What Nuxeo's own schemas write their properties with, their prefixes and their names, which a
+ * kit's stand-in model may not describe: a property written so is looked for only when the model
+ * describes the schema. Any other the model does not describe is refused.
+ */
+const NUXEO_SCHEMA_PREFIXES: ReadonlySet<string> = new Set([
+  'audio',
+  'aud',
+  'collection',
+  'collectionMember',
+  'comment',
+  'common',
+  'coldstorage',
+  'cs',
+  'dc',
+  'docri',
+  'docrm',
+  'domain',
+  'dublincore',
+  'facetedTag',
+  'file',
+  'files',
+  'image_metadata',
+  'imd',
+  'iptc',
+  'note',
+  'nt',
+  'nxtag',
+  'picture',
+  'pic',
+  'publish',
+  'publishing',
+  'record',
+  'relatedtext',
+  'rend',
+  'rnode',
+  'storyboard',
+  'strb',
+  'task',
+  'thumb',
+  'thumbnail',
+  'uid',
+  'vid',
+  'video',
+  'webc',
+  'webcontainer',
+]);
+
+/** A part of a property's path that steps into a list's items: `*`, `*1`, or an index. */
+const ITEM = /^(?:\*\d*|\d+)$/;
+
+/** `a`, `a and b`, `a, b and c`, each quoted. */
+function quotedList(names: readonly string[]): string {
+  const quoted = names.map((name) => `"${name}"`);
+  return quoted.length < 2
+    ? (quoted[0] ?? '')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+}
+
+/**
+ * Why `xpath`, a property a page provider names as NXQL writes one (`vdocs:checklist/*\/done`,
+ * `files:files/*\/file/name`), is not one of `model`, or `null` when it is, or when the model
+ * cannot tell: the server's own `ecm:` properties, and one of Nuxeo's own schemas the model does
+ * not describe. The schema is found by its prefix or its name, as Nuxeo finds it; then each part
+ * of the path: a subfield of a complex value, or an item of a list. What a file holds, its name or
+ * length, and a complex value whose subfields the model does not list, are taken as written.
+ * Given `type`, the type the page provider lists, the property is also held to that type, its
+ * facets, or a facet of the model a record may be given at run time.
+ */
+export function propertyNameProblem(
+  xpath: string,
+  model: ContentModel,
+  type: string | null = null,
+): string | null {
+  const [head, ...path] = xpath.split('/');
+  const colon = head.indexOf(':');
+  if (colon <= 0 || head.startsWith('ecm:')) return null;
+  const prefix = head.slice(0, colon);
+  const name = head.slice(colon + 1);
+  if (!/^[A-Za-z_][\w-]*$/.test(name)) return null;
+  const schema: SchemaModel | undefined =
+    [...model.schemas.values()].find((each) => each.prefix === prefix) ?? model.schemas.get(prefix);
+  if (!schema) {
+    return NUXEO_SCHEMA_PREFIXES.has(prefix)
+      ? null
+      : `"${xpath}": no schema of the content model is written "${prefix}:", by its prefix or its name, nor is it one of Nuxeo's own, so Nuxeo refuses the query`;
+  }
+  let property: PropertyModel | undefined = schema.properties.get(name);
+  if (!property) {
+    return `"${xpath}" is not a property of the schema "${schema.name}" (${schema.prefix}:) in the content model, so Nuxeo refuses the query`;
+  }
+  // The path so far, its items' steps left out: what a message names.
+  let at = head;
+  let inItem = false;
+  for (const part of path) {
+    if (property.list && !inItem && ITEM.test(part)) {
+      inItem = true;
+      continue;
+    }
+    // A file's own parts, its name, length or type, are Nuxeo's; and what a complex value holds is
+    // taken as written when the model lists none of it.
+    if (property.type === 'blob' || ITEM.test(part)) return null;
+    if (property.type !== 'complex' || !property.fields) {
+      return `"${xpath}": "${at}" is a ${propertyTypeOf(property)} property, with no subfield "${part}", so Nuxeo refuses the query`;
+    }
+    if (property.fields.size === 0) return null;
+    const subfield: PropertyModel | undefined = property.fields.get(part);
+    if (!subfield) {
+      const whose = property.list ? `the entries of "${at}" have` : `"${at}" has`;
+      return `"${xpath}": ${whose} no subfield "${part}", only ${quotedList([...property.fields.keys()])}, so Nuxeo refuses the query`;
+    }
+    property = subfield;
+    inItem = false;
+    at = `${at}/${part}`;
+  }
+  if (type === null || !model.types.has(type)) return null;
+  const own = new Set(model.types.get(type)?.schemas ?? []);
+  for (const facet of model.types.get(type)?.facets ?? [])
+    for (const each of model.facets.get(facet)?.schemas ?? []) own.add(each);
+  if (own.has(schema.name)) return null;
+  // A record may be given a facet at run time, and with it the facet's schemas.
+  if ([...model.facets.values()].some((facet) => facet.schemas.includes(schema.name))) return null;
+  return `"${xpath}" is a property of the schema "${schema.name}", which the type "${type}" the page provider lists does not have, nor a facet of the model: no record it lists has it`;
+}
+
+/** The strings a condition on `ecm:primaryType` or `ecm:mixinType` at `at` compares it with. */
+function comparedWith(tokens: readonly NxqlToken[], at: number): NxqlToken[] {
+  let next = at + 1;
+  if (keyword(tokens[next], 'NOT')) next++;
+  const operator = tokens[next];
+  if (operator?.kind === 'symbol' && ['=', '<>', '!='].includes(operator.text))
+    return tokens[next + 1]?.kind === 'string' ? [tokens[next + 1]] : [];
+  if (!keyword(operator, 'IN') || tokens[next + 1]?.kind !== 'open') return [];
+  const depth = tokens[next + 1].depth;
+  const values: NxqlToken[] = [];
+  for (let index = next + 2; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.kind === 'close' && token.depth === depth) break;
+    if (token.kind === 'string') values.push(token);
+  }
+  return values;
+}
+
+/**
+ * What a page provider's NXQL names that the content model does not have, each said with why:
+ * each property ({@link propertyNameProblem}, held to the type it lists when {@link listedType}
+ * can tell); each type, in a pattern's `FROM` or compared with `ecm:primaryType`; and each facet
+ * compared with `ecm:mixinType`, each in the model or one of Nuxeo's own
+ * ({@link NUXEO_DOCUMENT_TYPES}, {@link NUXEO_FACETS}). What `nxqlProblems` finds is not said
+ * again: a query it cannot read has nothing here.
+ */
+export function nxqlNameProblems(
+  nxql: string,
+  options: { readonly pattern: boolean },
+  model: ContentModel,
+): string[] {
+  const problems: string[] = [];
+  const say = (problem: string) => {
+    if (!problems.includes(problem)) problems.push(problem);
+  };
+  const { tokens, unclosed } = tokenize(nxql);
+  if (unclosed) return problems;
+  const type = listedType(nxql, options);
+  const typeProblem = (name: string, from: boolean) => {
+    if (model.types.has(name) || NUXEO_DOCUMENT_TYPES.has(name)) return;
+    say(
+      `the type "${name}" is not in the content model, nor one of Nuxeo's own, so ${from ? 'Nuxeo refuses a query from it' : 'the query lists no record of it'}`,
+    );
+  };
+  tokens.forEach((token, index) => {
+    if (token.kind !== 'name') return;
+    if (token.text === 'ecm:primaryType' || token.text === 'ecm:mixinType') {
+      for (const value of comparedWith(tokens, index)) {
+        const name = value.text.slice(1, -1);
+        if (token.text === 'ecm:primaryType') typeProblem(name, false);
+        else if (!model.facets.has(name) && !NUXEO_FACETS.has(name))
+          say(
+            `the facet "${name}" is not in the content model, nor one of Nuxeo's own, so no record has it`,
+          );
+      }
+      return;
+    }
+    if (token.text.includes(':')) {
+      const problem = propertyNameProblem(token.text, model, type);
+      if (problem !== null) say(problem);
+    }
+  });
+  if (options.pattern) {
+    const from = tokens.findIndex((token) => token.depth === 0 && keyword(token, 'FROM'));
+    for (let index = from + 1; from >= 0 && index < tokens.length; index++) {
+      const token = tokens[index];
+      if (token.depth === 0 && (keyword(token, 'WHERE') || keyword(token, 'ORDER'))) break;
+      if (token.kind === 'name' && !token.text.includes(':')) typeProblem(token.text, true);
+    }
+  }
+  return problems;
+}
+
+/**
+ * How many parameters a page provider's NXQL takes, each a `?` Nuxeo fills in order with what a
+ * queue, a related list or a home's figure gives it; `null` when it names one, `:name`, too, which
+ * a search document fills, or when a string is left open, which `nxqlProblems` says.
+ */
+export function positionalParameters(nxql: string): number | null {
+  const { tokens, unclosed } = tokenize(nxql);
+  if (unclosed || tokens.some((token) => token.kind === 'parameter' && token.text !== '?'))
+    return null;
+  return tokens.filter((token) => token.kind === 'parameter').length;
+}
+
+/** A page provider of the package's own, with the parameters its NXQL takes, when it can tell. */
+export interface ParameterProvider {
+  readonly component: string;
+  /** {@link positionalParameters}'s answer: `null` when it cannot tell. */
+  readonly parameters: number | null;
+}
+
+/**
+ * Each queue, related list and home figure that gives a page provider of the package's own other
+ * than as many parameters as its NXQL takes: too few, and Nuxeo has a `?` it cannot fill, and
+ * refuses the query; too many, and the last are never read, a queue's search among them, which
+ * then finds nothing it would not list anyway. A queue's search is its last parameter, after its
+ * own. `path` is the file's, inside `agentic-ui-config/`: `queues/<id>.json`, a layout, or
+ * `home.json`. A page provider not in `providers`, or whose count is `null`, is not checked; an
+ * entry already malformed has its finding from the validator, and is passed over here.
+ */
+export function parameterFindings(
+  path: string,
+  content: unknown,
+  providers: ReadonlyMap<string, ParameterProvider>,
+): Finding[] {
+  const findings: Finding[] = [];
+  if (!isRecord(content)) return findings;
+  const check = (item: Record<string, unknown>, at: string, what: string, search: boolean) => {
+    const name = item['pageProvider'];
+    const provider = typeof name === 'string' ? providers.get(name) : undefined;
+    if (!provider || provider.parameters === null) return;
+    const given = item['parameters'] === undefined ? [] : item['parameters'];
+    if (!Array.isArray(given)) return;
+    const count = given.length + (search ? 1 : 0);
+    if (count === provider.parameters) return;
+    const takes = `the page provider "${name}" (${provider.component}) takes ${provider.parameters} ${provider.parameters === 1 ? 'parameter' : 'parameters'}, each a ? filled in order`;
+    const gives = `${what} gives ${count}${search ? `, its search's text last` : ''}`;
+    findings.push({
+      path: join(at, item['parameters'] === undefined ? 'pageProvider' : 'parameters'),
+      kind: 'parameter',
+      message: `${takes}, and ${gives}: ${
+        count < provider.parameters
+          ? 'Nuxeo cannot fill the rest, and refuses the query'
+          : search
+            ? "the last are never read, so a search's text changes nothing"
+            : 'the last are never read'
+      }`,
+    });
+  };
+  if (path.startsWith('queues/')) check(content, '', 'the queue', isRecord(content['search']));
+  else if (path === 'home.json' && Array.isArray(content['cards'])) {
+    content['cards'].forEach((card, index) => {
+      if (isRecord(card) && isRecord(card['kpi']))
+        check(card['kpi'], join(join('cards', index), 'kpi'), 'the figure', false);
+    });
+  } else if (path.startsWith('layouts/')) {
+    const cards = (value: unknown, at: string): void => {
+      if (!Array.isArray(value)) return;
+      value.forEach((card, index) => {
+        if (isRecord(card) && isRecord(card['related']))
+          check(
+            card['related'],
+            join(join(join(at, 'cards'), index), 'related'),
+            'the related list',
+            false,
+          );
+      });
+    };
+    cards(content['cards'], '');
+    if (Array.isArray(content['tabs']))
+      content['tabs'].forEach((tab, index) => {
+        if (isRecord(tab)) cards(tab['cards'], join('tabs', index));
+      });
+  }
+  return findings;
 }
 
 /** A page provider of the package's own, as the pipeline read it from its component. */

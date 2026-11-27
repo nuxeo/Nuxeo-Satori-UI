@@ -24,7 +24,10 @@
  *      for a package that ships a stand-in model, its own `content-model.json`. A queue's facet and
  *      a home's figure name an aggregate their page provider defines, when the package's own
  *      model defines it; the NXQL of a page provider the package defines holds nothing Nuxeo's
- *      grammar has no place for, by a check of its tokens, not a parse; a queue's and a related
+ *      grammar has no place for, by a check of its tokens, not a parse, and, given a model, it,
+ *      its sorts and its aggregates name only properties, types and facets the model has, each
+ *      property on the type the NXQL lists when it says; a queue, a related list and a home's
+ *      figure give such a page provider as many parameters as its NXQL's ?; a queue's and a related
  *      list's columns and sorts, on such a page provider whose NXQL says the type it lists, name
  *      that type's properties in the content model, with widgets that show them. The layouts the
  *      component contributes are the files the validator read, in the modes it
@@ -109,9 +112,15 @@ import {
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** The validator's library, which Node loads as it is through the hook imported above. */
 const LIBRARY = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'lib');
-const { listedColumnFindings, listedType, nxqlProblems } = await import(
-  pathToFileURL(join(LIBRARY, 'page-providers.ts')).href
-);
+const {
+  listedColumnFindings,
+  listedType,
+  nxqlNameProblems,
+  nxqlProblems,
+  parameterFindings,
+  positionalParameters,
+  propertyNameProblem,
+} = await import(pathToFileURL(join(LIBRARY, 'page-providers.ts')).href);
 const { propertiesOf, readContentModel } = await import(
   pathToFileURL(join(LIBRARY, 'content-model.ts')).href
 );
@@ -455,6 +464,14 @@ function run({
       "a page provider's NXQL holds what Nuxeo refuses, listed above. This is a check of its tokens, not of the query: one it passes may still be refused on the server.",
     );
   }
+  const unnamed = unmodelledNames(directory, heldTo);
+  if (unnamed.length > 0) {
+    for (const finding of unnamed) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a page provider's NXQL, sort or aggregate names a property, a type or a facet the content model does not have, listed above.",
+    );
+  }
   const unanswered = unansweredAggregates(directory, root);
   if (unanswered.length > 0) {
     for (const finding of unanswered) process.stdout.write(`${finding}\n`);
@@ -469,6 +486,14 @@ function run({
     return refuse(
       2,
       "a queue's or a related list's column or sort names a property the records its page provider lists do not have, or a widget that does not show one, listed above.",
+    );
+  }
+  const unfilled = unfilledParameters(directory, root);
+  if (unfilled.length > 0) {
+    for (const finding of unfilled) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      "a queue, a related list or a home's figure gives a page provider of the package's own other than the parameters its NXQL takes, listed above.",
     );
   }
   const connected = connectorFindings(directory, root, heldTo);
@@ -988,9 +1013,23 @@ function pageProvidersOf(directory) {
           : extension.indexOf(`</${element}`, start);
         const definition = extension.slice(start, end === -1 ? extension.length : end);
         const definitionKept = extensionKept.slice(start, end === -1 ? extension.length : end);
-        const aggregates = [...definition.matchAll(new RegExp(`<aggregate${TAG}`, 'g'))]
-          .map(([, attributes]) => attributesOf(attributes).id)
+        const aggregateTags = [...definition.matchAll(new RegExp(`<aggregate${TAG}`, 'g'))].map(
+          ([, attributes]) => attributesOf(attributes),
+        );
+        const aggregates = aggregateTags
+          .map(({ id }) => id)
           .filter((id) => id !== undefined && id !== '');
+        // The properties it names besides its NXQL: what it sorts by, and what each aggregate
+        // groups by.
+        const named = [
+          ...[...definition.matchAll(new RegExp(`<sort${TAG}`, 'g'))]
+            .map(([, attributes]) => attributesOf(attributes).column)
+            .map((column, index) => ({ place: `sort[${index}].column`, xpath: column })),
+          ...aggregateTags.map(({ id, parameter }) => ({
+            place: `aggregates.${id}.parameter`,
+            xpath: parameter,
+          })),
+        ].filter(({ xpath }) => typeof xpath === 'string' && xpath !== '');
         // Nuxeo builds the query from the where clause whenever there is one, and from the pattern
         // only when there is not.
         const whereClause = new RegExp(`<whereClause${TAG}`).exec(definition);
@@ -1018,6 +1057,7 @@ function pageProvidersOf(directory) {
           aggregates: new Set(aggregates),
           nxql: nxql === null ? null : { text: nxql, pattern: pattern !== null },
           listed: nxql === null ? null : listedType(nxql, { pattern: pattern !== null }),
+          named,
         });
       }
     }
@@ -1553,6 +1593,79 @@ function refusedNxql(directory) {
       findings.push(
         `${join(directory, 'bundle', ...component.split('/'))}: ${place}: ${problem} [structure]`,
       );
+  }
+  return findings;
+}
+
+/** The content model in `file`, read; `null` when it cannot be, which the validator has said. */
+function modelIn(file) {
+  if (file === undefined || file === null) return null;
+  try {
+    return (
+      readContentModel(JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''))).model ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What each page provider the package defines names that `model`, the content model the validator
+ * was given, does not have, as a finding in the validator's form: the component, the page provider
+ * and the element, the property, the type or the facet, and why. Its NXQL (`nxqlNameProblems`),
+ * its sorts and its aggregates' properties (`propertyNameProblem`), each property held to the type
+ * the NXQL lists when it says. A misspelt property in a condition, such as the vehicle kit's
+ * `vdocs:checklist/*\/don`, is a query the server refuses; a misspelt type or facet one that lists
+ * nothing. None without a model.
+ */
+function unmodelledNames(directory, model) {
+  const read = modelIn(model);
+  if (read === null) return [];
+  const findings = [];
+  for (const [name, { component, nxql, listed, named }] of pageProvidersOf(directory)) {
+    const file = join(directory, 'bundle', ...component.split('/'));
+    if (nxql !== null)
+      for (const problem of nxqlNameProblems(nxql.text, { pattern: nxql.pattern }, read))
+        findings.push(
+          `${file}: pageProviders.${name}.${nxql.pattern ? 'pattern' : 'whereClause.fixedPart'}: ${problem} [unknown]`,
+        );
+    for (const { place, xpath } of named) {
+      const problem = propertyNameProblem(xpath, read, listed);
+      if (problem !== null)
+        findings.push(`${file}: pageProviders.${name}.${place}: ${problem} [unknown]`);
+    }
+  }
+  return findings;
+}
+
+/**
+ * Each queue, related list and home figure that gives a page provider of the package's own other
+ * than as many parameters as its NXQL's `?` (`parameterFindings`), as a finding in the validator's
+ * form. Needs no model: the count is the NXQL's.
+ */
+function unfilledParameters(directory, root) {
+  const providers = new Map(
+    [...pageProvidersOf(directory)].map(([name, { component, nxql }]) => [
+      name,
+      { component, parameters: nxql === null ? null : positionalParameters(nxql.text) },
+    ]),
+  );
+  if (providers.size === 0) return [];
+  const files = ['home.json'];
+  for (const folder of ['queues', 'layouts']) {
+    const at = join(root, folder);
+    if (!existsSync(at) || !lstatSync(at).isDirectory()) continue;
+    for (const path of filesUnder(at).filter((file) => file.endsWith('.json')))
+      files.push(`${folder}/${path}`);
+  }
+  const findings = [];
+  for (const file of files.sort()) {
+    const path = join(root, ...file.split('/'));
+    if (!existsSync(path)) continue;
+    const content = definitionFile(path);
+    if (content === null) continue;
+    for (const finding of parameterFindings(file, content, providers))
+      findings.push(`${path}: ${finding.path}: ${finding.message} [${finding.kind}]`);
   }
   return findings;
 }
