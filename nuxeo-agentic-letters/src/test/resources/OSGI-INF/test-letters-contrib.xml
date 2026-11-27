@@ -49,4 +49,11 @@
       class="org.nuxeo.template.processors.IdentityProcessor" />
   </extension>
 
+  <!-- The platform's own PDF output format, a conversion by mime type, and one that runs a chain,
+       which a letter template may not name. -->
+  <extension target="org.nuxeo.template.service.TemplateProcessorComponent" point="outputFormat">
+    <outputFormat id="pdf" label="PDF" mimetype="application/pdf" />
+    <outputFormat id="chained" label="Chained" chainId="Test.AnyChain" mimetype="application/pdf" />
+  </extension>
+
 </component>

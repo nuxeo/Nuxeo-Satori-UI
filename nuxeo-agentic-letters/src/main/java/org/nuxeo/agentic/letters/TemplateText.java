@@ -39,8 +39,13 @@ import org.nuxeo.ecm.core.api.NuxeoException;
  * ({@link #FORBIDDEN}, {@link #VELOCITY}, {@link #REFERENCE}), anywhere, in either format.</li>
  * <li><b>HTML that runs and fetches nothing:</b> only the tags of {@link #TAGS} and the attributes
  * of {@link #ATTRIBUTES}, no {@code javascript:}, {@code url(}, {@code @import} or conditional
- * comment; no placeholder inside a tag or a style sheet, where a value could become markup or a
- * style.</li>
+ * comment; no placeholder inside a tag, a comment or a style sheet, where a value could become
+ * markup or a style. Read as a browser reads it: a comment's text holds no {@code -}, {@code <},
+ * {@code >} or {@code !}; a {@code <title>} and a {@code <style>} hold no {@code <}; a style sheet
+ * and a style attribute hold no parenthesis, {@code @}, backslash or {@code &}, so no function, no
+ * at-rule and no escape; and no attribute's value holds a character reference.</li>
+ * <li><b>A text template holds no markup:</b> no {@code <} before a letter, {@code /}, {@code !} or
+ * {@code ?}.</li>
  * <li><b>Placeholders that parse</b> ({@link Placeholder}), at most {@value #MAX_PLACEHOLDERS} of
  * them, and no brace pair that is not one.</li>
  * </ul>
@@ -193,13 +198,36 @@ final class TemplateText {
             throw Refusal.invalid("A letter template holds no $ before a letter or a brace, and this one holds "
                     + Letters.quoted(reference.group()) + ": write an amount as USD 10, or with a placeholder");
         }
+        if (format == Format.TEXT) {
+            Matcher markup = MARKUP.matcher(text);
+            if (markup.find()) {
+                throw Refusal.invalid("A text letter template holds no markup, and this one holds "
+                        + Letters.quoted(markup.group()));
+            }
+        }
         List<int[]> noPlaceholder = format == Format.HTML ? checkHtml(text) : List.of();
         return new Parsed(format, Collections.unmodifiableList(split(text, noPlaceholder)));
     }
 
+    /** What would begin a tag, a comment or a declaration in a browser. */
+    private static final Pattern MARKUP = Pattern.compile("<[A-Za-z/!?]");
+
+    /** What a comment's text holds: none of the characters by which a browser ends one early. */
+    private static final Pattern COMMENT_TEXT = Pattern.compile("[^-<>!]*");
+
+    /**
+     * What a style sheet, or a style attribute, holds: none of the characters CSS fetches, imports or
+     * escapes with, a function's parenthesis, an at-rule's {@code @}, an escape's backslash, and no
+     * {@code <} or {@code &}, which would end the sheet or be decoded into something else.
+     */
+    private static final Pattern CSS_FORBIDDEN = Pattern.compile("[(@\\\\<&]");
+
     /**
      * Every tag of {@code text} held to {@link #TAGS} and {@link #ATTRIBUTES}, with the ranges where a
-     * placeholder may not be: each tag, and each style sheet.
+     * placeholder may not be: each tag, each comment and each style sheet. Read as a browser reads
+     * them: a comment's text holds none of the characters that end it early in a browser, and a
+     * {@code <title>} and a {@code <style>} hold no {@code <}, so that each ends where a browser ends
+     * it, at its closing tag.
      */
     private static List<int[]> checkHtml(String text) {
         List<int[]> ranges = new ArrayList<>();
@@ -207,8 +235,9 @@ final class TemplateText {
         while ((i = text.indexOf('<', i)) >= 0) {
             if (text.startsWith("<!--", i)) {
                 int end = text.indexOf("-->", i + 4);
-                if (end < 0) {
-                    throw Refusal.invalid("A letter template's comment is not closed");
+                if (end < 0 || !COMMENT_TEXT.matcher(text.substring(i + 4, end)).matches()) {
+                    throw Refusal.invalid("A letter template's comment is <!-- text -->, its text with no -, <, > "
+                            + "or !, and closed");
                 }
                 ranges.add(new int[] { i, end + 3 });
                 i = end + 3;
@@ -240,12 +269,20 @@ final class TemplateText {
             checkAttributes(name, attributes);
             ranges.add(new int[] { i, tag.end() });
             i = tag.end();
-            if (!closing && name.equals("style")) {
-                int end = text.toLowerCase(Locale.ROOT).indexOf("</style", i);
-                if (end < 0) {
-                    throw Refusal.invalid("A letter template's <style> is not closed");
+            if (!closing && (name.equals("style") || name.equals("title"))) {
+                // Text to a browser up to its closing tag, never markup: so it holds no <.
+                int end = text.indexOf('<', i);
+                if (end < 0 || !text.regionMatches(true, end, "</" + name, 0, name.length() + 2)) {
+                    throw Refusal.invalid("A letter template's <" + name + "> holds text alone, no <, and is closed");
                 }
-                ranges.add(new int[] { i, end });
+                if (name.equals("style")) {
+                    Matcher css = CSS_FORBIDDEN.matcher(text.substring(i, end));
+                    if (css.find()) {
+                        throw Refusal.invalid("A letter template's style sheet holds no " + Letters.quoted(css.group())
+                                + ": no function, at-rule or escape");
+                    }
+                    ranges.add(new int[] { i, end });
+                }
                 i = end;
             }
         }
@@ -258,7 +295,19 @@ final class TemplateText {
         int count = 0;
         while (attribute.find()) {
             String name = attribute.group(1).toLowerCase(Locale.ROOT);
+            String value = attribute.group(2) == null ? "" : attribute.group(2);
             count++;
+            // A browser decodes a character reference in a value: none, so a value is what it reads.
+            if (value.indexOf('&') >= 0) {
+                throw Refusal.invalid("A letter template's attribute value holds no &");
+            }
+            if (name.equals("style")) {
+                Matcher css = CSS_FORBIDDEN.matcher(value);
+                if (css.find()) {
+                    throw Refusal.invalid("A letter template's style attribute holds no " + Letters.quoted(css.group())
+                            + ": no function, at-rule or escape");
+                }
+            }
             if (tag.equals("meta")) {
                 if (!name.equals("charset")) {
                     throw Refusal.invalid("A letter template's <meta> holds its charset alone");

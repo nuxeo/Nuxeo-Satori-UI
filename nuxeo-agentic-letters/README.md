@@ -103,7 +103,7 @@ so that a version of the platform that renames one fails the build.
 | `src/main/resources/OSGI-INF/letters-operations-contrib.xml` | `Letter.Generate`                                                                                                    |
 | `src/main/resources/OSGI-INF/letters-listener-contrib.xml`   | The guards, before the platform's own template listener, and the audit's writer                                      |
 | `src/main/package/`                                          | The Marketplace package, `nuxeo-agentic-letters` 0.1.0, which depends on `nuxeo-template-rendering`                  |
-| `src/test/java/`                                             | 58 tests: 52 in Nuxeo's test framework, with Template Rendering 11.5.154 and the platform's audit, 6 with no runtime |
+| `src/test/java/`                                             | 60 tests: 54 in Nuxeo's test framework, with Template Rendering 11.5.154 and the platform's audit, 6 with no runtime |
 
 ## The model
 
@@ -116,16 +116,16 @@ so that a version of the platform that renames one fails the build.
 **`LetterTemplate`, the platform's `TemplateSource` and the add-on's facet.** Its file is the
 platform's `file:content`, its title the letter's title.
 
-| Property                                                                | Whose    | What it holds                                                                                         |
-| ----------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `tmpl:templateName`                                                     | Platform | Its name, letters, digits, dots, hyphens and underscores: `payers-denial-es`                          |
-| `tmpl:applicableTypes`                                                  | Platform | The record types it is for, one by one, each carrying `Correspondence`; never `all`                   |
-| `tmpl:templateType`                                                     | Platform | `agenticLetter`, the add-on's processor: written by the add-on when none is named, and no other taken |
-| `tmpl:outputFormat`                                                     | Platform | None, or one of the platform's output formats, which converts the letter after it is rendered         |
-| `tmpl:forcedTypes`, `tmpl:useAsMainContent`, `tmpl:targetRenditionName` | Platform | None, false and none: no other way of binding or rendering it                                         |
-| `ltpl:letter`                                                           | Add-on   | The letter it is a template of, as a button asks for it: `payers.denial`                              |
-| `ltpl:language`                                                         | Add-on   | Its language tag                                                                                      |
-| `ltpl:conditions`                                                       | Add-on   | Twenty at most, each `prefix:name=value`, a property of each of its types: what the record must hold  |
+| Property                                                                | Whose    | What it holds                                                                                               |
+| ----------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `tmpl:templateName`                                                     | Platform | Its name, letters, digits, dots, hyphens and underscores: `payers-denial-es`                                |
+| `tmpl:applicableTypes`                                                  | Platform | The record types it is for, one by one, each carrying `Correspondence`; never `all`                         |
+| `tmpl:templateType`                                                     | Platform | `agenticLetter`, the add-on's processor: written by the add-on when none is named, and no other taken       |
+| `tmpl:outputFormat`                                                     | Platform | None, or an output format the platform converts to by mime type, such as `pdf`; never one that runs a chain |
+| `tmpl:forcedTypes`, `tmpl:useAsMainContent`, `tmpl:targetRenditionName` | Platform | None, false and none: no other way of binding or rendering it                                               |
+| `ltpl:letter`                                                           | Add-on   | The letter it is a template of, as a button asks for it: `payers.denial`                                    |
+| `ltpl:language`                                                         | Add-on   | Its language tag                                                                                            |
+| `ltpl:conditions`                                                       | Add-on   | Twenty at most, each `prefix:name=value`, a property of each of its types: what the record must hold        |
 
 **`Letter`, the add-on's.** Every property is the server's.
 
@@ -191,6 +191,12 @@ browser runs or fetches. Checked when it is saved, and again each time a letter 
   `form`, `object` or `svg`, no event handler, no `javascript:`, `url(`, `@import` or `expression(`,
   no conditional comment, no `<` that does not begin a tag. **No placeholder inside a tag, a comment
   or a style sheet,** where a value could become markup or a style: a placeholder is in the text.
+- **Read as a browser reads it,** so that what is checked is what a browser parses: a comment is
+  `<!-- text -->`, its text holding no `-`, `<`, `>` or `!`; a `<title>` and a `<style>` are text up to
+  their closing tag, and hold no `<`; a style sheet and a `style` attribute hold no parenthesis, `@`,
+  backslash or `&`, so no CSS function, at-rule or escape; and no attribute's value holds a
+  character reference, `&`.
+- **A text template holds no markup:** no `<` before a letter, `/`, `!` or `?`.
 - **Placeholders, 500 at most, each one of:**
   - `{{prefix:name}}`, or a complex property's subfield, `{{prefix:name/sub}}`: a property of the
     record, a value or a list of values, which **each** of the template's types has;
@@ -262,23 +268,23 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-letters/pom.xml verify
-# target/nuxeo-agentic-letters-0.1.0.zip, the Marketplace package, after 58 tests
+# target/nuxeo-agentic-letters-0.1.0.zip, the Marketplace package, after 60 tests
 ```
 
 The root `pom.xml` lists the module, and the Marketplace workflow (`build-marketplace.yml`) builds
 and tests it on the pull requests it sees; it does not publish it.
 
-| Test                            | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GenerateTest`, 6               | **Generate and file:** the letter next to its record, linked to it and to its template, its title, file name and type; every placeholder filled, a reference's, a date's, an amount's, a list's; bound to its template as the platform binds a document; a record's values escaped; a text letter                                                                                                                                                        |
-| `LanguageTest`, 11              | **The language choice:** the record's; one chosen over it; one chosen with no template, 400, and one of no form; the default, and the server's; none at all, 404; the template whose conditions the record meets, none or two fitting, 409; a trashed template none                                                                                                                                                                                      |
-| `PermissionTest`, 8             | **Refused without Write**, before any template is looked for; a record that cannot be read; no right to add a document beside it; a record printed that the writer may not read; a template the writer may not read; a type without the facet; a record in the trash. Nothing written                                                                                                                                                                    |
-| `TemplateSafetyTest`, 9         | **A template that tries to reach what it should not, refused:** other engines' syntax, FreeMarker's object maker among it; HTML that runs or fetches; a placeholder in markup; the context, the session, files, fields, a second hop; a denied property, on save and on writing; another processor, a forced type, the main content; the processor refusing the platform's own ways to render; a template past the save refused when a letter is written |
-| `GuardTest`, 7                  | Templates kept by administrators: created, changed, copied, trashed, removed; a letter written by `Letter.Generate` alone, changed by no one, an administrator included, not copied, trashed by an administrator alone                                                                                                                                                                                                                                   |
-| `AuditTest`, 2                  | **The audit entry:** on the record, by its writer, category `Letters`, the letter, its template and its language and why; a refused letter audits nothing                                                                                                                                                                                                                                                                                                |
-| `BundleTest`, 5                 | The components; the facets, schemas and types; the processor at the platform's service, chosen for no file by itself; one operation, and no allow-list contribution, chain or REST binding; the version                                                                                                                                                                                                                                                  |
-| `TemplateRenderingModelTest`, 4 | Every name of the platform's the add-on reads, held to Template Rendering's own files; its listener runs on a letter template                                                                                                                                                                                                                                                                                                                            |
-| `TemplateTextTest`, 6           | The file's reading, with no runtime: text and placeholders, the formats, what is refused and what is taken; the Payers kit's six templates taken                                                                                                                                                                                                                                                                                                         |
+| Test                            | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GenerateTest`, 6               | **Generate and file:** the letter next to its record, linked to it and to its template, its title, file name and type; every placeholder filled, a reference's, a date's, an amount's, a list's; bound to its template as the platform binds a document; a record's values escaped; a text letter                                                                                                                                                                                           |
+| `LanguageTest`, 11              | **The language choice:** the record's; one chosen over it; one chosen with no template, 400, and one of no form; the default, and the server's; none at all, 404; the template whose conditions the record meets, none or two fitting, 409; a trashed template none                                                                                                                                                                                                                         |
+| `PermissionTest`, 8             | **Refused without Write**, before any template is looked for; a record that cannot be read; no right to add a document beside it; a record printed that the writer may not read; a template the writer may not read; a type without the facet; a record in the trash. Nothing written                                                                                                                                                                                                       |
+| `TemplateSafetyTest`, 11        | **A template that tries to reach what it should not, refused:** markup read as a browser reads it; other engines' syntax, FreeMarker's object maker among it; HTML that runs or fetches; a placeholder in markup; the context, the session, files, fields, a second hop; a denied property, on save and on writing; another processor, a forced type, the main content; the processor refusing the platform's own ways to render; a template past the save refused when a letter is written |
+| `GuardTest`, 7                  | Templates kept by administrators: created, changed, copied, trashed, removed; a letter written by `Letter.Generate` alone, changed by no one, an administrator included, not copied, trashed by an administrator alone                                                                                                                                                                                                                                                                      |
+| `AuditTest`, 2                  | **The audit entry:** on the record, by its writer, category `Letters`, the letter, its template and its language and why; a refused letter audits nothing                                                                                                                                                                                                                                                                                                                                   |
+| `BundleTest`, 5                 | The components; the facets, schemas and types; the processor at the platform's service, chosen for no file by itself; one operation, and no allow-list contribution, chain or REST binding; the version                                                                                                                                                                                                                                                                                     |
+| `TemplateRenderingModelTest`, 4 | Every name of the platform's the add-on reads, held to Template Rendering's own files; its listener runs on a letter template                                                                                                                                                                                                                                                                                                                                                               |
+| `TemplateTextTest`, 6           | The file's reading, with no runtime: text and placeholders, the formats, what is refused and what is taken; the Payers kit's six templates taken                                                                                                                                                                                                                                                                                                                                            |
 
 **Each guard was seen failing** ([below](#how-the-guards-were-seen-failing)).
 
@@ -289,7 +295,8 @@ back, by a script kept outside the repository. Three stayed green at first, each
 check refused the same template or request first: a language of no form refused as having no
 template, a template for `all` refused as naming no type, and Velocity's directives refused for the
 reference beside them. The tests were made to tell them apart, by the refusal's reason and by a
-directive with no reference, and all three went red. 31 of 31 red.
+directive with no reference, and all three went red. Seven more, 32 to 38, were made once the
+parser read a comment, a title and a style sheet as a browser does. 38 of 38 red.
 
 | #     | The guard broken                                                                                                                                                         | Red in               |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
@@ -305,6 +312,9 @@ directive with no reference, and all three went red. 31 of 31 red.
 | 23-25 | A placeholder reaching a file or several fields; one naming a schema its type has not; a denied property, on save and when a letter is written                           | `TemplateSafetyTest` |
 | 26-30 | Other engines' syntax taken; Velocity's directives taken; any HTML tag taken; any attribute taken; a placeholder inside a tag, a comment or a style sheet                | `TemplateSafetyTest` |
 | 31    | A record's values not escaped in an HTML letter                                                                                                                          | `GenerateTest`       |
+| 32-34 | A comment's text not held to what ends it in a browser; a title or a style sheet holding a `<`; a style sheet holding a function, an at-rule or an escape                | `TemplateSafetyTest` |
+| 35-37 | A style attribute holding a function or an escape; an attribute's value holding a character reference; a text template holding markup                                    | `TemplateSafetyTest` |
+| 38    | An output format that runs a chain taken                                                                                                                                 | `TemplateSafetyTest` |
 
 ## Installing it
 
@@ -348,8 +358,9 @@ which is deferred until the app is finished, as every security review is
   properties: a template is an administrator's, and the writer may read whatever it prints anyway.
   Field-level protection is decision I, not taken.
 - **What a letter holds.** Values escaped in HTML; the HTML allow-list, no placeholder in markup or
-  style; a text letter as text. Check how the server serves an HTML file on download, and whether a
-  deployment should ask for PDF, the template's output format, instead.
+  style; a text letter as text. Check how the server serves an HTML file on download, whether with
+  a content security policy as a second line, and whether a deployment should ask for PDF, the
+  template's output format, instead.
 - **Who writes a letter.** `Write` on the record, as the writer, before any template is read; the
   letter created as the writer beside the record, so the folder's permission applies; the template
   read as the writer. Nuxeo's Automation endpoint reaches the operation for anyone: check that the
@@ -375,5 +386,7 @@ which is deferred until the app is finished, as every security review is
   the same placeholders in the document's XML and running nothing, is the next step if a kit needs
   them.
 - **Sending a letter:** it is filed, not mailed or printed.
+- **A letter's move, and a proxy of it,** are left to the platform's permissions: neither changes
+  the letter, and a kit's queries of a record's letters leave proxies out.
 - **The app's own screen for templates:** none; administrators keep them through the REST API, Web
   UI or a seed.

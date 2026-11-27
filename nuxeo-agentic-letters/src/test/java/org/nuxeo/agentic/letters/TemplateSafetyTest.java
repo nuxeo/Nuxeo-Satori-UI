@@ -118,6 +118,43 @@ public class TemplateSafetyTest {
     }
 
     @Test
+    public void markupIsReadAsABrowserReadsIt() {
+        String[] html = {
+                // A comment ends where a browser ends it, not only at the next -->.
+                "<!--><p onclick=\"x()\">a</p>-->", "<!---><p onclick=\"x()\">a</p>-->",
+                "<!-- a --!><p onclick=\"x()\">a</p> -->", "<!-- a - b -->",
+                // A title and a style sheet are text to a browser, up to their closing tag.
+                "<title><!--</title><p onclick=\"x()\">a</p>--></title>", "<title>a <b>b</b></title>",
+                "<style>p { color: red } <!-- </style>",
+                // Nothing in a style sheet or a style attribute fetches, imports or escapes.
+                "<style>p { background: \\75 rl(x) }</style>", "<style>p { background-image: image-set(\"x\" 1x) }</style>",
+                "<style>@font-face { font-family: x }</style>", "<style>p { color: red; } &amp;</style>",
+                "<p style=\"background: u&#114;l(x)\">a</p>", "<p style=\"color: rgb(1, 2, 3)\">a</p>",
+                "<p style=\"color: \\72 ed\">a</p>", "<p title=\"a &amp; b\">a</p>" };
+        for (String each : html) {
+            refusedTemplate(each);
+        }
+        // A text template holds no markup at all.
+        for (String each : new String[] { "<p onclick=\"x()\">a</p>", "</p>", "<!-- x -->", "<?xml?>" }) {
+            refusedTemplate(each, doc -> doc.setPropertyValue("file:content",
+                    (Serializable) Blobs.createBlob(each, "text/plain", "UTF-8", "x.txt")));
+        }
+        assertNoTemplateSaved();
+    }
+
+    @Test
+    public void anOutputFormatIsAConversionByMimeTypeNeverAChain() {
+        refusedTemplate("<p>x</p>", doc -> doc.setPropertyValue("tmpl:outputFormat", "chained"));
+        assertNoTemplateSaved();
+        String pdf = Office.asAdministrator(repository, s -> {
+            DocumentModel doc = Office.templateModel(s, "test-pdf-en", "test.pdf", "en", "<p>x</p>");
+            doc.setPropertyValue("tmpl:outputFormat", "pdf");
+            return s.createDocument(doc).getId();
+        });
+        assertEquals("pdf", Office.stored(repository, pdf).getPropertyValue("tmpl:outputFormat"));
+    }
+
+    @Test
     public void aPlaceholderInsideATagACommentOrAStyleIsRefused() {
         for (String each : new String[] { "<p class=\"{{tclaim:status}}\">x</p>", "<p title={{tclaim:status}}>x</p>",
                 "<style>p { color: {{tclaim:status}} }</style>", "<!-- {{tclaim:number}} -->" }) {

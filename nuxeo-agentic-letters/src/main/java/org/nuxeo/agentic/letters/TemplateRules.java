@@ -28,6 +28,7 @@ import org.nuxeo.ecm.core.schema.types.primitives.BinaryType;
 import org.nuxeo.ecm.core.schema.types.primitives.StringType;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.template.api.TemplateProcessorService;
+import org.nuxeo.template.api.descriptor.OutputFormatDescriptor;
 
 /**
  * A letter template, as the add-on takes it from an administrator: when it is saved, and again each
@@ -41,7 +42,8 @@ import org.nuxeo.template.api.TemplateProcessorService;
  * <li><b>The add-on's processor,</b> {@code tmpl:templateType} {@value Letters#PROCESSOR}, and none of
  * the platform's bindings that would render it otherwise: no forced type, which binds every new
  * record of a type to it; not its file as the bound document's main content, which would make the
- * letter's file its template; no rendition. An output format only of the platform's.</li>
+ * letter's file its template; no rendition. An output format only that the platform converts to by
+ * its mime type, never one that runs a chain.</li>
  * <li><b>Its conditions,</b> {@code ltpl:conditions}, each {@code prefix:name=value}, a value of each
  * of its types.</li>
  * <li><b>Its file,</b> read by {@link TemplateText}, and each placeholder a property each of its types
@@ -104,8 +106,13 @@ final class TemplateRules {
             throw Refusal.invalid("A letter template is bound to no rendition: tmpl:targetRenditionName stays empty");
         }
         String output = text(template, Letters.TMPL_OUTPUT_FORMAT);
-        if (output != null && Framework.getService(TemplateProcessorService.class).getOutputFormatDescriptor(output) == null) {
-            throw Refusal.invalid("A letter template's tmpl:outputFormat is one of the platform's output formats");
+        if (output != null) {
+            OutputFormatDescriptor format = Framework.getService(TemplateProcessorService.class)
+                                                     .getOutputFormatDescriptor(output);
+            if (format == null || format.getMimeType() == null || format.getChainId() != null) {
+                throw Refusal.invalid("A letter template's tmpl:outputFormat is an output format the platform "
+                        + "converts to by its mime type, never one that runs a chain");
+            }
         }
         List<String> types = list(template, Letters.TMPL_APPLICABLE_TYPES);
         if (types.isEmpty() || types.contains(Letters.PLATFORM_ALL) || types.size() > MAX_TYPES) {

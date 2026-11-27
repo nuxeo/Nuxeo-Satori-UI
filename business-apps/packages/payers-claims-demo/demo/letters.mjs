@@ -187,6 +187,21 @@ export function textProblems(name, text, types, model) {
   if (REFERENCE.test(text)) problems.push(`${name} holds a "$" reference`);
   if (/<\?|<!\[CDATA\[/i.test(text))
     problems.push(`${name} holds a processing instruction or CDATA`);
+  // Read as a browser reads them: a comment's text with none of the characters that end it early,
+  // a title and a style sheet with no "<" before their closing tag, and no character by which CSS
+  // fetches, imports or escapes, nor a character reference in an attribute's value.
+  for (const [, comment] of text.matchAll(/<!--([\s\S]*?)-->/g))
+    if (/[-<>!]/.test(comment)) problems.push(`${name} has a comment holding -, <, > or !`);
+  for (const [, tag, body] of text.matchAll(/<(title|style)\b[^>]*>([\s\S]*?)<\/\1/gi)) {
+    if (body.includes('<')) problems.push(`${name}'s <${tag.toLowerCase()}> holds a "<"`);
+    if (tag.toLowerCase() === 'style' && /[(@\\&]/.test(body))
+      problems.push(`${name}'s style sheet holds a function, an at-rule or an escape`);
+  }
+  for (const [, value] of text.matchAll(/=\s*("[^"]*"|'[^']*')/g))
+    if (value.includes('&')) problems.push(`${name} has an attribute value holding "&"`);
+  for (const [, value] of text.matchAll(/\bstyle\s*=\s*("[^"]*"|'[^']*')/gi))
+    if (/[(@\\]/.test(value))
+      problems.push(`${name}'s style attribute holds a function, an at-rule or an escape`);
   const withoutComments = text.replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE html>/i, '');
   for (const [, slash, tag, attributes] of withoutComments.matchAll(
     /<\s*(\/?)\s*([A-Za-z][A-Za-z0-9-]*)([^>]*)>/g,
