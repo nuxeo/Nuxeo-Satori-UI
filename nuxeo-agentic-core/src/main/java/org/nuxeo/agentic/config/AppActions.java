@@ -58,7 +58,8 @@ final class AppActions {
 
     static final String VARIABLE = "var:";
 
-    static final Set<String> PLACEMENTS = Set.of("record", "row", "bulk");
+    /** Where an action shows: the record page's toolbar, a queue's row, a card of the record page that names it, a queue's selection. */
+    static final Set<String> PLACEMENTS = Set.of("record", "row", "card", "bulk");
 
     /**
      * What the registry serves, and what it can run.
@@ -153,7 +154,7 @@ final class AppActions {
         }
         Set<String> placements = placements(entry.get("on"));
         if (placements == null) {
-            return "has an \"on\" that is not a list of \"record\", \"row\" and \"bulk\"";
+            return "has an \"on\" that is not a list of \"record\", \"row\", \"card\" and \"bulk\"";
         }
         JsonNode parameters = entry.get("parameters");
         if (parameters != null && !parameters.isObject()) {

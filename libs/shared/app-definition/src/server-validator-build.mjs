@@ -321,6 +321,30 @@ function brokenCases(root, layout, queue, add) {
     broken('a rule nested deeper than the validator reads', (file) => {
       file.cards = [{ id: 'added', visibleWhen: nested(300), fields: ['dc:title'] }];
     });
+    broken(
+      "a holds card naming an action the app's actions.json does not show on a card",
+      (file) => {
+        file.cards = [
+          { id: 'added', holds: { place: 'acme.placeHold', release: 'acme.placeHold' } },
+        ];
+      },
+    );
+    broken(
+      "a related list's New of a type the model does not have, by a reference of the server's",
+      (file) => {
+        file.cards = [
+          {
+            id: 'added',
+            related: {
+              pageProvider: 'acme_related',
+              parameters: [{ field: 'ecm:uuid' }],
+              columns: ['dc:title'],
+              create: { type: 'AcmeNone', field: 'ecm:parentId', in: { path: '/default-domain' } },
+            },
+          },
+        ];
+      },
+    );
     add(`${layout}, not an object`, { path: layout, content: [] });
     add(`${layout}, null`, { path: layout, content: null });
     const minimal = {

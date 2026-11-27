@@ -44,20 +44,32 @@ public class BundleTest {
             assertTrue(name, Files.isRegularFile(Path.of("src/main/resources", name.trim())));
         }
         assertEquals(List.of("OSGI-INF/records-types.xml", "OSGI-INF/records-security.xml",
-                "OSGI-INF/records-listener.xml", "OSGI-INF/records-audit.xml"), names);
+                "OSGI-INF/records-listener.xml", "OSGI-INF/records-audit.xml", "OSGI-INF/records-holds.xml",
+                "OSGI-INF/records-operations.xml"), names);
     }
 
-    /** No Automation operation and no endpoint: a person reaches the review by filing a document (decision 3). */
+    /**
+     * One Automation operation, the legal hold's release with a reason, for decision 3's buttons, and
+     * no endpoint: a person reaches the review by filing a document.
+     */
     @Test
-    public void theAddOnContributesNoOperationAndNoEndpoint() throws IOException {
+    public void theAddOnContributesOneOperationAndNoEndpoint() throws IOException {
+        List<String> operations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(Path.of("src/main/resources/OSGI-INF"))) {
             for (Path file : files.filter(Files::isRegularFile).toList()) {
                 String xml = Files.readString(file, StandardCharsets.UTF_8);
-                assertFalse(file.toString(), xml.contains("OperationServiceComponent"));
+                if (xml.contains("OperationServiceComponent")) {
+                    operations.add(file.getFileName().toString());
+                    assertEquals(file.toString(), 1, xml.split("<operation ", -1).length - 1);
+                    assertTrue(file.toString(),
+                            xml.contains("<operation class=\"org.nuxeo.agentic.records.ReleaseLegalHoldOperation\" />"));
+                }
                 assertFalse(file.toString(), xml.contains("webengine"));
                 assertFalse(file.toString(), xml.contains("<servlet"));
+                assertFalse(file.toString(), xml.contains("org.nuxeo.agentic.ui.operations"));
             }
         }
+        assertEquals(List.of("records-operations.xml"), operations);
     }
 
     @Test

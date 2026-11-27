@@ -120,6 +120,18 @@
         <h3 class="record-page__heading" [id]="'record-card-' + card.id">{{ card.heading }}</h3>
       }
       @if (card.related; as related) {
+        @if (related.create; as create) {
+          <!-- A related list's New: the type's create form, referring to the open record. -->
+          <div class="record-page__related-create">
+            <lib-record-create
+              [document]="document()"
+              [create]="create.entry"
+              [label]="create.label"
+              [readOnly]="readOnly()"
+              [source]="related.source"
+            />
+          </div>
+        }
         <lib-record-list
           class="record-page__related"
           [list]="related.list"
@@ -150,6 +162,17 @@
           [external]="external.external"
           [source]="external.source"
           [stateHeadingLevel]="4"
+        />
+      } @else if (card.holds; as holds) {
+        <!-- The record's retention and legal holds, the platform's (layout-v2.md, section 7). -->
+        <lib-record-holds
+          class="record-page__holds"
+          [document]="document()"
+          [holds]="holds.holds"
+          [label]="holds.label"
+          [cardId]="card.id"
+          [readOnly]="readOnly()"
+          [headingLevel]="4"
         />
       } @else if (card.checklist; as checklist) {
         <!-- The file's items, each done or not by the record's own entry for it (layout-v2.md, section 7). -->

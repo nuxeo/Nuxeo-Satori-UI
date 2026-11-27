@@ -67,7 +67,7 @@ export interface DesignerCard {
   readonly labelKey: string;
   /** What the card shows. Only a card of `fields` has fields to edit. */
   readonly shows:
-    'fields' | 'related' | 'timeline' | 'comments' | 'external' | 'checklist' | 'nothing';
+    'fields' | 'related' | 'timeline' | 'comments' | 'external' | 'checklist' | 'holds' | 'nothing';
   readonly fields: readonly DesignerField[];
 }
 
@@ -139,6 +139,7 @@ function shows(card: LayoutJson): DesignerCard['shows'] {
     'comments',
     'external',
     'checklist',
+    'holds',
   ] as const) {
     if (key in card) return key;
   }

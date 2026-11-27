@@ -103,6 +103,14 @@ export interface Registries {
    * define, as a page provider is, so a card is then held to the form of its names only.
    */
   readonly connectors: Readonly<Record<string, ReadonlySet<string>>> | null;
+  /**
+   * The package's own actions that show on a card, `"on": ["card"]` in its `actions.json`, which a
+   * holds card may name to place and release a hold (layout-v2.md, section 7). `null` where the
+   * caller does not have the package's `actions.json`, as the app does not when it loads a layout:
+   * a card is then held to the form of the ids only, and the page offers only what the app registry
+   * served.
+   */
+  readonly cardActions: ReadonlySet<string> | null;
 }
 
 const text: ParameterCheck = (value) =>
@@ -367,6 +375,7 @@ export const PACKAGED_REGISTRIES: Registries = {
   modules: PACKAGED_MODULES,
   pages: PACKAGED_PAGES,
   connectors: null,
+  cardActions: null,
 };
 
 /**

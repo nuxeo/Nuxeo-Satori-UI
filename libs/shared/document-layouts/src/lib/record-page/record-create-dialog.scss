@@ -1,0 +1,14 @@
+.lib-record-create {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(560px, 80vw);
+}
+
+.lib-record-create__context,
+.lib-record-create__saving {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+  overflow-wrap: anywhere;
+}

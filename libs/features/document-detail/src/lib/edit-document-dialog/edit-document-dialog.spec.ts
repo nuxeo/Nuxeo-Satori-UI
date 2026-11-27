@@ -214,6 +214,15 @@ describe('EditDocumentDialogComponent', () => {
     expect(form.showServerErrors).not.toHaveBeenCalled();
   });
 
+  it("says the server's reason when it refuses the save for a legal hold", async () => {
+    const held =
+      'This record is under a legal hold: its files cannot be changed until the hold is released.';
+    failWith(409, { 'entity-type': 'exception', status: 409, message: held });
+    await clickSave();
+    expect(alertText()).toBe(held);
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('reports any other failure, keeps the input, and clears the report on the next try', async () => {
     failWith(500, { 'entity-type': 'exception', status: 500, message: 'Boom' });
     await clickSave();

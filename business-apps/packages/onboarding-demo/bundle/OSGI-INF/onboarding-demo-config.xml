@@ -21,6 +21,7 @@
     <layout type="DisputeCase" mode="view" src="agentic-ui-config/layouts/DisputeCase/view.layout.json" />
     <layout type="OnboardingCase" mode="edit" src="agentic-ui-config/layouts/OnboardingCase/edit.layout.json" />
     <layout type="DisputeCase" mode="edit" src="agentic-ui-config/layouts/DisputeCase/edit.layout.json" />
+    <layout type="DisputeCase" mode="create" src="agentic-ui-config/layouts/DisputeCase/create.layout.json" />
     <layout type="ESignatureRequest" mode="view" src="agentic-ui-config/layouts/ESignatureRequest/view.layout.json" />
     <layout type="ESignatureRequest" mode="create" src="agentic-ui-config/layouts/ESignatureRequest/create.layout.json" />
     <layout type="ESignatureRequest" mode="edit" src="agentic-ui-config/layouts/ESignatureRequest/edit.layout.json" />
@@ -29,6 +30,7 @@
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
     <app id="onboarding" src="agentic-ui-config/app.json">
       <file path="labels/en.json" />
+      <file path="actions.json" />
       <file path="queues/open-cases.json" />
       <file path="queues/awaiting-signature.json" />
       <file path="queues/open-disputes.json" />

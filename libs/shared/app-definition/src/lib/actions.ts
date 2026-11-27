@@ -54,8 +54,11 @@ export const ACTIONS_V2_KEYS = {
   message: MESSAGE_KEYS,
 } as const;
 
-/** Where an action shows: the record page's toolbar, a queue's row menu, a queue's selection. */
-export const PLACEMENTS = ['record', 'row', 'bulk'] as const;
+/**
+ * Where an action shows: the record page's toolbar, a queue's row menu, a card of the record page
+ * that names it (a holds card, layout-v2.md, section 7), a queue's selection.
+ */
+export const PLACEMENTS = ['record', 'row', 'card', 'bulk'] as const;
 export type Placement = (typeof PLACEMENTS)[number];
 
 const PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -134,6 +137,10 @@ function action(c: Checker, item: unknown, path: string, operations: ReadonlySet
   const hasOperation = 'operation' in item;
   if (hasTransition === hasOperation)
     c.add(path, 'structure', 'an action has "transition" or "operation", one of the two');
+  // A card offers what runs an operation, as a holds card places and releases a hold; the
+  // platform's own Change state offers a lifecycle's transitions.
+  if (hasTransition && on.includes('card'))
+    c.add(join(path, 'on'), 'structure', 'a card offers an action that runs an operation');
   if (hasTransition && (typeof item['transition'] !== 'string' || !NAME.test(item['transition'])))
     c.add(
       join(path, 'transition'),
@@ -182,14 +189,18 @@ function placements(c: Checker, item: Record<string, unknown>, path: string): Pl
   if (!('on' in item)) return ['record'];
   const on = item['on'];
   if (!Array.isArray(on) || on.length === 0) {
-    c.add(join(path, 'on'), 'structure', 'on lists where it shows: "record", "row" or "bulk"');
+    c.add(
+      join(path, 'on'),
+      'structure',
+      'on lists where it shows: "record", "row", "card" or "bulk"',
+    );
     return [];
   }
   const seen: Placement[] = [];
   on.forEach((place, index) => {
     const at = join(join(path, 'on'), index);
     if (!PLACEMENTS.includes(place as Placement))
-      c.add(at, 'structure', `${shown(place)} is not "record", "row" or "bulk"`);
+      c.add(at, 'structure', `${shown(place)} is not "record", "row", "card" or "bulk"`);
     else if (seen.includes(place as Placement))
       c.add(at, 'structure', `"${place as string}" is listed twice`);
     else seen.push(place as Placement);

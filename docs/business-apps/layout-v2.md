@@ -17,7 +17,10 @@ no expression language and no code in configuration.
   - named widgets;
   - computed fields;
   - fields and cards shown or hidden by a rule;
-  - related records, and a property of a linked record (section 12);
+  - related records, and a property of a linked record (section 12), and a related record created
+    from the record's page, referring to it (section 7, "New");
+  - the record's retention and legal holds, with buttons that place and release a hold through the
+    server's allow-list (section 7);
   - the record's timeline and its comments;
   - a checklist of the items a record must have done, from configuration;
   - banners above the cards, each shown by a rule, such as a picture's rights ending;
@@ -357,8 +360,9 @@ the document page's Attachments panel adds a file, and the record page links to 
 | `comments`          | Or the record's comments (section 7), in `view` mode only                                                                                                                                                     |
 | `external`          | Or fields of a record in another system (section 7), in `view` mode only                                                                                                                                      |
 | `checklist`         | Or the items a record must have done, each done or not, with who and when, ticked on the page where the file says so (section 7), in `view` mode only                                                         |
+| `holds`             | Or the record's retention and legal holds, as the platform keeps them, with the package's actions that place and release a hold (section 7), in `view` mode only                                              |
 
-A card has one of `fields`, `related`, `timeline`, `comments`, `external` and `checklist`.
+A card has one of `fields`, `related`, `timeline`, `comments`, `external`, `checklist` and `holds`.
 
 In `metadata`, `edit` and `create` modes, cards show as the sections of the panel or the form.
 
@@ -572,6 +576,58 @@ A card can list records related to the open one, in `view` mode:
 | `sort`         | The order, as `{ "field", "order": "asc" \| "desc" }` entries                                                              |
 | `pageSize`     | 1 to 100. Default 10                                                                                                       |
 | `rowActions`   | Registered row actions, by ID, such as `app.rowActions.download`. A row opens its record when clicked; actions add to that |
+
+A list can offer to create a related record, **New**, whose create form gives the property that
+refers to the open record the open record's id, read-only:
+
+```json
+{
+  "id": "disputes",
+  "labelKey": "onboarding.card.onboardingCase.disputes",
+  "span": 2,
+  "related": {
+    "pageProvider": "onboarding_case_disputes",
+    "parameters": [{ "field": "ecm:uuid" }],
+    "columns": ["dsp:number", "dc:title", "dsp:status"],
+    "create": {
+      "type": "DisputeCase",
+      "field": "dsp:case",
+      "labelKey": "onboarding.action.newDispute",
+      "in": { "pageProvider": "onboarding_dispute_registers" }
+    }
+  }
+}
+```
+
+| `create` key        | Meaning                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`              | Required: the document type it creates                                                                                                |
+| `field`             | Required: the new record's property, a string, that takes the open record's id. Never an `ecm:` or `var:` name                        |
+| `label`, `labelKey` | The button's words, and the form's title. Without either, "New" and the type's name                                                   |
+| `in`                | `{ "pageProvider" }`: the new record is filed in the first folder this page provider finds. Left out, in the open record's own folder |
+
+- **The type's own create form,** its `create` file or its generated one, as Create in Browse
+  draws it, with `field` given the open record's id and shown read-only, by the open record's
+  title, wherever the form shows it, and sent whether it shows it or not. Nothing entered can
+  change it. A line above the form names the open record and the folder.
+- **The person's own create permission decides.** The button shows once the folder is found and
+  its permissions, as the server answers them, give the person `AddChildren`, the permission
+  Browse's Create asks for; never on a read-only page, a version, a proxy or a record in the trash.
+  The record is created as the person, `POST` under the folder, as in Browse: the server checks the
+  permission and the folder's types, and its refusal, or a constraint it names, is said in the
+  form, which stays open with what was entered. A server error says only that it failed.
+- **The reference is the form's, not the server's.** The new record's `field` is an ordinary
+  property: once created, anyone the server lets write the record may change it, through the REST
+  API or a form that shows it editable. The onboarding kit's Edit form shows it read-only, which is
+  no control either.
+- **Where it is filed is the server's to find,** as a list's records are: a page provider defined
+  on the server, never a path in configuration, whose first record the person may read is the
+  folder. A path would differ from one server to the next, and name a place nobody reviewed.
+- **Created,** a message names the new record, and the lists read their pages again; the page
+  stays on the open record, whose list now shows it.
+- **The validator** holds `type` to a type's name and `field` to a property's, and, given the
+  content model, `type` to one of its types and `field` to a string property of that type. A
+  finding about `create` leaves the button out, and the list stays.
 
 **Only page providers.** The plan's step 2 also listed an NXQL template in the layout. It is left
 out on purpose:
@@ -787,6 +843,63 @@ let the page tick them, with `"tickable": true`:
 - **Not a security control,** as nothing in a layout is. The server's permissions decide who may
   change the property, and so tick an item; a tick box not offered is a convenience.
 
+### Retention and legal holds
+
+A card can show the record's retention and its legal holds, as the platform keeps them, and offer
+to place and release a hold, in `view` mode (development plan, phase 7, "retention and holds
+through Retention Management"):
+
+```json
+{
+  "id": "holds",
+  "labelKey": "onboarding.card.disputeCase.holds",
+  "span": 2,
+  "holds": {
+    "place": "onboarding.dispute.placeHold",
+    "release": "onboarding.dispute.releaseHold",
+    "pageSize": 5
+  }
+}
+```
+
+| Key        | Meaning                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `place`    | An action of the package's `actions.json` shown `"on": ["card"]`, offered while the record has no legal hold. Left out, none is |
+| `release`  | The same, offered while the record has one. It names another action than `place`                                                |
+| `pageSize` | How many of the newest holds placed and released show: 1 to 100. Default 10                                                     |
+
+- **Everything it shows is the platform's.** The retention and the hold are what the server says of
+  the record in its document JSON, `retainUntil`, `isRecord` and `hasLegalHold`, beside
+  `isVersion`; the rule is the first of the retention module's `record:ruleIds`, shown by its title,
+  as a `document-link` shows a record, and as "Unavailable" to a reader who may not read it; the
+  holds placed and released are the record's audit, the events `afterSetLegalHold` and
+  `afterRemoveLegalHold`, newest first, each with who, when, in the reader's zone, and the reason,
+  which is the audit's comment. A retention that waits for an event, a year of 9999, says so; one
+  the retention module ended says on which day, from `record:retainUntil`.
+- **Placing and releasing are decision 3's operation buttons** ([app-definition-v2.md](app-definition-v2.md),
+  section 5), and nothing of the card's own. Each is an action of the package's `actions.json` on a
+  card, with its form for the reason, which the app registry serves only if the server's allow-list
+  lets it run, and `AgenticUi.RunAction` checks again. The onboarding kit's run the retention
+  module's own `Document.Hold`, whose `description` is the reason, and `Records.ReleaseLegalHold`,
+  `nuxeo-agentic-records`' release with a reason: the module's `Document.Unhold` takes none
+  ([the add-on's README](../../nuxeo-agentic-records/README.md)).
+- **Offered** on a record that is no version, proxy or record in the trash, on a page that is not
+  read-only, to someone the record's permissions say holds the platform's `ManageLegalHold`, and
+  only where the app registry served the action and its rule passes. Its `enabledWhen` shows it
+  disabled while it does not pass.
+- **The validator holds `place` and `release`** to the form of an id, and, given the package's
+  `actions.json`, as the pipeline gives it, to the package's actions shown on a card. The app,
+  which loads a layout without it, offers only what the registry served.
+- **The server decides, and refuses what a hold forbids.** The platform takes `Remove` from a held
+  record for everyone but administrators, so their deletion or trash is refused, 403, with its
+  permission's message, and the page offers them no Delete. An administrator's trash, which the
+  platform lets through, and their deletion, `nuxeo-agentic-records` refuses, 409, with its own
+  sentence, as it refuses for everyone a folder's trash or deletion that would take a held record
+  along and a change of the record's files, through the record or a live proxy of it. The record
+  page shows the server's reason when it refuses a deletion, a change of the files or an edit: the
+  sentence for a 409, and the server's message for any other refusal but a missing permission on
+  an edit, which the Edit form says in its own words. Hiding a button is not the control.
+
 ## 8. What is refused, and when
 
 | When                                     | A structural error                                                   | An ID the platform does not have                                                          |
@@ -795,8 +908,9 @@ let the page tick them, with `"tickable": true`:
 | When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That banner, card, field, list column or row action is left out, and the console says why |
 
 - **In a list of related records,** a finding about one column or one row action leaves out that
-  one. A finding about the list itself, such as a key version 2 does not have, leaves out its card,
-  and so does one about a timeline, comments or a checklist. In a card from another system, a
+  one, and one about its New leaves out the button. A finding about the list itself, such as a key
+  version 2 does not have, leaves out its card, and so does one about a timeline, comments, a
+  checklist or a holds card. In a card from another system, a
   finding about one field leaves out that field, and one about the card's own keys leaves out the
   card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that

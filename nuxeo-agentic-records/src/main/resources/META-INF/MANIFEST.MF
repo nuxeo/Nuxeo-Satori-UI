@@ -2,9 +2,11 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: Nuxeo Agentic Records
 Bundle-SymbolicName: org.nuxeo.agentic.records;singleton:=true
-Bundle-Version: 0.3.0
+Bundle-Version: 0.4.0
 Bundle-Vendor: Hyland Software
 Nuxeo-Component: OSGI-INF/records-types.xml,
  OSGI-INF/records-security.xml,
  OSGI-INF/records-listener.xml,
- OSGI-INF/records-audit.xml
+ OSGI-INF/records-audit.xml,
+ OSGI-INF/records-holds.xml,
+ OSGI-INF/records-operations.xml

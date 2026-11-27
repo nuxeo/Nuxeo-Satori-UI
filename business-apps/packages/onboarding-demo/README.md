@@ -15,6 +15,12 @@ The e-signature step is the server's:
 on. **No vendor is chosen** (decision H): the add-on's stand-in provider and stand-in service sign
 nothing for real.
 
+Since 0.2.0 a dispute keeps its **legal hold** on the server, for the plan's phase 7 demo step 5, "A
+legal hold blocks a deletion, on the server": the platform's retention module, `nuxeo-retention`,
+and [`nuxeo-agentic-records`](../../../nuxeo-agentic-records/README.md) 0.4.0, which the package now
+depends on too ([below](#legal-holds-on-a-dispute)). And a case's page **creates a dispute raised
+on it**, which closes the shortfall item 6 logged ([below](#a-dispute-raised-from-its-case)).
+
 ## The short version
 
 - **An onboarding case's record page:** the case, its customer, product, status and risk rating as
@@ -33,7 +39,14 @@ nothing for real.
   the SHA-256 of the file sent, the file signed and the evidence. Its Edit form cancels it.
 - **A dispute's record page** of its own: the customer, account, amount, reason and status, the
   dates and days open, the resolution, attachments and history, with banners when it is overdue or
-  due within five days; an Edit form that asks for the resolution once it is resolved.
+  due within five days; an Edit form that asks for the resolution once it is resolved. Since 0.2.0,
+  the onboarding case it is raised on, and a **legal hold** card: its retention, its hold, the holds
+  placed and released with who, when and why, and Place or Release legal hold, for a dispute
+  analyst, through the deployment's allow-list. While it holds, the server refuses to delete the
+  dispute, to put it in the trash or to change its files, whoever asks, and the page says why.
+- **A case's disputes,** a related list on its page, with **New dispute**: the dispute's create
+  form, the case filled in and read-only, filed in the disputes register, under the person's own
+  permission to create there.
 - **Queues:** open onboarding cases, with status and risk facets; agreements awaiting signature;
   open disputes, with reason and status facets.
 - **A home and a menu** for three groups, `onboarding-officers`, `kyc-analysts` and
@@ -43,23 +56,26 @@ nothing for real.
 
 ## What is in it
 
-| File                                                                                                            | What it is                                                                               | Written by                                          |
-| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `bundle/agentic-ui-config/app.json`                                                                             | The app, `onboarding`, for its three groups                                              | `app-package`                                       |
-| `bundle/agentic-ui-config/layouts/OnboardingCase/view.layout.json`                                              | The case's record page                                                                   | `app-layout`, then `write_package_file`             |
-| `bundle/agentic-ui-config/layouts/OnboardingCase/edit.layout.json`                                              | Its Edit form: the notes required once it is declined                                    | `app-form`, then `write_package_file`               |
-| `bundle/agentic-ui-config/layouts/DisputeCase/view.layout.json`, `edit.layout.json`                             | A dispute's record page and Edit form                                                    | `app-layout`, `app-form`, then `write_package_file` |
-| `bundle/agentic-ui-config/layouts/ESignatureRequest/create.layout.json`                                         | Send for signature: the case, the attachment, the signers, a message                     | `app-form`, then `write_package_file`               |
-| `bundle/agentic-ui-config/layouts/ESignatureRequest/view.layout.json`, `edit.layout.json`                       | A request's page, and the form that cancels it                                           | `app-layout`, `app-form`, then `write_package_file` |
-| `bundle/agentic-ui-config/queues/*.json`                                                                        | The three queues                                                                         | `app-queue`, then `write_package_file`              |
-| `bundle/agentic-ui-config/home.json`, `navigation.json`                                                         | The home and the menu                                                                    | `write_package_file`, with `app-registry`           |
-| `bundle/agentic-ui-config/labels/en.json`                                                                       | Every label the files name                                                               | The generators, then `write_package_file`           |
-| `bundle/OSGI-INF/onboarding-demo-model.xml`, `bundle/schemas/onboarding.xsd`, `dispute.xsd`, the search schemas | The stand-in model's two types and its four page providers                               | `app-model`                                         |
-| `bundle/OSGI-INF/onboarding-demo-signature.xml`, `bundle/schemas/onboarding_kyc.xsd`                            | The checklist, the add-on's facet on the case, the request type, the two registers       | **By hand** (the log, step 2)                       |
-| `bundle/OSGI-INF/onboarding-demo-config.xml`                                                                    | The configuration component: the layouts, and the app for the registry                   | The generators                                      |
-| `bundle/META-INF/MANIFEST.MF`, `package/package.xml`                                                            | The bundle and the Marketplace package, which depends on `nuxeo-agentic-signature:0.1.0` | `app-package`, then **by hand**                     |
-| `content-model.json`                                                                                            | The model as a server with the add-on and the kit would answer it, for the pipeline      | `app-model`, then **by hand**                       |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                                      | The seed, its fictional records and its 18 controls. Not packaged                        | By hand: the write tools write no code              |
+| File                                                                                                            | What it is                                                                                                                               | Written by                                          |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                                                                             | The app, `onboarding`, for its three groups                                                                                              | `app-package`                                       |
+| `bundle/agentic-ui-config/layouts/OnboardingCase/view.layout.json`                                              | The case's record page                                                                                                                   | `app-layout`, then `write_package_file`             |
+| `bundle/agentic-ui-config/layouts/OnboardingCase/edit.layout.json`                                              | Its Edit form: the notes required once it is declined                                                                                    | `app-form`, then `write_package_file`               |
+| `bundle/agentic-ui-config/layouts/DisputeCase/view.layout.json`, `edit.layout.json`                             | A dispute's record page, with its legal hold card, and Edit form                                                                         | `app-layout`, `app-form`, then `write_package_file` |
+| `bundle/agentic-ui-config/layouts/DisputeCase/create.layout.json`                                               | A dispute's Create form, its case read-only                                                                                              | **By hand** (0.2.0)                                 |
+| `bundle/agentic-ui-config/actions.json`                                                                         | Place and Release legal hold, the holds card's two actions, `"on": ["card"]`                                                             | **By hand** (0.2.0)                                 |
+| `deployment/onboarding-demo-operations-config.xml`, `deployment/build-allow-list.json`                          | The demo server's allow-list for the two actions, and the pipeline's. Not packaged                                                       | **By hand** (0.2.0)                                 |
+| `bundle/agentic-ui-config/layouts/ESignatureRequest/create.layout.json`                                         | Send for signature: the case, the attachment, the signers, a message                                                                     | `app-form`, then `write_package_file`               |
+| `bundle/agentic-ui-config/layouts/ESignatureRequest/view.layout.json`, `edit.layout.json`                       | A request's page, and the form that cancels it                                                                                           | `app-layout`, `app-form`, then `write_package_file` |
+| `bundle/agentic-ui-config/queues/*.json`                                                                        | The three queues                                                                                                                         | `app-queue`, then `write_package_file`              |
+| `bundle/agentic-ui-config/home.json`, `navigation.json`                                                         | The home and the menu                                                                                                                    | `write_package_file`, with `app-registry`           |
+| `bundle/agentic-ui-config/labels/en.json`                                                                       | Every label the files name                                                                                                               | The generators, then `write_package_file`           |
+| `bundle/OSGI-INF/onboarding-demo-model.xml`, `bundle/schemas/onboarding.xsd`, `dispute.xsd`, the search schemas | The stand-in model's two types and its four page providers                                                                               | `app-model`                                         |
+| `bundle/OSGI-INF/onboarding-demo-signature.xml`, `bundle/schemas/onboarding_kyc.xsd`                            | The checklist, the add-on's facet on the case, the request type, the two registers                                                       | **By hand** (the log, step 2)                       |
+| `bundle/OSGI-INF/onboarding-demo-config.xml`                                                                    | The configuration component: the layouts, and the app for the registry                                                                   | The generators                                      |
+| `bundle/META-INF/MANIFEST.MF`, `package/package.xml`                                                            | The bundle and the Marketplace package, which depends on `nuxeo-agentic-signature:0.1.0` and, since 0.2.0, `nuxeo-agentic-records:0.4.0` | `app-package`, then **by hand**                     |
+| `content-model.json`                                                                                            | The model as a server with the add-on and the kit would answer it, for the pipeline                                                      | `app-model`, then **by hand**                       |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`                                                      | The seed, its fictional records and its 21 controls. Not packaged                                                                        | By hand: the write tools write no code              |
 
 ## The stand-in model
 
@@ -68,7 +84,7 @@ Fictional, and replaced whole when a real one arrives.
 | Type                 | Schemas, and facets                                                                                                                        | Opens as                                          |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | `OnboardingCase`     | `common`, `dublincore`, `files`, `onboarding` (`onb`), `uid`, `onboarding_kyc` (`kyc`); `Versionable`, and the add-on's `Signable` (`sgn`) | A record page                                     |
-| `DisputeCase`        | `common`, `dublincore`, `files`, `dispute` (`dsp`)                                                                                         | A record page                                     |
+| `DisputeCase`        | `common`, `dublincore`, `files`, `dispute` (`dsp`), whose `dsp:case` names the onboarding case it is raised on, by its id, since 0.2.0     | A record page                                     |
 | `ESignatureRequest`  | `common`, `dublincore`; the add-on's `SignatureRequest` (`sigreq`)                                                                         | A record page: its files are `sigreq:` properties |
 | `OnboardingRegister` | A folder whose Create menu offers `OnboardingCase` and `ESignatureRequest`                                                                 | Browse                                            |
 | `DisputeRegister`    | A folder whose Create menu offers `DisputeCase`                                                                                            | Browse                                            |
@@ -79,6 +95,8 @@ Fictional, and replaced whole when a real one arrives.
 | `onboarding_open_disputes`      | Disputes open or under investigation, the soonest due first   | The search index, with reason and status aggregates |
 | `onboarding_case_signatures`    | A case's signature requests, newest first, by its id          | The repository                                      |
 | `onboarding_awaiting_signature` | Requests out for signature, the oldest first                  | The repository                                      |
+| `onboarding_case_disputes`      | A case's disputes, newest first, by its id (0.2.0)            | The repository                                      |
+| `onboarding_dispute_registers`  | The disputes registers, the oldest first: where New files one | The repository                                      |
 
 The case's statuses (Open, KYC review, Awaiting signature, Approved, Declined) are the officers'
 to set; the e-signature card's are the add-on's, and nothing in the kit writes them. A case
@@ -111,23 +129,84 @@ and the kit seeded (below). Not run: no server has either package.
    one signed with another secret, and Nuxeo refuses it, 401.
 
 A dispute analyst's part: Open disputes, by reason; `DSP-2002` overdue; its Edit form asks for
-the resolution once it is resolved.
+the resolution once it is resolved. Then demo step 5, [below](#legal-holds-on-a-dispute), and a
+dispute raised from its case, [below](#a-dispute-raised-from-its-case).
+
+## Legal holds on a dispute
+
+Phase 7's demo step 5, "A legal hold blocks a deletion, on the server", on `DSP-2002`. Not run: no
+server has the kit, the records add-on or the retention module.
+
+1. **A dispute analyst** with the platform's `ManageLegalHold` on the disputes register, which the
+   seed grants `dispute-analysts`, opens `DSP-2002`. Its Legal hold card: not under retention, no
+   legal hold, none placed yet, and **Place legal hold**.
+2. **Place legal hold**, with a reason, "Chargeback dispute with the card scheme". The button runs
+   the retention module's own `Document.Hold`, through `AgenticUi.RunAction` and the deployment's
+   allow-list: the dispute is made a record, and held. The card says "On legal hold", and the hold
+   placed, by whom, when, and the reason, the platform's audit's comment.
+3. **Deleting it is refused, on the server.** For the analyst, the platform takes `Remove` from a
+   held record: the page offers no Delete, and a deletion or a trash sent anyway is refused, 403,
+   with the platform's message. An administrator's, which the platform would let through,
+   `nuxeo-agentic-records` refuses, 409: "This record is under a legal hold: it cannot be put in the
+   trash or deleted until the hold is released." Removing or replacing an attachment, in the
+   document page's Attachments, is refused for everyone, 409, and the page shows the add-on's
+   reason: "This record is under a legal hold: its files cannot be changed until the hold is
+   released." So is putting the disputes register in the trash. Editing the dispute's status or
+   resolution is not: a hold keeps the record and its files, not its description, as the
+   platform's does.
+4. **Release legal hold**, with a reason, "Settled with the merchant". It runs
+   `Records.ReleaseLegalHold`, the records add-on's, since the module's `Document.Unhold` takes no
+   reason. The card lists the release under the hold, with its reason, and offers Place again.
+
+**The allow-list is the deployment's,** `deployment/onboarding-demo-operations-config.xml`, which
+the server's administrators put in `nxserver/config/`; the package never contributes one, and the
+pipeline holds the kit's `actions.json` to `deployment/build-allow-list.json`. It allows each
+operation for the onboarding app's buttons, to dispute analysts, on a dispute case, with a reason
+of at most 500 characters, and the permission `ManageLegalHold`, which the platform checks again
+itself. Without it the registry serves neither button, and the card shows the dispute's hold and
+offers nothing.
+
+## A dispute raised from its case
+
+Closes the shortfall's item 6, "a record page cannot create a related record". Not run.
+
+1. **A dispute analyst**, who may read the onboarding register (the seed grants `dispute-analysts`
+   `Read` there), opens `ONB-1001`. Its Disputes card lists `DSP-2002`, raised on it, and offers
+   **New dispute**.
+2. **New dispute** opens the dispute's Create form: "For ONB-1001 …, filed in Disputes", the
+   onboarding case shown read-only by its title, the rest to fill in. Saved, the dispute is created
+   in the disputes register, which `onboarding_dispute_registers` finds, as the analyst, with
+   `dsp:case` the case's id; the card lists it, and the case page stays open.
+3. **An onboarding officer** on the same page sees no New dispute: the disputes register gives
+   officers nothing, so its permissions do not let them add to it. A create they sent anyway, past
+   the page, is the server's to refuse, and its reason is what the form would show.
+
+The reference is the layout's, layout version 2's `create` on a related list
+([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 7): `"type": "DisputeCase"`,
+`"field": "dsp:case"`, `"in": { "pageProvider": "onboarding_dispute_registers" }`.
 
 ## Building it
 
 ```bash
-npm run app-package -- business-apps/packages/onboarding-demo --platform 0.2.0
+npm run app-package -- business-apps/packages/onboarding-demo --platform 0.2.0 \
+  --model business-apps/packages/onboarding-demo/content-model.json \
+  --allow-list business-apps/packages/onboarding-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/onboarding-demo-0.1.0.zip`, held to the package's own `content-model.json`, since it
-ships a stand-in model: 7 layouts held to the model, 14 files passed, on 26 November 2026.
+It writes `dist/onboarding-demo-0.2.0.zip`, held to the package's own `content-model.json`, since it
+ships a stand-in model, and its `actions.json` to the deployment's allow-list: 8 layouts held to the
+model, 16 files passed, on 27 November 2026. With `--previous` and the staging branch's 0.1.0:
+"21 changes, which need a patch version. 0.2.0 raises the minor". Seen failing on a copy: a holds
+card naming `onboarding.dispute.placeHld` and a New on `dsp:cas`, each refused at step 2, by name.
 
 ## Installing it on a local Nuxeo
 
 **Not run.** Installing is the orchestrator's, after review. As the moves kit's install, with the
 add-on's package first: build both, copy both zips into the container, and a one-off script in
-`/docker-entrypoint-initnuxeo.d/` that installs `nuxeo-agentic-signature-0.1.0.zip`, then
-`onboarding-demo-0.1.0.zip`, with `nuxeoctl mp-install --accept=true`, and removes itself; restart.
+`/docker-entrypoint-initnuxeo.d/` that installs `nuxeo-agentic-signature-0.1.0.zip`, the retention
+module, `nuxeo-retention`, from the Marketplace, `nuxeo-agentic-records-0.4.0.zip`, then
+`onboarding-demo-0.2.0.zip`, with `nuxeoctl mp-install --accept=true`, and removes itself; put
+`deployment/onboarding-demo-operations-config.xml` in `nxserver/config/`; restart.
 Check: the server log's `Component Loading Status` has nothing pending or missing;
 `/nuxeo/agentic-ui-config/layouts.json` lists the three types' layouts; and the MCP server's
 `describe_document_type` `OnboardingCase` lists `kyc:checklist` and `sgn:status`, where step 1 was
@@ -161,7 +240,10 @@ node business-apps/packages/onboarding-demo/demo/seed.mjs
   never written over: one with others and not this one is left as it is, and said so.
 - **The groups' permissions:** `ReadWrite` on the onboarding register for `onboarding-officers` and
   `kyc-analysts`, since an officer sends a case's agreement and an analyst ticks its checklist, both
-  writes of the case; `ReadWrite` on the disputes register for `dispute-analysts`.
+  writes of the case; `ReadWrite` on the disputes register for `dispute-analysts`, and, since 0.2.0,
+  the retention module's `ManageLegalHold` there, to place and release a dispute's hold, and `Read`
+  on the onboarding register, to read the case a dispute is raised on and raise one from it.
+- **A dispute raised on a case:** `DSP-2002`'s `dsp:case` is `ONB-1001`'s id, the same customer's.
 - **No user and no group:** the groups and the people in them are the server's to decide. The
   officers, analysts and ticks are user names only.
 - **Nothing sent for signature:** no request, and no `sigreq:` or `sgn:` property, which are the
@@ -174,8 +256,10 @@ node business-apps/packages/onboarding-demo/demo/seed.mjs
   agrees, up to `NUXEO_INDEX_WAIT_MS` (15 seconds by default).
 - **What it needs:** Node 24. `NUXEO_USER` and `NUXEO_PASS` have no default and must be an
   administrator's. Exit 2 is a precondition, before anything is written: no credentials, no server,
-  a `/me` that is not a user, not an administrator, or the add-on or a kit type missing.
-- **Its controls,** `node business-apps/packages/onboarding-demo/demo/seed.selftest.mjs`, 18 of 18,
+  a `/me` that is not a user, not an administrator, or the e-signature add-on, the retention
+  module, the records add-on or a kit type missing.
+- **Its controls,** `node business-apps/packages/onboarding-demo/demo/seed.selftest.mjs`, 21 of 21
+  since 0.2.0, 18 before,
   against a stand-in for the REST API: they prove the script, not a server. Ten ways of breaking
   the seed, one at a time, each turned at least one red: no administrator check, no check that
   `/me` is a user, no add-on precondition, no dispute type precondition, the checklist written on
@@ -293,27 +377,48 @@ anyway, so removing the user check left it green; it now answers an administrato
 independent review found the dispute type missing from the preflight, which would have stopped the
 run after its first writes rather than before them; it is checked now, with a control of its own.
 
+## 0.2.0: what was written, and seen failing (27 November 2026)
+
+Written by hand, in a worktree of `staging/enterprise-grade-app`, beside the platform's two pieces
+it needed: layout version 2's holds card and a related list's `create`, and the `card` placement of
+an action. **Nothing was written to any server**; the local Nuxeo was read once, to see that it
+answers a document's `isRecord`, `retainUntil` and `hasLegalHold`, and that it has no legal hold
+operation without the retention module.
+
+| What                                                                                                   | Result                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run app-package` with `--model`, `--allow-list` and `--previous` (0.1.0, from staging)            | 8 layouts held to the model, 16 files passed; 0.2.0 raises the minor                                                                         |
+| The same, on a copy whose holds card names `onboarding.dispute.placeHld` and whose New names `dsp:cas` | Refused at step 2, both named                                                                                                                |
+| The seed's controls                                                                                    | 21 of 21; with the retention module's precondition taken out, its control red                                                                |
+| The holds card, the New button and dialog, the form's fixed value, the server's reason                 | Their specs, with axe at WCAG 2.2 AA; each check taken out in turn turned its spec red (the pull request lists them)                         |
+| The deployment allow-list                                                                              | `AllowListXmlTest`: it registers, and the registry serves both actions to a dispute analyst                                                  |
+| A held record's deletion, trash, folder and files                                                      | `LegalHoldGuardTest` and `ReleaseLegalHoldTest`, in Nuxeo's test framework ([the add-on's README](../../../nuxeo-agentic-records/README.md)) |
+
 ## Where the tools fell short: phase 7 feedback
 
-| #   | What                                                                                                                                                                                               | Kit-blocking | Done here                                                                                                    |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------ |
-| 1   | `app-model` writes no complex property, so no checklist, which layout version 2's checklist card needs in a fixed shape: `item`, `done`, `doneBy`, `doneOn`                                        | Yes          | By hand, a schema of its own. Proposal: a property type `checklist` for `app-model`, which writes that shape |
-| 2   | `app-model` gives a type no facet: an add-on's (`Signable`), or the platform's (`Versionable`, with `uid`)                                                                                         | Yes          | By hand, `<doctype append="true">`. Proposal: `--facets`                                                     |
-| 3   | `app-model` writes no type without a schema of the kit's, and no folder with subtypes, so a kit cannot have a register whose Create menu offers its types                                          | Yes          | By hand. Proposal: `--schemaless` with `--facets`, and `--folder` with `--subtypes`                          |
-| 4   | `app-model --properties` writes a type's `content-model.json` entry again from scratch, dropping facets and schemas added to it                                                                    | No           | The hand edits came after every such call                                                                    |
-| 5   | The write tools do not write `package.xml` or the manifest, so a kit that depends on an add-on, or lists a component of its own, edits both by hand                                                | No           | By hand. Proposal: `app-package --depends`                                                                   |
-| 6   | **A record page cannot create a related record:** a signature request is created from the register's Create menu, in Browse, with the case picked, not from the case's page                        | No           | Said so in the demo. A platform gap: a related list's "New", giving the open record's id                     |
-| 7   | A banner's tone is `info`, `warning` or `negative`: no `positive`, which a "signed" banner would take                                                                                              | No           | The signed banner is `info`                                                                                  |
-| 8   | A single file property has no widget that downloads it on a record page (`image` shows a picture; `file-list` takes a list): the request's signed file and evidence, and the case's `sgn:evidence` | No           | Their SHA-256 shown, and the signed file is on the case's attachments                                        |
-| 9   | No picker for one of a record's attachments: the file to sign is typed by its name                                                                                                                 | No           | A text field, which the add-on checks against the case's attachments                                         |
-| 10  | A `document-link` to a version shows its title, not its label                                                                                                                                      | No           | The request links the signed version; its label is in the case's history                                     |
+| #   | What                                                                                                                                                                                                | Kit-blocking | Done here                                                                                                                                                                                                                                              |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `app-model` writes no complex property, so no checklist, which layout version 2's checklist card needs in a fixed shape: `item`, `done`, `doneBy`, `doneOn`                                         | Yes          | By hand, a schema of its own. Proposal: a property type `checklist` for `app-model`, which writes that shape                                                                                                                                           |
+| 2   | `app-model` gives a type no facet: an add-on's (`Signable`), or the platform's (`Versionable`, with `uid`)                                                                                          | Yes          | By hand, `<doctype append="true">`. Proposal: `--facets`                                                                                                                                                                                               |
+| 3   | `app-model` writes no type without a schema of the kit's, and no folder with subtypes, so a kit cannot have a register whose Create menu offers its types                                           | Yes          | By hand. Proposal: `--schemaless` with `--facets`, and `--folder` with `--subtypes`                                                                                                                                                                    |
+| 4   | `app-model --properties` writes a type's `content-model.json` entry again from scratch, dropping facets and schemas added to it                                                                     | No           | The hand edits came after every such call                                                                                                                                                                                                              |
+| 5   | The write tools do not write `package.xml` or the manifest, so a kit that depends on an add-on, or lists a component of its own, edits both by hand                                                 | No           | By hand. Proposal: `app-package --depends`                                                                                                                                                                                                             |
+| 6   | ~~**A record page cannot create a related record:** a signature request is created from the register's Create menu, in Browse, with the case picked, not from the case's page~~ **Closed in 0.2.0** | No           | Layout version 2's `create` on a related list: the case's Disputes card offers New dispute ([above](#a-dispute-raised-from-its-case)). The signature requests' list could offer it the same way; it does not yet, since a request is sent once created |
+| 7   | A banner's tone is `info`, `warning` or `negative`: no `positive`, which a "signed" banner would take                                                                                               | No           | The signed banner is `info`                                                                                                                                                                                                                            |
+| 8   | A single file property has no widget that downloads it on a record page (`image` shows a picture; `file-list` takes a list): the request's signed file and evidence, and the case's `sgn:evidence`  | No           | Their SHA-256 shown, and the signed file is on the case's attachments                                                                                                                                                                                  |
+| 9   | No picker for one of a record's attachments: the file to sign is typed by its name                                                                                                                  | No           | A text field, which the add-on checks against the case's attachments                                                                                                                                                                                   |
+| 10  | A `document-link` to a version shows its title, not its label                                                                                                                                       | No           | The request links the signed version; its label is in the case's history                                                                                                                                                                               |
 
 The proposals are for the generators' owner: no generator, validator or pipeline was changed to
 make this kit pass.
 
 ## Not done yet
 
-- **On a server:** nothing. The demo has not run; the add-on and the kit are installed nowhere.
+- **On a server:** nothing. The demo has not run; the add-ons and the kit are installed nowhere.
+  The steps file for 0.2.0's two demos, `scripts/beta-harness/steps/onboarding-holds.mjs`, is
+  written and has not run.
+- **A hold on a case,** rather than a dispute: the case's page has no holds card yet. The card and
+  the actions are the platform's; a second allow-list entry's type would add it.
 - **A real e-signature provider,** decision H, and so the step's demo on a vendor's service.
 - **The onboarding and disputes workflows:** a case's approval, and a dispute's investigation, are
   statuses a person sets, not route models. A workflow's node could create a signature request the

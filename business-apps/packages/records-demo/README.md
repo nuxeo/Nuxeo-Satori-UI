@@ -141,8 +141,9 @@ Not done on any server. In this order:
 1. **The retention module,** `nuxeo-retention`, from Nuxeo's Marketplace: Nuxeo supported, with no
    subscription of its own, and available to Nuxeo Online Services customers. Its version for LTS
    2025 must match the server's: its newest builds need LTS 2025.18 or later.
-2. **The records add-on,** `nuxeo-agentic-records` 0.3.0, built by Maven
-   ([its README](../../../nuxeo-agentic-records/README.md)), and **this kit**, with
+2. **The records add-on,** `nuxeo-agentic-records` 0.3.0 or later, built by Maven
+   ([its README](../../../nuxeo-agentic-records/README.md)); 0.4.0 also keeps a legal hold beyond
+   the platform's, which this kit's records then are under too; and **this kit**, with
    `nuxeoctl mp-install`, then a restart.
 3. **The groups** `records-managers` and `records-approvers`, and the people in them, in the server's
    directory. A run needs three people: one who starts it, and two others who approve it.
