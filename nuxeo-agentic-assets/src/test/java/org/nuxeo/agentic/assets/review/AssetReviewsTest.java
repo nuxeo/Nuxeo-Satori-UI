@@ -81,9 +81,9 @@ class AssetReviewsTest {
     @Test
     void aPolicysMistakesNeverWidenIt() {
         ReviewPolicy policy = ReviewPolicy.of(new ReviewPolicyDescriptor("AcmeAsset",
-                List.of(" creative-review ", "Everyone", "two words", "", "brand-leads")));
+                List.of(" creative-review ", "Everyone", "two words", "", "brand-leads", "members")));
         assertEquals(Set.of("creative-review", "brand-leads"), policy.groups());
-        assertEquals(3, policy.problems().size(), policy.problems()::toString);
+        assertEquals(4, policy.problems().size(), policy.problems()::toString);
         ReviewPolicy none = ReviewPolicy.of(new ReviewPolicyDescriptor("AcmeAsset", List.of("Everyone")));
         assertTrue(none.groups().isEmpty());
         assertNull(ReviewPolicy.of(new ReviewPolicyDescriptor(" ", List.of("creative-review"))));

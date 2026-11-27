@@ -62,9 +62,16 @@ public class AssetReviewListener implements EventListener {
 
     static final String DOCUMENT_TRASHED = "documentTrashed";
 
-    /** The properties a decision keeps as it was written. */
+    /**
+     * The properties a decision keeps as it was written: among them when it was written, which the
+     * page reads the review's order by.
+     */
     static final List<String> KEPT = List.of(ENTITY_PROPERTY, ORIGIN_PROPERTY, ENTITY_ID_PROPERTY, XPATH_PROPERTY,
-            PARENT_PROPERTY, AUTHOR_PROPERTY);
+            PARENT_PROPERTY, AUTHOR_PROPERTY, "dc:created", "comment:creationDate");
+
+    /** What a comments folder's documents undergo with it, with no event of their own. */
+    static final java.util.Set<String> CONTAINER_EVENTS = java.util.Set.of(DocumentEventTypes.ABOUT_TO_REMOVE,
+            DOCUMENT_TRASHED, DocumentEventTypes.ABOUT_TO_MOVE, DocumentEventTypes.ABOUT_TO_COPY);
 
     private final Supplier<AssetReviewService> reviews;
 
@@ -82,31 +89,57 @@ public class AssetReviewListener implements EventListener {
             return;
         }
         DocumentModel doc = context.getSourceDocument();
-        if (doc == null || !AssetReviews.isAnnotation(doc)) {
+        if (doc == null) {
             return;
         }
         String name = event.getName();
-        DocumentModel previous = DocumentEventTypes.BEFORE_DOC_UPDATE.equals(name)
-                && context.getProperty(CoreEventConstants.PREVIOUS_DOCUMENT_MODEL) instanceof DocumentModel p ? p : null;
-        if (!AssetReviews.isHeld(doc) && (previous == null || !AssetReviews.isHeld(previous))) {
+        NuxeoPrincipal principal = context.getPrincipal();
+        boolean annotation = AssetReviews.isAnnotation(doc);
+        boolean commentsFolder = !annotation && AssetReviews.COMMENT_ROOT.equals(doc.getType())
+                && CONTAINER_EVENTS.contains(name);
+        if (!annotation && !commentsFolder) {
             return;
         }
-        NuxeoPrincipal principal = context.getPrincipal();
+        DocumentModel previous = DocumentEventTypes.BEFORE_DOC_UPDATE.equals(name)
+                && context.getProperty(CoreEventConstants.PREVIOUS_DOCUMENT_MODEL) instanceof DocumentModel p ? p : null;
+        boolean held = annotation
+                && (AssetReviews.isHeld(doc) || previous != null && AssetReviews.isHeld(previous));
         try {
+            if (commentsFolder) {
+                commentsFolder(context, doc, name);
+                return;
+            }
+            if (!held) {
+                if (DocumentEventTypes.ABOUT_TO_CREATE.equals(name) && AssetReviews.isReview(doc)) {
+                    // A pin, anyone's who may comment: its author is the server's too.
+                    author(context, doc);
+                }
+                return;
+            }
             switch (name) {
             case DocumentEventTypes.ABOUT_TO_CREATE -> aboutToCreate(context, doc);
             case DocumentEventTypes.DOCUMENT_CREATED -> documentCreated(context, doc);
-            case DocumentEventTypes.BEFORE_DOC_UPDATE -> kept(previous, doc);
+            case DocumentEventTypes.BEFORE_DOC_UPDATE -> {
+                if (!belowAVersion(context, doc)) {
+                    kept(previous, doc);
+                }
+            }
             case DocumentEventTypes.ABOUT_TO_REMOVE, DOCUMENT_TRASHED, DocumentEventTypes.ABOUT_TO_MOVE,
                     DocumentEventTypes.ABOUT_TO_COPY -> {
-                if (!administrator(principal)) {
+                if (!administrator(principal) && !(DOCUMENT_TRASHED.equals(name) && assetTrashed(context, doc))) {
                     throw new ReviewRefusal(403, "kept",
                             "A review's decision is kept: only an administrator removes, moves or copies one.");
                 }
-                log.warn("Asset review: {} by {} of the decision {}", name, who(principal), doc.getId());
+                if (administrator(principal)) {
+                    log.warn("Asset review: {} by {} of the decision {}", name, who(principal), doc.getId());
+                }
             }
-            case DocumentEventTypes.ABOUT_TO_IMPORT -> throw new ReviewRefusal(403, "server-only",
-                    "A review's decision is made by writing it, not imported.");
+            case DocumentEventTypes.ABOUT_TO_IMPORT -> {
+                if (!administrator(principal)) {
+                    throw new ReviewRefusal(403, "server-only",
+                            "A review's decision is made by writing it, not imported.");
+                }
+            }
             default -> {
                 // Not an event this listener is contributed for.
             }
@@ -127,6 +160,63 @@ public class AssetReviewListener implements EventListener {
     private static void fail(Event event) {
         TransactionHelper.setTransactionRollbackOnly();
         event.markBubbleException();
+    }
+
+    /**
+     * An asset's comments folder removed, trashed, moved or copied: the platform does that to its
+     * annotations with no event of their own, so it is refused, but an administrator's, while a
+     * decision is below it; trashed with its asset, it is allowed, as the platform trashes an asset's
+     * documents with it.
+     */
+    private static void commentsFolder(DocumentEventContext context, DocumentModel folder, String name) {
+        NuxeoPrincipal principal = context.getPrincipal();
+        if (administrator(principal)) {
+            return;
+        }
+        boolean holds = CoreInstance.doPrivileged(context.getCoreSession(),
+                (Function<CoreSession, Boolean>) privileged -> {
+                    if (DOCUMENT_TRASHED.equals(name)) {
+                        DocumentModel asset = AssetReviews.assetOf(privileged, folder.getParentRef());
+                        if (asset != null && asset.isTrashed()) {
+                            return false;
+                        }
+                    }
+                    return AssetReviews.holdsDecision(privileged, folder);
+                });
+        if (holds) {
+            throw new ReviewRefusal(403, "kept",
+                    "A review's comments folder holding its decisions is kept: only an administrator removes, moves or"
+                            + " copies one.");
+        }
+    }
+
+    /** The person acting written as the annotation's author, whatever the request said. */
+    private static void author(DocumentEventContext context, DocumentModel doc) {
+        NuxeoPrincipal person = AssetReviews.acting(context.getPrincipal());
+        if (person == null) {
+            throw new ReviewRefusal(403, "invalid", "A review's annotation is written by a person signed in.");
+        }
+        doc.setPropertyValue(AUTHOR_PROPERTY, person.getName());
+    }
+
+    /**
+     * Whether the annotation is below a version of its asset: the platform copies an asset's comments
+     * into a version it checks in, then points each copy at the version, which is not a decision
+     * changed.
+     */
+    private static boolean belowAVersion(DocumentEventContext context, DocumentModel doc) {
+        return CoreInstance.doPrivileged(context.getCoreSession(), (Function<CoreSession, Boolean>) privileged -> {
+            DocumentModel asset = AssetReviews.assetOf(privileged, doc.getParentRef());
+            return asset != null && asset.isVersion();
+        });
+    }
+
+    /** Whether the annotation's asset is in the trash: the platform trashes an asset's documents with it. */
+    private static boolean assetTrashed(DocumentEventContext context, DocumentModel doc) {
+        return CoreInstance.doPrivileged(context.getCoreSession(), (Function<CoreSession, Boolean>) privileged -> {
+            DocumentModel asset = AssetReviews.assetOf(privileged, doc.getParentRef());
+            return asset != null && asset.isTrashed();
+        });
     }
 
     /** A decision about to be written: the person, the asset, the policy, the form, the review not concluded. */
@@ -156,8 +246,13 @@ public class AssetReviewListener implements EventListener {
                         "A review's annotation is a pin, a round sent back, or the review approved or rejected, in"
                                 + " the review's form.");
             }
+            // On the asset's own comments folder, below the asset, naming the asset: as the page reads it.
+            DocumentModel folder = parent == null ? null : privileged.getDocument(parent);
             if (!XPATH.equals(AssetReviews.text(doc, XPATH_PROPERTY))
-                    || !Objects.equals(asset.getId(), AssetReviews.text(doc, PARENT_PROPERTY))) {
+                    || !Objects.equals(asset.getId(), AssetReviews.text(doc, PARENT_PROPERTY)) || folder == null
+                    || !AssetReviews.COMMENT_ROOT.equals(folder.getType())
+                    || !new org.nuxeo.ecm.core.api.IdRef(asset.getId()).equals(
+                            privileged.getParentDocumentRef(folder.getRef()))) {
                 throw new ReviewRefusal(400, "invalid",
                         "A review's decision is written on the asset itself, on its picture's views.");
             }

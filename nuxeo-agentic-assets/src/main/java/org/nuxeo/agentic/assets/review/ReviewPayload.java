@@ -90,12 +90,13 @@ public record ReviewPayload(Kind kind, int round, Decision decision) {
         JsonNode version = node.get("version");
         JsonNode round = node.get("round");
         JsonNode kind = node.get("kind");
-        if (version == null || !version.isIntegralNumber() || version.asLong() != VERSION || round == null
-                || !round.isIntegralNumber() || round.asLong() < 1 || round.asLong() > MAX_ROUNDS || kind == null
-                || !kind.isTextual()) {
+        // Whole numbers as JSON writes small ones: a number too large for an int is no version or
+        // round, rather than one read short.
+        if (version == null || !version.isInt() || version.intValue() != VERSION || round == null || !round.isInt()
+                || round.intValue() < 1 || round.intValue() > MAX_ROUNDS || kind == null || !kind.isTextual()) {
             return null;
         }
-        int number = round.asInt();
+        int number = round.intValue();
         switch (kind.asText()) {
         case "pin" -> {
             return fraction(node.get("x")) && fraction(node.get("y")) ? new ReviewPayload(Kind.PIN, number, null)

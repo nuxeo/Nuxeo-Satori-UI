@@ -15,7 +15,7 @@
      Since the kit's 0.2.0, for nuxeo-agentic-assets 0.5.0: a fourth file, a still from the film,
      a preview, for screening; and a watermark. The still is served marked to anyone outside the
      kit's two groups, an outside partner, its text naming them; the key art of a delivery is marked
-     for its distributor, and the delivery holds it marked. Staff in media-rights or
+     for its distributor, naming its filer too, and the delivery holds it marked. Staff in media-rights or
      media-distribution download the still as it is. -->
 <component name="nuxeo.config.media-demo.rights">
 
@@ -42,7 +42,7 @@
       <!-- The still, marked for anyone outside the kit's groups; the key art, marked for the
            distributor of each delivery. The master and the subtitles are not marked: a subtitle
            file holds no picture, and the master is the distributor's to mark. -->
-      <watermark text="ACME PICTURES · FOR {recipient} · {day}" placement="tiled">
+      <watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
         <previews>
           <blob xpath="files:files/3/file" />
         </previews>

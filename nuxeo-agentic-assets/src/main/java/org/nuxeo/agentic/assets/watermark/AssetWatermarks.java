@@ -41,8 +41,9 @@ import org.nuxeo.runtime.api.Framework;
  * {@link Unavailable}. The unmarked file is never answered in its place.</li>
  * </ul>
  *
- * At most two files are marked at once on a node, each waiting its turn up to
- * {@value #WAIT_SECONDS} seconds, then refused.
+ * At most two pictures, and one video, are marked at once on a node, apart, each waiting its turn up
+ * to {@value #WAIT_SECONDS} seconds, then refused. A video's mark at a corner or the centre is placed
+ * on its frame as ffprobe reports its size, before any rotation flag turns it.
  */
 public final class AssetWatermarks {
 
@@ -54,7 +55,14 @@ public final class AssetWatermarks {
     /** How long a file waits for its turn to be marked. */
     static final int WAIT_SECONDS = 10;
 
-    private static final Semaphore TURNS = new Semaphore(2, true);
+    /** Pictures' turns: two at once on a node. */
+    private static final Semaphore PICTURES = new Semaphore(2, true);
+
+    /**
+     * Videos' turn: one at a time on a node, apart from the pictures', so that a long video holds up
+     * no picture.
+     */
+    private static final Semaphore VIDEOS = new Semaphore(1, true);
 
     /** Why a file was not marked: it is to be refused, never served unmarked. */
     public static final class Unavailable extends Exception {
@@ -81,9 +89,11 @@ public final class AssetWatermarks {
         if (text == null || text.isBlank()) {
             throw new Unavailable("the watermark's text is empty");
         }
+        boolean video = isVideo(file);
+        Semaphore turns = video ? VIDEOS : PICTURES;
         boolean turn;
         try {
-            turn = TURNS.tryAcquire(WAIT_SECONDS, TimeUnit.SECONDS);
+            turn = turns.tryAcquire(WAIT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new Unavailable("interrupted while waiting to mark the file", e);
@@ -92,9 +102,9 @@ public final class AssetWatermarks {
             throw new Unavailable("the server is marking other files: try again");
         }
         try {
-            return isVideo(file) ? video(file, text, placement) : picture(file, text, placement);
+            return video ? video(file, text, placement) : picture(file, text, placement);
         } finally {
-            TURNS.release();
+            turns.release();
         }
     }
 
@@ -134,7 +144,11 @@ public final class AssetWatermarks {
         }
         byte[] overlay;
         try {
-            overlay = new Watermarker().overlay((int) width, (int) height, text, placement);
+            // Tiled, the mark is drawn on a square as wide as the video's longer side, so that it covers
+            // the frame however a rotation flag turns it when ffmpeg decodes it.
+            int side = (int) Math.max(width, height);
+            overlay = placement == Placement.TILED ? new Watermarker().overlay(side, side, text, placement)
+                    : new Watermarker().overlay((int) width, (int) height, text, placement);
         } catch (WatermarkException e) {
             throw new Unavailable("the mark could not be drawn: " + e.getMessage(), e);
         }

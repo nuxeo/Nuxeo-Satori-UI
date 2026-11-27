@@ -141,11 +141,26 @@ class WatermarkPolicyTest {
     @Test
     void anExceptNamingNoGroupIsLeftOutSoThatMoreIsMarked() throws Exception {
         RightsPolicy policy = parse("""
-                <watermark text="ACME"><previews /><except group="Everyone" /><except group=" " /></watermark>
+                <watermark text="ACME"><previews /><except group="Everyone" /><except group=" " />
+                  <except group="members" /><except group="administrators" /></watermark>
                 """);
         assertFalse(policy.broken());
         assertEquals(Set.of(), policy.watermark().except());
         assertEquals(Reason.WATERMARK_REQUIRED, download(policy, Use.view("Medium"), STAFF).reason());
+    }
+
+    /**
+     * The system, acting for no one, is exempt from nothing whatever groups it carries; acting for
+     * someone, it is that person, as the user directory has them.
+     */
+    @Test
+    void theSystemActingForNoOneIsExemptFromNothing() throws Exception {
+        RightsPolicy policy = parse("""
+                <watermark text="ACME"><previews /><except group="brand-team" /></watermark>
+                """);
+        NuxeoPrincipal system = new UserPrincipal("system", List.of("brand-team", "administrators"), false, true);
+        assertEquals(Reason.WATERMARK_REQUIRED, download(policy, Use.view("Medium"), system).reason());
+        assertEquals(Reason.PREVIEW, download(policy, Use.view("Medium"), STAFF).reason());
     }
 
     @Test
@@ -181,6 +196,26 @@ class WatermarkPolicyTest {
         }
     }
 
+    /**
+     * A delivery's mark names its filer, {@code {user}}: the distributor's name is the filer's to
+     * write, so a mark naming it alone could name anyone. With no {@code {user}}, the policy is broken.
+     */
+    @Test
+    void aMarkForDeliveriesMustNameItsFiler() throws Exception {
+        String rules = """
+                      <territories xpath="fver:territories" />
+                      <windows xpath="film:windows" />
+                      <delivery><original /></delivery>
+                """;
+        RightsPolicy without = parse(rules + "<watermark text=\"FOR {recipient}\"><deliveries /></watermark>");
+        assertTrue(without.broken(), without.problems()::toString);
+        assertTrue(without.problems().stream().anyMatch(problem -> problem.contains("{user}")),
+                without.problems()::toString);
+        RightsPolicy with = parse(rules + "<watermark text=\"FOR {recipient} BY {user}\"><deliveries /></watermark>");
+        assertFalse(with.broken(), with.problems()::toString);
+        assertTrue(with.watermark().marks(Occasion.DELIVERY, Use.ORIGINAL));
+    }
+
     @Test
     void theMediaKitsOwnWatermarkMarksItsStillForOutsidersAndItsKeyArtForEachDelivery() throws Exception {
         List<RightsPolicyDescriptor> policies = RightsPolicyTest.contributed(Files.readAllBytes(
@@ -199,7 +234,7 @@ class WatermarkPolicyTest {
         assertFalse(watermark.marks(Occasion.DELIVERY, Use.ORIGINAL), "the master is not");
         assertFalse(watermark.marks(Occasion.DELIVERY, Use.blob("files:files/1/file")), "nor the subtitles");
         assertEquals(Set.of("media-rights", "media-distribution"), watermark.except());
-        assertEquals("ACME PICTURES · FOR Acme Distribution France · 2026-11-27",
+        assertEquals("ACME PICTURES · FOR Acme Distribution France · dana · 2026-11-27",
                 watermark.text("Acme Distribution France", "dana", TODAY, "FR"));
         NuxeoPrincipal partner = new UserPrincipal("paula", List.of("members"), false, false);
         assertTrue(watermark.requiredFor(Occasion.PREVIEW, still, partner));

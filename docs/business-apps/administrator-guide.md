@@ -486,8 +486,11 @@ for its videos.
   files, for everyone or for users outside the groups its `<except>` names. A file it marks is
   refused unmarked at the download endpoints, `watermark-required`, and served marked by
   `Asset.GetWatermarked`, for the person asking; a delivery holds its files marked for the
-  distributor. An administrator is marked as anyone else, unless in an exempt group. The media kit's
-  is in
+  distributor, naming its filer too. An administrator is marked as anyone else, unless in an exempt
+  group; an `<except>` naming `members` or `administrators` is left out. A stored file an Automation
+  operation hands over, such as `Document.GetBlob`'s, is decided for the assets that hold it; a
+  conversion an operation makes is not (the assets README, "What watermarks do not do"). The media
+  kit's is in
   [`media-demo-rights.xml`](../../business-apps/packages/media-demo/bundle/OSGI-INF/media-demo-rights.xml).
 - **Decision B is open, and its security review is pending:** the README says not to rely on it
   before then.

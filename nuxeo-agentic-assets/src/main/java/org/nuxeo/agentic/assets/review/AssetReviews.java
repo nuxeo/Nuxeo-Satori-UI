@@ -172,16 +172,16 @@ public final class AssetReviews {
 
     /**
      * Whether the asset's review is already concluded: an approval or a rejection written on it, as
-     * the asset page reads the review, below the asset, on its views, not in the trash.
+     * the asset page reads the review, below the asset, naming the asset, on its views, not in the
+     * trash. One copied below another asset with its comments folder names the asset it was written
+     * on, and is not that one's.
      */
     static boolean concluded(CoreSession privileged, DocumentModel asset) {
-        String id = asset.getId();
-        if (id == null || !QUERY_SAFE.matcher(id).matches()) {
-            throw new IllegalStateException("not written into a query: " + id);
-        }
+        String id = querySafe(asset.getId());
         String query = "SELECT " + ENTITY_PROPERTY + " FROM Document WHERE ecm:mixinType = '" + EXTERNAL_ENTITY_FACET
-                + "' AND ecm:ancestorId = '" + id + "' AND " + ORIGIN_PROPERTY + " = '" + ORIGIN + "' AND "
-                + XPATH_PROPERTY + " = '" + XPATH + "' AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0";
+                + "' AND ecm:ancestorId = '" + id + "' AND " + PARENT_PROPERTY + " = '" + id + "' AND "
+                + ORIGIN_PROPERTY + " = '" + ORIGIN + "' AND " + XPATH_PROPERTY + " = '" + XPATH
+                + "' AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0";
         for (Map<String, Serializable> row : privileged.queryProjection(query, 0, 0)) {
             Serializable entity = row.get(ENTITY_PROPERTY);
             ReviewPayload payload = ReviewPayload.read(entity instanceof String text ? text : null);
@@ -190,6 +190,32 @@ public final class AssetReviews {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether a decision, or anything else of the review's origin that is not a pin, is below
+     * {@code container}, wherever it was written: what removing, moving or copying the container would
+     * take with it.
+     */
+    static boolean holdsDecision(CoreSession privileged, DocumentModel container) {
+        String id = querySafe(container.getId());
+        String query = "SELECT " + ENTITY_PROPERTY + " FROM Document WHERE ecm:mixinType = '" + EXTERNAL_ENTITY_FACET
+                + "' AND ecm:ancestorId = '" + id + "' AND " + ORIGIN_PROPERTY + " = '" + ORIGIN + "'";
+        for (Map<String, Serializable> row : privileged.queryProjection(query, 0, 0)) {
+            Serializable entity = row.get(ENTITY_PROPERTY);
+            ReviewPayload payload = ReviewPayload.read(entity instanceof String text ? text : null);
+            if (payload == null || !payload.isPin()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String querySafe(String id) {
+        if (id == null || !QUERY_SAFE.matcher(id).matches()) {
+            throw new IllegalStateException("not written into a query: " + id);
+        }
+        return id;
     }
 
     // ------------------------------------------------------------------ who may decide

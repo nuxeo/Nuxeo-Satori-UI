@@ -29,8 +29,9 @@ import org.nuxeo.ecm.core.api.security.SecurityConstants;
  * {@code deliveries}: a file of a delivery package. Each marks the uses it names, or, naming none,
  * every use of its occasion.</li>
  * <li><strong>Exempt:</strong> a member of a group {@code <except>} names gets previews and downloads
- * unmarked. Nobody else, an administrator included. A delivery's files are marked whoever files it:
- * they go to a distributor, not to the filer.</li>
+ * unmarked. Nobody else, an administrator included, nor the system acting for no one. A delivery's
+ * files are marked whoever files it: they go to a distributor, not to the filer, and the text must
+ * name the filer too, {@code {user}}, since the distributor's name is the filer's to write.</li>
  * <li><strong>The text</strong> may name, in braces, {@code recipient}: the person downloading, or a
  * delivery's distributor; {@code user}: the person downloading, or filing the delivery;
  * {@code day}: the server's day in UTC; and {@code territory}: a delivery's, empty for a download.
@@ -44,8 +45,9 @@ import org.nuxeo.ecm.core.api.security.SecurityConstants;
  * A mistake breaks the policy, so that every use of its type is refused rather than one served
  * unmarked: a second {@code <watermark>}, no text, a text over {@value #MAX_TEXT} characters or with
  * a control character or a name in braces it does not know, a placement it does not know, no
- * occasion, or an occasion naming a use the policy does not list for it. An {@code <except>} that
- * names no group, or everyone, is left out: that marks more, never less.
+ * occasion, an occasion naming a use the policy does not list for it, or deliveries marked with no
+ * {@code {user}} in the text. An {@code <except>} that names no group, everyone, every user's
+ * {@code members} or the system's {@code administrators}, is left out: that marks more, never less.
  */
 public final class Watermark {
 
@@ -169,11 +171,19 @@ public final class Watermark {
             problems.add("a <watermark> with no <previews>, <downloads> or <deliveries>: every use is refused");
             sound = false;
         }
+        if (occasions.containsKey(Occasion.DELIVERY) && text != null && !text.contains("{user}")) {
+            // The distributor's name is the filer's to write: the mark must name who filed it too.
+            problems.add("a <watermark> with <deliveries> does not name {user}, the delivery's filer, in its text:"
+                    + " every use is refused");
+            sound = false;
+        }
         Set<String> except = new LinkedHashSet<>();
         for (String group : descriptor.getExcept()) {
             String trimmed = group == null ? "" : group.trim();
             if (!GROUP.matcher(trimmed).matches() || SecurityConstants.EVERYONE.equalsIgnoreCase(trimmed)
-                    || SecurityConstants.SYSTEM_USERNAME.equalsIgnoreCase(trimmed)) {
+                    || SecurityConstants.SYSTEM_USERNAME.equalsIgnoreCase(trimmed) || "members".equalsIgnoreCase(trimmed)
+                    || "administrators".equalsIgnoreCase(trimmed)) {
+                // members is every user's default group; administrators the system's own.
                 problems.add("<except group=\"" + trimmed + "\"> names no group of people, and is left out: more is"
                         + " marked, not less");
             } else {
@@ -263,11 +273,37 @@ public final class Watermark {
         if (!marks(occasion, use)) {
             return false;
         }
-        if (occasion == Occasion.DELIVERY || person == null || except.isEmpty()) {
+        if (occasion == Occasion.DELIVERY || except.isEmpty()) {
             return true;
         }
-        List<String> groups = person.getAllGroups();
+        NuxeoPrincipal who = person(person);
+        if (who == null) {
+            return true;
+        }
+        List<String> groups = who.getAllGroups();
         return groups == null || except.stream().noneMatch(groups::contains);
+    }
+
+    /**
+     * The person a download is for, to read their groups: the user signed in, or, for the system
+     * acting for someone, that user, read from the user directory; {@code null}, exempt from nothing,
+     * for no one, or for the system acting for no one, whose groups are the administrators'.
+     */
+    static NuxeoPrincipal person(NuxeoPrincipal principal) {
+        if (principal == null) {
+            return null;
+        }
+        if (!SecurityConstants.SYSTEM_USERNAME.equals(principal.getName())) {
+            return principal;
+        }
+        String originating = principal.getOriginatingUser();
+        if (originating == null || originating.isBlank() || originating.equals(principal.getName())) {
+            return null;
+        }
+        org.nuxeo.ecm.platform.usermanager.UserManager users = org.nuxeo.runtime.api.Framework.getService(
+                org.nuxeo.ecm.platform.usermanager.UserManager.class);
+        return users == null ? null
+                : org.nuxeo.runtime.api.Framework.doPrivileged(() -> users.getPrincipal(originating));
     }
 
     /**

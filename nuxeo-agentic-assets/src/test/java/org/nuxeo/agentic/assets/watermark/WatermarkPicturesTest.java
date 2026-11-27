@@ -137,6 +137,68 @@ public class WatermarkPicturesTest {
         assertTrue(downloads(STAFF, "file:content"));
     }
 
+    /**
+     * A blob handed over with no document, as the platform's Automation writes an operation's answer
+     * (`Document.GetBlob`, `Picture.GetView`), is decided for the assets that hold the stored file.
+     */
+    @Test
+    public void aStoredFileHandedOverWithNoDocumentIsDecidedForTheAssetsHoldingIt() {
+        Blob medium = view(0);
+        assertFalse(downloadsAlone(OUTSIDER, medium));
+        assertFalse(downloadsAlone(ADMINISTRATOR, medium));
+        assertTrue(downloadsAlone(STAFF, medium));
+        assertTrue("an unmarked preview", downloadsAlone(OUTSIDER, view(1)));
+        // A file no covered document holds is not this add-on's.
+        DocumentModel other = session.createDocumentModel("/assets", "note", "File");
+        Blob text = new ByteArrayBlob("a note".getBytes(), "text/plain");
+        text.setFilename("note.txt");
+        other.setPropertyValue("file:content", (Serializable) text);
+        other = session.createDocument(other);
+        commit();
+        assertTrue(downloadsAlone(OUTSIDER, (Blob) session.getDocument(other.getRef()).getPropertyValue("file:content")));
+    }
+
+    /**
+     * A copy of an asset whose views are retitled, where its copier may write, serves nothing the
+     * asset it was copied from would mark: the same file is decided wherever a covered document holds
+     * it.
+     */
+    @Test
+    public void aCopyWhoseViewIsRetitledServesNothingTheOriginalWouldMark() {
+        DocumentModel own = session.createDocument(session.createDocumentModel("/", "olgas", "Folder"));
+        ACP acp = own.getACP();
+        acp.getOrCreateACL().add(new ACE("olga", "Everything", true));
+        acp.getOrCreateACL().add(new ACE("sam", "Read", true));
+        session.setACP(own.getRef(), acp, true);
+        DocumentModel copy = session.copy(new org.nuxeo.ecm.core.api.IdRef(asset), own.getRef(), "copy");
+        commit();
+        CoreSession olga = CoreInstance.getCoreSession(session.getRepositoryName(), OUTSIDER);
+        DocumentModel mine = olga.getDocument(copy.getRef());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Serializable>> views = new ArrayList<>(
+                (List<Map<String, Serializable>>) mine.getPropertyValue("picture:views"));
+        Map<String, Serializable> medium = new HashMap<>(views.get(0));
+        Map<String, Serializable> thumbnail = new HashMap<>(views.get(1));
+        medium.put("title", "Thumbnail");
+        thumbnail.put("title", "Medium");
+        views.set(0, medium);
+        views.set(1, thumbnail);
+        mine.setPropertyValue("picture:views", (Serializable) views);
+        olga.saveDocument(mine);
+        commit();
+        // The Medium view's file, titled as the preview the watermark does not mark, on the copy.
+        assertFalse(downloadsOf(OUTSIDER, copy.getId(), "picture:views/0/content"));
+        assertTrue(downloadsOf(STAFF, copy.getId(), "picture:views/0/content"));
+    }
+
+    @Test
+    public void aBlobNamedAtTheOriginalsPlaceIsTheOriginal() throws Exception {
+        Blob original = marked(OUTSIDER, "blob:file:content");
+        assertEquals("image/jpeg", original.getMimeType());
+        assertEquals(404, refused(OUTSIDER, "blob:picture:views/1/content").getStatusCode());
+        assertNotNull(marked(OUTSIDER, "blob:picture:views/0/content"));
+    }
+
     @Test
     public void theEnricherSaysWatermarkRequiredForTheReaderAndNotForTheExempt() throws Exception {
         JsonNode outsider = enriched(OUTSIDER);
@@ -250,6 +312,28 @@ public class WatermarkPicturesTest {
 
     private boolean downloads(NuxeoPrincipal person, String xpath) {
         DocumentModel doc = session.getDocument(new org.nuxeo.ecm.core.api.IdRef(asset));
+        Blob blob = (Blob) doc.getPropertyValue(xpath);
+        LoginComponent.pushPrincipal(person);
+        try {
+            return downloads.checkPermission(doc, xpath, blob, "download", Map.of());
+        } finally {
+            LoginComponent.popPrincipal();
+        }
+    }
+
+    /** A download that names no document, as the platform writes an Automation operation's blob. */
+    private boolean downloadsAlone(NuxeoPrincipal person, Blob blob) {
+        LoginComponent.pushPrincipal(person);
+        try {
+            return downloads.checkPermission(null, null, blob, "download", Map.of());
+        } finally {
+            LoginComponent.popPrincipal();
+        }
+    }
+
+    private boolean downloadsOf(NuxeoPrincipal person, String id, String xpath) {
+        DocumentModel doc = CoreInstance.getCoreSession(session.getRepositoryName(), person)
+                                        .getDocument(new org.nuxeo.ecm.core.api.IdRef(id));
         Blob blob = (Blob) doc.getPropertyValue(xpath);
         LoginComponent.pushPrincipal(person);
         try {

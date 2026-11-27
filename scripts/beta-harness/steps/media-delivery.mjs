@@ -315,7 +315,7 @@ async function demo(h, base, filer, partner, standIn) {
   h.check(
     "the key art marked for its distributor, the mark's text naming them and the day",
     keyArt.watermarkedFor === DEMO.inside.distributor &&
-      keyArt.watermark === watermarkText(DEMO.inside.distributor, today),
+      keyArt.watermark === watermarkText(DEMO.inside.distributor, filer.username, today),
     `${keyArt.watermarkedFor}: ${keyArt.watermark}`,
   );
   const markedFile = keyArt.watermarkedFile ?? {};
@@ -425,7 +425,7 @@ async function demo(h, base, filer, partner, standIn) {
     if (standIn)
       h.check(
         "on the stand-in, the marked still's text naming the partner and the day",
-        jpegComment(forPartner.bytes) === watermarkText(partner.username, today),
+        jpegComment(forPartner.bytes) === watermarkText(partner.username, partner.username, today),
         String(jpegComment(forPartner.bytes)),
       );
     else

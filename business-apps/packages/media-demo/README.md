@@ -89,7 +89,7 @@ only on the kit's stand-in server, `demo/stand-in.mjs`.
 From 0.2.0, the policy's `<watermark>`, which `nuxeo-agentic-assets` 0.5.0 applies on the server:
 
 ```xml
-<watermark text="ACME PICTURES · FOR {recipient} · {day}" placement="tiled">
+<watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
   <previews><blob xpath="files:files/3/file" /></previews>
   <deliveries><blob xpath="files:files/2/file" /></deliveries>
   <except group="media-rights" />
@@ -98,7 +98,8 @@ From 0.2.0, the policy's `<watermark>`, which `nuxeo-agentic-assets` 0.5.0 appli
 ```
 
 - **A delivery's key art is marked for its distributor,** its text `ACME PICTURES · FOR <the
-distributor> · <the day>`, whoever files it. The delivery records, for each file, whether it was
+distributor> · <the filer> · <the day>`, whoever files it: the add-on requires a delivery's mark to
+  name its filer too, since the distributor's name is the filer's to write. The delivery records, for each file, whether it was
   marked, for whom and with what text, and holds the key art marked, a JPEG drawn on the server; the
   master and the subtitles are recorded unmarked, and not held. A key art that cannot be marked,
   such as one that is not a picture, refuses the delivery whole, `watermark-unavailable`.
@@ -205,7 +206,7 @@ when it refuses. `<version>` is the localised version's id, which its page shows
    the master and the subtitles for SVOD and the key art for Marketing, each with its digest; it is
    first in the queue of deliveries, and on the version's page. From 0.2.0 its record says the key
    art was marked for Acme Distribution France, with the text `ACME PICTURES · FOR Acme
-Distribution France · <the day>`, and holds it marked; the master and the subtitles were not.
+Distribution France · <the coordinator> · <the day>`, and holds it marked; the master and the subtitles were not.
 
 2. **Outside its window.** The German version, `"mdlv:territory":"DE"`, to Acme Verleih
    Deutschland: refused, 403, `outside-window` for the master and the subtitles, since SVOD in

@@ -258,7 +258,7 @@ const today = todayUtc();
     JSON.stringify(delivered.map((each) => each.watermarked)) ===
       JSON.stringify([false, false, true]) &&
       delivered[2].watermarkedFor === DEMO.inside.distributor &&
-      delivered[2].watermark === watermarkText(DEMO.inside.distributor, today) &&
+      delivered[2].watermark === watermarkText(DEMO.inside.distributor, 'coordinator', today) &&
       delivered.slice(0, 2).every((each) => each.watermarkedFile === null),
     JSON.stringify(
       delivered.map(({ watermarked, watermarkedFor, watermark }) => ({
@@ -344,7 +344,7 @@ const today = todayUtc();
       forPartner.bytes[0] === 0xff &&
       forPartner.bytes[1] === 0xd8 &&
       !forPartner.bytes.equals(stillBytes) &&
-      jpegComment(forPartner.bytes) === watermarkText('partner', today),
+      jpegComment(forPartner.bytes) === watermarkText('partner', 'partner', today),
     `${forPartner.status} ${forPartner.type} ${jpegComment(forPartner.bytes)}`,
   );
   check(
@@ -449,7 +449,7 @@ const today = todayUtc();
   check(
     'the kit policy: its text is the one data.mjs expects, naming its recipient and the day',
     fillWatermark(policy.watermark, { recipient: 'Someone', user: 'u', day: '2026-11-27' }) ===
-      watermarkText('Someone', '2026-11-27'),
+      watermarkText('Someone', 'u', '2026-11-27'),
     policy.watermark?.text,
   );
   check(

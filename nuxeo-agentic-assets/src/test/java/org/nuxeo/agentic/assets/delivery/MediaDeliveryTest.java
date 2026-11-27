@@ -180,7 +180,7 @@ public class MediaDeliveryTest {
         assertEquals(Boolean.FALSE, files.get(1).get("watermarked"));
         assertEquals(Boolean.TRUE, files.get(2).get("watermarked"));
         assertEquals("Acme Distribution France", files.get(2).get("watermarkedFor"));
-        String text = "ACME PICTURES · FOR Acme Distribution France · " + today;
+        String text = "ACME PICTURES · FOR Acme Distribution France · " + FILER + " · " + today;
         assertEquals(text, files.get(2).get("watermark"));
         Blob marked = (Blob) files.get(2).get("watermarkedFile");
         Blob keyArt = (Blob) session.getDocument(french.getRef()).getPropertyValue(KEY_ART);
@@ -188,7 +188,7 @@ public class MediaDeliveryTest {
         assertNotEquals(keyArt.getDigest(), marked.getDigest());
         // The text drawn names the distributor: the same picture marked with that text, byte for byte.
         assertArrayEquals(watermarked(keyArt, text), bytes(marked));
-        assertFalse(java.util.Arrays.equals(watermarked(keyArt, "ACME PICTURES · FOR Acme Suisse · " + today),
+        assertFalse(java.util.Arrays.equals(watermarked(keyArt, "ACME PICTURES · FOR Acme Suisse · " + FILER + " · " + today),
                 bytes(marked)));
     }
 
@@ -235,7 +235,7 @@ public class MediaDeliveryTest {
         Blob marked = new WatermarkedFiles().serve(read, "blob:" + STILL, partner);
         Blob still = (Blob) read.getPropertyValue(STILL);
         assertEquals("image/jpeg", marked.getMimeType());
-        assertArrayEquals(watermarked(still, "ACME PICTURES · FOR " + PARTNER + " · " + today), bytes(marked));
+        assertArrayEquals(watermarked(still, "ACME PICTURES · FOR " + PARTNER + " · " + PARTNER + " · " + today), bytes(marked));
         // What the watermark does not mark, it does not serve.
         assertEquals(404, assertThrows(NuxeoException.class,
                 () -> new WatermarkedFiles().serve(read, "blob:" + KEY_ART, partner)).getStatusCode());

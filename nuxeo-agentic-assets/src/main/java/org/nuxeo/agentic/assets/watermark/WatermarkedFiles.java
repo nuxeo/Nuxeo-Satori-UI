@@ -14,6 +14,7 @@ import org.apache.logging.log4j.Logger;
 import org.nuxeo.agentic.assets.rights.AssetRights;
 import org.nuxeo.agentic.assets.rights.AssetRightsService;
 import org.nuxeo.agentic.assets.rights.Decision;
+import org.nuxeo.agentic.assets.rights.DownloadUse;
 import org.nuxeo.agentic.assets.rights.RightsPolicy;
 import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
 import org.nuxeo.agentic.assets.rights.Use;
@@ -71,12 +72,19 @@ public final class WatermarkedFiles {
 
     /** {@code use} of {@code document}, marked for {@code person}. */
     public Blob serve(DocumentModel document, String use, NuxeoPrincipal person) {
-        Asked asked = parse(use);
+        Asked written = parse(use);
         AssetRightsService service = rights.get();
         if (service == null) {
             throw new DocumentSecurityException("The asset rights service is not running, so nothing is served.");
         }
         RightsPolicy policy = service.policyFor(document.getType());
+        if (policy != null && policy.broken()) {
+            throw new DocumentSecurityException(
+                    "The asset's rights refuse this file: " + Decision.Reason.POLICY_ERROR.code() + ".");
+        }
+        // A blob named by its xpath is the use a download of that xpath is: the original at the
+        // original's, a view at a view's place, never a rule written for that place otherwise.
+        Asked asked = policy == null ? written : canonical(document, policy, written);
         Watermark watermark = policy == null ? null : policy.watermark();
         Rule rule = policy == null ? null : policy.rule(asked.use());
         if (watermark == null || rule == null
@@ -151,6 +159,26 @@ public final class WatermarkedFiles {
         throw new NuxeoException("Name the file: original, view:<title>, rendition:<name>, blob:<xpath> or"
                 + " storyboard:<n>.", 400);
     }
+
+    /**
+     * A use named as a blob by its xpath, as {@code DownloadUse} names a download of that xpath, so
+     * that the operation and the download endpoints decide one place by one rule. A view, a rendition,
+     * the original and a storyboard frame are named as they are.
+     */
+    static Asked canonical(DocumentModel document, RightsPolicy policy, Asked asked) {
+        if (asked.use().kind() != Use.Kind.BLOB) {
+            return asked;
+        }
+        Use use = DownloadUse.classify(document, policy, asked.use().name(), blobAt(document, asked.use().name()),
+                null);
+        if (use.kind() == Use.Kind.STORYBOARD) {
+            Matcher frame = STORYBOARD_PLACE.matcher(asked.use().name());
+            return frame.matches() ? new Asked(Use.STORYBOARD, frame.group(1)) : new Asked(Use.unknown(null), null);
+        }
+        return new Asked(use, null);
+    }
+
+    private static final Pattern STORYBOARD_PLACE = Pattern.compile("vid:storyboard/(0|[1-9][0-9]{0,4})/content");
 
     /** The file the document holds for the use; {@code null} for none. */
     static Blob file(DocumentModel document, RightsPolicy policy, Asked asked) {

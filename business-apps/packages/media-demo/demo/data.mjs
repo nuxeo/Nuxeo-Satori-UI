@@ -111,10 +111,11 @@ export const FILES = {
 
 /**
  * The text the kit's watermark draws, as its rights policy writes it, `ACME PICTURES · FOR
- * {recipient} · {day}`: for a delivery's key art, its distributor; for the still, the outside
- * partner reading it. The selftest holds it to the policy file.
+ * {recipient} · {user} · {day}`: for a delivery's key art, its distributor and its filer; for the
+ * still, the outside partner reading it, twice. The selftest holds it to the policy file.
  */
-export const watermarkText = (recipient, today) => `ACME PICTURES · FOR ${recipient} · ${today}`;
+export const watermarkText = (recipient, user, today) =>
+  `ACME PICTURES · FOR ${recipient} · ${user} · ${today}`;
 
 /**
  * A version's four files, in the order its rights policy names them: `files:files/0` the master,

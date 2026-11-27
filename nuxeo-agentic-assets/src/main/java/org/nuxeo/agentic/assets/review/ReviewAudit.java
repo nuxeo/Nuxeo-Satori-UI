@@ -53,6 +53,13 @@ final class ReviewAudit {
     /** A document's context data that keeps it as fired, rather than read again in the background. */
     static final String SKIP_REFETCH = "skipRefetchDocument";
 
+    /**
+     * The mark this add-on's own entry carries, a boolean: Automation's {@code Event.Fire}, which any
+     * user may run, sets its event's properties as text only, so an event of this name it fires is
+     * not written to the audit.
+     */
+    static final String MARK = "agenticAssetReviewDecision";
+
     private ReviewAudit() {
     }
 
@@ -74,6 +81,7 @@ final class ReviewAudit {
         context.setProperty("category", CATEGORY);
         context.setProperty("comment", comment(payload));
         context.setProperty(EXTENDED_INFOS, new HashMap<>(extended));
+        context.setProperty(MARK, Boolean.TRUE);
         Framework.getService(EventService.class).fireEvent(context.newEvent(EVENT));
     }
 

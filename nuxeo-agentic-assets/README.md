@@ -481,7 +481,7 @@ condition of an asset's rights, decided at the same endpoints. The media kit's p
 <policy type="FilmVersion">
   <!-- ... rightsEnd, channels, territories, windows, the uses and the delivery package ... -->
   <blob xpath="files:files/3/file" preview="true" />
-  <watermark text="ACME PICTURES · FOR {recipient} · {day}" placement="tiled">
+  <watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
     <previews>
       <blob xpath="files:files/3/file" />
     </previews>
@@ -500,13 +500,17 @@ condition of an asset's rights, decided at the same endpoints. The media kit's p
   `<original />`, a `<view name>`, a `<rendition name>`, a `<blob xpath>` or `<storyboard />`, and,
   naming none, every use of its occasion. At least one occasion.
 - **Exempt:** a member of a group an `<except>` names gets previews and downloads unmarked.
-  Nobody else, an administrator included. A delivery's files are marked whoever files it: they go to
-  a distributor, not to the filer.
+  Nobody else, an administrator included, nor the system acting for no one, whose groups are the
+  administrators'; the system acting for someone is that person, as the user directory has them. An
+  `<except>` naming `members`, every user's group, or `administrators`, is left out. A delivery's
+  files are marked whoever files it: they go to a distributor, not to the filer.
 - **The text,** 1 to 200 characters, may name, in braces: `{recipient}`, the person downloading,
   or a delivery's distributor; `{user}`, the person downloading, or filing the delivery; `{day}`, the
   server's day in UTC; and `{territory}`, a delivery's, empty for a download. Each value is cut to
   100 characters, its control characters dropped, and drawn as pixels: it reaches no command line. A
-  person is named by their user name.
+  person is named by their user name. A watermark with `<deliveries>` must name `{user}`: the
+  distributor's name is the filer's to write, so a mark naming it alone could name anyone, and a
+  delivery's mark names who filed it too.
 - **Placement:** `tiled`, across the whole picture at -30 degrees, light over dark, as the share
   links' mark, which is the default; or once, at the `center` or a corner, `top-left`, `top-right`,
   `bottom-left` or `bottom-right`, a margin from its edges.
@@ -515,8 +519,10 @@ condition of an asset's rights, decided at the same endpoints. The media kit's p
   character, a name in braces it does not know, or a brace that names nothing; a placement it does
   not know, or spelled otherwise than above; no occasion; an occasion naming a use the policy does
   not list for it, a channel's use among the previews, a preview among the downloads, a file
-  outside the package among the deliveries; `<deliveries>` in a policy with no `<delivery>`. An
-  `<except>` naming no group, or everyone, is left out and logged: that marks more, never less.
+  outside the package among the deliveries; `<deliveries>` in a policy with no `<delivery>`, or with
+  no `{user}` in the text. An `<except>` naming no group, everyone, `members` or `administrators`, is
+  left out and logged: that marks more, never less. XMap reads only the elements it knows, so a
+  misspelt occasion, such as `<download>`, is not read, and marks nothing.
 
 ### Where it is enforced
 
@@ -524,6 +530,18 @@ condition of an asset's rights, decided at the same endpoints. The media kit's p
   `@preview` and `Blob.BulkDownload`, refuse a use the watermark marks for the person downloading,
   403 `watermark-required`. The permission's script hands the platform's `CurrentUser` global to the
   decision; a download with no person is held to the mark, exempt from nothing.
+- **The same file wherever it is held:** under a policy with a watermark, a download of a stored
+  file is decided too at every place a document of a covered type holds the same file, read with the
+  system's rights, as the `Video.*` operations decide a stored file. So a copy of an asset, whose
+  views its copier may retitle or whose attachments they may reorder where they may write, serves
+  nothing the asset it was copied from would mark, nor refuse. A file held by more than 100 such
+  documents is refused.
+- **A blob handed over with no document:** the platform writes an Automation operation's blob, such
+  as `Document.GetBlob`'s, `Picture.GetView`'s or a stored rendition's, through the download service
+  with no document. Such a blob, when it is a stored file, is decided for the documents of covered
+  types that hold it, at each place they hold it, for the person downloading: so those operations
+  hand over no file the rights or the watermark refuse. A blob that is not a stored file, such as a
+  conversion an operation makes, is not decided (below, "What watermarks do not do").
 - **The platform's `Video.*` operations** decide as a download with no person, so a video the
   watermark marks is refused to all of them, an exempt group's members included: what they answer
   would be the video unmarked.
@@ -541,6 +559,7 @@ served to no one else. In this order, the first that applies answering:
 | In this order                                                                                                   | Answer                         |
 | --------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | The use in none of the forms above                                                                              | 400                            |
+| A broken policy                                                                                                 | 403, `policy-error`            |
 | No policy for the type, no watermark, the use not listed, or not marked by the watermark on its occasion        | 404: download it as it is      |
 | The rights, as a download of the use is decided, a version or a proxy by its live document's                    | 403, with the rights' reason   |
 | The document has no file for the use                                                                            | 404                            |
@@ -550,6 +569,9 @@ served to no one else. In this order, the first that applies answering:
 - **The text** names the person asking as both `recipient` and `user`, the day, and no territory.
   A member of an exempt group is served it marked too: the download endpoints serve them the file
   itself.
+- **A blob named by its xpath** is the use a download of that xpath is, as `DownloadUse` names it:
+  `blob:file:content` is the original where that is the original's place, `blob:picture:views/0/content`
+  that view by its title. So one place is decided by one rule.
 - **Not a button, and it changes nothing.** The asset page asks for a picture view this way once the
   server has refused it unmarked. Decision 3 governs configuration binding buttons to Automation
   chains; no configuration binds this, and the platform's own page calls it as it calls the share
@@ -568,8 +590,8 @@ a PNG, at most 64 MiB, 24 million pixels and 16384 a side, read from its header 
 decoded from memory, never a temporary file, marked, and written as a new JPEG with nothing of the
 file but its pixels. The platform makes a picture's views with ImageMagick, and they are JPEGs, so a
 view is always one it marks; an original of another format, such as a TIFF, is not, and is refused
-where the watermark marks it. At most two files are marked at once on a node, each waiting its turn
-up to 10 seconds, then refused.
+where the watermark marks it. At most two pictures are marked at once on a node, and one video, apart,
+each waiting its turn up to 10 seconds, then refused: a long video holds up no picture.
 
 ### Video
 
@@ -578,6 +600,9 @@ Through the platform's own video tools, `VideoToolsService.watermark`, the same 
 frame with ffmpeg's `overlay`. The mark is drawn in Java, on a transparent PNG of the video's size,
 which the platform's `ffmpeg-info` command line, ffprobe, reads; so the policy's text never reaches
 a command line. The new video keeps the original's container and file name, `-watermarked` added.
+Tiled, the mark is drawn on a square as wide as the video's longer side, so that it covers the frame
+however a rotation flag turns it; at a corner or the centre, it is placed on the frame as ffprobe
+reports its size, before any rotation. The test checks a frame: the mark where the policy places it.
 
 - **On a server without ffmpeg,** or whose video tools say the tool is not available, a video the
   watermark marks is refused: at the download endpoints, `watermark-required`; by
@@ -606,10 +631,12 @@ refuses the delivery whole, 403 `watermark-unavailable`, naming the file, and no
 ### What watermarks do not do
 
 - **Close the paths the rights do not close.** A watermark is decided where the rights are: the
-  download endpoints, the `Video.*` operations and share links. An Automation operation that
-  returns a document's blob or a conversion of it, a previewer's own endpoint, and another add-on's
-  hand the file over unmarked, as they hand it over whatever the rights (above, "What it does not
-  cover", and the security review's item 1).
+  download endpoints, a stored file handed over with no document, the `Video.*` operations and share
+  links. An Automation operation that returns a conversion of a document's file, such as
+  `Blob.ToPDF`, `Blob.Convert`, `Picture.Resize` or `Document.Export`, a previewer's own endpoint, and
+  another add-on's hand over what they make unmarked, as they hand it over whatever the rights
+  (above, "What it does not cover", and the security review's item 1). Nor is a covered file held by
+  a document of a type no policy covers decided at that document's endpoints.
 - **Mark a use it does not name.** A video's transcoded videos and storyboard, and a picture's
   views, are uses of their own: a watermark naming the original alone leaves them as the rights
   decide them. `<downloads />` and `<previews />` naming none mark every use of their occasion.
@@ -669,8 +696,8 @@ The groups narrow who may ever decide, at the server's configuration; the permis
 assets, at each folder's. Neither alone is enough: whoever manages a folder's permissions may grant
 `ReviewAsset` there, themselves included, and a group alone would let its members decide
 everywhere. `ReviewAsset` is in the platform's permissions list, for an administrator to grant. A
-policy's group that is not a group's name, or names everyone, is left out and logged; a policy left
-with none lets no one decide.
+policy's group that is not a group's name, or names everyone or `members`, every user's group, is
+left out and logged; a policy left with none lets no one decide.
 
 ### The listener
 
@@ -688,15 +715,31 @@ Every refusal marks the transaction for rollback, and nothing of the request is 
 | After an approval or a rejection on the asset, not in the trash                                            | 409    | `concluded`      |
 | Otherwise                                                                                                  | made   |                  |
 
-- **The server writes the author,** the person, whatever the request wrote.
-- **Kept as written:** a change to a decision's payload, origin, file, the asset it is on or its
-  author, or a pin's changed into a decision, is refused, 403 `kept`, whoever asks; its note, the
-  comment's text, is Nuxeo's to allow. A decision deleted, trashed, moved or copied, but by an
-  administrator, 403 `kept`; imported, 403 `server-only`.
+- **On the asset's own comments folder:** a decision is written in the `CommentRoot` folder below
+  the asset, as the comment manager writes one, naming the asset as its `comment:parentId`. A review
+  is read as the page reads it, below the asset and naming it, so a decision copied below another
+  asset names the asset it was written on, and concludes nothing on the other.
+- **The comments folder is kept too:** the platform removes, moves, trashes and copies a folder's
+  documents with it, with no event of their own, and Nuxeo lets any member add and remove a comments
+  folder's children. So the asset's comments folder, while a decision is below it, is removed,
+  moved, trashed or copied by an administrator alone, 403 `kept`; trashed with its asset, it is
+  allowed, as the platform trashes an asset's documents with it.
+- **The server writes the author,** the person, whatever the request wrote: a decision's, and a
+  pin's.
+- **Kept as written:** a change to a decision's payload, origin, file, the asset it is on, its
+  author, or when it was written, `dc:created` and `comment:creationDate`, which the page orders the
+  review by, or a pin's changed into a decision, is refused, 403 `kept`, whoever asks; its note, the
+  comment's text, is Nuxeo's to allow. Below a version of its asset, as the platform copies an
+  asset's comments into a version it checks in and then points each copy at the version, a change
+  is allowed. A decision deleted, trashed, moved or copied, but by an administrator, 403 `kept`,
+  or trashed with its asset; imported, but by an administrator, 403 `server-only`.
 - **Audited:** each decision fires `assetReviewDecided`, category `assetReview`, on the asset, with
   its comment, such as `Review round 2: approved`, and the decision, the round, the annotation and
-  who; written to the platform's audit after the commit, as the documents and records add-ons write
-  theirs. A refused one records nothing, and is logged at `INFO`.
+  who; written to the platform's audit after the commit, in the background, as the documents and
+  records add-ons write theirs, so an audit that refuses the entry leaves the decision made and says
+  so in the server log. The entry carries a boolean mark, which Automation's `Event.Fire`, open to
+  every user, cannot set: an event of that name it fires is not written. A refused decision records
+  nothing, and is logged at `INFO`.
 
 ### What the page is told
 
@@ -710,8 +753,11 @@ said.
 ### What the review does not cover
 
 - **Pins.** A pin is anyone's whom Nuxeo lets comment on the asset, as before.
-- **Two decisions at once.** Two reviewers approving in the same instant may both be written; the
-  page reads the first as the conclusion, and the audit holds both.
+- **Two decisions at once.** Two reviewers deciding in the same instant may both be written, since
+  the review is read, not locked; the page reads the first, by when the repository wrote it, which
+  no one may change, as the conclusion, and the audit holds both.
+- **A decision trashed by an administrator and restored.** Whoever may write it may take it out of
+  the trash; an administrator who must take one away removes it.
 - **A copy of an asset.** The platform copies an asset's comments with it, its decisions included,
   with no event of their own, so the copy's review reads as its original's.
 - **The principal cache.** A person's groups are read through the user manager, whose cache holds a
@@ -960,11 +1006,11 @@ without ffmpeg, no tool available.
 | `TerritoriesPolicyTest`        | Territories, windows, a film's windows and a delivery package read through XMap; each mistake a refusal; a window's parts and days; the decision's order for a delivery and a download; the media kit's own file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `TerritoriesEnricherTest`      | What the enricher writes under a policy with territories: the territories, the asset's own windows, a film's windows left out                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `KitMediaModelTest`            | The test runtime's media model is the kit's: its types, their parents and schemas, and the schema files as copied                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `AssetReviewTest`              | In a Nuxeo runtime, on the brand kit's review policy: a round sent back, approved and rejected by a reviewer, each audited on the asset; refused to a holder of `ReviewAsset` outside the groups, to a group member not granted it, to `Everything`, above a blocked inheritance, to an administrator until granted, and on a type with no policy; a pin anyone's, anything else of the review's origin held; the form, the views and a concluded review; the author the server's; a decision kept, a pin not turned into one, deleted by an administrator alone; what the enricher says                                                                                                                                                                                                                                                                                                                                 |
+| `AssetReviewTest`              | In a Nuxeo runtime, on the brand kit's review policy: a round sent back, approved and rejected by a reviewer, each audited on the asset; refused to a holder of `ReviewAsset` outside the groups, to a group member not granted it, to `Everything`, above a blocked inheritance, to an administrator until granted, and on a type with no policy; a pin anyone's, anything else of the review's origin held; the form, the views and a concluded review; the author the server's; a decision kept, a pin not turned into one, deleted by an administrator alone; what the enricher says; a comments folder holding a decision kept, and a copy of it deciding nothing elsewhere; a decision outside the asset's own comments folder refused; a pin's author the server's; an entry fired with no mark not audited                                                                                                       |
 | `AssetReviewsTest`             | With no runtime: `ReviewAsset` read from an asset's permissions in the platform's order, a denial or a block met first refusing, `Everything` and others' grants holding nothing; the payload read as the page reads it, strictly; a review policy's mistakes never widening it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `WatermarkPolicyTest`          | A watermark read through XMap: its occasions, uses, exempt groups, text and placement; each mistake breaking the policy; a use refused unmarked to anyone not exempt, an administrator included; the rights' refusals kept; the text's names filled, cleaned and cut; the media kit's own file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `WatermarkPicturesTest`        | In a Nuxeo runtime: a marked view and download refused unmarked at the download service, served to the exempt group; the enricher's `watermark-required` for its reader; `Asset.GetWatermarked` serving the file marked, byte for byte the mark naming its reader and the day; nothing it does not mark served; the rights still deciding; a file that cannot be marked refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `VideoWatermarkTest`           | In a Nuxeo runtime with the platform's video tools: the original refused unmarked; where ffmpeg is installed, the kit's WebM marked through the tools, a new video of the same size; the mark drawn over the frames, the text alone at its place                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `WatermarkPolicyTest`          | A watermark read through XMap: its occasions, uses, exempt groups, text and placement; each mistake breaking the policy; a use refused unmarked to anyone not exempt, an administrator included; the rights' refusals kept; the text's names filled, cleaned and cut; the media kit's own file; the system acting for no one exempt from nothing; a mark for deliveries naming its filer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `WatermarkPicturesTest`        | In a Nuxeo runtime: a marked view and download refused unmarked at the download service, served to the exempt group; the enricher's `watermark-required` for its reader; `Asset.GetWatermarked` serving the file marked, byte for byte the mark naming its reader and the day; nothing it does not mark served; the rights still deciding; a file that cannot be marked refused; a stored file handed over with no document decided for the assets that hold it; a copy whose views are retitled serving nothing the original would mark; a blob named at a place decided as a download of that place is                                                                                                                                                                                                                                                                                                                 |
+| `VideoWatermarkTest`           | In a Nuxeo runtime with the platform's video tools: the original refused unmarked; where ffmpeg is installed, the kit's WebM marked through the tools, a new video of the same size; the mark drawn over the frames, the text alone at its place; a frame carrying the mark where the policy places it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `VideoWatermarkRefusedTest`    | In a Nuxeo runtime with no ffmpeg: the original refused unmarked to everyone, and `Asset.GetWatermarked` refusing, 409, without asking the tools to run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `MediaDeliveryTest`            | In a Nuxeo runtime, on the media kit's policy and schemas: a localised version delivered inside its window and refused outside it, before it opens and after it closes, its first and last days included; outside its territory; by its own rights, its rights end and its channels; a package refused whole for one file, or a file missing; the same windows at the download endpoints; the film's windows read for a reader who may not read the film, a film missing or in the trash refusing; the record the server writes over the filer's; the record kept; the filer held to a live version they may read; since 0.5.0, the key art marked for its distributor, byte for byte, and held, the others recorded unmarked; a delivery whose marked file cannot be marked refused whole; the still refused unmarked to an outside partner and an administrator, served to staff, and served marked naming the partner |
 
@@ -1023,31 +1069,39 @@ tests cannot reach:** the listener and the privileged reads run on H2 in `MediaD
 on the server's database; a check-in and a restore, since `MediaDelivery` is not versionable; and
 the REST API's answer to a refused delivery, its status and message, which has not run on a server.
 
-**The watermarks' and the review's guards were seen failing too,** on 27 November 2026: each of 38
-breakages, one at a time, turned the tests red, and the build unbroken was green. **The review, 18:**
-a decision not held; the reviewer group not asked; `ReviewAsset` not asked; `Everything` counted as
-`ReviewAsset`; a denial or a block of inheritance not read; an administrator exempt; the system
-deciding, not the person a privileged session acts for; a concluded review not looked for; a
-decision not kept; anyone deleting a decision; the request's author kept; a decision not audited; a
-pin of another version taken for one; a key written twice read as its last; anything after the
-payload read past; the enricher letting everyone decide; a decision off the picture's views
-accepted; a type with no policy reviewable. **The watermarks, 20:** the watermark not applied to a
-download; everyone exempt; no one exempt; the person downloading not handed on by the script; an
-unknown name in the text accepted; a second watermark accepted; a broken watermark not breaking the
-policy; a use not cleared for its occasion accepted; the marked file served whatever the rights,
-served unmarked, naming someone else, or for a use the watermark does not mark; a file that cannot
-be marked served unmarked; the video tools run without asking whether they can; a delivery marking
-nothing, marked for its filer, or made with a file that cannot be marked; the enricher not saying
-`watermark-required`; and, in the media kit's own policy, outside partners exempt and its delivered
-key art not marked. Two of the first run's 37 breakages went unseen: a denial not read, since Nuxeo
-refuses a denial but its own block and its merged permissions stop at a block, and the video tools'
-availability not asked, since ffprobe's absence refuses next. `AssetReviewsTest` and a count of the
-tools' answers were added, and both, made again, went red, with the 38th, added with the strict
-reader. The script that broke them is not in the repository; the list is in the pull request.
-**What the tests cannot reach:** the comment manager, which the tests stand in for as it writes on
-Nuxeo 2025.10.18, the REST API's answer to a refused annotation and to `Asset.GetWatermarked`, the
-audit on the server's database, and a video marked on a server: the video test ran with this
-machine's ffmpeg 8, and is skipped where there is none.
+**The watermarks' and the review's guards were seen failing too,** on 27 November 2026: 50
+breakages, made one at a time, and 49 of them turned the tests red; the build unbroken was green.
+**The review, 23:** a decision not held; the reviewer group not asked; `ReviewAsset` not asked;
+`Everything` counted as `ReviewAsset`; a denial or a block of inheritance not read; an administrator
+exempt; the system deciding, not the person a privileged session acts for; a concluded review not
+looked for; a decision not kept; anyone deleting a decision; the request's author kept, for a
+decision and for a pin; a decision not audited; an entry fired under the decision's name with no mark
+audited; a pin of another version taken for one; a key written twice read as its last; anything
+after the payload read past; the enricher letting everyone decide; a decision off the picture's
+views accepted; a type with no policy reviewable; a comments folder holding a decision not kept; a
+decision copied below another asset counted there. **The watermarks, 27:** the watermark not applied
+to a download; everyone exempt; no one exempt; the system exempt by its groups; every user's group
+accepted as exempt; the person downloading not handed on by the script; a stored file handed over
+with no document not decided; a copy's file not decided where the asset holds it; an unknown name in
+the text accepted; a second watermark accepted; a broken watermark not breaking the policy; a use not
+cleared for its occasion accepted; a delivery's mark not naming its filer accepted; the marked file
+served whatever the rights, served unmarked, naming someone else, or for a use the watermark does not
+mark; a blob named at another use's place taken as written; a file that cannot be marked served
+unmarked; the video tools run without asking whether they can; a video's mark drawn at the top left;
+a delivery marking nothing, marked for its filer, or made with a file that cannot be marked; the
+enricher not saying `watermark-required`; and, in the media kit's own policy, outside partners exempt
+and its delivered key art not marked. **The one not seen failing** is a decision's folder not checked
+to be a comments folder: the folder's place, the asset's own child, is checked too, and holds it. Two
+of the first run's breakages went unseen: a denial not read, since Nuxeo refuses a denial but its own
+block, and its merged permissions stop at a block, and the video tools' availability not asked,
+since ffprobe's absence refuses next. `AssetReviewsTest` and a count of the tools' answers were
+added, and both, made again, went red. The script that broke them is not in the repository; the
+list is in the pull request. **What the tests cannot reach:** the comment manager, which the tests
+stand in for as it writes on Nuxeo 2025.10.18, and its fix-up of a version's comments; the platform's
+trash of an asset's documents with it; the REST API's answer to a refused annotation and to
+`Asset.GetWatermarked`; Automation's writing of an operation's blob, which the tests stand in for as
+a download naming no document; the audit on the server's database; and a video marked on a server:
+the video test ran with this machine's ffmpeg 8, and is skipped where there is none.
 
 The version is `assets.package.version` in `pom.xml`, which `package.xml` takes, and the manifest's
 `Bundle-Version` repeats; `BundleTest` refuses a build where they differ.
@@ -1302,9 +1356,12 @@ check, not what it found:
 
 33. **Every path to a marked file's original:** that the download permission is asked, with the
     person downloading as `CurrentUser`, at every endpoint item 1 lists, on the release the server
-    runs; that the `Video.*` operations, deciding with no person, refuse a marked video to everyone;
-    and, for each path item 1 finds that does not name its document to the download service, whether
-    it hands over a file a watermark marks.
+    runs; that the platform writes an Automation operation's blob through the download service with
+    no document, so that a stored file is decided for the documents holding it, and what that query
+    costs per download there; that the `Video.*` operations, deciding with no person, refuse a marked
+    video to everyone; for each path item 1 finds that makes a conversion of a document's file,
+    whether it hands over what a watermark marks, unmarked; and whether a covered file held by a
+    document of a type no policy covers should be decided at that document's endpoints too.
 34. **Who is exempt:** a member of a group `<except>` names, as the user directory gives the person's
     groups; that nobody else is, an administrator included; that a download with no person, or with
     the system's, is exempt from nothing; and the principal cache's delay (item 18).
@@ -1332,10 +1389,13 @@ check, not what it found:
     that from deciding anything; and whether a policy should name the groups, or the permission
     alone should, or both, as it is.
 41. **What the listener holds:** every annotation of the review's origin that is not a well-formed
-    pin, read strictly, a key written twice refused; on the asset it is written below, as the page
-    reads it, and on that asset itself; on a live asset; once an approval or a rejection is written,
-    no other decision. And that the comment manager's privileged session, acting for the person, is
-    read as that person on the release the server runs.
+    pin, read strictly, a key written twice refused; in the asset's own comments folder, naming the
+    asset, as the page reads it; on a live asset; once an approval or a rejection is written, no
+    other decision. That the comment manager's privileged session, acting for the person, is read as
+    that person on the release the server runs; that the platform's own fix-up of a version's
+    comments, and its trash of an asset's documents with the asset, run as this README says they do;
+    and what else, an importer or a bulk action, writes, moves or removes a comments folder's
+    documents with no event the listener hears.
 42. **A decision kept:** its payload, origin, file, asset and author unchanged, whoever asks; moved,
     copied, trashed or deleted by an administrator alone; never imported. Whether a pin should be
     held too, since a reader may write one.

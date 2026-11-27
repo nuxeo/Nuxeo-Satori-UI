@@ -33,10 +33,13 @@ import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-c
 
 /**
  * A record's annotations on one file, of one origin, oldest first: `getAnnotationDocuments`'s
- * query. Its parameters are the record, the file's xpath and the origin, in that order.
+ * query. Its parameters are the record, the record again, the file's xpath and the origin, in that
+ * order. Below the record and naming it: an annotation copied below another record with its comments
+ * folder names the record it was written on, and is not this one's, as `nuxeo-agentic-assets` 0.5.0
+ * reads a review.
  */
 export const ANNOTATION_DOCUMENTS_QUERY =
-  'SELECT * FROM Annotation WHERE ecm:ancestorId = ? AND annotation:xpath = ? AND externalEntity:origin = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 ORDER BY dc:created ASC, ecm:uuid ASC';
+  'SELECT * FROM Annotation WHERE ecm:ancestorId = ? AND comment:parentId = ? AND annotation:xpath = ? AND externalEntity:origin = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 ORDER BY dc:created ASC, ecm:uuid ASC';
 /** A page of `getAnnotationDocuments`: Nuxeo's default largest page. */
 const ANNOTATION_PAGE_SIZE = 1000;
 /** How many pages it reads before it errors rather than answer part of a review. */
@@ -1026,7 +1029,7 @@ export class DocumentDetailService {
           {
             params: {
               query: ANNOTATION_DOCUMENTS_QUERY,
-              queryParams: [uid, xpath, origin],
+              queryParams: [uid, uid, xpath, origin],
               pageSize: ANNOTATION_PAGE_SIZE,
               currentPageIndex: index,
             },

@@ -29,9 +29,14 @@ public class ReviewAuditWriter implements PostCommitFilteringEventListener {
 
     private static final Logger log = LogManager.getLogger(ReviewAuditWriter.class);
 
+    /**
+     * This add-on's own entry: of its name, and carrying its mark, a boolean, which an event fired
+     * through Automation's {@code Event.Fire}, its properties text, cannot.
+     */
     @Override
     public boolean acceptEvent(Event event) {
-        return ReviewAudit.EVENT.equals(event.getName());
+        return ReviewAudit.EVENT.equals(event.getName()) && event.getContext() != null
+                && Boolean.TRUE.equals(event.getContext().getProperty(ReviewAudit.MARK));
     }
 
     @Override

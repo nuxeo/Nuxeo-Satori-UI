@@ -60,6 +60,16 @@ public interface AssetRightsService {
     }
 
     /**
+     * Since 0.5.0, a download that names no document, as the platform hands over an Automation
+     * operation's blob: when it is a file stored for documents a policy covers, what their rights
+     * decide for {@code person} at each place they hold it, the first refusal; {@code null} when none
+     * refuses, or the blob is not a stored file. Never throws: a failure refuses.
+     */
+    default DownloadDecision decideStored(Blob blob, NuxeoPrincipal person) {
+        return null;
+    }
+
+    /**
      * What the rights decide for a delivery of {@code document}'s package to {@code territory}: each
      * file its policy's {@code <delivery>} lists, decided by its rule for that territory, and found
      * on the document. Never throws: a document, a policy or rights that cannot be read give a

@@ -25,7 +25,10 @@ import org.nuxeo.runtime.api.Framework;
  * refusal, not a download let through.
  *
  * <p>A download with no document, which is how the platform hands over a blob it does not tie to
- * one, is not this add-on's to refuse; nor is a document of a type no policy covers.
+ * one, such as an Automation operation's, is decided, since 0.5.0, for the documents of covered types
+ * that hold the same stored file ({@link AssetRightsService#decideStored}); a blob that is not a
+ * stored file, such as a conversion, is not this add-on's to refuse, nor is a document of a type no
+ * policy covers.
  */
 public final class AssetRightsDownloadPermission {
 
@@ -64,7 +67,9 @@ public final class AssetRightsDownloadPermission {
             Object infos, Object currentUser) {
         try {
             if (document == null) {
-                return true;
+                // Since 0.5.0: a blob handed over with no document, as an Automation operation's is,
+                // decided for the covered documents that hold it, when it is a stored file.
+                return storedAllows(blob, reason, currentUser);
             }
             if (!(document instanceof DocumentModel model)) {
                 log.error("Asset rights: a download's document is a {}, so it is refused", document.getClass());
@@ -92,6 +97,25 @@ public final class AssetRightsDownloadPermission {
             log.error("Asset rights: a download could not be decided, so it is refused", e);
             return false;
         }
+    }
+
+    private static boolean storedAllows(Object blob, Object reason, Object currentUser) {
+        if (!(blob instanceof Blob stored)) {
+            return true;
+        }
+        AssetRightsService rights = service.get();
+        if (rights == null) {
+            log.error("Asset rights: the service is not running, so a download of a stored file is refused");
+            return false;
+        }
+        DownloadDecision decided = rights.decideStored(stored,
+                currentUser instanceof NuxeoPrincipal person ? person : null);
+        if (decided == null || decided.decision().allowed()) {
+            return true;
+        }
+        log.info("Asset rights: refused a stored file, the {} of an asset, to {}, through {}: {}", decided.use(), user(),
+                reason, decided.decision().reason().code());
+        return false;
     }
 
     private static String text(Object value) {

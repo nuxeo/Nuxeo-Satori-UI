@@ -103,6 +103,51 @@ public class VideoWatermarkTest {
         assertEquals(before.getWidth(), after.getWidth());
         assertEquals(before.getHeight(), after.getHeight());
         assertTrue(after.getDuration() > 0);
+
+        // A frame carries the mark where the policy places it, its bottom right, and is the original's
+        // elsewhere, but for the new encoding's noise.
+        BufferedImage plain = frame(original);
+        BufferedImage drawn = frame(marked);
+        int width = plain.getWidth();
+        int height = plain.getHeight();
+        double atTheMark = difference(plain, drawn, width / 2, height * 2 / 3, width, height);
+        double elsewhere = difference(plain, drawn, 0, 0, width / 2, height / 3);
+        assertTrue("the mark at the bottom right: " + atTheMark + " against " + elsewhere,
+                atTheMark > 3 * elsewhere + 2);
+    }
+
+    /** The first frame of {@code video}, taken by the platform's own {@code ffmpeg-screenshot}. */
+    private static BufferedImage frame(Blob video) throws Exception {
+        org.nuxeo.ecm.platform.commandline.executor.api.CommandLineExecutorService commands = Framework.getService(
+                org.nuxeo.ecm.platform.commandline.executor.api.CommandLineExecutorService.class);
+        java.io.File out = Framework.createTempFile("agentic-frame-", ".png");
+        try (org.nuxeo.ecm.core.api.CloseableFile in = video.getCloseableFile()) {
+            org.nuxeo.ecm.platform.commandline.executor.api.CmdParameters parameters = commands.getDefaultCmdParameters();
+            parameters.addNamedParameter("inFilePath", in.getFile().getAbsolutePath());
+            parameters.addNamedParameter("outFilePath", out.getAbsolutePath());
+            parameters.addNamedParameter("position", "0");
+            assertTrue(commands.execCommand("ffmpeg-screenshot", parameters).isSuccessful());
+            return ImageIO.read(out);
+        } finally {
+            java.nio.file.Files.deleteIfExists(out.toPath());
+        }
+    }
+
+    /** The mean difference of the two frames' channels over a region. */
+    private static double difference(BufferedImage a, BufferedImage b, int left, int top, int right, int bottom) {
+        long sum = 0;
+        long count = 0;
+        for (int x = left; x < right; x++) {
+            for (int y = top; y < bottom; y++) {
+                int p = a.getRGB(x, y);
+                int q = b.getRGB(x, y);
+                for (int shift = 0; shift <= 16; shift += 8) {
+                    sum += Math.abs(((p >> shift) & 0xff) - ((q >> shift) & 0xff));
+                    count++;
+                }
+            }
+        }
+        return count == 0 ? 0 : (double) sum / count;
     }
 
     /**

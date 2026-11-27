@@ -46,7 +46,8 @@ public record ReviewPolicy(String type, Set<String> groups, List<String> problem
             } else if (!GROUP.matcher(group).matches()) {
                 problems.add("<reviewer group=\"" + group + "\"> is not a group's name, and is left out");
             } else if (SecurityConstants.EVERYONE.equalsIgnoreCase(group)
-                    || SecurityConstants.SYSTEM_USERNAME.equalsIgnoreCase(group)) {
+                    || SecurityConstants.SYSTEM_USERNAME.equalsIgnoreCase(group) || "members".equalsIgnoreCase(group)) {
+                // members is the platform's default group, every user's.
                 problems.add("<reviewer group=\"" + group + "\"> names no group of people, and is left out");
             } else {
                 groups.add(group);

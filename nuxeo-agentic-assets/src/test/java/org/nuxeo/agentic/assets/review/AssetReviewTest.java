@@ -277,6 +277,102 @@ public class AssetReviewTest {
         assertEquals("kept", turned.getCode());
     }
 
+    /**
+     * The asset's comments folder is kept while it holds a decision: the platform removes, moves and
+     * copies a folder's documents with it, with no event of their own. Copied by an administrator, the
+     * decisions name the asset they were written on, and conclude nothing on the other.
+     */
+    @Test
+    public void aCommentsFolderHoldingADecisionIsKeptAndACopyOfItDecidesNothingElsewhere() {
+        String approval = write(RITA, asset, ReviewAnnotations.decision(1, "approved"));
+        String folder = TransactionHelper.runInTransaction(() -> CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> s.getParentDocumentRef(new IdRef(approval)).toString()));
+        String target = picture("/assets", "ast-506", "AcmeAsset");
+        write(BOB, target, ReviewAnnotations.pin(1, 0.5, 0.5));
+        transactions.nextTransaction();
+        String targetFolder = TransactionHelper.runInTransaction(() -> CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> s.getChild(new IdRef(target), "Comments").getId()));
+        // Members may add and remove children in a comments folder on the server: bob, here, by Write.
+        assertEquals("kept", refusedTo(BOB, s -> {
+            s.removeDocument(new IdRef(folder));
+            return null;
+        }).getCode());
+        assertEquals("kept", refusedTo(BOB, s -> s.move(new IdRef(folder), new IdRef(target), "moved")).getCode());
+        assertEquals("kept", refusedTo(BOB, s -> s.copy(new IdRef(folder), new IdRef(targetFolder), "copied")).getCode());
+        assertTrue("the approval is where it was written", stored(approval) != null);
+        // An administrator's copy, below the other asset: it names the first, and concludes nothing here.
+        inTransaction(ADMINISTRATOR, s -> s.copy(new IdRef(folder), new IdRef(target), "Comments-copy"));
+        assertNotNull(write(RITA, target, ReviewAnnotations.decision(1, "rejected")));
+    }
+
+    @Test
+    public void aDecisionIsWrittenInTheAssetsOwnCommentsFolder() {
+        ReviewRefusal refusal = refusedTo(RITA, s -> CoreInstance.doPrivileged(s, (CoreSession privileged) -> {
+            DocumentModel loose = privileged.createDocumentModel(privileged.getDocument(new IdRef(asset))
+                                                                           .getPathAsString(),
+                    "loose", "Annotation");
+            loose.setPropertyValue("comment:author", RITA);
+            loose.setPropertyValue("comment:text", "note");
+            loose.setPropertyValue("comment:parentId", asset);
+            loose.setPropertyValue("annotation:xpath", AssetReviews.XPATH);
+            loose.addFacet("ExternalEntity");
+            loose.setPropertyValue("externalEntity:origin", AssetReviews.ORIGIN);
+            loose.setPropertyValue("externalEntity:entity", ReviewAnnotations.decision(1, "approved"));
+            return privileged.createDocument(loose);
+        }));
+        assertEquals(400, refusal.getStatusCode());
+        assertEquals("invalid", refusal.getCode());
+        // Below the asset, in a folder that is not its comments folder, however it is named.
+        ReviewRefusal elsewhere = refusedTo(RITA, s -> CoreInstance.doPrivileged(s, (CoreSession privileged) -> {
+            String at = privileged.getDocument(new IdRef(asset)).getPathAsString();
+            DocumentModel folder = privileged.createDocument(privileged.createDocumentModel(at, "Comments", "Folder"));
+            DocumentModel loose = privileged.createDocumentModel(folder.getPathAsString(), "loose", "Annotation");
+            loose.setPropertyValue("comment:author", RITA);
+            loose.setPropertyValue("comment:text", "note");
+            loose.setPropertyValue("comment:parentId", asset);
+            loose.setPropertyValue("annotation:xpath", AssetReviews.XPATH);
+            loose.addFacet("ExternalEntity");
+            loose.setPropertyValue("externalEntity:origin", AssetReviews.ORIGIN);
+            loose.setPropertyValue("externalEntity:entity", ReviewAnnotations.decision(1, "approved"));
+            return privileged.createDocument(loose);
+        }));
+        // The folder is the nearest document that is not a comment: the asset is not its parent, and the
+        // folder's type has no policy.
+        assertEquals("not-reviewable", elsewhere.getCode());
+    }
+
+    @Test
+    public void aPinsAuthorIsTheServersToo() {
+        String id = inTransaction(BOB, s -> ReviewAnnotations.write(s, asset, AssetReviews.XPATH, AssetReviews.ORIGIN,
+                ReviewAnnotations.pin(1, 0.5, 0.5), "note", RITA).getId());
+        assertEquals(BOB, stored(id).getPropertyValue("comment:author"));
+    }
+
+    @Test
+    public void anEntryFiredUnderTheDecisionsNameWithoutItsMarkIsNotAudited() {
+        // As Automation's Event.Fire, which any user may run, fires one: its properties text only.
+        TransactionHelper.runInTransaction(() -> CoreInstance.doPrivileged(repository, (CoreSession s) -> {
+            org.nuxeo.ecm.core.event.impl.DocumentEventContext context = new org.nuxeo.ecm.core.event.impl.DocumentEventContext(
+                    s, principal(BOB), s.getDocument(new IdRef(asset)));
+            context.setProperty("comment", "Review round 1: approved");
+            context.setProperty(ReviewAudit.MARK, "true");
+            Framework.getService(org.nuxeo.ecm.core.event.EventService.class).fireEvent(
+                    context.newEvent(ReviewAudit.EVENT));
+        }));
+        nothingAudited(asset);
+    }
+
+    @Test
+    public void aDecisionsTrashFollowsItsAssets() {
+        write(RITA, asset, ReviewAnnotations.sendBack(1));
+        inTransaction(BOB, s -> {
+            Framework.getService(org.nuxeo.ecm.core.api.trash.TrashService.class).trashDocument(
+                    s.getDocument(new IdRef(asset)));
+            return null;
+        });
+        assertTrue(stored(asset).isTrashed());
+    }
+
     @Test
     public void aDecisionIsDeletedByAnAdministratorAlone() {
         String decided = write(RITA, asset, ReviewAnnotations.sendBack(1));

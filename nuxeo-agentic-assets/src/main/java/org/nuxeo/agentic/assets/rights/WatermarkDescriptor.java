@@ -14,7 +14,7 @@ import org.nuxeo.common.xmap.annotation.XObject;
  * A rights policy's watermark, as XML writes it:
  *
  * <pre>
- * &lt;watermark text="ACME PICTURES · FOR {recipient} · {day}" placement="tiled"&gt;
+ * &lt;watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled"&gt;
  *   &lt;previews&gt;&lt;blob xpath="files:files/3/file" /&gt;&lt;/previews&gt;
  *   &lt;downloads /&gt;
  *   &lt;deliveries&gt;&lt;blob xpath="files:files/2/file" /&gt;&lt;/deliveries&gt;
