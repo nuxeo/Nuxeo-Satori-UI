@@ -161,11 +161,16 @@ the system, in a transaction of its own:
    the record's attachments (not twice, by its digest), the item marked filed, and the audit's two
    entries. Queued: the item set to wait, with its reason, and an audit entry.
 
-Then, whatever happened, in a transaction of its own: an item still received, whose capture this
-run holds or no one does, is set to wait, `notFiled`. So a capture that threw, or whose
-transaction was rolled back without a word, as one a provider or another listener marks for
-rollback is, leaves no item received. A capture lost before it ran at all, as a background job
-lost with its node, does: the item stays received, and is not seen by the queue.
+Then, whatever happened, in a transaction of its own: an item still received, whose capture this run
+holds or no one does, is set to wait, `notFiled`. So a capture that threw, or whose transaction was
+rolled back without a word, as one a provider or another listener marks for rollback is, leaves no
+item received. A capture lost before it ran, or while it ran, as a background job lost with its
+node, does: the item stays received, its capture claimed for an hour by the run that was lost, and
+the queue does not show it. Nothing reads it again by itself. An administrator finds such items with
+`SELECT * FROM Document WHERE ecm:mixinType = 'CaptureItem' AND capt:status = 'received' AND
+capt:receivedAt < DATE '<a day before>'`, and deletes and uploads each again. A claim that cannot be
+taken at all, as when the transaction gives no way to release one, does not strand an item: the
+fallback sets it waiting regardless.
 
 ## The confidence rule
 
@@ -469,7 +474,8 @@ which is deferred until the app is finished, as every security review is
 - **Upload from the app,** and a one-click confirm: the app's Create form has no file input for a
   kit's type, and the decision is typed in the Edit form (the kit's README).
 - **Capture again:** an item that waited for a provider that was down is not read again by itself;
-  a person confirms or rejects it.
+  a person confirms or rejects it. Nor is one left received by a capture lost with its node: no
+  sweep sets it waiting ([above](#how-a-capture-goes)).
 - **Retention of items,** and what becomes of a rejected one: the platform's.
 - **Linked documents beyond the item:** the item itself is the linked document, by `capt:record`;
   the file is copied to the record's attachments. A record type with no attachments is not filed on.

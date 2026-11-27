@@ -714,6 +714,9 @@ classes with their fields, a key field naming the record's property it must equa
   content to its model provider ([capture README](../../nuxeo-agentic-capture/README.md#before-the-ai-provider-is-switched-on)).
 - **A profile that breaks a rule is not registered,** and the log names the rule; nothing in its
   inbox is then received.
+- **An item left received,** its capture lost with its node, is not in any queue, and nothing
+  reads it again: look for items with `capt:status = 'received'` older than an hour, and upload
+  each again ([capture README](../../nuxeo-agentic-capture/README.md#how-a-capture-goes)).
 - **Its security review is pending.**
 
 ## 9. What is not production-ready yet
