@@ -1751,7 +1751,7 @@
         "policy-error": "The server refused this video: it could not read this asset's rights.",
         "rights-ended": "The server refused this video: the rights to this asset ended on {{end}}.",
         "rights-ended-undated": "The server refused this video: the rights to this asset have ended.",
-        "watermark-required": "The server serves this video only watermarked for you, which this page does not play yet.",
+        "watermark-required": "The server serves this video only watermarked for you.",
         "watermark-unavailable": "The server refused this video: this asset's rights require a watermark, which could not be drawn on it."
       }
     },
@@ -1855,6 +1855,7 @@
       "transition": "State changed from {{from}} to {{to}}"
     },
     "video": {
+      "check-again": "Check again",
       "duration": "Duration",
       "facts-none": "The server has not read this video's duration, frame size or format.",
       "failed": "This video could not be loaded",
@@ -1865,9 +1866,12 @@
       "none": "This video has no file to play",
       "original": "Original",
       "player": "{{title}}, {{rendition}}",
+      "preparing": "The server is preparing a copy of this video watermarked for you. A long video can take a few minutes.",
+      "still-preparing": "The watermarked copy of this video is still being prepared. Check again in a few minutes.",
       "storyboard": "Storyboard of the video",
       "storyboard-none": "The server has made no storyboard for this video.",
-      "unplayable": "This browser cannot play this video's files"
+      "unplayable": "This browser cannot play this video's files",
+      "watermarked": "Watermarked for you: this asset's rights require it."
     },
     "yes": "Yes",
     "capture": {

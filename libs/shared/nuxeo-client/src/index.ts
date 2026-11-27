@@ -236,6 +236,7 @@ export {
   type NuxeoAnnotationDraft,
   type NuxeoComment,
   type NuxeoCommentList,
+  type WatermarkedVideoAnswer,
 } from './lib/services/document-detail.service';
 export { DirectoryService } from './lib/services/directory.service';
 export { SearchService } from './lib/services/search.service';

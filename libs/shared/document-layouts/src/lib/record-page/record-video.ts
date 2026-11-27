@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  InjectionToken,
   LOCALE_ID,
   computed,
   inject,
@@ -29,10 +30,21 @@ import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import {
   DocumentDetailService,
   assetRightsDecision,
+  type AssetRightsDecision,
   type AssetRightsExplanation,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { catchError, concat, forkJoin, map, of, switchMap, type Observable } from 'rxjs';
+import {
+  catchError,
+  concat,
+  forkJoin,
+  map,
+  of,
+  switchMap,
+  take,
+  timer,
+  type Observable,
+} from 'rxjs';
 
 import { rightsRefusal, type RightsRefusal } from './record-picture-views';
 
@@ -247,9 +259,53 @@ export function formatDuration(total: number): string {
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
 }
 
+/**
+ * How many times the page asks for a marked video the server is still preparing: after the last,
+ * it stops, and the reader asks again with Check again.
+ */
+export const WATERMARK_POLL_LIMIT = 12;
+
+/** The longest wait between two asks, in seconds. */
+const WATERMARK_POLL_CAP = 60;
+
+/**
+ * How long to wait, in milliseconds, before asking again for a marked video the server said it is
+ * still preparing, after the `attempt`-th answer, counted from 0: the server's `retryAfter`, held
+ * to 2 to 30 seconds, doubled at each answer up to a minute; `null` once
+ * {@link WATERMARK_POLL_LIMIT} answers have said so, when the page stops asking. With the server's
+ * 5 seconds, 12 asks over about 8 minutes, then none.
+ */
+export function watermarkPollDelay(attempt: number, retryAfter: number): number | null {
+  if (!Number.isInteger(attempt) || attempt < 0 || attempt >= WATERMARK_POLL_LIMIT - 1) return null;
+  const first = Math.min(Math.max(Number.isFinite(retryAfter) ? retryAfter : 5, 2), 30);
+  return Math.min(first * 2 ** attempt, WATERMARK_POLL_CAP) * 1000;
+}
+
+/**
+ * How the page waits before it asks again for a marked video being prepared: an observable that
+ * emits once, `ms` milliseconds on. `timer` in the application; a test stands in for it, so that it
+ * sees each wait asked for without waiting.
+ */
+export const WATERMARK_POLL_WAIT = new InjectionToken<(ms: number) => Observable<unknown>>(
+  'WATERMARK_POLL_WAIT',
+  { providedIn: 'root', factory: () => (ms: number) => timer(ms) },
+);
+
 type Shown =
   | { readonly key: string; readonly status: 'loading' }
-  | { readonly key: string; readonly status: 'ready'; readonly url: string }
+  | {
+      readonly key: string;
+      readonly status: 'ready';
+      readonly url: string;
+      /** Whether the server sent it marked for this reader, as the asset's rights require. */
+      readonly watermarked: boolean;
+    }
+  | {
+      readonly key: string;
+      readonly status: 'preparing';
+      /** The page asked as many times as it asks, and the server is preparing it still. */
+      readonly exhausted: boolean;
+    }
   | {
       readonly key: string;
       readonly status: 'failed';
@@ -283,6 +339,15 @@ type Shown =
  * asks the server why, through the `assetRights` enricher, and says the server's reason where the
  * player would be. Nothing is hidden or tried instead: the server decided. A 403 the rights do not
  * explain is said as any 403 is.
+ *
+ * **A file the rights serve only watermarked** (`watermark-required`, since `nuxeo-agentic-assets`
+ * 0.6.0 for a video) is then asked of the server marked for the reader, through
+ * `DocumentDetailService.fetchWatermarkedVideo`, and played so, with a note that it is. A long video
+ * is marked in the background: while the server answers that it is preparing it, the page says so,
+ * and asks again after the server's `retryAfter`, doubled at each answer up to a minute, at most
+ * {@link WATERMARK_POLL_LIMIT} times ({@link watermarkPollDelay}); then it stops, and offers Check
+ * again. A 409 is the server saying it could not mark it, the rights' own `watermark-unavailable`.
+ * Nothing is polled once the record changes or the page is left: the request's subscription ends.
  *
  * **The storyboard** is drawn through `nxs.components.storyboard`, so that an override of the strip
  * reaches it too, and only with the player, which its frames seek. Its frames are previews, fetched
@@ -318,6 +383,7 @@ export class RecordVideoComponent {
 
   private readonly documents = inject(DocumentDetailService);
   private readonly locale = inject(LOCALE_ID);
+  private readonly wait = inject(WATERMARK_POLL_WAIT);
   private readonly probe = inject(DOCUMENT).createElement('video');
   private readonly player = viewChild<ElementRef<HTMLVideoElement>>('player');
 
@@ -370,6 +436,37 @@ export class RecordVideoComponent {
     return shown?.status === 'failed' ? shown.refusal : null;
   });
 
+  /** Whether the selected file was sent watermarked for the reader. */
+  readonly watermarked = computed(() => {
+    const shown = this.shown();
+    return shown?.status === 'ready' && shown.watermarked;
+  });
+
+  /**
+   * While the server prepares the selected file marked for the reader: `asking`, while the page asks
+   * again; `stopped`, once it has asked as many times as it does. `null` otherwise.
+   */
+  readonly preparing = computed<'asking' | 'stopped' | null>(() => {
+    const shown = this.shown();
+    if (shown?.status !== 'preparing') return null;
+    return shown.exhausted ? 'stopped' : 'asking';
+  });
+
+  private readonly checkAgainLabel = toSignal(
+    inject(TranslateService).stream('document-layouts.video.check-again'),
+    { initialValue: '' },
+  );
+
+  /** Check again, offered once the page has stopped asking. */
+  readonly checkAgain = computed(() => [
+    {
+      label: String(this.checkAgainLabel()),
+      emphasis: 'outlined' as const,
+      cssClass: 'record-video__check-again',
+      press: () => this.retry(),
+    },
+  ]);
+
   /** Each frame's blob URL, by its key, once fetched; a frame that could not be is absent. */
   private readonly frameUrls = signal<ReadonlyMap<string, string>>(new Map());
 
@@ -403,6 +500,10 @@ export class RecordVideoComponent {
 
   /** The blob URL of each file fetched, by its key: what is revoked. */
   private readonly urls = new Map<string, string>();
+  /** The keys of the files fetched watermarked, so that one shown again says so. */
+  private readonly marked = new Set<string>();
+  /** The keys of the files the rights serve only marked: asked again, they are asked marked. */
+  private readonly markedOnly = new Set<string>();
 
   constructor() {
     // The same file asked again only by Retry: a record reloaded with the same files asks nothing.
@@ -490,6 +591,7 @@ export class RecordVideoComponent {
     if (shown?.status !== 'ready' || player?.getAttribute('src') !== shown.url) return;
     URL.revokeObjectURL(shown.url);
     this.urls.delete(shown.key);
+    this.marked.delete(shown.key);
     this.unplayable.update((keys) => new Set([...keys, shown.key]));
   }
 
@@ -511,7 +613,15 @@ export class RecordVideoComponent {
 
   private fetch(uid: string, rendition: VideoRenditionEntry): Observable<Shown> {
     const known = this.urls.get(rendition.key);
-    if (known) return of({ key: rendition.key, status: 'ready', url: known });
+    if (known)
+      return of({
+        key: rendition.key,
+        status: 'ready',
+        url: known,
+        watermarked: this.marked.has(rendition.key),
+      });
+    // Refused unmarked before: asked marked again, as Check again asks.
+    if (this.markedOnly.has(rendition.key)) return this.fetchMarked(uid, rendition, null);
     const asked =
       rendition.kind === 'rendition' && rendition.name !== null
         ? this.documents.fetchRendition(uid, rendition.name)
@@ -522,7 +632,7 @@ export class RecordVideoComponent {
         map((blob): Shown => {
           const url = URL.createObjectURL(blob);
           this.urls.set(rendition.key, url);
-          return { key: rendition.key, status: 'ready', url };
+          return { key: rendition.key, status: 'ready', url, watermarked: false };
         }),
         catchError((error: unknown) => this.failed(uid, rendition, nxsErrorStatus(error))),
       ),
@@ -531,7 +641,8 @@ export class RecordVideoComponent {
 
   /**
    * The state of a file that could not be fetched. A 403 may be the server's rights refusing it:
-   * the server is then asked why, and says so, or says nothing and the 403 is shown as it is.
+   * the server is then asked why, and says so, or says nothing and the 403 is shown as it is. One
+   * the rights serve only watermarked for the reader is then asked marked.
    */
   private failed(
     uid: string,
@@ -546,9 +657,78 @@ export class RecordVideoComponent {
     });
     if (error !== 403) return of(shown(null));
     return this.documents.fetchAssetRights(uid).pipe(
-      map((rights) => shown(this.refusalOf(rights, rendition))),
-      catchError(() => of(shown(null))),
+      catchError(() => of(null)),
+      switchMap((rights) => {
+        if (
+          rights &&
+          assetRightsDecision(rights, useOf(rendition)).reason === 'watermark-required'
+        ) {
+          this.markedOnly.add(rendition.key);
+          return this.fetchMarked(uid, rendition, rights);
+        }
+        return of(shown(this.refusalOf(rights, rendition)));
+      }),
     );
+  }
+
+  /**
+   * The file, marked for the reader, once the server's rights said it is served only so. While the
+   * server prepares it, the page says so and asks again, after {@link watermarkPollDelay}, until it
+   * is ready or the page has asked {@link WATERMARK_POLL_LIMIT} times. A 409 is the server saying it
+   * could not mark it, which is the rights' own reason; anything else is said as its status.
+   */
+  private fetchMarked(
+    uid: string,
+    rendition: VideoRenditionEntry,
+    rights: AssetRightsExplanation | null,
+  ): Observable<Shown> {
+    const key = rendition.key;
+    const use =
+      rendition.kind === 'rendition' && rendition.name !== null
+        ? `rendition:${rendition.name}`
+        : 'original';
+    const ask = (attempt: number): Observable<Shown> =>
+      this.documents.fetchWatermarkedVideo(uid, use).pipe(
+        switchMap((answer): Observable<Shown> => {
+          if (answer.status === 'ready') {
+            const url = URL.createObjectURL(answer.file);
+            this.urls.set(key, url);
+            this.marked.add(key);
+            return of({ key, status: 'ready', url, watermarked: true });
+          }
+          const wait = watermarkPollDelay(attempt, answer.retryAfter);
+          if (wait === null) return of({ key, status: 'preparing', exhausted: true });
+          return concat(
+            of<Shown>({ key, status: 'preparing', exhausted: false }),
+            this.wait(wait).pipe(
+              take(1),
+              switchMap(() => ask(attempt + 1)),
+            ),
+          );
+        }),
+        catchError((failure: unknown) => {
+          const status =
+            typeof failure === 'object' && failure !== null && 'status' in failure
+              ? failure.status
+              : undefined;
+          const unavailable: AssetRightsDecision = {
+            allowed: false,
+            reason: 'watermark-unavailable',
+            channel: null,
+            rightsEnd: null,
+          };
+          return of<Shown>({
+            key,
+            status: 'failed',
+            error: nxsErrorStatus(failure),
+            refusal:
+              status === 409
+                ? rightsRefusal(unavailable, rights?.channels ?? null, this.locale, 'video')
+                : null,
+          });
+        }),
+      );
+    return concat(of<Shown>({ key, status: 'loading' }), ask(0));
   }
 
   /** What the server's rights say of `rendition`, once it was refused; `null` when they say nothing. */
@@ -557,12 +737,7 @@ export class RecordVideoComponent {
     rendition: VideoRenditionEntry,
   ): RightsRefusal | null {
     if (!rights) return null;
-    const decision = assetRightsDecision(
-      rights,
-      rendition.kind === 'original'
-        ? { kind: 'original', name: null }
-        : { kind: 'rendition', name: rendition.name },
-    );
+    const decision = assetRightsDecision(rights, useOf(rendition));
     return rightsRefusal(decision, rights.channels, this.locale, 'video');
   }
 
@@ -572,7 +747,9 @@ export class RecordVideoComponent {
       if (keep.has(key)) continue;
       URL.revokeObjectURL(url);
       this.urls.delete(key);
+      this.marked.delete(key);
     }
+    for (const key of [...this.markedOnly]) if (!keep.has(key)) this.markedOnly.delete(key);
   }
 
   /** Revoke the blob URL of every frame fetched but those in `keep`. */
@@ -586,6 +763,16 @@ export class RecordVideoComponent {
     }
     this.frameUrls.set(kept);
   }
+}
+
+/** The use a file is to the server's rights: the original, or a transcoded video by its name. */
+function useOf(rendition: VideoRenditionEntry): {
+  kind: 'original' | 'rendition';
+  name: string | null;
+} {
+  return rendition.kind === 'original'
+    ? { kind: 'original', name: null }
+    : { kind: 'rendition', name: rendition.name };
 }
 
 function sameKeys<T extends { readonly key: string }>(a: readonly T[], b: readonly T[]): boolean {

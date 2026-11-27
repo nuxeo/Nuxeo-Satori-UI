@@ -4202,7 +4202,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-376 exported symbol(s).
+377 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4679,6 +4679,7 @@ class DocumentDetailService {
     fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>;
     fetchAssetReview(uid: string): Observable<AssetReviewAnswer | null>;
     fetchWatermarked(uid: string, use: string): Observable<Blob>;
+    fetchWatermarkedVideo(uid: string, use: string): Observable<WatermarkedVideoAnswer>;
     fetchRendition(uid: string, name: string): Observable<Blob>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
@@ -5760,6 +5761,13 @@ const WORKSPACE_CONTENT_TYPE_ORDER: readonly ["Audio", "Collection", "File", "Fo
 const WRITE_DOCUMENT = "Write";
 const WRITE_PROPERTIES = "WriteProperties";
 const WRITE_VERSION = "WriteVersion";
+type WatermarkedVideoAnswer = {
+    readonly status: 'ready';
+    readonly file: Blob;
+    } | {
+    readonly status: 'preparing';
+    readonly retryAfter: number;
+};
 class WorkflowService {
     getWorkflowModels(): Observable<NuxeoWorkflowModel[]>;
     startWorkflow(docId: string, workflowModelName: string): Observable<NuxeoWorkflow>;

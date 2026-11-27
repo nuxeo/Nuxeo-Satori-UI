@@ -20,7 +20,10 @@
       ? ('document-layouts.video.original' | translate)
       : rendition.name;
   <figure class="record-video__figure" [attr.data-rendition]="rendition.name ?? 'original'">
-    <div class="record-video__frame" [attr.aria-busy]="videoUrl() === null && failure() === null">
+    <div
+      class="record-video__frame"
+      [attr.aria-busy]="videoUrl() === null && failure() === null && preparing() !== 'stopped'"
+    >
       @if (videoUrl(); as url) {
         <video
           #player
@@ -36,6 +39,24 @@
           (seeked)="moved()"
           (error)="undecodable($event)"
         ></video>
+      } @else if (preparing() === 'asking') {
+        <!-- The server marks a long video for the reader in the background: asked again, bounded. -->
+        <div class="record-video__preparing" role="status" data-preparing="asking">
+          <nxs-spinner diameter="32" [label]="'document-layouts.video.preparing' | translate" />
+          <p class="record-video__preparing-text">
+            {{ 'document-layouts.video.preparing' | translate }}
+          </p>
+        </div>
+      } @else if (preparing() === 'stopped') {
+        <!-- Asked as many times as the page asks: the reader asks again. -->
+        <nxs-banner
+          class="record-video__still-preparing"
+          tone="info"
+          announce="status"
+          data-preparing="stopped"
+          [message]="'document-layouts.video.still-preparing' | translate"
+          [actions]="checkAgain()"
+        />
       } @else if (refusal(); as refused) {
         <!-- The server's rights refused this file: their reason, never the client's guess. -->
         <nxs-banner
@@ -58,6 +79,12 @@
       }
     </div>
     <figcaption class="record-video__caption">{{ caption(rendition, name) }}</figcaption>
+    @if (watermarked()) {
+      <!-- The server drew a mark naming the reader over every frame: said, so that no one wonders. -->
+      <p class="record-video__watermarked">
+        {{ 'document-layouts.video.watermarked' | translate }}
+      </p>
+    }
   </figure>
   @if (videoUrl() !== null && storyboard().length > 0) {
     <!-- Through its ID, so that an override of the strip reaches the record page too. Only with
