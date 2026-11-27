@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+  A letter template's own properties (ltpl:), beside the platform's template schema (tmpl:): which
+  letter it is a template of, its language, and what the record must hold for it to be chosen.
+  Written by an administrator alone, and checked when the template is saved.
+-->
+<xs:schema targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/letter_template/"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:ltpl="http://www.nuxeo.org/ecm/schemas/agentic/letter_template/">
+  <xs:simpleType name="conditionList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- The letter, such as payers.denial: what a button asks for. -->
+  <xs:element name="letter" type="xs:string" />
+  <!-- Its language tag, such as en or es. -->
+  <xs:element name="language" type="xs:string" />
+  <!-- Each prefix:name=value: the stored record's property must hold that value. -->
+  <xs:element name="conditions" type="ltpl:conditionList" />
+</xs:schema>

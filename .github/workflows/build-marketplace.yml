@@ -164,6 +164,14 @@ jobs:
           ls nuxeo-agentic-signature/target/nuxeo-agentic-signature-*.zip
           node nuxeo-agentic-signature/demo/esign-stand-in.selftest.mjs
 
+      # The letters module's add-on, likewise its own package. Its tests start a Nuxeo runtime with
+      # the platform's Template Rendering, 11.5.154 from the public repository, deployed from its own
+      # jar, and the platform's audit; its zip is not uploaded or published.
+      - name: Build and test the letters add-on
+        run: |
+          mvn verify -pl nuxeo-agentic-letters -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-letters/target/nuxeo-agentic-letters-*.zip
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:

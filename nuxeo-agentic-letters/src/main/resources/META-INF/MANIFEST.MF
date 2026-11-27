@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Letters
+Bundle-SymbolicName: org.nuxeo.agentic.letters;singleton:=true
+Bundle-Version: 0.1.0
+Bundle-Vendor: Hyland Software
+Nuxeo-Component: OSGI-INF/letters-schema-contrib.xml,
+ OSGI-INF/letters-processor-contrib.xml,
+ OSGI-INF/letters-operations-contrib.xml,
+ OSGI-INF/letters-listener-contrib.xml

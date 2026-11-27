@@ -33,6 +33,13 @@
     "payers.action.refer": "Refer to special investigations",
     "payers.action.refer.confirm": "Refer this claim to special investigations?",
     "payers.action.refer.done": "The claim is referred.",
+    "payers.action.denialLetter": "Write the denial letter",
+    "payers.action.denialLetter.confirm": "Write the denial letter for this claim, in the member's language or the one chosen?",
+    "payers.action.denialLetter.done": "The denial letter is written, and filed with the claim's letters.",
+    "payers.action.appealLetter": "Write the appeal decision letter",
+    "payers.action.appealLetter.confirm": "Write the letter of this appeal's decision, in the member's language or the one chosen?",
+    "payers.action.appealLetter.done": "The decision letter is written, and filed with the appeal's letters.",
+    "payers.action.letter.language": "Language (the member's when left empty)",
     "payers.task.determination": "Determination",
     "payers.task.decision": "Decision",
     "payers.task.allowedAmount": "Allowed amount",
@@ -51,6 +58,7 @@
     "payers.case.daysOpen": "Days open",
     "payers.case.summary": "Summary",
     "payers.case.history": "History",
+    "payers.letters.card": "Letters",
     "payers.appeal.checklist": "Appeal checklist",
     "payers.appeal.appealLetter": "Appeal letter received",
     "payers.appeal.reviewerAssigned": "Reviewer assigned",
@@ -92,6 +100,8 @@
     "layout.field.provider:phone": "Phone",
     "layout.field.provider:address": "Address",
     "layout.field.claim:diagnosis": "Diagnosis",
-    "layout.field.claim:adjuster": "Adjuster"
+    "layout.field.claim:adjuster": "Adjuster",
+    "layout.field.letter:language": "Language",
+    "layout.field.letter:writtenAt": "Written"
   }
 }

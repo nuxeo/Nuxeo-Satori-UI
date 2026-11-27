@@ -34,7 +34,8 @@ export const GROUPS = [
  * change cases, so that the appeals' specialist ticks an appeal's checklist on its page: the Case
  * page offers a tick box only to someone who may write the case. No demo group may change a member,
  * so none of the demo's people is offered a member's Edit form, which lists every property, the
- * social security number among them.
+ * social security number among them. Since 0.8.0, `templates` is the letter templates' folder:
+ * every group reads it, and none may change it.
  */
 export const GRANTS = [
   { place: '', group: 'claims-adjusters', permission: 'Read' },
@@ -43,6 +44,11 @@ export const GRANTS = [
   { place: 'claims', group: 'claims-adjusters', permission: 'ReadWrite' },
   { place: 'claims', group: 'claims-supervisors', permission: 'ReadWrite' },
   { place: 'cases', group: 'member-services', permission: 'ReadWrite' },
+  // Since 0.8.0: the letter templates, which the groups who write letters read and no one of them
+  // changes. Only an administrator keeps a template (nuxeo-agentic-letters refuses anyone else).
+  { place: 'templates', group: 'claims-adjusters', permission: 'Read' },
+  { place: 'templates', group: 'claims-supervisors', permission: 'Read' },
+  { place: 'templates', group: 'member-services', permission: 'Read' },
 ];
 
 /**
@@ -80,6 +86,11 @@ export const WORKFLOW_SUPERVISOR = 'jordan.kim';
  */
 export const APPEALS_SPECIALIST = 'sam.patel';
 
+/**
+ * The members. Since 0.8.0 each has the language their letters are written in, `language`, which the
+ * seed writes to `corr:language` on each of their claims and cases (nuxeo-agentic-letters'
+ * `Correspondence` facet): Maria Alvarez's letters are in Spanish, everyone else's in English.
+ */
 export const MEMBERS = [
   {
     number: 'MEMBER-100048',
@@ -92,6 +103,7 @@ export const MEMBERS = [
     plan: 'Gold PPO',
     status: 'active',
     ssn: '987-65-4320',
+    language: 'en',
   },
   {
     number: 'MEMBER-100049',
@@ -104,6 +116,7 @@ export const MEMBERS = [
     plan: 'Silver HMO',
     status: 'active',
     ssn: '987-65-4321',
+    language: 'es',
   },
   {
     number: 'MEMBER-100051',
@@ -116,6 +129,7 @@ export const MEMBERS = [
     plan: 'Gold PPO',
     status: 'lapsed',
     ssn: '987-65-4322',
+    language: 'en',
   },
   {
     number: 'MEMBER-100052',
@@ -128,6 +142,7 @@ export const MEMBERS = [
     plan: 'Bronze HMO',
     status: 'terminated',
     ssn: '987-65-4323',
+    language: 'en',
   },
 ];
 
@@ -400,5 +415,72 @@ export const CLAIM_DOCUMENTS = [
     title: 'Prior authorization',
     claim: 'CLAIM-000141',
     category: 'Authorization',
+  },
+];
+
+/**
+ * Since 0.8.0, the letter templates the seed keeps, as an administrator, in the workspace's letter
+ * templates folder: each a `LetterTemplate` of nuxeo-agentic-letters, its text the file of that name
+ * in `demo/letters/`. `name` is its document's name and its `tmpl:templateName`, `letter` the letter
+ * it is a template of (`ltpl:letter`), which a button's chain names, `language` its language, `types`
+ * the record types it is for (`tmpl:applicableTypes`), and `conditions` what the stored record must
+ * hold for it to be chosen (`ltpl:conditions`). Of a letter's templates in one language, exactly one
+ * must fit a record: the appeal outcome letter's two, upheld and overturned, never fit the same
+ * appeal. Fictional, like everything here.
+ */
+export const LETTER_TEMPLATES = [
+  {
+    name: 'payers-denial-en',
+    title: 'Notice of claim denial',
+    letter: 'payers.denial',
+    language: 'en',
+    types: ['Claim'],
+    conditions: ['claim:status=denied'],
+    file: 'payers-denial-en.html',
+  },
+  {
+    name: 'payers-denial-es',
+    title: 'Aviso de denegación de reclamación',
+    letter: 'payers.denial',
+    language: 'es',
+    types: ['Claim'],
+    conditions: ['claim:status=denied'],
+    file: 'payers-denial-es.html',
+  },
+  {
+    name: 'payers-appeal-upheld-en',
+    title: 'Decision on your appeal',
+    letter: 'payers.appealOutcome',
+    language: 'en',
+    types: ['Case'],
+    conditions: ['case:category=appeal', 'case:decision=upheld'],
+    file: 'payers-appeal-upheld-en.html',
+  },
+  {
+    name: 'payers-appeal-upheld-es',
+    title: 'Decisión sobre su apelación',
+    letter: 'payers.appealOutcome',
+    language: 'es',
+    types: ['Case'],
+    conditions: ['case:category=appeal', 'case:decision=upheld'],
+    file: 'payers-appeal-upheld-es.html',
+  },
+  {
+    name: 'payers-appeal-overturned-en',
+    title: 'Decision on your appeal',
+    letter: 'payers.appealOutcome',
+    language: 'en',
+    types: ['Case'],
+    conditions: ['case:category=appeal', 'case:decision=overturned'],
+    file: 'payers-appeal-overturned-en.html',
+  },
+  {
+    name: 'payers-appeal-overturned-es',
+    title: 'Decisión sobre su apelación',
+    letter: 'payers.appealOutcome',
+    language: 'es',
+    types: ['Case'],
+    conditions: ['case:category=appeal', 'case:decision=overturned'],
+    file: 'payers-appeal-overturned-es.html',
   },
 ];

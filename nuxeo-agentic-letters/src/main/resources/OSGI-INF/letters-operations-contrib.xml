@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.letters.operations" version="1.0">
+
+  <documentation>
+    Letter.Generate: a letter written on a record, from its letter's template, as the person who
+    asks, who must hold Write on the record. A button runs it only through a chain of the kit's that
+    the deployment's allow-list names and that begins with AgenticUi.RequireRunAction (decision 3);
+    Nuxeo's own Automation endpoint reaches it too, for anyone, and the operation's own checks are
+    the control either way. No REST binding is contributed.
+  </documentation>
+
+  <require>org.nuxeo.agentic.letters.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.letters.GenerateLetterOperation" />
+  </extension>
+
+</component>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Decision on your appeal</title>
+<style>
+body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; margin: 2cm; }
+header { margin-bottom: 2em; }
+.fictional { font-size: 9pt; color: gray; }
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { text-align: left; padding: 0.2em 1.5em 0.2em 0; }
+</style>
+</head>
+<body>
+<!-- A fictional letter of the Payers kit demo: no real payer, person, provider or claim. -->
+<header>
+<p><strong>Bayside Health Plan</strong><br>Appeals unit, 100 Example Way, Oakland, CA 94600</p>
+<p class="fictional">A fictional letter of the Payers kit demo. No real person, provider or claim.</p>
+</header>
+<p>{{letter.date}}</p>
+<address>
+{{case:member>member:firstName}} {{case:member>member:lastName}}<br>
+{{case:member>member:address/street}}<br>
+{{case:member>member:address/city}} {{case:member>member:address/zip}}
+</address>
+<h1>Decision on your appeal: the denial is upheld</h1>
+<p>Dear {{case:member>member:firstName}} {{case:member>member:lastName}},</p>
+<p>We received your appeal {{case:number}} on {{case:received}}, about the denial of claim {{case:claim>claim:number}}. A clinical reviewer who took no part in the first decision has looked at your appeal and the records you and your provider sent.</p>
+<p>After this review, the denial is upheld: the claim will not be paid.</p>
+<table>
+<tr><th>Appeal</th><td>{{case:number}}</td></tr>
+<tr><th>Claim</th><td>{{case:claim>claim:number}}</td></tr>
+<tr><th>Member number</th><td>{{case:member>member:number}}</td></tr>
+</table>
+<p>If you disagree with this decision, you may ask for an external review by an independent organization within four months of the date of this letter. Call member services at the number on your member card to learn how.</p>
+<p>Sincerely,</p>
+<p>{{letter.writer}}<br>Appeals unit, Bayside Health Plan</p>
+</body>
+</html>

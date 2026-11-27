@@ -417,12 +417,16 @@ export function readDescriptor(xml) {
 /**
  * Nuxeo's own Marketplace packages that a package of the candidate may depend on, by name, with the
  * packages of the candidate that may: `nuxeo-agentic-records` reviews the retention module's
- * records for disposition. The server installs them from Nuxeo's Marketplace, as `nuxeoctl
- * mp-install` resolves a dependency, never from this repository, so no version of them is the
- * candidate's to show met, and such a dependency is not a problem of the set. Any other dependency
- * outside the candidate still is, and so is one of these from any other package.
+ * records for disposition, and `nuxeo-agentic-letters` renders its letters through Template
+ * Rendering. The server installs them from Nuxeo's Marketplace, as `nuxeoctl mp-install` resolves a
+ * dependency, never from this repository, so no version of them is the candidate's to show met, and
+ * such a dependency is not a problem of the set. Any other dependency outside the candidate still
+ * is, and so is one of these from any other package.
  */
-export const PLATFORM_PACKAGES = new Map([['nuxeo-retention', new Set(['nuxeo-agentic-records'])]]);
+export const PLATFORM_PACKAGES = new Map([
+  ['nuxeo-retention', new Set(['nuxeo-agentic-records'])],
+  ['nuxeo-template-rendering', new Set(['nuxeo-agentic-letters'])],
+]);
 
 /**
  * Every way the candidate's packages fail one another: a package named twice, a dependency the
