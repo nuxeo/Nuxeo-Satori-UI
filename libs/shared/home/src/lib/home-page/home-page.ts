@@ -11,16 +11,18 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { NxsEmptyStateComponent } from '@nuxeo/satori-platform/components';
 import {
   ExtensionRuleContextService,
   ExtensionRuleRegistry,
   type ExtensionRuleContext,
 } from '@nuxeo/satori-platform/extensions';
-import { merge } from 'rxjs';
+import { map, merge, type Observable } from 'rxjs';
 
 import { figureOf, requestKey, type Figure } from '../figures';
 import { readHome, type HomeCard, type HomeFile, type ReadHome } from '../home-file';
-import { HOME_QUEUE_LINK, HomeService } from '../home.service';
+import { HOME_QUEUE_LINK, HOME_TASKS_LINK, HomeService } from '../home.service';
+import { recordItem, taskItem, type ListItem, type RouterTarget } from '../lists';
 
 type State =
   | { readonly kind: 'loading' }
@@ -32,19 +34,39 @@ type State =
 type Results =
   { readonly ok: true; readonly body: unknown } | { readonly ok: false; readonly reason: string };
 
+/** A list card's tasks or records, or why there are none. */
+type ListResults =
+  | { readonly ok: true; readonly items: readonly ListItem[] }
+  | { readonly ok: false; readonly reason: string };
+
+/** One task or record as the page draws it, its date written for the person's language. */
+interface DrawnItem extends ListItem {
+  readonly when: string | null;
+}
+
+/** A list card's content: the person's tasks, or their recent records. */
+interface DrawnList {
+  readonly of: 'tasks' | 'recent';
+  readonly state: 'loading' | 'failed' | 'empty' | 'items';
+  readonly items: readonly DrawnItem[];
+  /** The tasks page, for a list of tasks; `null` for a list of records. */
+  readonly more: RouterTarget | null;
+}
+
 /** A card as the page draws it, its numbers written for the person's language. */
 interface DrawnCard {
   readonly id: string;
   readonly title: string;
-  /** `link`: a card that is only a link to a queue. */
-  readonly kind: 'link' | 'loading' | 'unavailable' | 'figure';
+  /** `link`: a card that is only a link to a queue; `list`: a list of tasks or of records. */
+  readonly kind: 'link' | 'loading' | 'unavailable' | 'figure' | 'list';
   readonly value: string | null;
   readonly buckets: readonly { readonly key: string; readonly count: string }[];
   /** Whether the server returned only an aggregate's largest buckets. */
   readonly truncated: boolean;
-  /** Why the figure is unavailable, for the console. */
+  /** Why the figure, or the list, is unavailable, for the console. */
   readonly reason: string | null;
-  readonly link: string | readonly unknown[] | null;
+  readonly link: RouterTarget | null;
+  readonly list: DrawnList | null;
 }
 
 function warn(message: string): void {
@@ -55,15 +77,17 @@ function warn(message: string): void {
  * The home: an app's `home.json` drawn as cards (docs/business-apps/app-definition-v2.md,
  * section 10). Each card shows when its rule holds for the person signed in, with their groups and
  * no record, so a home per group is cards whose rule is `app.rules.inGroup`. A KPI counts a page
- * provider's results, or the documents in one of its aggregates' buckets, or lists the buckets.
+ * provider's results, or the documents in one of its aggregates' buckets, or lists the buckets. A
+ * list shows the person's open tasks, newest first, or the records they created or edited last.
  *
  * A card's rule decides what this page shows, and nothing else: a figure counts only what the
- * page provider returns to this person, and hiding a card hides no record.
+ * page provider returns to this person, a list holds only what the server returns to them, and
+ * hiding a card hides no record.
  */
 @Component({
   selector: 'lib-home-page',
   standalone: true,
-  imports: [RouterLink, TranslatePipe],
+  imports: [RouterLink, TranslatePipe, NxsEmptyStateComponent],
   templateUrl: './home-page.html',
   styleUrl: './home-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -74,11 +98,15 @@ export class HomePageComponent {
   private readonly ruleContext = inject(ExtensionRuleContextService);
   private readonly translate = inject(TranslateService);
   private readonly queueLink = inject(HOME_QUEUE_LINK);
+  private readonly tasksLink = inject(HOME_TASKS_LINK);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly state = signal<State>({ kind: 'loading' });
   private readonly results = signal<ReadonlyMap<string, Results>>(new Map());
   private readonly requested = new Set<string>();
+  /** Each list card's tasks or records, by the card's id. */
+  private readonly lists = signal<ReadonlyMap<string, ListResults>>(new Map());
+  private readonly listed = new Set<string>();
   /** What the console has been told, so that a page drawn again does not repeat it. */
   private readonly told = new Set<string>();
 
@@ -111,8 +139,14 @@ export class HomePageComponent {
   protected readonly cards = computed<readonly DrawnCard[]>(() => {
     this.translations();
     const results = this.results();
+    const lists = this.lists();
     const drawn: DrawnCard[] = [];
     for (const card of this.shownCards()) {
+      if (card.tasks !== null || card.recent !== null) {
+        const list = this.drawList(card, lists.get(card.id));
+        if (list !== null) drawn.push(list);
+        continue;
+      }
       const link = card.queue !== null && this.queueLink ? this.queueLink(card.queue) : null;
       if (card.kpi === null) {
         // A card that is only a link to a queue waits for the app's queue page.
@@ -126,6 +160,7 @@ export class HomePageComponent {
           truncated: false,
           reason: null,
           link,
+          list: null,
         });
         continue;
       }
@@ -153,6 +188,7 @@ export class HomePageComponent {
         truncated: figure?.kind === 'buckets' && figure.truncated,
         reason: figure?.kind === 'unavailable' ? figure.reason : null,
         link,
+        list: null,
       });
     }
     return drawn;
@@ -201,19 +237,25 @@ export class HomePageComponent {
         }
         if (this.queueLink === null && read.home.cards.some((card) => card.queue !== null))
           warn('the app has no queue page yet, so the links to queues are not drawn');
+        if (this.tasksLink === null && read.home.cards.some((card) => card.tasks !== null))
+          warn('the app has no tasks page, so the lists of tasks are not drawn');
         this.state.set({ kind: 'home', home: read.home });
       });
 
-    // Ask for the results of the cards that show, once for each page provider and parameters. A
-    // card that is hidden asks for nothing.
+    // Ask for the results of the cards that show, once for each page provider and parameters, and
+    // for each list that shows, once. A card that is hidden asks for nothing.
     effect(() => {
       const cards = this.shownCards();
       untracked(() => {
-        for (const card of cards) if (card.kpi) this.request(card);
+        for (const card of cards) {
+          if (card.kpi) this.request(card);
+          else if (card.recent !== null || (card.tasks !== null && this.tasksLink !== null))
+            this.requestList(card);
+        }
       });
     });
 
-    // Say once why a figure is unavailable.
+    // Say once why a figure or a list is unavailable.
     effect(() => {
       for (const card of this.cards()) {
         if (card.reason === null) continue;
@@ -254,6 +296,93 @@ export class HomePageComponent {
 
   private answer(key: string, results: Results): void {
     this.results.update((all) => new Map(all).set(key, results));
+  }
+
+  /** Read a list card's tasks or records, once. */
+  private requestList(card: HomeCard): void {
+    if (this.listed.has(card.id)) return;
+    this.listed.add(card.id);
+    const tasksLink = this.tasksLink;
+    let items: Observable<readonly ListItem[]>;
+    let what: string;
+    if (card.tasks !== null && tasksLink !== null) {
+      items = this.homes
+        .tasks(card.tasks)
+        .pipe(map((tasks) => tasks.map((task) => taskItem(task, tasksLink))));
+      what = 'the tasks were not read';
+    } else if (card.recent !== null) {
+      items = this.homes
+        .recent(card.recent)
+        .pipe(map((records) => records.map((record) => recordItem(record))));
+      what = 'the recent records were not read';
+    } else return;
+    items.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (found) => this.listAnswer(card.id, { ok: true, items: found }),
+      error: (error: unknown) =>
+        this.listAnswer(card.id, { ok: false, reason: `${what}: ${(error as Error).message}` }),
+    });
+  }
+
+  private listAnswer(id: string, results: ListResults): void {
+    this.lists.update((all) => new Map(all).set(id, results));
+  }
+
+  /**
+   * A list card as the page draws it, or `null` for a list of tasks in a host with no tasks page.
+   * Its title is its own, or the platform's name for the list.
+   */
+  private drawList(card: HomeCard, answer: ListResults | undefined): DrawnCard | null {
+    const of = card.tasks !== null ? 'tasks' : 'recent';
+    if (of === 'tasks' && this.tasksLink === null) return null;
+    const items: DrawnItem[] =
+      answer?.ok === true
+        ? answer.items.map((item) => ({ ...item, when: this.day(item.date) }))
+        : [];
+    return {
+      id: card.id,
+      title:
+        this.text(card.label, card.labelKey) ||
+        this.text(null, of === 'tasks' ? 'home.tasks.title' : 'home.recent.title') ||
+        card.id,
+      kind: 'list',
+      value: null,
+      buckets: [],
+      truncated: false,
+      reason: answer?.ok === false ? answer.reason : null,
+      link: null,
+      list: {
+        of,
+        state:
+          answer === undefined
+            ? 'loading'
+            : !answer.ok
+              ? 'failed'
+              : items.length === 0
+                ? 'empty'
+                : 'items',
+        items,
+        more: of === 'tasks' && this.tasksLink !== null ? this.tasksLink() : null,
+      },
+    };
+  }
+
+  /**
+   * An instant as the person's language writes its day, in the browser's time zone, the zone the
+   * person reads it in; `null` for one that cannot be read. A language the browser does not know
+   * falls back to the browser's own, in the same zone.
+   */
+  private day(date: string | null): string | null {
+    if (date === null) return null;
+    const time = Date.parse(date);
+    if (Number.isNaN(time)) return null;
+    const options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' };
+    try {
+      return new Intl.DateTimeFormat(this.translate.getCurrentLang() || undefined, options).format(
+        time,
+      );
+    } catch {
+      return new Intl.DateTimeFormat(undefined, options).format(time);
+    }
   }
 
   /** The literal, which wins, else the key's translation, else `null`. */

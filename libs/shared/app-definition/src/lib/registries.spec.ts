@@ -3,7 +3,13 @@ import { join } from 'node:path';
 import { ACTIONS_V2_KEYS, PLACEMENTS } from './actions';
 import { APP_ID, APP_V2_KEYS } from './app';
 import { ICON, ID, NAME } from './checker';
-import { HOME_V2_KEYS, NAVIGATION_V2_KEYS } from './home';
+import {
+  HOME_LIST_LIMIT,
+  HOME_RECENT_MAX_TYPES,
+  HOME_V2_KEYS,
+  NAVIGATION_V2_KEYS,
+  validateHome,
+} from './home';
 import { LABEL_KEY, LABELS_V2_KEYS } from './labels';
 import { LAYOUT_V2_KEYS } from './layout-v2';
 import { QUEUE_V2_KEYS } from './queue';
@@ -183,6 +189,8 @@ describe("the other files' JSON Schemas, held to their validators", () => {
       [home, HOME_V2_KEYS.home],
       [home['$defs'].homeCard, HOME_V2_KEYS.card],
       [home['$defs'].kpi, HOME_V2_KEYS.kpi],
+      [home['$defs'].tasks, HOME_V2_KEYS.tasks],
+      [home['$defs'].recent, HOME_V2_KEYS.recent],
       [navigation, NAVIGATION_V2_KEYS.navigation],
       [navigation['$defs'].entry, NAVIGATION_V2_KEYS.entry],
     ];
@@ -195,12 +203,13 @@ describe("the other files' JSON Schemas, held to their validators", () => {
     type Branch = {
       required: string[];
       anyOf?: { required: string[] }[];
-      not?: { required: string[] };
+      not?: { anyOf: { required: string[] }[] };
     };
     const branches = home['$defs'].homeCard.anyOf as Branch[];
-    expect(branches.length).toBe(2);
+    expect(branches.length).toBe(4);
     for (const branch of branches) {
-      const excludesKpi = branch.not?.required.includes('kpi') === true;
+      const excluded = (branch.not?.anyOf ?? []).flatMap((option) => option.required);
+      const excludesKpi = excluded.includes('kpi');
       const named = (branch.anyOf ?? [])
         .map((option) => option.required)
         .flat()
@@ -210,6 +219,76 @@ describe("the other files' JSON Schemas, held to their validators", () => {
         excludesKpi || 'label,labelKey',
       ]);
     }
+  });
+
+  it('let a home card show one of a figure, a list of tasks and a list of recent records, as the validator does', () => {
+    // Each branch requires one key and excludes the others a card may not hold beside it: a figure
+    // may link to a queue, and a list may not.
+    type Branch = { required: string[]; not?: { anyOf: { required: string[] }[] } };
+    const branches = home['$defs'].homeCard.anyOf as Branch[];
+    const shape = Object.fromEntries(
+      branches.map((branch) => [
+        branch.required.join(),
+        (branch.not?.anyOf ?? []).flatMap((option) => option.required).sort(),
+      ]),
+    );
+    expect(shape).toEqual({
+      kpi: ['recent', 'tasks'],
+      queue: ['kpi', 'recent', 'tasks'],
+      tasks: ['kpi', 'queue', 'recent'],
+      recent: ['kpi', 'queue', 'tasks'],
+    });
+    // A card of one key, or of two, is one the schema allows when some branch requires one of its
+    // keys and excludes neither; the validator passes exactly those, and refuses the rest.
+    const card = (keys: Record<string, unknown>) =>
+      validateHome({ version: 2, cards: [{ id: 'one', label: 'One', ...keys }] }).map(
+        (finding) => finding.kind,
+      );
+    const values: Record<string, unknown> = {
+      kpi: { pageProvider: 'default_search' },
+      queue: 'open',
+      tasks: {},
+      recent: {},
+    };
+    const allowed = (keys: string[]): boolean =>
+      Object.entries(shape).some(
+        ([required, excluded]) =>
+          keys.includes(required) && !keys.some((key) => excluded.includes(key)),
+      );
+    const kinds = Object.keys(values);
+    const allowedPairs: string[] = [];
+    for (const kind of kinds) {
+      expect(card({ [kind]: values[kind] })).toEqual([]);
+      for (const other of kinds.filter((each) => each > kind)) {
+        const found = card({ [kind]: values[kind], [other]: values[other] });
+        if (allowed([kind, other])) {
+          allowedPairs.push(`${kind}+${other}`);
+          expect(found).toEqual([]);
+        } else expect(found).toContain('structure');
+      }
+    }
+    // Not vacuous: the one pair version 2 allows is a figure that links to its queue.
+    expect(allowedPairs).toEqual(['kpi+queue']);
+  });
+
+  it('bound a list card as the validator does: its limit, and how many types it names', () => {
+    for (const part of ['tasks', 'recent']) {
+      const limit = home['$defs'][part].properties.limit;
+      expect([limit.type, limit.minimum, limit.maximum]).toEqual([
+        'integer',
+        1,
+        HOME_LIST_LIMIT.max,
+      ]);
+      expect(limit.description).toContain(`${HOME_LIST_LIMIT.default} when it says nothing`);
+    }
+    const types = home['$defs'].recent.properties.types;
+    expect([types.minItems, types.maxItems, types.uniqueItems, types.items.pattern]).toEqual([
+      1,
+      HOME_RECENT_MAX_TYPES,
+      true,
+      NAME.source,
+    ]);
+    expect(home['$defs'].tasks.properties.workflow.pattern).toBe(NAME.source);
   });
 
   it("copy the layout schema's definitions they share, unchanged", () => {

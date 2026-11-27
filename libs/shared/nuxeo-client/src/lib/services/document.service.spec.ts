@@ -117,6 +117,34 @@ describe('DocumentService', () => {
       expect(request.request.params.get('query')).toContain("dc:creator = 'a$&b'");
       request.flush(list());
     });
+
+    it('keeps to the types it is given, before the order, and to every type when given none', () => {
+      service.getRecentlyViewed('jdoe', 5, ['Contract', 'Note']).subscribe();
+      const typed = expectNxql();
+      const query = typed.request.params.get('query') ?? '';
+      expect(query).toMatch(
+        /\(dc:creator = 'jdoe' OR dc:lastContributor = 'jdoe'\) AND ecm:primaryType IN \('Contract', 'Note'\) ORDER BY dc:modified DESC$/,
+      );
+      expect(typed.request.params.get('pageSize')).toBe('5');
+      typed.flush(list());
+
+      // The control: no types, and an empty list, ask for every type, as before.
+      for (const types of [undefined, []]) {
+        service.getRecentlyViewed('jdoe', 5, types).subscribe();
+        const any = expectNxql();
+        expect(any.request.params.get('query')).not.toContain('ecm:primaryType IN');
+        any.flush(list());
+      }
+    });
+
+    it('escapes a type as it escapes the user, and puts it in as written', () => {
+      service.getRecentlyViewed('jdoe', 5, ["x') OR ('1", 'a$&b']).subscribe();
+      const request = expectNxql();
+      expect(request.request.params.get('query')).toContain(
+        "ecm:primaryType IN ('x\\') OR (\\'1', 'a$&b') ORDER BY",
+      );
+      request.flush(list());
+    });
   });
 
   describe('expired documents', () => {

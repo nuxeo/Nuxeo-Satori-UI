@@ -93,3 +93,38 @@
   font: var(--mat-sys-title-medium);
   color: var(--mat-sys-primary);
 }
+
+// A list card's tasks or records: each a link, with its record or type and its day under it.
+.home-card__items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-card__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-card__item-link {
+  font: var(--mat-sys-body-large);
+  color: var(--mat-sys-primary);
+  overflow-wrap: anywhere;
+}
+
+.home-card__item-detail,
+.home-card__item-date {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+// The empty state sits in a card, not on a page: its padding is the card's.
+.home-card__empty {
+  padding: 8px 0;
+}

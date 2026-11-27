@@ -272,12 +272,21 @@
     </mat-menu>
 
     <mat-sidenav-container class="shell-content">
+      <!--
+        At a phone's width the administration drawer is collapsed into the menu button below, and
+        opens over the page from it, modal: the focus is held in it, Escape and the backdrop close
+        it, and closing it gives the focus back to the button. Elsewhere it sits beside the page.
+      -->
       <mat-sidenav
-        mode="side"
+        id="shell-nav-drawer"
+        [mode]="drawerMode()"
         position="start"
-        [opened]="drawerOpen()"
+        [opened]="drawerShown()"
         (closed)="onDrawerClose()"
         class="nav-drawer-sidenav"
+        [attr.role]="adminMenuCompact() ? 'dialog' : null"
+        [attr.aria-modal]="adminMenuCompact() ? 'true' : null"
+        [attr.aria-label]="adminMenuCompact() ? ('shell.admin-menu' | translate) : null"
       >
         <app-nav-drawer
           [activeItem]="activeDrawerItem()"
@@ -438,6 +447,22 @@
       </mat-sidenav>
 
       <mat-sidenav-content>
+        @if (adminMenuCompact()) {
+          <div class="admin-menu-bar">
+            <button
+              #adminMenuTrigger
+              type="button"
+              mat-button
+              class="admin-menu-trigger"
+              aria-controls="shell-nav-drawer"
+              [attr.aria-expanded]="adminMenuOpen()"
+              (click)="openAdminMenu()"
+            >
+              <mat-icon svgIcon="menu" aria-hidden="true" />
+              {{ 'shell.admin-menu' | translate }}
+            </button>
+          </div>
+        }
         <router-outlet />
       </mat-sidenav-content>
     </mat-sidenav-container>

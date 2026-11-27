@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MAX_NESTING, type Finding } from './checker';
 import { validateHome, validateNavigation } from './home';
 import { validateActions } from './actions';
 import { validateLayoutV2 } from './layout-v2';
+import { readContentModel } from './content-model';
 import { validateQueue } from './queue';
 import { PACKAGED_REGISTRIES, withRegistered } from './registries';
 
@@ -89,7 +92,9 @@ describe('home.json', () => {
     {
       what: 'a card with neither a figure nor a queue',
       input: home([{ id: 'open', label: 'Open' }]),
-      found: ['cards[0]: a card has a "kpi", a "queue", or both [structure]'],
+      found: [
+        'cards[0]: a card has a "kpi", a "queue", or both; or a "tasks" or a "recent" [structure]',
+      ],
     },
     {
       what: 'a figure with no name',
@@ -208,6 +213,187 @@ describe('home.json', () => {
   ];
   it.each(rows)('refuses $what', ({ input, found }) => {
     expect(show(validateHome(input))).toEqual(found);
+  });
+
+  describe('the lists: the tasks and the recent records', () => {
+    const tasks = (list: unknown, keys: Record<string, unknown> = {}) => ({
+      id: 'mine',
+      tasks: list,
+      ...keys,
+    });
+    const recent = (list: unknown, keys: Record<string, unknown> = {}) => ({
+      id: 'recent',
+      recent: list,
+      ...keys,
+    });
+    // The contracts kit's own model, as the pipeline reads it with `--model`.
+    const read = readContentModel(
+      JSON.parse(
+        readFileSync(
+          join(
+            import.meta.dirname,
+            '..',
+            '..',
+            '..',
+            '..',
+            '..',
+            'business-apps',
+            'packages',
+            'contracts-demo',
+            'content-model.json',
+          ),
+          'utf8',
+        ),
+      ),
+    );
+    if (read.model === undefined) throw new Error(read.problems.join('; '));
+    const model = read.model;
+
+    it('passes sound ones: either filter, a limit, a name, a rule, or none of them', () => {
+      const sound = home([
+        tasks({}),
+        tasks({ workflow: 'SerialDocumentReview', limit: 5 }, { id: 'review', label: 'Reviews' }),
+        tasks({ limit: 1 }, { id: 'one', labelKey: 'contracts.home.tasks' }),
+        recent({}),
+        recent({ types: ['Contract'], limit: 20 }, { id: 'contracts', visibleWhen: adjusters }),
+      ]);
+      expect(show(validateHome(sound))).toEqual([]);
+      expect(show(validateHome(sound, { model }))).toEqual([]);
+    });
+
+    const lists: readonly Row[] = [
+      {
+        what: 'a list of tasks that is not an object',
+        input: home([tasks(true)]),
+        found: [
+          'cards[0].tasks: a list of tasks is { "workflow", "limit" }, either or neither [structure]',
+        ],
+      },
+      {
+        what: 'a key a list of tasks does not have',
+        input: home([tasks({ assignee: 'jdoe' })]),
+        found: ['cards[0].tasks.assignee: "assignee" is not a key version 2 has [unknown]'],
+      },
+      {
+        what: 'a workflow that is not a name',
+        input: home([tasks({ workflow: 'Serial Review' })]),
+        found: [
+          'cards[0].tasks.workflow: needs the name of a workflow model defined on the server, such as "SerialDocumentReview" [structure]',
+        ],
+      },
+      {
+        what: 'a workflow that is a list',
+        input: home([tasks({ workflow: ['SerialDocumentReview'] })]),
+        found: [
+          'cards[0].tasks.workflow: needs the name of a workflow model defined on the server, such as "SerialDocumentReview" [structure]',
+        ],
+      },
+      ...[0, 21, 2.5, '5', -1, null].map((limit): Row => ({
+        what: `a limit of ${JSON.stringify(limit)}`,
+        input: home([tasks({ limit }), recent({ limit })]),
+        found: [
+          'cards[0].tasks.limit: limit is how many the card shows: a whole number from 1 to 20 [structure]',
+          'cards[1].recent.limit: limit is how many the card shows: a whole number from 1 to 20 [structure]',
+        ],
+      })),
+      {
+        what: 'a list of recent records that is not an object',
+        input: home([recent(['Contract'])]),
+        found: [
+          'cards[0].recent: a list of recent records is { "types", "limit" }, either or neither [structure]',
+        ],
+      },
+      {
+        what: 'a key a list of recent records does not have',
+        input: home([recent({ type: 'Contract' })]),
+        found: ['cards[0].recent.type: "type" is not a key version 2 has [unknown]'],
+      },
+      {
+        what: 'types that are not a list',
+        input: home([recent({ types: 'Contract' })]),
+        found: [
+          'cards[0].recent.types: types is a list of document types, one at least [structure]',
+        ],
+      },
+      {
+        what: 'an empty list of types',
+        input: home([recent({ types: [] })]),
+        found: [
+          'cards[0].recent.types: types is a list of document types, one at least [structure]',
+        ],
+      },
+      {
+        what: 'more types than one search takes',
+        input: home([recent({ types: Array.from({ length: 21 }, (_, n) => `Type${n}`) })]),
+        found: [
+          'cards[0].recent.types: a list of recent records is filtered to 20 document types at most [structure]',
+        ],
+      },
+      {
+        what: 'a type that is not a name, and one named twice',
+        input: home([recent({ types: ['Contract', "x' OR 1=1", 'Contract', 3] })]),
+        found: [
+          `cards[0].recent.types[1]: needs the name of a document type, such as "Contract" [structure]`,
+          'cards[0].recent.types[2]: the type "Contract" is already in the list [structure]',
+          'cards[0].recent.types[3]: needs the name of a document type, such as "Contract" [structure]',
+        ],
+      },
+      {
+        what: 'a list with a figure',
+        input: home([tasks({}, { label: 'Mine', kpi: { pageProvider: 'default_search' } })]),
+        found: ['cards[0]: a card shows one thing, and this one has "kpi" and "tasks" [structure]'],
+      },
+      {
+        what: 'two lists in one card',
+        input: home([tasks({}, { recent: {} })]),
+        found: [
+          'cards[0]: a card shows one thing, and this one has "tasks" and "recent" [structure]',
+        ],
+      },
+      {
+        what: 'a list with a queue',
+        input: home([recent({}, { queue: 'open' })]),
+        found: [
+          'cards[0].queue: a "recent" card opens what it lists, not a queue: give the queue a card of its own [structure]',
+        ],
+      },
+      {
+        what: 'a list whose name is not a text',
+        input: home([tasks({}, { label: 3 })]),
+        found: ['cards[0].label: must be a text [structure]'],
+      },
+      {
+        what: 'a list whose rule reads a record',
+        input: home([
+          recent(
+            {},
+            {
+              visibleWhen: { type: 'app.rules.fieldIn', parameters: [{ field: 'dc:title' }, 'x'] },
+            },
+          ),
+        ]),
+        found: [
+          'cards[0].visibleWhen.parameters[0]: no record is open here, so a rule is given literals, not a property [parameter]',
+        ],
+      },
+    ];
+    it.each(lists)('refuses $what', ({ input, found }) => {
+      expect(show(validateHome(input))).toEqual(found);
+    });
+
+    it('holds the types to the content model when it is given one, and only then', () => {
+      const input = home([recent({ types: ['Contract', 'Claim'] })]);
+      expect(show(validateHome(input))).toEqual([]);
+      expect(show(validateHome(input, { model }))).toEqual([
+        'cards[0].recent.types[1]: the document type "Claim" is not in the content model [unknown]',
+      ]);
+    });
+
+    it("leaves a list's queue alone otherwise: a list names none, and a figure still may", () => {
+      const queues = new Set(['open']);
+      expect(show(validateHome(home([tasks({})]), { queues }))).toEqual([]);
+      expect(show(validateHome(home([kpi({}, { queue: 'open' })]), { queues }))).toEqual([]);
+    });
   });
 
   it("takes a customer's own rule, registered in Layer 2 code", () => {

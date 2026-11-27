@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { FormsModule } from '@angular/forms';
 import {
   Subject,
@@ -70,6 +71,16 @@ import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
 import { PresetBadgeComponent } from './preset-badge/preset-badge.component';
 import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
 
+/**
+ * A phone's width, Material's handset breakpoint (`Breakpoints.XSmall`): below it the
+ * administration drawer, 280 pixels wide beside the page, would leave an administration page a
+ * strip of a few dozen pixels at 320, so it collapses into a menu button instead.
+ */
+export const PHONE_WIDTH_QUERY = '(max-width: 599.98px)';
+
+/** The administration entry of the menu, whose drawer lists the administration pages. */
+const ADMINISTRATION_NAV_ID = 'app.navbar.administration';
+
 @Component({
   selector: 'app-shell',
   imports: [
@@ -102,6 +113,9 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
 export class AppShellComponent implements OnDestroy {
   @ViewChild('globalSearchContainer')
   private globalSearchContainer?: ElementRef<HTMLElement>;
+
+  @ViewChild('adminMenuTrigger')
+  private adminMenuTrigger?: ElementRef<HTMLButtonElement>;
 
   private readonly settingsDrawerItem: AppNavItem = {
     id: 'app.navbar.settings',
@@ -185,6 +199,34 @@ export class AppShellComponent implements OnDestroy {
   readonly displayName = computed(() => this.auth.username() ?? 'User');
   readonly drawerOpen = signal(false);
   readonly activeDrawerItem = signal<AppNavItem | null>(null);
+
+  private readonly breakpoints = inject(BreakpointObserver);
+  /** Whether the window is a phone's ({@link PHONE_WIDTH_QUERY}), followed as it is resized. */
+  protected readonly phoneWidth = toSignal(
+    this.breakpoints.observe(PHONE_WIDTH_QUERY).pipe(map((state) => state.matches)),
+    { initialValue: this.breakpoints.isMatched(PHONE_WIDTH_QUERY) },
+  );
+  /**
+   * The administration drawer at a phone's width: collapsed into a menu button above the page, so
+   * that each administration page has the window's width, and opened over the page by the button.
+   * Every other drawer, and this one on a wider window, sits beside the page as before.
+   */
+  readonly adminMenuCompact = computed(
+    () =>
+      this.phoneWidth() &&
+      this.drawerOpen() &&
+      this.activeDrawerItem()?.id === ADMINISTRATION_NAV_ID,
+  );
+  /** Whether the collapsed administration menu is open over the page. */
+  readonly adminMenuOpen = signal(false);
+  /** Whether the open administration menu was opened by its button, which takes the focus back. */
+  private adminMenuOpenedByButton = false;
+  /** `over` while the administration menu is collapsed: modal, with a backdrop and Escape. */
+  protected readonly drawerMode = computed(() => (this.adminMenuCompact() ? 'over' : 'side'));
+  /** Whether the drawer shows: a collapsed administration menu only while its button opened it. */
+  protected readonly drawerShown = computed(
+    () => this.drawerOpen() && (!this.adminMenuCompact() || this.adminMenuOpen()),
+  );
   readonly clipboardCount = signal(this.readClipboardCount());
   readonly clipboardBadgeLabel = computed(() => {
     const count = this.clipboardCount();
@@ -322,6 +364,9 @@ export class AppShellComponent implements OnDestroy {
         this.refreshClipboardCount();
         this.clearGlobalSearch();
         this.syncDrawerToRoute(nextPath);
+        // A page chosen from the collapsed administration menu, or reached any other way, is
+        // shown at the window's width: the menu closes back into its button.
+        this.adminMenuOpen.set(false);
       });
 
     window.addEventListener('storage', this.storageListener);
@@ -434,6 +479,12 @@ export class AppShellComponent implements OnDestroy {
       event.preventDefault();
       event.stopPropagation();
 
+      // At a phone's width the administration section keeps its drawer collapsed into the menu
+      // button: choosing Administration again opens that menu rather than closing the section.
+      if (this.adminMenuCompact() && item.id === ADMINISTRATION_NAV_ID) {
+        this.openAdminMenu();
+        return;
+      }
       if (this.activeDrawerItem()?.path === item.path && this.drawerOpen()) {
         this.drawerOpen.set(false);
         this.activeDrawerItem.set(null);
@@ -524,9 +575,29 @@ export class AppShellComponent implements OnDestroy {
   }
 
   onDrawerClose(): void {
+    // The collapsed administration menu closes back into its button, by Escape, the backdrop or a
+    // page chosen in it: the section, and the button, stay. The drawer gives the focus back to the
+    // button that opened it; where nothing has it, the button takes it.
+    if (this.adminMenuCompact()) {
+      // Closed by a resize to a phone's width, the drawer was never the button's to give back.
+      const opened = this.adminMenuOpenedByButton;
+      this.adminMenuOpenedByButton = false;
+      this.adminMenuOpen.set(false);
+      const trigger = this.adminMenuTrigger?.nativeElement;
+      const focused = document.activeElement;
+      if (opened && trigger && (focused === null || focused === document.body)) trigger.focus();
+      return;
+    }
     this.drawerOpen.set(false);
     this.activeDrawerItem.set(null);
     this.refreshClipboardCount();
+  }
+
+  /** Open the collapsed administration menu over the page; the drawer takes the focus. */
+  openAdminMenu(): void {
+    if (!this.adminMenuCompact()) return;
+    this.adminMenuOpenedByButton = true;
+    this.adminMenuOpen.set(true);
   }
 
   onGlobalSearchInput(value: string): void {

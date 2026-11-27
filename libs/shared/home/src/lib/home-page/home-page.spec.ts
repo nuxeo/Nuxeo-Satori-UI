@@ -354,7 +354,7 @@ describe('HomePageComponent', () => {
     );
     expect(cardIds()).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
-      '[agentic-ui-home] home.json refused: cards[0]: a card has a "kpi", a "queue", or both [structure]',
+      '[agentic-ui-home] home.json refused: cards[0]: a card has a "kpi", a "queue", or both; or a "tasks" or a "recent" [structure]',
     );
   });
 

@@ -23,6 +23,7 @@
     "contracts.home.renewals": "Up for renewal or overdue",
     "contracts.home.active": "Active contracts",
     "contracts.home.terminated": "Terminated contracts",
+    "contracts.home.recent": "Contracts you worked on last",
     "contracts.nav.home": "Home",
     "layout.schema.contract": "Contract"
   }
