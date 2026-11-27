@@ -151,6 +151,32 @@ describe('the checks across files', () => {
     ]);
   });
 
+  it("hold a holds card to the package's own actions on a card, and to none without actions.json", () => {
+    const file: PackageFile = { kind: 'layout', type: 'Claim', mode: 'view' };
+    const holds = (place: string) => ({
+      version: 2,
+      cards: [{ id: 'holds', label: 'Holds', holds: { place } }],
+    });
+    const onCard: PackageContext = {
+      assets: new Set(),
+      actions: {
+        version: 2,
+        actions: [
+          { id: 'payers.hold', label: 'Hold', on: ['card'], operation: 'Document.Hold' },
+          { id: 'payers.approve', label: 'Approve', transition: 'approve' },
+        ],
+      },
+    };
+    expect(show(validateFile(file, holds('payers.hold'), onCard))).toEqual([]);
+    const refused = (id: string) =>
+      `cards[0].holds.place: the action "${id}" is not one of the package's actions.json that shows on a card ("on": ["card"]) [unknown]`;
+    // An action of the package's shown elsewhere is not one a card offers.
+    expect(show(validateFile(file, holds('payers.approve'), onCard))).toEqual([
+      refused('payers.approve'),
+    ]);
+    expect(show(validateFile(file, holds('payers.hold'), empty))).toEqual([refused('payers.hold')]);
+  });
+
   it("refuse a module's settings that app.json does not turn on, or with no app.json", () => {
     const file: PackageFile = { kind: 'module', module: 'cases' };
     const settings = { version: 2, settings: {} };

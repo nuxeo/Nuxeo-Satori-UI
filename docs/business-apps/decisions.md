@@ -278,6 +278,26 @@ way.
     requiring the module's, and the review would be switched on by a setting instead, off by
     default.
 
+- **B and 3, legal holds on the record page (27 November 2026).** Built against both
+  recommendations. B, "one add-on per domain module": a hold's guard beyond the platform's and its
+  release with a reason went into the records module's add-on,
+  [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md) 0.4.0, which the onboarding kit
+  0.2.0 now depends on, and nothing into `nuxeo-agentic-core`. The platform refuses to delete a
+  held record; the add-on refuses, too, its trash, a folder's holding one, and a change of its
+  files, for everyone, administrators included. 3, "through a per-deployment allow-list": layout
+  version 2's holds card offers Place and Release legal hold as actions of the kit's `actions.json`
+  on a new placement, `"on": ["card"]`, which the registry and `AgenticUi.RunAction` treat as one
+  record's, run through the deployment's allow-list with `ManageLegalHold`. Placing is the retention
+  module's own `Document.Hold`; releasing is the add-on's one Automation operation,
+  `Records.ReleaseLegalHold`, since the module's `Document.Unhold` takes no reason and the audit of
+  a release would carry none. Its security review is deferred, as every one is. What changes if a
+  decision goes another way:
+  - **3, no:** the card shows the retention and the holds, and offers nothing; the kit's
+    `actions.json` and its deployment allow-list go, a minor version below 1.0.0. The guard stays:
+    it is the server's, and runs no button.
+  - **B, one large add-on or core:** the guard and the operation move with the records bundle, as
+    the note below says of the rest of it.
+
 - **B, the e-signature step's server add-on (26 November 2026).** Built against the
   recommendation, "one add-on per domain module": the e-signature step is
   [`nuxeo-agentic-signature`](../../nuxeo-agentic-signature/README.md), a Maven module beside

@@ -10,6 +10,8 @@
  * - **A checklist's property** is on the type, a list of complex values, with the subfields
  *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
  * - **A banner's link** names a string property of the type, which holds the linked record's id.
+ * - **A related list's `create`** names a type of the model, and a string property of that type,
+ *   which takes the open record's id.
  * - **A `document-link`'s `show`**, in a card's field or a related list's column, names a property
  *   of every type its `types` lists ({@link linkedShowFindings}): the linked records' types, which
  *   the file says, though a related list's own type it does not.
@@ -237,6 +239,39 @@ export function againstModel(
     }
   };
 
+  /**
+   * A related list's "New": the type it creates is in the model, and the property given the open
+   * record's id is one of that type's, a single text, as a reference holding one record's id is.
+   */
+  const created = (entry: Record<string, unknown>, path: string): void => {
+    const target = entry['type'];
+    const name = entry['field'];
+    // A malformed name has its finding already.
+    if (typeof target !== 'string') return;
+    const of = propertiesOf(model, target);
+    if (!of) {
+      add(
+        join(path, 'type'),
+        'unknown',
+        `the document type "${target}" is not in the content model`,
+      );
+      return;
+    }
+    if (typeof name !== 'string' || !XPATH.test(name)) return;
+    const property = of.get(name);
+    if (!property) {
+      add(join(path, 'field'), 'unknown', whyMissing(model, target, name));
+      return;
+    }
+    const shown = propertyTypeOf(property);
+    if (shown !== 'string')
+      add(
+        join(path, 'field'),
+        'parameter',
+        `a new record takes the open record's id in a string property, and "${name}" is a ${shown} property`,
+      );
+  };
+
   const cards = (list: unknown, path: string): void => {
     if (!Array.isArray(list)) return;
     list.forEach((card, index) => {
@@ -254,6 +289,8 @@ export function againstModel(
           findings.push(...linkedShowFindings(column, join(columns, inner), model)),
         );
       }
+      if (isRecord(card) && isRecord(card['related']) && isRecord(card['related']['create']))
+        created(card['related']['create'], join(join(join(path, index), 'related'), 'create'));
       if (!isRecord(card) || !Array.isArray(card['fields'])) return;
       const fields = join(join(path, index), 'fields');
       card['fields'].forEach((entry, inner) => field(entry, join(fields, inner), ofType));

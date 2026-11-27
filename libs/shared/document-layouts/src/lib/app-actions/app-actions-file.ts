@@ -23,8 +23,11 @@ import type { ExtensionRule } from '@nuxeo/satori-platform/extensions';
 
 import { describe, refusedRule } from '../record-page/record-layout';
 
-/** Where an operation's button shows: the record page's toolbar, or a queue's row menu. */
-export type AppActionPlacement = 'record' | 'row';
+/**
+ * Where an operation's button shows: the record page's toolbar, a queue's row menu, or a card of
+ * the record page that names it, as a holds card names the actions that place and release a hold.
+ */
+export type AppActionPlacement = 'record' | 'row' | 'card';
 
 /** A confirmation, or a success message: a literal, which wins, or a key to look one up by. */
 export interface AppActionMessage {
@@ -39,7 +42,7 @@ export interface AppActionDefinition {
   readonly labelKey: string | null;
   readonly icon: string | null;
   readonly order: number | null;
-  /** On one record: the record page's, a row's, or both. Never empty. */
+  /** On one record: the record page's, a row's, a card's, or several. Never empty. */
   readonly placements: readonly AppActionPlacement[];
   readonly visibleWhen: ExtensionRule | null;
   readonly enabledWhen: ExtensionRule | null;
@@ -135,7 +138,8 @@ export function readAppActions(content: unknown, registered: AppActionsRegistere
     if (leftOut.has(place)) return;
     const on = Array.isArray(item['on']) ? item['on'] : ['record'];
     const placements = on.filter(
-      (where): where is AppActionPlacement => where === 'record' || where === 'row',
+      (where): where is AppActionPlacement =>
+        where === 'record' || where === 'row' || where === 'card',
     );
     if (placements.length === 0) {
       problems.push(

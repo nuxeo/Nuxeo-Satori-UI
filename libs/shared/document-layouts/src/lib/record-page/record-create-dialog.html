@@ -1,0 +1,39 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+<mat-dialog-content class="lib-record-create">
+  <p class="lib-record-create__context" [id]="contextId">
+    {{
+      'document-layouts.create.context'
+        | translate: { record: data.reference.title, folder: data.folder.title }
+    }}
+  </p>
+  <lib-document-layout-form
+    class="lib-record-create__form"
+    mode="create"
+    [type]="data.type"
+    [parentPath]="data.folder.path"
+    [fixed]="fixed"
+    [disabled]="saving()"
+    [headingLevel]="3"
+  />
+  @if (failure(); as message) {
+    <nxs-banner
+      class="lib-record-create__failure"
+      tone="error"
+      announce="alert"
+      [message]="message"
+    />
+  }
+  @if (saving()) {
+    <p class="lib-record-create__saving" role="status">
+      {{ 'document-layouts.create.saving' | translate }}
+    </p>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <nxs-button [disabled]="saving()" (press)="cancel()">{{
+    'document-layouts.create.cancel' | translate
+  }}</nxs-button>
+  <nxs-button appearance="filled" data-record-create-save [disabled]="saving()" (press)="save()">{{
+    'document-layouts.create.save' | translate
+  }}</nxs-button>
+</mat-dialog-actions>

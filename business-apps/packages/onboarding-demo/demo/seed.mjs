@@ -9,7 +9,9 @@
  *   node business-apps/packages/onboarding-demo/demo/seed.mjs
  *
  * Needs, installed first: nuxeo-agentic-signature, whose Signable and SignatureRequest facets the
- * kit's types carry, and this kit.
+ * kit's types carry; nuxeo-agentic-records, with the retention module it depends on, whose
+ * `ManageLegalHold` the dispute analysts are given and whose operations release a dispute's legal
+ * hold; and this kit.
  *
  * Environment:
  *   NUXEO_USER, NUXEO_PASS   required, with no default: an administrator's, since the seed grants
@@ -167,6 +169,10 @@ async function seed() {
       'dsp:dueOn': dayFrom(dispute.dueOn, today),
       'dsp:analyst': dispute.analyst,
       'dsp:resolution': dispute.resolution || null,
+      // The case it is raised on, by the id the seed just wrote it under; none for the others.
+      'dsp:case': dispute.case
+        ? (cases.find((kase) => kase.number === dispute.case)?.uid ?? null)
+        : null,
     };
     const { document } = await ensure(
       registers.disputes.path,
@@ -225,6 +231,8 @@ async function preflight() {
     );
   for (const [path, from] of [
     ['/config/facets/Signable', 'the e-signature add-on, nuxeo-agentic-signature'],
+    ['/config/facets/Record', 'the retention module, nuxeo-retention, with nuxeo-agentic-records'],
+    ['/config/types/DispositionRequest', 'the records add-on, nuxeo-agentic-records'],
     ['/config/types/OnboardingCase', 'this kit, onboarding-demo'],
     ['/config/types/ESignatureRequest', 'this kit, onboarding-demo'],
     ['/config/types/OnboardingRegister', 'this kit, onboarding-demo'],

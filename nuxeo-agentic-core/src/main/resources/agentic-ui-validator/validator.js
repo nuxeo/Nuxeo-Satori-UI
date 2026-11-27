@@ -417,7 +417,8 @@ var agenticUiValidator = (function () {
         actions: /* @__PURE__ */ new Set(),
         modules: PACKAGED_MODULES,
         pages: PACKAGED_PAGES,
-        connectors: null
+        connectors: null,
+        cardActions: null
     };
     function withRegistered(base, extra) {
         var _a, _b, _c, _d, _e, _f, _g;
@@ -1548,6 +1549,27 @@ var agenticUiValidator = (function () {
                 finally { if (e_24) throw e_24.error; }
             }
         };
+        var created = function (entry2, path) {
+            var target = entry2["type"];
+            var name = entry2["field"];
+            if (typeof target !== "string")
+                return;
+            var of = propertiesOf(model, target);
+            if (!of) {
+                add(join(path, "type"), "unknown", "the document type \"".concat(target, "\" is not in the content model"));
+                return;
+            }
+            if (typeof name !== "string" || !XPATH.test(name))
+                return;
+            var property = of.get(name);
+            if (!property) {
+                add(join(path, "field"), "unknown", whyMissing(model, target, name));
+                return;
+            }
+            var shown2 = propertyTypeOf(property);
+            if (shown2 !== "string")
+                add(join(path, "field"), "parameter", "a new record takes the open record's id in a string property, and \"".concat(name, "\" is a ").concat(shown2, " property"));
+        };
         var cards = function (list, path) {
             if (!Array.isArray(list))
                 return;
@@ -1558,6 +1580,8 @@ var agenticUiValidator = (function () {
                     var columns2_1 = join(join(join(path, index), "related"), "columns");
                     card2["related"]["columns"].forEach(function (column, inner) { return findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(column, join(columns2_1, inner), model)), false)); });
                 }
+                if (isRecord(card2) && isRecord(card2["related"]) && isRecord(card2["related"]["create"]))
+                    created(card2["related"]["create"], join(join(join(path, index), "related"), "create"));
                 if (!isRecord(card2) || !Array.isArray(card2["fields"]))
                     return;
                 var fields = join(join(path, index), "fields");
@@ -1713,10 +1737,23 @@ var agenticUiValidator = (function () {
         "timeline",
         "comments",
         "external",
-        "checklist"
+        "checklist",
+        "holds"
     ];
     var CARD_KEYS = __spreadArray(["id", "label", "labelKey", "span", "visibleWhen"], __read(CARD_CONTENTS), false);
-    var RELATED_KEYS = ["pageProvider", "parameters", "columns", "sort", "pageSize", "rowActions"];
+    var RELATED_KEYS = [
+        "pageProvider",
+        "parameters",
+        "columns",
+        "sort",
+        "pageSize",
+        "rowActions",
+        "create"
+    ];
+    var RELATED_CREATE_KEYS = ["type", "field", "label", "labelKey", "in"];
+    var RELATED_CREATE_IN_KEYS = ["pageProvider"];
+    var HOLDS_KEYS = ["place", "release", "pageSize"];
+    var DOCUMENT_TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
     var TIMELINE_KEYS = ["events", "filter", "pageSize"];
     var COMMENTS_KEYS = ["pageSize"];
     var REVIEW_KEYS = [];
@@ -1777,7 +1814,7 @@ var agenticUiValidator = (function () {
             if ("visibleWhen" in item)
                 c.rule(item["visibleWhen"], join(path, "visibleWhen"));
             if (CARD_CONTENTS.filter(function (key) { return key in item; }).length !== 1)
-                c.add(path, "structure", 'a card has one of "fields", "related", "timeline", "comments", "external" or "checklist"');
+                c.add(path, "structure", 'a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds"');
             if ("fields" in item) {
                 var fields = item["fields"];
                 if (!Array.isArray(fields))
@@ -1814,6 +1851,12 @@ var agenticUiValidator = (function () {
                     c.add(join(path, "checklist"), "structure", "a checklist belongs in view mode only");
                 else
                     checklist(c, item["checklist"], join(path, "checklist"));
+            }
+            if ("holds" in item) {
+                if (!view)
+                    c.add(join(path, "holds"), "structure", "holds belong in view mode only");
+                else
+                    holds(c, item["holds"], join(path, "holds"));
             }
         };
         var cards = function (list, path, columns3) {
@@ -1972,6 +2015,67 @@ var agenticUiValidator = (function () {
         }
         c.unknownKeys(item, RELATED_KEYS, path);
         c.list(item, path, { openRecord: true });
+        if ("create" in item)
+            relatedCreate(c, item["create"], join(path, "create"));
+    }
+    function relatedCreate(c, item, path) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", 'create is an object: { "type", "field" }');
+            return;
+        }
+        c.unknownKeys(item, RELATED_CREATE_KEYS, path);
+        c.label(item, path);
+        var type = item["type"];
+        if (typeof type !== "string" || !DOCUMENT_TYPE.test(type))
+            c.add(join(path, "type"), "structure", 'needs the document type it creates: a letter, then letters, digits, "_" or "-"');
+        var field = item["field"];
+        if (typeof field !== "string" || !XPATH.test(field))
+            c.add(join(path, "field"), "structure", "needs the property \"<prefix>:<name>\" of the new record that holds the open record's id");
+        else if (field.startsWith("ecm:") || field.startsWith("var:"))
+            c.add(join(path, "field"), "structure", "".concat(field, " is not a property a new record stores: the reference is one of its own"));
+        if ("in" in item) {
+            var place = item["in"];
+            var at2 = join(path, "in");
+            if (!isRecord(place))
+                c.add(at2, "structure", 'in is { "pageProvider" }');
+            else {
+                c.unknownKeys(place, RELATED_CREATE_IN_KEYS, at2);
+                if (typeof place["pageProvider"] !== "string" || !NAME.test(place["pageProvider"]))
+                    c.add(join(at2, "pageProvider"), "structure", "needs the name of a page provider defined on the server, whose first record is the folder");
+            }
+        }
+    }
+    function holds(c, item, path) {
+        var e_27, _h;
+        if (!isRecord(item)) {
+            c.add(path, "structure", "holds is an object");
+            return;
+        }
+        c.unknownKeys(item, HOLDS_KEYS, path);
+        var known = c.registries.cardActions;
+        try {
+            for (var _j = __values(["place", "release"]), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var key = _k.value;
+                if (!(key in item))
+                    continue;
+                var id = item[key];
+                var at2 = join(path, key);
+                if (typeof id !== "string" || !ID.test(id))
+                    c.add(at2, "structure", "".concat(key, " names an action of the package's actions.json: 1 to 64 letters, digits, \".\", \"_\" or \"-\""));
+                else if (known !== null && !known.has(id))
+                    c.add(at2, "unknown", "the action \"".concat(id, "\" is not one of the package's actions.json that shows on a card (\"on\": [\"card\"])"));
+            }
+        }
+        catch (e_27_1) { e_27 = { error: e_27_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_27) throw e_27.error; }
+        }
+        if (typeof item["place"] === "string" && item["place"] === item["release"])
+            c.add(join(path, "release"), "structure", "place and release name two different actions");
+        pageSize(c, item, path);
     }
     function timeline(c, item, path) {
         if (!isRecord(item)) {
@@ -2057,7 +2161,7 @@ var agenticUiValidator = (function () {
         var found = function (at2) { return c.add(at2, "structure", "an address is never written in a layout: a connector's address is the server's configuration"); };
         var queue2 = [[item, path, 0]];
         var _loop_2 = function (next) {
-            var e_27, _h;
+            var e_28, _h;
             var _j = __read(queue2[next], 3), value = _j[0], at2 = _j[1], depth = _j[2];
             if (typeof value === "string") {
                 if (ADDRESS.test(value) && !XPATH.test(value))
@@ -2070,19 +2174,19 @@ var agenticUiValidator = (function () {
                 value.forEach(function (inner, index) { return queue2.push([inner, join(at2, index), depth + 1]); });
             else if (isRecord(value))
                 try {
-                    for (var _k = (e_27 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
+                    for (var _k = (e_28 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
                         var _m = __read(_l.value, 2), key = _m[0], inner = _m[1];
                         if (ADDRESS.test(key))
                             found(join(at2, key));
                         queue2.push([inner, join(at2, key), depth + 1]);
                     }
                 }
-                catch (e_27_1) { e_27 = { error: e_27_1 }; }
+                catch (e_28_1) { e_28 = { error: e_28_1 }; }
                 finally {
                     try {
                         if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
                     }
-                    finally { if (e_27) throw e_27.error; }
+                    finally { if (e_28) throw e_28.error; }
                 }
         };
         for (var next = 0; next < queue2.length; next++) {
@@ -2152,7 +2256,7 @@ var agenticUiValidator = (function () {
     ];
     var FORM_FIELD = /^var:([A-Za-z][A-Za-z0-9_]{0,63})$/;
     var MESSAGE_KEYS = ["label", "labelKey"];
-    var PLACEMENTS = ["record", "row", "bulk"];
+    var PLACEMENTS = ["record", "row", "card", "bulk"];
     var PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
     var PLATFORM_ID = /^(?:app|core)\./;
     function validateActions(content, options) {
@@ -2178,7 +2282,7 @@ var agenticUiValidator = (function () {
         return Array.isArray(action2["on"]) ? action2["on"] : ["record"];
     }
     function action(c, item, path, operations) {
-        var e_28, _h;
+        var e_29, _h;
         if (!isRecord(item)) {
             c.add(path, "structure", "an action is an object");
             return;
@@ -2204,6 +2308,8 @@ var agenticUiValidator = (function () {
         var hasOperation = "operation" in item;
         if (hasTransition === hasOperation)
             c.add(path, "structure", 'an action has "transition" or "operation", one of the two');
+        if (hasTransition && on.includes("card"))
+            c.add(join(path, "on"), "structure", "a card offers an action that runs an operation");
         if (hasTransition && (typeof item["transition"] !== "string" || !NAME.test(item["transition"])))
             c.add(join(path, "transition"), "structure", "transition is the name of a lifecycle transition");
         if (hasOperation) {
@@ -2232,12 +2338,12 @@ var agenticUiValidator = (function () {
                     message(c, item[key], join(path, key));
             }
         }
-        catch (e_28_1) { e_28 = { error: e_28_1 }; }
+        catch (e_29_1) { e_29 = { error: e_29_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_28) throw e_28.error; }
+            finally { if (e_29) throw e_29.error; }
         }
         if ("refresh" in item && typeof item["refresh"] !== "boolean")
             c.add(join(path, "refresh"), "structure", "refresh is true or false");
@@ -2247,14 +2353,14 @@ var agenticUiValidator = (function () {
             return ["record"];
         var on = item["on"];
         if (!Array.isArray(on) || on.length === 0) {
-            c.add(join(path, "on"), "structure", 'on lists where it shows: "record", "row" or "bulk"');
+            c.add(join(path, "on"), "structure", 'on lists where it shows: "record", "row", "card" or "bulk"');
             return [];
         }
         var seen = [];
         on.forEach(function (place, index) {
             var at2 = join(join(path, "on"), index);
             if (!PLACEMENTS.includes(place))
-                c.add(at2, "structure", "".concat(shown(place), " is not \"record\", \"row\" or \"bulk\""));
+                c.add(at2, "structure", "".concat(shown(place), " is not \"record\", \"row\", \"card\" or \"bulk\""));
             else if (seen.includes(place))
                 c.add(at2, "structure", "\"".concat(place, "\" is listed twice"));
             else
@@ -2263,7 +2369,7 @@ var agenticUiValidator = (function () {
         return seen;
     }
     function parameters(c, value, path, on, fields, sent) {
-        var e_29, _h;
+        var e_30, _h;
         if (!isRecord(value)) {
             c.add(path, "structure", "parameters must be an object");
             return;
@@ -2288,16 +2394,16 @@ var agenticUiValidator = (function () {
                     c.value(item, at2);
             }
         }
-        catch (e_29_1) { e_29 = { error: e_29_1 }; }
+        catch (e_30_1) { e_30 = { error: e_30_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_29) throw e_29.error; }
+            finally { if (e_30) throw e_30.error; }
         }
     }
     function form(c, value, path, hasOperation, on) {
-        var e_30, _h;
+        var e_31, _h;
         if (!Array.isArray(value) || value.length === 0) {
             c.add(path, "structure", "a form is a list of the fields it asks for");
             return [];
@@ -2313,12 +2419,12 @@ var agenticUiValidator = (function () {
                 c.add(finding.path.startsWith(card2) ? "".concat(path).concat(finding.path.slice(card2.length)) : path, finding.kind, finding.message);
             }
         }
-        catch (e_30_1) { e_30 = { error: e_30_1 }; }
+        catch (e_31_1) { e_31 = { error: e_31_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_30) throw e_30.error; }
+            finally { if (e_31) throw e_31.error; }
         }
         return value.map(function (entry2, index) {
             var field = isRecord(entry2) ? entry2["field"] : entry2;
@@ -2417,7 +2523,7 @@ var agenticUiValidator = (function () {
         return { major: major, minor: minor, patch: patch, prerelease: match[4] ? match[4].split(".") : [] };
     }
     function compareVersions(a, b) {
-        var e_31, _h;
+        var e_32, _h;
         try {
             for (var _j = __values(["major", "minor", "patch"]), _k = _j.next(); !_k.done; _k = _j.next()) {
                 var part = _k.value;
@@ -2425,12 +2531,12 @@ var agenticUiValidator = (function () {
                     return a[part] < b[part] ? -1 : 1;
             }
         }
-        catch (e_31_1) { e_31 = { error: e_31_1 }; }
+        catch (e_32_1) { e_32 = { error: e_32_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_31) throw e_31.error; }
+            finally { if (e_32) throw e_32.error; }
         }
         if (a.prerelease.length === 0 || b.prerelease.length === 0)
             return b.prerelease.length - a.prerelease.length;
@@ -2452,7 +2558,7 @@ var agenticUiValidator = (function () {
         return 0;
     }
     function parseRange(text2) {
-        var e_32, _h;
+        var e_33, _h;
         var _a;
         var parts2 = text2.trim().split(/\s+/);
         var comparators = [];
@@ -2472,12 +2578,12 @@ var agenticUiValidator = (function () {
                     comparators.push({ operator: operator, version: version });
             }
         }
-        catch (e_32_1) { e_32 = { error: e_32_1 }; }
+        catch (e_33_1) { e_33 = { error: e_33_1 }; }
         finally {
             try {
                 if (parts2_1_1 && !parts2_1_1.done && (_h = parts2_1.return)) _h.call(parts2_1);
             }
-            finally { if (e_32) throw e_32.error; }
+            finally { if (e_33) throw e_33.error; }
         }
         return text2.trim() === "" ? null : comparators;
     }
@@ -2605,7 +2711,7 @@ var agenticUiValidator = (function () {
         });
     }
     function branding(c, value) {
-        var e_33, _h, e_34, _j;
+        var e_34, _h, e_35, _j;
         if (!isRecord(value)) {
             c.add("branding", "structure", "branding is an object");
             return;
@@ -2618,12 +2724,12 @@ var agenticUiValidator = (function () {
                     c.add(join("branding", key), "structure", "must be a text");
             }
         }
-        catch (e_33_1) { e_33 = { error: e_33_1 }; }
+        catch (e_34_1) { e_34 = { error: e_34_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_33) throw e_33.error; }
+            finally { if (e_34) throw e_34.error; }
         }
         if ("theme" in value && (typeof value["theme"] !== "string" || !ID.test(value["theme"])))
             c.add("branding.theme", "structure", "theme is the id of one of the server's themes");
@@ -2634,12 +2740,12 @@ var agenticUiValidator = (function () {
                     image(c, value[key], join("branding", key));
             }
         }
-        catch (e_34_1) { e_34 = { error: e_34_1 }; }
+        catch (e_35_1) { e_35 = { error: e_35_1 }; }
         finally {
             try {
                 if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
             }
-            finally { if (e_34) throw e_34.error; }
+            finally { if (e_35) throw e_35.error; }
         }
     }
     function image(c, value, path) {
@@ -2818,7 +2924,7 @@ var agenticUiValidator = (function () {
     var LABELS_KEYS = ["$schema", "version", "labels"];
     var MODULE_KEYS = ["$schema", "version", "settings"];
     function validateLabels(content) {
-        var e_35, _h;
+        var e_36, _h;
         var stop = unreadable(content, "a labels file");
         if (stop)
             return stop;
@@ -2841,12 +2947,12 @@ var agenticUiValidator = (function () {
                     c.add(at2, "structure", "must be a text");
             }
         }
-        catch (e_35_1) { e_35 = { error: e_35_1 }; }
+        catch (e_36_1) { e_36 = { error: e_36_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_35) throw e_35.error; }
+            finally { if (e_36) throw e_36.error; }
         }
         return c.findings;
     }
@@ -2963,7 +3069,7 @@ var agenticUiValidator = (function () {
         [at(String.raw(__makeTemplateObject(["home.json"], ["home\\.json"]))), function () { return ({ kind: "home" }); }]
     ];
     function placeFile(path, hasApp) {
-        var e_36, _h;
+        var e_37, _h;
         if (hasApp === void 0) { hasApp = function () { return false; }; }
         var _a, _b, _c;
         var candidates = [];
@@ -2976,12 +3082,12 @@ var agenticUiValidator = (function () {
                     candidates.push({ file: placed, root: (_a = match[1]) != null ? _a : "" });
             }
         }
-        catch (e_36_1) { e_36 = { error: e_36_1 }; }
+        catch (e_37_1) { e_37 = { error: e_37_1 }; }
         finally {
             try {
                 if (PLACES_1_1 && !PLACES_1_1.done && (_h = PLACES_1.return)) _h.call(PLACES_1);
             }
-            finally { if (e_36) throw e_36.error; }
+            finally { if (e_37) throw e_37.error; }
         }
         return (_c = (_b = candidates.find(function (candidate) { return hasApp(candidate.root); })) != null ? _b : candidates[0]) != null ? _c : null;
     }
@@ -2997,7 +3103,7 @@ var agenticUiValidator = (function () {
     function untranslated(content, labels, catalogue) {
         var findings = [];
         var visit = function (value, path) {
-            var e_37, _h;
+            var e_38, _h;
             if (Array.isArray(value))
                 value.forEach(function (item, index) { return visit(item, join(path, index)); });
             else if (isRecord(value))
@@ -3018,12 +3124,12 @@ var agenticUiValidator = (function () {
                             visit(item, at2);
                     }
                 }
-                catch (e_37_1) { e_37 = { error: e_37_1 }; }
+                catch (e_38_1) { e_38 = { error: e_38_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_37) throw e_37.error; }
+                    finally { if (e_38) throw e_38.error; }
                 }
         };
         visit(content, "");
@@ -3041,7 +3147,7 @@ var agenticUiValidator = (function () {
             case "layout":
                 return validateLayoutV2(content, {
                     mode: (_b = options.mode) != null ? _b : file.mode,
-                    registries: registries,
+                    registries: withCardActions(registries, context.actions),
                     model: options.model,
                     type: file.type
                 });
@@ -3062,7 +3168,7 @@ var agenticUiValidator = (function () {
         }
     }
     function withPackageActions(registries, actions) {
-        var e_38, _h;
+        var e_39, _h;
         if (!isRecord(actions) || !Array.isArray(actions["actions"]))
             return registries;
         var row = [];
@@ -3079,17 +3185,22 @@ var agenticUiValidator = (function () {
                     bulk.push(action2["id"]);
             }
         }
-        catch (e_38_1) { e_38 = { error: e_38_1 }; }
+        catch (e_39_1) { e_39 = { error: e_39_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_38) throw e_38.error; }
+            finally { if (e_39) throw e_39.error; }
         }
         return withRegistered(registries, { rowActions: row, bulkActions: bulk });
     }
+    function withCardActions(registries, actions) {
+        var list = isRecord(actions) && Array.isArray(actions["actions"]) ? actions["actions"] : [];
+        var card2 = list.flatMap(function (action2) { return isRecord(action2) && typeof action2["id"] === "string" && placementsOf(action2).includes("card") ? [action2["id"]] : []; });
+        return __spreadProps(__spreadValues({}, registries), { cardActions: new Set(card2) });
+    }
     function missingAssets(content, context) {
-        var e_39, _h;
+        var e_40, _h;
         if (!isRecord(content) || !isRecord(content["branding"]))
             return [];
         var branding2 = content["branding"];
@@ -3108,12 +3219,12 @@ var agenticUiValidator = (function () {
                     });
             }
         }
-        catch (e_39_1) { e_39 = { error: e_39_1 }; }
+        catch (e_40_1) { e_40 = { error: e_40_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_39) throw e_39.error; }
+            finally { if (e_40) throw e_40.error; }
         }
         return findings;
     }

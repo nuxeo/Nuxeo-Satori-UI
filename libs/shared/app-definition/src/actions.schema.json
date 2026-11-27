@@ -57,7 +57,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": {
-            "enum": ["record", "row", "bulk"]
+            "enum": ["record", "row", "card", "bulk"]
           }
         },
         "visibleWhen": {

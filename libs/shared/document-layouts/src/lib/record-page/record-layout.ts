@@ -206,6 +206,37 @@ export interface RecordChecklistEntry {
   readonly tickable: boolean;
 }
 
+/**
+ * A holds card (layout-v2.md, section 7): the record's retention and legal holds, which the
+ * platform keeps, and the app's actions on a card that place and release a hold.
+ */
+export interface RecordHoldsEntry {
+  /** The id of the action, `"on": ["card"]`, that places a hold; `null` when the card offers none. */
+  readonly place: string | null;
+  /** The id of the action that releases the hold; `null` when the card offers none. */
+  readonly release: string | null;
+  /** 1 to 100: how many of the newest holds placed and released show. */
+  readonly pageSize: number;
+}
+
+/**
+ * A related list's "New" (layout-v2.md, section 7): the create form of a type, with one of its
+ * properties given the open record's id, read-only, filed where the file says.
+ */
+export interface RecordCreateEntry {
+  /** The document type it creates. */
+  readonly type: string;
+  /** The new record's property, `<prefix>:<name>`, that takes the open record's id. */
+  readonly field: string;
+  /** The button's words: the file's, else "New" and the type's label. */
+  readonly label: LayoutLabel;
+  /**
+   * The page provider whose first record is the folder the new record is filed in, or `null` for
+   * the open record's own folder.
+   */
+  readonly folder: string | null;
+}
+
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
@@ -233,6 +264,10 @@ export interface RecordCardEntry {
   readonly external: RecordExternalEntry | null;
   /** For a checklist's card, its property and items; `null` for any other card. */
   readonly checklist: RecordChecklistEntry | null;
+  /** For a holds card, the actions it offers; `null` for any other card. */
+  readonly holds: RecordHoldsEntry | null;
+  /** For a card of related records that offers "New", what it creates; `null` otherwise. */
+  readonly create: RecordCreateEntry | null;
 }
 
 export interface RecordTabEntry {
@@ -338,7 +373,7 @@ export function labelOf(
  * The entry a finding is about: the review, the share links, the capture, the banner, or the
  * innermost tab, card, field, list column, row action or field from another system its path passes
  * through, as `review`, `shareLinks`, `capture`, `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
- * `cards[4].external.fields[0]`. A widget's own lists — a table's `parameters.columns` — are not
+ * `cards[4].external.fields[0]`, or a related list's New, `cards[3].related.create`. A widget's own lists — a table's `parameters.columns` — are not
  * fields of the file, so a finding inside one names the field whose widget it is. `null` for a
  * finding about the file as a whole.
  */
@@ -357,6 +392,10 @@ export function entryOf(path: string): string | null {
     if (entry === null ? before !== '' : before !== entry) break;
     entry = path.slice(0, end);
   }
+  // A related list's New is an entry of its own: what is wrong with it leaves out the button, and
+  // the list stays.
+  const create = entry === null ? null : `${entry}.related.create`;
+  if (create !== null && (path === create || path.startsWith(`${create}.`))) return create;
   return entry;
 }
 
@@ -753,6 +792,29 @@ function timelineOf(raw: Json): RecordTimelineEntry {
   };
 }
 
+/** A holds card as the file writes it: the validator has refused one of any other shape. */
+function holdsOf(raw: Json): RecordHoldsEntry {
+  return {
+    place: text(raw['place']) ?? null,
+    release: text(raw['release']) ?? null,
+    pageSize: pageSizeOf(raw),
+  };
+}
+
+/** A related list's New as the file writes it, once the validator has passed it. */
+function createOf(raw: Json): RecordCreateEntry {
+  const type = String(raw['type']);
+  return {
+    type,
+    field: String(raw['field']),
+    label: labelOf(raw, [], null),
+    folder:
+      isRecord(raw['in']) && typeof raw['in']['pageProvider'] === 'string'
+        ? raw['in']['pageProvider']
+        : null,
+  };
+}
+
 export function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
@@ -840,10 +902,17 @@ export function readRecordLayout(
         comments: null,
         external: null,
         checklist: null,
+        holds: null,
+        create: null,
       };
       if (isRecord(card['related'])) {
         const related = readRecordList(card['related'], `${place}.related`, place, reading);
-        return related ? [{ ...common, ...none, related }] : [];
+        // A finding about its New leaves out the button alone, and the list stays.
+        const create =
+          isRecord(card['related']['create']) && !leftOut.has(`${place}.related.create`)
+            ? createOf(card['related']['create'])
+            : null;
+        return related ? [{ ...common, ...none, related, create }] : [];
       }
       if (isRecord(card['external'])) {
         const external = readExternal(card['external'], `${place}.external`, place, reading);
@@ -859,6 +928,9 @@ export function readRecordLayout(
       }
       if (isRecord(card['comments'])) {
         return [{ ...common, ...none, comments: { pageSize: pageSizeOf(card['comments']) } }];
+      }
+      if (isRecord(card['holds'])) {
+        return [{ ...common, ...none, holds: holdsOf(card['holds']) }];
       }
       const fields = (Array.isArray(card['fields']) ? card['fields'] : []).flatMap(
         (entry: unknown, position) => field(entry, `${place}.fields[${position}]`),

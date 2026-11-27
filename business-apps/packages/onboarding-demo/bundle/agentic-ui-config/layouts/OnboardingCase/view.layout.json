@@ -175,6 +175,42 @@
       }
     },
     {
+      "id": "disputes",
+      "labelKey": "onboarding.card.onboardingCase.disputes",
+      "span": 2,
+      "related": {
+        "pageProvider": "onboarding_case_disputes",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dsp:number",
+          { "field": "dc:title", "labelKey": "onboarding.field.disputeTitle" },
+          { "field": "dsp:amount", "widget": "currency", "parameters": { "currency": "USD" } },
+          {
+            "field": "dsp:status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Open": "info",
+                "Investigating": "warning",
+                "Resolved for customer": "positive",
+                "Resolved for bank": "neutral",
+                "Closed": "neutral"
+              }
+            }
+          },
+          { "field": "dsp:openedOn", "widget": "date" }
+        ],
+        "sort": [{ "field": "dsp:openedOn", "order": "desc" }],
+        "pageSize": 10,
+        "create": {
+          "type": "DisputeCase",
+          "field": "dsp:case",
+          "labelKey": "onboarding.action.newDispute",
+          "in": { "pageProvider": "onboarding_dispute_registers" }
+        }
+      }
+    },
+    {
       "id": "notes",
       "labelKey": "onboarding.card.onboardingCase.notes",
       "span": 2,

@@ -403,6 +403,37 @@ describe('validateLayoutV2, given the content model', () => {
     expect(messages(related)).toEqual([]);
   });
 
+  it("holds a related list's New to a type of the model, and its reference to a text of that type", () => {
+    const create = (type: string, field: string) => ({
+      version: 2,
+      cards: [
+        {
+          id: 'members',
+          related: {
+            pageProvider: 'household_members',
+            parameters: [{ field: 'ecm:uuid' }],
+            columns: ['dc:title'],
+            create: { type, field },
+          },
+        },
+      ],
+    });
+    // A member referring to another, by its first name for the test: a text of the type.
+    expect(messages(create('Member', 'member:firstName'))).toEqual([]);
+    expect(messages(create('Household', 'member:firstName'))).toEqual([
+      'cards[0].related.create.type: the document type "Household" is not in the content model [unknown]',
+    ]);
+    expect(messages(create('Member', 'member:spouse'))).toEqual([
+      'cards[0].related.create.field: "member:spouse" is not a property of the type "Member" or of its facets [unknown]',
+    ]);
+    expect(messages(create('Member', 'member:visits'))).toEqual([
+      `cards[0].related.create.field: a new record takes the open record's id in a string property, and "member:visits" is a long property [parameter]`,
+    ]);
+    expect(messages(create('Member', 'member:plans'))).toEqual([
+      `cards[0].related.create.field: a new record takes the open record's id in a string property, and "member:plans" is a string[] property [parameter]`,
+    ]);
+  });
+
   it('adds nothing to a finding the file has already: an unknown widget, a malformed name', () => {
     expect(
       messages(withFields({ field: 'member:firstName', widget: 'calendar' }, 'not a property')),

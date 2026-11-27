@@ -230,9 +230,12 @@
         },
         "checklist": {
           "$ref": "#/$defs/checklist"
+        },
+        "holds": {
+          "$ref": "#/$defs/holds"
         }
       },
-      "description": "A card shows one of fields, related records, a timeline, comments, fields from another system or a checklist.",
+      "description": "A card shows one of fields, related records, a timeline, comments, fields from another system, a checklist or the record's retention and legal holds.",
       "oneOf": [
         {
           "required": ["fields"]
@@ -251,6 +254,9 @@
         },
         {
           "required": ["checklist"]
+        },
+        {
+          "required": ["holds"]
         }
       ]
     },
@@ -522,6 +528,65 @@
               "app.rowActions.delete"
             ]
           }
+        },
+        "create": {
+          "$ref": "#/$defs/relatedCreate"
+        }
+      }
+    },
+    "relatedCreate": {
+      "type": "object",
+      "required": ["type", "field"],
+      "additionalProperties": false,
+      "description": "A \"New\" button on the list: the create form of type, with field given the open record's id, read-only. The new record is filed in the open record's folder, or in the first folder in's page provider finds. The person's own permissions decide whether the server takes it.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$",
+          "description": "The document type it creates."
+        },
+        "field": {
+          "$ref": "#/$defs/xpath",
+          "description": "The new record's property, a string, that holds the open record's id. Never an ecm: or var: name."
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "in": {
+          "type": "object",
+          "required": ["pageProvider"],
+          "additionalProperties": false,
+          "description": "Where the new record is filed: the first folder this page provider finds, rather than the open record's folder.",
+          "properties": {
+            "pageProvider": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+            }
+          }
+        }
+      }
+    },
+    "holds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "View mode only. The record's retention, its rule and end, and its legal hold with the holds placed and released, read from the platform. place and release name actions of the package's actions.json shown on a card, which run through the server's allow-list.",
+      "properties": {
+        "place": {
+          "$ref": "#/$defs/id",
+          "description": "The action, \"on\": [\"card\"], that places a legal hold, offered while the record has none."
+        },
+        "release": {
+          "$ref": "#/$defs/id",
+          "description": "The action, \"on\": [\"card\"], that releases the legal hold, offered while the record has one."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "How many of the newest holds placed and released show. Default 10."
         }
       }
     },

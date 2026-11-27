@@ -138,10 +138,15 @@ describe('the JSON Schema, held to the registries and the validator', () => {
       ['externalField', LAYOUT_V2_KEYS.externalField],
       ['checklist', LAYOUT_V2_KEYS.checklist],
       ['checklistItem', LAYOUT_V2_KEYS.checklistItem],
+      ['holds', LAYOUT_V2_KEYS.holds],
+      ['relatedCreate', LAYOUT_V2_KEYS.relatedCreate],
       ['check', LAYOUT_V2_KEYS.check],
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());
     }
+    expect(Object.keys(defs['relatedCreate'].properties['in'].properties).sort()).toEqual(
+      [...LAYOUT_V2_KEYS.relatedCreateIn].sort(),
+    );
   });
 });
 

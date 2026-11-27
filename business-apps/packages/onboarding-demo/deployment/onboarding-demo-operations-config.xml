@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!--
+  The demo server's allow-list for the onboarding kit: the deployment's contribution, which the
+  kit's README has the server's administrators put in nxserver/config/. Not in the kit's package,
+  and never in one: the package pipeline refuses a package that contributes to
+  org.nuxeo.agentic.ui.operations (plan decision 3, on its recommendation: a per-deployment
+  allow-list).
+
+  It allows the two actions of a dispute's holds card, for the onboarding app's buttons, for
+  dispute analysts who hold the platform's ManageLegalHold on the dispute, on a dispute case:
+
+  - Document.Hold, the retention module's own operation, which makes the dispute a record and
+    places a legal hold on it, with its description, the reason the analyst enters;
+  - Records.ReleaseLegalHold, nuxeo-agentic-records' operation, which releases the hold with the
+    reason the analyst enters. The retention module's Document.Unhold takes no reason, so the
+    platform's audit of a release would carry none.
+
+  Each is allow-listed as itself, so Nuxeo's own Automation endpoint runs it too, for anyone the
+  platform lets: neither does more there than the platform's own operation does, and core checks
+  ManageLegalHold in either place. The allow-list holds a button to the app, the group, the type
+  and the reason's length; the platform holds every run to the permission.
+
+  Fictional, like the kit.
+-->
+<component name="onboarding-demo.deployment.operations" version="1.0">
+  <require>org.nuxeo.agentic.ui.operations</require>
+
+  <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
+    <operation id="Document.Hold" permission="ManageLegalHold">
+      <app>onboarding</app>
+      <group>dispute-analysts</group>
+      <type>DisputeCase</type>
+      <!-- What the analyst enters in the button's form: the hold's reason, never empty. -->
+      <param name="description" type="string" maxLength="500" source="input" required="true" />
+    </operation>
+    <operation id="Records.ReleaseLegalHold" permission="ManageLegalHold">
+      <app>onboarding</app>
+      <group>dispute-analysts</group>
+      <type>DisputeCase</type>
+      <param name="reason" type="string" maxLength="500" source="input" required="true" />
+    </operation>
+  </extension>
+</component>

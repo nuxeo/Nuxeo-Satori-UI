@@ -1,4 +1,4 @@
-<package type="addon" name="onboarding-demo" version="0.1.0">
+<package type="addon" name="onboarding-demo" version="0.2.0">
   <title>Onboarding and disputes</title>
   <description>
     <p>The Onboarding and disputes app definition, a Nuxeo Satori business app.</p>
@@ -13,6 +13,7 @@
   <dependencies>
     <package>nuxeo-agentic-ui:2026.0.2</package>
     <package>nuxeo-agentic-signature:0.1.0</package>
+    <package>nuxeo-agentic-records:0.4.0</package>
   </dependencies>
   <visibility>PRIVATE</visibility>
 </package>

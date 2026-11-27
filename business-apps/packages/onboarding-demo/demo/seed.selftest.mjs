@@ -40,6 +40,8 @@ const TYPES = [
   'OnboardingRegister',
   'DisputeRegister',
   'DisputeCase',
+  // The records add-on's, which the preflight looks for.
+  'DispositionRequest',
 ];
 
 /**
@@ -49,7 +51,7 @@ const TYPES = [
 function standIn({
   administrator = true,
   types = TYPES,
-  facets = ['Signable'],
+  facets = ['Signable', 'Record'],
   hide = null,
   me = undefined,
 } = {}) {
@@ -269,6 +271,30 @@ const caseAt = (stub, number) =>
   stub.server.close();
 }
 {
+  const stub = await standIn({ facets: ['Signable'] });
+  const result = await run(stub.url);
+  check(
+    'the retention module missing: exit 2, nothing written, and it is named',
+    result.status === 2 &&
+      writes(stub.requests).length === 0 &&
+      /nuxeo-retention/.test(result.output),
+    result.output,
+  );
+  stub.server.close();
+}
+{
+  const stub = await standIn({ types: TYPES.filter((type) => type !== 'DispositionRequest') });
+  const result = await run(stub.url);
+  check(
+    'the records add-on missing: exit 2, nothing written, and it is named',
+    result.status === 2 &&
+      writes(stub.requests).length === 0 &&
+      /nuxeo-agentic-records/.test(result.output),
+    result.output,
+  );
+  stub.server.close();
+}
+{
   const stub = await standIn({ types: TYPES.filter((type) => type !== 'ESignatureRequest') });
   const result = await run(stub.url);
   check(
@@ -308,6 +334,16 @@ const caseAt = (stub, number) =>
     GRANTS.every(({ register: name, group, permission }) =>
       register(name).acl.some((ace) => ace.username === group && ace.permission === permission),
     ),
+  );
+  const disputeAt = (number) =>
+    stub.docs.get(`/default-domain/workspaces/onboarding-demo/disputes/${number.toLowerCase()}`);
+  check(
+    'it gives a dispute raised on a case that case by its id, and the others none',
+    DISPUTES.every((dispute) =>
+      dispute.case
+        ? disputeAt(dispute.number).properties['dsp:case'] === caseAt(stub, dispute.case).uid
+        : disputeAt(dispute.number).properties['dsp:case'] === null,
+    ) && DISPUTES.some((dispute) => dispute.case),
   );
   const agreements = CASES.map((kase) => caseAt(stub, kase.number).properties['files:files'] ?? []);
   const uploaded = [...stub.uploads.values()].filter(Boolean);

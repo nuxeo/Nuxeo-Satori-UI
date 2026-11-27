@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/actions.schema.json",
+  "version": 2,
+  "actions": [
+    {
+      "id": "onboarding.dispute.placeHold",
+      "labelKey": "onboarding.action.placeHold",
+      "icon": "gavel",
+      "on": ["card"],
+      "visibleWhen": { "type": "app.rules.isType", "parameters": ["DisputeCase"] },
+      "enabledWhen": { "type": "app.rules.inGroup", "parameters": ["dispute-analysts"] },
+      "operation": "Document.Hold",
+      "parameters": { "description": { "field": "var:reason" } },
+      "form": [
+        {
+          "field": "var:reason",
+          "labelKey": "onboarding.field.holdReason",
+          "widget": "long-text",
+          "parameters": { "rows": 3 },
+          "required": true
+        }
+      ],
+      "confirm": { "labelKey": "onboarding.action.placeHold.confirm" },
+      "success": { "labelKey": "onboarding.action.placeHold.done" }
+    },
+    {
+      "id": "onboarding.dispute.releaseHold",
+      "labelKey": "onboarding.action.releaseHold",
+      "icon": "lock_open",
+      "on": ["card"],
+      "visibleWhen": { "type": "app.rules.isType", "parameters": ["DisputeCase"] },
+      "enabledWhen": { "type": "app.rules.inGroup", "parameters": ["dispute-analysts"] },
+      "operation": "Records.ReleaseLegalHold",
+      "parameters": { "reason": { "field": "var:reason" } },
+      "form": [
+        {
+          "field": "var:reason",
+          "labelKey": "onboarding.field.releaseReason",
+          "widget": "long-text",
+          "parameters": { "rows": 3 },
+          "required": true
+        }
+      ],
+      "confirm": { "labelKey": "onboarding.action.releaseHold.confirm" },
+      "success": { "labelKey": "onboarding.action.releaseHold.done" }
+    }
+  ]
+}

@@ -4,6 +4,7 @@
  * checked with its package's `app.json`, `actions.json`, `assets/`, queues and English labels:
  *
  * - a queue's row and bulk actions may be the package's own, from `actions.json`;
+ * - a holds card's actions must be the package's own, from `actions.json`, shown on a card;
  * - a module's settings must be for a module `app.json` turns on;
  * - a branding image in `assets/` must be in the package;
  * - a queue the home or the menu names must be in `queues/`;
@@ -197,7 +198,7 @@ function findingsOf(
     case 'layout':
       return validateLayoutV2(content, {
         mode: options.mode ?? file.mode,
-        registries,
+        registries: withCardActions(registries, context.actions),
         model: options.model,
         type: file.type,
       });
@@ -266,6 +267,21 @@ export function withPackageActions(registries: Registries, actions: unknown): Re
     if (on.includes('bulk')) bulk.push(action['id']);
   }
   return withRegistered(registries, { rowActions: row, bulkActions: bulk });
+}
+
+/**
+ * The registries with the package's actions that show on a card, from its `actions.json`, which a
+ * holds card may name: none when the package has no such file. A file checked with its package
+ * always knows them, so a card naming another is refused when the package is built.
+ */
+export function withCardActions(registries: Registries, actions: unknown): Registries {
+  const list = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
+  const card = list.flatMap((action: unknown) =>
+    isRecord(action) && typeof action['id'] === 'string' && placementsOf(action).includes('card')
+      ? [action['id']]
+      : [],
+  );
+  return { ...registries, cardActions: new Set(card) };
 }
 
 function missingAssets(content: unknown, context: PackageContext): Finding[] {

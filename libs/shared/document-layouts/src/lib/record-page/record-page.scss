@@ -63,6 +63,13 @@
   overflow-x: auto;
 }
 
+/* A related list's New, over the list it adds to. */
+.record-page__related-create {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-end: 8px;
+}
+
 .record-page__fields,
 .record-page__nested {
   margin: 0;

@@ -125,6 +125,7 @@ import {
   DocumentLayoutComponent,
   DocumentLayoutService,
   RecordPageComponent,
+  readServerRefusal,
   type ResolvedRecordLayout,
 } from '@agentic-ui/shared/document-layouts';
 import {
@@ -3250,10 +3251,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
               );
               this.goBack();
             },
-            error: () => {
+            error: (failure: unknown) => {
               this.actionInProgress.set(null);
+              // The server's own reason, such as a legal hold's, when it refused; else ours.
               this.toast.error(
-                this.translate.instant('document-detail.message.failed-to-delete-document'),
+                readServerRefusal(failure) ??
+                  this.translate.instant('document-detail.message.failed-to-delete-document'),
               );
             },
           });
@@ -3994,10 +3997,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         this.toast.show(`"${file.name}" attached`);
         this.loadDocument(this.docUid);
       },
-      error: () => {
+      error: (failure: unknown) => {
         this.actionInProgress.set(null);
+        // The server's own reason, such as a legal hold's, when it refused; else ours.
         this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-upload-attachment'),
+          readServerRefusal(failure) ??
+            this.translate.instant('document-detail.message.failed-to-upload-attachment'),
         );
       },
     });
@@ -4040,10 +4045,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
               this.toast.show(`"${att.name}" replaced`);
               this.loadDocument(this.docUid);
             },
-            error: () => {
+            error: (failure: unknown) => {
               this.actionInProgress.set(null);
+              // The server's own reason, such as a legal hold's, when it refused; else ours.
               this.toast.error(
-                this.translate.instant('document-detail.message.failed-to-replace-attachment'),
+                readServerRefusal(failure) ??
+                  this.translate.instant('document-detail.message.failed-to-replace-attachment'),
               );
             },
           });
@@ -4068,10 +4075,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
               this.toast.show(`"${att.name}" removed`);
               this.loadDocument(this.docUid);
             },
-            error: () => {
+            error: (failure: unknown) => {
               this.actionInProgress.set(null);
+              // The server's own reason, such as a legal hold's, when it refused; else ours.
               this.toast.error(
-                this.translate.instant('document-detail.message.failed-to-remove-attachment'),
+                readServerRefusal(failure) ??
+                  this.translate.instant('document-detail.message.failed-to-remove-attachment'),
               );
             },
           });
@@ -4099,10 +4108,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
               this.toast.show(this.translate.instant('document-detail.message.main-file-replaced'));
               this.loadDocument(this.docUid);
             },
-            error: () => {
+            error: (failure: unknown) => {
               this.actionInProgress.set(null);
+              // The server's own reason, such as a legal hold's, when it refused; else ours.
               this.toast.error(
-                this.translate.instant('document-detail.message.failed-to-replace-main-file'),
+                readServerRefusal(failure) ??
+                  this.translate.instant('document-detail.message.failed-to-replace-main-file'),
               );
             },
           });
@@ -4127,10 +4138,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
               this.toast.show(this.translate.instant('document-detail.message.main-file-removed'));
               this.loadDocument(this.docUid);
             },
-            error: () => {
+            error: (failure: unknown) => {
               this.actionInProgress.set(null);
+              // The server's own reason, such as a legal hold's, when it refused; else ours.
               this.toast.error(
-                this.translate.instant('document-detail.message.failed-to-remove-main-file'),
+                readServerRefusal(failure) ??
+                  this.translate.instant('document-detail.message.failed-to-remove-main-file'),
               );
             },
           });
