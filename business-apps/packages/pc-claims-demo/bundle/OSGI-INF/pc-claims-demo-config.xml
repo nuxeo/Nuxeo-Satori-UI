@@ -20,6 +20,7 @@
     <layout type="PropertyClaim" mode="view" src="agentic-ui-config/layouts/PropertyClaim/view.layout.json" />
     <layout type="PropertyPolicy" mode="view" src="agentic-ui-config/layouts/PropertyPolicy/view.layout.json" />
     <layout type="PropertyClaim" mode="edit" src="agentic-ui-config/layouts/PropertyClaim/edit.layout.json" />
+    <layout type="PropertyClaimMail" mode="edit" src="agentic-ui-config/layouts/PropertyClaimMail/edit.layout.json" />
   </extension>
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
@@ -29,6 +30,7 @@
       <file path="home.json" />
       <file path="navigation.json" />
       <file path="queues/open-property-claims.json" />
+      <file path="queues/mail-to-confirm.json" />
     </app>
   </extension>
 </component>

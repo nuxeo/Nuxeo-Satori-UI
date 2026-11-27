@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.capture" version="1.0">
+
+  <documentation>
+    The capture service: the providers a server may classify and extract with, each registered here
+    by an id and a class implementing org.nuxeo.agentic.capture.CaptureProvider, and the one the
+    server uses, which its nuxeo.conf names in nuxeo.agentic.capture.provider. With none named, or
+    the one named not configured, nothing is classified: every item waits for a person, and nothing
+    is filed by itself.
+
+    The profiles a kit contributes: an inbox's type and its items' type, the record type they are
+    filed on, the classes with their fields, which fields match a record, and the threshold under
+    which nothing is filed without a person.
+  </documentation>
+
+  <require>org.nuxeo.agentic.capture.schema</require>
+  <require>org.nuxeo.runtime.kv.KeyValueService</require>
+
+  <implementation class="org.nuxeo.agentic.capture.CaptureComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.capture.CaptureService" />
+  </service>
+
+  <extension-point name="providers">
+    <documentation>
+      A capture provider, by its id, 1 to 32 lower-case letters, digits and "-", starting with a
+      letter, and its class. enabled="false" removes one.
+
+      <code>
+        <provider id="standin" class="org.nuxeo.agentic.capture.standin.StandInProvider" />
+      </code>
+    </documentation>
+    <object class="org.nuxeo.agentic.capture.ProviderDescriptor" />
+  </extension-point>
+
+  <extension-point name="profiles">
+    <documentation>
+      A capture profile: which inbox and item types it captures, the record type it files on and,
+      if given, the folder records are matched under, the threshold, from 0.5 to 1, 0.85 when none
+      is given, and its classes, each with the fields extracted from it. A field with match names
+      the record's property its value must equal; with format, a pattern its whole value must
+      match. A profile that breaks a rule is not registered, and the server's log says which.
+
+      <code>
+        <profile id="pc-claims-mail">
+          <inboxType>PropertyClaimInbox</inboxType>
+          <itemType>PropertyClaimMail</itemType>
+          <recordType>PropertyClaim</recordType>
+          <recordPath>/default-domain/workspaces/pc-claims-demo</recordPath>
+          <threshold>0.85</threshold>
+          <class name="claimLetter" label="Claim letter">
+            <description>A letter about an existing property claim</description>
+            <keyword>claim number</keyword>
+            <field name="claimNumber" label="Claim number" match="pclaim:number" format="PC-[0-9]{5}" />
+            <field name="sender" label="From" />
+          </class>
+        </profile>
+      </code>
+    </documentation>
+    <object class="org.nuxeo.agentic.capture.ProfileDescriptor" />
+  </extension-point>
+
+</component>

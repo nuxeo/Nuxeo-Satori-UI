@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- Stand-ins for the AI package's two operations, for the tests only: they count their calls,
+     keep what they were given, and answer what the test sets (TestAiOperations). No AI service is
+     called: there is none in the tests. -->
+<component name="org.nuxeo.agentic.capture.test.ai">
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.capture.TestAiOperations$Classify" />
+    <operation class="org.nuxeo.agentic.capture.TestAiOperations$Extract" />
+  </extension>
+
+</component>
