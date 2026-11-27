@@ -1,10 +1,11 @@
 # Studio migration
 
-Phases M0, M1 and M2 of the migration in
+Phases M0 to M3 of the migration in
 [docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
 declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
-definition the package pipeline's validator accepts, and runs the verification harness over the
+definition the package pipeline's validator accepts, proposes each custom element as a Layer 2
+plugin and scaffolds it (M3, the code track, below), and runs the verification harness over the
 result. It prints the report a person approves, with every reported item's owner and decision and
 every proposal accepted or rejected, writes what a person accepted, carries decisions to a new
 build of the package, and records the reviewer's approval.
@@ -25,14 +26,15 @@ The commands it runs, one by one:
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
 npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>] [--decisions <decisions.json>]
-npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>] [--run-plugins] [--observed <file>]
 npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
 npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
-npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
-npx tsx tools/studio-migration/src/cli.ts approve <package.zip> <conversion-directory> --by <name>
+npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
+npx tsx tools/studio-migration/src/cli.ts approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
+npx tsx tools/studio-migration/src/cli.ts plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>] [--restamp]
 npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 ```
 
@@ -41,7 +43,9 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
 - `inventory` says what the package holds, what each part becomes and what someone has to decide.
 - `convert` writes the M1 conversion and its report. `--decisions` writes what people accepted in
   a `decisions.json`, of this build or an earlier one, carried as `decisions --from` carries it.
-- `check` runs the harness on a conversion.
+- `check` runs the harness on a conversion. Check 9 reads the plugins of the package's custom
+  elements from this repository, or the one `--plugins` names; `--run-plugins` runs them too, and
+  `--observed` gives what each element shows, for the values half (below, **The code track**).
 - `mutate` writes a deliberately broken copy of a conversion, for the harness to refuse.
 - `decisions` writes the conversion's `decisions.json`, for people to say who owns each reported
   item and what they decided, and who accepts or rejects each proposal, and why. `--from` carries
@@ -53,6 +57,8 @@ npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory
   order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
   guided migration**). Given several packages, or a folder, it runs each so into a folder of its
   own, and writes a summary of them all (below, **Many packages in one run**).
+- `plugin` writes the Layer 2 plugin library of one custom element of the package, from the
+  template every customer library comes from, for an agent to finish (below, **The code track**).
 - `lab` opens documents in Web UI and in the new app on a real server, compares the requests each
   sends, and runs the server halves it can (below, **Lab mode**). It is the only command that
   talks to a server.
@@ -123,8 +129,9 @@ them through what it writes.
 - **It only reads the package,** once: every step is given the same bytes.
 - **It says which checks still need the migration lab server,** and why: each of checks 3, 5, 6
   and 7 whose server half did not run, with what that half adds and what this run could not
-  settle, and check 9, which waits for M3. Check 10 is never among them: `check` is given the
-  allow-list `convert` was, and without one the conversion makes no action.
+  settle, and check 9 while a custom element's plugin is not written or not run, with what to do.
+  Check 10 is never among them: `check` is given the allow-list `convert` was, and without one the
+  conversion makes no action.
 
 **On the made-up packages**, Acme-Claims with and without M2's corpus, every file `migrate` writes
 is byte-identical to the commands run by hand into the same paths:
@@ -260,7 +267,7 @@ On the sample package, with M1:
     background: its blue at a contrast of 4.43, and its error red at 4.17.
 - **The broken copy:** check 8 also names the primary colour moved to the wrong token.
 - **Every run:** the verdict is "not ready", with the reasons:
-  - check 8 failed, three checks ran in part, and check 9 waits for M3;
+  - check 8 failed, and three checks ran in part;
   - 2 constructs wait for a later phase, and one proposal waits for a person;
   - 133 reported items have no owner.
 
@@ -650,14 +657,14 @@ is reported: `app.json`'s branding takes a logo and a favicon only.
 
 Every construct of the package is in the report once, with one of these outcomes:
 
-| Outcome     | Meaning                                                                                                                                       |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `converted` | Done, with where it went                                                                                                                      |
-| `proposed`  | An agent proposes it, and a person accepts it                                                                                                 |
-| `reported`  | It does not migrate, with why                                                                                                                 |
-| `generated` | Studio's own packaging, records and templates                                                                                                 |
-| `server`    | It stays on the server in the Studio package, and the new app reads it                                                                        |
-| `pending`   | A later phase converts it, and the note says which: a version 1 field under a condition once the converter writes version 2 forms, code in M3 |
+| Outcome     | Meaning                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `converted` | Done, with where it went                                                                                                          |
+| `proposed`  | An agent proposes it, and a person accepts it                                                                                     |
+| `reported`  | It does not migrate, with why                                                                                                     |
+| `generated` | Studio's own packaging, records and templates                                                                                     |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                                                            |
+| `pending`   | A later phase converts it, and the note says which: a version 1 field under a condition once the converter writes version 2 forms |
 
 A `reported` construct may still have been written, as a field version 1 cannot show as Web UI
 does is: its `to` then says where.
@@ -756,7 +763,11 @@ check that did not run does.
     the record or a selection, as Web UI does: the contribution Web UI's slot keeps, never a
     disabled, replaced or outranked one. Nothing asks for anything the package does not. The
     recorded requests and their result counts need the server.
-- **Not run:** 9, plugins, which M3 brings.
+- **Check 9, plugins,** holds each custom element's plugin to the element (below, **The code
+  track**). Its scan of the plugins and of the configuration needs only the files; its tests,
+  gates and values run with `check --run-plugins --observed <file>`. Until a plugin is written,
+  or run, the check is `partial`. A package with no custom element passes it, its configuration
+  holding no code.
 
 **Readiness.** A migration is ready only when all ten pass, nothing is pending, every proposal is
 accepted or rejected by someone named, for a reason, and the conversion was made with those
@@ -836,6 +847,41 @@ conversion carries, on a layout field, a tab, a card, a task form's field, an ac
 a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
 M2's corpus included, and check 5 fails for every one.
 
+**Check 9's controls.** Twenty-five more, in the same file as `PLUGIN_MUTATIONS`, break the
+plugins or the conversion of the made-up corpus's two custom elements; `src/check-plugins.spec.ts`
+applies each and sees check 9 fail, with a finding it names for each. Ten of them check 9 sees only
+by running the plugin, and the spec runs each from a copy of the plugin's files with the control
+applied, as `check --run-plugins` does. `mutate` does not apply them: it breaks a conversion's
+directory, never a plugin.
+
+| Mutation                      | Run | Breaks                                                                   |
+| ----------------------------- | --- | ------------------------------------------------------------------------ |
+| `plugin-writes-html`          |     | Writes a value the plugin shows as HTML, with `[innerHTML]`              |
+| `plugin-drops-value`          | yes | Takes a value the element shows out of the plugin's template             |
+| `plugin-test-fails`           | yes | Makes one of the plugin's own tests expect another value                 |
+| `plugin-todo-left`            | yes | Leaves one of the plugin's tests `it.todo`                               |
+| `plugin-bypasses-http`        |     | Sends the plugin's request through an `HttpClient` of its own            |
+| `plugin-asks-other-operation` | yes | Makes the plugin run another operation than its element                  |
+| `plugin-registers-more`       | yes | Registers a rule of the plugin's own beside its component                |
+| `plugin-changes-event-detail` | yes | Emits an event with another detail than the element fires                |
+| `plugin-asks-on-render`       | yes | Sends a request as the plugin is drawn, where the element sends none     |
+| `plugin-extra-button`         | yes | Gives the plugin a button the element does not have                      |
+| `plugin-skips-tests`          | yes | Takes the plugin's tests of its behaviour away, with `describe.skip`     |
+| `plugin-empty-test`           | yes | Gives the plugin a test that asserts nothing                             |
+| `plugin-bypasses-sanitizer`   |     | Trusts a value past Angular's sanitiser                                  |
+| `plugin-drops-output`         |     | Takes an output for one of the element's events off the plugin           |
+| `plugin-not-built-in`         |     | Leaves the plugin's provider out of the template app                     |
+| `code-in-plugin-metadata`     |     | Puts the element's code into `studio-plugin.json`                        |
+| `plugin-project-target`       |     | Makes the plugin's `typecheck` target run something else                 |
+| `plugin-runs-eval`            |     | Runs text as code, with `eval`                                           |
+| `plugin-binds-nuxeo-src`      |     | Binds a document's file to an image's `[src]`                            |
+| `plugin-third-party-api`      |     | Puts a type of another package in the plugin's public API                |
+| `plugin-own-test-config`      |     | Changes how the plugin's tests run, in its own Vite configuration        |
+| `plugin-from-changed-element` |     | Holds the plugin to another definition of its element                    |
+| `code-in-configuration`       |     | Puts the element's code into the conversion's record page, as a template |
+| `drop-element-entry`          |     | Leaves a custom element out of the report                                |
+| `plugin-needs-no-decision`    |     | Gives an element's plugin as proposed with no decision of its own        |
+
 **The decisions' controls.** Six more, in the same file, break a `decisions.json` filled in against
 its report, in one way each: they take a decision's owner or what was decided off, change the
 report under a decision, or add an entry that must not be taken. No check fails then: readiness
@@ -882,6 +928,23 @@ of it, a field added above another, a search field relabelled, a theme property 
 view's `dom-if` testing another facet; the approval's to a decided run approved through a stand-in
 for a terminal, and written to disk with `mutate`. Each was seen failing: a check, or readiness
 naming it. The sample is not in this repository, and was not used.
+
+**The controls of the plugins' joins.** Three more, `PLUGIN_JOIN_MUTATIONS`, for where check 9
+meets the decisions and the approval ([`src/plugin-joins.spec.ts`](src/plugin-joins.spec.ts)). Each
+breaks the made-up corpus's migration with both plugins accepted, by name and for a reason, and its
+report approved, and readiness must name what broke while check 9 still passes:
+
+| Mutation                          | Caught by | Breaks                                                                                       |
+| --------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| `accept-plugin-undecided`         | decisions | Records a plugin as accepted in the report, with no decision of it in `decisions.json`       |
+| `carry-plugin-to-changed-element` | decisions | Carries a plugin's acceptance to its element changed in a new build, rather than drop it     |
+| `change-plugin-after-approval`    | approval  | Changes a file of an accepted plugin after the report was approved, check 9 passing it still |
+
+The new build for the second gives the exposure element one more comment, so its identity is
+another and carrying drops its acceptance; the control puts it back. Each was seen failing, and
+each guard it holds was broken on purpose and seen to turn the spec red: the plugin's entry with
+no decision, the approval blind to the plugins, the element's identity blind to its definition,
+and a rejected plugin left built in. `mutate` does not apply them.
 
 ## The report
 
@@ -1189,6 +1252,142 @@ holds it. On this server it cannot be seen live: the fields of Web UI's stock la
 Core and a note's format alone, which the new app's Properties panel draws whatever its layout
 files say. It needs a package's Web UI layouts on the server, as the lab server will have them.
 
+## The code track (M3)
+
+Migration M3 (the migration document, sections 4 to 7): each custom element of a package becomes a
+Layer 2 Angular plugin, written by an agent, held to the element by check 9, and accepted by a
+person. **Built and checked on two made-up elements only, with no real package.** Until decision
+5's spike proves signed, pinned plugins loaded at run time, a plugin is built into the customer's
+app from the template, as every customer library is today: nothing here loads code at run time.
+
+1. **The inventory describes each element** ([`src/elements.ts`](src/elements.ts)). A custom
+   element is a `dom-module` of the custom bundle, `nuxeo-<project>-custom-bundle.html`, that holds
+   a script. Read from the parsed markup and the script's syntax tree, and never run: its
+   properties, with their types and defaults; its behaviours and the methods it calls on itself;
+   its template's bindings, the document properties they read, its conditions and the elements it
+   uses; its listeners; the events it fires with `this.fire` or `new CustomEvent`; the operations
+   its `nuxeo-operation` and `nuxeo-operation-button` run; its texts; where the package uses it;
+   and the SHA-256 of what it reaches in the package: its definition, the custom bundle's code outside its elements and slot contributions, where a behaviour or a mixin it uses is defined, and the files of the package either names in a `src` or an `href`, read once and not followed further. `inventory` prints it under "Custom elements". What an
+   element holds is the element's: its scripts and conditions are not among the file's, and both
+   counts of check 1 count the element whole.
+2. **The report proposes each element as its plugin** ([`src/convert-elements.ts`](src/convert-elements.ts)),
+   a construct `custom-element:<file>#<n>`, `proposed`, with the plugin's library,
+   `libs/extensions/<element>`, as where it goes. It is a proposal as a condition's rule is
+   (**The report**, above): a person accepts or rejects it in `decisions.json`, with their name and
+   reason, held to the element by its identity, of that SHA-256, and the report
+   records what the conversion was made with, `applied`. Accepting it writes nothing of the
+   conversion. Readiness waits for the decision, so a plugin that passes check 9 is not ready on
+   that alone, and a decision is carried to a new build only while what the element reaches in the package is the same: what it reaches beyond it, Web UI's own behaviours, is not in it.
+   `approve` records, beside the report's digests, the SHA-256 of every file of each accepted
+   plugin's library, `studio-plugin.json` among them, read from this repository or the one
+   `--plugins` names: a plugin changed after the approval voids it. A contribution that holds a custom
+   element in a document's actions is reported: an app's toolbar draws actions, not components, so
+   where the plugin shows is a person's call. The custom bundle's other code, and customer code in
+   a file Studio generates, are reported: M3 writes plugins of elements only.
+3. **`plugin` scaffolds the library** ([`src/plugin.ts`](src/plugin.ts)): it runs
+   `nx g ./tools/satori-generators:extension-library`, the template every customer's Layer 2
+   library comes from, then writes over its samples the element's component, registered by ID
+   behind a lazy import, with an `input()` per property and an `output()` per event; a spec skeleton
+   with an `it.todo` per behaviour the inventory read; the element's texts in the package's own
+   language; a README quoting the element; and `studio-plugin.json`, which names the element, the
+   package, the definition it was written from, the component and the provider. It refuses an
+   element the package does not define, and a library already there. It writes no behaviour.
+   `plugin … --restamp` records anew, in an existing plugin, the element's definition as the package
+   given holds it, for a person who has changed the plugin to follow a changed element.
+4. **The Code agent finishes it,** following [`.cursor/skills/studio-plugin/SKILL.md`](../../.cursor/skills/studio-plugin/SKILL.md):
+   the repository's conventions, the app's services only, a test of each behaviour, and never any
+   code in configuration. Then it adds the provider to the template's `app.config.ts`.
+5. **Check 9** ([`src/check-plugins.ts`](src/check-plugins.ts), [`src/plugin-scan.ts`](src/plugin-scan.ts),
+   [`src/plugin-run.ts`](src/plugin-run.ts)) holds each plugin to its element:
+   - **the report** lists the element as its plugin, a proposal a person decides, at its library;
+     a rejected plugin is not held to its element, and its library must be gone;
+   - **the plugin** is the element's, from its definition as the package holds it now, with its
+     interface, built into the template app from its own library, as the template's `tsconfig.app.json` resolves its import path, with no directory check 9 does not read, `node_modules` or `.git`, with the template's build and test configuration, a
+     test of every behaviour the inventory read or a reason in its README's "Not kept";
+   - **a scan** of its shipped code finds no data written as HTML, no sanitiser bypassed, no text
+     run as code, no URL bound to `[src]` that is not a blob URL it revokes, no Nuxeo URL in a
+     `src`, no network but through the app's services, no other origin, no browser storage, no code
+     run at start-up, no global reached by a computed name, no built-in changed, no import outside
+     Angular, RxJS, the platform's published entry points and its own files, and the repository's
+     conventions kept; its public API exports no class and no type of another package; and no
+     string of the conversion's app definition or of `studio-plugin.json` holds code;
+   - **run** (`--run-plugins`): its own tests pass, from a copy of its files with the template's
+     configuration and the harness's own setup, which fails a test that asserts nothing; a passing
+     test of every behaviour the inventory read, by its title, as Vitest ran it; none left `todo`,
+     skipped, or taken away, and no file of them running none; lint, test and typecheck of the
+     library, and build of the template app, pass through Nx, once the library on disk is the files
+     the check read, its `project.json` the generator's; and the platform's customer guardrail,
+     `libs/platform/guardrails/check-extension-library.mjs`, passes on its files;
+   - **its values** (`--observed`): the harness's own spec, written into the copy and into nothing
+     of the plugin, registers the plugin through its provider, resolves its component by ID, shows
+     it each record of the observed behaviour with the record and the inputs the file gives, and
+     compares the text it shows, each piece with one space between, as check 6 compares labels; the
+     requests it sends and the outputs it emits as it is drawn; that every button it shows is
+     pressed by the file; and, pressing each, the requests until it settles, the operation, its
+     input (`doc:<uid>` and the uid alone being one document) and its parameters, and the outputs
+     emitted, a detail of none being `{}` as Polymer fires it. Whenever the plugin runs, what
+     registering and drawing it added to the app's registries is held to its one component. An
+     input the file never gives a value leaves the check in part.
+6. **The observed behaviour** ([`src/observed.ts`](src/observed.ts)), `studio-migration-observed/1`,
+   is records as Nuxeo's REST API returns them and, for each element, what it shows on each and
+   what pressing it asks and fires. For a real package it would be read from Web UI on the
+   migration server, which lab mode does not do yet. The made-up corpus's was worked out by hand
+   from each element's code.
+
+**On the made-up corpus** ([`src/testing/m3-corpus.ts`](src/testing/m3-corpus.ts)): two elements,
+`acme-claim-exposure`, which shows a claim's properties computed, and `acme-claim-escalate`, a
+button that runs `Claim.Escalate` and fires `claim-escalated`, `document-updated` or `notify`. The
+`plugin` command wrote `libs/extensions/acme-claim-exposure` and `libs/extensions/acme-claim-escalate`,
+which were then finished with the skill and built into `apps/nuxeo-satori-template`.
+
+- **In the tests:** both plugins run, their own tests and the harness's spec, and check 9 finds
+  nothing, `partial` only because lint, build and typecheck do not run there. Every control fails it.
+- **By hand, on 27 November 2026:** `check --run-plugins --observed`, on the corpus's package, its
+  conversion and its observed behaviour, ran both plugins' gates through Nx too, and check 9 passed
+  on both. That run is not repeated by any test or CI job: CI runs the plugins' lint, test, build
+  and typecheck as the repository's gates, and the tests above.
+- **One thing shown differently:** the escalate element's `notify` was a toast in Web UI; a slot
+  binds none of the plugin's outputs and the template app has no toast, so the plugin shows the
+  message beside its button. Its README says so.
+
+**What it does not do:**
+
+- **No real package.** No custom element of a real package has been migrated, so neither has the
+  phase 6 demo's "custom element from a real package". Real elements will hold what these two do
+  not: Polymer 3 classes, imports of other files, behaviours of their own, elements nested in one
+  another.
+- **Run-time loading** waits for decision 5's spike and its owners; the plugin is built in.
+- **Placing a plugin** is a person's, as they accept it: the conversion writes no manifest entry for
+  it, and the record page's layout file holds no component.
+- **The template's own configuration** is not in the approval: it covers each accepted plugin's
+  library. Check 9 holds the template's `app.config.ts` to call each accepted plugin's provider as
+  it imports it from the plugin, read from its syntax tree; its `tsconfig.app.json` to resolve the
+  plugin's import path to the library's `src/index.ts`; and a rejected plugin's library to be gone
+  from the repository. It reads no other file of the template app: `angular.json`, whose
+  `tsConfig` or `fileReplacements` could build other files, and the rest of the fork are the
+  customer's own code, which their review holds.
+- **An element's reach is read one level deep, in the package.** Its identity covers its module,
+  the custom bundle's code outside its elements, and the package's files either names; not a file
+  one of those loads in turn, a behaviour defined in another element's module or another custom
+  bundle, a path from the server's root, `/…`, which is no file of the package, or Web UI's own
+  behaviours. A change there keeps the element's identity and its plugin's acceptance.
+- **One plugin per element name** in a repository: `libs/extensions/<element>`. Two packages in one
+  repository with an element of the same name share it, so one cannot accept the plugin while the
+  other rejects it and both be ready.
+- **The observed behaviour of a real element** needs Web UI on the migration server.
+- **Another language** than the package's own: the plugin carries its element's texts in that
+  language, since the template provides no translation service.
+- **The scan is a tripwire, not a proof.** Code that hides what it does can pass it, and the
+  harness's spec and the plugin share a page. It reads the syntax, not the types: a type inferred
+  from a value is held by asking that its type be written. A person reviews every plugin before
+  accepting it.
+- **The values half compares text, requests and outputs,** not attributes, styles or what a style
+  hides: a tooltip, an icon's name or a value hidden by CSS is the reviewer's. It holds the plugin
+  only on the records and inputs the observed behaviour gives.
+- **Overrides of the platform's own registrations** are held by the scan, which allows only
+  `provideSatoriExtensions({ components })` and no registry elsewhere; the run sees only what is
+  added, by ID.
+
 ## Tests
 
 ```bash
@@ -1204,6 +1403,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   - an operation button with parameters;
   - a dashboard list with a query parameter and a page size;
   - schemas with typed fields.
+
+  For M3, [`m3-corpus.ts`](src/testing/m3-corpus.ts) adds two made-up custom elements to the
+  custom bundle, one used in the Claim's view layout and one among a document's actions, four
+  records of the Claim type, and what each element shows on them and asks the server, worked out
+  by hand (above, **The code track**).
 
   For M2, [`m2-corpus.ts`](src/testing/m2-corpus.ts) adds, on a type and a workflow of its own:
   a task layout in Web UI's own format, and one whose names' case the package does not give; three
@@ -1688,7 +1892,8 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   places (`formPlaces`, in `src/forms.ts`) still hold the type whose view it wrote no file for to
   the tab, as `…: … is missing, though … shows it`. Found while writing the support playbook, with
   a made-up package; not fixed here, and the playbook names it.
-- **Check 9** needs plugins, in M3.
+- **The rest of M3, the code track** (above): real packages' elements, the observed behaviour read
+  from Web UI, a plugin's placement, run-time loading after decision 5, and other languages.
 - **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
   screen's table. The server half of check 5 needs the migration server.
 - **Version 2 forms.** The app now draws `edit` and `create` files of version 2 (layout-v2.md,
@@ -1781,7 +1986,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     workflow, whose model file is of no known kind until then. A task layout whose names' case the
     package does not give is reported;
   - **the script Studio generates for a task layout**, whose shape the catalogue does not know, so
-    each such script is customer code, pending M3, until it does;
+    each such script is customer code, reported, until it does;
   - **what Studio Designer writes for a tab:** its item and page, and whether the page is a layout
     block or an element of its own;
   - the elements, slots and widgets they use that the catalogue does not know yet;

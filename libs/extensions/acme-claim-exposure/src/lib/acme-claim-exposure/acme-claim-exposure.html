@@ -1,0 +1,15 @@
+<div class="row">
+  <span class="label">{{ text('label.claim.number') }}</span>
+  <span class="value">{{ number() }}</span>
+</div>
+<div class="row">
+  <span class="label">{{ text('label.claim.outstanding') }}</span>
+  <span class="value">{{ outstanding() }}</span>
+</div>
+<div class="row">
+  <span class="label">{{ text('label.claim.reserveRatio') }}</span>
+  <span class="value">{{ ratio() }}</span>
+</div>
+@if (high()) {
+  <span class="high">{{ text('label.claim.highExposure') }}</span>
+}

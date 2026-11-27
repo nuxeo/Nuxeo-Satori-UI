@@ -4,7 +4,8 @@
     "outDir": "<%= offsetFromRoot %>dist/out-tsc",
     "importHelpers": false,
     "useDefineForClassFields": false,
-    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"]
+    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
+    "rootDir": "<%= rootDir %>"
   },
   "include": [
     "vite.config.ts",

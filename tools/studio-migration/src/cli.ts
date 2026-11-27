@@ -10,9 +10,9 @@
  *   mutate    --list                                          the mutations, and what must refuse each
  *   decisions <package.zip> <conversion-directory> [--from <decisions.json>]
  *                                                             the decisions file, for people to fill in
- *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+ *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
  *                                                             the report, for the person who approves it
- *   approve   <package.zip> <conversion-directory> --by <name>
+ *   approve   <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
  *                                                             a person's approval of the report and its
  *                                                             decisions, typed at a terminal (approval.ts)
  *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
@@ -61,12 +61,14 @@ import { readFileSync, readSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { account, type Accounting } from './account';
 import {
+  acceptedPlugins,
   APPROVAL_FILE,
   ApprovalError,
   approvalDigest,
   approvalOf,
   CONFIRM_LENGTH,
   digestsOf,
+  type PluginFiles,
 } from './approval';
 import { CatalogueError, loadCatalogue, type How } from './catalogue';
 import { constructsOf, sharedIdentities } from './constructs';
@@ -89,6 +91,11 @@ import {
   everyDecisionMade,
   holdDecisions,
 } from './decisions';
+import { describeElement } from './elements';
+import { ObservedError, readObserved } from './observed';
+import { nextSteps, PluginError, restampPlugin, scaffoldPlugin } from './plugin';
+import { runPlugin, type PluginRun } from './plugin-run';
+import { readLibrary, readPlugins, WORKSPACE, type PluginsInput } from './plugins';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
 import { isDirectory, migrateMany } from './batch';
@@ -135,14 +142,15 @@ export interface CliIo {
 const USAGE = `usage:
   studio-migration inventory <package.zip> [--json]
   studio-migration convert <package.zip> <new-directory> [--allow-list <file>] [--decisions <decisions.json>]
-  studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+  studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>] [--run-plugins] [--observed <file>]
   studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
-  studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
-  studio-migration approve <package.zip> <conversion-directory> --by <name>
+  studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>] [--plugins <repository>]
+  studio-migration approve <package.zip> <conversion-directory> --by <name> [--plugins <repository>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
   studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
+  studio-migration plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>] [--restamp]
   studio-migration lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 `;
 
@@ -159,12 +167,17 @@ const COMMANDS: Readonly<
 > = {
   inventory: { args: 1, flags: ['--json'] },
   convert: { args: 2, flags: [], valued: ['--allow-list', '--decisions'] },
-  check: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
+  check: {
+    args: 2,
+    flags: ['--json', '--run-plugins'],
+    valued: ['--allow-list', '--plugins', '--observed'],
+  },
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
-  report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
-  approve: { args: 2, flags: [], valued: ['--by'] },
+  report: { args: 2, flags: ['--json'], valued: ['--allow-list', '--plugins'] },
+  approve: { args: 2, flags: [], valued: ['--by', '--plugins'] },
   migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
+  plugin: { args: 2, flags: ['--restamp'], valued: ['--workspace', '--owner'] },
 };
 
 /** A command line read against {@link COMMANDS}: its arguments, flags and values. */
@@ -208,7 +221,9 @@ function parse(argv: readonly string[]): Parsed {
  * `main` itself, run as it always was, and its code is given as `main` gives it.
  */
 export function commandLine(argv: readonly string[], io: CliIo): number | Promise<number> {
-  const { command, args, values, wrong } = parse(argv);
+  const { command, args, flags, values, wrong } = parse(argv);
+  if (command === 'check' && !wrong && args.length === 2 && flags.includes('--run-plugins'))
+    return checkRunningPlugins(argv, io);
   const out = values.get('--out');
   if (
     command === 'migrate' &&
@@ -285,23 +300,8 @@ export function main(argv: readonly string[], io: CliIo): number {
         io.out(conversionSummary(conversion, args[1]));
         return 0;
       }
-      case 'check': {
-        const pkg = readPackage(io, args[0]);
-        const conversion = readConversion(args[1]);
-        const allowList = readAllowList(io, allowListFile);
-        const result = runHarness({
-          pkg,
-          inventory: inventory(pkg),
-          catalogue: loadCatalogue(),
-          conversion,
-          ...(allowList ? { allowList } : {}),
-        });
-        io.out(
-          json ? `${JSON.stringify(result, null, 2)}\n` : harnessSummary(result, pkg, args[1]),
-        );
-        io.checked?.(result);
-        return result.checks.some((check) => check.status === 'fail') ? 1 : 0;
-      }
+      case 'check':
+        return check(args, values, json, io);
       case 'mutate': {
         const chosen = mutation(args[1]);
         if (!chosen) {
@@ -380,12 +380,14 @@ export function main(argv: readonly string[], io: CliIo): number {
       case 'report': {
         const pkg = readPackage(io, args[0]);
         const allowList = readAllowList(io, allowListFile);
+        const read = inventory(pkg);
         const summary = summarise({
           pkg,
-          inventory: inventory(pkg),
+          inventory: read,
           catalogue: loadCatalogue(),
           conversion: readConversion(args[1]),
           ...(allowList ? { allowList } : {}),
+          plugins: readPlugins(values.get('--plugins') ?? WORKSPACE, read),
         });
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
         io.reported?.(summary);
@@ -397,7 +399,13 @@ export function main(argv: readonly string[], io: CliIo): number {
           io.err(USAGE);
           return 2;
         }
-        return approve(io, readPackage(io, args[0]), args[1], by);
+        return approve(
+          io,
+          readPackage(io, args[0]),
+          args[1],
+          by,
+          values.get('--plugins') ?? WORKSPACE,
+        );
       }
       case 'migrate': {
         const out = values.get('--out');
@@ -418,23 +426,126 @@ export function main(argv: readonly string[], io: CliIo): number {
           main,
         );
       }
+      case 'plugin': {
+        const pkg = readPackage(io, args[0]);
+        const owner = values.get('--owner');
+        if (flags.includes('--restamp')) {
+          const stamped = restampPlugin(pkg, inventory(pkg), args[1], {
+            workspace: values.get('--workspace') ?? WORKSPACE,
+          });
+          io.out(
+            `${stamped.library}: now the plugin of ${args[1]} as ${pkg.descriptor.name} ${pkg.descriptor.version} defines it (${stamped.to.slice(0, 12)}, was ${stamped.from?.slice(0, 12) ?? 'none'}). Check 9 holds it to that definition.\n`,
+          );
+          return 0;
+        }
+        const { names } = scaffoldPlugin(pkg, inventory(pkg), args[1], {
+          workspace: values.get('--workspace') ?? WORKSPACE,
+          ...(owner !== undefined ? { owner } : {}),
+        });
+        io.out(nextSteps(names));
+        return 0;
+      }
     }
   } catch (error) {
-    if (
-      error instanceof ZipError ||
-      error instanceof StudioPackageError ||
-      error instanceof CatalogueError ||
-      error instanceof ConversionError ||
-      error instanceof MutationError ||
-      error instanceof DecisionsError ||
-      error instanceof ApprovalError
-    ) {
-      io.err(`${error.message}\n`);
-      return 1;
-    }
-    throw error;
+    return refusal(error, io);
   }
   return 2;
+}
+
+/** What a command prints and exits with when it refuses, for a reason it gives; a defect throws. */
+function refusal(error: unknown, io: CliIo): number {
+  if (
+    error instanceof PluginError ||
+    error instanceof ObservedError ||
+    error instanceof ZipError ||
+    error instanceof StudioPackageError ||
+    error instanceof CatalogueError ||
+    error instanceof ConversionError ||
+    error instanceof MutationError ||
+    error instanceof DecisionsError ||
+    error instanceof ApprovalError
+  ) {
+    io.err(`${error.message}\n`);
+    return 1;
+  }
+  throw error;
+}
+
+/**
+ * `check`: the harness, with the plugins of the package's custom elements read from the repository
+ * (`--plugins`, this one by default) for check 9, or, from `--run-plugins`, the very files it ran
+ * and what running them found.
+ */
+function check(
+  args: readonly string[],
+  values: ReadonlyMap<string, string>,
+  json: boolean,
+  io: CliIo,
+  ran?: {
+    readonly pkg: StudioPackage;
+    readonly inventory: Inventory;
+    readonly plugins: PluginsInput;
+  },
+): number {
+  const pkg = ran?.pkg ?? readPackage(io, args[0]);
+  const conversion = readConversion(args[1]);
+  const allowList = readAllowList(io, values.get('--allow-list'));
+  const read = ran?.inventory ?? inventory(pkg);
+  const observedFile = values.get('--observed');
+  const result = runHarness({
+    pkg,
+    inventory: read,
+    catalogue: loadCatalogue(),
+    conversion,
+    ...(allowList ? { allowList } : {}),
+    plugins:
+      ran?.plugins ??
+      readPlugins(values.get('--plugins') ?? WORKSPACE, read, {
+        ...(observedFile !== undefined ? { observed: readObserved(observedFile) } : {}),
+      }),
+  });
+  io.out(json ? `${JSON.stringify(result, null, 2)}\n` : harnessSummary(result, pkg, args[1]));
+  io.checked?.(result);
+  return result.checks.some((outcome) => outcome.status === 'fail') ? 1 : 0;
+}
+
+/**
+ * `check --run-plugins`: each plugin of the package's custom elements is run first, its tests,
+ * its gates and, with `--observed`, what it shows (`plugin-run.ts`), then the harness. Slow, so
+ * it is asked for; and asynchronous, as the runs are.
+ */
+async function checkRunningPlugins(argv: readonly string[], io: CliIo): Promise<number> {
+  const { args, flags, values } = parse(argv);
+  try {
+    const pkg = readPackage(io, args[0]);
+    // Read first, so that a wrong path stops the command before the slow runs, not after them.
+    readConversion(args[1]);
+    const read = inventory(pkg);
+    const workspace = values.get('--plugins') ?? WORKSPACE;
+    const observedFile = values.get('--observed');
+    const observed = observedFile !== undefined ? readObserved(observedFile) : undefined;
+    // Read once: check 9 holds the plugins to the files that ran, and the run makes sure the files
+    // on disk are still those before its gates.
+    const plugins = readPlugins(workspace, read, { ...(observed ? { observed } : {}) });
+    const runs: Record<string, PluginRun> = {};
+    for (const source of plugins.sources) {
+      io.err(
+        `Running ${source.library}: its tests, what it shows, and lint, test, typecheck and build\n`,
+      );
+      runs[source.element] = await runPlugin(workspace, source, {
+        ...(observed ? { observed } : {}),
+        element: read.customElements.find((element) => element.name === source.element),
+        gates: true,
+      });
+    }
+    return check(args, values, flags.includes('--json'), io, {
+      pkg,
+      inventory: read,
+      plugins: { ...plugins, runs },
+    });
+  } catch (error) {
+    return refusal(error, io);
+  }
 }
 
 /** Which part of the harness must refuse what a control breaks. */
@@ -446,10 +557,18 @@ function catcher(control: Mutation | DecisionMutation): string {
 
 /**
  * `approve`: a person's approval of the report and its decisions as they are, typed at a
- * terminal, in `approval.json`. Refused, with nothing written, where there is no terminal, while a
- * decision is still to make, and when the person does not type back the start of the digest.
+ * terminal, in `approval.json`, with the files of each plugin the report accepts, read from
+ * `workspace` (this repository, or the one `--plugins` names, as check 9 reads them). Refused,
+ * with nothing written, where there is no terminal, while a decision is still to make, and when
+ * the person does not type back the start of the digest.
  */
-function approve(io: CliIo, pkg: StudioPackage, directory: string, by: string): number {
+function approve(
+  io: CliIo,
+  pkg: StudioPackage,
+  directory: string,
+  by: string,
+  workspace: string,
+): number {
   if (!io.terminal) {
     io.err(
       "approve records a person's approval, typed at a terminal, and there is none here: its input or its output is not a terminal, as in a script, a pipeline or an agent's run. Nothing was written. Run it yourself, in a terminal.\n",
@@ -458,7 +577,8 @@ function approve(io: CliIo, pkg: StudioPackage, directory: string, by: string): 
   }
   const conversion = readConversion(directory);
   const build = packageBuildOf(pkg);
-  const approval = approvalOf(conversion, build, by, (io.now ?? (() => new Date()))());
+  const plugins: PluginFiles = (library) => readLibrary(workspace, library);
+  const approval = approvalOf(conversion, build, by, (io.now ?? (() => new Date()))(), plugins);
   const constructs = constructsOf(inventory(pkg));
   const held = holdDecisions(
     conversion.report,
@@ -471,7 +591,7 @@ function approve(io: CliIo, pkg: StudioPackage, directory: string, by: string): 
     throw new ApprovalError(
       `${join(directory, DECISIONS_FILE)} still has decisions to make, or holds some that are not taken, and the conversion must be made with them: the verdict of check or report lists each. Nothing was written: approve once every decision is made, since a change to decisions.json voids an approval`,
     );
-  const digests = digestsOf(conversion);
+  const digests = digestsOf(conversion, plugins);
   const digest = approvalDigest(digests);
   io.out(
     [
@@ -479,6 +599,11 @@ function approve(io: CliIo, pkg: StudioPackage, directory: string, by: string): 
       `  report.json     SHA-256 ${digests.report}`,
       `  decisions.json  SHA-256 ${digests.decisions ?? 'none'}`,
       `  its files       SHA-256 ${digests.files}`,
+      ...(digests.plugins === null
+        ? []
+        : [
+            `  its plugins     SHA-256 ${digests.plugins}, of ${acceptedPlugins(conversion.report).join(', ')}`,
+          ]),
       `  together        ${digest}`,
       'A change to any of them voids the approval. Approving clears nothing else that stands in the way.',
       '',
@@ -854,6 +979,8 @@ export function summary(result: Inventory, accounting: Accounting): string {
   lines.push(
     `Custom code: ${withCode.length ? withCode.map((custom) => custom.path).join(', ') : 'none'}`,
   );
+  lines.push(`Custom elements: ${result.customElements.length || 'none'}`);
+  for (const element of result.customElements) lines.push(...describeElement(element));
 
   const known = accounting.scripts.filter((outcome) => outcome.entry !== null).length;
   lines.push(

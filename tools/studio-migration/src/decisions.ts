@@ -8,8 +8,9 @@
  * it. The `decisions` command writes the file with an entry for every item a person decides:
  *
  * - **a reported item,** for its `owner` and what they decided, in their own words, `decision`;
- * - **a proposal,** a condition's rule an agent proposes, or a card an operation feeds, for who
- *   decided it, `owner`, whether they `accept` or `reject` it, `decision`, and why, `reason`. What
+ * - **a proposal,** a condition's rule an agent proposes, a card an operation feeds, or a custom
+ *   element's plugin (`convert-elements.ts`), for who decided it, `owner`, whether they `accept`
+ *   or `reject` it, `decision`, and why, `reason`. What
  *   a proposal guards, a field under the condition, say, takes no decision of its own: it is
  *   written with the rule once the rule is accepted (`convert.ts`, `withVerdicts`), and reported
  *   once it is rejected.
@@ -906,7 +907,9 @@ function readDecisions(
         return;
       }
       // Accepting writes what is proposed: a proposal of nothing the converter can write cannot be.
-      if (verdict === ACCEPT && entry.rule === undefined) {
+      // A custom element's plugin is the one proposal the converter writes nothing of: an agent
+      // writes it, check 9 holds it, and accepting it is what readiness and the approval need.
+      if (verdict === ACCEPT && entry.rule === undefined && entry.kind !== 'custom-element') {
         findings.push(
           `${file}: ${id} proposes nothing the converter can write yet, so it cannot be accepted: reject it, with your reason, or leave it for the mapping agent`,
         );

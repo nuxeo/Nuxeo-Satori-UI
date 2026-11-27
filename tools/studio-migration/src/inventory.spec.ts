@@ -224,7 +224,7 @@ describe('inventory', () => {
 
   it('tells a custom bundle with code from one with only comments', () => {
     expect(synthetic.customCode).toEqual([
-      { path: `${UI}/nuxeo-Acme-Claims-custom-bundle.html`, hasCode: false },
+      { path: `${UI}/nuxeo-Acme-Claims-custom-bundle.html`, hasCode: false, hasOtherCode: false },
     ]);
     const withCode = of({
       bundle: {
@@ -233,6 +233,9 @@ describe('inventory', () => {
       },
     });
     expect(withCode.customCode[0].hasCode).toBe(true);
+    // A script outside a dom-module is no custom element: it is the bundle's other code.
+    expect(withCode.customCode[0].hasOtherCode).toBe(true);
+    expect(withCode.customElements).toEqual([]);
   });
 
   it('reads the dashboard cards, marks the repeat, and skips the one inside a comment', () => {

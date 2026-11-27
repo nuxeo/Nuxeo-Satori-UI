@@ -9,6 +9,8 @@
     "baseUrl": ".",
     "paths": {
       "@agentic-ui/testing/i18n": ["tools/i18n/test-translate-setup.ts"],
+      "@agentic-ui/acme-claim-escalate": ["libs/extensions/acme-claim-escalate/src/index.ts"],
+      "@agentic-ui/acme-claim-exposure": ["libs/extensions/acme-claim-exposure/src/index.ts"],
       "@agentic-ui/acme-extensions": ["libs/extensions/acme-extensions/src/index.ts"],
       "@agentic-ui/core": ["libs/core/src/index.ts"],
       "@agentic-ui/feature-administration": ["libs/features/administration/src/index.ts"],

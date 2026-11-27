@@ -72,8 +72,9 @@ describe('studio-migration inventory', () => {
     expect(out).toMatch(
       /element nuxeo-operation \(used once\) is for an agent to propose: Home cards read page providers/,
     );
+    // A script outside every custom element is not one M3 makes a plugin of.
     expect(out).toContain(
-      `${UI}/nuxeo-Acme-Claims-custom-bundle.html holds customer code, for an agent to propose as a Layer 2 plugin`,
+      `${UI}/nuxeo-Acme-Claims-custom-bundle.html holds customer code outside its custom elements, which is reported: a person rewrites it as a plugin, or leaves it behind`,
     );
   });
 
@@ -307,7 +308,7 @@ describe('studio-migration convert, check and mutate', () => {
       'partial',
       'partial',
       'pass',
-      'not run',
+      'pass',
       'pass',
     ]);
   });

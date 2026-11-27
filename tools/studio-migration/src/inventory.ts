@@ -7,6 +7,8 @@
  * `unrecognised` rather than skipped; a file that cannot be read is listed in `problems` rather
  * than ending the run.
  */
+import { createHash } from 'node:crypto';
+import { posix } from 'node:path';
 import {
   attributesOf,
   childLabel,
@@ -15,6 +17,7 @@ import {
   parseHtml,
   parseXml,
 } from './markup';
+import { elementModules, readCustomElement, type CustomElement } from './elements';
 import { scriptShape } from './script-shape';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { themeProperties, type ThemeProperty } from './theme';
@@ -323,6 +326,12 @@ export interface CustomCode {
   readonly path: string;
   /** False when the file holds only comments, as Studio generates it. */
   readonly hasCode: boolean;
+  /**
+   * True when it holds more than comments, its custom elements (`customElements`) and its slot
+   * contributions, each of which is a construct of its own: a script outside every element, a
+   * style, an import of another file.
+   */
+  readonly hasOtherCode: boolean;
 }
 
 /** A `<script>` in a layout, search screen, slot bundle, dashboard or theme. */
@@ -351,6 +360,13 @@ export interface Inventory {
   readonly searches: readonly SearchLayout[];
   readonly slotContributions: readonly SlotContribution[];
   readonly customCode: readonly CustomCode[];
+  /**
+   * The custom elements the custom bundle defines (`elements.ts`), which the code track of M3
+   * turns into Layer 2 plugins. What each holds is its own: its scripts, conditions and the
+   * elements its template uses are not among this inventory's `scripts`, `conditions` and
+   * `elements`, which are the rest of the package's.
+   */
+  readonly customElements: readonly CustomElement[];
   readonly dashboard: Dashboard | null;
   readonly themes: readonly Theme[];
   readonly translations: readonly Translations[];
@@ -413,6 +429,42 @@ export function classify(
   return BUNDLE_KINDS.find(([pattern]) => pattern.test(path))?.[1] ?? 'unrecognised';
 }
 
+/**
+ * The SHA-256 of what a custom element can reach in the package: its definition, `own`; the code of
+ * its custom bundle outside its elements and slot contributions, `bundle`; and each file of the
+ * package either names, with its bytes, or "absent" for one the package does not hold, such as
+ * Web UI's own. Read once, not followed further.
+ */
+function reachOf(
+  element: Pick<CustomElement, 'sha256'>,
+  bundle: { readonly markup: string; readonly named: readonly string[] } | undefined,
+  own: readonly string[],
+  file: (path: string) => Buffer | undefined,
+): string {
+  const hash = createHash('sha256').update(`definition\u0000${element.sha256}\n`);
+  hash.update(`bundle\u0000${bundle?.markup ?? ''}\n`);
+  for (const path of [...new Set([...own, ...(bundle?.named ?? [])])].sort()) {
+    const bytes = file(path);
+    hash.update(
+      `${path}\u0000${bytes ? createHash('sha256').update(bytes).digest('hex') : 'absent'}\n`,
+    );
+  }
+  return hash.digest('hex');
+}
+
+/** The files of the package the elements given name in a `src` or an `href`, from `path`'s folder. */
+function namedFiles(path: string, elements: readonly Element[]): string[] {
+  const folder = posix.dirname(path);
+  return elements.flatMap((element) =>
+    ['src', 'href'].flatMap((attribute) => {
+      const value = element.getAttribute(attribute)?.trim() ?? '';
+      // A URL of another origin, a fragment or a data URL is no file of the package.
+      if (value === '' || /^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(value)) return [];
+      return [posix.normalize(posix.join(folder, value.split(/[?#]/)[0] ?? ''))];
+    }),
+  );
+}
+
 export function inventory(pkg: StudioPackage): Inventory {
   // Every path asked for comes from the bundle's own listing, so it is always there.
   const read = (path: string): string =>
@@ -473,12 +525,30 @@ export function inventory(pkg: StudioPackage): Inventory {
   const blockUses: BlockUse[] = [];
   /** Each block use's element, for the slot contribution that holds it. */
   const useAt = new Map<Element, BlockUse>();
+  const customElements: CustomElement[] = [];
+  /** The package's files each custom element names in a `src` or an `href`, for its SHA-256. */
+  const named = new Map<CustomElement, readonly string[]>();
+  /** The custom elements each Web UI file uses, by name, for each element's `uses`. */
+  const usedIn = new Map<string, Set<string>>();
   const webUi = (
     path: string,
-    options: { readonly task?: boolean } = {},
+    options: { readonly task?: boolean; readonly customBundle?: boolean } = {},
   ): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
+    // A custom element's definition is the element's: read whole, then taken out of the file, so
+    // that its scripts, conditions and elements are not counted as the rest of the package's.
+    if (options.customBundle)
+      for (const module of elementModules(document)) {
+        const element = readCustomElement(
+          path,
+          customElements.filter((candidate) => candidate.path === path).length,
+          module,
+        );
+        customElements.push(element);
+        named.set(element, namedFiles(path, [module, ...elementsOf(module)]));
+        module.remove();
+      }
     conditions.push(
       ...conditionsOf(path, document, within, conditionAt).map((condition) => ({
         ...condition,
@@ -491,6 +561,7 @@ export function inventory(pkg: StudioPackage): Inventory {
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
         elements.set(element.localName, (elements.get(element.localName) ?? 0) + 1);
+        usedIn.set(element.localName, (usedIn.get(element.localName) ?? new Set()).add(path));
       }
       if (element.getAttribute('role') === 'widget') fieldsBefore++;
       const block = blockPaths.get(element.localName);
@@ -611,11 +682,12 @@ export function inventory(pkg: StudioPackage): Inventory {
 
   // The custom bundle, which Studio's own bundle imports first, may hold contributions too: one
   // that disables or outranks a button of the bundle is where a project's hand-written changes go.
+  const customBundles = new Set(ofKind('custom-bundle'));
   const slotContributions: SlotContribution[] = [
     ...ofKind('custom-bundle'),
     ...ofKind('slot-contributions'),
   ].flatMap((path) =>
-    elementsOf(webUi(path).document)
+    elementsOf(webUi(path, { customBundle: customBundles.has(path) }).document)
       .filter((element) => element.localName === 'nuxeo-slot-content')
       .map((element) => {
         const order = element.getAttribute('order');
@@ -663,10 +735,25 @@ export function inventory(pkg: StudioPackage): Inventory {
 
   // Judged on the parsed file, where comments are nodes of their own, rather than by cutting
   // comments out of the text, which a malformed comment can survive.
-  const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => ({
-    path,
-    hasCode: hasContent(parseHtml(read(path))),
-  }));
+  /** Each custom bundle's code outside its elements and slot contributions, as markup. */
+  const bundleCode = new Map<string, { markup: string; named: readonly string[] }>();
+  const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => {
+    const rest = parseHtml(read(path));
+    for (const module of elementModules(rest)) module.remove();
+    for (const contribution of elementsOf(rest).filter(
+      (element) => element.localName === 'nuxeo-slot-content',
+    ))
+      contribution.remove();
+    bundleCode.set(path, {
+      markup: rest.documentElement.outerHTML,
+      named: namedFiles(path, elementsOf(rest)),
+    });
+    return {
+      path,
+      hasCode: hasContent(parseHtml(read(path))),
+      hasOtherCode: hasContent(rest),
+    };
+  });
 
   const dashboardPath = ofKind('dashboard')[0];
   let dashboard: Dashboard | null = null;
@@ -771,6 +858,23 @@ export function inventory(pkg: StudioPackage): Inventory {
     searches,
     slotContributions,
     customCode,
+    // Where each is used: the package's files, and the templates of its other elements.
+    customElements: customElements.map((element) => ({
+      ...element,
+      // What it can reach in the package: its definition, the custom bundle's code outside its
+      // elements, where a behaviour or a mixin it uses is defined, and the package's files either
+      // names in a `src` or an `href`. A change to any of them makes it another element, whose
+      // plugin is decided again (its identity, `constructs.ts`) and restamped (check 9).
+      sha256: reachOf(element, bundleCode.get(element.path), named.get(element) ?? [], (file) =>
+        pkg.bundleFiles.get(file),
+      ),
+      uses: [
+        ...(usedIn.get(element.name) ?? []),
+        ...customElements
+          .filter((other) => other !== element && other.elements.includes(element.name))
+          .map((other) => `${other.path}, in ${other.name}`),
+      ],
+    })),
     dashboard,
     themes,
     translations,
@@ -1116,8 +1220,8 @@ function columnOf(column: Element, within: ReadonlyMap<Element, number>): Result
  * The sorts a results layout's script offers: Studio's template writes them as
  * `this.sortOptions = [{field: 'dc:title', label: …, order: 'asc', selected: true}, …]`. They are
  * read from the script's text by pattern, and nothing is run. Whether the script is Studio's
- * template is its own construct's to say, by its shape: one that is not is customer code, pending
- * M3, and its sorts are read by the same pattern all the same.
+ * template is its own construct's to say, by its shape: one that is not is customer code, reported,
+ * and its sorts are read by the same pattern all the same.
  */
 export function sortOptionsOf(script: string): SortOption[] {
   const start = script.search(/\bsortOptions\s*=\s*\[/);

@@ -13,6 +13,10 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts'],
+    // Many tests run the tool whole over a package, and check 9's spec runs Vitest on plugins beside
+    // them: on CI, a single migrate run that takes half a second here took 5.5 seconds and failed on
+    // Vitest's default of 5. A test that hangs still fails, after 30.
+    testTimeout: 30_000,
     reporters: ['default'],
     coverage: {
       reportsDirectory: '../../coverage/tools/studio-migration',

@@ -12,6 +12,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, provideRouter, withComponentInputBinding } from '@angular/router';
 import { filter } from 'rxjs/operators';
 
+import { provideAcmeClaimEscalatePlugin } from '@agentic-ui/acme-claim-escalate';
+import { provideAcmeClaimExposurePlugin } from '@agentic-ui/acme-claim-exposure';
 import { provideAcmeExtensions } from '@agentic-ui/acme-extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { ExtensionRuleContextService } from '@nuxeo/satori-platform/extensions';
@@ -109,6 +111,16 @@ export const appConfig: ApplicationConfig = {
     //    Delete this line and the import in your fork — it is a demonstration,
     //    not something you need.
     provideAcmeExtensions(),
+
+    //    Two plugins of the Studio migration's code track (M3): Layer 2 libraries written for
+    //    two custom elements of a made-up Studio package, by `npm run studio-migration -- plugin`
+    //    and the studio-plugin skill. Built in here, as decision 5 keeps a customer's code built
+    //    into their app from this template, so that CI keeps building migrated plugins into it.
+    //    Each registers one component, which shows only where a manifest places it.
+    //
+    //    Delete these lines and their imports in your fork: they are demonstrations.
+    provideAcmeClaimExposurePlugin(),
+    provideAcmeClaimEscalatePlugin(),
 
     // 3. Keep the rule context live. Not registration, which is why it is
     //    separate: rules read the signed-in user and the current route, and

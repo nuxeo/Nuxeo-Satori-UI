@@ -140,7 +140,7 @@ export const SERVER_HALVES: Readonly<Record<number, string>> = {
  * conversion makes no action to hold to a list.
  */
 const OTHER_GAPS: Readonly<Record<number, string>> = {
-  9: 'Nothing to do now: a later version of this tool brings it, with the plugins (phase M3).',
+  9: 'Each custom element becomes a Layer 2 plugin, which an agent writes with `npm run studio-migration -- plugin` and the studio-plugin skill, in your copy of this repository; check, run again with --run-plugins and the observed behaviour, --observed, holds each plugin to its element.',
 };
 
 export function migrate(request: MigrateRequest, io: CliIo, run: Command): number {

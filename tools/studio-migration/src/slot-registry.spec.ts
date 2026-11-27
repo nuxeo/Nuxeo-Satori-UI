@@ -149,7 +149,7 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
         [6, 'partial'],
         [7, 'partial'],
         [8, 'pass'],
-        [9, 'not run'],
+        [9, 'pass'],
         [10, 'pass'],
       ]);
     });

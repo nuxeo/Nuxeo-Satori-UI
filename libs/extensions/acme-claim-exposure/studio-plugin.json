@@ -1,0 +1,13 @@
+{
+  "format": "studio-migration-plugin/1",
+  "element": "acme-claim-exposure",
+  "package": {
+    "name": "Acme-Claims",
+    "version": "1.0.0"
+  },
+  "definition": "62d573dcbc2ce59f6c5534b1c432d25dd2303e76141260e4b66ebe828f16fba5",
+  "project": "acme-claim-exposure",
+  "importPath": "@agentic-ui/acme-claim-exposure",
+  "provider": "provideAcmeClaimExposurePlugin",
+  "component": "acme.components.claimExposure"
+}

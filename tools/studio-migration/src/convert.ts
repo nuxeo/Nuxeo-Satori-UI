@@ -37,6 +37,7 @@ import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
 import { proposalOf, sameRule } from './conditions';
 import { constructsOf, sharedIdentities, type Construct, type ConstructKind } from './constructs';
 import { convertBlocks } from './convert-blocks';
+import { convertElements } from './convert-elements';
 import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
@@ -76,9 +77,10 @@ export interface ReportEntry {
   /** For a condition: the registered rule it becomes, or is proposed to become. */
   readonly rule?: unknown;
   /**
-   * True for a proposal a person accepts or rejects in `decisions.json`: a condition's rule, or a
-   * card an operation feeds. What such a proposal guards, a field under the condition, say, takes
-   * no decision of its own: it is written with the rule once the condition's is accepted.
+   * True for a proposal a person accepts or rejects in `decisions.json`: a condition's rule, a
+   * card an operation feeds, or a custom element's plugin. What such a proposal guards, a field
+   * under the condition, say, takes no decision of its own: it is written with the rule once the
+   * condition's is accepted.
    */
   readonly proposal?: true;
   /**
@@ -272,6 +274,7 @@ export function convert(
   convertSearches(context);
   convertDashboard(context);
   convertSlots(context);
+  convertElements(context);
   // Last: a block is decided by its uses, which the parts above decide.
   convertBlocks(context);
 
@@ -528,7 +531,10 @@ function decide(
       return FILE_OUTCOMES[kind];
     }
     case 'custom-code':
-      return { outcome: 'pending', note: 'An agent proposes a Layer 2 plugin for it, in M3' };
+      return {
+        outcome: 'reported',
+        note: "Code of the custom bundle outside its custom elements, such as a script, a style or an import: M3's code track writes a plugin for each custom element, and for nothing else. A style is not migrated (parity decision 5); what other code does is a person's to rewrite as a plugin, or leave behind",
+      };
     case 'script': {
       const script = inventory.scripts.find(
         (candidate) => candidate.path === construct.file && candidate.index === key - 1,
@@ -537,8 +543,8 @@ function decide(
       return known
         ? { outcome: 'generated', note: known.name }
         : {
-            outcome: 'pending',
-            note: 'Customer code: an agent proposes a Layer 2 plugin for it, in M3',
+            outcome: 'reported',
+            note: "A script of a shape the catalogue records Studio generating for none of its files, so taken for customer code: its file is converted from its markup, and the script is not. M3's code track writes plugins for the custom bundle's elements only, so what the script adds is a person's to rewrite as a plugin, or leave behind; if Studio wrote it, the catalogue is to learn its shape",
           };
     }
     case 'condition': {

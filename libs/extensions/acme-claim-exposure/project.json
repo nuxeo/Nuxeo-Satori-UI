@@ -1,0 +1,30 @@
+{
+  "name": "acme-claim-exposure",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/extensions/acme-claim-exposure/src",
+  "prefix": "acme",
+  "tags": ["scope:customer", "type:extension"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/extensions/acme-claim-exposure"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{workspaceRoot}/dist/out-tsc/libs/extensions/acme-claim-exposure"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "ngc -p libs/extensions/acme-claim-exposure/tsconfig.lib.json --outDir dist/out-tsc/libs/extensions/acme-claim-exposure"
+      }
+    }
+  }
+}

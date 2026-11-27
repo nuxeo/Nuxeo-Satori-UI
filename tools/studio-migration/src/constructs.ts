@@ -27,6 +27,7 @@ export type ConstructKind =
   | 'condition'
   | 'slot-contribution'
   | 'custom-code'
+  | 'custom-element'
   | 'script'
   | 'dashboard-card'
   | 'theme-property'
@@ -43,6 +44,7 @@ export const COUNTED_KINDS: readonly ConstructKind[] = [
   'search-view',
   'condition',
   'slot-contribution',
+  'custom-element',
   'script',
   'dashboard-card',
   'theme-property',
@@ -231,7 +233,19 @@ export function constructsOf(inventory: Inventory): Construct[] {
     );
   }
   for (const custom of inventory.customCode) {
-    if (custom.hasCode) add('custom-code', custom.path, 'code', 'customer code', null, []);
+    if (custom.hasOtherCode) add('custom-code', custom.path, 'code', 'customer code', null, []);
+  }
+  for (const element of inventory.customElements) {
+    add(
+      'custom-element',
+      element.path,
+      String(element.index + 1),
+      `the custom element ${element.name}`,
+      null,
+      // Its definition, by its SHA-256: an element changed in any way is another element, whose
+      // plugin is written and decided again.
+      [element.name, element.sha256],
+    );
   }
   for (const script of inventory.scripts) {
     add('script', script.path, String(script.index + 1), `script ${script.index + 1}`, null, [

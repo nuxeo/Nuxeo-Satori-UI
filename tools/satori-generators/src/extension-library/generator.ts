@@ -82,6 +82,10 @@ export default async function extensionLibraryGenerator(
     projectRoot,
     importPath,
     offsetFromRoot,
+    // TypeScript 6 asks for `rootDir` wherever the sources it compiles share no folder below it,
+    // and a library's do not: its path aliases reach the platform's libraries. The workspace's
+    // root holds them all, at any depth, so a generated library type-checks as it is written.
+    rootDir: offsetFromRoot.replace(/\/$/, ''),
     // `generateFiles` strips a trailing `__tmpl__` from filenames. Template files
     // are named `project.json__tmpl__`-style so that nothing inside `files/` is
     // mistaken for a real workspace file by Nx, eslint or vitest.

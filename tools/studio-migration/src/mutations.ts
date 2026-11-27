@@ -14,10 +14,11 @@
  * taken. No check fails then: readiness, which holds that file to the report, must name what broke
  * among what stands in the way.
  */
+import { createHash } from 'node:crypto';
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
 import { fieldOf, layoutFields } from './app-walk';
-import { digestsOf } from './approval';
+import { acceptedPlugins, digestsOf } from './approval';
 import {
   convert,
   labelsOf,
@@ -33,6 +34,8 @@ import { menuEntryId } from './convert-home';
 import { buttonAction } from './convert-slots';
 import { holdDecisions, type DecisionsBuild } from './decisions';
 import type { Inventory, SlotContribution } from './inventory';
+import { elementSource, PLUGIN_FILE } from './plugin';
+import type { PluginSource } from './plugins';
 import { slotRegistry } from './slot-registry';
 import type { StudioPackage } from './studio-package';
 
@@ -1446,7 +1449,8 @@ export const APPROVAL_MUTATIONS: readonly DecisionMutation[] = [
         ...conversion,
         report: { ...conversion.report, constructs: conversion.report.constructs.slice(1) },
       };
-      approval['report'] = digestsOf(other).report;
+      // Its report's digest alone, so no plugin need be read.
+      approval['report'] = digestsOf(other, () => null).report;
       return {
         conversion: { ...conversion, approval },
         changed: "made approval.json approve another report, one entry short of the conversion's",
@@ -1553,3 +1557,729 @@ export function mutation(name: string): Mutation | DecisionMutation | null {
     null
   );
 }
+
+/**
+ * What a control of check 9 breaks: the conversion, and the plugins of the package's custom
+ * elements, each as check 9 reads it (`plugins.ts`). A control changes a copy, never a library on
+ * disk: the harness's tests run a broken plugin from a copy of its files.
+ */
+export interface PluginSubject {
+  readonly conversion: Conversion;
+  readonly plugins: readonly PluginSource[];
+  readonly source: MutationSource;
+  /** The template app's configuration, which builds the plugins in. */
+  readonly template?: { readonly path: string; readonly text: string } | null;
+}
+
+/**
+ * The controls of check 9 (docs/business-apps/studio-migration.md, section 7): a plugin that
+ * writes data as HTML, drops a value, fails its own tests or bypasses the app's HTTP service; a
+ * conversion that puts an element's code into configuration, or leaves an element out of its
+ * report; and more. `needsRun` says the check sees it only by running the plugin, its tests or what
+ * it shows: the harness's tests run those, and hold the others to the files alone. They are not
+ * among `mutate`'s, which breaks a conversion's directory and never a plugin.
+ */
+export interface PluginMutation {
+  readonly name: string;
+  readonly description: string;
+  readonly caughtBy: 9;
+  readonly needsRun: boolean;
+  readonly apply: (subject: PluginSubject) => {
+    readonly subject: PluginSubject;
+    readonly changed: string;
+  };
+}
+
+/** The first plugin, by its library, with a file `pick` finds, and that file's path and text. */
+function pluginFile(
+  subject: PluginSubject,
+  pick: (path: string, text: string) => boolean,
+  what: string,
+): { plugin: PluginSource; path: string; text: string } {
+  const plugins = [...subject.plugins].sort((a, b) => a.library.localeCompare(b.library));
+  for (const plugin of plugins)
+    for (const [path, text] of Object.entries(plugin.files).sort(([a], [b]) => a.localeCompare(b)))
+      if (pick(path, text)) return { plugin, path, text };
+  throw new MutationError(`no plugin of the conversion has ${what}`);
+}
+
+/** The subject with one file of one plugin replaced. */
+function withPluginFile(
+  subject: PluginSubject,
+  plugin: PluginSource,
+  path: string,
+  text: string,
+): PluginSubject {
+  return {
+    ...subject,
+    plugins: subject.plugins.map((candidate) =>
+      candidate === plugin
+        ? { ...candidate, files: { ...candidate.files, [path]: text } }
+        : candidate,
+    ),
+  };
+}
+
+const isTemplate = (path: string): boolean => path.startsWith('src/lib/') && path.endsWith('.html');
+const isShippedCode = (path: string): boolean =>
+  path.startsWith('src/lib/') && path.endsWith('.ts') && !path.endsWith('.spec.ts');
+/** A spec of the element's behaviour: not the registration's, which the command writes whole. */
+const isBehaviourSpec = (path: string): boolean =>
+  path.startsWith('src/lib/') && path.endsWith('.spec.ts') && path !== 'src/lib/extensions.spec.ts';
+/** `{{ value() }}` in a template: a value it shows, read from a signal, not one of its texts. */
+const VALUE = /\{\{(?!\s*text\()\s*([A-Za-z_$][\w$]*\(\))\s*\}\}/;
+/** An element that shows a value and nothing else: `<span class="value">{{ number() }}</span>`. */
+const SHOWS_VALUE =
+  /(<([a-z][\w-]*)([^>]*)>)\s*\{\{(?!\s*text\()\s*([A-Za-z_$][\w$]*\(\))\s*\}\}\s*(<\/\2>)/;
+
+export const PLUGIN_MUTATIONS: readonly PluginMutation[] = [
+  {
+    name: 'plugin-writes-html',
+    description: 'Make a plugin write a value it shows as HTML, with [innerHTML]',
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isTemplate(file) && SHOWS_VALUE.test(content),
+        'a template showing a value',
+      );
+      const match = SHOWS_VALUE.exec(text) as RegExpExecArray;
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(SHOWS_VALUE, '<$2$3 [innerHTML]="$4"></$2>'),
+        ),
+        changed: `wrote ${match[4]} as HTML in ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-drops-value',
+    description: 'Take a value the element shows out of its plugin',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isTemplate(file) && VALUE.test(content),
+        'a template showing a value',
+      );
+      const match = VALUE.exec(text) as RegExpExecArray;
+      return {
+        subject: withPluginFile(subject, plugin, path, text.replace(VALUE, '')),
+        changed: `took ${match[1]} out of ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-test-fails',
+    description: "Make one of a plugin's own tests expect another value",
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const expected = /\.toBe\((['"])/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && expected.test(content),
+        'a test of its behaviour',
+      );
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(expected, '.toBe($1not what it shows: '),
+        ),
+        changed: `changed what a test of ${plugin.library}/${path} expects`,
+      };
+    },
+  },
+  {
+    name: 'plugin-todo-left',
+    description: "Leave one of a plugin's tests still to write",
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const close = /\n\}\);\s*$/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && close.test(content),
+        'a test of its behaviour',
+      );
+      const broken = text.replace(
+        close,
+        "\n  it.todo('does what the element does when it is given no record');\n});\n",
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `left a test of ${plugin.library}/${path} to write`,
+      };
+    },
+  },
+  {
+    name: 'plugin-bypasses-http',
+    description:
+      "Make a plugin's request go through an HttpClient of its own, past the app's service",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const api = /inject\(\s*NuxeoApiBase\s*\)/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && api.test(content),
+        "a request through the app's service",
+      );
+      const broken = `import { HttpClient } from '@angular/common/http';\n${text.replace(api, 'inject(HttpClient)')}`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} send its request with an HttpClient of its own`,
+      };
+    },
+  },
+  {
+    name: 'plugin-asks-other-operation',
+    description: 'Make a plugin run another operation than its element runs',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const operations = subject.source.inventory.customElements.flatMap((element) =>
+        element.operations.map((operation) => operation.operation),
+      );
+      const named = (content: string): string | undefined =>
+        operations.find((operation) => content.includes(`'${operation}'`));
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && named(content) !== undefined,
+        "an element's operation",
+      );
+      const operation = named(text) as string;
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(`'${operation}'`, `'${operation}.Other'`),
+        ),
+        changed: `made ${plugin.library}/${path} run ${operation}.Other, not ${operation}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-runs-eval',
+    description: 'Make a plugin run text as code, with eval',
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(subject, isShippedCode, 'code of its own');
+      const broken = `${text}\nexport function evaluate(text: string): unknown {\n  return eval(text);\n}\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `added eval to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-binds-nuxeo-src',
+    description: "Make a plugin bind a document's file to an image's [src]",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(subject, isTemplate, 'a template');
+      const broken = `${text}<img [src]="document()?.properties?.['file:content']" alt="" />\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `bound a file to [src] in ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-third-party-api',
+    description: "Put a type of another package in a plugin's public API",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === 'src/index.ts',
+        'a public API',
+      );
+      const broken = `${text}export type { Observable as PluginStream } from 'rxjs';\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `exported a type of rxjs from ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-from-changed-element',
+    description: 'Hold a plugin written from another definition of its element',
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === PLUGIN_FILE,
+        `a ${PLUGIN_FILE}`,
+      );
+      const metadata = JSON.parse(text) as Json;
+      metadata['definition'] = createHash('sha256').update('another definition').digest('hex');
+      return {
+        subject: withPluginFile(subject, plugin, path, `${JSON.stringify(metadata, null, 2)}\n`),
+        changed: `made ${plugin.library}/${path} name another definition of ${String(metadata['element'])}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-changes-event-detail',
+    description: 'Make a plugin emit an event with another detail than its element fires',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const emits = /\.emit\(\{/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && emits.test(content),
+        'an event with a detail',
+      );
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(emits, '.emit({ changed: true, '),
+        ),
+        changed: `added to the detail of an event of ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-asks-on-render',
+    description: 'Make a plugin send a request as it is drawn, where its element sends none',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const service = /private readonly (\w+) = inject\((\w+Service)\);/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) =>
+          isShippedCode(file) &&
+          /@Component/.test(content) &&
+          /\.escalate\(/.test(content) &&
+          service.test(content),
+        "a component that sends its element's request",
+      );
+      const broken = text.replace(
+        /(\n {2}protected escalate\(\): void \{)/,
+        "\n  private readonly drawn = this.escalation\n    .escalate('claim-cl-1001', 'as it is drawn')\n    .pipe(takeUntilDestroyed())\n    .subscribe();\n$1",
+      );
+      if (broken === text)
+        throw new MutationError('no component of the plugins sends a request to add one to');
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} send a request as it is drawn`,
+      };
+    },
+  },
+  {
+    name: 'plugin-extra-button',
+    description: 'Give a plugin a button its element does not have',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isTemplate(file) && VALUE.test(content),
+        'a template showing a value',
+      );
+      const broken = `${text}<button type="button" aria-label="Delete" (click)="text('x')"></button>\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `added a button to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-skips-tests',
+    description: "Take a plugin's tests of its behaviour away, with describe.skip",
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const suite = /\ndescribe\(/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && suite.test(content),
+        'a test of its behaviour',
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, text.replace(suite, '\ndescribe.skip(')),
+        changed: `skipped the tests of ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-empty-test',
+    description: 'Give a plugin a test that asserts nothing',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const close = /\n\}\);\s*$/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && close.test(content),
+        'a test of its behaviour',
+      );
+      const broken = text.replace(
+        close,
+        "\n  it('does what the element does on every record', () => {\n    // Nothing is asserted.\n  });\n});\n",
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `added a test that asserts nothing to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-bypasses-sanitizer',
+    description: "Make a plugin trust a value past Angular's sanitiser",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && /@Component/.test(content),
+        'a component',
+      );
+      const broken = `import { DomSanitizer } from '@angular/platform-browser';\n${text}\nexport function trusted(sanitizer: DomSanitizer, html: string): unknown {\n  return sanitizer.bypassSecurityTrustHtml(html);\n}\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} trust HTML past the sanitiser`,
+      };
+    },
+  },
+  {
+    name: 'plugin-drops-output',
+    description: "Take an output for one of its element's events off a plugin",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const declared = /\n\s*readonly \w+ = output<[^;]*>\(\);/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && declared.test(content),
+        'an output',
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, text.replace(declared, '')),
+        changed: `took an output off ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-not-built-in',
+    description: "Leave a plugin's provider out of the template app",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const template = subject.template;
+      const plugin = [...subject.plugins].sort((a, b) => a.library.localeCompare(b.library))[0];
+      const provider =
+        plugin && (JSON.parse(plugin.files[PLUGIN_FILE] ?? '{}') as Json)['provider'];
+      if (!template || typeof provider !== 'string' || !template.text.includes(`${provider}()`))
+        throw new MutationError('no plugin is built into the template app to leave out');
+      return {
+        subject: {
+          ...subject,
+          template: { ...template, text: template.text.split(`${provider}(),`).join('') },
+        },
+        changed: `left ${provider} out of ${template.path}`,
+      };
+    },
+  },
+  {
+    name: 'code-in-plugin-metadata',
+    description: "Put the element's code into a plugin's studio-plugin.json",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === PLUGIN_FILE,
+        `a ${PLUGIN_FILE}`,
+      );
+      const metadata = JSON.parse(text) as Json;
+      const element = subject.source.inventory.customElements.find(
+        (candidate) => candidate.name === metadata['element'],
+      );
+      metadata['template'] = element
+        ? elementSource(subject.source.pkg, element)
+        : '<script>Polymer({})</script>';
+      return {
+        subject: withPluginFile(subject, plugin, path, `${JSON.stringify(metadata, null, 2)}\n`),
+        changed: `put the code of ${String(metadata['element'])} into ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-project-target',
+    description: "Make a plugin's typecheck target run something else",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === 'project.json',
+        'a project.json',
+      );
+      const project = JSON.parse(text) as Json;
+      const targets = project['targets'] as Json;
+      const typecheck = targets['typecheck'] as Json;
+      typecheck['options'] = { ...(typecheck['options'] as Json), command: 'node -e 0' };
+      return {
+        subject: withPluginFile(subject, plugin, path, `${JSON.stringify(project, null, 2)}\n`),
+        changed: `made ${plugin.library}/${path} type-check nothing`,
+      };
+    },
+  },
+  {
+    name: 'plugin-registers-more',
+    description: 'Make a plugin register a rule of its own beside its component',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const components = /\n(\s*)components: \{/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => file === 'src/lib/extensions.ts' && components.test(content),
+        'a registration of its component',
+      );
+      const broken = text.replace(
+        components,
+        "\n$1rules: { 'acme.rules.alwaysAllowed': () => true },\n$1components: {",
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} register a rule beside its component`,
+      };
+    },
+  },
+  {
+    name: 'plugin-own-test-config',
+    description: "Change how a plugin's tests are run, in its own Vite configuration",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const setup = /setupFiles: \[[^\]]*\]/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => file === 'vite.config.mts' && setup.test(content),
+        'a Vite configuration',
+      );
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(setup, "setupFiles: ['src/test-setup.ts', 'src/fake-server.ts']"),
+        ),
+        changed: `added a setup file to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'code-in-configuration',
+    description: "Put a custom element's code into the conversion's configuration",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { conversion, source } = subject;
+      const element = source.inventory.customElements[0];
+      if (!element) throw new MutationError('the package has no custom element to copy');
+      const path = layouts(conversion).find((candidate) => candidate.endsWith('/view.layout.json'));
+      if (path === undefined)
+        throw new MutationError('the conversion has no record page to put it on');
+      const file = clone(conversion.app[path]) as Json;
+      const cards = Array.isArray(file['cards']) ? (file['cards'] as unknown[]) : [];
+      // As a template computation, the shape a lazy conversion would give it.
+      cards.push({
+        id: element.name,
+        label: element.name,
+        fields: [
+          {
+            id: `${element.name}-markup`,
+            computed: { fn: 'core.template', args: [elementSource(source.pkg, element)] },
+          },
+        ],
+      });
+      file['cards'] = cards;
+      return {
+        subject: { ...subject, conversion: withFile(conversion, path, file) },
+        changed: `put the code of ${element.name} into app/${path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-element-entry',
+    description: 'Leave a custom element out of the report',
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { conversion } = subject;
+      const entry = conversion.report.constructs.find(
+        (candidate) => candidate.kind === 'custom-element',
+      );
+      if (!entry) throw new MutationError('the report lists no custom element to leave out');
+      return {
+        subject: {
+          ...subject,
+          conversion: withEntries(
+            conversion,
+            conversion.report.constructs.filter((candidate) => candidate !== entry),
+          ),
+        },
+        changed: `left ${entry.id} out of the report`,
+      };
+    },
+  },
+  {
+    name: 'plugin-needs-no-decision',
+    description:
+      "Give a custom element's plugin in the report as proposed with no decision of its own, as a report written before plugins took decisions would",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { conversion } = subject;
+      const entry = conversion.report.constructs.find(
+        (candidate) => candidate.kind === 'custom-element' && candidate.proposal === true,
+      );
+      if (!entry)
+        throw new MutationError('the report proposes no custom element as a plugin to decide');
+      const { proposal: _proposal, applied: _applied, ...undecided } = entry;
+      return {
+        subject: {
+          ...subject,
+          conversion: withEntries(
+            conversion,
+            conversion.report.constructs.map((candidate) =>
+              candidate === entry ? undecided : candidate,
+            ),
+          ),
+        },
+        changed: `gave ${entry.id} as proposed with no decision of its own`,
+      };
+    },
+  },
+];
+
+/**
+ * The controls of the joins between check 9 and the people's half (docs/business-apps/
+ * studio-migration.md, sections 6 and 8): a plugin is a proposal a person accepts or rejects in
+ * `decisions.json`, held to its element by the element's identity, and the approval covers each
+ * accepted plugin's files. Each breaks a migration whose decisions are made and whose report is
+ * approved, and readiness must name what broke: among the decisions, `decisions`, or the approval
+ * void, `approval`. Like check 9's, they are not among `mutate`'s.
+ */
+export interface PluginJoinMutation {
+  readonly name: string;
+  readonly description: string;
+  readonly caughtBy: 'decisions' | 'approval';
+  readonly apply: (subject: PluginSubject) => {
+    readonly subject: PluginSubject;
+    readonly changed: string;
+  };
+}
+
+/** The subject's decisions, copied, and the item of each custom element's plugin in them. */
+function pluginDecisions(subject: PluginSubject): { file: Json; items: Json[] } {
+  const file = clone(subject.conversion.decisions);
+  if (!isRecord(file) || !Array.isArray(file['decisions']))
+    throw new MutationError(
+      'the conversion has no decisions.json to break: `decisions` writes one, for a person to fill in',
+    );
+  const items = (file['decisions'] as unknown[]).filter(
+    (item): item is Json => isRecord(item) && String(item['id']).startsWith('custom-element:'),
+  );
+  return { file, items };
+}
+
+export const PLUGIN_JOIN_MUTATIONS: readonly PluginJoinMutation[] = [
+  {
+    name: 'accept-plugin-undecided',
+    description:
+      'Record a plugin as accepted in the report, with no decision of it in decisions.json',
+    caughtBy: 'decisions',
+    apply: (subject) => {
+      const { conversion } = subject;
+      const { file, items } = pluginDecisions(subject);
+      const entry = conversion.report.constructs.find(
+        (candidate) => candidate.kind === 'custom-element' && candidate.applied === 'accept',
+      );
+      const item = items.find((candidate) => candidate['id'] === entry?.id);
+      if (!entry || !item)
+        throw new MutationError(
+          'the report accepts no plugin that decisions.json decides: accept one, and convert with the decisions, first',
+        );
+      item['owner'] = '';
+      item['decision'] = '';
+      item['reason'] = '';
+      return {
+        subject: { ...subject, conversion: { ...conversion, decisions: file } },
+        changed: `left ${entry.id} undecided in decisions.json, the report accepting it`,
+      };
+    },
+  },
+  {
+    name: 'carry-plugin-to-changed-element',
+    description:
+      "Carry a plugin's acceptance to its element changed in a new build of the package, rather than drop it",
+    caughtBy: 'decisions',
+    apply: (subject) => {
+      const { conversion } = subject;
+      const { file, items } = pluginDecisions(subject);
+      const carried = isRecord(file['carriedFrom']) ? file['carriedFrom'] : {};
+      const dropped = (Array.isArray(carried['dropped']) ? carried['dropped'] : []).find(
+        (candidate): candidate is Json =>
+          isRecord(candidate) &&
+          String(candidate['id']).startsWith('custom-element:') &&
+          candidate['decision'] === 'accept',
+      );
+      const item = items.find((candidate) => candidate['id'] === dropped?.['id']);
+      if (!dropped || !item)
+        throw new MutationError(
+          "no plugin's acceptance was dropped when decisions were carried: carry them from a build whose accepted element changed, first",
+        );
+      item['identity'] = dropped['identity'];
+      item['owner'] = dropped['owner'];
+      item['decision'] = 'accept';
+      item['reason'] = 'Accepted on the earlier build';
+      return {
+        subject: { ...subject, conversion: { ...conversion, decisions: file } },
+        changed: `carried the acceptance of ${String(item['id'])} from the earlier build, whose element was another`,
+      };
+    },
+  },
+  {
+    name: 'change-plugin-after-approval',
+    description:
+      'Change a file of an accepted plugin after the report was approved, in a way check 9 still passes',
+    caughtBy: 'approval',
+    apply: (subject) => {
+      if (!isRecord(subject.conversion.approval))
+        throw new MutationError(
+          'the conversion holds no approval.json to void: a person writes one, with the approve command',
+        );
+      const accepted = new Set(acceptedPlugins(subject.conversion.report));
+      const { plugin, path, text } = pluginFile(
+        { ...subject, plugins: subject.plugins.filter((source) => accepted.has(source.library)) },
+        (file) => isShippedCode(file),
+        'an accepted plugin with code',
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, `${text}// Changed after the approval.\n`),
+        changed: `changed ${plugin.library}/${path} after the report was approved`,
+      };
+    },
+  },
+];

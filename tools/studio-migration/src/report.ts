@@ -27,6 +27,7 @@
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { holdApproval } from './approval';
+import { pluginFilesOf } from './plugins';
 import { constructsOf, identitiesOf, type ConstructKind } from './constructs';
 import {
   OUTCOMES,
@@ -293,7 +294,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
           dropped: held.carriedFrom?.dropped ?? [],
         }
       : null;
-  const approval = holdApproval(conversion, build);
+  const approval = holdApproval(conversion, build, pluginFilesOf(input.plugins));
   const byFile = findingsByFile(
     result.checks,
     conversion,

@@ -57,7 +57,8 @@ describe('the harness on a sound conversion', () => {
       [6, 'partial'],
       [7, 'partial'],
       [8, 'pass'],
-      [9, 'not run'],
+      // No custom element, so no plugin to hold to one, and no code in its configuration.
+      [9, 'pass'],
       [10, 'pass'],
     ]);
     expect(result.checks.flatMap((c) => c.findings)).toEqual([]);
@@ -97,7 +98,6 @@ describe('the harness on a sound conversion', () => {
       'check 5 ran only in part',
       'check 6 ran only in part',
       'check 7 ran only in part',
-      'check 9 did not run',
       expect.stringMatching(/^\d+ constructs are pending a later phase$/),
       '1 proposal waits for a person to accept or reject it',
       expect.stringMatching(/^\d+ reported items have no owner$/),
@@ -158,8 +158,8 @@ describe('each deliberate breakage fails the check that guards it', () => {
       const result = check({ ...input, conversion: broken }, mutation.caughtBy);
       expect(result?.status).toBe('fail');
       expect(result?.findings.length).toBeGreaterThan(0);
-      // Its failure stands in the way. Not `ready` alone: check 9 never runs, so no migration is
-      // ready yet, broken or not.
+      // Its failure stands in the way. Not `ready` alone: checks 3, 5, 6 and 7 run only in part
+      // without the migration server, so no migration is ready yet, broken or not.
       expect(runHarness({ ...input, conversion: broken }).blockers).toContain(
         `check ${mutation.caughtBy} failed`,
       );
