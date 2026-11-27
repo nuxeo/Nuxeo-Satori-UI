@@ -44,5 +44,20 @@
       </excludes>
     </fileSet>
 
+    <!--
+      The embedded panel (apps/nuxeo-embedded-panels, output at dist/nuxeo-embedded-panels/browser/):
+      its one script, main.js, its translations and its icons, at a versioned address another
+      system's page loads it from, /nuxeo/agentic-ui/embedded/v1/. Inert without
+      nuxeo-agentic-embedded, which opens the path to a page signed in to nothing and issues the
+      tokens the panel needs; without it the path stays behind the server's sign-in.
+    -->
+    <fileSet>
+      <directory>../dist/nuxeo-embedded-panels/browser</directory>
+      <outputDirectory>/web/nuxeo.war/agentic-ui/embedded/v1</outputDirectory>
+      <includes>
+        <include>**/*</include>
+      </includes>
+    </fileSet>
+
   </fileSets>
 </assembly>
