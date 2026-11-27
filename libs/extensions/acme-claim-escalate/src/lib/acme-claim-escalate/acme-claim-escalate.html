@@ -2,4 +2,7 @@
   <nxs-button appearance="outlined" [disabled]="running()" (press)="escalate()">{{
     text('label.claim.escalate')
   }}</nxs-button>
+  @if (failure(); as message) {
+    <span class="failure" role="alert">{{ message }}</span>
+  }
 }

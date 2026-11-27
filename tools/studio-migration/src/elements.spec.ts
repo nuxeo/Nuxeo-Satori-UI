@@ -6,6 +6,7 @@ import { describeElement, pluginInterface } from './elements';
 import { inventory } from './inventory';
 import { secondCount } from './second-count';
 import { readStudioPackage } from './studio-package';
+import { m2CorpusFiles } from './testing/m2-corpus';
 import { M3_CUSTOM_BUNDLE, m3CorpusFiles } from './testing/m3-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
 
@@ -68,6 +69,7 @@ describe('the custom elements of a package', () => {
     );
     expect(pluginInterface(escalate)).toEqual({
       inputs: ['document', 'reason'],
+      models: [],
       outputs: ['claimEscalated', 'documentUpdated', 'notify'],
     });
     expect(describeElement(escalate).join('\n')).toContain(
@@ -123,5 +125,45 @@ describe('the custom elements of a package', () => {
         note: expect.stringContaining('acme-claim-escalate, a custom element of the package'),
       }),
     );
+  });
+});
+
+describe('custom elements, as real bundles may write them', () => {
+  /** The M3 corpus's custom bundle with one more element, and M2's corpus for its layout blocks. */
+  function withElement(markup: string) {
+    const files = { ...m2CorpusFiles(), ...m3CorpusFiles() };
+    files[M3_CUSTOM_BUNDLE] = files[M3_CUSTOM_BUNDLE].replace(
+      '<nuxeo-slot-content name="claimEscalation"',
+      `${markup}\n<nuxeo-slot-content name="claimEscalation"`,
+    );
+    const pkg = readStudioPackage(syntheticPackage({ bundle: files }));
+    return { pkg, read: inventory(pkg) };
+  }
+
+  it("counts a layout block an element's template uses as the element's, in both counts", () => {
+    const { pkg, read } = withElement(`<dom-module id="acme-policy-panel">
+  <template><acme-policy-terms document="[[document]]"></acme-policy-terms><acme-claim-exposure document="[[document]]"></acme-claim-exposure></template>
+  <script>Polymer({ is: 'acme-policy-panel', properties: { document: Object, total: { type: Number, readOnly: true }, open: { type: Boolean, notify: true } } });</script>
+</dom-module>`);
+    const first = countsOf(constructsOf(read));
+    expect([...secondCount(pkg, read)].sort()).toEqual([...first].sort());
+    // An element used only inside another one is used there.
+    const exposure = read.customElements.find((element) => element.name === 'acme-claim-exposure');
+    expect(exposure?.uses).toContain(`${M3_CUSTOM_BUNDLE}, in acme-policy-panel`);
+    // A read-only property is no input; one it notifies is a model.
+    const panel = read.customElements.find((element) => element.name === 'acme-policy-panel');
+    expect(pluginInterface(panel as NonNullable<typeof panel>)).toEqual({
+      inputs: ['document', 'open'],
+      models: ['open'],
+      outputs: [],
+    });
+  });
+
+  it('takes a dom-module whose only script sits in its template for an element, in both counts', () => {
+    const { pkg, read } = withElement(`<dom-module id="acme-late-script">
+  <template><span>[[document.title]]</span><script>Polymer({ is: 'acme-late-script' });</script></template>
+</dom-module>`);
+    expect(read.customElements.map((element) => element.name)).toContain('acme-late-script');
+    expect([...secondCount(pkg, read)].sort()).toEqual([...countsOf(constructsOf(read))].sort());
   });
 });

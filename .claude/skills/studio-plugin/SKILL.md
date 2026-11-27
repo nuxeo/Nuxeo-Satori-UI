@@ -64,8 +64,9 @@ line the generator adds; if the generator reorders the file, put the other lines
 - **`inject()` for every dependency**, never a constructor parameter.
 - **`input()` and `output()`** for the element's interface: one input per property that is not
   its own state, one output per event, named in camel case (`claim-escalated` is
-  `claimEscalated`). The element's state (`_running`) is a `signal()`; what it computes from its
-  properties (`_outstanding(amount, reserve)`) is a `computed()`.
+  `claimEscalated`). A property the element writes back, `notify: true`, is a `model()`, and a
+  read-only one is no input. The element's state (`_running`) is a `signal()`; what it computes
+  from its properties (`_outstanding(amount, reserve)`) is a `computed()`.
 - **Every `.subscribe()` has `takeUntilDestroyed()`.**
 - **Texts** come from `texts.ts` by the element's own keys, as Web UI's `i18n` did, the key itself
   where the package holds no text. No other English in the template.
@@ -75,26 +76,39 @@ line the generator adds; if the generator reorders the file, put the other lines
   `/nuxeo/api/v1/automation/<operation>`, the input as `doc:<uid>`. Never `HttpClient`, `fetch`,
   `XMLHttpRequest`, an interceptor, or another origin. The component injects the service, never
   `NuxeoApiBase`.
-- **An event** is the output's `emit`, with the detail the element fired. Web UI's
-  `document-updated` is also `DocumentChangesService.notify()`, so the app's lists read again.
+- **An event** is the output's `emit`, with the detail the element fired, `{}` for one it fired
+  with none. **A slot that places the component binds none of its outputs**, so what Web UI did on
+  an event the plugin does itself: `document-updated` is also `DocumentChangesService.notify()`, so
+  the record page and its lists read again, and a `notify` message is shown in the plugin's own
+  template, the template app having no toast. Say so in the README under "Shown differently".
 - **A permission test** the element made with `hasPermission(document, 'Write')` reads
   `document.contextParameters.permissions`, as Web UI's does. It decides what the screen offers,
   never what the server allows: the server still refuses what the user may not do.
-- **Imports** only from `@angular/*`, the published `@nuxeo/satori-platform/*` entry points, and
-  the library's own files.
+- **Imports** only from `@angular/*`, RxJS, the published `@nuxeo/satori-platform/*` entry points,
+  and the library's own files under `src/`.
 - **The public API** (`src/index.ts`) exports the provider and the ID list only, each with its
-  type written: no component, and no type of any other package.
+  type written: no component, no default export, and no type of any other package.
+- **The registration** is `provideSatoriExtensions({ components: { … } })`, written out, in
+  `src/lib/extensions.ts`, and nothing else: no rule, action or slot entry, no initializer, and no
+  registry reached from anywhere else. Keep the template's `project.json`, `vite.config.mts`,
+  `tsconfig*.json` and `src/test-setup.ts` as the generator wrote them.
 - **No HTML from data, no code from text:** no `innerHTML`, `outerHTML`, `[innerHTML]`,
   `DomSanitizer` or `bypassSecurityTrust*`, no `eval`, `new Function` or string timers, no browser
   storage or cookies. An image or a file the element showed from Nuxeo is fetched through a
-  service and shown as a blob URL, revoked on destroy, never a Nuxeo URL bound to `[src]`.
+  service and shown as a blob URL, revoked on destroy, never a Nuxeo URL bound to `[src]`; no
+  style `url()`, `new Image()`, `setAttribute('src', …)`, host binding or `@HostBinding` that loads
+  something past the app's services; nothing that behaves otherwise in tests, such as `isDevMode`,
+  `navigator` or `import.meta`.
 
 Nothing of the element's code is copied: you rewrite what it does in Angular. The README already
 quotes it for the reviewer.
 
 ## 4. Write the tests from the element's behaviour
 
-Turn every `it.todo` into a test. Check 9 fails while one is left, or skipped.
+Turn every `it.todo` into a test **of the same title**: check 9 holds the plugin to a passing
+test of each behaviour's title, as Vitest ran it, and fails while one is left, skipped, empty or in
+a file Vitest does not read. Every test asserts something: check 9 runs them with
+`expect.hasAssertions()`. No `.skip`, `.only`, `.todo`, `xit` or `vi.mock`.
 
 - **What it shows:** render the component with `TestBed` on records like the observed behaviour's,
   set `document` with `fixture.componentRef.setInput`, and assert the text the element shows, word
@@ -123,9 +137,12 @@ npm run studio-migration -- check <package.zip> <conversion> --run-plugins --obs
 
 Check 9 runs the plugin's own tests, and lint, test, build and typecheck through Nx; scans it for
 the unsafe patterns of section 3 and the configuration for code; and shows the plugin each record
-of the observed behaviour, comparing what it shows, asks and fires with what the element did. It
-must pass. A finding is fixed in the plugin, never by changing the observed behaviour, the
-conversion's report or `studio-plugin.json`. The support playbook,
+of the observed behaviour, comparing what it shows, what it asks the server and emits as it is
+drawn and when each button is pressed, and that every button it shows is one the element's
+observed behaviour presses. It must pass. A finding is fixed in the plugin, never by changing the
+observed behaviour, the conversion's report or `studio-plugin.json`. If the element itself has
+changed, change the plugin to follow it, then `npm run studio-migration -- plugin <package.zip>
+<element> --restamp` records the definition it now follows. The support playbook,
 `docs/business-apps/studio-migration-support.md`, says what each finding means.
 
 ## 6. Hand it over

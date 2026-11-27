@@ -99,13 +99,17 @@ export interface CustomElement {
   readonly sha256: string;
 }
 
-/** True for a `dom-module` that defines an element: one with a custom element's name and a script. */
+/**
+ * True for a `dom-module` that defines an element: one with a custom element's name and a script
+ * anywhere in it, its template's content included, as the second count of check 1 reads it from the
+ * text.
+ */
 export function definesElement(module: Element): boolean {
   const id = module.getAttribute('id')?.trim() ?? '';
   return (
     module.localName === 'dom-module' &&
     /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/.test(id) &&
-    Array.from(module.children).some((child) => child.localName === 'script')
+    elementsOf(module).some((child) => child.localName === 'script')
   );
 }
 
@@ -120,7 +124,7 @@ export function readCustomElement(path: string, index: number, module: Element):
   const template = Array.from(module.children).find((child) => child.localName === 'template');
   const content = (template as HTMLTemplateElement | undefined)?.content ?? null;
   const markup = content ? elementsOf(content) : [];
-  const script = Array.from(module.children)
+  const script = elementsOf(module)
     .filter((child) => child.localName === 'script')
     .map((child) => child.textContent ?? '')
     .join('\n');
@@ -399,12 +403,17 @@ function readProperty(
  */
 export function pluginInterface(element: CustomElement): {
   readonly inputs: readonly string[];
+  /** Of `inputs`, those the element writes back, `notify: true`: a `model()` each, two ways. */
+  readonly models: readonly string[];
   readonly outputs: readonly string[];
 } {
+  // A read-only property is the element's to set, and a page never gives it one.
+  const given = element.properties.filter(
+    (property) => !property.internal && property.computed === null && !property.readOnly,
+  );
   return {
-    inputs: element.properties
-      .filter((property) => !property.internal && property.computed === null)
-      .map((property) => camelCase(property.name)),
+    inputs: given.map((property) => camelCase(property.name)),
+    models: given.filter((property) => property.notify).map((property) => camelCase(property.name)),
     outputs: unique(element.events.map((event) => camelCase(event.name))),
   };
 }

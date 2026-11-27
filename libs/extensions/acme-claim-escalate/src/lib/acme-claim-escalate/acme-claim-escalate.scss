@@ -1,3 +1,9 @@
 :host {
-  display: inline-block;
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.failure {
+  color: var(--mat-sys-error);
 }

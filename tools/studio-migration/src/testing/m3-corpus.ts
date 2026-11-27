@@ -210,7 +210,9 @@ export const M3_RECORDS: readonly Record<string, unknown>[] = [
 
 /**
  * What each element shows on {@link M3_RECORDS}, and what clicking it asks the server, worked out
- * by hand from its template and script with the corpus's English texts: no Web UI ran.
+ * by hand from its template and script with the corpus's English texts: no Web UI ran. Each
+ * element's property is given another value than its default on one record at least, so that the
+ * plugin's input is held too, and an event fired with no detail has `{}`, as Polymer's `fire` gives.
  */
 export const M3_OBSERVED: ObservedBehaviour = {
   format: 'studio-migration-observed/1',
@@ -224,9 +226,11 @@ export const M3_OBSERVED: ObservedBehaviour = {
           record: 'claim-cl-1001',
           shows: 'Claim number CL-1001 Outstanding 9000.00 Reserve ratio 25% High exposure',
         },
+        // Under a lower threshold than the element's 10000, the warning shows.
         {
           record: 'claim-cl-1002',
-          shows: 'Claim number CL-1002 Outstanding 2000.50 Reserve ratio 20%',
+          inputs: { threshold: 2000 },
+          shows: 'Claim number CL-1002 Outstanding 2000.50 Reserve ratio 20% High exposure',
         },
         {
           record: 'claim-cl-1003',
@@ -258,7 +262,7 @@ export const M3_OBSERVED: ObservedBehaviour = {
                   event: 'claim-escalated',
                   detail: { claim: 'claim-cl-1001', level: 2 },
                 },
-                { event: 'document-updated', detail: null },
+                { event: 'document-updated', detail: {} },
               ],
             },
           ],
@@ -266,8 +270,10 @@ export const M3_OBSERVED: ObservedBehaviour = {
         // No Write permission, and closed: Web UI's dom-if leaves the button out.
         { record: 'claim-cl-1002', shows: '' },
         { record: 'claim-cl-1003', shows: '' },
+        // With the page's own reason, and a server that refuses.
         {
           record: 'claim-cl-1004',
+          inputs: { reason: 'audit' },
           shows: 'Escalate',
           clicks: [
             {
@@ -276,7 +282,7 @@ export const M3_OBSERVED: ObservedBehaviour = {
               asks: {
                 operation: 'Claim.Escalate',
                 input: 'doc:claim-cl-1004',
-                params: { reason: 'manual' },
+                params: { reason: 'audit' },
               },
               fires: [{ event: 'notify', detail: { message: 'The claim could not be escalated' } }],
             },

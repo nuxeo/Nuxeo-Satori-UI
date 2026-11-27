@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { camelCase, type CustomElement } from './elements';
+import type { CustomElement } from './elements';
 import type { ObservedBehaviour } from './observed';
 import {
   childEnvironment,
@@ -40,10 +40,29 @@ export interface GateRun {
   readonly output: string;
 }
 
-/** What one record showed, and what each press did. */
+/** A request the plugin sent, as the harness's spec read it. */
+export interface SeenAsk {
+  readonly operation: string | null;
+  readonly method: string;
+  readonly url: string;
+  readonly input: unknown;
+  readonly params: unknown;
+}
+
+/** What the plugin emitted, by the output's name. */
+export interface SeenFire {
+  readonly output: string;
+  readonly detail: unknown;
+}
+
+/** What one record showed, asked and emitted as it was drawn, and what each press did. */
 export interface SeenRecord {
   readonly record: string;
   readonly shows: string;
+  /** The buttons it showed, each by its text, or its accessible name where it has no text. */
+  readonly buttons?: readonly string[];
+  readonly loads?: readonly SeenAsk[];
+  readonly fires?: readonly SeenFire[];
   readonly error?: string;
   readonly clicks?: readonly SeenClick[];
 }
@@ -51,14 +70,8 @@ export interface SeenRecord {
 export interface SeenClick {
   readonly button: string;
   readonly found: boolean;
-  readonly asks: readonly {
-    readonly operation: string | null;
-    readonly url: string;
-    readonly input: unknown;
-    readonly params: unknown;
-  }[];
-  /** What it emitted, by the output's name. */
-  readonly fires: readonly { readonly output: string; readonly detail: unknown }[];
+  readonly asks: readonly SeenAsk[];
+  readonly fires: readonly SeenFire[];
   readonly error?: string;
 }
 
@@ -67,20 +80,24 @@ export interface PluginRun {
   /** The plugin's own specs, run with Vitest in a copy of its library. */
   readonly tests: {
     readonly passed: number;
+    /** The titles of the tests that passed, as Vitest ran them. */
+    readonly passedTitles?: readonly string[];
     readonly failed: readonly string[];
     /** Tests left `todo` or skipped. */
     readonly unwritten: readonly string[];
+    /** Spec files Vitest ran in which no test ran. */
+    readonly empty?: readonly string[];
     /** The run's own failure, when it could not run at all. */
     readonly error?: string;
   };
   /** What the plugin showed on each record of the observed behaviour; absent without one. */
   readonly seen?: readonly SeenRecord[];
   /**
-   * What registering the plugin added to the app's registries, by registry: its components, rules,
-   * actions, and each slot's entries. Read with the observed behaviour.
+   * What the plugin added to the app's registries, by registry: its components, rules, actions,
+   * and each slot's entries, once registered and once drawn.
    */
   readonly registered?: Readonly<Record<string, readonly string[]>>;
-  /** Why the harness's spec could not read what the plugin shows. */
+  /** Why the harness's spec could not read what the plugin shows, or registers. */
   readonly seenError?: string;
   /** Lint, test, typecheck and build, through Nx, when they were run. */
   readonly gates?: Readonly<Record<string, GateRun>>;
@@ -89,7 +106,7 @@ export interface PluginRun {
 export interface RunOptions {
   /** The observed behaviour, for what the plugin shows; without it, only its tests run. */
   readonly observed?: ObservedBehaviour;
-  /** The custom element, for its events' names. */
+  /** The custom element, for its name in the observed behaviour. */
   readonly element?: CustomElement;
   /** Run lint, test, typecheck and build through Nx too. */
   readonly gates?: boolean;
@@ -176,8 +193,9 @@ export function pluginMetadata(source: PluginSource): PluginMetadata | null {
 export function probeSource(inputPath: string): string {
   return `/* The Studio migration harness's own spec, for check 9: written into a copy of the plugin, never into the plugin. */
 import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { HttpTestingController, provideHttpClientTesting, type TestRequest } from '@angular/common/http/testing';
+import { reflectComponentType, type Type } from '@angular/core';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
   EXTENSION_SLOTS,
@@ -189,12 +207,12 @@ import {
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 import * as plugin from './index';
 
-interface ProbeClick { button: string; answer?: unknown; failure?: number }
-interface ProbeRecord { record: string; clicks?: ProbeClick[] }
+interface Answer { answer?: unknown; failure?: number }
+interface ProbeRecord { record: string; inputs?: Record<string, unknown>; loads?: Answer[]; clicks?: (Answer & { button: string })[] }
 interface ProbeInput {
   provider: string;
   component: string;
-  outputs: string[];
+  recordInput: string;
   inputs: Record<string, unknown>;
   records: Record<string, unknown>[];
   seen: ProbeRecord[];
@@ -215,6 +233,11 @@ function shown(root: Node): string {
   return pieces.join(' ');
 }
 
+/** A button by its text, or else by its accessible name. */
+function labelOf(button: Element): string {
+  return shown(button) || (button.getAttribute('aria-label') ?? button.getAttribute('title') ?? '').trim();
+}
+
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error)).split('\\n')[0];
 
 /** Everything the app's registries hold, by registry. */
@@ -230,12 +253,45 @@ function registered(): Record<string, string[]> {
   return held;
 }
 
+function read(request: TestRequest) {
+  const body = (request.request.body ?? {}) as Record<string, unknown>;
+  const url = request.request.urlWithParams;
+  return {
+    operation: /\\/automation\\/([^/?]+)/.exec(url)?.[1] ?? null,
+    method: request.request.method,
+    url,
+    input: body['input'] ?? null,
+    params: body['params'] ?? null,
+  };
+}
+
+/** Every request the plugin sends until it settles, each answered as the element's was, in order. */
+async function settle(fixture: ComponentFixture<unknown>, http: HttpTestingController, answers: Answer[]) {
+  const asked: ReturnType<typeof read>[] = [];
+  for (let round = 0; round < 10; round++) {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const pending = http.match(() => true);
+    if (pending.length === 0) break;
+    for (const request of pending) {
+      const answer = answers[asked.length];
+      asked.push(read(request));
+      if (answer?.failure !== undefined) request.flush('failed', { status: answer.failure, statusText: 'Failed' });
+      else if (answer) request.flush((answer.answer ?? {}) as object);
+      else request.flush('not asked for', { status: 404, statusText: 'Not Found' });
+    }
+  }
+  fixture.detectChanges();
+  return asked;
+}
+
 let before: Record<string, string[]> = {};
 
 describe('check 9, what the plugin shows', () => {
   it('reads what the registries hold without the plugin', () => {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     before = registered();
+    expect(before['components']).toBeDefined();
   });
 
   it('reads it on each record', async () => {
@@ -249,14 +305,17 @@ describe('check 9, what the plugin shows', () => {
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],
     });
-    const after = registered();
     const added: Record<string, string[]> = {};
-    for (const [registry, ids] of Object.entries(after)) {
-      const extra = ids.filter((id) => !(before[registry] ?? []).includes(id));
-      if (extra.length > 0) added[registry] = extra;
-    }
-    const component = await TestBed.inject(ExtensionComponentRegistry).resolve(input.component);
+    const note = (held: Record<string, string[]>): void => {
+      for (const [registry, ids] of Object.entries(held))
+        for (const id of ids)
+          if (!(before[registry] ?? []).includes(id) && !(added[registry] ?? []).includes(id))
+            (added[registry] ??= []).push(id);
+    };
+    note(registered());
+    const component = (await TestBed.inject(ExtensionComponentRegistry).resolve(input.component)) as Type<unknown> | null;
     if (!component) throw new Error('nothing resolves ' + input.component);
+    const outputs = (reflectComponentType(component)?.outputs ?? []).map((output) => output.propName);
     const http = TestBed.inject(HttpTestingController);
     const results: unknown[] = [];
     for (const seen of input.seen) {
@@ -265,56 +324,51 @@ describe('check 9, what the plugin shows', () => {
         const fixture = TestBed.createComponent(component);
         const fires: { output: string; detail: unknown }[] = [];
         const instance = fixture.componentInstance as Record<string, unknown>;
-        for (const name of input.outputs) {
+        for (const name of outputs) {
           const emitter = instance[name] as { subscribe?: (next: (value: unknown) => void) => unknown } | undefined;
           emitter?.subscribe?.((detail: unknown) => fires.push({ output: name, detail: detail === undefined ? null : detail }));
         }
-        fixture.componentRef.setInput('document', record ?? null);
-        for (const [name, value] of Object.entries(input.inputs)) fixture.componentRef.setInput(name, value);
-        fixture.detectChanges();
-        await fixture.whenStable();
-        fixture.detectChanges();
+        fixture.componentRef.setInput(input.recordInput, record ?? null);
+        for (const [name, value] of Object.entries({ ...input.inputs, ...(seen.inputs ?? {}) }))
+          fixture.componentRef.setInput(name, value);
+        const loads = await settle(fixture, http, seen.loads ?? []);
         const host = fixture.nativeElement as HTMLElement;
+        const shows = shown(host);
+        const buttons = Array.from(host.querySelectorAll('button, [role="button"], a[href]')).map(labelOf);
+        const drawn = fires.splice(0);
         const clicks: unknown[] = [];
         for (const click of seen.clicks ?? []) {
-          fires.length = 0;
-          const button = Array.from(host.querySelectorAll('button')).find((candidate) => shown(candidate) === click.button);
+          const button = Array.from(host.querySelectorAll('button, [role="button"]')).find((candidate) => labelOf(candidate) === click.button) as HTMLElement | undefined;
           if (!button) {
             clicks.push({ button: click.button, found: false, asks: [], fires: [] });
             continue;
           }
           button.click();
-          fixture.detectChanges();
-          const asks = http.match(() => true).map((request, index) => {
-            const body = (request.request.body ?? {}) as Record<string, unknown>;
-            const url = request.request.urlWithParams;
-            if (index === 0 && click.failure !== undefined) request.flush('failed', { status: click.failure, statusText: 'Failed' });
-            else if (index === 0) request.flush((click.answer ?? {}) as object);
-            else request.flush('not asked for', { status: 404, statusText: 'Not Found' });
-            return {
-              operation: /\\/automation\\/([^/?]+)/.exec(url)?.[1] ?? null,
-              url,
-              input: body['input'] ?? null,
-              params: body['params'] ?? null,
-            };
-          });
-          fixture.detectChanges();
-          await fixture.whenStable();
-          fixture.detectChanges();
-          clicks.push({ button: click.button, found: true, asks, fires: [...fires] });
+          const asks = await settle(fixture, http, [click]);
+          clicks.push({ button: click.button, found: true, asks, fires: fires.splice(0) });
         }
-        results.push({ record: seen.record, shows: shown(host), clicks });
+        results.push({ record: seen.record, shows, buttons, loads, fires: drawn, clicks });
+        note(registered());
         fixture.destroy();
       } catch (error) {
         results.push({ record: seen.record, shows: '', error: message(error) });
       }
     }
-    http.match(() => true);
+    note(registered());
     writeFileSync(input.out, JSON.stringify({ seen: results, registered: added }));
+    expect(results.length).toBe(input.seen.length);
   });
 });
 `;
 }
+
+/** The harness's own setup: every test of the plugin asserts something, or it fails. */
+export const PROBE_SETUP = 'src/studio-check-9.setup.ts';
+const PROBE_SETUP_SOURCE = `/* The Studio migration harness's own setup, for check 9: a test that asserts nothing fails. */
+beforeEach(() => {
+  expect.hasAssertions();
+});
+`;
 
 interface VitestReport {
   readonly testResults?: readonly {
@@ -322,6 +376,7 @@ interface VitestReport {
     readonly status: string;
     readonly message?: string;
     readonly assertionResults?: readonly {
+      readonly title: string;
       readonly fullName: string;
       readonly status: string;
       readonly failureMessages?: readonly string[];
@@ -356,6 +411,18 @@ export async function runPlugin(
     const configuration = templateConfiguration(workspace, source.library);
     const files: Record<string, string> = { ...source.files };
     for (const [path, text] of Object.entries(configuration)) if (text !== null) files[path] = text;
+    // And the harness's setup beside the template's, so that a test that asserts nothing fails.
+    const vite = files['vite.config.mts'] ?? '';
+    const setupFiles = "setupFiles: ['src/test-setup.ts']";
+    if (!vite.includes(setupFiles))
+      throw new Error(
+        `the template's vite.config.mts names no ${setupFiles}, which check 9 adds its own setup beside`,
+      );
+    files['vite.config.mts'] = vite.replace(
+      setupFiles,
+      `setupFiles: ['src/test-setup.ts', '${PROBE_SETUP}']`,
+    );
+    files[PROBE_SETUP] = PROBE_SETUP_SOURCE;
     for (const [path, text] of Object.entries(files)) {
       // Not the project file: Nx would find a second project of the same name.
       if (path === 'project.json') continue;
@@ -363,23 +430,25 @@ export async function runPlugin(
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, text);
     }
+    // The harness's spec runs whenever the plugin does: what it registers needs only its provider,
+    // and what it shows, the observed behaviour.
     const metadata = pluginMetadata(source);
     const observed = options.observed?.elements[options.element?.name ?? source.element];
-    const probing = metadata !== null && observed !== undefined && options.observed !== undefined;
-    if (probing) {
+    const probing = metadata !== null;
+    if (metadata !== null) {
       const inputPath = join(scratch, 'probe-input.json');
       writeFileSync(
         inputPath,
         JSON.stringify({
           provider: metadata.provider,
           component: metadata.component,
-          outputs: [
-            ...new Set((options.element?.events ?? []).map((event) => camelCase(event.name))),
-          ],
-          inputs: observed.inputs,
+          recordInput: observed?.recordInput ?? 'document',
+          inputs: observed?.inputs ?? {},
           records: options.observed?.records ?? [],
-          seen: observed.records.map((record) => ({
+          seen: (observed?.records ?? []).map((record) => ({
             record: record.record,
+            ...(record.inputs ? { inputs: record.inputs } : {}),
+            loads: record.loads ?? [],
             clicks: record.clicks ?? [],
           })),
           out,
@@ -410,7 +479,7 @@ export async function runPlugin(
           seen: SeenRecord[];
           registered: Record<string, readonly string[]>;
         };
-        seen = read.seen;
+        if (observed !== undefined) seen = read.seen;
         registered = read.registered;
       } else seenError = probeFailure(report) ?? lastLines(ran.output, 8);
     }
@@ -420,7 +489,7 @@ export async function runPlugin(
       const onDisk = readLibrary(workspace, source.library);
       gates =
         onDisk !== null && sameFiles(onDisk, source.files)
-          ? await runGates(workspace, metadata?.project ?? name, options)
+          ? await runGates(workspace, name, options)
           : {
               files: {
                 passed: false,
@@ -466,22 +535,34 @@ function readTests(path: string, ran: Ran): PluginRun['tests'] {
   );
   const failed: string[] = [];
   const unwritten: string[] = [];
+  const passedTitles: string[] = [];
+  const empty: string[] = [];
   let passed = 0;
   for (const file of own) {
     const results = file.assertionResults ?? [];
+    const where = file.name.slice(file.name.lastIndexOf('/src/') + 1);
     if (file.status === 'failed' && results.every((result) => result.status !== 'failed'))
-      failed.push(
-        `${file.name.slice(file.name.lastIndexOf('/src/') + 1)}: ${(file.message ?? 'it did not run').split('\n')[0]}`,
-      );
+      failed.push(`${where}: ${(file.message ?? 'it did not run').split('\n')[0]}`);
+    // A file whose tests a `describe.skip` or the like took away runs nothing and passes.
+    if (results.length === 0 && file.status !== 'failed') empty.push(where);
     for (const result of results) {
-      if (result.status === 'passed') passed++;
-      else if (result.status === 'failed') failed.push(result.fullName);
+      if (result.status === 'passed') {
+        passed++;
+        passedTitles.push(result.title);
+      } else if (result.status === 'failed') failed.push(result.fullName);
       else unwritten.push(result.fullName);
     }
   }
   return own.length === 0
-    ? { passed, failed, unwritten, error: 'Vitest found none of its spec files' }
-    : { passed, failed, unwritten };
+    ? {
+        passed,
+        passedTitles,
+        failed,
+        unwritten,
+        empty,
+        error: 'Vitest found none of its spec files',
+      }
+    : { passed, passedTitles, failed, unwritten, empty };
 }
 
 /** Why the harness's spec failed, from Vitest's report. */

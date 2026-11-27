@@ -8,6 +8,10 @@ migration's code track (`npm run studio-migration -- plugin`, M3 in
 It registers one component, `acme.components.claimExposure`, and nothing else. It is inert until an
 app adds its provider, and the component shows only where a manifest places it.
 
+**Made up.** The element and its package Acme-Claims are fictional, written for the Studio
+migration's tests (`tools/studio-migration/src/testing/m3-corpus.ts`). No real package's element was
+migrated here.
+
 ## Built in from the template
 
 Until decision 5 proves signed, pinned plugins loaded at run time, a plugin is built into the
@@ -33,16 +37,12 @@ Behaviours it used: `Nuxeo.I18nBehavior`.
 As the package defines it, quoted for the person who writes the plugin. It is never run, and
 none of it is copied into the plugin's code:
 
-```html
+```text
 <dom-module id="acme-claim-exposure">
   <template>
     <style>
-      :host {
-        display: block;
-      }
-      .high {
-        color: var(--nuxeo-warn-text, #b00020);
-      }
+      :host { display: block; }
+      .high { color: var(--nuxeo-warn-text, #b00020); }
     </style>
     <div class="row">
       <span class="label">[[i18n('label.claim.number')]]</span>
@@ -50,15 +50,11 @@ none of it is copied into the plugin's code:
     </div>
     <div class="row">
       <span class="label">[[i18n('label.claim.outstanding')]]</span>
-      <span class="value"
-        >[[_outstanding(document.properties.cl:amount, document.properties.cl:reserve)]]</span
-      >
+      <span class="value">[[_outstanding(document.properties.cl:amount, document.properties.cl:reserve)]]</span>
     </div>
     <div class="row">
       <span class="label">[[i18n('label.claim.reserveRatio')]]</span>
-      <span class="value"
-        >[[_ratio(document.properties.cl:amount, document.properties.cl:reserve)]]</span
-      >
+      <span class="value">[[_ratio(document.properties.cl:amount, document.properties.cl:reserve)]]</span>
     </div>
     <template is="dom-if" if="[[_isHigh(document.properties.cl:amount, threshold)]]">
       <span class="high">[[i18n('label.claim.highExposure')]]</span>

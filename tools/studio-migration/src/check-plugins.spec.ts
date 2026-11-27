@@ -46,11 +46,17 @@ const subject: PluginSubject = {
   conversion: m3.conversion,
   plugins: m3.plugins.sources,
   source: m3,
+  template: m3.plugins.template,
 };
 const withSubject = (broken: PluginSubject, runs?: Record<string, PluginRun>): HarnessInput => ({
   ...m3,
   conversion: broken.conversion,
-  plugins: { ...m3.plugins, sources: broken.plugins, ...(runs ? { runs } : {}) },
+  plugins: {
+    ...m3.plugins,
+    sources: broken.plugins,
+    template: broken.template ?? null,
+    ...(runs ? { runs } : {}),
+  },
 });
 
 describe('check 9, on what needs no run', () => {
@@ -76,6 +82,7 @@ describe('check 9, on what needs no run', () => {
     expect(componentOf(escalate as PluginSource, 'acme-claim-escalate')).toEqual({
       path: 'src/lib/acme-claim-escalate/acme-claim-escalate.ts',
       inputs: ['document', 'reason'],
+      models: [],
       outputs: ['claimEscalated', 'documentUpdated', 'notify'],
     });
   });
@@ -198,6 +205,106 @@ describe('the scan, on its own', () => {
     ).toEqual([]);
   });
 
+  it('reads what loads past the app, what differs where it runs, and what a spec takes away', () => {
+    const template = [
+      '<img [ngSrc]="photo()" alt="">',
+      '<img src="https://images.example/p.gif" alt="">',
+      '<div [style.background-image]="background()"></div>',
+      '<div [ngStyle]="styles()"></div>',
+    ].join('\n');
+    const code = [
+      "import { Component, HostBinding, inject, isDevMode } from '@angular/core';",
+      "import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';",
+      "@Component({ selector: 'acme-x', standalone: true, templateUrl: './x.html',",
+      "  host: { '[style.background-image]': 'bg' }, styles: ['a { background: url(/nuxeo/x); }'] })",
+      'export class X {',
+      "  @HostBinding('attr.src') src = '';",
+      '  private readonly rules = inject(ExtensionRuleRegistry);',
+      '  // URL.createObjectURL and URL.revokeObjectURL, named in a comment, count for nothing.',
+      '  photo(): string { return isDevMode() ? "/nuxeo/a" : "/nuxeo/b"; }',
+      '  load(el: HTMLElement): void {',
+      "    new Image().src = '/nuxeo/x';",
+      "    el.setAttribute('src', '/nuxeo/y');",
+      '    void el.ownerDocument.defaultView;',
+      '    void navigator.userAgent;',
+      '    void import.meta;',
+      '  }',
+      '}',
+    ].join('\n');
+    const findings = scanPlugin(
+      plugin({
+        'src/lib/x/x.html': template,
+        'src/lib/x/x.ts': code,
+        'src/lib/x/x.scss': '.a { background: url(https://images.example/b.png); }',
+        'src/lib/net.js': 'fetch("/x")',
+        '.eslintrc.json': '{}',
+        'src/lib/x/x.spec.ts': [
+          "describe.skip('x', () => { it('a', () => { expect(1).toBe(1); }); });",
+          "xit('b', () => {});",
+          "it.only('c', () => {});",
+          "vi.mock('./x');",
+        ].join('\n'),
+      }),
+    );
+    const of = (pattern: RegExp): number => findings.filter((line) => pattern.test(line)).length;
+    // ngSrc bound with no blob URL, and a literal source of another origin.
+    expect(of(/it binds \[ngsrc\]/)).toBe(1);
+    expect(of(/it loads https:\/\/images\.example\/p\.gif from another origin/)).toBe(1);
+    expect(of(/binds a URL into a style/)).toBe(2);
+    expect(of(/on its host/)).toBe(1);
+    expect(of(/uses @HostBinding/)).toBe(1);
+    expect(of(/its style loads/)).toBe(2);
+    expect(of(/reaches ExtensionRuleRegistry/)).toBe(1);
+    expect(of(/depends on isDevMode/)).toBe(1);
+    expect(of(/new Image\(\)/)).toBe(1);
+    expect(of(/past Angular, through (?:src|defaultView)/)).toBe(2);
+    expect(of(/sets an element's src past Angular's templates, with setAttribute/)).toBe(1);
+    expect(of(/reads navigator/)).toBe(1);
+    expect(of(/reads import\.meta/)).toBe(1);
+    expect(of(/net\.js is a file check 9 does not read/)).toBe(1);
+    expect(of(/\.eslintrc\.json is a file check 9 does not read/)).toBe(1);
+    expect(
+      of(/takes its own tests away, or runs only some, with (?:describe\.skip|xit|it\.only)/),
+    ).toBe(3);
+    expect(of(/replaces a module or a global for its tests, with vi\.mock/)).toBe(1);
+  });
+
+  it('holds an export whose type is not written, an alias of a class, and a default export', () => {
+    const files = {
+      'src/index.ts': [
+        "export { STREAM, Alias, IDS } from './lib/extensions';",
+        'export default 1;',
+      ].join('\n'),
+      'src/lib/extensions.ts': [
+        "import { Subject } from 'rxjs';",
+        'class Hidden {}',
+        'export const STREAM = new Subject<string>();',
+        'export const Alias = Hidden;',
+        "export const IDS = Object.freeze({ components: ['acme.components.x'] } as const);",
+      ].join('\n'),
+    };
+    expect(scanPublicApi(plugin(files))).toEqual([
+      'libs/extensions/acme-x/src/index.ts exports STREAM, whose type is not written: write it, so that the API is what it says',
+      'libs/extensions/acme-x/src/index.ts exports Alias, whose type is not written: write it, so that the API is what it says',
+      'libs/extensions/acme-x/src/index.ts has a default export: name each export',
+    ]);
+    expect(
+      scanConfiguration(
+        {
+          'actions.json': {
+            actions: [{ label: '<img src=x onerror=go()>' }, { label: 'Function("1")()' }],
+            '<script>go()</script>': true,
+          },
+        },
+        [],
+      ).map((line) => line.replace(/: configuration names.*$/, '')),
+    ).toEqual([
+      'app/actions.json at actions[0].label holds markup with a handler',
+      'app/actions.json at actions[1].label holds code that loads or builds code',
+      'app/actions.json at (a key) holds markup',
+    ]);
+  });
+
   it("holds the public API to its own names, and Angular's and the platform's types", () => {
     const files = {
       'src/index.ts': [
@@ -306,6 +413,17 @@ describe('each control of check 9 fails it', () => {
     [
       'plugin-own-test-config',
       "libs/extensions/acme-claim-escalate/vite.config.mts is not the template's",
+    ],
+    ['plugin-bypasses-sanitizer', "it trusts a value past Angular's sanitiser, with DomSanitizer"],
+    ['plugin-drops-output', 'the component has no output claimEscalated'],
+    ['plugin-not-built-in', 'does not build libs/extensions/acme-claim-escalate in'],
+    [
+      'code-in-plugin-metadata',
+      'libs/extensions/acme-claim-escalate/studio-plugin.json at template holds markup',
+    ],
+    [
+      'plugin-project-target',
+      "libs/extensions/acme-claim-escalate/project.json is not the generator's",
     ],
   ])('names what broke: %s', (name, expected) => {
     const mutation = PLUGIN_MUTATIONS.find((candidate) => candidate.name === name);
@@ -419,6 +537,20 @@ describe('check 9, on the plugins run', () => {
     [
       'plugin-registers-more',
       'registers acme.rules.alwaysAllowed among the rules, beside its component',
+    ],
+    ['plugin-changes-event-detail', 'pressing "Escalate" emits'],
+    [
+      'plugin-asks-on-render',
+      'as it is drawn, the plugin asks Claim.Escalate on "doc:claim-cl-1001"',
+    ],
+    [
+      'plugin-extra-button',
+      'the plugin shows a button "Delete", which the observed behaviour never presses',
+    ],
+    ['plugin-skips-tests', 'ran no test: a describe.skip, or the like, takes them all away'],
+    [
+      'plugin-empty-test',
+      'own test fails: acme-claim-escalate, as a plugin does what the element does on every record',
     ],
   ])('names what broke: %s', (name, expected) => {
     const mutation = PLUGIN_MUTATIONS.find((candidate) => candidate.name === name);

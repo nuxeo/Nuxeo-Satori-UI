@@ -11,13 +11,15 @@ import {
   pluginFiles,
   pluginNames,
   PluginError,
+  restampPlugin,
   scaffoldPlugin,
   templateConfiguration,
   type Spawn,
 } from './plugin';
+import { observedProblem } from './observed';
 import { WORKSPACE } from './plugins';
 import { readStudioPackage } from './studio-package';
-import { M3_CUSTOM_BUNDLE, m3CorpusFiles } from './testing/m3-corpus';
+import { M3_CUSTOM_BUNDLE, M3_OBSERVED, m3CorpusFiles } from './testing/m3-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
 
 const archive = syntheticPackage({ bundle: m3CorpusFiles() });
@@ -150,6 +152,65 @@ describe('the plugin command', () => {
       'the generator did not write libs/extensions/acme-claim-escalate: NX  no such generator',
     );
     expect(run(['plugin', 'acme.zip', 'acme-nothing']).code).toBe(1);
+  });
+
+  it("records the element's definition anew with --restamp, and nothing else of the plugin", () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'studio-plugin-'));
+    const root = join(workspace, 'libs', 'extensions', 'acme-claim-exposure');
+    mkdirSync(root, { recursive: true });
+    const stale = {
+      element: 'acme-claim-exposure',
+      package: { name: 'Acme-Claims', version: '0.9.0' },
+      definition: 'old',
+      component: 'acme.components.claimExposure',
+    };
+    writeFileSync(join(root, PLUGIN_FILE), JSON.stringify(stale));
+    const stamped = restampPlugin(pkg, read, 'acme-claim-exposure', { workspace });
+    expect(stamped).toEqual({
+      library: 'libs/extensions/acme-claim-exposure',
+      from: 'old',
+      to: exposure.sha256,
+    });
+    expect(JSON.parse(readFileSync(join(root, PLUGIN_FILE), 'utf8'))).toEqual({
+      ...stale,
+      package: { name: 'Acme-Claims', version: '1.0.0' },
+      definition: exposure.sha256,
+    });
+    expect(() => restampPlugin(pkg, read, 'acme-claim-escalate', { workspace })).toThrow(
+      'libs/extensions/acme-claim-escalate/studio-plugin.json is not there: write the plugin with the plugin command first',
+    );
+  });
+
+  it('refuses an observed behaviour of the wrong shape, rather than misreading it', () => {
+    expect(observedProblem(M3_OBSERVED)).toBeNull();
+    const element = M3_OBSERVED.elements['acme-claim-escalate'];
+    const broken = (records: unknown[]): unknown => ({
+      ...M3_OBSERVED,
+      elements: { 'acme-claim-escalate': { ...element, records } },
+    });
+    expect(
+      observedProblem(
+        broken([
+          { record: 'claim-cl-1001', shows: '', clicks: [{ button: 'Escalate', asks: null }] },
+        ]),
+      ),
+    ).toBe(
+      'acme-claim-escalate, on claim-cl-1001: events are a list of an event and its detail each',
+    );
+    expect(
+      observedProblem(
+        broken([
+          {
+            record: 'claim-cl-1001',
+            shows: '',
+            clicks: [{ button: 'Escalate', asks: { input: 'x' }, fires: [] }],
+          },
+        ]),
+      ),
+    ).toBe('acme-claim-escalate, on claim-cl-1001: a request names its operation');
+    expect(observedProblem(broken([{ record: 'nobody', shows: '' }]))).toBe(
+      'acme-claim-escalate: nobody is none of its records',
+    );
   });
 
   it('gives a child Node its options less any loader of the caller’s', () => {

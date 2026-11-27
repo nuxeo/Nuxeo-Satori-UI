@@ -827,11 +827,12 @@ conversion carries, on a layout field, a tab, a card, a task form's field, an ac
 a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
 M2's corpus included, and check 5 fails for every one.
 
-**Check 9's controls.** Fourteen more, in the same file as `PLUGIN_MUTATIONS`, break the plugins
-or the conversion of the made-up corpus's two custom elements; `src/check-plugins.spec.ts` applies
-each and sees check 9 fail. Five of them check 9 sees only by running the plugin, and the spec runs
-each from a copy of the plugin's files with the control applied, as `check --run-plugins` does.
-`mutate` does not apply them: it breaks a conversion's directory, never a plugin.
+**Check 9's controls.** Twenty-four more, in the same file as `PLUGIN_MUTATIONS`, break the
+plugins or the conversion of the made-up corpus's two custom elements; `src/check-plugins.spec.ts`
+applies each and sees check 9 fail, with a finding it names for each. Ten of them check 9 sees only
+by running the plugin, and the spec runs each from a copy of the plugin's files with the control
+applied, as `check --run-plugins` does. `mutate` does not apply them: it breaks a conversion's
+directory, never a plugin.
 
 | Mutation                      | Run | Breaks                                                                   |
 | ----------------------------- | --- | ------------------------------------------------------------------------ |
@@ -842,6 +843,16 @@ each from a copy of the plugin's files with the control applied, as `check --run
 | `plugin-bypasses-http`        |     | Sends the plugin's request through an `HttpClient` of its own            |
 | `plugin-asks-other-operation` | yes | Makes the plugin run another operation than its element                  |
 | `plugin-registers-more`       | yes | Registers a rule of the plugin's own beside its component                |
+| `plugin-changes-event-detail` | yes | Emits an event with another detail than the element fires                |
+| `plugin-asks-on-render`       | yes | Sends a request as the plugin is drawn, where the element sends none     |
+| `plugin-extra-button`         | yes | Gives the plugin a button the element does not have                      |
+| `plugin-skips-tests`          | yes | Takes the plugin's tests of its behaviour away, with `describe.skip`     |
+| `plugin-empty-test`           | yes | Gives the plugin a test that asserts nothing                             |
+| `plugin-bypasses-sanitizer`   |     | Trusts a value past Angular's sanitiser                                  |
+| `plugin-drops-output`         |     | Takes an output for one of the element's events off the plugin           |
+| `plugin-not-built-in`         |     | Leaves the plugin's provider out of the template app                     |
+| `code-in-plugin-metadata`     |     | Puts the element's code into `studio-plugin.json`                        |
+| `plugin-project-target`       |     | Makes the plugin's `typecheck` target run something else                 |
 | `plugin-runs-eval`            |     | Runs text as code, with `eval`                                           |
 | `plugin-binds-nuxeo-src`      |     | Binds a document's file to an image's `[src]`                            |
 | `plugin-third-party-api`      |     | Puts a type of another package in the plugin's public API                |
@@ -1132,6 +1143,8 @@ app from the template, as every customer library is today: nothing here loads co
    language; a README quoting the element; and `studio-plugin.json`, which names the element, the
    package, the definition it was written from, the component and the provider. It refuses an
    element the package does not define, and a library already there. It writes no behaviour.
+   `plugin … --restamp` records anew, in an existing plugin, the element's definition as the package
+   given holds it, for a person who has changed the plugin to follow a changed element.
 4. **The Code agent finishes it,** following [`.cursor/skills/studio-plugin/SKILL.md`](../../.cursor/skills/studio-plugin/SKILL.md):
    the repository's conventions, the app's services only, a test of each behaviour, and never any
    code in configuration. Then it adds the provider to the template's `app.config.ts`.
@@ -1148,17 +1161,22 @@ app from the template, as every customer library is today: nothing here loads co
      Angular, RxJS, the platform's published entry points and its own files, and the repository's
      conventions kept; its public API exports no class and no type of another package; and no
      string of the conversion's app definition or of `studio-plugin.json` holds code;
-   - **run** (`--run-plugins`): its own tests pass, with none left `todo` or skipped, from a copy of
-     its files with the template's configuration; lint, test and typecheck of the library, and
-     build of the template app, pass through Nx, once the library on disk is the files the check
-     read;
+   - **run** (`--run-plugins`): its own tests pass, from a copy of its files with the template's
+     configuration and the harness's own setup, which fails a test that asserts nothing; a passing
+     test of every behaviour the inventory read, by its title, as Vitest ran it; none left `todo`,
+     skipped, or taken away, and no file of them running none; lint, test and typecheck of the
+     library, and build of the template app, pass through Nx, once the library on disk is the files
+     the check read, its `project.json` the generator's;
    - **its values** (`--observed`): the harness's own spec, written into the copy and into nothing
      of the plugin, registers the plugin through its provider, resolves its component by ID, shows
-     it each record of the observed behaviour, and compares the text it shows, each piece with one
-     space between, as check 6 compares labels; presses each button the element was pressed on,
-     answers the request as the server did, and compares the request, the operation, its input and
-     its parameters, and the outputs emitted with the element's events; and holds what registering
-     the plugin added to the app's registries to its one component.
+     it each record of the observed behaviour with the record and the inputs the file gives, and
+     compares the text it shows, each piece with one space between, as check 6 compares labels; the
+     requests it sends and the outputs it emits as it is drawn; that every button it shows is
+     pressed by the file; and, pressing each, the requests until it settles, the operation, its
+     input (`doc:<uid>` and the uid alone being one document) and its parameters, and the outputs
+     emitted, a detail of none being `{}` as Polymer fires it. Whenever the plugin runs, what
+     registering and drawing it added to the app's registries is held to its one component. An
+     input the file never gives a value leaves the check in part.
 6. **The observed behaviour** ([`src/observed.ts`](src/observed.ts)), `studio-migration-observed/1`,
    is records as Nuxeo's REST API returns them and, for each element, what it shows on each and
    what pressing it asks and fires. For a real package it would be read from Web UI on the
@@ -1169,10 +1187,17 @@ app from the template, as every customer library is today: nothing here loads co
 `acme-claim-exposure`, which shows a claim's properties computed, and `acme-claim-escalate`, a
 button that runs `Claim.Escalate` and fires `claim-escalated`, `document-updated` or `notify`. The
 `plugin` command wrote `libs/extensions/acme-claim-exposure` and `libs/extensions/acme-claim-escalate`,
-which were then finished with the skill and built into `apps/nuxeo-satori-template`. With
-`check --run-plugins --observed`, check 9 passes on both: their tests, their gates and their values.
-The tests run both plugins and every control; lint, build and typecheck run there only through
-`check --run-plugins`, and in CI as the repository's gates.
+which were then finished with the skill and built into `apps/nuxeo-satori-template`.
+
+- **In the tests:** both plugins run, their own tests and the harness's spec, and check 9 finds
+  nothing, `partial` only because lint, build and typecheck do not run there. Every control fails it.
+- **By hand, on 27 November 2026:** `check <the corpus's package> <its conversion> --run-plugins
+--observed <its observed behaviour>` ran both plugins' gates through Nx too, and check 9 passed on
+  both. That run is not repeated by any test or CI job: CI runs the plugins' lint, test, build and
+  typecheck as the repository's gates, and the tests above.
+- **One thing shown differently:** the escalate element's `notify` was a toast in Web UI; a slot
+  binds none of the plugin's outputs and the template app has no toast, so the plugin shows the
+  message beside its button. Its README says so.
 
 **What it does not do:**
 
@@ -1187,7 +1212,15 @@ The tests run both plugins and every control; lint, build and typecheck run ther
 - **Another language** than the package's own: the plugin carries its element's texts in that
   language, since the template provides no translation service.
 - **The scan is a tripwire, not a proof.** Code that hides what it does can pass it, and the
-  harness's spec and the plugin share a page. A person reviews every plugin before accepting it.
+  harness's spec and the plugin share a page. It reads the syntax, not the types: a type inferred
+  from a value is held by asking that its type be written. A person reviews every plugin before
+  accepting it.
+- **The values half compares text, requests and outputs,** not attributes, styles or what a style
+  hides: a tooltip, an icon's name or a value hidden by CSS is the reviewer's. It holds the plugin
+  only on the records and inputs the observed behaviour gives.
+- **Overrides of the platform's own registrations** are held by the scan, which allows only
+  `provideSatoriExtensions({ components })` and no registry elsewhere; the run sees only what is
+  added, by ID.
 
 ## Tests
 

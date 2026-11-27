@@ -97,11 +97,40 @@ export function shipped(path: string): boolean {
   );
 }
 
-/** Every unsafe pattern and every break of the conventions in a plugin's shipped code. */
+/** The files a plugin library holds outside `src/`: the template's, and its own two. */
+const LIBRARY_FILES = new Set([
+  'README.md',
+  'project.json',
+  'studio-plugin.json',
+  'tsconfig.json',
+  'tsconfig.lib.json',
+  'tsconfig.spec.json',
+  'vite.config.mts',
+]);
+
+/** Every unsafe pattern and every break of the conventions in a plugin's files. */
 export function scanPlugin(source: PluginSource): string[] {
   const findings: string[] = [];
   const at = (path: string, line: number): string => `${source.library}/${path}:${line}`;
+  for (const path of Object.keys(source.files).sort()) {
+    const known = path.startsWith('src/')
+      ? /\.(?:ts|html|scss)$/.test(path) && !path.split('/').some((part) => part.startsWith('.'))
+      : LIBRARY_FILES.has(path);
+    if (!known)
+      findings.push(
+        `${source.library}/${path} is a file check 9 does not read: a plugin holds TypeScript, its templates and its styles, under src/, and the template's files beside them`,
+      );
+  }
   for (const [path, text] of Object.entries(source.files).sort(([a], [b]) => a.localeCompare(b))) {
+    if (!path.startsWith('src/')) continue;
+    if (path.endsWith('.scss')) {
+      findings.push(...scanStyle(text, (line) => at(path, line)));
+      continue;
+    }
+    if (/\.spec\.ts$/.test(path)) {
+      findings.push(...scanSpec(text, path, (line) => at(path, line)));
+      continue;
+    }
     if (!shipped(path)) continue;
     if (path.endsWith('.html')) {
       const component = source.files[path.replace(/\.html$/, '.ts')] ?? '';
@@ -121,8 +150,8 @@ function scanTemplate(html: string, at: (line: number) => string, component: str
     const index = html.toLowerCase().indexOf(needle.toLowerCase());
     return index === -1 ? 1 : html.slice(0, index).split('\n').length;
   };
-  const blobs =
-    /\bURL\.createObjectURL\b/.test(component) && /\bURL\.revokeObjectURL\b/.test(component);
+  // Read from the component's syntax tree, so that a comment naming them counts for nothing.
+  const blobs = callsBoth(component, 'createObjectURL', 'revokeObjectURL');
   for (const element of Array.from(document.body.querySelectorAll('*'))) {
     const tag = element.localName;
     if (['script', 'iframe', 'object', 'embed', 'base', 'link', 'meta', 'frame'].includes(tag))
@@ -142,7 +171,13 @@ function scanTemplate(html: string, at: (line: number) => string, component: str
         findings.push(
           `${at(lineOf(name))}: it runs text as code, in the handler ${name}="${attribute.value}"`,
         );
-      else if (/^(?:\[|bind-)?(?:style|ngstyle)/.test(name) && /url\s*\(/i.test(attribute.value))
+      else if (
+        (/^(?:\[|bind-)(?:style|ngstyle)/.test(name) &&
+          (/url\s*\(/i.test(attribute.value) ||
+            /image|background|mask|content|cursor|src/.test(name) ||
+            /^(?:\[|bind-)(?:style|ngstyle)\]?$/.test(name))) ||
+        (name === 'style' && /url\s*\(/i.test(attribute.value))
+      )
         findings.push(
           `${at(lineOf(name))}: it binds a URL into a style, ${name}="${attribute.value}", which the browser fetches past the app's services`,
         );
@@ -150,8 +185,12 @@ function scanTemplate(html: string, at: (line: number) => string, component: str
         findings.push(
           `${at(lineOf(name))}: it sends a form to ${attribute.value}, past the app's services`,
         );
-      else if (['src', 'srcset', 'poster', 'data'].includes(bare)) {
-        if (/\/nuxeo\//.test(attribute.value))
+      else if (['src', 'srcset', 'poster', 'data', 'ngsrc', 'ngsrcset'].includes(bare)) {
+        if (/^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(attribute.value))
+          findings.push(
+            `${at(lineOf(name))}: it loads ${attribute.value} from another origin, in ${name}`,
+          );
+        else if (/\/nuxeo\//.test(attribute.value))
           findings.push(
             `${at(lineOf(name))}: it names a Nuxeo URL in ${name}, which the browser fetches past the app's services`,
           );
@@ -248,6 +287,22 @@ function scanCode(text: string, path: string, at: (line: number) => string): str
         findings.push(
           `${here(node)}: it runs code when the app starts, with ${name}: a plugin of an element runs only where it is placed`,
         );
+      else if ((name === 'isDevMode' || name === 'ngDevMode') && !inImport && !declared)
+        findings.push(
+          `${here(node)}: it depends on ${name}, which tests and a production build answer differently`,
+        );
+      else if (name === 'navigator' && !declared && !member)
+        findings.push(`${here(node)}: it reads navigator, which differs where it runs`);
+      else if (
+        /^(?:ExtensionRuleRegistry|ExtensionActionRegistry|ExtensionSlotRegistry|ExtensionComponentRegistry|AppExtensionsService)$/.test(
+          name,
+        ) &&
+        !inImport &&
+        !declared
+      )
+        findings.push(
+          `${here(node)}: it reaches ${name}: a plugin registers its component through its provider, and changes no other registration`,
+        );
       else if (GLOBALS.has(name) && !declared && !member)
         findings.push(`${here(node)}: it reaches ${name}, one of Node's or the page's own globals`);
       else if (
@@ -290,6 +345,22 @@ function scanCode(text: string, path: string, at: (line: number) => string): str
       node.expression.text === 'Function'
     )
       findings.push(`${here(node)}: it runs text as code, with new Function`);
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'Image'
+    )
+      findings.push(`${here(node)}: it loads an image past the app's services, with new Image()`);
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      (((node.name.text === 'src' || node.name.text === 'srcset' || node.name.text === 'href') &&
+        assigned(node)) ||
+        node.name.text === 'defaultView' ||
+        node.name.text === 'location')
+    )
+      findings.push(`${here(node)}: it reaches the page past Angular, through ${node.name.text}`);
+    if (ts.isMetaProperty(node))
+      findings.push(`${here(node)}: it reads import.meta, which differs where it runs`);
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const name = ts.isIdentifier(callee)
@@ -313,6 +384,43 @@ function scanCode(text: string, path: string, at: (line: number) => string): str
           findings.push(
             `${here(node)}: it imports ${specifier.text} as it runs, which is not a file of its own`,
           );
+      }
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        /^(?:setAttribute|setProperty|setAttributeNS)$/.test(callee.name.text) &&
+        node.arguments.some(
+          (argument) =>
+            ts.isStringLiteralLike(argument) &&
+            /^(?:src|srcset|href|innerHTML|outerHTML|srcdoc|style|action|formaction|on\w+)$/i.test(
+              argument.text,
+            ),
+        )
+      )
+        findings.push(
+          `${here(node)}: it sets an element's ${node.arguments
+            .filter(ts.isStringLiteralLike)
+            .map((argument) => argument.text)
+            .filter((text) =>
+              /^(?:src|srcset|href|innerHTML|outerHTML|srcdoc|style|action|formaction|on\w+)$/i.test(
+                text,
+              ),
+            )
+            .join(', ')} past Angular's templates, with ${callee.name.text}`,
+        );
+      // Its registration is its components alone, written out, so that nothing it registers, or
+      // replaces of the platform's own, is out of the scan's sight.
+      if (ts.isIdentifier(callee) && callee.text === 'provideSatoriExtensions') {
+        const [contributions] = node.arguments;
+        if (!contributions || !ts.isObjectLiteralExpression(contributions))
+          findings.push(
+            `${here(node)}: it registers through provideSatoriExtensions with what it works out as it runs: give it { components } written out`,
+          );
+        else
+          for (const property of contributions.properties)
+            if (!property.name || property.name.getText(source) !== 'components')
+              findings.push(
+                `${here(property)}: it registers ${property.name?.getText(source) ?? 'something'} through provideSatoriExtensions: a plugin of one element registers its components alone`,
+              );
       }
       if (REDEFINING.test(callee.getText(source)))
         findings.push(
@@ -346,14 +454,39 @@ function scanCode(text: string, path: string, at: (line: number) => string): str
       findings.push(`${here(component)}: ${name} has an inline template: use templateUrl`);
     else if (property('templateUrl') === undefined)
       findings.push(`${here(component)}: ${name} names no templateUrl`);
+    const styles = property('styles');
+    if (styles !== undefined)
+      for (const style of [styles, ...(ts.isArrayLiteralExpression(styles) ? styles.elements : [])])
+        if (ts.isStringLiteralLike(style))
+          findings.push(...scanStyle(style.text, () => here(style)));
     const host = property('host');
     if (host && ts.isObjectLiteralExpression(host))
       for (const binding of host.properties)
-        if (binding.name && /innerhtml|outerhtml/i.test(binding.name.getText(source)))
+        if (
+          binding.name &&
+          /^\[(?:attr\.)?(?:src|srcset|style|href)|^\(|^on/i.test(
+            binding.name.getText(source).replace(/^['"]|['"]$/g, ''),
+          )
+        )
+          findings.push(
+            `${here(binding)}: ${name} binds ${binding.name.getText(source)} on its host, past what the scan of its template reads`,
+          );
+        else if (binding.name && /innerhtml|outerhtml/i.test(binding.name.getText(source)))
           findings.push(
             `${here(binding)}: ${name} writes data as HTML, through its host binding ${binding.name.getText(source)}`,
           );
     for (const member of component.members) {
+      for (const bound of ts.canHaveDecorators(member) ? (ts.getDecorators(member) ?? []) : []) {
+        const call = bound.expression;
+        if (
+          ts.isCallExpression(call) &&
+          ts.isIdentifier(call.expression) &&
+          (call.expression.text === 'HostBinding' || call.expression.text === 'HostListener')
+        )
+          findings.push(
+            `${here(member)}: ${name} uses @${call.expression.text}${call.arguments[0] ? `(${call.arguments[0].getText(source)})` : ''}, past what the scan of its template reads: bind it in the template`,
+          );
+      }
       if (ts.isConstructorDeclaration(member) && member.parameters.length > 0)
         findings.push(
           `${here(member)}: ${name} takes what it needs as constructor parameters: use inject()`,
@@ -369,6 +502,60 @@ function scanCode(text: string, path: string, at: (line: number) => string): str
     }
   }
   return findings;
+}
+
+/** What a spec must not do: take its own tests away, run only some, or replace what it tests. */
+function scanSpec(text: string, path: string, at: (line: number) => string): string[] {
+  const findings: string[] = [];
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
+  const here = (node: ts.Node): string =>
+    at(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression.getText(source);
+      if (
+        /^(?:x|f)(?:it|test|describe)$/.test(callee) ||
+        /^(?:it|test|describe|suite)\.(?:skip|only|todo|skipIf|runIf|fails|concurrent|sequential|shuffle)\b/.test(
+          callee,
+        )
+      )
+        findings.push(
+          `${here(node)}: it takes its own tests away, or runs only some, with ${callee}`,
+        );
+      if (/^vi\.(?:mock|doMock|stubGlobal|hoisted)$/.test(callee))
+        findings.push(
+          `${here(node)}: it replaces a module or a global for its tests, with ${callee}: test the plugin as the app runs it, with Angular's testing providers`,
+        );
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return findings;
+}
+
+/** What a style must not do: load anything from a URL, which the browser fetches itself. */
+function scanStyle(css: string, at: (line: number) => string): string[] {
+  const findings: string[] = [];
+  css.split('\n').forEach((line, index) => {
+    if (/url\s*\(|@import|expression\s*\(|image-set\s*\(/i.test(line))
+      findings.push(
+        `${at(index + 1)}: its style loads ${line.trim().slice(0, 80)}, which the browser fetches past the app's services`,
+      );
+  });
+  return findings;
+}
+
+/** True when the code, read from its syntax tree and not its comments, calls both members. */
+function callsBoth(code: string, first: string, second: string): boolean {
+  const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true);
+  const called = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression))
+      called.add(node.expression.name.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return called.has(first) && called.has(second);
 }
 
 /** True when a relative import from the file at `path` stays among the library's own files. */
@@ -510,6 +697,17 @@ export function scanPublicApi(source: PluginSource): string[] {
   };
   const holdExport = (file: ts.SourceFile, name: string): void => {
     const declaration = topLevel(file, name);
+    if (
+      declaration &&
+      ts.isVariableDeclaration(declaration) &&
+      declaration.type === undefined &&
+      !(declaration.initializer && frozenLiteral(declaration.initializer))
+    ) {
+      findings.push(
+        `${source.library}/src/index.ts exports ${name}, whose type is not written: write it, so that the API is what it says`,
+      );
+      return;
+    }
     if (!declaration) {
       findings.push(
         `${source.library}/src/index.ts exports ${name}, which ${file.fileName} does not declare`,
@@ -531,6 +729,16 @@ export function scanPublicApi(source: PluginSource): string[] {
 
   const file = parse('src/index.ts') as ts.SourceFile;
   for (const statement of file.statements) {
+    if (
+      ts.isExportAssignment(statement) ||
+      (ts.canHaveModifiers(statement) &&
+        ts
+          .getModifiers(statement)
+          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword))
+    ) {
+      findings.push(`${source.library}/src/index.ts has a default export: name each export`);
+      continue;
+    }
     if (ts.isExportDeclaration(statement)) {
       const from =
         statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
@@ -573,6 +781,35 @@ export function scanPublicApi(source: PluginSource): string[] {
     }
   }
   return findings;
+}
+
+/** `Object.freeze({ … } as const)`, or a literal: a value whose type is what it is written as. */
+function frozenLiteral(node: ts.Expression): boolean {
+  let value: ts.Expression = node;
+  while (
+    ts.isAsExpression(value) ||
+    ts.isParenthesizedExpression(value) ||
+    ts.isSatisfiesExpression(value)
+  )
+    value = value.expression;
+  if (
+    ts.isCallExpression(value) &&
+    value.expression.getText() === 'Object.freeze' &&
+    value.arguments.length === 1
+  )
+    return frozenLiteral(value.arguments[0]);
+  if (ts.isObjectLiteralExpression(value))
+    return value.properties.every(
+      (property) => ts.isPropertyAssignment(property) && frozenLiteral(property.initializer),
+    );
+  if (ts.isArrayLiteralExpression(value)) return value.elements.every(frozenLiteral);
+  return (
+    ts.isStringLiteralLike(value) ||
+    ts.isNumericLiteral(value) ||
+    value.kind === ts.SyntaxKind.TrueKeyword ||
+    value.kind === ts.SyntaxKind.FalseKeyword ||
+    value.kind === ts.SyntaxKind.NullKeyword
+  );
 }
 
 /** Where a file imports a name from, or `null` when it does not import it. */
@@ -622,16 +859,24 @@ const CODE: readonly (readonly [RegExp, string])[] = [
   [/<\s*(?:script|template|dom-module|style|iframe|object|embed)\b/i, 'markup'],
   [/\bPolymer\s*\(/, "Polymer's definition of an element"],
   [/\bfunction\s*\*?\s*[\w$]*\s*\(/, 'a function'],
-  [/(?:\)|\b[A-Za-z_$][\w$]*)\s*=>/, 'an arrow function'],
-  [/\bthis\.[A-Za-z_$][\w$]*/, 'code reading this'],
+  [/\)\s*=>|=>\s*[{(]/, 'an arrow function'],
+  [/\bthis\.[A-Za-z_$][\w$]*\s*[(.=[]/, 'code reading this'],
+  [/<[a-z][\w-]*(?:\s[^>]*)?\son[a-z]+\s*=/i, 'markup with a handler'],
+  [/\b(?:Function|import|require)\s*\(/, 'code that loads or builds code'],
   [/\[\[[^\]]*\]\]/, 'a Polymer binding'],
   [/\bon-[a-z][\w-]*\s*=/, 'a Polymer listener'],
   [/\bjavascript\s*:/i, 'a javascript: URL'],
   [/\b(?:eval|setTimeout|setInterval)\s*\(/, 'code run from text'],
   [/\bnew\s+Function\b/, 'code run from text'],
 ];
-/** A two-way binding is code too, but a translation's placeholder looks the same: not in labels. */
-const BINDING: readonly [RegExp, string] = [/\{\{[^}]*\}\}/, 'a binding'];
+/**
+ * Not in labels, where a translation's placeholder and its formatting look the same: a two-way
+ * binding, and markup of any element.
+ */
+const OUTSIDE_LABELS: readonly (readonly [RegExp, string])[] = [
+  [/\{\{[^}]*\}\}/, 'a binding'],
+  [/<\/?[a-z][\w-]*(?:[\s/>]|$)/i, 'markup'],
+];
 
 /**
  * Every string of configuration that holds code: the conversion's app definition, by its path
@@ -644,7 +889,7 @@ export function scanConfiguration(
   const findings: string[] = [];
   const walk = (file: string, value: unknown, at: string, labels: boolean): void => {
     if (typeof value === 'string') {
-      const found = [...CODE, ...(labels ? [] : [BINDING])].find(([pattern]) =>
+      const found = [...CODE, ...(labels ? [] : OUTSIDE_LABELS)].find(([pattern]) =>
         pattern.test(value),
       );
       if (found)
@@ -656,8 +901,11 @@ export function scanConfiguration(
     if (Array.isArray(value))
       value.forEach((item, index) => walk(file, item, `${at}[${index}]`, labels));
     else if (isRecord(value))
-      for (const [key, item] of Object.entries(value))
+      for (const [key, item] of Object.entries(value)) {
+        // A key is configuration too.
+        walk(file, key, at ? `${at} (a key)` : '(a key)', labels);
         walk(file, item, at ? `${at}.${key}` : key, labels);
+      }
   };
   for (const [path, content] of Object.entries(app).sort(([a], [b]) => a.localeCompare(b)))
     walk(`app/${path}`, content, '', /^labels\//.test(path));

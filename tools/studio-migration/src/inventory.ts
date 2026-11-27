@@ -805,9 +805,15 @@ export function inventory(pkg: StudioPackage): Inventory {
     searches,
     slotContributions,
     customCode,
+    // Where each is used: the package's files, and the templates of its other elements.
     customElements: customElements.map((element) => ({
       ...element,
-      uses: [...(usedIn.get(element.name) ?? [])],
+      uses: [
+        ...(usedIn.get(element.name) ?? []),
+        ...customElements
+          .filter((other) => other !== element && other.elements.includes(element.name))
+          .map((other) => `${other.path}, in ${other.name}`),
+      ],
     })),
     dashboard,
     themes,

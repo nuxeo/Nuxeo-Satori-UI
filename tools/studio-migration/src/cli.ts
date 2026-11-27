@@ -66,7 +66,7 @@ import {
 import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { describeElement } from './elements';
 import { ObservedError, readObserved } from './observed';
-import { nextSteps, PluginError, scaffoldPlugin } from './plugin';
+import { nextSteps, PluginError, restampPlugin, scaffoldPlugin } from './plugin';
 import { runPlugin, type PluginRun } from './plugin-run';
 import { readPlugins, WORKSPACE, type PluginsInput } from './plugins';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
@@ -111,7 +111,7 @@ const USAGE = `usage:
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
   studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
-  studio-migration plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>]
+  studio-migration plugin <package.zip> <custom-element> [--workspace <directory>] [--owner <prefix>] [--restamp]
   studio-migration lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 `;
 
@@ -137,7 +137,7 @@ const COMMANDS: Readonly<
   decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
   migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
-  plugin: { args: 2, flags: [], valued: ['--workspace', '--owner'] },
+  plugin: { args: 2, flags: ['--restamp'], valued: ['--workspace', '--owner'] },
 };
 
 /** A command line read against {@link COMMANDS}: its arguments, flags and values. */
@@ -346,6 +346,15 @@ export function main(argv: readonly string[], io: CliIo): number {
       case 'plugin': {
         const pkg = readPackage(io, args[0]);
         const owner = values.get('--owner');
+        if (flags.includes('--restamp')) {
+          const stamped = restampPlugin(pkg, inventory(pkg), args[1], {
+            workspace: values.get('--workspace') ?? WORKSPACE,
+          });
+          io.out(
+            `${stamped.library}: now the plugin of ${args[1]} as ${pkg.descriptor.name} ${pkg.descriptor.version} defines it (${stamped.to.slice(0, 12)}, was ${stamped.from?.slice(0, 12) ?? 'none'}). Check 9 holds it to that definition.\n`,
+          );
+          return 0;
+        }
         const { names } = scaffoldPlugin(pkg, inventory(pkg), args[1], {
           workspace: values.get('--workspace') ?? WORKSPACE,
           ...(owner !== undefined ? { owner } : {}),
@@ -425,6 +434,8 @@ async function checkRunningPlugins(argv: readonly string[], io: CliIo): Promise<
   const { args, flags, values } = parse(argv);
   try {
     const pkg = readPackage(io, args[0]);
+    // Read first, so that a wrong path stops the command before the slow runs, not after them.
+    readConversion(args[1]);
     const read = inventory(pkg);
     const workspace = values.get('--plugins') ?? WORKSPACE;
     const observedFile = values.get('--observed');

@@ -40,8 +40,8 @@ export interface PluginsInput {
 /** The app every plugin is built into until plugins load at run time (decision 5). */
 export const TEMPLATE_CONFIG = 'apps/nuxeo-satori-template/src/app/app.config.ts';
 
-/** The directories a library's files are never read from. */
-const SKIPPED = new Set(['node_modules', 'dist', 'coverage']);
+/** The directories a library's files are never read from: installed packages, and git's own. */
+const SKIPPED = new Set(['node_modules', '.git']);
 
 /** Every file of a library, as text, by its path under it; `null` when there is no such directory. */
 export function readLibrary(workspace: string, library: string): Record<string, string> | null {
@@ -50,7 +50,8 @@ export function readLibrary(workspace: string, library: string): Record<string, 
   const files: Record<string, string> = {};
   const walk = (directory: string, prefix: string): void => {
     for (const name of readdirSync(directory).sort()) {
-      if (name.startsWith('.') || SKIPPED.has(name)) continue;
+      // Dotfiles too: a plugin holds none, and check 9 says so of one it finds.
+      if (SKIPPED.has(name)) continue;
       const full = join(directory, name);
       const path = prefix ? `${prefix}/${name}` : name;
       if (statSync(full).isDirectory()) walk(full, path);

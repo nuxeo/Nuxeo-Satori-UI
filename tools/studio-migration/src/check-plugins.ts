@@ -29,7 +29,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pluginLibraryOf } from './convert-elements';
 import { camelCase, pluginInterface, type CustomElement } from './elements';
 import type { CheckOutcome, HarnessInput } from './harness';
-import { shown, type ObservedElement } from './observed';
+import { detailOf, sameAsk, shown, type ObservedElement } from './observed';
 import {
   behaviours,
   PLUGIN_FILE,
@@ -72,15 +72,30 @@ export function checkPlugins(input: HarnessInput): CheckOutcome {
     }
     findings.push(...holdPlugin(input, element, source, plugins));
     const run = plugins.runs?.[element.name];
+    findings.push(...holdTitles(element, source, run));
     if (!run) {
       waiting.push(`${element.name}'s tests, gates and values were not run`);
       continue;
     }
-    findings.push(...holdRun(element, source, run));
+    findings.push(...holdRun(element, source, run), ...holdRegistered(source, run));
     if (!run.gates) waiting.push(`${element.name}'s lint, test, build and typecheck were not run`);
     const observed = plugins.observed?.elements[element.name];
-    if (!observed) waiting.push(`no observed behaviour of ${element.name} was given`);
-    else findings.push(...holdValues(element, observed, run), ...holdRegistered(source, run));
+    if (!observed) {
+      waiting.push(`no observed behaviour of ${element.name} was given`);
+      continue;
+    }
+    findings.push(...holdValues(element, observed, run));
+    // An input the observed behaviour never gives a value is not held to the element.
+    const given = new Set([
+      observed.recordInput ?? 'document',
+      ...Object.keys(observed.inputs),
+      ...observed.records.flatMap((record) => Object.keys(record.inputs ?? {})),
+    ]);
+    const unheld = pluginInterface(element).inputs.filter((name) => !given.has(name));
+    if (unheld.length > 0)
+      waiting.push(
+        `the observed behaviour of ${element.name} gives no value to ${unheld.join(', ')}, so the plugin is not held to the element there`,
+      );
   }
   if (elements.length > 0 && !plugins) waiting.push('the plugins were not read');
   return {
@@ -112,14 +127,15 @@ function holdPlugin(
   if (metadata.format !== PLUGIN_FORMAT) findings.push(`${file} is not a ${PLUGIN_FORMAT} file`);
   if (metadata.element !== element.name)
     findings.push(`${file} is the plugin of ${String(metadata.element)}, not of ${element.name}`);
-  const { name, version } = input.pkg.descriptor;
-  if (metadata.package?.name !== name || metadata.package?.version !== version)
+  // Another version of the same package is fine while the element's definition is the same.
+  const { name } = input.pkg.descriptor;
+  if (metadata.package?.name !== name)
     findings.push(
-      `${file} was written from ${String(metadata.package?.name)} ${String(metadata.package?.version)}, not from the package given, ${name} ${version}`,
+      `${file} was written from ${String(metadata.package?.name)}, not from the package given, ${name}`,
     );
   else if (metadata.definition !== element.sha256)
     findings.push(
-      `the custom element ${element.name} has changed since its plugin was written: write the plugin again from the element as the package holds it now`,
+      `the custom element ${element.name} has changed since its plugin was written: change the plugin to do what the element does now, then record the element it was written from with plugin --restamp`,
     );
 
   // The element's interface, on the component the plugin registers.
@@ -129,7 +145,12 @@ function holdPlugin(
       `${source.library}: no component of the plugin has the selector ${element.name}, the element's name`,
     );
   else {
-    const { inputs, outputs } = pluginInterface(element);
+    const { inputs, models, outputs } = pluginInterface(element);
+    for (const wanted of models)
+      if (component.inputs.includes(wanted) && !component.models.includes(wanted))
+        findings.push(
+          `${source.library}/${component.path}: ${wanted} is an input, where the element writes it back: make it a model()`,
+        );
     for (const wanted of inputs)
       if (!component.inputs.includes(wanted))
         findings.push(
@@ -140,7 +161,19 @@ function holdPlugin(
         findings.push(
           `${source.library}/${component.path}: the component has no output ${wanted}, for the element's ${element.events.find((event) => camelCase(event.name) === wanted)?.name ?? wanted} event`,
         );
+    // A model's own `<name>Change` is the model's.
+    for (const declared of component.outputs)
+      if (!outputs.includes(declared))
+        findings.push(
+          `${source.library}/${component.path}: the component has an output ${declared}, which the element does not fire`,
+        );
   }
+  const project = source.library.slice(source.library.lastIndexOf('/') + 1);
+  if (metadata.project !== project)
+    findings.push(
+      `${file} names the project ${String(metadata.project)}, not ${project}, whose library it is in`,
+    );
+  findings.push(...holdProject(source, project));
 
   // Built in from the template.
   const template = plugins.template;
@@ -168,17 +201,89 @@ function holdPlugin(
       );
   }
 
-  // A test of each behaviour the inventory read, or a reason in the README for leaving it.
-  const titles = testTitles(source);
-  const notKept = notKeptOf(source.files['README.md'] ?? '');
-  for (const behaviour of behaviours(element))
-    if (!titles.has(behaviour.title) && !notKept.includes(behaviour.title))
-      findings.push(
-        `${source.library} has no test of the element's behaviour ${JSON.stringify(behaviour.title)}, and its README's "Not kept" does not say why`,
-      );
-
   findings.push(...scanPlugin(source), ...scanPublicApi(source));
   return findings;
+}
+
+/**
+ * A test of each behaviour the inventory read, or a line of the README's "Not kept" saying why
+ * not. Once the plugin has run, the test must be one that passed, as Vitest ran it: a test in a
+ * file Vitest never reads, or one a `describe.skip` took away, is no test.
+ */
+function holdTitles(
+  element: CustomElement,
+  source: PluginSource,
+  run: PluginRun | undefined,
+): string[] {
+  const findings: string[] = [];
+  const passed = run?.tests.passedTitles;
+  const titles = passed === undefined ? testTitles(source) : new Set(passed);
+  const notKept = notKeptOf(source.files['README.md'] ?? '');
+  for (const behaviour of behaviours(element)) {
+    if (titles.has(behaviour.title)) continue;
+    const reason = notKept.find((line) => line.includes(behaviour.title));
+    if (
+      reason !== undefined &&
+      reason
+        .replace(behaviour.title, '')
+        .replace(/[\s`*:,.–-]+/g, ' ')
+        .trim()
+        .split(' ').length >= 3
+    )
+      continue;
+    findings.push(
+      passed === undefined
+        ? `${source.library} has no test of the element's behaviour ${JSON.stringify(behaviour.title)}, and its README's "Not kept" does not say why`
+        : `${source.library} has no passing test of the element's behaviour ${JSON.stringify(behaviour.title)}, and its README's "Not kept" does not say why`,
+    );
+  }
+  return findings;
+}
+
+/**
+ * The project file the generator writes: its targets run the library's lint, tests and type check
+ * as every library's do, so that a gate cannot pass by running something else.
+ */
+function holdProject(source: PluginSource, project: string): string[] {
+  const findings: string[] = [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source.files['project.json'] ?? 'null');
+  } catch {
+    parsed = null;
+  }
+  const config = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<
+    string,
+    unknown
+  >;
+  const want = expectedTargets(source.library);
+  if (config['name'] !== project || !isDeepStrictEqual(config['targets'], want))
+    findings.push(
+      `${source.library}/project.json is not the generator's: its name and its lint, test and typecheck targets are every library's`,
+    );
+  return findings;
+}
+
+/** The targets `extension-library` writes for a library at `library`. */
+function expectedTargets(library: string): Record<string, unknown> {
+  return {
+    test: {
+      executor: '@nx/vitest:test',
+      outputs: ['{options.reportsDirectory}'],
+      options: { reportsDirectory: `coverage/${library}` },
+    },
+    lint: { executor: '@nx/eslint:lint' },
+    typecheck: {
+      executor: 'nx:run-commands',
+      cache: true,
+      inputs: ['default', '^default'],
+      outputs: [`{workspaceRoot}/dist/out-tsc/${library}`],
+      options: {
+        cwd: '{workspaceRoot}',
+        command: `ngc -p ${library}/tsconfig.lib.json --outDir dist/out-tsc/${library}`,
+      },
+    },
+  };
 }
 
 /** The titles of the tests the plugin's specs hold, `it.todo` and skipped ones apart. */
@@ -204,9 +309,10 @@ function testTitles(source: PluginSource): Set<string> {
   return titles;
 }
 
-/** The text of a README's "Not kept" section, where a behaviour left out is named, with why. */
-function notKeptOf(readme: string): string {
-  return /^## Not kept\s*\n([^]*?)(?=^## |(?![^]))/m.exec(readme)?.[1] ?? '';
+/** The lines of a README's "Not kept" section, where a behaviour left out is named, with why. */
+function notKeptOf(readme: string): string[] {
+  const section = /^## Not kept\s*\n([^]*?)(?=^## |(?![^]))/m.exec(readme)?.[1] ?? '';
+  return section.split('\n');
 }
 
 /** What registering the plugin added to the app's registries: its one component, and nothing else. */
@@ -243,6 +349,14 @@ function holdRun(element: CustomElement, source: PluginSource, run: PluginRun): 
     findings.push(`${source.library} has ${tests.unwritten.length - 10} more tests still to write`);
   if (tests.error === undefined && tests.passed === 0)
     findings.push(`${source.library}'s own tests hold no test that passes`);
+  for (const file of tests.empty ?? [])
+    findings.push(
+      `${source.library}/${file} ran no test: a describe.skip, or the like, takes them all away`,
+    );
+  if (run.seenError !== undefined)
+    findings.push(
+      `the harness could not read what the plugin of ${element.name} shows and registers: ${firstLine(run.seenError)}`,
+    );
   // A spec of the element's behaviour, not only of its registration.
   const specs = Object.keys(source.files).filter(
     (path) => /\.spec\.ts$/.test(path) && path !== 'src/lib/extensions.spec.ts',
@@ -264,11 +378,16 @@ function holdValues(element: CustomElement, observed: ObservedElement, run: Plug
   const findings: string[] = [];
   const name = element.name;
   if (run.seen === undefined) {
-    findings.push(
-      `the harness could not read what the plugin of ${name} shows: ${firstLine(run.seenError ?? 'its spec wrote nothing')}`,
-    );
+    if (run.seenError === undefined)
+      findings.push(
+        `the harness could not read what the plugin of ${name} shows: its spec wrote nothing`,
+      );
     return findings;
   }
+  const events = (fired: readonly { event: string; detail: unknown }[]) =>
+    fired.map((one) => ({ output: camelCase(one.event), detail: detailOf(one.detail) }));
+  const outputs = (emitted: readonly { output: string; detail: unknown }[]) =>
+    emitted.map((one) => ({ output: one.output, detail: detailOf(one.detail) }));
   for (const record of observed.records) {
     const seen = run.seen.find((candidate) => candidate.record === record.record);
     const where = `${name}, on ${record.record}`;
@@ -284,6 +403,24 @@ function holdValues(element: CustomElement, observed: ObservedElement, run: Plug
       findings.push(
         `${where}: the plugin shows ${JSON.stringify(shown(seen.shows))}, where the element shows ${JSON.stringify(shown(record.shows))}`,
       );
+    // As it is drawn: the requests, each the element's, and the events.
+    const loads = record.loads ?? [];
+    const asked = seen.loads ?? [];
+    if (asked.length !== loads.length || !asked.every((ask, index) => sameAsk(ask, loads[index])))
+      findings.push(
+        `${where}: as it is drawn, the plugin asks ${asked.map(describeAsk).join('; ') || 'nothing'}, where the element asks ${loads.map(describeAsk).join('; ') || 'nothing'}`,
+      );
+    if (!isDeepStrictEqual(outputs(seen.fires ?? []), events(record.fires ?? [])))
+      findings.push(
+        `${where}: as it is drawn, the plugin emits ${JSON.stringify(outputs(seen.fires ?? []))}, where the element fires ${JSON.stringify(events(record.fires ?? []))}`,
+      );
+    // Every button it shows is one the observed behaviour presses, so none goes unheld.
+    const pressedHere = new Set((record.clicks ?? []).map((click) => click.button));
+    for (const button of seen.buttons ?? [])
+      if (!pressedHere.has(button))
+        findings.push(
+          `${where}: the plugin shows a button ${JSON.stringify(button)}, which the observed behaviour never presses`,
+        );
     for (const click of record.clicks ?? []) {
       const pressed = seen.clicks?.find((candidate) => candidate.button === click.button);
       if (!pressed || !pressed.found) {
@@ -300,25 +437,12 @@ function holdValues(element: CustomElement, observed: ObservedElement, run: Plug
         findings.push(
           `${where}: pressing ${JSON.stringify(click.button)} sends ${pressed.asks.length} requests, where the element sends one, ${describeAsk(click.asks)}`,
         );
-      else if (click.asks !== null) {
-        const [ask] = pressed.asks;
-        if (
-          ask.operation !== click.asks.operation ||
-          !isDeepStrictEqual(ask.input ?? null, click.asks.input) ||
-          !isDeepStrictEqual(ask.params ?? {}, click.asks.params)
-        )
-          findings.push(
-            `${where}: pressing ${JSON.stringify(click.button)} asks ${describeAsk(ask)}, where the element asks ${describeAsk(click.asks)}`,
-          );
-      }
-      const expected = click.fires.map((fired) => ({
-        output: camelCase(fired.event),
-        detail: fired.detail,
-      }));
-      const emitted = pressed.fires.map((fired) => ({
-        output: fired.output,
-        detail: fired.detail ?? null,
-      }));
+      else if (click.asks !== null && !sameAsk(pressed.asks[0], click.asks))
+        findings.push(
+          `${where}: pressing ${JSON.stringify(click.button)} asks ${describeAsk(pressed.asks[0])}, where the element asks ${describeAsk(click.asks)}`,
+        );
+      const expected = events(click.fires);
+      const emitted = outputs(pressed.fires);
       if (!isDeepStrictEqual(emitted, expected))
         findings.push(
           `${where}: pressing ${JSON.stringify(click.button)} emits ${JSON.stringify(emitted)}, where the element fires ${JSON.stringify(expected)}`,
@@ -328,7 +452,11 @@ function holdValues(element: CustomElement, observed: ObservedElement, run: Plug
   return findings;
 }
 
-function describeAsk(ask: { operation: string | null; input: unknown; params: unknown }): string {
+function describeAsk(ask: {
+  readonly operation: string | null;
+  readonly input: unknown;
+  readonly params: unknown;
+}): string {
   return `${ask.operation ?? 'no operation'} on ${JSON.stringify(ask.input ?? null)} with ${JSON.stringify(ask.params ?? {})}`;
 }
 
@@ -362,6 +490,7 @@ export function componentOf(
 ): {
   readonly path: string;
   readonly inputs: readonly string[];
+  readonly models: readonly string[];
   readonly outputs: readonly string[];
 } | null {
   for (const [path, text] of Object.entries(source.files)) {
@@ -406,6 +535,7 @@ export function componentOf(
       return {
         path,
         inputs: members(['input', 'input.required', 'model', 'model.required']),
+        models: members(['model', 'model.required']),
         outputs: members(['output', 'outputFromObservable']),
       };
     }

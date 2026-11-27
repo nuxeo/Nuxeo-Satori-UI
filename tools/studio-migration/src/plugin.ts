@@ -168,9 +168,9 @@ export function pluginFiles(
   element: CustomElement,
   names: PluginNames,
 ): Record<string, string> {
-  const { inputs, outputs } = pluginInterface(element);
+  const { inputs, models, outputs } = pluginInterface(element);
   const properties = element.properties.filter(
-    (property) => !property.internal && property.computed === null,
+    (property) => !property.internal && property.computed === null && !property.readOnly,
   );
   const texts = elementTexts(pkg, inventory, element);
   const dir = `src/lib/${names.element}`;
@@ -194,7 +194,10 @@ export function pluginFiles(
       `  /** The element's \`${property.name}\`${property.type ? ` (${property.type})` : ''}${
         property.value !== null ? `, by default \`${property.value}\` in the element` : ''
       }. */`,
-      `  readonly ${inputs[properties.indexOf(property)]} = input<${typed}>(${initial});`,
+      // A property the element writes back, `notify: true`, is a model: bound both ways.
+      `  readonly ${inputs[properties.indexOf(property)]} = ${
+        models.includes(inputs[properties.indexOf(property)]) ? 'model' : 'input'
+      }<${typed}>(${initial});`,
     ];
   });
   // One output per event, in the order the element first fires each: `outputs` is in that order.
@@ -210,7 +213,9 @@ export function pluginFiles(
   const usesDocument = properties.some((property) => property.name === 'document');
 
   const component = [
-    `import { ChangeDetectionStrategy, Component${inputLines.length ? ', input' : ''}${outputLines.length ? ', output' : ''} } from '@angular/core';`,
+    `import { ChangeDetectionStrategy, Component${
+      inputs.length > models.length ? ', input' : ''
+    }${models.length ? ', model' : ''}${outputLines.length ? ', output' : ''} } from '@angular/core';`,
     ...(usesDocument
       ? [`import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';`]
       : []),
@@ -385,6 +390,18 @@ export function pluginFiles(
     'entry naming the component, in a slot that draws components (docs/extension-reference.md:',
     '`tabs`, `documentView`, `sidebar`, or a route).',
     '',
+    ...(element.events.length > 0
+      ? [
+          '## Its events',
+          '',
+          `The element fires ${element.events.map((event) => `\`${event.name}\``).join(', ')}; the plugin has an output for each.`,
+          'A slot that places the component sets its inputs and binds none of its outputs. So what Web UI',
+          'did on an event, a toast for `notify` or reading the document again for `document-updated`,',
+          "the plugin does itself, through the app's services or its own template, and its outputs stay for",
+          'a host that binds them.',
+          '',
+        ]
+      : []),
     '## The element it replaces',
     '',
     `Its interface, as a plugin: inputs ${inputs.map((name) => `\`${name}\``).join(', ') || 'none'}; outputs ${outputs.map((name) => `\`${name}\``).join(', ') || 'none'}.`,
@@ -393,7 +410,7 @@ export function pluginFiles(
     'As the package defines it, quoted for the person who writes the plugin. It is never run, and',
     "none of it is copied into the plugin's code:",
     '',
-    '```html',
+    '```text',
     markup,
     '```',
     '',
@@ -647,7 +664,7 @@ export function scaffoldPlugin(
   const root = join(request.workspace, ...names.library.split('/'));
   if (existsSync(root))
     throw new PluginError(
-      `${names.library} already exists, and the plugin command never writes over a library: remove it, or give the plugin another owner`,
+      `${names.library} already exists, and the plugin command never writes over a library: to hold it to the element as the package defines it now, once the plugin does what the element does, add --restamp`,
     );
   const ran = spawn(
     process.execPath,
@@ -681,6 +698,47 @@ export function scaffoldPlugin(
       cwd: request.workspace,
     });
   return { names, written: Object.keys(files).sort() };
+}
+
+/**
+ * `plugin … --restamp`: records, in an existing plugin's `studio-plugin.json`, the package and the
+ * element's definition as the package given holds them, and changes nothing else. For a person who
+ * has changed the plugin to follow a changed element: check 9 then holds it to the element as it is.
+ */
+export function restampPlugin(
+  pkg: StudioPackage,
+  inventory: Inventory,
+  elementName: string,
+  request: PluginRequest,
+): { readonly library: string; readonly from: string | null; readonly to: string } {
+  const element = inventory.customElements.find((candidate) => candidate.name === elementName);
+  if (!element)
+    throw new PluginError(
+      `the package defines no custom element ${elementName}; its custom elements are ${
+        inventory.customElements.map((candidate) => candidate.name).join(', ') || 'none'
+      }`,
+    );
+  const library = pluginLibraryOf(element);
+  const file = join(request.workspace, ...library.split('/'), PLUGIN_FILE);
+  if (!existsSync(file))
+    throw new PluginError(
+      `${library}/${PLUGIN_FILE} is not there: write the plugin with the plugin command first`,
+    );
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  } catch (error) {
+    throw new PluginError(`${library}/${PLUGIN_FILE} is not JSON: ${(error as Error).message}`);
+  }
+  if (metadata['element'] !== element.name)
+    throw new PluginError(
+      `${library}/${PLUGIN_FILE} is the plugin of ${String(metadata['element'])}, not of ${element.name}`,
+    );
+  const from = typeof metadata['definition'] === 'string' ? metadata['definition'] : null;
+  metadata['package'] = { name: pkg.descriptor.name, version: pkg.descriptor.version };
+  metadata['definition'] = element.sha256;
+  writeFileSync(file, `${JSON.stringify(metadata, null, 2)}\n`);
+  return { library, from, to: element.sha256 };
 }
 
 /** What the command prints once it has written the library. */

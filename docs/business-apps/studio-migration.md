@@ -252,9 +252,11 @@ A migrated package is ready when checks 1 to 10 pass, a person has accepted or r
 - **What needs the plugin run,** `check --run-plugins`: its own tests pass, with none left to write;
   it passes lint, test, build and typecheck through Nx.
 - **What needs the observed behaviour,** `--observed`: it shows the same values as the element on
-  the same records, as check 6 compares them, asks the server what the element asked, emits what
-  it fired, and registers its component alone. Read from a file of records and what the element
-  showed, with no server: lab mode does not record one from Web UI yet.
+  the same records, as check 6 compares them, asks the server what the element asked and emits
+  what it fired, as it is drawn and as each button is pressed, and shows no button the element's
+  behaviour does not press. Read from a file of records and what the element showed, with no
+  server: lab mode does not record one from Web UI yet. Whenever the plugin runs, it registers its
+  component alone.
 - **A plugin not written, or not run,** leaves the check `partial`. A plugin that passes stays a
   proposal until a person accepts it.
 
@@ -344,14 +346,17 @@ something to break fails its check too. The thirteen that do not say so: `widen-
 condition and no operation button to break there, and eight of M2's nine no task layout, tab or
 layout block.
 
-**In M3**, fourteen more, for check 9, on the made-up corpus's two custom elements and their
+**In M3**, twenty-four more, for check 9, on the made-up corpus's two custom elements and their
 plugins: a plugin that writes data as HTML, drops a value, fails its own tests, leaves one to
-write, bypasses the app's HTTP service, runs another operation, registers more than its component,
-runs `eval`, binds a file to `[src]`, puts a third-party type in its public API, changes its own
-test configuration, or was written from another definition of its element; a conversion that puts
-an element's code into configuration, or leaves an element out of its report. Each fails check 9;
-the five that only running a plugin shows run, each from a copy of the plugin with the control
-applied.
+write, skips them, holds one that asserts nothing, bypasses the app's HTTP service or its
+sanitiser, runs another operation, sends a request as it is drawn, emits another detail, shows a
+button its element does not have, registers more than its component, runs `eval`, binds a file
+to `[src]`, puts a third-party type in its public API, drops an output, changes its own test
+configuration or its project's targets, is not built into the template, puts code into its
+`studio-plugin.json`, or was written from another definition of its element; a conversion that
+puts an element's code into configuration, or leaves an element out of its report. Each fails
+check 9; the ten that only running a plugin shows run, each from a copy of the plugin with the
+control applied.
 
 **For the report's decisions** (section 8), six more, which break a `decisions.json` filled in
 against its report: take a decided item's owner off, or its decision; change the reason the report
@@ -469,14 +474,19 @@ These sit inside the [development plan](development-plan.md):
   it. The report proposes each as a Layer 2 plugin at `libs/extensions/<element>`, until a person
   accepts it. `npm run studio-migration -- plugin <package.zip> <element>` scaffolds the plugin from
   the template every customer library comes from, with the element's interface and a spec
-  skeleton of its observed behaviour, and the Code agent's skill,
+  skeleton of the behaviours the inventory read, and the Code agent's skill,
   `.cursor/skills/studio-plugin/SKILL.md`, says how to finish it. Check 9 runs as section 6 says,
-  with fourteen negative controls (section 7), each seen failing.
+  with twenty-four negative controls (section 7), each seen failing. Two independent reviews, one of
+  correctness and one asking whether a wrong or unsafe plugin could pass, found gaps; the ones
+  closed have controls of their own, and the tool's README lists what stays open. The scan stays a
+  tripwire that a person's review completes.
 - **Built in from the template.** As decision 5 keeps it until signed, pinned plugins are proven, a
   plugin is a library the customer's fork of `apps/nuxeo-satori-template` adds with one line. The two
   made-up plugins, `libs/extensions/acme-claim-exposure` and `acme-claim-escalate`, written with the
-  command and the skill, are built into the template so that CI builds them, and pass check 9 with
-  `--run-plugins` and the corpus's observed behaviour, and the repository's gates.
+  command and the skill, are built into the template so that CI builds them. Run by hand on 27
+  November 2026 with `--run-plugins` and the corpus's observed behaviour, check 9 passed on both;
+  the tests run their tests and values on every change, and CI their lint, test, build and
+  typecheck.
 - **Not yet:**
   - a custom element of a real package, which phase 6's demo asks for: real elements will hold
     what the made-up ones do not;

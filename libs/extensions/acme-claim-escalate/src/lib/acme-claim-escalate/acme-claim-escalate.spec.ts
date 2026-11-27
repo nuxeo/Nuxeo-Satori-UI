@@ -190,6 +190,10 @@ describe('acme-claim-escalate, as a plugin', () => {
     expect(fired).toEqual([
       { output: 'notify', detail: { message: 'The claim could not be escalated' } },
     ]);
+    // A slot binds no output, so the plugin shows the message itself, where Web UI toasted it.
+    fixture.detectChanges();
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]');
+    expect(alert?.textContent?.trim()).toBe('The claim could not be escalated');
     // Nothing changed, so nothing is read again, and the button is offered again.
     expect(changes).toEqual([]);
     fixture.detectChanges();

@@ -133,7 +133,12 @@ export function secondCount(pkg: StudioPackage, inventory: Inventory): Map<strin
     const raw = pkg.bundleFiles.get(file.path)?.toString('utf8') ?? '';
     if (WEB_UI_KINDS.has(file.kind) && blocks.size > 0) {
       // Each tag named as a block is a use of it, which shows the block's fields once more.
-      const uses = [...withoutHtmlComments(raw).matchAll(START_TAG)]
+      // A custom element's own template is the element's: a block it uses is not the file's.
+      const outside =
+        file.kind === 'custom-bundle'
+          ? withoutElements(withoutHtmlComments(raw))
+          : withoutHtmlComments(raw);
+      const uses = [...outside.matchAll(START_TAG)]
         .map(([start]) => TAG_NAME.exec(start)?.[1]?.toLowerCase() ?? '')
         .filter((name) => blocks.has(name));
       set('block-use', file.path, uses.length);

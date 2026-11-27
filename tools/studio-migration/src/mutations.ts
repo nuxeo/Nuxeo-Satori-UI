@@ -1286,6 +1286,8 @@ export interface PluginSubject {
   readonly conversion: Conversion;
   readonly plugins: readonly PluginSource[];
   readonly source: MutationSource;
+  /** The template app's configuration, which builds the plugins in. */
+  readonly template?: { readonly path: string; readonly text: string } | null;
 }
 
 /**
@@ -1343,10 +1345,11 @@ const isShippedCode = (path: string): boolean =>
 /** A spec of the element's behaviour: not the registration's, which the command writes whole. */
 const isBehaviourSpec = (path: string): boolean =>
   path.startsWith('src/lib/') && path.endsWith('.spec.ts') && path !== 'src/lib/extensions.spec.ts';
-/** `{{ value() }}` in a template: a value it shows, not one of its texts. */
-const VALUE = /\{\{(?!\s*text\()\s*([^}]+?)\s*\}\}/;
+/** `{{ value() }}` in a template: a value it shows, read from a signal, not one of its texts. */
+const VALUE = /\{\{(?!\s*text\()\s*([A-Za-z_$][\w$]*\(\))\s*\}\}/;
 /** An element that shows a value and nothing else: `<span class="value">{{ number() }}</span>`. */
-const SHOWS_VALUE = /(<([a-z][\w-]*)([^>]*)>)\s*\{\{(?!\s*text\()\s*([^}]+?)\s*\}\}\s*(<\/\2>)/;
+const SHOWS_VALUE =
+  /(<([a-z][\w-]*)([^>]*)>)\s*\{\{(?!\s*text\()\s*([A-Za-z_$][\w$]*\(\))\s*\}\}\s*(<\/\2>)/;
 
 export const PLUGIN_MUTATIONS: readonly PluginMutation[] = [
   {
@@ -1545,6 +1548,217 @@ export const PLUGIN_MUTATIONS: readonly PluginMutation[] = [
       return {
         subject: withPluginFile(subject, plugin, path, `${JSON.stringify(metadata, null, 2)}\n`),
         changed: `made ${plugin.library}/${path} name another definition of ${String(metadata['element'])}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-changes-event-detail',
+    description: 'Make a plugin emit an event with another detail than its element fires',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const emits = /\.emit\(\{/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && emits.test(content),
+        'an event with a detail',
+      );
+      return {
+        subject: withPluginFile(
+          subject,
+          plugin,
+          path,
+          text.replace(emits, '.emit({ changed: true, '),
+        ),
+        changed: `added to the detail of an event of ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-asks-on-render',
+    description: 'Make a plugin send a request as it is drawn, where its element sends none',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const service = /private readonly (\w+) = inject\((\w+Service)\);/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) =>
+          isShippedCode(file) &&
+          /@Component/.test(content) &&
+          /\.escalate\(/.test(content) &&
+          service.test(content),
+        "a component that sends its element's request",
+      );
+      const broken = text.replace(
+        /(\n {2}protected escalate\(\): void \{)/,
+        "\n  private readonly drawn = this.escalation\n    .escalate('claim-cl-1001', 'as it is drawn')\n    .pipe(takeUntilDestroyed())\n    .subscribe();\n$1",
+      );
+      if (broken === text)
+        throw new MutationError('no component of the plugins sends a request to add one to');
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} send a request as it is drawn`,
+      };
+    },
+  },
+  {
+    name: 'plugin-extra-button',
+    description: 'Give a plugin a button its element does not have',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isTemplate(file) && VALUE.test(content),
+        'a template showing a value',
+      );
+      const broken = `${text}<button type="button" aria-label="Delete" (click)="text('x')"></button>\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `added a button to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-skips-tests',
+    description: "Take a plugin's tests of its behaviour away, with describe.skip",
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const suite = /\ndescribe\(/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && suite.test(content),
+        'a test of its behaviour',
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, text.replace(suite, '\ndescribe.skip(')),
+        changed: `skipped the tests of ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-empty-test',
+    description: 'Give a plugin a test that asserts nothing',
+    caughtBy: 9,
+    needsRun: true,
+    apply: (subject) => {
+      const close = /\n\}\);\s*$/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isBehaviourSpec(file) && close.test(content),
+        'a test of its behaviour',
+      );
+      const broken = text.replace(
+        close,
+        "\n  it('does what the element does on every record', () => {\n    // Nothing is asserted.\n  });\n});\n",
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `added a test that asserts nothing to ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-bypasses-sanitizer',
+    description: "Make a plugin trust a value past Angular's sanitiser",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && /@Component/.test(content),
+        'a component',
+      );
+      const broken = `import { DomSanitizer } from '@angular/platform-browser';\n${text}\nexport function trusted(sanitizer: DomSanitizer, html: string): unknown {\n  return sanitizer.bypassSecurityTrustHtml(html);\n}\n`;
+      return {
+        subject: withPluginFile(subject, plugin, path, broken),
+        changed: `made ${plugin.library}/${path} trust HTML past the sanitiser`,
+      };
+    },
+  },
+  {
+    name: 'plugin-drops-output',
+    description: "Take an output for one of its element's events off a plugin",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const declared = /\n\s*readonly \w+ = output<[^;]*>\(\);/;
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file, content) => isShippedCode(file) && declared.test(content),
+        'an output',
+      );
+      return {
+        subject: withPluginFile(subject, plugin, path, text.replace(declared, '')),
+        changed: `took an output off ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-not-built-in',
+    description: "Leave a plugin's provider out of the template app",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const template = subject.template;
+      const plugin = [...subject.plugins].sort((a, b) => a.library.localeCompare(b.library))[0];
+      const provider =
+        plugin && (JSON.parse(plugin.files[PLUGIN_FILE] ?? '{}') as Json)['provider'];
+      if (!template || typeof provider !== 'string' || !template.text.includes(`${provider}()`))
+        throw new MutationError('no plugin is built into the template app to leave out');
+      return {
+        subject: {
+          ...subject,
+          template: { ...template, text: template.text.split(`${provider}(),`).join('') },
+        },
+        changed: `left ${provider} out of ${template.path}`,
+      };
+    },
+  },
+  {
+    name: 'code-in-plugin-metadata',
+    description: "Put the element's code into a plugin's studio-plugin.json",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === PLUGIN_FILE,
+        `a ${PLUGIN_FILE}`,
+      );
+      const metadata = JSON.parse(text) as Json;
+      const element = subject.source.inventory.customElements.find(
+        (candidate) => candidate.name === metadata['element'],
+      );
+      metadata['template'] = element
+        ? elementSource(subject.source.pkg, element)
+        : '<script>Polymer({})</script>';
+      return {
+        subject: withPluginFile(subject, plugin, path, `${JSON.stringify(metadata, null, 2)}\n`),
+        changed: `put the code of ${String(metadata['element'])} into ${plugin.library}/${path}`,
+      };
+    },
+  },
+  {
+    name: 'plugin-project-target',
+    description: "Make a plugin's typecheck target run something else",
+    caughtBy: 9,
+    needsRun: false,
+    apply: (subject) => {
+      const { plugin, path, text } = pluginFile(
+        subject,
+        (file) => file === 'project.json',
+        'a project.json',
+      );
+      const project = JSON.parse(text) as Json;
+      const targets = project['targets'] as Json;
+      const typecheck = targets['typecheck'] as Json;
+      typecheck['options'] = { ...(typecheck['options'] as Json), command: 'node -e 0' };
+      return {
+        subject: withPluginFile(subject, plugin, path, `${JSON.stringify(project, null, 2)}\n`),
+        changed: `made ${plugin.library}/${path} type-check nothing`,
       };
     },
   },
