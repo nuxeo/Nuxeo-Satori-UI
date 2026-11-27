@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!-- The media kit's policy, as it is but for one thing: its delivery marks the master too, a long
+     video in VideoDeliveryBackgroundTest, as a studio that marks its masters for each distributor
+     would. The kit's own policy does not: its master is the distributor's to mark. -->
+<component name="org.nuxeo.agentic.assets.test.media-video-delivery">
+
+  <require>nuxeo.config.media-demo.rights</require>
+
+  <extension target="org.nuxeo.agentic.assets.rights" point="policies">
+    <policy type="FilmVersion">
+      <rightsEnd xpath="dc:expired" />
+      <channels xpath="fver:channels" />
+      <territories xpath="fver:territories" />
+      <windows xpath="film:windows" document="fver:film" type="Film" />
+      <original xpath="files:files/0/file" channel="SVOD" />
+      <blob xpath="files:files/1/file" channel="SVOD" />
+      <blob xpath="files:files/2/file" channel="Marketing" />
+      <blob xpath="files:files/3/file" preview="true" />
+      <rendition name="thumbnail" preview="true" />
+      <delivery>
+        <original />
+        <blob xpath="files:files/1/file" />
+        <blob xpath="files:files/2/file" />
+      </delivery>
+      <watermark text="ACME PICTURES · FOR {recipient} · {user} · {day}" placement="tiled">
+        <previews>
+          <blob xpath="files:files/3/file" />
+        </previews>
+        <deliveries>
+          <original />
+          <blob xpath="files:files/2/file" />
+        </deliveries>
+        <except group="media-rights" />
+        <except group="media-distribution" />
+      </watermark>
+    </policy>
+  </extension>
+
+</component>

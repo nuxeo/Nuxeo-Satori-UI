@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.nuxeo.agentic.assets.rights.AssetRightsComponent;
 import org.nuxeo.agentic.assets.rights.AssetRightsService;
 import org.nuxeo.agentic.assets.rights.AssetRightsService.DownloadDecision;
 import org.nuxeo.ecm.core.api.Blob;
@@ -147,7 +148,7 @@ public final class VideoOperationRights {
         }
         String refusal;
         try {
-            Set<String> types = Set.copyOf(rights.coveredTypes());
+            Set<String> types = withCopies(rights.coveredTypes());
             String query = holdersQuery(types, stored.getKey());
             if (query == null) {
                 return;
@@ -168,6 +169,17 @@ public final class VideoOperationRights {
      * Every document of {@code types} whose blob fields hold {@code key}, as one query, or
      * {@code null} when no covered type has a blob field.
      */
+    /**
+     * The covered types and, since 0.6.0, a long video's marked copy's, whose stored file the rights
+     * refuse to everyone: so a copy handed over with no document, or given to a {@code Video.*}
+     * operation, is refused as at its own endpoints.
+     */
+    public static Set<String> withCopies(Set<String> covered) {
+        Set<String> types = new TreeSet<>(covered);
+        types.add(AssetRightsComponent.COPY_TYPE);
+        return Set.copyOf(types);
+    }
+
     public static String holdersQuery(Set<String> types, String key) {
         SchemaManager schemas = Framework.getService(SchemaManager.class);
         Set<String> covered = new TreeSet<>();

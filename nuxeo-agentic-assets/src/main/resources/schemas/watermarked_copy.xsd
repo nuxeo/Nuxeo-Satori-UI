@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!-- Since 0.6.0: a long video's marked copy, kept once a background job has made it, so that it is
+     reused rather than made at every request. Written by that job alone, with the system's rights,
+     in a folder no one but the system reads; the download endpoints refuse its file to everyone, and
+     only Asset.GetWatermarked serves it, to the person its key names, once the rights allow it. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/assets/watermarked-copy"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/agentic/assets/watermarked-copy">
+
+  <!-- The platform's blob type, content, for the marked file. -->
+  <xs:include schemaLocation="core-types.xsd" />
+
+  <!-- What it is looked up by: the SHA-256, in hex, of the source, its file, the watermark and the
+       text drawn, with the person and the territory where the text names them. -->
+  <xs:element name="key" type="xs:string" />
+
+  <!-- The document the file was read from, its type, and the place it holds the file at. -->
+  <xs:element name="source" type="xs:string" />
+  <xs:element name="sourceType" type="xs:string" />
+  <xs:element name="xpath" type="xs:string" />
+  <!-- The use, as Asset.GetWatermarked names it, or a delivery's file by its rule. -->
+  <xs:element name="use" type="xs:string" />
+  <!-- The source file's digest when it was marked: another digest, and the copy is dropped. -->
+  <xs:element name="digest" type="xs:string" />
+  <!-- The SHA-256 of the policy's type and its watermark's whole definition when it was marked. -->
+  <xs:element name="fingerprint" type="xs:string" />
+
+  <!-- download or delivery. -->
+  <xs:element name="purpose" type="xs:string" />
+  <!-- Who it is marked for, and who asked or filed: the names the text draws, or empty. -->
+  <xs:element name="recipient" type="xs:string" />
+  <xs:element name="user" type="xs:string" />
+  <xs:element name="territory" type="xs:string" />
+  <!-- The exact text drawn. -->
+  <xs:element name="watermark" type="xs:string" />
+
+  <!-- When it was made, in UTC: older than the configured days, and it is dropped. -->
+  <xs:element name="made" type="xs:date" />
+
+  <!-- The marked file. -->
+  <xs:element name="content" type="nxs:content" />
+
+</xs:schema>

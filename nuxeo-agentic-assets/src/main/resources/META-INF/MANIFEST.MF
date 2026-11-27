@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: Nuxeo Agentic Assets
 Bundle-SymbolicName: org.nuxeo.agentic.assets;singleton:=true
-Bundle-Version: 0.5.0
+Bundle-Version: 0.6.0
 Bundle-Vendor: Hyland Software
 Nuxeo-Component: OSGI-INF/asset-rights-service.xml,
  OSGI-INF/asset-rights-download-permission.xml,
@@ -15,4 +15,7 @@ Nuxeo-Component: OSGI-INF/asset-rights-service.xml,
  OSGI-INF/media-delivery-listener.xml,
  OSGI-INF/asset-watermark-operations-contrib.xml,
  OSGI-INF/asset-review-service.xml,
- OSGI-INF/asset-review-listener.xml
+ OSGI-INF/asset-review-listener.xml,
+ OSGI-INF/asset-video-marker.xml,
+ OSGI-INF/asset-watermarked-copies-types.xml,
+ OSGI-INF/asset-video-watermark-service.xml

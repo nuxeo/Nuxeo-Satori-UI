@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.watermark.marker" version="1.0">
+
+  <documentation>
+    Since 0.6.0, what marks a video a rights policy's watermark marks: the platform's own video
+    tools, VideoToolsService.watermark, whose videoWatermarkWithPicture command line runs ffmpeg's
+    overlay with a picture of the mark drawn in Java, sized by the platform's ffmpeg-info command
+    line, ffprobe. A server without ffmpeg has the service, and it says it cannot run: a video the
+    watermark marks is then refused, never served unmarked. Its own service, so that a test
+    runtime without ffmpeg stands in for it.
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.assets.watermark.PlatformVideoMarker" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.watermark.VideoMarker" />
+  </service>
+
+</component>

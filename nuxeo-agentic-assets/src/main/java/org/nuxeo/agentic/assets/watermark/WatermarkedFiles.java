@@ -4,6 +4,7 @@
 package org.nuxeo.agentic.assets.watermark;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -24,9 +25,13 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
+import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
 import org.nuxeo.ecm.platform.rendition.Rendition;
 import org.nuxeo.ecm.platform.rendition.service.RenditionService;
 import org.nuxeo.runtime.api.Framework;
+
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * What {@code Asset.GetWatermarked} serves, since 0.5.0: a use of an asset, marked for the person
@@ -70,8 +75,25 @@ public final class WatermarkedFiles {
     record Asked(Use use, String frame) {
     }
 
+    /** The file the document holds for a use, and the place it holds it at; {@code null} for a computed rendition. */
+    record Located(Blob blob, String xpath) {
+    }
+
+    /**
+     * What the operation answers, since 0.6.0: the file marked, or, for a long video being marked in
+     * the background, {@code preparing}, a short JSON saying so and when to ask again, which the
+     * operation answers with the status 202.
+     */
+    public record Answer(Blob file, boolean preparing) {
+    }
+
     /** {@code use} of {@code document}, marked for {@code person}. */
     public Blob serve(DocumentModel document, String use, NuxeoPrincipal person) {
+        return answer(document, use, person).file();
+    }
+
+    /** {@code use} of {@code document}, marked for {@code person}, or being marked. */
+    public Answer answer(DocumentModel document, String use, NuxeoPrincipal person) {
         Asked written = parse(use);
         AssetRightsService service = rights.get();
         if (service == null) {
@@ -106,23 +128,76 @@ public final class WatermarkedFiles {
             throw new DocumentSecurityException(
                     "The asset's rights refuse this file: " + decision.reason().code() + ".");
         }
-        Blob file = file(document, policy, asked);
+        Located found = located(document, policy, asked);
+        Blob file = found == null ? null : found.blob();
         if (file == null) {
             throw new NuxeoException("The asset has no such file.", 404);
         }
         String text = watermark.text(name(person), name(person), service.today(), "");
+        if (AssetWatermarks.isVideo(file)) {
+            return video(document, use, asked, found, watermark, text, person);
+        }
         Blob marked;
         try {
             marked = AssetWatermarks.mark(file, text, watermark.placement());
         } catch (AssetWatermarks.Unavailable e) {
             log.info("Asset rights: the {} of {} could not be marked for {}, so it is refused: {}", asked.use(),
                     document.getId(), name(person), e.getMessage());
-            throw new NuxeoException("This file cannot be marked as its rights require, so it is not served: "
-                    + Decision.Reason.WATERMARK_UNAVAILABLE.code() + ".", 409);
+            throw unavailable(null);
         }
         log.info("Asset rights: served the {} of {} ({}) marked to {}", asked.use(), document.getId(),
                 document.getType(), name(person));
-        return marked;
+        return new Answer(marked, false);
+    }
+
+    /**
+     * Since 0.6.0, a video: marked in the request when it is short; when it is long, a kept copy for
+     * this person, or {@code preparing} while a job makes one, or the job's failure. Never the unmarked
+     * video.
+     */
+    private Answer video(DocumentModel document, String use, Asked asked, Located found, Watermark watermark,
+            String text, NuxeoPrincipal person) {
+        MarkedVideos videos = Framework.getService(MarkedVideos.class);
+        MarkedVideos.Outcome outcome = videos == null
+                ? new MarkedVideos.Refused("the server's marked videos are not running")
+                : videos.mark(MarkedVideos.Order.of(document, use, found.xpath(), found.blob(), watermark, text,
+                        name(person), name(person), "", MarkedVideos.Purpose.DOWNLOAD));
+        if (outcome instanceof MarkedVideos.Marked marked) {
+            log.info("Asset rights: served the {} of {} ({}) marked to {}{}", asked.use(), document.getId(),
+                    document.getType(), name(person), marked.copy() == null ? "" : ", from its kept copy");
+            // A kept copy's stored file is refused wherever else it is asked for: handed over here as
+            // its bytes, under no key of the store's.
+            return new Answer(marked.copy() == null ? marked.file() : new ServedCopy(marked.file()), false);
+        }
+        if (outcome instanceof MarkedVideos.Preparing preparing) {
+            log.info("Asset rights: the marked {} of {} is being prepared for {}", asked.use(), document.getId(),
+                    name(person));
+            return new Answer(preparing(use, preparing.retryAfter()), true);
+        }
+        String reason = outcome instanceof MarkedVideos.Refused refused ? refused.reason() : null;
+        log.info("Asset rights: the {} of {} could not be marked for {}, so it is refused: {}", asked.use(),
+                document.getId(), name(person), reason);
+        throw unavailable(reason);
+    }
+
+    /** The answer while a long video is being marked: what it is, and when to ask again. */
+    static Blob preparing(String use, int retryAfter) {
+        ObjectNode json = JsonNodeFactory.instance.objectNode();
+        json.put("entity-type", "watermarkedFile");
+        json.put("status", "preparing");
+        json.put("use", use);
+        json.put("retryAfter", retryAfter);
+        Blob blob = new ByteArrayBlob(json.toString().getBytes(StandardCharsets.UTF_8), "application/json",
+                StandardCharsets.UTF_8.name());
+        blob.setFilename("preparing.json");
+        return blob;
+    }
+
+    /** 409: the file cannot be marked, so it is not served, with the reason when there is one. */
+    private static NuxeoException unavailable(String reason) {
+        return new NuxeoException("This file cannot be marked as its rights require, so it is not served: "
+                + Decision.Reason.WATERMARK_UNAVAILABLE.code()
+                + (reason == null || reason.isBlank() ? "." : ": " + reason + "."), 409);
     }
 
     static Asked parse(String use) {
@@ -182,28 +257,34 @@ public final class WatermarkedFiles {
 
     /** The file the document holds for the use; {@code null} for none. */
     static Blob file(DocumentModel document, RightsPolicy policy, Asked asked) {
+        Located found = located(document, policy, asked);
+        return found == null ? null : found.blob();
+    }
+
+    /** The file the document holds for the use, and its place; {@code null} for none. */
+    static Located located(DocumentModel document, RightsPolicy policy, Asked asked) {
         Use use = asked.use();
         try {
             switch (use.kind()) {
             case ORIGINAL:
-                return blobAt(document, policy.originalXpath());
+                return at(document, policy.originalXpath());
             case BLOB:
-                return blobAt(document, use.name());
+                return at(document, use.name());
             case VIEW:
-                return view(document, use.name());
+                return at(document, viewPlace(document, use.name()));
             case STORYBOARD:
-                return blobAt(document, "vid:storyboard/" + asked.frame() + "/content");
+                return at(document, "vid:storyboard/" + asked.frame() + "/content");
             case RENDITION:
-                Blob transcoded = transcoded(document, use.name());
+                String transcoded = transcodedPlace(document, use.name());
                 if (transcoded != null) {
-                    return transcoded;
+                    return at(document, transcoded);
                 }
                 RenditionService renditions = Framework.getService(RenditionService.class);
                 if (renditions == null) {
                     return null;
                 }
                 Rendition rendition = renditions.getRendition(document, use.name());
-                return rendition == null ? null : rendition.getBlob();
+                return rendition == null || rendition.getBlob() == null ? null : new Located(rendition.getBlob(), null);
             default:
                 return null;
             }
@@ -215,6 +296,11 @@ public final class WatermarkedFiles {
         }
     }
 
+    private static Located at(DocumentModel document, String xpath) {
+        Blob blob = xpath == null ? null : blobAt(document, xpath);
+        return blob == null ? null : new Located(blob, xpath);
+    }
+
     private static Blob blobAt(DocumentModel document, String xpath) {
         try {
             return document.getPropertyValue(xpath) instanceof Blob blob ? blob : null;
@@ -223,30 +309,30 @@ public final class WatermarkedFiles {
         }
     }
 
-    /** The first picture view of that title, as the download use names a view by its title. */
-    private static Blob view(DocumentModel document, String title) {
+    /** The place of the first picture view of that title, as the download use names a view by its title. */
+    private static String viewPlace(DocumentModel document, String title) {
         if (!document.hasSchema("picture")
                 || !(document.getPropertyValue("picture:views") instanceof List<?> views)) {
             return null;
         }
         for (int index = 0; index < views.size(); index++) {
             if (title.equals(document.getPropertyValue("picture:views/" + index + "/title"))) {
-                return blobAt(document, "picture:views/" + index + "/content");
+                return "picture:views/" + index + "/content";
             }
         }
         return null;
     }
 
-    /** A video's transcoded video of that conversion's name, as {@code @rendition} serves it. */
-    private static Blob transcoded(DocumentModel document, String name) {
+    /** The place of a video's transcoded video of that conversion's name, as {@code @rendition} serves it. */
+    private static String transcodedPlace(DocumentModel document, String name) {
         if (!document.hasSchema("video")
                 || !(document.getPropertyValue("vid:transcodedVideos") instanceof List<?> videos)) {
             return null;
         }
         for (int index = 0; index < videos.size(); index++) {
             Serializable named = document.getPropertyValue("vid:transcodedVideos/" + index + "/name");
-            if (name.equals(named)) {
-                return blobAt(document, "vid:transcodedVideos/" + index + "/content");
+            if (name.equals(named) && blobAt(document, "vid:transcodedVideos/" + index + "/content") != null) {
+                return "vid:transcodedVideos/" + index + "/content";
             }
         }
         return null;

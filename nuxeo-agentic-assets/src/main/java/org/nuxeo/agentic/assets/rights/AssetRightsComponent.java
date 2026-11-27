@@ -74,6 +74,13 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
 
     static final String COLLECTION_FACET = "Collection";
 
+    /**
+     * Since 0.6.0, a long video's marked copy's type ({@code WatermarkedCopies.TYPE}): its file is
+     * refused at every download endpoint, and wherever its stored file is handed over with no
+     * document, to everyone.
+     */
+    public static final String COPY_TYPE = "WatermarkedCopy";
+
     /** What a type or a document id may be, to be written into a query: anything else refuses. */
     private static final Pattern QUERY_SAFE = Pattern.compile("[A-Za-z0-9_.:-]+");
 
@@ -358,7 +365,8 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     DownloadDecision holders(String repository, ManagedBlob blob, NuxeoPrincipal person) {
         Use unknown = Use.unknown(null);
         try {
-            String query = VideoOperationRights.holdersQuery(Set.copyOf(coveredTypes()), blob.getKey());
+            String query = VideoOperationRights.holdersQuery(VideoOperationRights.withCopies(coveredTypes()),
+                    blob.getKey());
             if (query == null) {
                 return null;
             }
@@ -404,6 +412,12 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
         } catch (RuntimeException e) {
             log.error("Asset rights: a download's document has no readable type, so it is refused", e);
             return new DownloadDecision(Use.unknown(null), Decision.refuse(Reason.POLICY_ERROR));
+        }
+        if (COPY_TYPE.equals(type)) {
+            // Since 0.6.0: a long video's marked copy, kept for the person it names, is served by
+            // Asset.GetWatermarked alone, to that person, once the rights allow it; to everyone else,
+            // an administrator included, wherever it is asked for, refused.
+            return new DownloadDecision(Use.unknown(xpath), Decision.refuse(Reason.NOT_CLEARED));
         }
         RightsPolicy policy = policyFor(type);
         if (policy == null) {

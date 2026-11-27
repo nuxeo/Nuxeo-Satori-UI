@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
@@ -72,7 +73,8 @@ public final class Watermark {
             return code;
         }
 
-        static Placement of(String code) {
+        /** The placement written so, exactly, or {@code null}. */
+        public static Placement of(String code) {
             for (Placement placement : values()) {
                 if (placement.code.equals(code)) {
                     return placement;
@@ -342,6 +344,34 @@ public final class Watermark {
     /** The text as the policy writes it, its names unfilled. */
     public String template() {
         return text;
+    }
+
+    /** Whether the text names {@code name}, such as {@code recipient}, in braces. */
+    public boolean names(String name) {
+        return text.contains("{" + name + "}");
+    }
+
+    /**
+     * Since 0.6.0: everything the watermark says, as one canonical text, so that a marked copy kept
+     * under it is told from one kept under another: its text as written, its placement, each occasion
+     * with the uses it names, and the groups exempt. A change to any of them is a change of the
+     * watermark.
+     */
+    public String definition() {
+        StringBuilder written = new StringBuilder();
+        written.append("text=").append(text).append('\n');
+        written.append("placement=").append(placement.code()).append('\n');
+        for (Occasion occasion : Occasion.values()) {
+            Set<Use> uses = occasions.get(occasion);
+            if (uses != null) {
+                written.append(occasion.element())
+                       .append('=')
+                       .append(uses.stream().map(Use::toString).sorted().collect(Collectors.joining("\u001f")))
+                       .append('\n');
+            }
+        }
+        written.append("except=").append(except.stream().sorted().collect(Collectors.joining("\u001f")));
+        return written.toString();
     }
 
     public Placement placement() {
