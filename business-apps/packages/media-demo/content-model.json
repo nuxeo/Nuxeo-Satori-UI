@@ -112,7 +112,11 @@
             "filename": "string",
             "mimeType": "string",
             "length": "long",
-            "digest": "string"
+            "digest": "string",
+            "watermarked": "boolean",
+            "watermarkedFor": "string",
+            "watermark": "string",
+            "watermarkedFile": "blob"
           }
         }
       }

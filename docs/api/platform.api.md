@@ -4202,7 +4202,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-372 exported symbol(s).
+376 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4222,6 +4222,7 @@ class ARenderService {
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+const ASSET_REVIEW_ENRICHER = "assetReview";
 const ASSET_RIGHTS_ENRICHER = "assetRights";
 interface AdminAccessChecks {
     isAdministrator: () => boolean;
@@ -4285,6 +4286,14 @@ interface AssetQueueItem {
     icon: string;
     }
 }
+interface AssetReviewAnswer {
+    readonly type: string;
+    readonly mayDecide: boolean;
+    readonly reason: AssetReviewRefusal | null;
+    readonly permission: string;
+    }
+}
+type AssetReviewRefusal = 'not-a-reviewer' | 'not-live' | 'not-reviewable';
 interface AssetRightsDecision {
     readonly allowed: boolean;
     readonly reason: AssetRightsReason;
@@ -4301,7 +4310,7 @@ interface AssetRightsExplanation {
     readonly otherwise: AssetRightsDecision;
     }
 }
-type AssetRightsReason = 'channel-not-covered' | 'cleared' | 'not-cleared' | 'policy-error' | 'preview' | 'rights-ended';
+type AssetRightsReason = 'channel-not-covered' | 'cleared' | 'not-cleared' | 'policy-error' | 'preview' | 'rights-ended' | 'watermark-required' | 'watermark-unavailable';
 interface AssetSearchParams {
     pageIndex?: number;
     pageSize?: number;
@@ -4668,6 +4677,8 @@ class DocumentDetailService {
     fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>;
+    fetchAssetReview(uid: string): Observable<AssetReviewAnswer | null>;
+    fetchWatermarked(uid: string, use: string): Observable<Blob>;
     fetchRendition(uid: string, name: string): Observable<Blob>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
@@ -5766,6 +5777,7 @@ class WorkflowService {
 const administrationAccessGuard: CanActivateFn;
 const administrationLandingGuard: CanActivateFn;
 function allowedTransitions(document: NuxeoDocument | null | undefined): readonly NuxeoAllowedTransition[];
+function assetReview(document: NuxeoDocument | null | undefined): AssetReviewAnswer | null;
 function assetRights(document: NuxeoDocument | null | undefined): AssetRightsExplanation | null;
 function assetRightsDecision(rights: AssetRightsExplanation, use: AssetUse): AssetRightsDecision;
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;

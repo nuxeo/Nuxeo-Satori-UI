@@ -326,6 +326,12 @@ export {
   type AssetUseKind,
 } from './lib/utils/asset-rights';
 export {
+  ASSET_REVIEW_ENRICHER,
+  assetReview,
+  type AssetReviewAnswer,
+  type AssetReviewRefusal,
+} from './lib/utils/asset-review';
+export {
   SHARE_LINK_ID,
   SHARE_LINK_OPERATIONS,
   SHARE_LINK_ORIGINAL,

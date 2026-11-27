@@ -4,6 +4,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import {
   DocumentDetailService,
+  type AssetReviewAnswer,
   type NuxeoAnnotation,
   type NuxeoAnnotationDraft,
   type NuxeoDocument,
@@ -14,6 +15,7 @@ import {
   MAX_ROUNDS,
   REVIEW_ORIGIN,
   REVIEW_XPATH,
+  decisionPayload,
   pinPayload,
   roundClosedPayload,
 } from './picture-review';
@@ -43,6 +45,16 @@ function picture(permissions: string[] | undefined, uid = 'p1'): NuxeoDocument {
 const REVIEWER = ['Read', 'Comment'];
 const LEAD = ['Read', 'ReadWrite', 'Write'];
 const READER = ['Read', 'Browse'];
+
+/** What the server's `assetReview` enricher answers a member of a reviewer group granted ReviewAsset. */
+const MAY_DECIDE: AssetReviewAnswer = {
+  type: 'AcmeAsset',
+  mayDecide: true,
+  reason: null,
+  permission: 'ReviewAsset',
+};
+/** And anyone else, a holder of Write included. */
+const MAY_NOT: AssetReviewAnswer = { ...MAY_DECIDE, mayDecide: false, reason: 'not-a-reviewer' };
 
 let made = 0;
 function stored(entity: string, overrides: Partial<NuxeoAnnotation> = {}): NuxeoAnnotation {
@@ -86,6 +98,9 @@ describe('RecordPictureReviewComponent', () => {
   let view: () => Observable<Blob>;
   let writes: { uid: string; draft: NuxeoAnnotationDraft; answer: Subject<NuxeoAnnotation> }[];
   let announced: string[];
+  /** What the server's review enricher answers: none, as a server without the add-on gives. */
+  let reviewAnswer: AssetReviewAnswer | null;
+  let fetchAssetReview: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     fixture = null;
@@ -93,6 +108,8 @@ describe('RecordPictureReviewComponent', () => {
     reads = [];
     writes = [];
     announced = [];
+    reviewAnswer = null;
+    fetchAssetReview = vi.fn(() => of(reviewAnswer));
     view = () => of(new Blob(['jpeg'], { type: 'image/jpeg' }));
     Object.assign(URL, {
       createObjectURL: vi.fn(() => 'blob:view-1'),
@@ -105,6 +122,7 @@ describe('RecordPictureReviewComponent', () => {
           provide: DocumentDetailService,
           useValue: {
             fetchBlobByXpath: (): Observable<Blob> => view(),
+            fetchAssetReview,
             getAnnotationDocuments: (
               uid: string,
               xpath: string,
@@ -383,26 +401,52 @@ describe('RecordPictureReviewComponent', () => {
     expect(document.activeElement).toBe(button(root, 'Add a pin'));
   });
 
-  it('offers no Close round while the open round has no pin', async () => {
-    const root = await render(picture(LEAD));
-    await answerRead([]);
-    expect(button(root, 'Add a pin')).not.toBeNull();
-    expect(button(root, 'Close round 1')).toBeNull();
+  it('asks the server what it lets the reader decide, for the record shown', async () => {
+    await render(picture(LEAD));
+    expect(fetchAssetReview).toHaveBeenCalledTimes(1);
+    expect(fetchAssetReview).toHaveBeenCalledWith('p1');
   });
 
-  it('closes the round for a holder of Write: the next opens, and the earlier pins stay, marked as past', async () => {
-    const again = await render(picture(LEAD));
+  it('offers a reviewer Approve and Reject, and no Send back while the open round has no pin', async () => {
+    reviewAnswer = MAY_DECIDE;
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    expect(button(root, 'Add a pin')).not.toBeNull();
+    expect(button(root, 'Send back round 1')).toBeNull();
+    expect(button(root, 'Approve')).not.toBeNull();
+    expect(button(root, 'Reject')).not.toBeNull();
+  });
+
+  it("offers a holder of Write no decision unless the server's review says they may decide", async () => {
+    for (const answer of [null, MAY_NOT]) {
+      reviewAnswer = answer;
+      fixture?.destroy();
+      fixture = null;
+      const root = await render(picture(LEAD));
+      await answerRead([stored(pinPayload(1, 0.4, 0.4))]);
+      expect(button(root, 'Add a pin')).not.toBeNull();
+      expect(button(root, 'Send back round 1')).toBeNull();
+      expect(button(root, 'Approve')).toBeNull();
+      expect(button(root, 'Reject')).toBeNull();
+    }
+  });
+
+  it('sends the round back for a reviewer: the next opens, and the earlier pins stay, marked as past', async () => {
+    reviewAnswer = MAY_DECIDE;
+    const again = await render(picture(REVIEWER));
     await answerRead([stored(pinPayload(1, 0.4, 0.4), { text: 'Crop tighter' })]);
-    button(again, 'Close round 1')?.click();
+    button(again, 'Send back round 1')?.click();
     await settle();
     expect(writes[0].draft).toEqual({
       xpath: 'picture:views',
-      text: 'Round 1 closed',
+      text: 'Round 1 sent back',
       origin: 'nuxeo-satori.review',
       entity: roundClosedPayload(1),
     });
-    await answerWrite(stored(roundClosedPayload(1), { author: 'lead1', text: 'Round 1 closed' }));
-    expect(announced).toEqual(['Round 1 closed. Round 2 is open.']);
+    await answerWrite(
+      stored(roundClosedPayload(1), { author: 'lead1', text: 'Round 1 sent back' }),
+    );
+    expect(announced).toEqual(['Round 1 sent back. Round 2 is open.']);
     expect(again.querySelector('.record-review__status')?.textContent?.trim()).toBe(
       'Round 2 is open',
     );
@@ -412,7 +456,7 @@ describe('RecordPictureReviewComponent', () => {
       ),
     ).toEqual(['Round 2, open', 'Round 1, past']);
     expect(again.querySelector('.record-review__closed-by')?.textContent).toContain(
-      'Closed by lead1',
+      'Sent back by lead1',
     );
     const [past] = marks(again);
     expect(past.classList).toContain('record-review__pin--past');
@@ -432,11 +476,90 @@ describe('RecordPictureReviewComponent', () => {
     expect(JSON.parse(writes[1].draft.entity as string).round).toBe(2);
   });
 
-  it('offers a holder of Comment a pin, but not Close round', async () => {
+  it('offers a holder of Comment a pin, and no decision the server does not let them make', async () => {
+    reviewAnswer = MAY_NOT;
     const root = await render(picture(REVIEWER));
     await answerRead([stored(pinPayload(1, 0.4, 0.4))]);
     expect(button(root, 'Add a pin')).not.toBeNull();
-    expect(button(root, 'Close round 1')).toBeNull();
+    expect(button(root, 'Send back round 1')).toBeNull();
+    expect(button(root, 'Approve')).toBeNull();
+  });
+
+  it('approves for a reviewer: the review is concluded, said, and nothing more is decided', async () => {
+    reviewAnswer = MAY_DECIDE;
+    const root = await render(picture(REVIEWER));
+    await answerRead([stored(pinPayload(1, 0.4, 0.4))]);
+    button(root, 'Approve')?.click();
+    await settle();
+    expect(writes[0].draft).toEqual({
+      xpath: 'picture:views',
+      text: 'Approved in round 1',
+      origin: 'nuxeo-satori.review',
+      entity: decisionPayload(1, 'approved'),
+    });
+    await answerWrite(
+      stored(decisionPayload(1, 'approved'), { author: 'lead1', text: 'Approved in round 1' }),
+    );
+    expect(announced).toEqual(['The review is approved.']);
+    const conclusion = root.querySelector('.record-review__conclusion');
+    expect(conclusion?.getAttribute('data-decision')).toBe('approved');
+    expect(conclusion?.textContent).toContain('Approved by lead1');
+    expect(root.querySelector('.record-review__status')).toBeNull();
+    expect(button(root, 'Approve')).toBeNull();
+    expect(button(root, 'Reject')).toBeNull();
+    expect(button(root, 'Send back round 1')).toBeNull();
+  });
+
+  it('rejects for a reviewer, and offers nothing on a review read concluded', async () => {
+    reviewAnswer = MAY_DECIDE;
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Reject')?.click();
+    await settle();
+    expect(JSON.parse(writes[0].draft.entity as string)).toEqual({
+      kind: 'decision',
+      version: 1,
+      round: 1,
+      decision: 'rejected',
+    });
+
+    fixture?.destroy();
+    fixture = null;
+    const concluded = await render(picture(REVIEWER, 'p2'));
+    await answerRead([
+      stored(pinPayload(1, 0.4, 0.4)),
+      stored(decisionPayload(1, 'rejected'), { author: 'lead2' }),
+    ]);
+    expect(concluded.querySelector('.record-review__conclusion')?.textContent).toContain(
+      'Rejected by lead2',
+    );
+    expect(button(concluded, 'Approve')).toBeNull();
+    expect(button(concluded, 'Reject')).toBeNull();
+    expect(button(concluded, 'Send back round 1')).toBeNull();
+  });
+
+  it("says a refused decision as the server's refusal, and reads the review again", async () => {
+    reviewAnswer = MAY_DECIDE;
+    const root = await render(picture(REVIEWER));
+    await answerRead([stored(pinPayload(1, 0.4, 0.4))]);
+    expect(reads).toHaveLength(1);
+    button(root, 'Approve')?.click();
+    await settle();
+    writes[0].answer.error(new HttpErrorResponse({ status: 403 }));
+    await settle();
+    expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
+      'The server refused: you may not decide this review',
+    );
+    expect(reads).toHaveLength(2);
+
+    button(root, 'Send back round 1')?.click();
+    await settle();
+    writes[1].answer.error(new HttpErrorResponse({ status: 409 }));
+    await settle();
+    expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
+      'This review is already approved or rejected',
+    );
+    expect(reads).toHaveLength(3);
   });
 
   it('shows a reader who may not comment the pins, and no way to add one: the server still decides', async () => {
@@ -445,7 +568,7 @@ describe('RecordPictureReviewComponent', () => {
     expect(marks(root)).toHaveLength(1);
     expect(entries(root)).toHaveLength(1);
     expect(button(root, 'Add a pin')).toBeNull();
-    expect(button(root, 'Close round 1')).toBeNull();
+    expect(button(root, 'Send back round 1')).toBeNull();
     expect(root.querySelector('.record-review__read-only')?.textContent?.trim()).toBe(
       'You can see the pins, but not add one.',
     );
@@ -455,10 +578,12 @@ describe('RecordPictureReviewComponent', () => {
   });
 
   it('offers nothing on a read-only page, as the designer previews it', async () => {
+    reviewAnswer = MAY_DECIDE;
     const root = await render(picture(['Everything']), true);
     await answerRead([stored(pinPayload(1, 0.4, 0.4))]);
     expect(button(root, 'Add a pin')).toBeNull();
-    expect(button(root, 'Close round 1')).toBeNull();
+    expect(button(root, 'Send back round 1')).toBeNull();
+    expect(button(root, 'Approve')).toBeNull();
     expect(marks(root)).toHaveLength(1);
   });
 
@@ -602,14 +727,16 @@ describe('RecordPictureReviewComponent', () => {
     const closes = Array.from({ length: MAX_ROUNDS - 1 }, (_, index) =>
       stored(roundClosedPayload(index + 1)),
     );
+    reviewAnswer = MAY_DECIDE;
     const root = await render(picture(LEAD));
     await answerRead([...closes, stored(pinPayload(MAX_ROUNDS, 0.5, 0.5))]);
-    button(root, `Close round ${MAX_ROUNDS}`)?.click();
+    button(root, `Send back round ${MAX_ROUNDS}`)?.click();
     await settle();
     await answerWrite(stored(roundClosedPayload(MAX_ROUNDS)));
     expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
-      'The round could not be closed',
+      'The round could not be sent back',
     );
+
     expect(announced).toEqual([]);
   });
 

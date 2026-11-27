@@ -42,6 +42,12 @@
         <nxs-spinner diameter="32" [label]="'document-layouts.picture.loading' | translate" />
       }
     </div>
+    @if (watermarked()) {
+      <!-- The server sent this view marked for the reader: the asset's rights require it. -->
+      <p class="record-picture__watermarked">
+        {{ 'document-layouts.picture.watermarked' | translate }}
+      </p>
+    }
     <figcaption class="record-picture__caption">{{ caption(view) }}</figcaption>
   </figure>
   @if (views().length > 1) {

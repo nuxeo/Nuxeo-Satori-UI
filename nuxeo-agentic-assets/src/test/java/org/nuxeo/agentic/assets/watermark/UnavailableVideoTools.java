@@ -18,6 +18,9 @@ public class UnavailableVideoTools extends DefaultComponent implements VideoTool
     /** How many times a video was given to a tool: none should be, since none is available. */
     static volatile int calls;
 
+    /** How many times a tool's availability was asked. */
+    static volatile int asked;
+
     @Override
     public Blob extractClosedCaptions(Blob video, String outFormat, String startAt, String endAt) {
         throw unavailable();
@@ -40,6 +43,7 @@ public class UnavailableVideoTools extends DefaultComponent implements VideoTool
 
     @Override
     public boolean isToolAvailable(String tool) {
+        asked++;
         return false;
     }
 

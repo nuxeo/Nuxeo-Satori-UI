@@ -7,6 +7,7 @@ import java.io.IOException;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -64,9 +65,13 @@ public record ReviewPayload(Kind kind, int round, Decision decision) {
         }
     }
 
-    /** A JSON reader that refuses a key written twice, which a browser's parser would read as its last. */
+    /**
+     * A JSON reader that refuses a key written twice, which a browser's parser would read as its last,
+     * and anything after the value, which a browser's parser refuses.
+     */
     private static final ObjectMapper JSON = new ObjectMapper(
-            new JsonFactory().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION));
+            new JsonFactory().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)).enable(
+                    DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
     /** The payload {@code entity} holds, or {@code null} when it is none of the three. */
     public static ReviewPayload read(String entity) {

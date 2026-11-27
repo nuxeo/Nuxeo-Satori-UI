@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 26 November 2026.
+Updated 27 November 2026.
 
 ## Until the app is finished: every open decision on its recommendation
 
@@ -228,6 +228,19 @@ way.
   - **A media add-on of its own:** the delivery types and listener move into it, requiring
     `org.nuxeo.agentic.assets.rights`, whose service decides a delivery; the territories and
     windows stay in the assets add-on, since every download of an asset is decided there.
+
+- **B, watermarks and the review held on the server, in the assets add-on (27 November 2026).**
+  Built against the recommendation, "one add-on per domain module": a policy's watermark and an
+  asset's review decided on the server are
+  [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md#watermarks) 0.5.0, since a mark is a
+  condition of an asset's rights, decided at the same endpoints, and the review is the asset page's.
+  The review's decisions are Nuxeo's own annotations written, which a synchronous listener holds to
+  the add-on's `ReviewAsset` permission and a review policy's groups, so decision 3 is not touched.
+  A marked file is served by `Asset.GetWatermarked`, an operation the platform's own page calls, as
+  it calls the share links', which no configuration binds to a button. Its security review is
+  deferred until the app is finished. What changes if B goes another way: as for media rights
+  above, the bundle moves whole, and a kit's components, `org.nuxeo.agentic.assets.rights` and
+  `org.nuxeo.agentic.assets.review`, keep their names.
 
 - **B, the document control module's server add-on (26 November 2026).** Built against the
   recommendation: numbering, revisions and supersession are

@@ -190,6 +190,17 @@ describe('rightsRefusal', () => {
     expect(rightsRefusal(decision('cleared'), [], 'en-US', 'video')).toBeNull();
   });
 
+  it('has its own words for a use served only watermarked, and one that cannot be marked', () => {
+    expect(rightsRefusal(decision('watermark-required'), [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.watermark-required',
+    );
+    expect(rightsRefusal(decision('watermark-unavailable'), [], 'en-US', 'video')).toEqual({
+      reason: 'watermark-unavailable',
+      key: 'document-layouts.rights.refused-video.watermark-unavailable',
+      params: {},
+    });
+  });
+
   it('has its own words for a use no rights clear and for rights the server could not read', () => {
     expect(rightsRefusal(decision('not-cleared'), [], 'en-US')?.key).toBe(
       'document-layouts.rights.refused.not-cleared',
@@ -204,6 +215,9 @@ describe('RecordPictureViewsComponent', () => {
   let fixture: ComponentFixture<RecordPictureViewsComponent> | null;
   let fetchBlobByXpath: ReturnType<typeof vi.fn>;
   let fetchAssetRights: ReturnType<typeof vi.fn>;
+  /** `Asset.GetWatermarked`: each request's answer, in the order asked. */
+  let fetchWatermarked: ReturnType<typeof vi.fn>;
+  let marked: { uid: string; use: string; answer: Subject<Blob> }[];
   /** What the server says why, when asked. */
   let rightsAnswer: Observable<AssetRightsExplanation | null>;
   /** Each request's answer, by `<uid> <xpath>`, in the order asked. */
@@ -233,10 +247,19 @@ describe('RecordPictureViewsComponent', () => {
     });
     rightsAnswer = of(noPrintRights());
     fetchAssetRights = vi.fn(() => rightsAnswer);
+    marked = [];
+    fetchWatermarked = vi.fn((uid: string, use: string): Observable<Blob> => {
+      const answer = new Subject<Blob>();
+      marked.push({ uid, use, answer });
+      return answer;
+    });
     TestBed.configureTestingModule({
       imports: [RecordPictureViewsComponent, MatIconTestingModule],
       providers: [
-        { provide: DocumentDetailService, useValue: { fetchBlobByXpath, fetchAssetRights } },
+        {
+          provide: DocumentDetailService,
+          useValue: { fetchBlobByXpath, fetchAssetRights, fetchWatermarked },
+        },
       ],
     });
   });
@@ -515,6 +538,97 @@ describe('RecordPictureViewsComponent', () => {
 
       expect(fetchAssetRights).not.toHaveBeenCalled();
       expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+    });
+
+    it('asks for no marked view when the rights refuse it for another reason', async () => {
+      await refusePrintView({ status: 403 });
+
+      expect(fetchWatermarked).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a view the server serves only watermarked', () => {
+    const WITH_PRINT = [...VIEWS, view('OriginalJpeg', 6000, 7500)];
+    const note = (root: HTMLElement) => root.querySelector('.record-picture__watermarked');
+
+    function markedRights(): AssetRightsExplanation {
+      const rights = noPrintRights();
+      return {
+        ...rights,
+        uses: rights.uses.map((use) =>
+          use.name === 'OriginalJpeg'
+            ? { ...use, reason: 'watermark-required' as const, channel: 'Print' }
+            : use,
+        ),
+      };
+    }
+
+    /** Render the asset, choose its print view, and have the server refuse it unmarked. */
+    async function refuseUnmarked(): Promise<HTMLElement> {
+      rightsAnswer = of(markedRights());
+      const root = await render(picture(WITH_PRINT));
+      await answer(0);
+      button(root, 'OriginalJpeg')?.click();
+      await settle();
+      requests[1].answer.error({ status: 403 });
+      return settle();
+    }
+
+    it('asks the server for it marked, by its title, after its 403 and its reason, and shows it so', async () => {
+      const root = await refuseUnmarked();
+
+      expect(fetchAssetRights).toHaveBeenCalledWith('p1');
+      expect(fetchWatermarked).toHaveBeenCalledTimes(1);
+      expect(fetchWatermarked).toHaveBeenCalledWith('p1', 'view:OriginalJpeg');
+      marked[0].answer.next(new Blob(['marked'], { type: 'image/jpeg' }));
+      marked[0].answer.complete();
+      await settle();
+
+      expect(image(root)?.getAttribute('src')).toBe('blob:view-2');
+      expect(note(root)?.textContent?.trim()).toBe(
+        "Watermarked for you: this asset's rights require it.",
+      );
+      expect(root.querySelector('nxs-banner[data-refusal]')).toBeNull();
+      // Another view, served as it is, says nothing of a watermark.
+      button(root, 'Medium')?.click();
+      await settle();
+      expect(note(root)).toBeNull();
+      // Shown again from its blob URL, it still says so.
+      button(root, 'OriginalJpeg')?.click();
+      await settle();
+      expect(image(root)?.getAttribute('src')).toBe('blob:view-2');
+      expect(note(root)).not.toBeNull();
+    });
+
+    it('revokes the marked view when it is destroyed, as any other', async () => {
+      await refuseUnmarked();
+      marked[0].answer.next(new Blob(['marked'], { type: 'image/jpeg' }));
+      marked[0].answer.complete();
+      await settle();
+      fixture?.destroy();
+      fixture = null;
+      expect(revoked).toEqual(expect.arrayContaining(['blob:view-1', 'blob:view-2']));
+    });
+
+    it("says a mark the server could not draw as the rights' own reason", async () => {
+      const root = await refuseUnmarked();
+      marked[0].answer.error({ status: 409 });
+      await settle();
+
+      expect(root.querySelector('nxs-banner[data-refusal]')?.getAttribute('data-refusal')).toBe(
+        'watermark-unavailable',
+      );
+      expect(image(root)).toBeNull();
+    });
+
+    it('says any other refusal of the marked view as its status', async () => {
+      const root = await refuseUnmarked();
+      marked[0].answer.error({ status: 403 });
+      await settle();
+
+      expect(root.querySelector('nxs-banner[data-refusal]')).toBeNull();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(note(root)).toBeNull();
     });
   });
 });

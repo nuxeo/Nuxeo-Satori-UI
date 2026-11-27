@@ -154,6 +154,13 @@ public class AssetReviewTest {
     }
 
     @Test
+    public void theServerWritesTheAuthorWhateverTheRequestSaid() {
+        String id = inTransaction(RITA, s -> ReviewAnnotations.write(s, asset, AssetReviews.XPATH, AssetReviews.ORIGIN,
+                ReviewAnnotations.sendBack(1), "note", "someone-else").getId());
+        assertEquals(RITA, stored(id).getPropertyValue("comment:author"));
+    }
+
+    @Test
     public void aRejectionConcludesTheReviewToo() {
         write(RITA, asset, ReviewAnnotations.decision(1, "rejected"));
         ReviewRefusal refusal = refused(RITA, asset, ReviewAnnotations.decision(1, "approved"));
@@ -223,7 +230,8 @@ public class AssetReviewTest {
         assertNotNull(write(BOB, asset, ReviewAnnotations.pin(1, 0.25, 0.5)));
         // Spelled otherwise, it is no pin: held as a decision, and bob may decide none.
         for (String entity : List.of("{\"kind\":\"pin\",\"version\":2,\"round\":1,\"x\":0.1,\"y\":0.1}",
-                "{\"kind\":\"pin\",\"version\":1,\"round\":1,\"x\":0.1,\"y\":0.1,\"kind\":\"decision\"}",
+                // A key written twice, its last a pin's, is read strictly, not as its last: no pin.
+                "{\"kind\":\"decision\",\"decision\":\"approved\",\"version\":1,\"round\":1,\"x\":0.1,\"y\":0.1,\"kind\":\"pin\"}",
                 "{\"kind\":\"pin\",\"version\":1,\"round\":1,\"x\":2,\"y\":0.1}", "not json",
                 "{\"kind\":\"approve\",\"version\":1,\"round\":1}")) {
             assertEquals(entity, "not-a-reviewer", refused(BOB, asset, entity).getCode());

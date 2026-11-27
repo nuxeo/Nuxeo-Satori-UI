@@ -43,11 +43,19 @@ final class ReviewAnnotations {
     /** An annotation by the session's user on the document with that id. */
     static DocumentModel write(CoreSession user, String documentId, String xpath, String origin, String entity,
             String text) {
+        return write(user, documentId, xpath, origin, entity, text, user.getPrincipal().getName());
+    }
+
+    /**
+     * The same, its author written as {@code author}: what a request writing the document itself,
+     * past the comment manager, could claim.
+     */
+    static DocumentModel write(CoreSession user, String documentId, String xpath, String origin, String entity,
+            String text, String author) {
         if (!user.hasPermission(new IdRef(documentId), "Read")) {
             throw new DocumentSecurityException(
                     "The user " + user.getPrincipal().getName() + " can not create comments on document " + documentId);
         }
-        String author = user.getPrincipal().getName();
         return CoreInstance.doPrivileged(user, (Function<CoreSession, DocumentModel>) s -> {
             DocumentModel parent = s.getDocument(new IdRef(documentId));
             DocumentRef location = s.getOrCreateDocument(

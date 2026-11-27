@@ -213,9 +213,9 @@ rounds. `{}` turns it on; it takes no option yet:
   backdate one. A holder of `Write` on the record, which its annotations inherit, can still change
   `dc:created` afterwards, as they can change the record.
 - **Rounds.** A pin is in the round open when it was written, round 1 first, whatever its page had
-  seen: a pin written on a page that had not yet seen round 1 closed is round 2's. "Close round"
-  closes the round open then and opens the next; the pins of a closed round stay on the picture and
-  in the list, marked as past. Each close moves the rounds by one: a second close of a round
+  seen: a pin written on a page that had not yet seen round 1 closed is round 2's. "Send back"
+  closes the round open then, changes requested, and opens the next; the pins of a closed round
+  stay on the picture and in the list, marked as past. Each close moves the rounds by one: a second close of a round
   already closed, by two people at once, changes nothing, and a close deleted from the record's
   comments renumbers the rounds after it, merging none. A review counts 999 rounds at most. After
   each write the page reads the record's annotations again, so that what others wrote meanwhile
@@ -228,16 +228,31 @@ rounds. `{}` turns it on; it takes no option yet:
   lists, and where Nuxeo lets its author, or an administrator, edit or delete it as any comment.
   Editing its text there keeps its place and round ([api-integrations.md](../api-integrations.md),
   section 39).
-- **What the page offers,** from the record's `permissions` enricher, which the document page
-  asks for: Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`, on the record;
-  Close round to a holder of `Write`, once the open round has a pin. Nothing on a version, a record
-  in the trash, a page drawn read-only, as the layout designer's preview is, or a record that came
-  without its permissions. A reader sees the pins and their notes, and is offered neither.
-- **Hiding a control is not the security control.** Nuxeo 2025's comment service accepts an
-  annotation, a pin or a round's close, from anyone who may read the record, through the REST API,
-  whatever the page offers: `TreeCommentManager.checkCreateCommentPermissions` checks `Read`. It
-  makes the signed-in user the author, whatever the request says. A review that only some readers
-  may write needs the server to check more, which nothing here does.
+- **Decisions: Send back, Approve and Reject.** Approve and Reject end the review: each is an
+  annotation too, `"kind": "decision"`, its `decision` `approved` or `rejected`. The first one
+  written concludes the review, in the round open then; the page says so, _Approved by …_ with
+  the day, in place of the open round, and offers no decision after it. A round's close or a
+  decision written after the conclusion changes nothing.
+- **What the page offers.** Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`,
+  on the record, from its `permissions` enricher, which the document page asks for. Send back,
+  Approve and Reject only to a reader the server lets decide: the page asks the record's
+  `assetReview` enricher (`DocumentDetailService.fetchAssetReview`), which
+  `nuxeo-agentic-assets` 0.5.0 adds, and offers them while it answers `mayDecide: true` and the
+  review is not concluded; Send back once the open round has a pin. `Write` alone is no longer
+  enough. With no answer, from a server without that add-on, no decision is offered. Nothing on a
+  version, a record in the trash, or a page drawn read-only, as the layout designer's preview is.
+  A reader sees the pins and their notes, and is offered nothing.
+- **Decisions are held on the server; pins are not.** `nuxeo-agentic-assets` 0.5.0 refuses a
+  round's close, an approval or a rejection, 403, from anyone outside the type's review policy's
+  reviewer groups, or not granted the add-on's `ReviewAsset` permission on the asset, an
+  administrator included; 409 once the review is concluded; 400 for anything but a decision of
+  the review's form. It writes the person as the author, keeps each decision as written, and adds
+  each to the platform's audit, on the asset ([its README](../../nuxeo-agentic-assets/README.md)).
+  A refusal is said where the decision was asked, and the review read again. Hiding a control is
+  still not the control: a pin is Nuxeo 2025's, whose comment service accepts one from anyone who
+  may read the record, through the REST API, whatever the page offers
+  (`TreeCommentManager.checkCreateCommentPermissions` checks `Read`), and makes the signed-in user
+  its author.
 - **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys, Home and End
   move among them and choose the one reached, which a hidden hint says. Each one's name says its
   number, its round, whether that round is past, its place in percent and its note.
@@ -1177,7 +1192,15 @@ becomes. In version 2's terms:
     six have passed: it shows the views when it is next opened;
   - the record's own file is not shown, nor the picture's information, EXIF and IPTC that the
     document page's viewer lists: a field shows a property a kit wants, such as `dc:rights`;
+  - **a view the server serves only watermarked,** `watermark-required` in the `assetRights`
+    enricher (`nuxeo-agentic-assets` 0.5.0, where the asset's rights policy requires a mark for
+    this reader), is asked of the server marked, after its 403 and its reason, through
+    `DocumentDetailService.fetchWatermarked`, the add-on's `Asset.GetWatermarked`, and shown from a
+    blob URL with a note that it is watermarked for the reader. A mark the server could not draw,
+    409, is said as the rights' reason, and any other refusal as its status. The page never asks
+    for a marked view before the server refuses the view itself;
   - **the document page does not download the record's own file,** the original, while the record
+
     page holds the View tab: it is held back until something on the page shows it, the Annotations
     tab, whose viewer does, or the packaged viewer, when the type turns out to have no record page.
     A record with the `picture:views` property and none of the `video` schema's is held back so,

@@ -64,6 +64,7 @@ public class VideoWatermarkRefusedTest {
         TransactionHelper.commitOrRollbackTransaction();
         TransactionHelper.startTransaction();
         UnavailableVideoTools.calls = 0;
+        UnavailableVideoTools.asked = 0;
     }
 
     @Test
@@ -77,6 +78,7 @@ public class VideoWatermarkRefusedTest {
         NuxeoException refusal = VideoWatermarks.refused(session.getRepositoryName(), video, READER);
         assertEquals(409, refusal.getStatusCode());
         assertTrue(refusal.getMessage(), refusal.getMessage().contains("watermark-unavailable"));
-        assertEquals("the tools are asked whether they can, and are not asked to run", 0, UnavailableVideoTools.calls);
+        assertTrue("the tools are asked whether they can", UnavailableVideoTools.asked > 0);
+        assertEquals("and are not asked to run", 0, UnavailableVideoTools.calls);
     }
 }

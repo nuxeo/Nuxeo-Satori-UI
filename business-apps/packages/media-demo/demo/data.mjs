@@ -1,3 +1,5 @@
+import { picturePng } from './png.mjs';
+
 /**
  * The media kit's fictional film, its localised versions and its release windows, for its seed,
  * its stand-in server and the demo's steps file. No real studio, distributor, person or film: the
@@ -14,10 +16,16 @@ export const VERSIONS = { name: 'versions', title: 'Localised versions' };
 export const DELIVERIES = { name: 'deliveries', title: 'Deliveries' };
 
 /**
- * The kit's two groups, which the server's directory holds: rights managers write the films and
- * their versions; the distribution team reads them, and files deliveries.
+ * The kit's groups, which the server's directory holds: rights managers write the films and their
+ * versions; the distribution team reads them, and files deliveries; and, from 0.2.0, outside
+ * partners, such as a festival's programmers, read the versions, and are served the still marked.
+ * The kit's watermark exempts the first two, its staff (`bundle/OSGI-INF/media-demo-rights.xml`).
  */
-export const GROUPS = { rights: 'media-rights', distribution: 'media-distribution' };
+export const GROUPS = {
+  rights: 'media-rights',
+  distribution: 'media-distribution',
+  partners: 'media-partners',
+};
 
 /** Who may do what, folder by folder: the seed grants these on the workspace's three folders. */
 export const GRANTS = [
@@ -27,6 +35,7 @@ export const GRANTS = [
   { folder: VERSIONS.name, group: GROUPS.distribution, permission: 'Read' },
   { folder: DELIVERIES.name, group: GROUPS.distribution, permission: 'ReadWrite' },
   { folder: DELIVERIES.name, group: GROUPS.rights, permission: 'Read' },
+  { folder: VERSIONS.name, group: GROUPS.partners, permission: 'Read' },
 ];
 
 /**
@@ -92,9 +101,26 @@ export const LOCALISED = [
 export const versionName = (version) => `${FILM.name}-${version.key}`;
 export const versionTitle = (version) => `${FILM.title} (${version.language})`;
 
+/** Where each of a version's files is, as the kit's rights policy names them. */
+export const FILES = {
+  master: 'files:files/0/file',
+  subtitles: 'files:files/1/file',
+  keyArt: 'files:files/2/file',
+  still: 'files:files/3/file',
+};
+
 /**
- * A version's three files, in the order its rights policy names them: `files:files/0` the master,
- * `1` the subtitles, `2` the key art. Small placeholders, not a film: a stand-in model's files.
+ * The text the kit's watermark draws, as its rights policy writes it, `ACME PICTURES · FOR
+ * {recipient} · {day}`: for a delivery's key art, its distributor; for the still, the outside
+ * partner reading it. The selftest holds it to the policy file.
+ */
+export const watermarkText = (recipient, today) => `ACME PICTURES · FOR ${recipient} · ${today}`;
+
+/**
+ * A version's four files, in the order its rights policy names them: `files:files/0` the master,
+ * `1` the subtitles, `2` the key art and, from 0.2.0, `3` a still from the film. The master and the
+ * subtitles are small placeholders, not a film: a stand-in model's files. The key art and the
+ * still are pictures, drawn by `png.mjs`, so that the server can mark them.
  */
 export function filesOf(version) {
   const title = versionTitle(version);
@@ -114,9 +140,24 @@ export function filesOf(version) {
       ),
     },
     {
-      fileName: `${versionName(version)}-key-art.txt`,
-      mimeType: 'text/plain',
-      bytes: Buffer.from(`Placeholder for the key art of ${title}.\n`),
+      fileName: `${versionName(version)}-key-art.png`,
+      mimeType: 'image/png',
+      bytes: picturePng({
+        shape: 'key-art',
+        size: [480, 270],
+        background: [28, 52, 84],
+        ink: [236, 214, 160],
+      }),
+    },
+    {
+      fileName: `${versionName(version)}-still.png`,
+      mimeType: 'image/png',
+      bytes: picturePng({
+        shape: 'still',
+        size: [480, 270],
+        background: [44, 48, 58],
+        ink: [250, 236, 190],
+      }),
     },
   ];
 }

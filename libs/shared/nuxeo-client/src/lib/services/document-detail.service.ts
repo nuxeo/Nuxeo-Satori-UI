@@ -27,6 +27,7 @@ import {
   assetRights,
   type AssetRightsExplanation,
 } from '../utils/asset-rights';
+import { ASSET_REVIEW_ENRICHER, assetReview, type AssetReviewAnswer } from '../utils/asset-review';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
 
@@ -105,6 +106,36 @@ export class DocumentDetailService {
         'enrichers.document': ASSET_RIGHTS_ENRICHER,
       })
       .pipe(map((document) => assetRights(document)));
+  }
+
+  /**
+   * Whether the reader may decide the document's review: the `assetReview` enricher's answer, read
+   * fresh, or `null` when the server gives none (no `nuxeo-agentic-assets` 0.5.0, or no review
+   * policy for the type). It decides what the review offers; the server refuses a decision from
+   * anyone it does not let decide, whatever this says.
+   */
+  fetchAssetReview(uid: string): Observable<AssetReviewAnswer | null> {
+    return this.api
+      .get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
+        properties: 'dublincore',
+        'enrichers.document': ASSET_REVIEW_ENRICHER,
+      })
+      .pipe(map((document) => assetReview(document)));
+  }
+
+  /**
+   * A use of an asset, marked for the reader as its rights policy's watermark requires, through
+   * `nuxeo-agentic-assets`' `Asset.GetWatermarked`: `view:<title>`, `original`,
+   * `rendition:<name>` or `blob:<xpath>`. Asked only once the download endpoints refused the use
+   * unmarked, `watermark-required`; the server decides the rights again, and refuses what it does
+   * not mark.
+   */
+  fetchWatermarked(uid: string, use: string): Observable<Blob> {
+    return this.http.post(
+      this.api.apiUrl('/nuxeo/api/v1/automation/Asset.GetWatermarked'),
+      { input: `doc:${uid}`, params: { use }, context: {} },
+      { responseType: 'blob' },
+    );
   }
 
   /**

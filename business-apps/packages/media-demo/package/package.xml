@@ -1,7 +1,7 @@
-<package type="addon" name="media-demo" version="0.1.0">
+<package type="addon" name="media-demo" version="0.2.0">
   <title>Media rights (demo)</title>
   <description>
-    <p>The media rights starter kit of the Nuxeo Satori business apps, for the fictional Acme Pictures, with fictional data: a film's record page with its release windows and its localised versions, each with its own rights; a localised version's page with its files and deliveries; and the queue of deliveries, each delivery's page saying what was delivered, to which distributor, in which territory and when. Its rights policy is for nuxeo-agentic-assets, which decides every delivery and download on the server.</p>
+    <p>The media rights starter kit of the Nuxeo Satori business apps, for the fictional Acme Pictures, with fictional data: a film's record page with its release windows and its localised versions, each with its own rights; a localised version's page with its files and deliveries; and the queue of deliveries, each delivery's page saying what was delivered, to which distributor, in which territory and when. Its rights policy is for nuxeo-agentic-assets, which decides every delivery and download on the server, and marks a still for outside partners and a delivery's key art for its distributor.</p>
   </description>
   <vendor>Nuxeo</vendor>
   <installer restart="true" />
@@ -12,7 +12,7 @@
   </target-platform>
   <dependencies>
     <package>nuxeo-agentic-ui:2026.0.2</package>
-    <package>nuxeo-agentic-assets:0.4.0</package>
+    <package>nuxeo-agentic-assets:0.5.0</package>
   </dependencies>
   <visibility>PRIVATE</visibility>
 </package>

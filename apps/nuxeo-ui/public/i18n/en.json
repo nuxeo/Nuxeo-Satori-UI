@@ -1563,7 +1563,8 @@
       "label": "Picture",
       "loading": "Loading the picture",
       "none": "The picture's views are not ready yet",
-      "views": "Views of the picture"
+      "views": "Views of the picture",
+      "watermarked": "Watermarked for you: this asset's rights require it."
     },
     "record": {
       "unavailable": "Unavailable"
@@ -1574,14 +1575,23 @@
     "review": {
       "across": "Across (%)",
       "add-pin": "Add a pin",
+      "approve": "Approve",
+      "approved": "The review is approved.",
+      "approved-text": "Approved in round {{round}}",
       "cancel": "Cancel",
-      "close-round": "Close round {{round}}",
-      "closed": "Round {{round}} closed. Round {{next}} is open.",
-      "closed-by": "Closed by {{user}}, {{when}}",
+      "closed": "Round {{round}} sent back. Round {{next}} is open.",
+      "closed-by": "Sent back by {{user}}, {{when}}",
+      "concluded-approved": "Approved by {{user}}, {{when}}",
+      "concluded-rejected": "Rejected by {{user}}, {{when}}",
       "down": "Down (%)",
       "error": {
-        "close": "The round could not be closed",
-        "close-forbidden": "You may not close this round",
+        "close": "The round could not be sent back",
+        "close-concluded": "This review is already approved or rejected",
+        "close-forbidden": "The server refused: you may not send this round back",
+        "decide": "The review could not be decided",
+        "decide-concluded": "This review is already approved or rejected",
+        "decide-forbidden": "The server refused: you may not decide this review",
+        "decide-invalid": "The server refused this decision: it is not in the review's form",
         "pin": "The pin could not be placed",
         "pin-forbidden": "You may not add a pin to this picture"
       },
@@ -1602,10 +1612,14 @@
       "placed": "Pin {{number}} placed",
       "position": "{{across}}% across, {{down}}% down",
       "read-only": "You can see the pins, but not add one.",
-      "round-closed-text": "Round {{round}} closed",
+      "reject": "Reject",
+      "rejected": "The review is rejected.",
+      "rejected-text": "Rejected in round {{round}}",
+      "round-closed-text": "Round {{round}} sent back",
       "round-heading-open": "Round {{round}}, open",
       "round-heading-past": "Round {{round}}, past",
-      "round-open": "Round {{round}} is open"
+      "round-open": "Round {{round}} is open",
+      "send-back": "Send back round {{round}}"
     },
     "rights": {
       "refused": {
@@ -1615,7 +1629,9 @@
         "not-cleared": "The server refused this view: this asset's rights do not clear it for any use.",
         "policy-error": "The server refused this view: it could not read this asset's rights.",
         "rights-ended": "The server refused this view: the rights to this asset ended on {{end}}.",
-        "rights-ended-undated": "The server refused this view: the rights to this asset have ended."
+        "rights-ended-undated": "The server refused this view: the rights to this asset have ended.",
+        "watermark-required": "The server serves this view only watermarked for you.",
+        "watermark-unavailable": "The server refused this view: this asset's rights require a watermark, which could not be drawn on it."
       },
       "refused-video": {
         "channel-not-covered": "The server refused this video: it is covered by the {{channel}} channel, and this asset's rights cover {{channels}} only.",
@@ -1624,7 +1640,9 @@
         "not-cleared": "The server refused this video: this asset's rights do not clear it for any use.",
         "policy-error": "The server refused this video: it could not read this asset's rights.",
         "rights-ended": "The server refused this video: the rights to this asset ended on {{end}}.",
-        "rights-ended-undated": "The server refused this video: the rights to this asset have ended."
+        "rights-ended-undated": "The server refused this video: the rights to this asset have ended.",
+        "watermark-required": "The server serves this video only watermarked for you, which this page does not play yet.",
+        "watermark-unavailable": "The server refused this video: this asset's rights require a watermark, which could not be drawn on it."
       }
     },
     "sections": "Property sections",
