@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nuxeo.agentic</groupId>
+    <artifactId>nuxeo-agentic-ui-parent</artifactId>
+    <version>2026.0.2-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>nuxeo-agentic-letters</artifactId>
+  <name>Nuxeo Agentic Letters</name>
+  <description>
+    The letters module's server add-on, on the platform's Template Rendering add-on: letter
+    templates are the platform's template documents, kept by an administrator, each with its
+    language and the record types it is for; someone who may write a record generates a letter from
+    one, rendered through the platform's template processor service by a processor of the add-on's
+    own that fills placeholders and runs nothing; the letter is filed next to its record, linked to
+    it, and audited on it. Its own Marketplace package, beside nuxeo-agentic-core: one add-on per
+    domain module (decision B's recommendation).
+  </description>
+
+  <properties>
+    <!--
+      The Marketplace package's version, its own: the add-on is released apart from
+      nuxeo-agentic-ui, and a kit's package depends on it by this version. The manifest's
+      Bundle-Version repeats it, and BundleTest refuses a build where the two differ.
+    -->
+    <letters.package.version>0.1.0</letters.package.version>
+    <!--
+      Template Rendering as it is on the public repository: 11.5.154, the platform the other
+      add-ons build and test against. LTS 2025's Template Rendering is a Marketplace package for
+      Nuxeo Online Services customers and is not on the public repository; every class and name the
+      add-on uses is the same in its source, nuxeo/nuxeo's 2025 branch (the README says how that was
+      checked, and TemplateRenderingModelTest holds the names to the platform's own files).
+    -->
+    <template.rendering.version>11.5.154</template.rendering.version>
+  </properties>
+
+  <!--
+    The test runtime starts Nuxeo Stream on Chronicle Queue, and 11.5's Chronicle looks for a JDK
+    method Java 21 no longer has, so the runtime does not start. The last releases of the same line
+    find it where Java 21 keeps it. Only the tests load Chronicle: the bundle uses none of it.
+  -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-core</artifactId><version>2.25ea15</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-bytes</artifactId><version>2.25ea11</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-wire</artifactId><version>2.25ea16</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-threads</artifactId><version>2.25ea7</version></dependency>
+      <dependency><groupId>net.openhft</groupId><artifactId>chronicle-queue</artifactId><version>5.25ea17</version></dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!--
+      The Nuxeo artifacts are 11.5's, from the parent's nuxeo-parent import, as the other add-ons
+      build against: the 2025 ones are not on the public repository.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The listener API: EventListener, Event, DocumentEventContext. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-event</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- TransactionHelper: a refusal marks the transaction for rollback. -->
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-jtajca</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.common</groupId>
+      <artifactId>nuxeo-common</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Letter.Generate, the one operation: the Automation annotations and its context. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      The platform's audit, which each letter is written to on its record: AuditLogger and
+      LogEntry, reached through AuditAccess, as the documents and records add-ons reach it.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      The platform's Template Rendering API: TemplateProcessor, the interface the add-on's
+      processor implements, TemplateProcessorService, TemplateBasedDocument and TemplateInput. The
+      server brings it, with the nuxeo-template-rendering package the add-on's package depends on.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.template.rendering</groupId>
+      <artifactId>nuxeo-template-rendering-api</artifactId>
+      <version>${template.rendering.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!--
+      The Nuxeo test framework: a real runtime and repository in the test's JVM, VCS on H2, with its
+      events, security, transactions and Automation.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-storage-sql-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      The platform's Template Rendering itself, for the tests: its template document types and
+      schemas, its template processor service, its adapters and its listeners, deployed from its own
+      jar and nothing else of it (LettersFeature names each component). Its own dependencies are left
+      out: those components need none the core does not bring, but the mime type registry.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.template.rendering</groupId>
+      <artifactId>nuxeo-template-rendering-core</artifactId>
+      <version>${template.rendering.version}</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-mimetype</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      The audit test: the user manager with its test directories, and the platform's audit, its
+      service, its listener and its store, an H2 database, as the documents and records add-ons'
+      tests run it.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-core</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <!-- FeaturesRunner reads test classes with ASM; 11.5's reads class files up to Java 16's only. -->
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.7</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Chronicle Threads 2.25 needs it, and 11.5's dependency management leaves it out. -->
+    <dependency>
+      <groupId>net.openhft</groupId>
+      <artifactId>affinity</artifactId>
+      <version>3.23.3</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <systemPropertyVariables>
+            <letters.package.version>${letters.package.version}</letters.package.version>
+          </systemPropertyVariables>
+          <!-- What Nuxeo Stream on Chronicle needs of the JDK on 21, in the test runtime. -->
+          <argLine>
+            --add-opens=java.base/java.lang=ALL-UNNAMED
+            --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+            --add-opens=java.base/java.io=ALL-UNNAMED
+            --add-opens=java.base/java.nio=ALL-UNNAMED
+            --add-opens=java.base/java.util=ALL-UNNAMED
+            --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED
+            --add-exports=java.base/jdk.internal.ref=ALL-UNNAMED
+            --add-exports=java.base/jdk.internal.misc=ALL-UNNAMED
+            --add-exports=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED
+          </argLine>
+        </configuration>
+      </plugin>
+
+      <!-- package.xml with its version, for the Marketplace package. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>filter-package-descriptor</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/package</outputDirectory>
+              <useDefaultDelimiters>false</useDefaultDelimiters>
+              <delimiters>
+                <delimiter>@</delimiter>
+              </delimiters>
+              <resources>
+                <resource>
+                  <directory>src/main/package</directory>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- The Marketplace package: package.xml, install.xml and the bundle. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.6.0</version>
+        <configuration>
+          <descriptors>
+            <descriptor>src/main/assemble/assembly.xml</descriptor>
+          </descriptors>
+          <finalName>nuxeo-agentic-letters-${letters.package.version}</finalName>
+          <appendAssemblyId>false</appendAssemblyId>
+          <attach>false</attach>
+        </configuration>
+        <executions>
+          <execution>
+            <id>marketplace-package</id>
+            <phase>package</phase>
+            <goals><goal>single</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

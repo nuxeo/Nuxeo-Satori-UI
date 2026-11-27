@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- A member, as a kit's: a name, an address, and a number no letter prints on this server. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/test/tmember/"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tmember="http://www.nuxeo.org/ecm/schemas/agentic/test/tmember/">
+  <xs:complexType name="address">
+    <xs:sequence>
+      <xs:element name="street" type="xs:string" />
+      <xs:element name="city" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="firstName" type="xs:string" />
+  <xs:element name="lastName" type="xs:string" />
+  <xs:element name="address" type="tmember:address" />
+  <xs:element name="ssn" type="xs:string" />
+</xs:schema>

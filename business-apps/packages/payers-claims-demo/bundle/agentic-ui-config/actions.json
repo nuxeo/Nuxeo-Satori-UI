@@ -74,6 +74,70 @@
       "operation": "Payers.ReferToInvestigations",
       "confirm": { "labelKey": "payers.action.refer.confirm" },
       "success": { "labelKey": "payers.action.refer.done" }
+    },
+    {
+      "id": "payers.claim.writeDenialLetter",
+      "labelKey": "payers.action.denialLetter",
+      "icon": "mail",
+      "order": 40,
+      "on": ["record"],
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.isType", "parameters": ["Claim"] },
+          { "type": "app.rules.inState", "parameters": ["denied"] },
+          { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+        ]
+      },
+      "enabledWhen": "app.rules.canWrite",
+      "operation": "Payers.WriteDenialLetter",
+      "parameters": {
+        "language": { "field": "var:language" }
+      },
+      "form": [
+        {
+          "field": "var:language",
+          "labelKey": "payers.action.letter.language",
+          "widget": "vocabulary",
+          "parameters": { "directory": "PayersLetterLanguage" }
+        }
+      ],
+      "confirm": { "labelKey": "payers.action.denialLetter.confirm" },
+      "success": { "labelKey": "payers.action.denialLetter.done" }
+    },
+    {
+      "id": "payers.case.writeAppealLetter",
+      "labelKey": "payers.action.appealLetter",
+      "icon": "mail",
+      "order": 50,
+      "on": ["record"],
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.isType", "parameters": ["Case"] },
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "case:category" }, "appeal"] },
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "case:decision" }, "upheld", "overturned"]
+          },
+          { "type": "app.rules.inGroup", "parameters": ["member-services"] }
+        ]
+      },
+      "enabledWhen": "app.rules.canWrite",
+      "operation": "Payers.WriteAppealLetter",
+      "parameters": {
+        "language": { "field": "var:language" }
+      },
+      "form": [
+        {
+          "field": "var:language",
+          "labelKey": "payers.action.letter.language",
+          "widget": "vocabulary",
+          "parameters": { "directory": "PayersLetterLanguage" }
+        }
+      ],
+      "confirm": { "labelKey": "payers.action.appealLetter.confirm" },
+      "success": { "labelKey": "payers.action.appealLetter.done" }
     }
   ]
 }

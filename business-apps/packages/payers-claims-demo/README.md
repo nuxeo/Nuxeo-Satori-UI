@@ -2,7 +2,7 @@
 
 The Payers kit, version 1 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 1), with phase 2's claims review workflow, appeals and, since 0.7.0, their review workflow,
-and the package pipeline's demo app
+since 0.8.0 phase 7's letters through Template Rendering, and the package pipeline's demo app
 definition ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)). All its data
 is fictional. Phase 0's demo runs on it, phase 1's demo script runs on it (below), phase 2's first
 four demo steps and its sixth are written for it, and the pipeline's controls
@@ -57,6 +57,18 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   out on purpose. Phase 2's demo step 4 is written for them, in
   [`scripts/beta-harness/steps/payers-operations.mjs`](../../../scripts/beta-harness/steps/payers-operations.mjs).
   **Not run on a server yet.**
+- **Letters,** version 0.8.0's ([below](#the-letters)): Write the denial letter, for adjusters on a
+  denied claim, and Write the appeal decision letter, for member services on a decided appeal. Each
+  runs a chain of the kit's that asks `Letter.Generate`, the operation of
+  [`nuxeo-agentic-letters`](../../../nuxeo-agentic-letters/README.md), which the package depends on,
+  on the platform's Template Rendering. The letter is written from a template an administrator
+  keeps, in the member's language, `corr:language`, or the one chosen in the button's form, and
+  filed beside its record, which lists it on a Letters card. Six fictional templates, in English
+  and Spanish, which the seed keeps: placeholders and HTML, nothing that runs. The deployment
+  allows the two chains in a file of its own, beside the operation buttons'. Its steps file is
+  [`scripts/beta-harness/steps/payers-letters.mjs`](../../../scripts/beta-harness/steps/payers-letters.mjs).
+  **Not run on a server yet:** 0.8.0 and the add-on are installed nowhere, and the local Nuxeo has
+  no Template Rendering.
 - **What a production install shows:** the record pages and the model, to everyone, and the home,
   the menu, the queues and the labels from the app registry, after sign-in, to the three demo
   groups `app.json` names. The development server serves the same files through
@@ -65,44 +77,49 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 
 ## What is in it
 
-| File                                                           | What it is                                                                                 |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                            | The app: its name, version, platform range and groups                                      |
-| `bundle/agentic-ui-config/layouts/Member/view.layout.json`     | The Member record page: section 9's                                                        |
-| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`      | The Claim record page                                                                      |
-| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page, with an appeal's checklist, tickable, and every case's timeline      |
-| `bundle/agentic-ui-config/layouts/Provider/view.layout.json`   | The Provider record page, with the claims it billed                                        |
-| `bundle/agentic-ui-config/layouts/Member/metadata.layout.json` | Version 1: the Properties panel beside the Member page, without the social security number |
-| `bundle/agentic-ui-config/queues/unassigned-claims.json`       | Adjusters: claims no one holds yet, with a Status facet                                    |
-| `bundle/agentic-ui-config/queues/my-claims.json`               | Adjusters: the claims they hold, through `$currentUser`                                    |
-| `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                |
-| `bundle/agentic-ui-config/queues/open-appeals.json`            | Member services and supervisors: appeals not decided, the nearest due first                |
-| `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                  |
-| `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the four queues, and two platform pages                                |
-| `bundle/agentic-ui-config/actions.json`                        | Mark as paid, a lifecycle transition, and the two operation buttons                        |
-| `bundle/agentic-ui-config/tasks/*.layout.json`                 | The workflows' three task forms, one per step with a task: two claims, one appeals         |
-| `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                     |
-| `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                |
-| `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, the claim lifecycle, page providers                |
-| `bundle/OSGI-INF/payers-claims-demo-workflow.xml`              | The two workflows: their route models, variables, chains, vocabularies and filters         |
-| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two buttons' chains, each guarded so that only a button runs it                        |
-| `deployment/payers-claims-demo-operations-config.xml`          | The demo server's allow-list, for `nxserver/config/`. Not packaged: the deployment's own   |
-| `deployment/build-allow-list.json`                             | The allow-list the pipeline builds the kit against, and CI with it. Not packaged           |
-| `bundle/data/PayersClaimReview.zip`                            | The route model, as the importer reads it: written from `workflow/PayersClaimReview/`      |
-| `bundle/data/PayersAppealReview.zip`                           | Since 0.7.0, the appeal review's: written from `workflow/PayersAppealReview/`              |
-| `bundle/data/vocabularies/PayersClaimDecision.csv`             | The decisions a determination picks from                                                   |
-| `bundle/data/vocabularies/PayersAppealDecision.csv`            | Since 0.7.0, the decisions an appeal's review picks from: uphold or overturn               |
-| `bundle/schemas/*.xsd`                                         | **The stand-in model's** schemas, and the workflow's variables (`var_*`)                   |
-| `workflow/PayersClaimReview/`, `workflow/PayersAppealReview/`  | Each route model's source: a document export, one `document.xml` per node. Not packaged    |
-| `workflow/build-route-model.mjs`, `route-model.mjs`            | Writes each zip from its source, the same bytes every time; `--check` compares             |
-| `workflow/route-model.selftest.mjs`                            | The route models' controls, with no server                                                 |
-| `workflow/platform-check.mjs`, `PlatformCheck.java`            | The route models held to the local Nuxeo's own classes, with no deploy                     |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`     | The seed script, its fictional records and people, and its controls. Not packaged          |
-| `demo/lifecycle.mjs`                                           | The claim lifecycle, read from the stand-in model, for the seed and its controls           |
-| `demo/appeals.mjs`                                             | The Case page's checklist and the open-appeals queue, read from the kit's files            |
-| `package/package.xml`                                          | The Marketplace package: name, version, and what it depends on                             |
-| `build.mjs`                                                    | Version 1's builder: the generator's, byte for byte                                        |
-| `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                 |
+| File                                                           | What it is                                                                                         |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                            | The app: its name, version, platform range and groups                                              |
+| `bundle/agentic-ui-config/layouts/Member/view.layout.json`     | The Member record page: section 9's                                                                |
+| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`      | The Claim record page                                                                              |
+| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page, with an appeal's checklist, tickable, and every case's timeline              |
+| `bundle/agentic-ui-config/layouts/Provider/view.layout.json`   | The Provider record page, with the claims it billed                                                |
+| `bundle/agentic-ui-config/layouts/Member/metadata.layout.json` | Version 1: the Properties panel beside the Member page, without the social security number         |
+| `bundle/agentic-ui-config/queues/unassigned-claims.json`       | Adjusters: claims no one holds yet, with a Status facet                                            |
+| `bundle/agentic-ui-config/queues/my-claims.json`               | Adjusters: the claims they hold, through `$currentUser`                                            |
+| `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                        |
+| `bundle/agentic-ui-config/queues/open-appeals.json`            | Member services and supervisors: appeals not decided, the nearest due first                        |
+| `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                          |
+| `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the four queues, and two platform pages                                        |
+| `bundle/agentic-ui-config/actions.json`                        | Mark as paid, a lifecycle transition, the two operation buttons, and the two letter buttons        |
+| `bundle/agentic-ui-config/tasks/*.layout.json`                 | The workflows' three task forms, one per step with a task: two claims, one appeals                 |
+| `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                             |
+| `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                        |
+| `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, the claim lifecycle, page providers                        |
+| `bundle/OSGI-INF/payers-claims-demo-workflow.xml`              | The two workflows: their route models, variables, chains, vocabularies and filters                 |
+| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two buttons' chains, each guarded so that only a button runs it                                |
+| `bundle/OSGI-INF/payers-claims-demo-letters.xml`               | Since 0.8.0: `Correspondence` on Claim and Case, the letters' vocabulary, page provider and chains |
+| `bundle/data/vocabularies/PayersLetterLanguage.csv`            | Since 0.8.0, the languages a letter button's form offers: English and Spanish                      |
+| `deployment/payers-claims-demo-operations-config.xml`          | The demo server's allow-list, for `nxserver/config/`. Not packaged: the deployment's own           |
+| `deployment/payers-claims-demo-letters-config.xml`             | Since 0.8.0, the demo server's letters allow-list, for `nxserver/config/`. Not packaged            |
+| `deployment/build-allow-list.json`                             | The allow-list the pipeline builds the kit against, and CI with it. Not packaged                   |
+| `bundle/data/PayersClaimReview.zip`                            | The route model, as the importer reads it: written from `workflow/PayersClaimReview/`              |
+| `bundle/data/PayersAppealReview.zip`                           | Since 0.7.0, the appeal review's: written from `workflow/PayersAppealReview/`                      |
+| `bundle/data/vocabularies/PayersClaimDecision.csv`             | The decisions a determination picks from                                                           |
+| `bundle/data/vocabularies/PayersAppealDecision.csv`            | Since 0.7.0, the decisions an appeal's review picks from: uphold or overturn                       |
+| `bundle/schemas/*.xsd`                                         | **The stand-in model's** schemas, and the workflow's variables (`var_*`)                           |
+| `workflow/PayersClaimReview/`, `workflow/PayersAppealReview/`  | Each route model's source: a document export, one `document.xml` per node. Not packaged            |
+| `workflow/build-route-model.mjs`, `route-model.mjs`            | Writes each zip from its source, the same bytes every time; `--check` compares                     |
+| `workflow/route-model.selftest.mjs`                            | The route models' controls, with no server                                                         |
+| `workflow/platform-check.mjs`, `PlatformCheck.java`            | The route models held to the local Nuxeo's own classes, with no deploy                             |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`     | The seed script, its fictional records and people, and its controls. Not packaged                  |
+| `demo/lifecycle.mjs`                                           | The claim lifecycle, read from the stand-in model, for the seed and its controls                   |
+| `demo/appeals.mjs`                                             | The Case page's checklist and the open-appeals queue, read from the kit's files                    |
+| `demo/letters/*.html`                                          | Since 0.8.0, the six letter templates the seed keeps, fictional. Not packaged                      |
+| `demo/letters.mjs`                                             | The templates held to what `nuxeo-agentic-letters` takes, with no server                           |
+| `package/package.xml`                                          | The Marketplace package: name, version, and what it depends on                                     |
+| `build.mjs`                                                    | Version 1's builder: the generator's, byte for byte                                                |
+| `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                         |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **Operation buttons on decision 3's recommendation,** which is open: a per-deployment allow-list
@@ -149,7 +166,13 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   something new: the appeal review workflow. One thing behaves otherwise, which the rule cannot
   see: a claims review started on a denied claim reopens it, where before 0.7.0 its start refused
   one, and only an administrator, or the system an overturned appeal's chain runs as, may start it
-  there.
+  there. **0.8.0** is a minor raise, more than the patch the pipeline asks for: it counts 21
+  changes since 0.7.0, two actions and fifteen labels added and the Claim and Case layouts changed,
+  and leaves the manifest, `package.xml`, the new letters component and its vocabulary to a person.
+  Those add a facet to two types, a vocabulary, a page provider and two chains, remove nothing, and
+  add a dependency, `nuxeo-agentic-letters` 0.1.0, which in turn needs the platform's Template
+  Rendering: a server without them refuses the package. The minor says the kit does something new:
+  letters.
 - **Migration notes:** `upgrade-notes.json`, outside the zip. The upgrade check refuses a removal
   that a customer's configuration may rely on without one
   ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 10), and found
@@ -185,6 +208,10 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
 - **An appeal's decision is a property,** since 0.7.0: `case:decision`, `upheld` or `overturned`,
   which the appeal review writes when it decides the appeal, as the seed writes it on the decided
   one. None before, and none on a grievance. The Case page shows it on a decided appeal.
+- **A claim's and a case's language,** since 0.8.0: `corr:language`, of
+  `nuxeo-agentic-letters`' `Correspondence` facet, which the letters component gives both types:
+  the language their letters are written in, the member's, which the seed writes. Not a kit schema:
+  the add-on's.
 - **A claim's lifecycle is its status,** since 0.4.0: `payersClaim`, whose states are
   `claim:status`'s values. A claim starts `submitted`; `review` puts it in review; `pend` and
   `resume` hold it and bring it back; `approve` and `deny` decide it, from review or held; `pay`
@@ -520,6 +547,83 @@ the platform serves, draws and runs them is
 - **Not yet:** an install. Whether the server registers the allow-list, serves the file filtered and
   runs the chain is for the steps file, once the kit and the contribution are installed.
 
+## The letters
+
+Phase 7's "letters through Template Rendering"
+([development plan](../../../docs/business-apps/development-plan.md), phase 7), since 0.8.0, on
+[`nuxeo-agentic-letters`](../../../nuxeo-agentic-letters/README.md), which the package depends on,
+and which depends on the platform's Template Rendering. The add-on's README says what it checks
+and refuses; this is what the kit gives it.
+
+| Button                           | Shows                                                                   | Its form                     | Runs                       | Letter                 |
+| -------------------------------- | ----------------------------------------------------------------------- | ---------------------------- | -------------------------- | ---------------------- |
+| Write the denial letter          | To adjusters, on a denied claim                                         | The language, may stay empty | `Payers.WriteDenialLetter` | `payers.denial`        |
+| Write the appeal decision letter | To member services, on an appeal whose decision is upheld or overturned | The language, may stay empty | `Payers.WriteAppealLetter` | `payers.appealOutcome` |
+
+- **The chains are the kit's,** in `bundle/OSGI-INF/payers-claims-demo-letters.xml`: each begins
+  with `AgenticUi.RequireRunAction`, naming itself, as the operation buttons' do, then fetches the
+  record and asks `Letter.Generate` for its letter, with the language the form sent, a chain
+  parameter that is data and never evaluated, or none. No REST binding.
+- **The right to run them from a button is the deployment's:**
+  `deployment/payers-claims-demo-letters-config.xml`, a file of its own beside the operation
+  buttons', so that a server may allow one and not the other. It allows the denial letter's chain
+  for the Payers app's button, for `claims-adjusters` holding `Write` on a claim in the `denied`
+  state, and the appeal letter's for `member-services` holding `Write` on a case, each with one
+  parameter, `language`, a string of at most 16 characters from the form, which may be left out.
+  The server checks each itself, whatever the button's rule. The pipeline holds the kit to
+  `deployment/build-allow-list.json`, which names both.
+- **What the add-on checks, as the person:** that they may write the record, that its type carries
+  `Correspondence`, and that they may read the template; it chooses the template, writes the
+  letter, files it beside the record, as the person, so they need to add documents to its folder,
+  and records `letterGenerated` in the record's history. Adjusters may change claims and member
+  services cases, which the seed gives them, so each may write their letters, and only those.
+- **The templates are documents an administrator keeps,** `LetterTemplate`s of the add-on, in
+  `/default-domain/workspaces/payers-demo/templates`, which the seed writes from `demo/letters/` and
+  every demo group reads; none may change one, and the add-on lets only an administrator. Each
+  names its letter, its language, the record type it is for, and the conditions the stored record
+  must meet:
+
+  | Template                                                     | Letter                 | For   | Conditions                                         |
+  | ------------------------------------------------------------ | ---------------------- | ----- | -------------------------------------------------- |
+  | `payers-denial-en`, `payers-denial-es`                       | `payers.denial`        | Claim | `claim:status=denied`                              |
+  | `payers-appeal-upheld-en`, `payers-appeal-upheld-es`         | `payers.appealOutcome` | Case  | `case:category=appeal`, `case:decision=upheld`     |
+  | `payers-appeal-overturned-en`, `payers-appeal-overturned-es` | `payers.appealOutcome` | Case  | `case:category=appeal`, `case:decision=overturned` |
+
+  So one button writes the appeal's decision letter, and the add-on picks the upheld or the
+  overturned template from the stored case. The text is HTML with placeholders and nothing else:
+  the claim's number, the member's name and address through `claim:member` and `case:member`, the
+  provider's name, a day and the amount billed, and the letter's date and writer. No template
+  names the social security number, or the diagnosis.
+
+- **The language:** the one chosen in the form, which must have a template, or the record's,
+  `corr:language`, its member's: Maria Alvarez's are in Spanish, so CLAIM-000144's denial letter
+  is, and everyone else's in English. A language with no template, chosen, is refused; the
+  record's, with none, falls back to English.
+
+### How the letters were verified, with no deploy
+
+- **The templates, against what the add-on takes:** `demo/letters.mjs` holds the six to its rules,
+  the forbidden syntax, the HTML it allows and the placeholders, each property named held to
+  `content-model.json`'s types, and holds the templates of one letter in one language to fitting
+  each seeded record at most once, and each record a button offers the letter on exactly once. The
+  seed runs it before it asks the server anything, and the seed's selftest breaks copies ten ways,
+  a FreeMarker expression and directive, a Velocity directive, a script, an event handler, a style
+  fetching a URL, the person, a system property, a property the type lacks and two hops, each
+  refused. It mirrors the add-on's checks; the add-on's tests are the control.
+- **Against the server's own classes:** `node workflow/platform-check.mjs` loads the letters
+  component's two chains with `OperationChainContribution`, from the local container's jars,
+  read-only; checks that each is its guard, naming itself, the record fetched and
+  `Letter.Generate` with its letter, that the component has no REST binding, and that each
+  language, an expression, gives the language chosen, none when none was, and a language holding a
+  template as text, with the server's MVEL; and loads the vocabulary with its descriptor class.
+  Run on 27 November 2026: 199 checks passed, 19 of them these.
+- **In `nuxeo-agentic-core`'s tests:** `AllowListXmlTest` still reads the operation buttons'
+  contribution alone, and the kit's `actions.json` served with it leaves out the two letter
+  buttons, whose chains that contribution does not hold.
+- **Not yet:** an install. Whether the server takes the templates as the seed writes them, runs the
+  chains and files the letters is for the steps file, once the add-on, the kit and the letters
+  contribution are installed.
+
 ## Building it
 
 Since 0.5.0 its buttons run two chains, and the pipeline holds a package to the allow-list of the
@@ -531,7 +635,8 @@ and on no server; the demo server's own allow-list is narrower ([below](#the-ope
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/payers-claims-demo-0.7.0.zip`.
+It writes `dist/payers-claims-demo-0.8.0.zip`. Since 0.8.0 the allow-list names the two letter
+chains as well.
 
 After changing a route model's source, write the zips again first, and commit them:
 
@@ -541,8 +646,9 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.7.0.changes.md`. Run on 26 November 2026 against the staging branch's
-0.6.1, with the content model and the platform as it was there (`--previous-platform`, the
+`dist/payers-claims-demo-0.8.0.changes.md`. Run on 27 November 2026 against the staging branch's
+0.7.0, with the platform not compared: 21 changes, which need a patch version, and 0.8.0 raises
+the minor. 0.7.0's run, on 26 November 2026, against the staging branch's 0.6.1, with the content model and the platform as it was there (`--previous-platform`, the
 upgrade check): 14 changes, which need a patch version, and 0.7.0 raises the minor; the upgrade
 check keeps every configuration. 0.6.1's run, against 0.6.0: 3 changes, which needed a patch, and
 0.6.1 raised the patch. 0.6.0's run, against
@@ -886,6 +992,67 @@ was started with, which is no matter here: only a new review starts at the chang
 removes no type, schema, property or page provider. Then the appeal review's steps file
 ([below](#the-appeal-reviews-demo)).
 
+### Over version 0.7.0: version 0.8.0, with the letters
+
+**Not run yet.** 0.8.0 adds the letters: two buttons, their chains, a vocabulary, a page provider,
+the Letters card on the Claim and Case pages, and `nuxeo-agentic-letters`' `Correspondence` facet
+on both types. It depends on `nuxeo-agentic-letters` 0.1.0, which depends on Nuxeo's
+`nuxeo-template-rendering`, so those two come first, and a server without them refuses the kit.
+From the repository's root:
+
+**1. Template Rendering, from Nuxeo's Marketplace,** where it is published for LTS 2025, Nuxeo
+supported, for Nuxeo Online Services customers. A server registered with Nuxeo Connect installs it
+by name, `nuxeoctl mp-install nuxeo-template-rendering`, in the one-off script below; one that is
+not installs its zip, downloaded from the Marketplace by someone with an account.
+
+**2. `nuxeo-agentic-letters`, built from this repository** (its README, "Installing it"):
+
+```bash
+mvn verify -pl nuxeo-agentic-letters -am
+```
+
+**3. Build the kit:**
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
+```
+
+**4. Into the container, with the letters allow-list and the one-off script,** which installs
+Template Rendering, the add-on and the kit, in that order, when the container next starts, then
+removes itself. The allow-list goes into `nxserver/config/`, where the server reads it, as the
+operation buttons' does:
+
+```bash
+docker cp nuxeo-agentic-letters/target/nuxeo-agentic-letters-0.1.0.zip nuxeo:/tmp/ && docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.8.0.zip nuxeo:/tmp/
+```
+
+```bash
+docker cp business-apps/packages/payers-claims-demo/deployment/payers-claims-demo-letters-config.xml nuxeo:/opt/nuxeo/server/nxserver/config/
+```
+
+```bash
+printf '%s
+' '#!/bin/bash' '{ nuxeoctl mp-install nuxeo-template-rendering --accept=true && nuxeoctl mp-install /tmp/nuxeo-agentic-letters-0.1.0.zip --accept=true && nuxeoctl mp-remove payers-claims-demo --accept=true && nuxeoctl mp-install /tmp/payers-claims-demo-0.8.0.zip --accept=true; } > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
+```
+
+```bash
+docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
+```
+
+**5. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
+
+- the install log lists Template Rendering, `nuxeo-agentic-letters` 0.1.0 and the kit 0.8.0
+  installed, and the server log's `Component Loading Status` has nothing pending or missing;
+- as an administrator, `GET /nuxeo/api/v1/config/types/LetterTemplate` answers 200, and
+  `GET /nuxeo/api/v1/config/types/Claim` lists the `Correspondence` facet;
+- `GET /nuxeo/api/v1/directory/PayersLetterLanguage` lists `en` and `es`;
+- as `dana.lee`, `/nuxeo/agentic-ui-apps/apps/payers-claims/actions.json` serves
+  `payers.claim.writeDenialLetter`, and as `riley.brooks` `payers.case.writeAppealLetter`.
+
+**6. Seed it again** (below), with 0.8.0's seed: it writes each claim's and case's language and the
+six templates, and refuses a server without the add-on or 0.8.0. Nothing needs deleting first:
+0.8.0 removes nothing. Then the letters' steps file ([below](#the-letters-demo)).
+
 ### Removing it
 
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
@@ -902,7 +1069,10 @@ ecm:currentLifeCycleState = 'running'`, through `GET /nuxeo/api/v1/search/lang/N
 lists its running instances; and `DELETE /nuxeo/api/v1/workflow/<id>` cancels each, which an
 administrator may. Its instances, their tasks and its nodes carry the `facet-var_PayersClaimReview…`
 facets, whose schemas leave with the package, as the claims' types do. **From 0.7.0, the same for
-`PayersAppealReview`,** whose facets are `facet-var_PayersAppealReview…`. **Not run yet.**
+`PayersAppealReview`,** whose facets are `facet-var_PayersAppealReview…`. **Not run yet.** From
+0.8.0, the workspace holds the letter templates and the letters a demo filed, which go with it;
+remove the kit before `nuxeo-agentic-letters`, whose facet its types carry, and take
+`deployment/payers-claims-demo-letters-config.xml` out of `nxserver/config/`.
 
 Then remove the package the way it was installed. `nuxeoctl mp-remove`, like `mp-install`,
 refuses while the server runs, and stopping the server stops the container, so a one-off script
@@ -945,6 +1115,12 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   and assigned to another specialist, so that the open-appeals queue's order and facets can be
   told apart. Morgan Chen holds both added claims, so none of what phase 1's demo counts as Dana
   Lee or as member services' claims changes.
+- **Since 0.8.0, the letters:** each claim and case is given its member's language, `corr:language`:
+  Spanish for Maria Alvarez's, CLAIM-000140, CLAIM-000142, CLAIM-000144 and CASE-2041, English for
+  everyone else's. And the six letter templates of `data.mjs`'s `LETTER_TEMPLATES`, in a
+  `templates` folder, Letter templates, which every demo group reads and none may change, each a
+  `LetterTemplate` with its letter, language, record type, conditions and the add-on's processor,
+  its text the file of `demo/letters/` it names, uploaded only when it does not hold those bytes.
 - **And the people:** six fictional users, in the three groups the kit's rules name.
 
   | User           | Groups                                   | Works                                     |
@@ -970,6 +1146,10 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   does not exist, or a checklist on a grievance, stops the run with exit 1, naming it. An entry
   not done may still say who and when, as CASE-2041's medical records do: the page shows neither.
 
+- **The letter templates are held to the add-on first,** since 0.8.0: before it asks the server
+  anything, the seed holds them to what `nuxeo-agentic-letters` takes (`demo/letters.mjs`, above),
+  and a template it would refuse, or could not choose, stops the run with exit 1, naming it.
+
 - **Each claim's lifecycle is its status.** After it writes a claim, the seed follows the fewest
   transitions of the claim lifecycle from the state the claim is in to its status
   (`demo/lifecycle.mjs`, which reads the lifecycle from the stand-in model): from `submitted` for a
@@ -985,7 +1165,9 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   and stops the run with exit 2.
 - **It checks what it wrote:** last, it signs in as each user, and checks their groups and what
   they may change, once, reads each claim back, in the state its status names, and each case,
-  holding the checklist it was given, entry for entry. Then it runs the eight page providers and
+  holding the checklist it was given, entry for entry; since 0.8.0, each claim and case holding its
+  member's language, each template what it was given, and each user reading every template and
+  changing none. Then it runs the eight page providers and
   compares what they return with what it seeded, each queue's aggregates included, asking
   `payers_my_claims` for each adjuster's claims as that adjuster, and `payers_open_appeals` for the
   appeals not decided and no grievance, by state and by specialist. A queue may hold records the
@@ -995,12 +1177,12 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   `PAYERS_DEMO_PASSWORD` have no default, and `NUXEO_USER` must be an administrator: only one may
   create users and groups. `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a
   precondition is not met: no credentials, no demo password, no server, credentials refused or not
-  an administrator's, the package not installed or older than 0.7.0, no
-  `/default-domain/workspaces`, or a user or a group of the demo's names that the seed did not
-  create.
+  an administrator's, the package not installed or older than 0.8.0, `nuxeo-agentic-letters` not
+  installed, no `/default-domain/workspaces`, or a user or a group of the demo's names that the seed
+  did not create.
 
-It prints a member's and a provider's record page, each appeal's, and the open appeals' queue, on
-the app at `APP_URL`
+It prints a member's and a provider's record page, each appeal's, the open appeals' queue, and
+since 0.8.0 each denied claim's, with its letters' language, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
 
 ### Seeing it under `nx serve`
@@ -1317,6 +1499,39 @@ or none of them. Exit 2 means a precondition is not met, and says which. Each ru
 entries in CLAIM-000131's history, the chain's marked with the run's id, which no other demo counts.
 **Not run yet:** the kit 0.5.0 is installed nowhere.
 
+### The letters' demo
+
+Phase 7's letters, as a steps file of the beta harness,
+[`scripts/beta-harness/steps/payers-letters.mjs`](../../../scripts/beta-harness/steps/payers-letters.mjs),
+run as an adjuster, `dana.lee`:
+
+1. Maria Alvarez's denied claim, CLAIM-000144, offers Write the denial letter on its toolbar; its
+   dialog asks the kit's question, with the language field; left empty, it runs, the person is told
+   the letter is written, and the letter is filed beside the claim, in Spanish, from
+   `payers-denial-es`, its text naming the claim and the member with no placeholder left, listed
+   on the claim's Letters card, and the claim's history holds `letterGenerated`;
+2. with English chosen, sent as the dialog sends it, the letter is in English;
+3. member services, `riley.brooks`, write the decision letter of CASE-2043, whose denial was
+   upheld: from `payers-appeal-upheld-en`, chosen by the stored case's decision;
+4. a claim of theirs in review offers no letter button.
+
+Then, past the app, the negative checks: member services calling `Letter.Generate` directly on the
+claim, which they may read and not change, 403; the denial letter in Swedish, which no template
+is in, 400; asked by member services, whom the allow-list's group leaves out, 403; on a claim in
+review, a state the allow-list does not name, 403; and the kit's chain called through Nuxeo's own
+endpoint, refused by its first step. None of the five files a letter or writes to the claim's
+history.
+
+```bash
+NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-letters
+```
+
+**What it needs:** Template Rendering, `nuxeo-agentic-letters` 0.1.0 and the package 0.8.0
+installed and seeded, the letters contribution in `nxserver/config/` (above), `nuxeo-agentic-ui`
+from this branch or later, `PAYERS_DEMO_PASSWORD` for member services, and Playwright. Each run
+leaves three letters, two beside CLAIM-000144 and one beside CASE-2043, with their history entries,
+which no other demo counts. **Not run yet:** the kit 0.8.0 and the add-on are installed nowhere.
+
 ## What a server shows, and what the dev server does
 
 The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses, to everyone:
@@ -1438,6 +1653,19 @@ included, is shown no app. The demo itself still runs on a development server, a
   entries may replace the platform's (app-definition-v2.md, section 13).
 - **`content-model.json` does not list `PayersClaimSearch`:** no layout names it, and the
   pipeline holds only layouts to the model.
+- **The letters have not run on a server:** the kit 0.8.0, `nuxeo-agentic-letters` and Template
+  Rendering are installed nowhere, so the letters' steps file has not run, and no server has
+  answered `corr:language`, or the `Letter` type the Letters card lists, as `content-model.json`
+  writes them, by hand, as `case:checklist` was. The pipeline holds a layout's own fields to the
+  model, and not a related card's columns, which are the related records'.
+- **A letter is filed beside its record, and read by whoever may read that folder:** the claims
+  folder's and the cases folder's readers, every demo group. Its writer may not change it, nor an
+  adjuster remove it: the add-on keeps a letter as it was written.
+- **The decision letter does not tick its checklist item.** The appeal review writes the decision
+  letter's item when it decides the appeal; writing the letter is a second, separate step, and
+  nothing links the two.
+- **The templates are HTML, and the letters too:** no PDF. A template's `tmpl:outputFormat` would ask
+  the platform to convert it, which needs the server's converters, and the kit's ask for none.
 - **The seed's and the demo's controls are not in CI:**
   `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks the seed's logic
   against a stand-in for the REST API it calls, so it proves the script, not the server; the demo

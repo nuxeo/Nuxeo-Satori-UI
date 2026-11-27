@@ -392,6 +392,31 @@ way.
     created and changed; they stay inert until a type carries the facet, and the provider stays
     unset, so nothing is read until a server names one.
 
+- **B, the letters module's server add-on (27 November 2026).** Built against the recommendation,
+  "one add-on per domain module": letters are
+  [`nuxeo-agentic-letters`](../../nuxeo-agentic-letters/README.md), a Maven module beside
+  `nuxeo-agentic-core` with a Marketplace package of its own, which depends on Nuxeo's Template
+  Rendering package and which the [Payers kit](../../business-apps/packages/payers-claims-demo/README.md)
+  0.8.0 depends on; nothing of it went into `nuxeo-agentic-core`. It is built on the platform: a
+  letter template is Template Rendering's template document, kept by administrators alone, with the
+  add-on's facet for its letter, language and conditions; a letter is rendered through the
+  platform's template processor service, by a processor of the add-on's own that fills placeholders
+  and runs nothing, and is filed next to its record as a document bound to its template as the
+  platform binds one. **Decision 3 is followed, on its recommendation:** the add-on registers one
+  Automation operation, `Letter.Generate`, whose own checks, `Write` on the record among them, are
+  the control; the kit's two letter buttons run chains of the kit's that begin with
+  `AgenticUi.RequireRunAction`, and the deployment's allow-list for them is a file of its own,
+  `deployment/payers-claims-demo-letters-config.xml`. Its security review is deferred until the
+  app is finished, as every security review is; it is installed nowhere. What changes if B goes
+  another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and that package
+    depends on `nuxeo-template-rendering` instead; the kit's `package.xml` names it in place of
+    `nuxeo-agentic-letters`. The component, facet, schema, type, operation and setting names do not
+    change, so no kit's files do.
+  - **Into `nuxeo-agentic-core`:** every server would then need Template Rendering, which LTS 2025
+    does not install by default, so the letters would stay a package of their own, or `nuxeo-agentic-core`
+    would gain a dependency it does not have today.
+
 - **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
   5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
   serves some of an asset's picture views, and its original where its rights allow, watermarked on
@@ -550,3 +575,4 @@ Taken on 19 November 2026 in the Studio parity plan, `docs/nuxeo-studio-parity-p
 | `app-model --attachments`, the generators' one change made while an agent built the moves kit: a stand-in type may carry Nuxeo's `files` schema                                                                                                                                                                                                                                                                                                                                                                         | Approved by the plan's author, for the generators' owner ([moves kit](../../business-apps/packages/moves-demo/README.md)) | 26 November 2026 |
 | Business-app kits stay in this repository, under `business-apps/packages/`, beside the app definition pipeline that checks them; version 1's configuration packages stay in nuxeo/Nuxeo-Satori-Config, whose builder checks no version 2 file ([package-pipeline.md](package-pipeline.md))                                                                                                                                                                                                                              | Decided by the plan's author                                                                                              | 26 November 2026 |
 | The migration work still to do is held until the plan's other remaining items are done, then done with care, as the migration's most important part; what is built stays. It covers phase 4's three real packages, lab server, server halves of checks 5, 6 and 7, accepting proposals and reviewers; migration M3, the code track (a Studio package's custom elements to Angular plugins, with harness check 9, resting on decision 5); and phase 10's upload                                                          | Decided by the plan's author                                                                                              | 26 November 2026 |
+| The held migration work resumes, now that the plan's other buildable items are done: one or two slices at a time, each reviewed by two independent reviewers and merged before the next. First, accepting proposals with a reviewer's approval of each report and decisions carried to a new build, and M3, a package's custom elements to Angular plugins through the template build (decision 5), with harness check 9. Both are on made-up packages; three real packages and the lab server still wait               | Decided by the plan's author                                                                                              | 27 November 2026 |

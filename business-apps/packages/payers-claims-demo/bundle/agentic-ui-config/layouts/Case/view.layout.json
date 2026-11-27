@@ -88,6 +88,20 @@
       }
     },
     {
+      "id": "letters",
+      "labelKey": "payers.letters.card",
+      "related": {
+        "pageProvider": "payers_record_letters",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "dc:title",
+          "letter:language",
+          { "field": "letter:writtenAt", "widget": "relative-date" }
+        ],
+        "rowActions": ["app.rowActions.download"]
+      }
+    },
+    {
       "id": "history",
       "labelKey": "payers.case.history",
       "timeline": { "pageSize": 10 }

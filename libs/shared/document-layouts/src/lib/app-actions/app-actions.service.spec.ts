@@ -131,10 +131,14 @@ describe('AppActionsService', () => {
     expect(service().register('payers-claims', KIT)).toEqual([
       REQUEST,
       'payers.claim.referToInvestigations',
+      'payers.claim.writeDenialLetter',
+      'payers.case.writeAppealLetter',
     ]);
     expect(slots().registeredIds(EXTENSION_SLOTS.toolbar)).toEqual([
       REQUEST,
       'payers.claim.referToInvestigations',
+      'payers.claim.writeDenialLetter',
+      'payers.case.writeAppealLetter',
     ]);
     expect(slots().registeredIds(EXTENSION_SLOTS.rowActions)).toEqual([REQUEST]);
     const [toolbar] = slots().resolve<ExtensionActionDescriptor>(

@@ -1477,13 +1477,20 @@ export function packageModel(kit) {
       if (point === 'doctype')
         for (const { attributes, inner } of elements(body, 'doctype')) {
           if (!attributes.name) continue;
-          model.doctypes.set(attributes.name, {
-            // `append` adds to a type of the platform's, such as File, which the package does not own.
-            append: attributes.append === 'true',
-            schemas: [...inner.matchAll(new RegExp(`<schema${TAG}`, 'g'))]
-              .map(([, each]) => attributesOf(each).name)
-              .filter(Boolean),
-          });
+          // `append` adds to a type of the platform's, such as File, which the package does not own,
+          // or to one of the package's own from another of its components, as the Payers kit's
+          // letters component gives Claim a facet: then the type is still the package's.
+          const append = attributes.append === 'true';
+          const schemas = [...inner.matchAll(new RegExp(`<schema${TAG}`, 'g'))]
+            .map(([, each]) => attributesOf(each).name)
+            .filter(Boolean);
+          const known = model.doctypes.get(attributes.name);
+          if (known !== undefined && (append || known.append))
+            model.doctypes.set(attributes.name, {
+              append: append && known.append,
+              schemas: [...new Set([...known.schemas, ...schemas])],
+            });
+          else model.doctypes.set(attributes.name, { append, schemas });
         }
       if (point === 'lifecycle')
         for (const { attributes, inner } of elements(body, 'lifecycle')) {

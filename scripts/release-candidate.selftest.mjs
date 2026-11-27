@@ -354,6 +354,17 @@ function theSet() {
     platform.join('; '),
     false,
   );
+  // And nuxeo-agentic-letters on Template Rendering, the same way.
+  const rendering = setProblems([
+    ui('2026.0.2'),
+    kit({ name: 'nuxeo-agentic-letters', dependencies: ['nuxeo-template-rendering:2025.0.0'] }),
+  ]);
+  check(
+    "the letters add-on's dependency on Template Rendering, which the Marketplace installs",
+    rendering.length === 0,
+    rendering.join('; '),
+    false,
+  );
   const cases = [
     [
       'a dependency on a package of neither the candidate nor Nuxeo',
@@ -364,6 +375,11 @@ function theSet() {
       "a dependency on one of Nuxeo's own packages from a package not listed for it",
       [ui('2026.0.2'), kit({ dependencies: ['nuxeo-retention:2025.0.0'] })],
       /has no package nuxeo-retention/,
+    ],
+    [
+      'a dependency on Template Rendering from a package other than the letters add-on',
+      [ui('2026.0.2'), kit({ dependencies: ['nuxeo-template-rendering:2025.0.0'] })],
+      /has no package nuxeo-template-rendering/,
     ],
     [
       'a dependency at a snapshot of its release',
@@ -1102,8 +1118,9 @@ async function theDemoListing() {
   check(
     "the repository's kit demos listed, with their people, seeds and environment",
     problems.length === 0 &&
-      // The demo, the claims review, the appeals, the appeal review and the operation buttons.
-      of('payers-claims-demo').length === 5 &&
+      // The demo, the claims review, the appeals, the appeal review, the operation buttons and,
+      // since 0.8.0, the letters.
+      of('payers-claims-demo').length === 6 &&
       // The demo, step 2's rights, step 4's review and the videos.
       of('brand-assets-demo').length === 4 &&
       of('brand-assets-demo').some((each) => each.file.endsWith('/brand-assets-video.mjs')) &&
@@ -1130,6 +1147,23 @@ async function theDemoListing() {
       operations?.needs.some((need) => need.includes('payers-claims-demo-operations-config.xml')) &&
       operations?.steps.at(-1) === 'Health',
     JSON.stringify(operations),
+    false,
+  );
+  // Since 0.8.0, the letters' demo: its adjuster, the member services person it signs in through
+  // the REST API, and the add-on and the deployment contribution a server run needs beside the kit.
+  const lettersDemo = of('payers-claims-demo').find((each) =>
+    each.file.endsWith('/payers-letters.mjs'),
+  );
+  check(
+    "the letters' demo listed, with its people, the add-on and the deployment's letters allow-list it needs",
+    JSON.stringify(lettersDemo?.runAs.users) === JSON.stringify(['dana.lee']) &&
+      JSON.stringify(lettersDemo?.signsInAs) === JSON.stringify(['riley.brooks']) &&
+      lettersDemo?.environment.includes('PAYERS_DEMO_PASSWORD') &&
+      lettersDemo?.needs.some((need) => need.includes('nuxeo-agentic-letters')) &&
+      lettersDemo?.needs.some((need) => need.includes('payers-claims-demo-letters-config.xml')) &&
+      lettersDemo?.steps[0]?.startsWith('Preconditions') &&
+      lettersDemo?.steps.at(-1) === 'Health',
+    JSON.stringify(lettersDemo),
     false,
   );
   // Since 0.7.0, the appeal review's demo: its specialist, and the adjuster it signs in through the

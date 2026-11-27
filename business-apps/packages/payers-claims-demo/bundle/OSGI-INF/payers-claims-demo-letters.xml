@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<!--
+  Since 0.8.0, the letters: a denial letter on a denied claim, and an appeal outcome letter on a
+  decided appeal, written from templates in English and Spanish through nuxeo-agentic-letters, which
+  the package depends on, on the platform's Template Rendering. Written by hand, apart from the
+  stand-in model, so that the model can be replaced whole and this follows it.
+
+  - Claim and Case get the add-on's Correspondence facet, corr:language: a letter is written only on
+    a record whose type carries it, in its language when a template exists in it. The seed writes
+    each claim's and case's from its member's.
+  - PayersLetterLanguage: the languages the buttons' form offers. Empty is the record's own.
+  - payers_record_letters: a record's letters, for the Letters card on the Claim and Case pages.
+  - The two buttons' chains. Each begins with AgenticUi.RequireRunAction, naming itself, so that
+    only AgenticUi.RunAction runs it, for a button, and then asks Letter.Generate, the add-on's
+    operation, for its letter, with the language the form sent, or none. The kit never allows its
+    own chains: the deployment does (deployment/payers-claims-demo-letters-config.xml), and the
+    pipeline refuses a package that contributes to the allow-list. No REST binding: one would not
+    stop a dispatcher, and AgenticUi.RunAction applies it to the button too.
+
+  The templates themselves are documents, which an administrator keeps: the seed writes the kit's
+  six (demo/letters/). The add-on checks, as the person, that they may write the record and read the
+  template, and refuses a template that holds anything but text and placeholders. Fictional, like
+  the rest of the kit.
+-->
+<component name="nuxeo.config.payers-claims-demo.letters" version="1.0">
+  <require>nuxeo.config.payers-claims-demo.model</require>
+  <!-- The Correspondence facet and its schema, and the Letter and LetterTemplate types:
+       nuxeo-agentic-letters'. -->
+  <require>org.nuxeo.agentic.letters.schema</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Added to the stand-in model's two types that letters are written on. -->
+    <doctype name="Claim" append="true">
+      <facet name="Correspondence" />
+    </doctype>
+    <doctype name="Case" append="true">
+      <facet name="Correspondence" />
+    </doctype>
+  </extension>
+
+  <!-- The languages a letter's form offers: a template must exist in the one chosen. -->
+  <extension target="org.nuxeo.ecm.directory.GenericDirectory" point="directories">
+    <directory name="PayersLetterLanguage" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>payers_vocabulary_PayersLetterLanguage</table>
+      <dataFile>data/vocabularies/PayersLetterLanguage.csv</dataFile>
+    </directory>
+  </extension>
+
+  <!-- The Claim and Case pages' Letters card: a record's letters, given its ecm:uuid, the newest
+       first. A letter is filed beside its record, and names it in letter:record. -->
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="payers_record_letters">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Letter WHERE letter:record = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="letter:writtenAt" ascending="false" />
+      <pageSize>10</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="chains">
+    <!-- Write the denial letter on a denied claim, in the claim's language or the one chosen. -->
+    <chain id="Payers.WriteDenialLetter">
+      <!-- First: no further unless AgenticUi.RunAction runs it, for a button. -->
+      <operation id="AgenticUi.RequireRunAction">
+        <param type="string" name="operation">Payers.WriteDenialLetter</param>
+      </operation>
+      <operation id="Context.FetchDocument" />
+      <operation id="Letter.Generate">
+        <param type="string" name="letter">payers.denial</param>
+        <param type="string" name="language">expr:ChainParameters["language"]</param>
+      </operation>
+    </chain>
+
+    <!-- Write the appeal outcome letter on a decided appeal: the add-on picks the upheld or the
+         overturned template by the conditions each holds the stored case to. -->
+    <chain id="Payers.WriteAppealLetter">
+      <operation id="AgenticUi.RequireRunAction">
+        <param type="string" name="operation">Payers.WriteAppealLetter</param>
+      </operation>
+      <operation id="Context.FetchDocument" />
+      <operation id="Letter.Generate">
+        <param type="string" name="letter">payers.appealOutcome</param>
+        <param type="string" name="language">expr:ChainParameters["language"]</param>
+      </operation>
+    </chain>
+  </extension>
+</component>
