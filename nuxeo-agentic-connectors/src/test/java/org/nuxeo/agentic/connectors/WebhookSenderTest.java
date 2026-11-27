@@ -447,6 +447,24 @@ class WebhookSenderTest {
         }
     }
 
+    /** How a TLS failure is judged, with the exceptions built here: the same on every platform. */
+    @Test
+    void aTlsFailureIsRetriedOnlyWhenTheConnectionEnded() {
+        javax.net.ssl.SSLHandshakeException closed = new javax.net.ssl.SSLHandshakeException(
+                "Remote host terminated the handshake");
+        closed.initCause(new java.io.EOFException("SSL peer shut down incorrectly"));
+        assertEquals(Outcome.UNREACHABLE, WebhookSender.tls(closed));
+        javax.net.ssl.SSLException reset = new javax.net.ssl.SSLException("reset",
+                new java.net.SocketException("Connection reset"));
+        assertEquals(Outcome.UNREACHABLE, WebhookSender.tls(reset));
+        javax.net.ssl.SSLHandshakeException untrusted = new javax.net.ssl.SSLHandshakeException("PKIX path building failed");
+        untrusted.initCause(new java.security.cert.CertificateException("unable to find a valid certification path"));
+        assertEquals(Outcome.TLS, WebhookSender.tls(untrusted));
+        assertEquals(Outcome.TLS, WebhookSender.tls(new javax.net.ssl.SSLHandshakeException(
+                "Received fatal alert: protocol_version")));
+        assertEquals(Outcome.TLS, WebhookSender.tls(new javax.net.ssl.SSLPeerUnverifiedException("peer not verified")));
+    }
+
     /** A receiver, or what is in front of it, that closes the connection during the handshake: tried again. */
     @Test
     void aConnectionClosedDuringTheHandshakeIsUnreachableAndTriedAgain() throws Exception {

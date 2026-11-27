@@ -23,7 +23,9 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <li>{@value #DELIVERED}: an attempt the receiver answered {@code 2xx};</li>
  * <li>{@value #RETRYING}: an attempt that failed, and will be made again;</li>
  * <li>{@value #DEAD_LETTERED}: a delivery given up on;</li>
- * <li>{@value #RESENT}: a dead letter an administrator sent again.</li>
+ * <li>{@value #RESENT}: a dead letter an administrator sent again;</li>
+ * <li>{@value #SUPERSEDED}: what an attempt came to, made by a node whose claim another took over
+ * before it finished: it may have reached the receiver, and changes nothing.</li>
  * </ul>
  *
  * The comment names the webhook, the delivery, the event, the document's id and type, the attempt,
@@ -42,6 +44,8 @@ interface WebhookAudit {
     String DEAD_LETTERED = "webhookDeadLettered";
 
     String RESENT = "webhookResent";
+
+    String SUPERSEDED = "webhookSuperseded";
 
     void record(String event, String comment);
 

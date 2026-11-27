@@ -202,6 +202,10 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
     public void stop(ComponentContext context) {
         stopRetrying();
         deliveries = null;
+        WebhookSender running = sender;
+        if (running != null) {
+            running.close();
+        }
     }
 
     /** Stops looking for due deliveries; tests call {@link #retryDue} themselves. */
@@ -220,7 +224,11 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
 
     /** For tests: a resolver and a TLS trust of their own. */
     void sender(WebhookSender sender) {
+        WebhookSender before = this.sender;
         this.sender = sender;
+        if (before != null && before != sender) {
+            before.close();
+        }
     }
 
     /** For tests: an audit that records what it is given. */
@@ -497,8 +505,7 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
                 + " node meanwhile, so this outcome changes nothing", delivery.webhook(), delivery.id(),
                 delivery.event(), delivery.type(), delivery.document(), delivery.attempts(), outcome.label(),
                 status(result), detail(result));
-        audit.record(outcome == Outcome.DELIVERED ? WebhookAudit.DELIVERED : WebhookAudit.RETRYING,
-                WebhookAudit.comment(delivery, null, "superseded"));
+        audit.record(WebhookAudit.SUPERSEDED, WebhookAudit.comment(delivery, null, "superseded"));
     }
 
     /** A delivery done with: delivered, or a dead letter. Logged, counted and audited. */

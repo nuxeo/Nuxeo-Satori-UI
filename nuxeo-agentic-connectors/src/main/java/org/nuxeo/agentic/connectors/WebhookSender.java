@@ -159,6 +159,13 @@ final class WebhookSender {
 
     private final SSLSocketFactory tls;
 
+    /** One thread for every attempt's deadline: it only closes sockets. The sender's own, stopped with it. */
+    private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "agentic-webhooks-deadlines");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     WebhookSender(Resolver resolver, SSLSocketFactory tls) {
         this.resolver = resolver;
         this.tls = tls;
@@ -244,7 +251,7 @@ final class WebhookSender {
         // The deadline, whatever the socket is doing: a read waits at most until it, but a write, or a
         // TLS record trickled a byte at a time, would not; closing the socket ends either.
         AtomicBoolean expired = new AtomicBoolean();
-        ScheduledFuture<?> watchdog = DEADLINES.schedule(() -> {
+        ScheduledFuture<?> watchdog = deadlines.schedule(() -> {
             expired.set(true);
             close(socket);
         }, timeout.toNanos(), TimeUnit.NANOSECONDS);
@@ -284,12 +291,10 @@ final class WebhookSender {
         }
     }
 
-    /** One thread for every attempt's deadline: it only closes sockets. */
-    private static final ScheduledExecutorService DEADLINES = Executors.newSingleThreadScheduledExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "agentic-webhooks-deadlines");
-        thread.setDaemon(true);
-        return thread;
-    });
+    /** Stops the deadline's thread, when the component stops or a test replaces the sender. */
+    void close() {
+        deadlines.shutdownNow();
+    }
 
     private static void close(Socket socket) {
         try {

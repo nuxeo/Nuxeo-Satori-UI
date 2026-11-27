@@ -399,7 +399,8 @@ public class WebhookRuntimeTest {
         assertEquals(1, delivered.size());
         assertEquals(3, delivered.get(0).get("attempts").asInt());
         assertEquals(1, hooks.audit.entries.stream().filter(e -> e.contains("reason=superseded")).count());
-        assertEquals(2, hooks.audit.events().stream().filter(WebhookAudit.DELIVERED::equals).count());
+        assertEquals(1, hooks.audit.events().stream().filter(WebhookAudit.SUPERSEDED::equals).count());
+        assertEquals(1, hooks.audit.events().stream().filter(WebhookAudit.DELIVERED::equals).count());
     }
 
     /** Anything an attempt throws is its outcome: retried, then a dead letter, never claimed for ever. */

@@ -58,7 +58,7 @@ reviewer.
 | `src/main/resources/OSGI-INF/connectors-webhooks-service.xml`            | The component `org.nuxeo.agentic.connectors.webhooks`, its service, its `webhooks` extension point, its post-commit listener and its work queue                                                                                                                                                                    |
 | `src/main/resources/OSGI-INF/connectors-webhooks-operations-contrib.xml` | Registers `Webhook.Deliveries` and `Webhook.Resend`, an administrator's                                                                                                                                                                                                                                            |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`                    | Maps the change events' servlet on `/agentic-connectors/events/*`, with no authentication filter                                                                                                                                                                                                                   |
-| `src/test/java/`                                                         | 158 tests, with embedded HTTP stubs (`SystemOfRecordStub`, and raw sockets for the webhooks' sender); 30 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`), the webhooks' deliveries made by the work manager                                       |
+| `src/test/java/`                                                         | 159 tests, with embedded HTTP stubs (`SystemOfRecordStub`, and raw sockets for the webhooks' sender); 30 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`), the webhooks' deliveries made by the work manager                                       |
 | `demo/core-system.mjs`                                                   | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims, and `notify`, which sends a signed change event                                                                                                                                                                |
 | `demo/change-event.mjs`                                                  | How the stand-in signs a change event                                                                                                                                                                                                                                                                              |
 | `demo/core-system.selftest.mjs`                                          | Its controls, 16 of them                                                                                                                                                                                                                                                                                           |
@@ -302,12 +302,12 @@ contribution with the same id replaces it whole, and `enabled="false"` removes i
 that breaks a rule removes the one it would have replaced,** unlike a connector's: a mistake in a
 contribution meant to narrow a webhook must not leave the wider one sending.
 
-| Server property                               | Default    | What it does                                                                                                                                             |
-| --------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nuxeo.agentic.webhooks.<id>.address`         | Unset: off | The receiver's address: `https`, a host, a path, no user, query or fragment                                                                              |
-| `nuxeo.agentic.webhooks.<id>.secret`          | Unset: off | The secret each delivery is signed with, at least 32 characters. Shorter, or the events secret of the connector with the same id, is off                 |
-| `nuxeo.agentic.webhooks.<id>.http.allowed`    | Unset      | `true` lets it send to a plain `http` address. For a demo server only                                                                                    |
-| `nuxeo.agentic.webhooks.<id>.private.allowed` | Unset      | `true` lets the address resolve to a private or loopback address. Link-local, multicast, unspecified and reserved addresses are refused whatever it says |
+| Server property                               | Default    | What it does                                                                                                                                                             |
+| --------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `nuxeo.agentic.webhooks.<id>.address`         | Unset: off | The receiver's address: `https`, a host, a path, no user, query or fragment                                                                                              |
+| `nuxeo.agentic.webhooks.<id>.secret`          | Unset: off | The secret each delivery is signed with, at least 32 characters. Shorter, or the events secret of the connector with the same id, is off                                 |
+| `nuxeo.agentic.webhooks.<id>.http.allowed`    | Unset      | `true` lets it send to a plain `http` address. For a demo server only                                                                                                    |
+| `nuxeo.agentic.webhooks.<id>.private.allowed` | Unset      | `true` lets the address resolve to a private or loopback address. Link-local, cloud metadata, multicast, unspecified and reserved addresses are refused whatever it says |
 
 **No contribution names any of these:** they are the webhook's id under `nuxeo.agentic.webhooks.`,
 which is not under `nuxeo.agentic.connectors.`, so no connector can name one as its credential and
@@ -437,7 +437,8 @@ at once. **An attempt not finished within two minutes**, by a node that stopped 
 taken over as the next attempt, or, when it was the last, the delivery is a dead letter, `timeout`,
 and nothing more is sent. A delivery leaves flight, delivered or a dead letter, only by a
 compare-and-set of its record as its owner left it, so the stalled node's late outcome changes
-nothing: it is logged and audited, `reason=superseded`, since it may have reached the receiver.
+nothing: it is logged and audited, `webhookSuperseded`, since it may have reached the receiver. So a
+delivery dead-lettered as `timeout` after its last claim expired may still have been delivered.
 
 **After its last attempt**, or at once for an outcome no attempt would change, a delivery is a
 **dead letter**: kept with its payload for 30 days, for an administrator to see, fix the cause of,
@@ -471,7 +472,8 @@ anything is read or sent, whatever the id they name.
 
 - **The audit:** the platform's, category `agenticWebhooks`, written as `nuxeo-agentic-embedded`
   writes its own: `webhookDelivered`, `webhookRetrying` and `webhookDeadLettered` for each
-  attempt's outcome, `webhookResent` for a resend. The comment names the webhook, the delivery,
+  attempt's outcome, `webhookResent` for a resend, and `webhookSuperseded` for what an attempt came
+  to on a node whose claim another took over. The comment names the webhook, the delivery,
   the event, the document's id and type, the attempt, the outcome, the receiver's status, the kind
   of address refused or the setting missing, and for a resend the administrator. **Never** the
   secret, the signature, the nonce, the address or a field's value. The entry's principal is the
@@ -567,7 +569,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -pl nuxeo-agentic-connectors -am verify
-# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 158 tests
+# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 159 tests
 node nuxeo-agentic-connectors/demo/core-system.selftest.mjs      # 16 of 16
 node nuxeo-agentic-connectors/demo/webhook-receiver.selftest.mjs # 15 of 15
 ```
@@ -860,6 +862,9 @@ for it, not its findings.
   deliveries, and a webhook that names `dc:modified` gives its receiver what it needs to order them.
 - **An event the key/value store refuses is lost:** the listener logs it, by its event and
   document, and goes on with the transaction's other events; nothing retries keeping it.
+- **A node that stops between taking a delivery out of flight and recording it** delivered or a
+  dead letter leaves no record of it, and no audit entry, and its payload until its time in the store
+  passes. The window is two writes to the store wide.
 - **A Marketplace package** for the add-on, and the pipeline reading a kit's own connector
   contributions instead of a `--registered` file.
 - **Hot reload:** unregistering a contribution that replaced another removes the connector rather

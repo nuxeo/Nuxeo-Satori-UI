@@ -170,8 +170,8 @@ public record Webhook(String id, List<Trigger> triggers, List<String> types, Lis
 
     /**
      * The server property that, set to {@code true}, lets this webhook send to a private or loopback
-     * address ({@link WebhookAddresses}). Link-local, multicast, unspecified and reserved addresses
-     * are refused whatever it says.
+     * address ({@link WebhookAddresses}). Link-local, the cloud metadata services' addresses,
+     * multicast, unspecified and reserved addresses are refused whatever it says.
      */
     public String privateAllowedProperty() {
         return PROPERTY_PREFIX + id + ".private.allowed";
