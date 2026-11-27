@@ -83,6 +83,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
     how the job is seen failing.
 20. [telemetry.md](telemetry.md): telemetry, a design only, for decision T: opt-in and off by
     default, to the customer's own collector, a closed list of fields, and what needs deciding.
+21. [extension-model.md](extension-model.md): how customers extend the product without our source,
+    only through packages of their own, a proposal for review with decisions K, L, M, N and 5.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):
