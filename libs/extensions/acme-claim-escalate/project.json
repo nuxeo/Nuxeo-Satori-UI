@@ -1,0 +1,30 @@
+{
+  "name": "acme-claim-escalate",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/extensions/acme-claim-escalate/src",
+  "prefix": "acme",
+  "tags": ["scope:customer", "type:extension"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/extensions/acme-claim-escalate"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{workspaceRoot}/dist/out-tsc/libs/extensions/acme-claim-escalate"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "ngc -p libs/extensions/acme-claim-escalate/tsconfig.lib.json --outDir dist/out-tsc/libs/extensions/acme-claim-escalate"
+      }
+    }
+  }
+}

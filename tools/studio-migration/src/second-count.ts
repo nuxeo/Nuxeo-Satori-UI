@@ -76,11 +76,13 @@ const PATTERNS: Partial<
     condition: conditionTags,
     script: count(SCRIPT),
   },
-  // The custom bundle may hold contributions as the bundle does, beside its code.
+  // The custom bundle may hold contributions as the bundle does, beside its code. Its custom
+  // elements are counted whole, and what they hold is theirs, not the file's.
   'custom-bundle': {
-    'slot-contribution': count(tag('nuxeo-slot-content')),
-    condition: conditionTags,
-    script: count(SCRIPT),
+    'custom-element': (text) => elementSpans(text).length,
+    'slot-contribution': (text) => count(tag('nuxeo-slot-content'))(withoutElements(text)),
+    condition: (text) => conditionTags(withoutElements(text)),
+    script: (text) => count(SCRIPT)(withoutElements(text)),
   },
   dashboard: {
     'dashboard-card': count(tag('nuxeo-card')),
@@ -157,6 +159,51 @@ export function secondCount(pkg: StudioPackage, inventory: Inventory): Map<strin
     }
   }
   return counts;
+}
+
+/**
+ * The custom elements a custom bundle's text defines: each `<dom-module>` with a custom element's
+ * `id`, up to its `</dom-module>`, that holds a `<script>`. Read from the text, as the rest of this
+ * count is, and never from the parser's elements.
+ */
+function elementSpans(text: string): (readonly [number, number])[] {
+  const spans: (readonly [number, number])[] = [];
+  const open = /<dom-module(?=[\s/>])/gi;
+  for (let match = open.exec(text); match; match = open.exec(text)) {
+    const start = match.index;
+    const tagEnd = startTagEnd(text, start);
+    const close = text.toLowerCase().indexOf('</dom-module', tagEnd);
+    const end = close === -1 ? text.length : text.indexOf('>', close) + 1 || text.length;
+    const startTag = text.slice(start, tagEnd);
+    const id = DOM_MODULE_ID.exec(startTag);
+    const name = (id?.[1] ?? id?.[2] ?? '').trim();
+    if (
+      /^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/.test(name) &&
+      /<script(?=[\s/>])/i.test(text.slice(tagEnd, end))
+    )
+      spans.push([start, end]);
+    open.lastIndex = end;
+  }
+  return spans;
+}
+
+/** Where the start tag that begins at `start` ends, a `>` inside a quoted value not ending it. */
+function startTagEnd(text: string, start: number): number {
+  const pattern = new RegExp(START_TAG.source, 'y');
+  pattern.lastIndex = start;
+  const match = pattern.exec(text);
+  return match ? start + match[0].length : start + 1;
+}
+
+/** The text with the custom elements' definitions taken out. */
+function withoutElements(text: string): string {
+  let kept = '';
+  let at = 0;
+  for (const [start, end] of elementSpans(text)) {
+    kept += text.slice(at, start);
+    at = end;
+  }
+  return kept + text.slice(at);
 }
 
 function count(pattern: RegExp): (text: string) => number {

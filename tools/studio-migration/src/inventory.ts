@@ -15,6 +15,7 @@ import {
   parseHtml,
   parseXml,
 } from './markup';
+import { elementModules, readCustomElement, type CustomElement } from './elements';
 import { scriptShape } from './script-shape';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { themeProperties, type ThemeProperty } from './theme';
@@ -316,6 +317,12 @@ export interface CustomCode {
   readonly path: string;
   /** False when the file holds only comments, as Studio generates it. */
   readonly hasCode: boolean;
+  /**
+   * True when it holds more than comments, its custom elements (`customElements`) and its slot
+   * contributions, each of which is a construct of its own: a script outside every element, a
+   * style, an import of another file.
+   */
+  readonly hasOtherCode: boolean;
 }
 
 /** A `<script>` in a layout, search screen, slot bundle, dashboard or theme. */
@@ -344,6 +351,13 @@ export interface Inventory {
   readonly searches: readonly SearchLayout[];
   readonly slotContributions: readonly SlotContribution[];
   readonly customCode: readonly CustomCode[];
+  /**
+   * The custom elements the custom bundle defines (`elements.ts`), which the code track of M3
+   * turns into Layer 2 plugins. What each holds is its own: its scripts, conditions and the
+   * elements its template uses are not among this inventory's `scripts`, `conditions` and
+   * `elements`, which are the rest of the package's.
+   */
+  readonly customElements: readonly CustomElement[];
   readonly dashboard: Dashboard | null;
   readonly themes: readonly Theme[];
   readonly translations: readonly Translations[];
@@ -466,12 +480,28 @@ export function inventory(pkg: StudioPackage): Inventory {
   const blockUses: BlockUse[] = [];
   /** Each block use's element, for the slot contribution that holds it. */
   const useAt = new Map<Element, BlockUse>();
+  const customElements: CustomElement[] = [];
+  /** The custom elements each Web UI file uses, by name, for each element's `uses`. */
+  const usedIn = new Map<string, Set<string>>();
   const webUi = (
     path: string,
-    options: { readonly task?: boolean } = {},
+    options: { readonly task?: boolean; readonly customBundle?: boolean } = {},
   ): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
+    // A custom element's definition is the element's: read whole, then taken out of the file, so
+    // that its scripts, conditions and elements are not counted as the rest of the package's.
+    if (options.customBundle)
+      for (const module of elementModules(document)) {
+        customElements.push(
+          readCustomElement(
+            path,
+            customElements.filter((element) => element.path === path).length,
+            module,
+          ),
+        );
+        module.remove();
+      }
     conditions.push(
       ...conditionsOf(path, document, within, conditionAt).map((condition) => ({
         ...condition,
@@ -484,6 +514,7 @@ export function inventory(pkg: StudioPackage): Inventory {
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
         elements.set(element.localName, (elements.get(element.localName) ?? 0) + 1);
+        usedIn.set(element.localName, (usedIn.get(element.localName) ?? new Set()).add(path));
       }
       if (element.getAttribute('role') === 'widget') fieldsBefore++;
       const block = blockPaths.get(element.localName);
@@ -604,11 +635,12 @@ export function inventory(pkg: StudioPackage): Inventory {
 
   // The custom bundle, which Studio's own bundle imports first, may hold contributions too: one
   // that disables or outranks a button of the bundle is where a project's hand-written changes go.
+  const customBundles = new Set(ofKind('custom-bundle'));
   const slotContributions: SlotContribution[] = [
     ...ofKind('custom-bundle'),
     ...ofKind('slot-contributions'),
   ].flatMap((path) =>
-    elementsOf(webUi(path).document)
+    elementsOf(webUi(path, { customBundle: customBundles.has(path) }).document)
       .filter((element) => element.localName === 'nuxeo-slot-content')
       .map((element) => {
         const order = element.getAttribute('order');
@@ -656,10 +688,19 @@ export function inventory(pkg: StudioPackage): Inventory {
 
   // Judged on the parsed file, where comments are nodes of their own, rather than by cutting
   // comments out of the text, which a malformed comment can survive.
-  const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => ({
-    path,
-    hasCode: hasContent(parseHtml(read(path))),
-  }));
+  const customCode: CustomCode[] = ofKind('custom-bundle').map((path) => {
+    const rest = parseHtml(read(path));
+    for (const module of elementModules(rest)) module.remove();
+    for (const contribution of elementsOf(rest).filter(
+      (element) => element.localName === 'nuxeo-slot-content',
+    ))
+      contribution.remove();
+    return {
+      path,
+      hasCode: hasContent(parseHtml(read(path))),
+      hasOtherCode: hasContent(rest),
+    };
+  });
 
   const dashboardPath = ofKind('dashboard')[0];
   let dashboard: Dashboard | null = null;
@@ -764,6 +805,10 @@ export function inventory(pkg: StudioPackage): Inventory {
     searches,
     slotContributions,
     customCode,
+    customElements: customElements.map((element) => ({
+      ...element,
+      uses: [...(usedIn.get(element.name) ?? [])],
+    })),
     dashboard,
     themes,
     translations,
@@ -1109,8 +1154,8 @@ function columnOf(column: Element, within: ReadonlyMap<Element, number>): Result
  * The sorts a results layout's script offers: Studio's template writes them as
  * `this.sortOptions = [{field: 'dc:title', label: …, order: 'asc', selected: true}, …]`. They are
  * read from the script's text by pattern, and nothing is run. Whether the script is Studio's
- * template is its own construct's to say, by its shape: one that is not is customer code, pending
- * M3, and its sorts are read by the same pattern all the same.
+ * template is its own construct's to say, by its shape: one that is not is customer code, reported,
+ * and its sorts are read by the same pattern all the same.
  */
 export function sortOptionsOf(script: string): SortOption[] {
   const start = script.search(/\bsortOptions\s*=\s*\[/);

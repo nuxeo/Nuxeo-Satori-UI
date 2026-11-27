@@ -7,8 +7,10 @@
  * server, with Web UI and the new app on it: 3 (model), 5 (conditions), 6 (what people see) and
  * 7 (what the server is asked). Their other half runs here, and each says what it did not run. A
  * check whose findings are empty but which did not run whole is `partial`, never a pass. Check 9
- * waits for M3's plugins. Lab mode (`lab-cli.ts`) runs what it can of the server halves, against a
- * real server, and never through this file's result.
+ * (`check-plugins.ts`), M3's, holds each custom element's plugin to the element: its scan runs on
+ * the files, and its tests, gates and values run when `check` is given `--run-plugins`. Lab mode
+ * (`lab-cli.ts`) runs what it can of the server halves, against a real server, and never through
+ * this file's result.
  *
  * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
  * decision, and every reported item has an owner and a decision, in the conversion's
@@ -19,6 +21,7 @@ import { mapThemeProperty, type Catalogue } from './catalogue';
 import { checkConditions } from './check-conditions';
 import { checkFields } from './check-fields';
 import { checkModel } from './check-model';
+import { checkPlugins } from './check-plugins';
 import { checkPackage } from './check-package';
 import { checkRequests } from './check-requests';
 import { checkSeen } from './check-seen';
@@ -38,6 +41,7 @@ import {
   type ReportEntry,
 } from './convert';
 import type { Inventory } from './inventory';
+import type { PluginsInput } from './plugins';
 import { secondCount } from './second-count';
 import type { StudioPackage } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -85,6 +89,11 @@ export interface HarnessInput {
   readonly allowListFromReport?: boolean;
   /** The platform version `app.json`'s range must hold; the platform's own when left out. */
   readonly platformVersion?: string;
+  /**
+   * The plugins of the package's custom elements, for check 9: their files, read from the
+   * repository, and, once run, their tests, gates and what they showed (`plugins.ts`).
+   */
+  readonly plugins?: PluginsInput;
 }
 
 /** WCAG 2.1 AA, success criterion 1.4.3: the least contrast for text. */
@@ -113,7 +122,7 @@ const CHECKS: readonly (readonly [
   [6, 'What people see', checkSeen],
   [7, 'What the server is asked', checkRequests],
   [8, 'Theme', (input) => ({ findings: theme(input) })],
-  [9, 'Plugins', 'It tests the plugins that replace custom elements, in M3'],
+  [9, 'Plugins', checkPlugins],
   [10, 'Package', checkPackage],
 ];
 

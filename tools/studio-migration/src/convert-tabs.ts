@@ -187,7 +187,7 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
       const element = page.parts.find((part) => own(part.attributes, 'name')?.trim() === name);
       both(item, page, {
         outcome: 'reported',
-        note: `Its page, ${element?.element ?? 'the element named so'}, is no layout block of the package, so no card holds what it shows: for the package's own code, an agent proposes a plugin, in M3, and for Web UI's, a person maps it`,
+        note: `Its page, ${element?.element ?? 'the element named so'}, is no layout block of the package, so no card holds what it shows: a custom element of the package's own custom bundle has its plugin proposed with the element, for a person to place in a tab, and Web UI's own or another file's a person maps`,
       });
       continue;
     }

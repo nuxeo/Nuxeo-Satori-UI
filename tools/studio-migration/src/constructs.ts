@@ -26,6 +26,7 @@ export type ConstructKind =
   | 'condition'
   | 'slot-contribution'
   | 'custom-code'
+  | 'custom-element'
   | 'script'
   | 'dashboard-card'
   | 'theme-property'
@@ -42,6 +43,7 @@ export const COUNTED_KINDS: readonly ConstructKind[] = [
   'search-view',
   'condition',
   'slot-contribution',
+  'custom-element',
   'script',
   'dashboard-card',
   'theme-property',
@@ -192,7 +194,15 @@ export function constructsOf(inventory: Inventory): Construct[] {
     );
   }
   for (const custom of inventory.customCode) {
-    if (custom.hasCode) add('custom-code', custom.path, 'code', 'customer code');
+    if (custom.hasOtherCode) add('custom-code', custom.path, 'code', 'customer code');
+  }
+  for (const element of inventory.customElements) {
+    add(
+      'custom-element',
+      element.path,
+      String(element.index + 1),
+      `the custom element ${element.name}`,
+    );
   }
   for (const script of inventory.scripts) {
     add('script', script.path, String(script.index + 1), `script ${script.index + 1}`);

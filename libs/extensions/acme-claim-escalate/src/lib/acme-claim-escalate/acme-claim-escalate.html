@@ -1,0 +1,5 @@
+@if (canEscalate()) {
+  <nxs-button appearance="outlined" [disabled]="running()" (press)="escalate()">{{
+    text('label.claim.escalate')
+  }}</nxs-button>
+}

@@ -539,9 +539,8 @@ describe('migrate, on what still needs a server', () => {
           `\\n {2}- ${number} ${name}: its server half ${SERVER_HALVES[number].replace(/[.*+?^${}()|[\]\\']/g, '\\$&')}\\.\\n {6}This run: [^\\n]*migration server[^\\n]*\\.\\n`,
         ),
       );
-    expect(out).toContain(
-      '\nChecks that did not run whole, for another reason:\n  - 9 Plugins: not run: It tests the plugins that replace custom elements, in M3.\n      Nothing to do now',
-    );
+    // No custom element: check 9 passes, so nothing else is left to run whole.
+    expect(out).not.toContain('\nChecks that did not run whole, for another reason:\n');
     expect(out).toContain(
       'The checks that need the lab server cannot be run from here: ask your Nuxeo contact',
     );

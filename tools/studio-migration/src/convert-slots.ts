@@ -228,6 +228,21 @@ export function convertSlots(context: ConvertContext): void {
         context.decide(id, { outcome: guard.outcome, note: guard.note });
         continue;
       }
+      // A custom element of the package is the code track's: its plugin is proposed with the
+      // element (`convert-elements.ts`), and the app's toolbar draws actions, not components.
+      const element = contribution.parts.find((part) =>
+        inventory.customElements.some((custom) => custom.name === part.element),
+      );
+      if (
+        element &&
+        !contribution.parts.some((part) => part.element === 'nuxeo-operation-button')
+      ) {
+        context.decide(id, {
+          outcome: 'reported',
+          note: `It holds ${element.element}, a custom element of the package, not an operation button: the element's plugin is proposed with the element, and an app's toolbar shows actions, not components, so where the plugin shows is a person's call`,
+        });
+        continue;
+      }
       const action = buttonAction(contribution, entry.slot);
       if ('problem' in action) {
         context.decide(id, { outcome: 'reported', note: action.problem });

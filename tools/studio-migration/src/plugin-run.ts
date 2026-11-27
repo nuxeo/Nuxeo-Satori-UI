@@ -1,0 +1,520 @@
+/**
+ * Running a plugin for check 9 (docs/business-apps/studio-migration.md, section 6): its own tests,
+ * what it shows on the observed behaviour's records, and, when asked, the repository's gates.
+ *
+ * - **Its tests and what it shows** run in a copy of the library, made from the very files check 9
+ *   scanned, under `tmp/` in the workspace, where the workspace's paths and packages resolve as they
+ *   do for the library itself. Into the copy goes one more spec, the harness's own, which nothing
+ *   of the plugin writes: it registers the plugin through its provider, resolves its component by
+ *   ID as the host does, gives it each record, reads the text it shows, presses each button the
+ *   observed behaviour presses, answers the request as the server did, and records what it asked
+ *   and emitted. One Vitest run gives both, with the plugin's own configuration. The copy is removed
+ *   after the run.
+ * - **The gates** run through Nx on the library itself, once check 9 has made sure its files are
+ *   those it scanned: `lint`, `test` and `typecheck` of the library, and `build` of the template
+ *   app, which a plugin is built into until plugins load at run time (decision 5).
+ *
+ * Nothing of the customer's package runs here: only the plugin, which is code of this repository a
+ * person reviews, and the harness's spec.
+ */
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { camelCase, type CustomElement } from './elements';
+import type { ObservedBehaviour } from './observed';
+import {
+  childEnvironment,
+  childNodeOptions,
+  nxEntry,
+  PLUGIN_FILE,
+  templateConfiguration,
+  type PluginMetadata,
+} from './plugin';
+import { readLibrary, type PluginSource } from './plugins';
+
+/** One gate's verdict. */
+export interface GateRun {
+  readonly passed: boolean;
+  /** The last lines it printed, for the finding. */
+  readonly output: string;
+}
+
+/** What one record showed, and what each press did. */
+export interface SeenRecord {
+  readonly record: string;
+  readonly shows: string;
+  readonly error?: string;
+  readonly clicks?: readonly SeenClick[];
+}
+
+export interface SeenClick {
+  readonly button: string;
+  readonly found: boolean;
+  readonly asks: readonly {
+    readonly operation: string | null;
+    readonly url: string;
+    readonly input: unknown;
+    readonly params: unknown;
+  }[];
+  /** What it emitted, by the output's name. */
+  readonly fires: readonly { readonly output: string; readonly detail: unknown }[];
+  readonly error?: string;
+}
+
+/** A plugin's run, as check 9 reads it. */
+export interface PluginRun {
+  /** The plugin's own specs, run with Vitest in a copy of its library. */
+  readonly tests: {
+    readonly passed: number;
+    readonly failed: readonly string[];
+    /** Tests left `todo` or skipped. */
+    readonly unwritten: readonly string[];
+    /** The run's own failure, when it could not run at all. */
+    readonly error?: string;
+  };
+  /** What the plugin showed on each record of the observed behaviour; absent without one. */
+  readonly seen?: readonly SeenRecord[];
+  /**
+   * What registering the plugin added to the app's registries, by registry: its components, rules,
+   * actions, and each slot's entries. Read with the observed behaviour.
+   */
+  readonly registered?: Readonly<Record<string, readonly string[]>>;
+  /** Why the harness's spec could not read what the plugin shows. */
+  readonly seenError?: string;
+  /** Lint, test, typecheck and build, through Nx, when they were run. */
+  readonly gates?: Readonly<Record<string, GateRun>>;
+}
+
+export interface RunOptions {
+  /** The observed behaviour, for what the plugin shows; without it, only its tests run. */
+  readonly observed?: ObservedBehaviour;
+  /** The custom element, for its events' names. */
+  readonly element?: CustomElement;
+  /** Run lint, test, typecheck and build through Nx too. */
+  readonly gates?: boolean;
+  /** The template app's Nx project, built with the plugin in it. */
+  readonly templateProject?: string;
+}
+
+/** The harness's spec, in the copy. */
+export const PROBE_SPEC = 'src/studio-check-9.probe.spec.ts';
+/** The gates, by Nx target, run on the library; `build` is the template app's. */
+export const GATES = ['lint', 'test', 'typecheck', 'build'] as const;
+/** The Nx project of the template app, which a plugin is built into. */
+export const TEMPLATE_PROJECT = 'nuxeo-satori-template';
+
+interface Ran {
+  readonly status: number | null;
+  readonly output: string;
+}
+
+/** Runs Node on a JavaScript entry point, with no shell, and collects what it prints. */
+function runNode(
+  args: readonly string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  timeout = 600_000,
+): Promise<Ran> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [...args], { cwd, env, shell: false });
+    let output = '';
+    const keep = (chunk: Buffer): void => {
+      output = (output + chunk.toString('utf8')).slice(-20_000);
+    };
+    child.stdout.on('data', keep);
+    child.stderr.on('data', keep);
+    const timer = setTimeout(() => child.kill('SIGTERM'), timeout);
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolve({ status: null, output: `${output}\n${error.message}` });
+    });
+    child.on('close', (status) => {
+      clearTimeout(timer);
+      resolve({ status, output });
+    });
+  });
+}
+
+/**
+ * The environment of a child run: this one's, less what a Vitest runner sets for its own workers,
+ * which would make a Vitest started from the harness's tests think it is one of them.
+ */
+function runEnvironment(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(childEnvironment()))
+    if (!/^(?:VITEST|TINYPOOL|__VITEST)/.test(name) && name !== 'NODE_ENV') env[name] = value;
+  env['NODE_OPTIONS'] = childNodeOptions();
+  env['NX_DAEMON'] = 'false';
+  return env;
+}
+
+function lastLines(text: string, count = 25): string {
+  return text
+    .split('\n')
+    .filter(
+      (line) =>
+        !/^\s*$/.test(line) && !/analogjs|deprecated|configLoader|VITE_CONFIG|__dirname/.test(line),
+    )
+    .slice(-count)
+    .join('\n');
+}
+
+/** The metadata a plugin's `studio-plugin.json` holds, or `null` when it holds none that reads. */
+export function pluginMetadata(source: PluginSource): PluginMetadata | null {
+  const text = source.files[PLUGIN_FILE];
+  if (text === undefined) return null;
+  try {
+    const parsed = JSON.parse(text) as PluginMetadata;
+    return typeof parsed === 'object' && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The harness's spec: what it reads of the plugin, given `input` as JSON at `inputPath`. */
+export function probeSource(inputPath: string): string {
+  return `/* The Studio migration harness's own spec, for check 9: written into a copy of the plugin, never into the plugin. */
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { readFileSync, writeFileSync } from 'node:fs';
+import {
+  EXTENSION_SLOTS,
+  ExtensionActionRegistry,
+  ExtensionComponentRegistry,
+  ExtensionRuleRegistry,
+  ExtensionSlotRegistry,
+} from '@nuxeo/satori-platform/extensions';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
+import * as plugin from './index';
+
+interface ProbeClick { button: string; answer?: unknown; failure?: number }
+interface ProbeRecord { record: string; clicks?: ProbeClick[] }
+interface ProbeInput {
+  provider: string;
+  component: string;
+  outputs: string[];
+  inputs: Record<string, unknown>;
+  records: Record<string, unknown>[];
+  seen: ProbeRecord[];
+  out: string;
+}
+
+const input = JSON.parse(readFileSync(${JSON.stringify(inputPath)}, 'utf8')) as ProbeInput;
+
+function shown(root: Node): string {
+  const walker = (root.ownerDocument ?? (root as Document)).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const pieces: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const parent = node.parentElement?.localName;
+    if (parent === 'style' || parent === 'script') continue;
+    const text = (node.textContent ?? '').replace(/\\s+/g, ' ').trim();
+    if (text) pieces.push(text);
+  }
+  return pieces.join(' ');
+}
+
+const message = (error: unknown): string => (error instanceof Error ? error.message : String(error)).split('\\n')[0];
+
+/** Everything the app's registries hold, by registry. */
+function registered(): Record<string, string[]> {
+  const slots = TestBed.inject(ExtensionSlotRegistry);
+  const held: Record<string, string[]> = {
+    components: [...TestBed.inject(ExtensionComponentRegistry).registeredComponentIds()],
+    rules: [...TestBed.inject(ExtensionRuleRegistry).registeredRuleIds()],
+    actions: [...TestBed.inject(ExtensionActionRegistry).registeredActionIds()],
+  };
+  for (const slot of new Set([...Object.values(EXTENSION_SLOTS), ...slots.registeredSlotIds()]))
+    held['slot ' + slot] = [...slots.registeredIds(slot)];
+  return held;
+}
+
+let before: Record<string, string[]> = {};
+
+describe('check 9, what the plugin shows', () => {
+  it('reads what the registries hold without the plugin', () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    before = registered();
+  });
+
+  it('reads it on each record', async () => {
+    const provider = (plugin as Record<string, unknown>)[input.provider];
+    if (typeof provider !== 'function') throw new Error('the library exports no ' + input.provider);
+    TestBed.configureTestingModule({
+      providers: [
+        (provider as () => never)(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: NUXEO_API_ORIGIN, useValue: '' },
+      ],
+    });
+    const after = registered();
+    const added: Record<string, string[]> = {};
+    for (const [registry, ids] of Object.entries(after)) {
+      const extra = ids.filter((id) => !(before[registry] ?? []).includes(id));
+      if (extra.length > 0) added[registry] = extra;
+    }
+    const component = await TestBed.inject(ExtensionComponentRegistry).resolve(input.component);
+    if (!component) throw new Error('nothing resolves ' + input.component);
+    const http = TestBed.inject(HttpTestingController);
+    const results: unknown[] = [];
+    for (const seen of input.seen) {
+      const record = input.records.find((candidate) => candidate['uid'] === seen.record);
+      try {
+        const fixture = TestBed.createComponent(component);
+        const fires: { output: string; detail: unknown }[] = [];
+        const instance = fixture.componentInstance as Record<string, unknown>;
+        for (const name of input.outputs) {
+          const emitter = instance[name] as { subscribe?: (next: (value: unknown) => void) => unknown } | undefined;
+          emitter?.subscribe?.((detail: unknown) => fires.push({ output: name, detail: detail === undefined ? null : detail }));
+        }
+        fixture.componentRef.setInput('document', record ?? null);
+        for (const [name, value] of Object.entries(input.inputs)) fixture.componentRef.setInput(name, value);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        const clicks: unknown[] = [];
+        for (const click of seen.clicks ?? []) {
+          fires.length = 0;
+          const button = Array.from(host.querySelectorAll('button')).find((candidate) => shown(candidate) === click.button);
+          if (!button) {
+            clicks.push({ button: click.button, found: false, asks: [], fires: [] });
+            continue;
+          }
+          button.click();
+          fixture.detectChanges();
+          const asks = http.match(() => true).map((request, index) => {
+            const body = (request.request.body ?? {}) as Record<string, unknown>;
+            const url = request.request.urlWithParams;
+            if (index === 0 && click.failure !== undefined) request.flush('failed', { status: click.failure, statusText: 'Failed' });
+            else if (index === 0) request.flush((click.answer ?? {}) as object);
+            else request.flush('not asked for', { status: 404, statusText: 'Not Found' });
+            return {
+              operation: /\\/automation\\/([^/?]+)/.exec(url)?.[1] ?? null,
+              url,
+              input: body['input'] ?? null,
+              params: body['params'] ?? null,
+            };
+          });
+          fixture.detectChanges();
+          await fixture.whenStable();
+          fixture.detectChanges();
+          clicks.push({ button: click.button, found: true, asks, fires: [...fires] });
+        }
+        results.push({ record: seen.record, shows: shown(host), clicks });
+        fixture.destroy();
+      } catch (error) {
+        results.push({ record: seen.record, shows: '', error: message(error) });
+      }
+    }
+    http.match(() => true);
+    writeFileSync(input.out, JSON.stringify({ seen: results, registered: added }));
+  });
+});
+`;
+}
+
+interface VitestReport {
+  readonly testResults?: readonly {
+    readonly name: string;
+    readonly status: string;
+    readonly message?: string;
+    readonly assertionResults?: readonly {
+      readonly fullName: string;
+      readonly status: string;
+      readonly failureMessages?: readonly string[];
+    }[];
+  }[];
+}
+
+/**
+ * Runs a plugin's own tests and, with an observed behaviour, what it shows, in a copy of its files;
+ * then, when asked, the gates through Nx on the library itself.
+ */
+export async function runPlugin(
+  workspace: string,
+  source: PluginSource,
+  options: RunOptions = {},
+): Promise<PluginRun> {
+  const name = source.library.slice(source.library.lastIndexOf('/') + 1);
+  // Under `tmp/`, which the repository ignores, at the depth of `libs/extensions/<name>`, so that
+  // the library's relative paths to the workspace's root hold in the copy.
+  const scratch = join(
+    workspace,
+    'tmp',
+    `studio-check-9-${process.pid}-${randomBytes(4).toString('hex')}`,
+  );
+  const copy = join(scratch, name);
+  const out = join(scratch, 'seen.json');
+  const report = join(scratch, 'vitest.json');
+  const env = runEnvironment();
+  try {
+    // Its build and test configuration as the template writes it, never its own: a plugin does
+    // not choose how it is tested. Check 9 holds its own to the template's apart.
+    const configuration = templateConfiguration(workspace, source.library);
+    const files: Record<string, string> = { ...source.files };
+    for (const [path, text] of Object.entries(configuration)) if (text !== null) files[path] = text;
+    for (const [path, text] of Object.entries(files)) {
+      // Not the project file: Nx would find a second project of the same name.
+      if (path === 'project.json') continue;
+      const full = join(copy, ...path.split('/'));
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, text);
+    }
+    const metadata = pluginMetadata(source);
+    const observed = options.observed?.elements[options.element?.name ?? source.element];
+    const probing = metadata !== null && observed !== undefined && options.observed !== undefined;
+    if (probing) {
+      const inputPath = join(scratch, 'probe-input.json');
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          provider: metadata.provider,
+          component: metadata.component,
+          outputs: [
+            ...new Set((options.element?.events ?? []).map((event) => camelCase(event.name))),
+          ],
+          inputs: observed.inputs,
+          records: options.observed?.records ?? [],
+          seen: observed.records.map((record) => ({
+            record: record.record,
+            clicks: record.clicks ?? [],
+          })),
+          out,
+        }),
+      );
+      writeFileSync(join(copy, ...PROBE_SPEC.split('/')), probeSource(inputPath));
+    }
+    const vitest = join(workspace, 'node_modules', 'vitest', 'vitest.mjs');
+    const ran = await runNode(
+      [
+        vitest,
+        'run',
+        '--config',
+        join(copy, 'vite.config.mts'),
+        '--reporter=json',
+        `--outputFile=${report}`,
+      ],
+      workspace,
+      env,
+    );
+    const tests = readTests(report, ran);
+    let seen: readonly SeenRecord[] | undefined;
+    let registered: Record<string, readonly string[]> | undefined;
+    let seenError: string | undefined;
+    if (probing) {
+      if (existsSync(out)) {
+        const read = JSON.parse(readFileSync(out, 'utf8')) as {
+          seen: SeenRecord[];
+          registered: Record<string, readonly string[]>;
+        };
+        seen = read.seen;
+        registered = read.registered;
+      } else seenError = probeFailure(report) ?? lastLines(ran.output, 8);
+    }
+    let gates: Record<string, GateRun> | undefined;
+    if (options.gates) {
+      // The gates read the library on disk: only when it is still the files check 9 read.
+      const onDisk = readLibrary(workspace, source.library);
+      gates =
+        onDisk !== null && sameFiles(onDisk, source.files)
+          ? await runGates(workspace, metadata?.project ?? name, options)
+          : {
+              files: {
+                passed: false,
+                output: `${source.library} changed on disk while check 9 read it, so its gates were not run`,
+              },
+            };
+    }
+    return {
+      tests,
+      ...(seen !== undefined ? { seen } : {}),
+      ...(registered !== undefined ? { registered } : {}),
+      ...(seenError !== undefined ? { seenError } : {}),
+      ...(gates !== undefined ? { gates } : {}),
+    };
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+function sameFiles(
+  a: Readonly<Record<string, string>>,
+  b: Readonly<Record<string, string>>,
+): boolean {
+  const keys = Object.keys(a).sort();
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => Object.hasOwn(b, key) && a[key] === b[key])
+  );
+}
+
+/** The plugin's own tests, from Vitest's report: every spec file but the harness's. */
+function readTests(path: string, ran: Ran): PluginRun['tests'] {
+  if (!existsSync(path))
+    return {
+      passed: 0,
+      failed: [],
+      unwritten: [],
+      error: lastLines(ran.output) || `exit ${String(ran.status)}`,
+    };
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as VitestReport;
+  const own = (parsed.testResults ?? []).filter(
+    (file) => !file.name.endsWith('studio-check-9.probe.spec.ts'),
+  );
+  const failed: string[] = [];
+  const unwritten: string[] = [];
+  let passed = 0;
+  for (const file of own) {
+    const results = file.assertionResults ?? [];
+    if (file.status === 'failed' && results.every((result) => result.status !== 'failed'))
+      failed.push(
+        `${file.name.slice(file.name.lastIndexOf('/src/') + 1)}: ${(file.message ?? 'it did not run').split('\n')[0]}`,
+      );
+    for (const result of results) {
+      if (result.status === 'passed') passed++;
+      else if (result.status === 'failed') failed.push(result.fullName);
+      else unwritten.push(result.fullName);
+    }
+  }
+  return own.length === 0
+    ? { passed, failed, unwritten, error: 'Vitest found none of its spec files' }
+    : { passed, failed, unwritten };
+}
+
+/** Why the harness's spec failed, from Vitest's report. */
+function probeFailure(path: string): string | null {
+  if (!existsSync(path)) return null;
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as VitestReport;
+  const probe = (parsed.testResults ?? []).find((file) =>
+    file.name.endsWith('studio-check-9.probe.spec.ts'),
+  );
+  const failure =
+    probe?.assertionResults?.flatMap((result) => result.failureMessages ?? [])[0] ?? probe?.message;
+  return failure ? failure.split('\n')[0] : null;
+}
+
+/** Lint, test and typecheck of the library, and build of the template app, through Nx. */
+async function runGates(
+  workspace: string,
+  project: string,
+  options: RunOptions,
+): Promise<Record<string, GateRun>> {
+  const nx = nxEntry(workspace);
+  const env = { ...runEnvironment(), NX_TUI: 'false' };
+  const gates: Record<string, GateRun> = {};
+  for (const gate of GATES) {
+    const target =
+      gate === 'build'
+        ? `${options.templateProject ?? TEMPLATE_PROJECT}:build`
+        : `${project}:${gate}`;
+    const ran = await runNode([nx, 'run', target, '--output-style=static'], workspace, env);
+    gates[gate] = {
+      passed: ran.status === 0,
+      output: ran.status === 0 ? '' : lastLines(ran.output),
+    };
+  }
+  return gates;
+}

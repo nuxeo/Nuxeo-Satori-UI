@@ -1,0 +1,17 @@
+:host {
+  display: block;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.label {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// The element's warning colour, as the theme's error role.
+.high {
+  color: var(--mat-sys-error);
+}

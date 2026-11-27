@@ -499,7 +499,7 @@ describe('the checks on task forms, tabs and layout blocks', () => {
       [6, 'partial'],
       [7, 'partial'],
       [8, 'pass'],
-      [9, 'not run'],
+      [9, 'pass'],
       [10, 'pass'],
     ]);
   });

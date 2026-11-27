@@ -37,6 +37,7 @@ import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
 import { decideCondition } from './conditions';
 import { constructsOf, type Construct, type ConstructKind } from './constructs';
 import { convertBlocks } from './convert-blocks';
+import { convertElements } from './convert-elements';
 import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
@@ -209,6 +210,7 @@ export function convert(
   convertSearches(context);
   convertDashboard(context);
   convertSlots(context);
+  convertElements(context);
   // Last: a block is decided by its uses, which the parts above decide.
   convertBlocks(context);
 
@@ -348,7 +350,10 @@ function decide(
       return FILE_OUTCOMES[kind];
     }
     case 'custom-code':
-      return { outcome: 'pending', note: 'An agent proposes a Layer 2 plugin for it, in M3' };
+      return {
+        outcome: 'reported',
+        note: "Code of the custom bundle outside its custom elements, such as a script, a style or an import: M3's code track writes a plugin for each custom element, and for nothing else. A style is not migrated (parity decision 5); what other code does is a person's to rewrite as a plugin, or leave behind",
+      };
     case 'script': {
       const script = inventory.scripts.find(
         (candidate) => candidate.path === construct.file && candidate.index === key - 1,
@@ -357,8 +362,8 @@ function decide(
       return known
         ? { outcome: 'generated', note: known.name }
         : {
-            outcome: 'pending',
-            note: 'Customer code: an agent proposes a Layer 2 plugin for it, in M3',
+            outcome: 'reported',
+            note: "Customer code in a file Studio generates: the file is converted from its markup, and its code is not. M3's code track writes plugins for the custom bundle's elements only, so what this code adds is a person's to rewrite as a plugin, or leave behind",
           };
     }
     case 'condition': {

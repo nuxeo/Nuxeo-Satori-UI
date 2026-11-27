@@ -38,6 +38,8 @@ export const SOURCES: Readonly<Record<string, string | Readonly<Record<string, s
   'check-conditions.ts': 'Check 5',
   'check-seen.ts': 'Check 6',
   'check-requests.ts': 'Check 7',
+  'check-plugins.ts': 'Check 9',
+  'plugin-scan.ts': 'Check 9',
   'check-package.ts': 'Check 10',
   'decisions.ts': 'decisions.json',
   'lab.ts': 'Lab mode: the request-log rule',

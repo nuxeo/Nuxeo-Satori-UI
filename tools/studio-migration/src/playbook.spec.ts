@@ -93,7 +93,7 @@ describe('the support playbook', () => {
   it('names who acts on every finding, with the words section 3 defines', () => {
     const actors = definedActors(markdown);
     expect([...actors].sort()).toEqual(
-      ['Decide', 'Decisions', 'Inputs', 'Lab', 'Package', 'Tool', 'Wait'].sort(),
+      ['Decide', 'Decisions', 'Inputs', 'Lab', 'Package', 'Plugin', 'Tool', 'Wait'].sort(),
     );
     for (const [heading, rows] of sections)
       for (const { kind, who } of rows) {

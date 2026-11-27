@@ -18,6 +18,7 @@ import {
   type SlotEntry,
   type TokenMapping,
 } from './catalogue';
+import { pluginLibraryOf } from './convert-elements';
 import type { Inventory, InventoryFile, ScriptUse, SlotContribution } from './inventory';
 
 export interface SlotOutcome {
@@ -83,6 +84,8 @@ export function account(inventory: Inventory, catalogue: Catalogue): Accounting 
     }),
     ...elements.flatMap(({ element, count, entry }) => {
       const subject = `element ${element} (used ${count === 1 ? 'once' : `${count} times`})`;
+      // The package's own element, which the code track turns into a plugin, listed below.
+      if (!entry && inventory.customElements.some((custom) => custom.name === element)) return [];
       if (!entry) return [`${subject} is not in the catalogue`];
       if (entry.how === 'automatic') return [];
       return [`${subject} is ${describe(entry.how)}: ${entry.note ?? entry.becomes}`];
@@ -93,11 +96,15 @@ export function account(inventory: Inventory, catalogue: Catalogue): Accounting 
         ({ script }) =>
           `script ${script.index + 1} in ${script.path} is not one Studio generates: review it as customer code`,
       ),
+    ...inventory.customElements.map(
+      (element) =>
+        `custom element ${element.name} in ${element.path} is for an agent to write as a Layer 2 plugin, ${pluginLibraryOf(element)}, with the plugin command, and a person to accept`,
+    ),
     ...inventory.customCode
-      .filter((custom) => custom.hasCode)
+      .filter((custom) => custom.hasOtherCode)
       .map(
         (custom) =>
-          `${custom.path} holds customer code, for an agent to propose as a Layer 2 plugin`,
+          `${custom.path} holds customer code outside its custom elements, which is reported: a person rewrites it as a plugin, or leaves it behind`,
       ),
     ...themes.flatMap(({ theme, mappings }) => {
       const reported = mappings.filter((mapping) => mapping.token === null).length;
