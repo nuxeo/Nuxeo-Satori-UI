@@ -8,6 +8,7 @@ import {
   readDevServer,
   readPackageRoots,
   readTarget,
+  serverEnvironment,
 } from './config.ts';
 
 const CREDENTIALS = { NUXEO_USER: 'builder', NUXEO_PASS: 'not-a-real-password' };
@@ -162,4 +163,37 @@ describe('readPackageRoots', () => {
       }
     },
   );
+});
+
+describe('serverEnvironment: what call.ts starts the server with', () => {
+  it("gives the server what it reads and what Node needs, and nothing else of the shell's", () => {
+    const shell = {
+      ...CREDENTIALS,
+      NUXEO_URL: 'http://localhost:8080',
+      DEV_SERVER_URL: 'http://localhost:4200',
+      BUILDER_PACKAGE_ROOTS: 'business-apps/packages',
+      PATH: '/usr/bin',
+      TMPDIR: '/tmp',
+      LANG: 'en_US.UTF-8',
+      // What a shell holds for other things: another service's settings, a cloud profile.
+      OTHER_SERVICE_PASSWORD: 'not-for-the-server',
+      AWS_PROFILE: 'default',
+      HOME: '/home/someone',
+      NODE_OPTIONS: '--require ./elsewhere.js',
+      UNSET: undefined,
+    };
+    expect(serverEnvironment(shell)).toEqual({
+      ...CREDENTIALS,
+      NUXEO_URL: 'http://localhost:8080',
+      DEV_SERVER_URL: 'http://localhost:4200',
+      BUILDER_PACKAGE_ROOTS: 'business-apps/packages',
+      PATH: '/usr/bin',
+      TMPDIR: '/tmp',
+      LANG: 'en_US.UTF-8',
+    });
+  });
+
+  it('gives no credential the shell does not hold', () => {
+    expect(serverEnvironment({ PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin' });
+  });
 });

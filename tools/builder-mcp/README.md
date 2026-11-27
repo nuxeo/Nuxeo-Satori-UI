@@ -390,7 +390,9 @@ Then `claude mcp list` shows `nuxeo-builder`, and `/mcp` inside Claude Code show
 **Without registering it,** as an agent that may not change the person's Claude configuration:
 `src/call.ts` starts the server over stdio, as a client does, makes one call and prints the answer.
 The server reads its settings from the shell's environment, as when registered; `call.ts` reads
-none. It exits 0 when the tool answered, 1 when it answered with an error, printed to stderr, and 2
+none. It gives the server only the five variables above and what Node needs to run, `PATH`, the
+temporary directory and the locale (`serverEnvironment`, in `src/config.ts`): nothing else the
+shell holds, such as a token for another service, reaches it. It exits 0 when the tool answered, 1 when it answered with an error, printed to stderr, and 2
 when the command was wrong.
 
 ```bash
