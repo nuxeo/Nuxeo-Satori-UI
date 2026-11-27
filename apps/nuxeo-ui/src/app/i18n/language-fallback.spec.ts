@@ -22,7 +22,7 @@ import { AppTranslateLoader } from './app-translate-loader';
  * English has a text.
  *
  * That is what lets a language ship while it is partly translated — the four shipped catalogues
- * hold 2,013 of English's 3,344 keys — and it is what a kit's language file, which the pipeline
+ * hold 2,013 of English's 3,355 keys — and it is what a kit's language file, which the pipeline
  * accepts as a subset of the kit's English, relies on too.
  *
  * Asserted through `TranslateService.instant`, which is what the translate pipe calls, over

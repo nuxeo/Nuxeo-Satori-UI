@@ -524,7 +524,7 @@ numbers and amounts follow the same language, once it is offered.
 
 | Languages                                                               | State                                                                                                                             |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,344 keys                                                                    |
+| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,355 keys                                                                    |
 | Spanish (`es`)                                                          | Requested from Crowdin. Its dates, numbers and amounts are ready; its catalogue is not on this branch, so it cannot be chosen yet |
 | Swedish, Arabic, Hebrew, Italian (`sv`, `ar`, `he`, `it`)               | Crowdin targets, not requested on this branch; dates, numbers and amounts ready; no catalogue here                                |
 | Danish, Finnish, Norwegian Bokmål (`da`, `fi`, `nb`)                    | Registered: dates, numbers and amounts ready. Not yet Crowdin targets, so not requested                                           |

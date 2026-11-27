@@ -153,6 +153,26 @@ const run = (args) =>
   }).status;
 check('it exits 0, whatever the coverage', run([]), 0);
 check('it exits 2 on an argument it does not know', run(['--strict']), 2);
+// Through a pipe, as `| jq` or a CI step reads it: the real repository's `--json` is well over the
+// 64 KiB a pipe takes at once, and exiting at once cut it off mid-string.
+{
+  const piped = spawnSync(process.execPath, [join(ROOT, 'tools', 'i18n', 'coverage.mjs'), '--json'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  let whole = false;
+  try {
+    whole = JSON.parse(piped.stdout).app.english === real.app.english;
+  } catch {
+    whole = false;
+  }
+  check(
+    `--json through a pipe is whole (${piped.stdout.length} characters) and parses`,
+    [piped.stdout.length > 65536, whole],
+    [true, true],
+  );
+}
 
 console.log(`coverage selftest: ${passed + failures.length} controls.`);
 if (failures.length) {

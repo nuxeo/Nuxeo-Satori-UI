@@ -208,5 +208,7 @@ function main(argv) {
   return 0;
 }
 
-// Importable by `crowdin-status.mjs` and the controls without printing anything.
-if (process.argv[1] === fileURLToPath(import.meta.url)) process.exit(main(process.argv.slice(2)));
+// Importable by `crowdin-status.mjs` and the controls without printing anything. `exitCode`, not
+// `process.exit()`: writing to a pipe is asynchronous, and exiting at once cut `--json` and
+// `--missing` off at 64 KiB when piped, mid-string.
+if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
