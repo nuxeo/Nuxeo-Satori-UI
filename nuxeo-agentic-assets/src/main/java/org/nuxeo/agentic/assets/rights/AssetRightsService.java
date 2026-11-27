@@ -4,6 +4,7 @@
 package org.nuxeo.agentic.assets.rights;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 import org.nuxeo.ecm.core.api.Blob;
@@ -30,7 +31,8 @@ public interface AssetRightsService {
 
     /**
      * The rights of {@code document} under {@code policy}: its own fields, or its live document's
-     * for a version or a proxy.
+     * for a version or a proxy; and, under a policy whose {@code <windows>} names a
+     * {@code document}, the release windows of the document that property names.
      *
      * @throws RuntimeException when they cannot be read; the caller refuses
      */
@@ -45,7 +47,47 @@ public interface AssetRightsService {
      */
     DownloadDecision decideDownload(DocumentModel document, String xpath, Blob blob, String rendition);
 
+    /**
+     * What the rights decide for a delivery of {@code document}'s package to {@code territory}: each
+     * file its policy's {@code <delivery>} lists, decided by its rule for that territory, and found
+     * on the document. Never throws: a document, a policy or rights that cannot be read give a
+     * refusal of the whole package.
+     *
+     * @throws UnsupportedOperationException from an implementation that cannot decide one: the
+     *             caller then refuses the delivery
+     */
+    default DeliveryDecision decideDelivery(DocumentModel document, String territory) {
+        throw new UnsupportedOperationException("deliveries are not decided here");
+    }
+
     /** A decision with the use it is about. */
     record DownloadDecision(Use use, Decision decision) {
+    }
+
+    /**
+     * One file of a delivery's package: its use, what the rights decide for it, and, when they allow
+     * it, the file the document holds for it.
+     */
+    record PackageFile(Use use, Decision decision, Blob blob) {
+    }
+
+    /**
+     * What a delivery's package is decided as: refused whole for a reason of its own, or file by file.
+     *
+     * @param refused the package's own refusal, such as no policy, a broken one or rights that cannot
+     *            be read; {@code null} when it was decided file by file
+     * @param files each file, in the package's order; empty when {@code refused} is set
+     */
+    record DeliveryDecision(Decision refused, List<PackageFile> files) {
+
+        public DeliveryDecision {
+            files = List.copyOf(files);
+        }
+
+        /** Delivered only whole: every file allowed and found, and no refusal of the package's own. */
+        public boolean delivered() {
+            return refused == null && !files.isEmpty()
+                    && files.stream().allMatch(file -> file.decision().allowed() && file.blob() != null);
+        }
     }
 }

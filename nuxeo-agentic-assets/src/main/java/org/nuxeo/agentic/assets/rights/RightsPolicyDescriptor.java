@@ -28,6 +28,23 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *
  * {@code <storyboard>}, for a video type, decides every frame of its storyboard.
  *
+ * <p>A policy with territories, for media rights, names two more fields, and may name a delivery
+ * package:
+ *
+ * <pre>
+ * &lt;territories xpath="fver:territories" /&gt;
+ * &lt;windows xpath="film:windows" document="fver:film" type="Film" /&gt;
+ * &lt;delivery&gt;
+ *   &lt;original /&gt;
+ *   &lt;blob xpath="files:files/1/file" /&gt;
+ * &lt;/delivery&gt;
+ * </pre>
+ *
+ * {@code territories} names a text or list property: where the asset may be delivered.
+ * {@code windows} names a complex list of release windows, each a {@code territory}, a
+ * {@code channel}, a {@code from} day and an {@code until} day; with {@code document}, it is read
+ * from the document whose id that property of the asset holds, such as a localised version's film.
+ *
  * {@link RightsPolicy#of} reads it, and decides what a mistake in it means: always a refusal.
  */
 @XObject("policy")
@@ -60,6 +77,26 @@ public class RightsPolicyDescriptor {
     /** Every frame of a video's storyboard, {@code vid:storyboard/<n>/content}, as one use. */
     @XNode("storyboard")
     protected UseDescriptor storyboard;
+
+    /** Where the asset may be delivered: a text or list property. */
+    @XNode("territories@xpath")
+    protected String territoriesXpath;
+
+    /** Its release windows: a complex list of territory, channel, from and until. */
+    @XNode("windows@xpath")
+    protected String windowsXpath;
+
+    /** The property holding the id of the document the windows are read from, when not the asset. */
+    @XNode("windows@document")
+    protected String windowsDocumentXpath;
+
+    /** With {@link #windowsDocumentXpath}: the type that document must be, such as {@code Film}. */
+    @XNode("windows@type")
+    protected String windowsDocumentType;
+
+    /** The files a delivery of the type carries. */
+    @XNode("delivery")
+    protected DeliveryDescriptor delivery;
 
     public String getType() {
         return type;
@@ -95,5 +132,25 @@ public class RightsPolicyDescriptor {
 
     public UseDescriptor getStoryboard() {
         return storyboard;
+    }
+
+    public String getTerritoriesXpath() {
+        return territoriesXpath;
+    }
+
+    public String getWindowsXpath() {
+        return windowsXpath;
+    }
+
+    public String getWindowsDocumentXpath() {
+        return windowsDocumentXpath;
+    }
+
+    public String getWindowsDocumentType() {
+        return windowsDocumentType;
+    }
+
+    public DeliveryDescriptor getDelivery() {
+        return delivery;
     }
 }

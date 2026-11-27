@@ -3,6 +3,7 @@
  */
 package org.nuxeo.agentic.assets.rights;
 
+import java.io.Serializable;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -25,6 +26,7 @@ import org.nuxeo.ecm.core.api.CoreInstance;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
+import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
 
@@ -46,6 +48,10 @@ import org.nuxeo.runtime.model.DefaultComponent;
  * thumbnail: a folder's tree export or a collection's default rendition holds the bytes of each
  * document in it, under the container's own type, which no policy covers, and goes into the
  * containers it meets, so one holding another container refuses too ({@link #holdsAnyOf}).</li>
+ * <li><strong>Release windows may be another document's.</strong> A localised version, an asset of
+ * its own with its own rights, may read its film's windows: the policy's {@code <windows document>}
+ * names the property holding the film's id, and the film is read with a privileged session, as a
+ * version's live document is. A film that is not there, not live or in the trash refuses.</li>
  * </ul>
  */
 public class AssetRightsComponent extends DefaultComponent implements AssetRightsService {
@@ -62,6 +68,16 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     /** What a type or a document id may be, to be written into a query: anything else refuses. */
     private static final Pattern QUERY_SAFE = Pattern.compile("[A-Za-z0-9_.:-]+");
 
+    /** What the id of the document an asset reads its release windows from may be. */
+    private static final Pattern DOCUMENT_ID = Pattern.compile("[A-Za-z0-9-]{1,64}");
+
+    /** Where an asset's release windows are read: from it, or from the document its policy names. */
+    @FunctionalInterface
+    interface WindowsSource {
+        /** The value of the policy's {@code <windows>} for {@code asset}, its live document. */
+        Serializable windows(DocumentModel asset, RightsPolicy policy);
+    }
+
     private final Clock clock;
 
     /** The document whose fields hold a download's rights: the live one, for a version or a proxy. */
@@ -70,6 +86,8 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     /** Whether a container holds a document of one of these types. */
     private final BiPredicate<DocumentModel, Set<String>> holdsAny;
 
+    private final WindowsSource windowsSource;
+
     /** Every contribution, in registration order, so that one removed by a hot reload goes. */
     private final List<RightsPolicyDescriptor> contributions = new ArrayList<>();
 
@@ -77,15 +95,23 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     private volatile Map<String, RightsPolicy> policies = Map.of();
 
     public AssetRightsComponent() {
-        this(Clock.systemUTC(), AssetRightsComponent::liveDocument, AssetRightsComponent::holdsAnyOf);
+        this(Clock.systemUTC(), AssetRightsComponent::liveDocument, AssetRightsComponent::holdsAnyOf,
+                AssetRightsComponent::windowsOf);
     }
 
     /** For tests, which choose the day, and have no repository to find a live document or a child in. */
     AssetRightsComponent(Clock clock, UnaryOperator<DocumentModel> rightsSource,
             BiPredicate<DocumentModel, Set<String>> holdsAny) {
+        this(clock, rightsSource, holdsAny, AssetRightsComponent::windowsOf);
+    }
+
+    /** For tests, which also choose where another document's release windows are read. */
+    AssetRightsComponent(Clock clock, UnaryOperator<DocumentModel> rightsSource,
+            BiPredicate<DocumentModel, Set<String>> holdsAny, WindowsSource windowsSource) {
         this.clock = clock;
         this.rightsSource = rightsSource;
         this.holdsAny = holdsAny;
+        this.windowsSource = windowsSource;
     }
 
     @Override
@@ -158,7 +184,122 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
 
     @Override
     public AssetFacts facts(DocumentModel document, RightsPolicy policy) {
-        return AssetFacts.read(rightsSource.apply(document), policy);
+        DocumentModel live = rightsSource.apply(document);
+        return AssetFacts.read(live, policy.territorial() ? windowsSource.windows(live, policy) : null, policy);
+    }
+
+    @Override
+    public DeliveryDecision decideDelivery(DocumentModel document, String territory) {
+        if (document == null) {
+            return new DeliveryDecision(Decision.refuse(Reason.POLICY_ERROR), List.of());
+        }
+        RightsPolicy policy;
+        try {
+            policy = policyFor(document.getType());
+        } catch (RuntimeException e) {
+            log.error("Asset rights: a delivery's document has no readable type, so it is refused", e);
+            return new DeliveryDecision(Decision.refuse(Reason.POLICY_ERROR), List.of());
+        }
+        if (policy == null || policy.delivery() == null) {
+            // No policy, or one with no package: nothing is cleared for delivery.
+            return new DeliveryDecision(Decision.refuse(Reason.NOT_CLEARED), List.of());
+        }
+        if (policy.broken() || policy.deliveryBroken()) {
+            return new DeliveryDecision(Decision.refuse(Reason.POLICY_ERROR), List.of());
+        }
+        if (territory == null || territory.isBlank()) {
+            return new DeliveryDecision(Decision.refuseIn(Reason.TERRITORY_NOT_COVERED, null, null), List.of());
+        }
+        AssetFacts facts;
+        try {
+            facts = facts(document, policy);
+        } catch (RuntimeException e) {
+            log.error("Asset rights: the rights of {} ({}) could not be read, so its delivery is refused",
+                    id(document), policy.type(), e);
+            return new DeliveryDecision(Decision.refuse(Reason.POLICY_ERROR), List.of());
+        }
+        LocalDate today = today();
+        List<PackageFile> files = new ArrayList<>();
+        for (Use use : policy.delivery()) {
+            Decision decision = AssetRights.decide(policy, () -> facts, use, today, territory);
+            Blob blob = null;
+            if (decision.allowed()) {
+                blob = packageFile(document, policy, use);
+                if (blob == null || blob.getDigest() == null || blob.getDigest().isEmpty()) {
+                    // Nothing to deliver, or nothing to record what was delivered by.
+                    blob = null;
+                    decision = Decision.refuse(Reason.NO_SUCH_FILE, decision.channel(), null);
+                }
+            }
+            files.add(new PackageFile(use, decision, blob));
+        }
+        return new DeliveryDecision(null, files);
+    }
+
+    /**
+     * The file a delivery's package lists, on the document: its original, the first picture view of
+     * that title, or the blob at that xpath. {@code null} when it has none.
+     */
+    static Blob packageFile(DocumentModel document, RightsPolicy policy, Use use) {
+        try {
+            switch (use.kind()) {
+            case ORIGINAL:
+                return document.getPropertyValue(policy.originalXpath()) instanceof Blob blob ? blob : null;
+            case BLOB:
+                return document.getPropertyValue(use.name()) instanceof Blob blob ? blob : null;
+            case VIEW:
+                if (!(document.getPropertyValue("picture:views") instanceof List<?> views)) {
+                    return null;
+                }
+                for (int index = 0; index < views.size(); index++) {
+                    if (use.name().equals(document.getPropertyValue("picture:views/" + index + "/title"))) {
+                        return document.getPropertyValue("picture:views/" + index + "/content") instanceof Blob blob
+                                ? blob : null;
+                    }
+                }
+                return null;
+            default:
+                return null;
+            }
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * An asset's release windows: its own, at the policy's {@code <windows>}, or, when that names a
+     * {@code document}, the windows of the document whose id the asset holds there, read with a
+     * privileged session, since the asset's reader may not read it. That document must be there,
+     * live, not in the trash, and of the type the policy's {@code <windows type>} names.
+     */
+    static Serializable windowsOf(DocumentModel asset, RightsPolicy policy) {
+        if (policy.windowsDocumentXpath() == null) {
+            return asset.getPropertyValue(policy.windowsXpath());
+        }
+        Serializable named = asset.getPropertyValue(policy.windowsDocumentXpath());
+        String id = named instanceof String text ? text.trim() : null;
+        if (id == null || !DOCUMENT_ID.matcher(id).matches()) {
+            throw new IllegalStateException("the asset names no document to read its release windows from");
+        }
+        CoreSession session = asset.getCoreSession();
+        if (session == null) {
+            throw new IllegalStateException("an asset with no session to read its release windows' document in");
+        }
+        return CoreInstance.doPrivileged(session, (Function<CoreSession, Serializable>) privileged -> {
+            DocumentRef ref = new IdRef(id);
+            if (!privileged.exists(ref)) {
+                throw new IllegalStateException("the document " + id + " named for the release windows is not there");
+            }
+            DocumentModel holder = privileged.getDocument(ref);
+            if (holder.isVersion() || holder.isProxy() || holder.isTrashed()) {
+                throw new IllegalStateException("the document " + id + " named for the release windows is not live");
+            }
+            if (!holder.getType().equals(policy.windowsDocumentType())) {
+                throw new IllegalStateException("the document " + id + " named for the release windows is not a "
+                        + policy.windowsDocumentType());
+            }
+            return holder.getPropertyValue(policy.windowsXpath());
+        });
     }
 
     @Override

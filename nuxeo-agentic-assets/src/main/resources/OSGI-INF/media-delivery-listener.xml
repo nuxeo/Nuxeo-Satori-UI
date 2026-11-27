@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.delivery" version="1.0">
+
+  <documentation>
+    Delivery packages, decided through the repository's own document events, with no Automation
+    operation and no endpoint of their own: a person files a MediaDelivery, and this listener,
+    synchronous, in their thread and transaction, decides it by the localised version's rights
+    policy, as the asset rights service decides a download, for the delivery's territory. Refused
+    whole, the request is rolled back and answered 403 with the server's reason, and nothing is
+    written. It refuses, too, any later change to a delivery's own properties, a copy, an import, a
+    check-in and a restore; a move, a trash and a deletion but an administrator's; and, but an
+    administrator's, the removal, move, trash or copy of a folder holding a delivery, which the
+    platform does to the folder's documents with no event of their own.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.delivery.types</require>
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticMediaDelivery" async="false" postCommit="false" priority="50"
+      class="org.nuxeo.agentic.assets.delivery.DeliveryListener">
+      <event>aboutToCreate</event>
+      <event>aboutToImport</event>
+      <event>beforeDocumentModification</event>
+      <event>aboutToRemove</event>
+      <event>aboutToMove</event>
+      <event>aboutToCopy</event>
+      <event>documentCreatedByCopy</event>
+      <event>aboutToCheckIn</event>
+      <event>beforeRestoringDocument</event>
+      <event>documentTrashed</event>
+    </listener>
+  </extension>
+
+</component>
