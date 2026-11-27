@@ -461,7 +461,7 @@ node sees them; on a server whose default store is in memory, they do not.
 | `Webhook.Resend`     | `delivery`: a dead letter's id                                                                                                   | The delivery, pending again. 404 for an id that is not a dead letter's, 409 for one with no payload or already sent again                                                                             |
 
 ```bash
-curl -s -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
+curl -s --fail-with-body -u "$NUXEO_USER:$NUXEO_PASS" -H 'Content-Type: application/json' \
   -d '{"params":{"state":"dead"}}' http://localhost:8080/nuxeo/api/v1/automation/Webhook.Deliveries
 ```
 
