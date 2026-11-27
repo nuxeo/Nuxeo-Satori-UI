@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:nuxeo-satori:app-definition:home:2",
   "title": "An app's home, home.json, app definition version 2",
-  "description": "docs/business-apps/app-definition-v2.md, section 10. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that card ids are unique, that each queue is one of the package's, and that a rule, a customer's own included, is given literals, since no record is open on the home.",
+  "description": "docs/business-apps/app-definition-v2.md, section 10. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that card ids are unique, that each queue is one of the package's, that each document type a list of recent records names is one of the content model's when the pipeline is given one, and that a rule, a customer's own included, is given literals, since no record is open on the home.",
   "type": "object",
   "required": ["version", "cards"],
   "additionalProperties": false,
@@ -43,12 +43,64 @@
             {
               "required": ["labelKey"]
             }
-          ]
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": ["tasks"]
+              },
+              {
+                "required": ["recent"]
+              }
+            ]
+          }
         },
         {
           "required": ["queue"],
           "not": {
-            "required": ["kpi"]
+            "anyOf": [
+              {
+                "required": ["kpi"]
+              },
+              {
+                "required": ["tasks"]
+              },
+              {
+                "required": ["recent"]
+              }
+            ]
+          }
+        },
+        {
+          "required": ["tasks"],
+          "not": {
+            "anyOf": [
+              {
+                "required": ["kpi"]
+              },
+              {
+                "required": ["queue"]
+              },
+              {
+                "required": ["recent"]
+              }
+            ]
+          }
+        },
+        {
+          "required": ["recent"],
+          "not": {
+            "anyOf": [
+              {
+                "required": ["kpi"]
+              },
+              {
+                "required": ["queue"]
+              },
+              {
+                "required": ["tasks"]
+              }
+            ]
           }
         }
       ],
@@ -69,6 +121,12 @@
         "queue": {
           "$ref": "#/$defs/id",
           "description": "A queue of the package, by its id: its file's name in queues/."
+        },
+        "tasks": {
+          "$ref": "#/$defs/tasks"
+        },
+        "recent": {
+          "$ref": "#/$defs/recent"
         },
         "visibleWhen": {
           "$ref": "#/$defs/rule"
@@ -103,6 +161,48 @@
           "type": "string",
           "minLength": 1,
           "description": "The key of one of the aggregate's buckets: the KPI counts the documents in it."
+        }
+      }
+    },
+    "tasks": {
+      "type": "object",
+      "description": "The signed-in person's open tasks, newest first, each opening on the tasks page, and a link to the tasks page.",
+      "additionalProperties": false,
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$",
+          "description": "A workflow model defined on the server, such as SerialDocumentReview: only its tasks show."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "How many the card shows, newest first: 5 when it says nothing."
+        }
+      }
+    },
+    "recent": {
+      "type": "object",
+      "description": "The records the signed-in person created or edited last, the most recently modified first: what the app's Recently viewed lists.",
+      "additionalProperties": false,
+      "properties": {
+        "types": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+          },
+          "description": "Document types, such as Contract: only records of these show."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "How many the card shows, newest first: 5 when it says nothing."
         }
       }
     },

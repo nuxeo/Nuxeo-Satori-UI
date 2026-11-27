@@ -29,6 +29,15 @@
       "label": "By author",
       "kpi": { "pageProvider": "default_search", "aggregate": "dc_creator_agg" },
       "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["administrators"] }
+    },
+    {
+      "id": "my-tasks",
+      "tasks": { "limit": 5 }
+    },
+    {
+      "id": "recent-notes",
+      "label": "Recent notes and files",
+      "recent": { "types": ["Note", "File"], "limit": 5 }
     }
   ]
 }

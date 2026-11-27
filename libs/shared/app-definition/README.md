@@ -265,7 +265,11 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - skipping a card's rule;
     - accepting any page, or one the reference does not list;
     - `withRegistered` dropping pages;
-    - a home key the schema lacks.
+    - a home key the schema lacks;
+    - the lists, `tasks` and `recent`: a limit past 20 (`HOME_LIST_LIMIT`), a schema whose bounds
+      or branches differ from the validator's, a list that names a queue or sits beside a figure,
+      a type twice or more than 20 (`HOME_RECENT_MAX_TYPES`), and a type the content model lacks
+      passed when the pipeline is given the model.
   - **Across files:**
     - ignoring the package's own actions in queues;
     - skipping whether `app.json` turns a module on;

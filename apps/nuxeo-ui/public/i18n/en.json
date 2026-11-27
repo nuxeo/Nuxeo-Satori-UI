@@ -1943,7 +1943,20 @@
     "loading-figure": "Counting",
     "none": "No home is configured for this app.",
     "open-queue": "Open the queue",
+    "recent": {
+      "changed": "Changed {{date}}",
+      "empty": "No recent records",
+      "loading": "Loading your recent records",
+      "title": "Recently viewed"
+    },
     "refused": "The home could not be read.",
+    "tasks": {
+      "empty": "No open tasks",
+      "loading": "Loading your tasks",
+      "open-page": "Open the tasks page",
+      "since": "Open since {{date}}",
+      "title": "My tasks"
+    },
     "title": "Home",
     "unavailable": "Unavailable"
   },
@@ -3811,6 +3824,8 @@
     }
   },
   "shell": {
+    "admin-menu": "Administration menu",
+    "admin-menu-close": "Close the administration menu",
     "ai": {
       "clear": "Clear chat",
       "close": "Close chat",

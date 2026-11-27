@@ -20,6 +20,11 @@
       "labelKey": "contracts.home.terminated",
       "kpi": { "pageProvider": "contracts_terminated" },
       "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["legal-reviewers"] }
+    },
+    {
+      "id": "recent",
+      "labelKey": "contracts.home.recent",
+      "recent": { "types": ["Contract"], "limit": 5 }
     }
   ]
 }
