@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!--
+  Correspondence (corr:), on a kit's record type: letters may be written on a record of the type,
+  and this is the language they are written in when none is asked for.
+-->
+<xs:schema targetNamespace="http://www.nuxeo.org/ecm/schemas/agentic/correspondence/"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:corr="http://www.nuxeo.org/ecm/schemas/agentic/correspondence/">
+  <!-- A language tag, such as en or es: a template in it is chosen when one exists. -->
+  <xs:element name="language">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:maxLength value="16" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+</xs:schema>
