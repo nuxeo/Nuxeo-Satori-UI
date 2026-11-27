@@ -15,6 +15,7 @@ import static org.nuxeo.agentic.signature.Desk.PDF;
 import static org.nuxeo.agentic.signature.Signatures.text;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.trash.TrashService;
+import org.nuxeo.ecm.core.bulk.BulkService;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Features;
@@ -295,25 +297,32 @@ public class GuardTest {
         assertEquals(Signatures.CANCELLED, text(Desk.stored(repository, caseId), Signatures.SGN_STATUS));
     }
 
-    /** A record in a folder being trashed, whose children the trash reaches later: not sent. */
+    /**
+     * A record in a trashed folder, which the folder's trash has not reached: not sent. That trash
+     * reaches the folder's children in the background, later, so a record filed before it would be
+     * reached at some point during the test, and the check of its folders tested only until then.
+     * Here the record is filed in the folder once its trash has ended: in the trash by its folder only.
+     */
     @Test
-    public void aRecordInATrashedFolderIsNotSent() {
-        Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository, (CoreSession s) -> {
-            s.createDocument(s.createDocumentModel("/desk", "archive", "Folder"));
+    public void aRecordInATrashedFolderIsNotSent() throws InterruptedException {
+        String archive = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
+                (CoreSession s) -> s.createDocument(s.createDocumentModel("/desk", "archive", "Folder")).getId()));
+        Desk.inTransactionAs(repository, ALICE, s -> {
+            Framework.getService(TrashService.class).trashDocument(s.getDocument(new IdRef(archive)));
             return null;
-        }));
+        });
+        assertTrue("the folder's trash did not end within 60 seconds",
+                Framework.getService(BulkService.class).await(Duration.ofSeconds(60)));
         String archived = Desk.inTransaction(() -> org.nuxeo.ecm.core.api.CoreInstance.doPrivileged(repository,
                 (CoreSession s) -> {
-                    DocumentModel doc = s.createDocumentModel("/desk/archive", "onb-old", "TestCase");
+                    DocumentModel doc = s.createDocumentModel(s.getDocument(new IdRef(archive)).getPathAsString(),
+                            "onb-old", "TestCase");
                     doc.setPropertyValue("files:files", (Serializable) List.of(Map.of("file",
                             (Serializable) Desk.pdf("agreement.pdf", PDF))));
                     return s.createDocument(doc).getId();
                 }));
-        Desk.inTransactionAs(repository, ALICE, s -> {
-            Framework.getService(TrashService.class).trashDocument(s.getDocument(new org.nuxeo.ecm.core.api.PathRef(
-                    "/desk/archive")));
-            return null;
-        });
+        assertTrue(Desk.stored(repository, archive).isTrashed());
+        assertFalse(Desk.stored(repository, archived).isTrashed());
         refused(409, ALICE, s -> s.createDocument(Desk.requestModel(s, archived, "agreement.pdf", Desk.ONE_SIGNER)));
     }
 
