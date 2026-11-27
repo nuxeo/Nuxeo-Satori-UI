@@ -1570,7 +1570,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   for `browse.html`, which is an input, and not for `browse.scss`, which is not. The template the
   test now reads was added to the inputs.
 
-- **For proposals, carrying and the approval, 29 guards**, broken one at a time by a script kept
+- **For proposals, carrying and the approval, 41 guards**, broken one at a time by a script kept
   outside the repository that runs the specs meant to catch each and restores the file, each seen
   turning them red:
   - **Proposals:** an accepted verdict writing the rule, and only on the rule proposed now; the
@@ -1591,8 +1591,44 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   The first round, of 30, found two that left the specs green. One, a verdict on another rule than
   the proposal's, has its test now. The other, a follower proposal counted as waiting in
   `holdDecisions`, was a second layer behind `readDecisions`, which takes no decision of one, so it
-  could turn nothing red alone: it was removed, and the guard in front of it is among the 29.
+  could turn nothing red alone: it was removed. The second round, of 41, after the reviews' fixes
+  (below), found two more: a refused file's record of what it carried shown in the report, and an
+  offered proposal counted as confirmed whatever it was decided. Each has its test now, and the
+  report also says what an earlier run of the same build offers again, which it had left out.
+  The 41 add to those above: the report held to the converter; the checks held to the decisions
+  the report records; names of a letter or a digit; the earlier build's own shared identities;
+  offers kept, and what was carried kept, on a run of the same build; a batch carrying by name only
+  from a file of identities; and the controls picking what they break.
 
+- **Two independent reviews of this slice**, by reviewers given the diff and what it is for, one
+  for correctness and one adversarial, asking whether a conversion nobody approved, or a proposal
+  nobody accepted, could reach readiness.
+  - **The adversarial review** found one hole, reproduced with the commands: relabelling the
+    proposals in `report.json`, as `converted` say, took every proposal off the verdict, and with a
+    hand-written `approval.json` every line that needs a person went too. Fixed: readiness converts
+    the package again with the allow-list and the decisions the report records, and names a report
+    that says otherwise of any construct (`reportDiffers`), which closes the same door for a
+    reported item relabelled to hide it. It found weaknesses too. Fixed, each with a test: a name,
+    a decision or a reason of characters that show nothing, such as a zero-width space, was taken
+    as a name; an identity the earlier build held twice still carried when only one of them was
+    decided, which its file now names (`shared`), and decisions of one identity are counted, said
+    something or not. Explained, under **Not done yet**: a decision rests on its entry and its
+    construct, so a layout host whose script changes keeps the acceptance, though the script then
+    stands in the way as customer code; an accepted rule is written on what its condition guards in
+    the new build; and `approval.json` is a file anyone who can write the conversion can write.
+  - **The correctness review** found, reproduced: a batch `--from` a run of the earlier format
+    stopped every package of another build of the same name, now carried by name only from a file
+    of the second format; check 5 failed a conversion made before its decisions were filled in,
+    where the guide says to look at a run with `check`, now the checks hold the conversion to the
+    decisions its report records and readiness holds those to `decisions.json`; an offer for
+    re-confirmation was lost on a second run of the same build, and what had been carried with it,
+    now both kept; the count of proposals waiting took in what a proposal guards, which no one can
+    decide, and read "1 proposals wait"; and the migration document said an agent's run could not
+    approve, though the reviewer approved with a program driving a terminal, as the README said it
+    could. Suspected, and fixed: an offered proposal counted as confirmed whatever it was decided;
+    a refused file's record of a carry shown in the report; and `drop-accepted-proposal` claiming
+    check 5 where an accepted proposal guards only an action, which is check 7's, so the control
+    now picks a field and a test holds the action to check 7.
 - **End to end, in a shell,** on the made-up packages, 27 November 2026: `migrate` of Acme-Claims
   with and without M2's corpus, with and without the allow-list, its decisions filled in, the
   proposals accepted, and run again with `--from`, which wrote each accepted rule and left nothing

@@ -720,7 +720,9 @@ export function reportSummary(summary: MigrationSummary): string {
   if (carried !== null) {
     lines.push(
       '',
-      `Carried from an earlier build, ${oneLine(carried.from.name)} ${oneLine(carried.from.version)}, bundle ${oneLine(carried.from.bundle.slice(0, 12))}, by each construct's identity: ${carried.carried} carried, ${carried.reconfirm.length} offered for re-confirmation, ${carried.dropped.length} dropped`,
+      carried.from === null
+        ? `Offered for re-confirmation, by an earlier run of this build: ${carried.reconfirm.length}`
+        : `Carried from an earlier build, ${oneLine(carried.from.name)} ${oneLine(carried.from.version)}, bundle ${oneLine(carried.from.bundle.slice(0, 12))}, by each construct's identity: ${carried.carried} carried, ${carried.reconfirm.length} offered for re-confirmation, ${carried.dropped.length} dropped`,
     );
     for (const item of carried.reconfirm)
       lines.push(

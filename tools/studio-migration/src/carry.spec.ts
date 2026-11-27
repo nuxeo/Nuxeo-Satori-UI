@@ -446,3 +446,63 @@ describe('carrying, as the reviews found it', () => {
     expect(held.verdicts.size).toBe(0);
   });
 });
+
+describe('what the report says it carried', () => {
+  it('counts an offered proposal confirmed only once accepted or rejected by someone named, for a reason', () => {
+    const input = prepare();
+    const earlier = filled(input);
+    // The proposal decided on an earlier reason: offered again, beside a blank decision.
+    const changed = {
+      ...earlier,
+      decisions: earlier.decisions.map((item) =>
+        item.id === `condition:${VIEW}#2` ? { ...item, note: 'An earlier reason' } : item,
+      ),
+    };
+    const offered = carriedTo(input, changed);
+    expect(offered.file.decisions.find((item) => item.id === `condition:${VIEW}#2`)).toMatchObject({
+      decision: '',
+      earlier: { decision: 'accept', changed: ['reason'] },
+    });
+    const confirm = (reason: string) => ({
+      ...offered.input,
+      conversion: {
+        ...offered.input.conversion,
+        decisions: {
+          ...offered.file,
+          decisions: offered.file.decisions.map((item) =>
+            item.id === `condition:${VIEW}#2`
+              ? { ...item, owner: 'Dana Reviewer', decision: 'accept', reason }
+              : item,
+          ),
+        },
+      },
+    });
+    const confirmedOf = (reason: string) =>
+      summarise(confirm(reason)).carried?.reconfirm.find(
+        (item) => item.id === `condition:${VIEW}#2`,
+      )?.confirmed;
+    // The same build: its offers are said beside the entry, and the report finds them there.
+    expect(confirmedOf('')).toBe(false);
+    expect(confirmedOf('Checked again')).toBe(true);
+  });
+
+  it('says nothing was carried from a file it takes none of', () => {
+    const later = prepare(NEW_BUILD);
+    const carried = carriedTo(later, filled(prepare()));
+    expect(summarise(carried.input).carried).not.toBeNull();
+    // The same file, held to another build than its own: none of it is taken, nor what it carried.
+    const other = {
+      ...carried.input,
+      conversion: {
+        ...carried.input.conversion,
+        decisions: {
+          ...carried.file,
+          package: { ...carried.file.package, bundle: 'f'.repeat(64) },
+        },
+      },
+    };
+    const summary = summarise(other);
+    expect(summary.decisionFindings[0]).toMatch(/so none of it is taken$/);
+    expect(summary.carried).toBeNull();
+  });
+});

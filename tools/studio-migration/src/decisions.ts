@@ -187,6 +187,8 @@ export interface HeldDecisions {
   readonly unsigned: number;
   /** What the file says it carried from an earlier build, when it was written so. */
   readonly carriedFrom?: CarriedFrom;
+  /** True when none of the file is taken: of another format or build, or with no list. */
+  readonly refused?: true;
 }
 
 /** What a file of decisions gives for a report, before anything is counted. */
@@ -265,6 +267,7 @@ export function holdDecisions(
     waiting,
     unsigned,
     ...(carriedFrom ? { carriedFrom } : {}),
+    ...(reading.refused ? { refused: true as const } : {}),
   };
 }
 

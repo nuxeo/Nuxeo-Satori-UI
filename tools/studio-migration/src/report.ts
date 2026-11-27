@@ -172,7 +172,8 @@ export interface MigrationSummary {
   readonly proposed: readonly ProposalItem[];
   /** For a `decisions.json` carried from an earlier build: what it carried, offered and dropped. */
   readonly carried: {
-    readonly from: CarriedFrom['package'];
+    /** The earlier build carried from, or `null` for offers of an earlier run of this build. */
+    readonly from: CarriedFrom['package'] | null;
     readonly carried: number;
     readonly reconfirm: readonly ReconfirmItem[];
     readonly dropped: CarriedFrom['dropped'];
@@ -280,14 +281,18 @@ export function summarise(input: HarnessInput): MigrationSummary {
       };
     });
 
-  const carried = held.carriedFrom
-    ? {
-        from: held.carriedFrom.package,
-        carried: held.carriedFrom.carried.length,
-        reconfirm: reconfirmItems(conversion, held, first),
-        dropped: held.carriedFrom.dropped,
-      }
-    : null;
+  // What was carried from an earlier build, and what any earlier run offers again, of a file
+  // taken at all.
+  const reconfirm = held.refused ? [] : reconfirmItems(conversion, held, first);
+  const carried =
+    held.carriedFrom || reconfirm.length > 0
+      ? {
+          from: held.carriedFrom?.package ?? null,
+          carried: held.carriedFrom?.carried.length ?? 0,
+          reconfirm,
+          dropped: held.carriedFrom?.dropped ?? [],
+        }
+      : null;
   const approval = holdApproval(conversion, build);
   const byFile = findingsByFile(
     result.checks,
