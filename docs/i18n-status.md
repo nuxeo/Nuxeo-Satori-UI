@@ -44,6 +44,15 @@ Arabic and Hebrew.
 | Swedish  | `sv` | —         | `sv`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2)                                                                                       |
 | Arabic   | `ar` | —         | `ar`       | **target, not yet requested** — a Crowdin target since 30 October, no approvals, so held out of the pull list (item 2). RTL ready ([#523](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/523)); refused until the catalogue lands (NXSAT-733), so it runs as `en` |
 | Hebrew   | `he` | —         | `he`       | **target, not yet requested** — as Arabic, including RTL                                                                         |
+| Danish   | `da` | —         | `da`       | **registered, not a target** — added 27 November 2026 for the business apps' phase 7; Angular locale data only, not yet a Crowdin target, so not requested |
+| Finnish  | `fi` | —         | `fi`       | **registered, not a target** — as Danish |
+| Norwegian Bokmål | `nb` | — | `nb` or `no` | **registered, not a target** — as Danish. The project may target "Norwegian Bokmal" (`nb`) or "Norwegian" (`no`), one of the two; `crowdin-conf.yml` writes either as `nb.json` |
+
+`npm run i18n:coverage` reports each language's coverage in the repository, for the app and for
+every business app's labels, which became Crowdin sources on 27 November 2026
+(`business-apps/packages/*/bundle/agentic-ui-config/labels/en.json`, in `crowdin-kits.yml`, pulled by `crowdin-pull-kits.yaml` into a pull request of its own, off until a kit string is approved); the Crowdin Status workflow
+prints it under Crowdin's own progress. What a Crowdin manager does to add a language is in the
+business apps' [administrator's guide](business-apps/administrator-guide.md#languages).
 
 Dropped: **Thai** (`th`) and **Chinese Simplified** (`zh`), both at 99% approved when removed.
 Their translations remain in Crowdin, so re-adding either is a pull rather than new work.

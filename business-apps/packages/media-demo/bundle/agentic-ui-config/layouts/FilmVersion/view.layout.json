@@ -1,0 +1,55 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "rights-ended",
+      "tone": "negative",
+      "labelKey": "media.banner.version.rightsEnded",
+      "visibleWhen": { "type": "app.rules.datePassed", "parameters": [{ "field": "dc:expired" }] }
+    }
+  ],
+  "cards": [
+    {
+      "id": "version",
+      "labelKey": "media.card.version.version",
+      "fields": [
+        { "field": "fver:film", "widget": "document-link", "parameters": { "types": ["Film"] } },
+        "fver:language"
+      ]
+    },
+    {
+      "id": "rights",
+      "labelKey": "media.card.version.rights",
+      "fields": [
+        { "field": "fver:territories", "widget": "chips" },
+        { "field": "fver:channels", "widget": "chips" },
+        { "field": "dc:expired", "widget": "date", "labelKey": "media.column.rightsEnd" }
+      ]
+    },
+    {
+      "id": "files",
+      "labelKey": "media.card.version.files",
+      "span": 2,
+      "fields": [{ "field": "files:files", "widget": "file-list" }]
+    },
+    {
+      "id": "deliveries",
+      "labelKey": "media.card.version.deliveries",
+      "span": 2,
+      "related": {
+        "pageProvider": "media_version_deliveries",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          { "field": "mdlv:deliveredAt", "widget": "date" },
+          "mdlv:distributor",
+          "mdlv:territory",
+          { "field": "mdlv:deliveredBy", "widget": "user" }
+        ],
+        "sort": [{ "field": "mdlv:deliveredAt", "order": "desc" }],
+        "pageSize": 20
+      }
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 # nuxeo-agentic-assets: an asset's rights and its share links, enforced on the server
 
 The assets module's server add-on ([development plan](../docs/business-apps/development-plan.md),
-phase 5, "The rights and sharing add-on"), version 0.3.0: the rights, for pictures and videos, and
-share links. A Maven
+phase 5, "The rights and sharing add-on"), version 0.4.0: the rights, for pictures and videos,
+share links, and, for phase 9's media rights, territories, release windows, localised versions and
+delivery packages. A Maven
 module beside `nuxeo-agentic-core`, with its own Marketplace package, `nuxeo-agentic-assets`.
 Publishing to channels and outside users are not built.
 
@@ -49,6 +50,14 @@ anywhere: it was built, tested, and checked against the server's own jars, read 
   items only, watermarked on the server, while the link is neither revoked nor past its day and the
   asset's rights still allow each one. Every download is logged, with the time, the link and the
   item. The token is 256 bits; the server keeps its SHA-256 only.
+- **Media rights** (below, "Media rights: territories, windows and deliveries"), since 0.4.0: a
+  policy may read where an asset may be delivered and its release windows, per territory and
+  channel, and a localised version may read its film's windows. A use is then refused outside them,
+  at the same endpoints and in the same way as an ended right: `territory-not-covered` and
+  `outside-window`. A `MediaDelivery`, a distributor's delivery of a localised version to a
+  territory, is filed as a document; the server chooses its files by the version's policy, and
+  refuses it whole when any is outside its window or territory. A policy that names neither is
+  decided as before.
 
 ## What it refuses, and how
 
@@ -68,15 +77,17 @@ For a document of a type a policy covers, each download is first named as a use:
 
 Then decided, the first that applies winning:
 
-| In this order                                                 | Answer | Reason code           |
-| ------------------------------------------------------------- | ------ | --------------------- |
-| The policy has no rights end or no channels: it is broken     | 403    | `policy-error`        |
-| The policy does not list the use                              | 403    | `not-cleared`         |
-| The policy marks the use a preview                            | served | `preview`             |
-| The rights fields cannot be read, or are not a date and text  | 403    | `policy-error`        |
-| The rights end day has passed: from the day after it, in UTC  | 403    | `rights-ended`        |
-| The asset's channels do not hold the channel covering the use | 403    | `channel-not-covered` |
-| Otherwise                                                     | served | `cleared`             |
+| In this order                                                                        | Answer | Reason code             |
+| ------------------------------------------------------------------------------------ | ------ | ----------------------- |
+| The policy has no rights end or no channels: it is broken                            | 403    | `policy-error`          |
+| The policy does not list the use                                                     | 403    | `not-cleared`           |
+| The policy marks the use a preview                                                   | served | `preview`               |
+| The rights fields cannot be read, or are not a date and text                         | 403    | `policy-error`          |
+| The rights end day has passed: from the day after it, in UTC                         | 403    | `rights-ended`          |
+| The asset's channels do not hold the channel covering the use                        | 403    | `channel-not-covered`   |
+| Under a policy with territories: none the asset may go to                            | 403    | `territory-not-covered` |
+| Under a policy with territories: no window open for the use's channel in any of them | 403    | `outside-window`        |
+| Otherwise                                                                            | served | `cleared`               |
 
 - **A video's files.** A transcoded video at its place, `vid:transcodedVideos/<n>/content`, is the
   rendition of the name at `vid:transcodedVideos/<n>/name`, the name the platform's video rendition
@@ -228,7 +239,9 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
 - **Publishing to channels and outside-user invitations** are the rest of the plan's rights and
   sharing add-on: not built. Share links are (below), with what they do not cover listed there.
 - **Regions, embargoes and the asset's lifecycle state,** which the prototype also weighs, are not
-  read: the kit's stand-in model has regions as free text and no asset lifecycle.
+  read for the brand assets kit: its stand-in model has regions as free text and no asset
+  lifecycle. Territories and release windows are read for a policy that names them, since 0.4.0
+  (below, "Media rights"); a policy that does not is decided as before.
 
 ## The policy
 
@@ -286,6 +299,146 @@ blob the policy lists, and a video's storyboard, `"use": "storyboard"`, with no 
 `channel` that covers it when there is one, and `rightsEnd` when that is the reason; and
 `otherwise`, the answer for any use not listed. The client reads it in
 `libs/shared/nuxeo-client/src/lib/utils/asset-rights.ts`, and asks for it only after a 403.
+
+Under a policy with territories, two more fields follow `channels`: `territories`, and `windows`,
+each `{ territory, channel, from, until }`; both `null` where `channels` is, and `windows` `null`
+too when the policy reads them from another document, such as a localised version's film, which
+the asset's reader may not read. A download names no territory, so the enricher's decisions are a
+download's. **The client does not translate `territory-not-covered` and `outside-window` yet:** it
+reads a use with a reason it does not know as not listed, so an asset page of a picture or a video
+under such a policy would say "not cleared". No kit has one: the media kit's versions are records
+with attachments.
+
+## Media rights: territories, windows and deliveries
+
+Phase 9's "Media rights and distribution: territories, release windows, localised versions, delivery
+packages, watermarks" ([development plan](../docs/business-apps/development-plan.md)), and its demo
+step 1, "A localised film delivered to a distributor inside its window, and refused outside it".
+Since 0.4.0. The media kit, [`media-demo`](../business-apps/packages/media-demo/README.md), is its
+app. Built against decision B's recommendation, in this add-on, since media rights are an asset's
+rights; decision 3 is not touched: a delivery is a document filed, which a listener decides, with no
+Automation operation and no button.
+
+### The policy
+
+```xml
+<policy type="FilmVersion">
+  <rightsEnd xpath="dc:expired" />
+  <channels xpath="fver:channels" />
+  <territories xpath="fver:territories" />
+  <windows xpath="film:windows" document="fver:film" type="Film" />
+  <original xpath="files:files/0/file" channel="SVOD" />
+  <blob xpath="files:files/1/file" channel="SVOD" />
+  <blob xpath="files:files/2/file" channel="Marketing" />
+  <rendition name="thumbnail" preview="true" />
+  <delivery>
+    <original />
+    <blob xpath="files:files/1/file" />
+    <blob xpath="files:files/2/file" />
+  </delivery>
+</policy>
+```
+
+- **`territories`** names a text or list property: where the asset may be delivered, matched as
+  written after trimming, as channels are.
+- **`windows`** names a complex list of release windows, each a `territory`, a `channel`, a `from`
+  day and an `until` day, in UTC, both included; a window with no `until` stays open. A window with
+  no territory, channel or first day, or one that ends before it opens, is a mistake: the rights
+  cannot be read, and every use that needs them is refused, `policy-error`.
+- **`windows document`** names a property of the asset holding the id of the document its windows
+  are read from, and **`windows type`** the type that document must be: a localised version reads
+  its film's. A `document` with no `type` is broken, so that no document of another type can lend
+  its windows. The film is read with a privileged session, as a version's live document is, since
+  the version's reader may not read the film. A document that is not there, not live, in the trash
+  or of another type refuses, `policy-error`; the type must match exactly, so a subtype of `Film`
+  is refused too.
+- **A localised version is an asset of its own,** of its own type, with its own rights: its own
+  territories, channels and rights end, and its own files. Its windows are its film's when its
+  policy says so, the title's release schedule for each of its language versions.
+- **One of `territories` and `windows` without the other** is broken: every use of the type is
+  refused. A policy with neither is decided as before 0.4.0.
+- **`delivery`** lists the files a delivery package carries, each named as its rule names it, an
+  `<original />`, a `<view name>` or a `<blob xpath>`, and decided by that rule. A package in a
+  policy with no territories, an empty one, one that names a use the policy does not clear for a
+  channel, a preview, a rendition or the storyboard, or gives an entry a channel, `preview` or the
+  original an xpath, refuses every delivery of the type; the policy's downloads are as they were.
+
+### What it decides
+
+After the rights end and the channel, as for any asset, under a policy with territories:
+
+| A download, which names no territory                                  | A delivery, to a territory                                | Code                    |
+| --------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------- |
+| The asset may be delivered nowhere                                    | The asset may not be delivered to that territory          | `territory-not-covered` |
+| No window for the use's channel is open in any territory it may go to | No window for the use's channel is open in that territory | `outside-window`        |
+
+- **The same endpoints:** the download permission, so `/nxfile/`, `@blob`, `@rendition`, `@preview`
+  and `Blob.BulkDownload`; the five `Video.*` operations; and share links, at their making and at
+  every request, since each decides through the same decision. A window that closes refuses the
+  next download and the next request through a link, as a rights end does.
+- **A preview** is served whatever the windows, as whatever the rights end.
+
+### A delivery package
+
+A `MediaDelivery` (`OSGI-INF/media-delivery-types.xml`, schema `mdlv`) is filed wherever its filer
+may add a document, over the REST API, naming the localised version by its id, the distributor and
+the territory:
+
+```json
+{
+  "entity-type": "document",
+  "type": "MediaDelivery",
+  "name": "fr",
+  "properties": {
+    "mdlv:version": "<the version's id>",
+    "mdlv:distributor": "Acme Distribution France",
+    "mdlv:territory": "FR"
+  }
+}
+```
+
+`DeliveryListener`, synchronous, before the document is created, in the filer's transaction:
+
+1. the version is read with the filer's own session: one they may not read, or that is not there,
+   is refused alike, 403 `version`; a proxy, a version of a document or one in the trash, 409;
+2. the version's policy chooses the files, its `<delivery>`; no policy, no package or a broken one
+   refuses, `not-cleared` or `policy-error`;
+3. each file is decided for the delivery's territory, by its rule's channel, as above, and must be
+   on the version with a digest, else `no-such-file`;
+4. **refused whole** when any file is refused: 403, its code the first refused file's reason, its
+   message each refused file's, such as `The delivery to BE is refused whole: blob files:files/2/file
+outside-window for Marketing.`, and nothing is made;
+5. otherwise the server writes the record, over anything the filer wrote there: the version, the
+   distributor and the territory, trimmed; each file, its use, name, channel, file name, type,
+   length and digest; when, in UTC, and by whom. A blank title becomes `<distributor>, <territory>`.
+
+**Kept:** a change to the record's `mdlv` properties is refused, 403 `kept`, whoever asks; its
+title and description are Nuxeo's to allow. So are a copy, an import, a check-in and a restore; and
+a move, a trash and a deletion, but an administrator's. A folder holding a delivery is not removed,
+moved, trashed or copied but by an administrator either: the platform does those to a folder's
+documents with no event of their own, so the listener asks, with the system's rights, whether a
+delivery is below the folder. `MediaDelivery` has no Versionable facet, so a check-in and a
+restore, which the listener refuses, are not reached in the tests.
+
+### What deliveries do not do
+
+- **Hand the files over.** A delivery is the record of what was delivered: which files, by their
+  digests, to whom, where and when. It moves no byte and serves none: it holds no file, so it opens
+  no new path to an asset's bytes.
+- **Refuse the files to whoever filed a refused delivery.** A delivery is decided for its
+  territory; a download names none, and is served while a window for its channel is open in any
+  territory the version may go to. So a delivery to Germany refused before SVOD opens there leaves
+  the version's master downloadable, at the download endpoints, by anyone who may read the version,
+  while its SVOD window is open in Switzerland. Who may read a version is its permissions' business.
+- **Make a share link.** Share links (below) serve watermarked pictures only, JPEG or PNG, and a
+  film's master and subtitles are neither. A link bound to a delivery's territory and window, and
+  serving a video watermarked, is not built; the download log, revocation and end date would be the
+  links' own if it were.
+- **Bound a version by its film's own rights end or channels.** A version's rights are its own; its
+  film gives its windows only.
+- **Hear what writes documents without events,** such as server code or an importer that bypasses
+  them: what the listener does not hear, it does not decide.
+- **Translate the new codes in the client** (above, "The `assetRights` enricher").
 
 ## Share links
 
@@ -486,33 +639,40 @@ mvn -pl nuxeo-agentic-assets -am package
 ```
 
 It runs the module's tests and writes the bundle and the Marketplace package,
-`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.3.0.zip`. `build-marketplace.yml` builds it on
-every pull request it runs for, without uploading or publishing it. The tests but one need no Nuxeo
+`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.4.0.zip`. `build-marketplace.yml` builds it on
+every pull request it runs for, without uploading or publishing it. The tests but two need no Nuxeo
 runtime: documents are proxies that answer only what the code reads. `VideoRightsTest` runs in the
 Nuxeo test framework, as `nuxeo-agentic-documents`'s tests do: a runtime and a repository on H2,
 the platform's Video type and `Video.*` operations, its download service evaluating the contributed
 permission through Nashorn, and the kit's own video policy, which the build copies from the kit; only
-the video tools service, which runs ffmpeg, is a fake.
+the video tools service, which runs ffmpeg, is a fake. `MediaDeliveryTest` runs there too, with the
+delivery types and listener, the download permission, and the media kit's own rights policy and
+schemas, which the build copies from the kit (`kit-media-policy`, `kit-media-schemas`), under the
+kit's types, which `KitMediaModelTest` holds to the kit's model file.
 
-| Test                           | What it holds                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                                                                                                                                                                                                                                                                          |
-| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                                                                                                                                                                                                                                                                        |
-| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                                                                                                                                                                                                                                                             |
-| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                                                                                                                                                             |
-| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                                                                                                                                                |
-| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                                                                                                                                                             |
-| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided, its transcoded videos by name at their places, every storyboard frame a preview                                                                                                                                                                                                                       |
-| `VideoPolicyTest`              | A video's files in their canonical forms only; `<storyboard>` through XMap, with a channel or as a preview; a `<blob>` at a video's place left out and said; what the enricher writes of them                                                                                                                                                                                        |
-| `VideoRightsTest`              | In a Nuxeo runtime: a transcoded video decided by its conversion's name at every place and through `/nxfile/`'s form, as by name; every one of twelve storyboard frames by the one rule; each `Video.*` operation refused or run as a download of its file, with every parameter handed on, a stored file given as its input decided for its holders, a version by its live document |
-| `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations; the five video operations, each the platform's id, parameters and methods                                                      |
-| `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                                                                                                                                                  |
-| `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                                                                                                                                                             |
-| `ShareLinkComponentTest`       | Making a link: the permission and the sharing group, items, day, rights now, each item's digest and SHA-256; opening it: every condition above, each refusal by its reason, the bytes marked and logged; one turn per link                                                                                                                                                           |
-| `WatermarkerTest`              | The mark across the whole picture, light and dark, the label whole on a thumbnail; nothing but the pixels kept; formats, bytes, pixels, sides, tiles and the budget refused from the header                                                                                                                                                                                          |
-| `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                                                                                                                                                    |
-| `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                                                                                                                                                          |
-| `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                                                                                                                                                    |
+| Test                           | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `KitVideoPolicyTest`           | The brand kit's video policy, read from its file: a video's downloads decided, its transcoded videos by name at their places, every storyboard frame a preview                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `VideoPolicyTest`              | A video's files in their canonical forms only; `<storyboard>` through XMap, with a channel or as a preview; a `<blob>` at a video's place left out and said; what the enricher writes of them                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `VideoRightsTest`              | In a Nuxeo runtime: a transcoded video decided by its conversion's name at every place and through `/nxfile/`'s form, as by name; every one of twelve storyboard frames by the one rule; each `Video.*` operation refused or run as a download of its file, with every parameter handed on, a stored file given as its input decided for its holders, a version by its live document                                                                                                                                                                                                                              |
+| `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations; the five video operations, each the platform's id, parameters and methods; the delivery listener synchronous on every event that could make or change a delivery, and `MediaDelivery` with no facet and its fields                                                                                                                                          |
+| `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ShareLinkComponentTest`       | Making a link: the permission and the sharing group, items, day, rights now, each item's digest and SHA-256; opening it: every condition above, each refusal by its reason, the bytes marked and logged; one turn per link                                                                                                                                                                                                                                                                                                                                                                                        |
+| `WatermarkerTest`              | The mark across the whole picture, light and dark, the label whole on a thumbnail; nothing but the pixels kept; formats, bytes, pixels, sides, tiles and the budget refused from the header                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `TerritoriesPolicyTest`        | Territories, windows, a film's windows and a delivery package read through XMap; each mistake a refusal; a window's parts and days; the decision's order for a delivery and a download; the media kit's own file                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `TerritoriesEnricherTest`      | What the enricher writes under a policy with territories: the territories, the asset's own windows, a film's windows left out                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `KitMediaModelTest`            | The test runtime's media model is the kit's: its types, their parents and schemas, and the schema files as copied                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `MediaDeliveryTest`            | In a Nuxeo runtime, on the media kit's policy and schemas: a localised version delivered inside its window and refused outside it, before it opens and after it closes, its first and last days included; outside its territory; by its own rights, its rights end and its channels; a package refused whole for one file, or a file missing; the same windows at the download endpoints; the film's windows read for a reader who may not read the film, a film missing or in the trash refusing; the record the server writes over the filer's; the record kept; the filer held to a live version they may read |
 
 Every guard was seen failing: each of 28 breakages, one at a time (a use not listed let through,
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
@@ -550,15 +710,35 @@ request. **What the tests cannot reach:** the directories, the repository, the u
 servlet container and Automation are fakes here, so the operations' statuses, the directories'
 tables and the servlet's mapping have not run on a server.
 
+**The media rights' guards were seen failing too,** on 26 November 2026: each of 31 breakages, one
+at a time, turned the tests red, and the build unbroken was green. A delivery's territory or window
+not checked; a download's window not checked, or a download held to no territory; a window's last
+day left out, or one with no first day skipped; a package delivered in part, or with a file missing;
+a version's windows read from itself and not its film; a film in the trash still read, read with
+the reader's own session, or of another type; a proxy delivered, or the version read with the
+system's rights; the filer's own `deliveredBy` kept; a delivery's record changed, deleted, moved or
+copied by its filer; a folder holding one not looked into; a refusal not marked for rollback; an
+import let through; a territory with no window, windows from a document of no type, a preview, or
+a rendition in a package taken for sound; a film's windows written by the enricher; the listener
+deaf to imports; the test model drifted from the kit's; the kit's key art cleared by SVOD; and a
+share link's item served once its window closed. Three of the first run's breakages did not count,
+two that did not compile and one that no test caught, a preview in a package; the test was added,
+and the three made again went red; so did three of the review's fixes' that first did not compile.
+The script that broke them is not in the repository; the list is in the pull request. **What the
+tests cannot reach:** the listener and the privileged reads run on H2 in `MediaDeliveryTest`, not
+on the server's database; a check-in and a restore, since `MediaDelivery` is not versionable; and
+the REST API's answer to a refused delivery, its status and message, which has not run on a server.
+
 The version is `assets.package.version` in `pom.xml`, which `package.xml` takes, and the manifest's
 `Bundle-Version` repeats; `BundleTest` refuses a build where they differ.
 
 ## Installing it on a local Nuxeo
 
-**Not run for 0.2.0 or 0.3.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read
+**Not run for 0.2.0, 0.3.0 or 0.4.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read
 only, on 25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and
-`brand-assets-demo-0.2.0` started: this upgrades both, to the add-on 0.3.0 and the kit 0.2.4, which
-depends on it, in one restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
+`brand-assets-demo-0.2.0` started: this upgrades both, to the add-on 0.4.0 and the kit 0.2.4, which
+depends on it, from 0.3.0 on, in one restart. The media kit, `media-demo` 0.1.0, which depends on
+0.4.0, installs the same way, with its own seed ([its README](../business-apps/packages/media-demo/README.md)). `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
 process, so a one-off script installs them when the container next starts, as the kits' READMEs do.
 **Not before the share links' security review:** the upgrade opens `/nuxeo/agentic-share/` to
 anyone who can reach the server.
@@ -577,7 +757,7 @@ npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 package's later version upgrades the one installed:
 
 ```bash
-docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.3.0.zip nuxeo:/tmp/
+docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.4.0.zip nuxeo:/tmp/
 ```
 
 ```bash
@@ -585,7 +765,7 @@ docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.4.
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.3.0.zip /tmp/brand-assets-demo-0.2.4.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.4.0.zip /tmp/brand-assets-demo-0.2.4.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
@@ -595,7 +775,7 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
 **3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
 
 - `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed, at
-  0.3.0 and 0.2.4;
+  0.4.0 and 0.2.4;
 - the server log's `Component Loading Status` has nothing pending or missing, and names
   `org.nuxeo.agentic.assets.rights`, `org.nuxeo.agentic.assets.rights.download`,
   `org.nuxeo.agentic.assets.rights.enrichers`, `org.nuxeo.agentic.assets.share.directories`,
@@ -749,3 +929,42 @@ condition for phase 5 being done:
     whose digest is MD5 does not decide alone; whether a view's file is stable enough on the release
     it runs on for a link not to end by itself, and whether ending it when a picture is replaced is
     what customers want.
+
+**Media rights,** since 0.4.0, add these. The review is deferred until the app is finished, as
+every review is ([security-reviews.md](../docs/business-apps/security-reviews.md)):
+
+25. **The decision's order and its two codes:** that a territory and a window are decided after
+    the rights end and the channel, and only under a policy that names both territories and
+    windows, a policy naming one of them refusing every use. Whether a download, which names no
+    territory, should be served while a window for its channel is open in any territory the asset
+    may be delivered to, as it is, and refused before every window opens, as it is; and whether a
+    delivery refused for one territory should leave the files downloadable while another
+    territory's window is open, as it does.
+26. **A film's windows read with the system's rights:** that the document a version names for its
+    windows is held to the policy's `type`, there, live and not in the trash; that what the
+    enricher writes of the version, its decisions, which depend on that document's windows, tells
+    a reader of the version nothing they should not know of a film they may not read; and whether
+    a version must also be bound by its film's own rights end or channels, which it is not.
+27. **Who may write the territories and the windows:** the trust model of item 4, for versions,
+    their film reference, and films: who may widen where and when a version may be delivered.
+28. **The delivery's way in:** that a `MediaDelivery` is only ever made through the synchronous
+    listener on `aboutToCreate`, in the filer's transaction, which it marks for rollback when it
+    refuses, as the documents and records add-ons' listeners do; that an import, a copy, a folder
+    copied whole, a check-in and a restore are each refused on the release the server runs; and
+    which server code, importers or bulk actions, such as one that sets a document's trash flag
+    directly, write documents without the events it hears.
+29. **Who may file a delivery:** whoever may add a document to a folder and read the version, with
+    their own session. Whether that is enough for a record that moves no byte, whether an
+    integration acting on a delivery's record must check who filed it, and whether a permission of
+    its own is wanted.
+30. **The record kept:** that its `mdlv` properties, a copy, an import, a check-in and a restore
+    are refused, a move, a trash and a deletion are an administrator's alone, and a folder holding
+    a delivery is removed, moved, trashed or copied by an administrator alone, the folder's subtree
+    looked into with the system's rights at each such event; whether that query sees a folder's
+    copy, not yet committed, on the database the server runs, as it does on H2; and what it costs
+    there, once for each folder a person removes, moves, trashes or copies.
+31. **The refusal's message:** that it names each refused file by its use and place, its reason
+    and its channel, and the territory, and names the version only by the id the filer gave; and
+    whether the REST API answers it as written, status and message, on the release the server runs.
+32. **The clock:** windows are days in UTC, decided by the server's clock, as rights ends and share
+    links' last days are (item 19).

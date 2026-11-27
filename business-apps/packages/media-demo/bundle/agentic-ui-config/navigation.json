@@ -1,0 +1,8 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "films", "icon": "document", "queue": "films" },
+    { "id": "deliveries", "icon": "history", "queue": "deliveries" }
+  ]
+}
