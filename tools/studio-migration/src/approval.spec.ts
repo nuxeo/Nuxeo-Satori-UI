@@ -229,9 +229,11 @@ describe('approving the report', () => {
       );
       // No name, or a blank one.
       expect(run(['approve', 'acme.zip', conversion], { terminal: right }).code).toBe(2);
-      const blank = run(['approve', 'acme.zip', conversion, '--by', '   '], { terminal: right });
-      expect(blank.code).toBe(1);
-      expect(blank.err).toMatch(/^an approval names the person who approves, in --by/);
+      for (const name of ['   ', '\u200b \u200b']) {
+        const blank = run(['approve', 'acme.zip', conversion, '--by', name], { terminal: right });
+        expect(blank.code).toBe(1);
+        expect(blank.err).toMatch(/^an approval names the person who approves, in --by/);
+      }
       // The digest not typed back, or nothing typed.
       for (const typed of ['00000000', null, ''])
         expect(
@@ -351,9 +353,10 @@ describe('each deliberate breakage of the approval voids it', () => {
       expect(held({ ...approval, format: 'something else' })).toEqual([
         'approval.json is not a studio-migration-approval/1 file, so it approves nothing',
       ]);
-      expect(held({ ...approval, approvedBy: ' ' })).toEqual([
-        'approval.json names no one who approved it, or no time, so it approves nothing',
-      ]);
+      for (const approvedBy of [' ', '\u200b'])
+        expect(held({ ...approval, approvedBy })).toEqual([
+          'approval.json names no one who approved it, or no time, so it approves nothing',
+        ]);
       expect(held({ ...approval, approvedAt: 'yesterday' })).toEqual([
         'approval.json names no one who approved it, or no time, so it approves nothing',
       ]);

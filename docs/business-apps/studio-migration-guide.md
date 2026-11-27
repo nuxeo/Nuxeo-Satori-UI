@@ -88,13 +88,13 @@ full path, so you can open it from any folder.
 
 It runs five steps, in order, and prints each as it ends:
 
-| Step                              | What it does                                                                      | What it writes, in `--out`                                   |
-| --------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 1. The inventory                  | Reads every file of the package, and says what each part becomes                  | `inventory.txt`                                              |
-| 2. The conversion                 | Converts what it can into the new app's configuration                             | `conversion/`, and what the step printed in `conversion.txt` |
-| 3. The checks that need no server | Holds the conversion to your package: the checks of section 8                     | `check.txt`                                                  |
-| 4. The report                     | The report a reviewer reads (section 4)                                           | `report.txt`                                                 |
-| 5. The decisions to fill in       | A file with an entry for every reported item, for a person's decision (section 5) | `conversion/decisions.json`, and `decisions.txt`             |
+| Step                              | What it does                                                                                         | What it writes, in `--out`                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1. The inventory                  | Reads every file of the package, and says what each part becomes                                     | `inventory.txt`                                              |
+| 2. The conversion                 | Converts what it can into the new app's configuration                                                | `conversion/`, and what the step printed in `conversion.txt` |
+| 3. The checks that need no server | Holds the conversion to your package: the checks of section 8                                        | `check.txt`                                                  |
+| 4. The report                     | The report a reviewer reads (section 4)                                                              | `report.txt`                                                 |
+| 5. The decisions to fill in       | A file with an entry for every reported item and every proposal, for a person's decision (section 5) | `conversion/decisions.json`, and `decisions.txt`             |
 
 `conversion/` holds:
 

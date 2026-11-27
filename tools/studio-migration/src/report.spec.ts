@@ -146,9 +146,9 @@ describe('the report of a sound conversion', () => {
     expect(summary.proposed.map((item) => item.id)).toEqual(
       entries.filter((entry) => entry.outcome === 'proposed').map((entry) => entry.id),
     );
-    expect(summary.blockers).toContain(
-      `${summary.proposed.length} proposals wait for a person to accept or reject them`,
-    );
+    // Only the condition's proposal waits for a person: the field it guards follows it.
+    expect(summary.proposed.map((item) => item.status).sort()).toEqual(['follows', 'waiting']);
+    expect(summary.blockers).toContain('1 proposal waits for a person to accept or reject it');
   });
 
   it('says what each file of the package became', () => {

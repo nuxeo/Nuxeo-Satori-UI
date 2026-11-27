@@ -18,12 +18,11 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
 import { fieldOf, layoutFields } from './app-walk';
 import { digestsOf } from './approval';
-import { identitiesOf } from './constructs';
 import {
   convert,
   labelsOf,
-  packageBuildOf,
   recordedAllowList,
+  recordedVerdicts,
   type Conversion,
   type ConvertedTheme,
   type ReportEntry,
@@ -1302,12 +1301,8 @@ function proposalsOf(
   conversion: Conversion,
   source: MutationSource,
 ): { readonly id: string; readonly verdict: Verdict | undefined }[] {
-  const { verdicts } = holdDecisions(
-    conversion.report,
-    conversion.decisions,
-    packageBuildOf(source.pkg),
-    identitiesOf(source.inventory),
-  );
+  // As the checks hold the conversion: to what its report records it was made with.
+  const verdicts = recordedVerdicts(conversion.report);
   return conversion.report.constructs
     .filter(
       (entry) =>
@@ -1385,12 +1380,12 @@ export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
       const proposals = proposalsOf(conversion, source);
       const rejected = proposals.find((proposal) => proposal.verdict?.accepted === false);
       if (!rejected?.verdict)
-        throw new MutationError('no proposal of the conversion is rejected in its decisions.json');
+        throw new MutationError('no proposal of the conversion is rejected, as its report records');
       const verdicts = verdictsOf(proposals);
       verdicts.set(rejected.id, { ...rejected.verdict, accepted: true });
       return {
         conversion: writtenWith(conversion, source, verdicts, `accepting ${rejected.id}`),
-        changed: `wrote what ${rejected.id} proposes, which ${rejected.verdict.owner} rejected, as if it were accepted`,
+        changed: `wrote what ${rejected.id} proposes, which a person rejected, as if it were accepted`,
       };
     },
   },
@@ -1402,15 +1397,31 @@ export const PROPOSAL_MUTATIONS: readonly Mutation[] = [
     apply: (conversion, given) => {
       const source = needSource(given);
       const proposals = proposalsOf(conversion, source);
-      const accept = proposals.find((proposal) => proposal.verdict?.accepted === true);
-      if (!accept?.verdict)
-        throw new MutationError('no proposal of the conversion is accepted in its decisions.json');
-      const verdicts = verdictsOf(proposals);
-      verdicts.delete(accept.id);
-      return {
-        conversion: writtenWith(conversion, source, verdicts, `leaving ${accept.id} undecided`),
-        changed: `left out what ${accept.id} proposes, which ${accept.verdict.owner} accepted`,
-      };
+      const accepted = proposals.filter((proposal) => proposal.verdict?.accepted === true);
+      if (accepted.length === 0)
+        throw new MutationError('no proposal of the conversion is accepted, as its report records');
+      // One whose rule a field shows under, a layout's or a task form's, which check 5 holds to be
+      // there; an action or a menu entry left out is check 7's.
+      for (const accept of accepted) {
+        const verdicts = verdictsOf(proposals);
+        verdicts.delete(accept.id);
+        const without = writtenWith(conversion, source, verdicts, `leaving ${accept.id} undecided`);
+        const forms = Object.keys(conversion.app).filter(
+          (path) => path.startsWith('layouts/') || path.startsWith('tasks/'),
+        );
+        if (
+          forms.some(
+            (path) => JSON.stringify(without.app[path]) !== JSON.stringify(conversion.app[path]),
+          )
+        )
+          return {
+            conversion: without,
+            changed: `left out what ${accept.id} proposes, which a person accepted, where a field shows under its rule`,
+          };
+      }
+      throw new MutationError(
+        'no accepted proposal of the conversion has its rule on a field: check 7 holds an action or a menu entry an accepted rule is written on',
+      );
     },
   },
 ];

@@ -366,12 +366,9 @@ describe('studio-migration decisions and report', () => {
     const checked = run(['check', 'acme.zip', out, '--allow-list', 'allow.json'], files);
     expect(checked.out).toContain('Verdict: not ready');
     expect(checked.out).not.toMatch(/reported items? ha/);
-    // The proposal it accepts is not written in this conversion, made before it was decided: check
-    // 5 holds the accepted rule's field to be there, and readiness says to convert again.
-    expect(checked.code).toBe(1);
-    expect(checked.out).toContain(
-      "      - layouts/Claim/view.layout.json: cl:tags is missing, though Web UI's view layout of Claim shows it while a condition passes, and its rule converts\n",
-    );
+    // The proposal it accepts is not written in this conversion, made before it was decided: the
+    // checks hold the conversion to what it records, and pass, and readiness says to convert again.
+    expect(checked.code).toBe(0);
     expect(checked.out).toContain(
       '  - the conversion was made with 1 of its proposals decided otherwise than decisions.json decides them now',
     );

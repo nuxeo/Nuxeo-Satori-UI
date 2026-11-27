@@ -35,6 +35,8 @@ import {
   platformVersion,
   packageBuildOf,
   readCatalogue,
+  recordedVerdicts,
+  reportDiffers,
   studioBuildOf,
   withVerdicts,
   type Conversion,
@@ -138,6 +140,9 @@ export function runHarness(given: HarnessInput): HarnessResult {
   // A proposal the conversion was made with another decision of than decisions.json gives now:
   // what it wrote, or did not, is not what was decided.
   const otherwise = madeOtherwise(input.conversion.report, verdicts);
+  // The report is the converter's, for this package and the decisions it records: one that says
+  // otherwise of a construct, a proposal relabelled converted say, was edited or is out of date.
+  const differs = reportDiffers(given.conversion, given.pkg, given.inventory, given.catalogue);
   // A reason that names the allow-list is the conversion's, so a decision made on it rests on the
   // list the conversion was made with.
   const recorded = [...(input.conversion.report.allowList ?? [])].sort();
@@ -155,7 +160,16 @@ export function runHarness(given: HarnessInput): HarnessResult {
       .filter((check) => check.status === 'not run')
       .map((check) => `check ${check.number} did not run`),
     ...(pending ? [`${pending} constructs are pending a later phase`] : []),
-    ...(waiting ? [`${waiting} proposals wait for a person to accept or reject them`] : []),
+    ...(differs.length > 0
+      ? [
+          `report.json says otherwise than the converter of ${differs.length} of the package's constructs, such as ${differs[0].id}, its ${differs[0].key}: convert the package again, as migrate does`,
+        ]
+      : []),
+    ...(waiting
+      ? [
+          `${waiting} ${waiting === 1 ? 'proposal waits' : 'proposals wait'} for a person to accept or reject ${waiting === 1 ? 'it' : 'them'}`,
+        ]
+      : []),
     ...(unsigned
       ? [
           `${unsigned} ${unsigned === 1 ? 'proposal is' : 'proposals are'} accepted or rejected with no one's name, or no reason`,
@@ -226,20 +240,15 @@ export function runCheck(given: HarnessInput, number: number): CheckResult | und
 
 /**
  * The input with what was left out filled in: the report's allow-list, the platform's version;
- * and the inventory with what people decided of the proposals, as `decisions.json` gives it once
- * held to the report, so that each check holds an accepted rule where the converter writes it,
- * and one nobody accepted where it writes nothing.
+ * and the inventory with what people decided of the proposals, as the report records the
+ * conversion was made with (`recordedVerdicts`), so that each check holds an accepted rule where
+ * the converter writes it, and one nobody accepted where it writes nothing. Readiness holds what
+ * the report records to `decisions.json`, and the report to the converter (`runHarness`).
  */
 function completed(given: HarnessInput): HarnessInput {
-  const { verdicts } = holdDecisions(
-    given.conversion.report,
-    given.conversion.decisions,
-    packageBuildOf(given.pkg),
-    identitiesOf(given.inventory),
-  );
   return {
     ...given,
-    inventory: withVerdicts(given.inventory, verdicts),
+    inventory: withVerdicts(given.inventory, recordedVerdicts(given.conversion.report)),
     allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
     allowListFromReport: given.allowList === undefined,
     platformVersion: given.platformVersion ?? platformVersion(),

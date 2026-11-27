@@ -830,6 +830,39 @@ describe('migrate, given several packages', () => {
   );
 
   it(
+    'carries another build by its name only from a file that names identities, and runs it either way',
+    async () => {
+      const earlier = fresh();
+      expect((await run(['migrate', folder({ 'claims.zip': SOUND }), '--out', earlier])).code).toBe(
+        0,
+      );
+      const path = join(earlier, 'packages', 'claims', 'conversion', 'decisions.json');
+      fill(path);
+      // As the tool's earlier version wrote it: the first format, its items their places alone.
+      const file = JSON.parse(readFileSync(path, 'utf8'));
+      file.format = 'studio-migration-decisions/1';
+      for (const item of file.decisions) delete item.identity;
+      writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+      const out = fresh();
+      const ran = await run([
+        'migrate',
+        folder({ 'policies.zip': CORPUS }),
+        '--out',
+        out,
+        '--from',
+        earlier,
+      ]);
+      // Another build: not carried from a file of places, and not stopped either.
+      expect(ran.code).toBe(0);
+      expect(summaryOf(out).packages[0]).toMatchObject({ result: 'not ready', carriedFrom: null });
+      expect(ran.out).toContain(
+        `\n     Nothing carried: ${earlier} holds no decisions for this package as it is now, so they start again\n`,
+      );
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
     'says nothing was carried when a run stops before its decisions step',
     async () => {
       const given = folder({ 'claims.zip': SOUND });

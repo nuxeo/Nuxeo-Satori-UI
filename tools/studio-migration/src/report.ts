@@ -36,7 +36,7 @@ import {
   type Outcome,
   type ReportEntry,
 } from './convert';
-import { holdDecisions, type CarriedFrom, type EarlierDecision } from './decisions';
+import { holdDecisions, LEGIBLE, type CarriedFrom, type EarlierDecision } from './decisions';
 import { coverage, runHarness, type CheckResult, type HarnessInput } from './harness';
 import type { FileKind } from './inventory';
 
@@ -205,7 +205,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
   const held = holdDecisions(report, conversion.decisions, build, identitiesOf(inventory));
   const isDecided = (id: string): boolean => {
     const taken = held.taken.get(id);
-    return Boolean(taken?.owner.trim() && taken.decision.trim());
+    return Boolean(taken && LEGIBLE.test(taken.owner) && LEGIBLE.test(taken.decision));
   };
 
   const count = (kind: KindCount['kind'], ids: readonly string[]): KindCount => {
@@ -249,8 +249,8 @@ export function summarise(input: HarnessInput): MigrationSummary {
         file: entry.file,
         note: entry.note ?? '',
         ...(entry.to !== undefined ? { to: entry.to } : {}),
-        owner: taken?.owner.trim() ? taken.owner : null,
-        decision: taken?.decision.trim() ? taken.decision : null,
+        owner: taken && LEGIBLE.test(taken.owner) ? taken.owner : null,
+        decision: taken && LEGIBLE.test(taken.decision) ? taken.decision : null,
       };
     });
   const proposed = entries
@@ -273,8 +273,8 @@ export function summarise(input: HarnessInput): MigrationSummary {
         note: entry.note ?? '',
         ...(entry.rule !== undefined ? { rule: entry.rule } : {}),
         status,
-        owner: taken?.owner.trim() ? taken.owner : null,
-        reason: taken?.reason?.trim() ? taken.reason : null,
+        owner: taken && LEGIBLE.test(taken.owner) ? taken.owner : null,
+        reason: taken?.reason !== undefined && LEGIBLE.test(taken.reason) ? taken.reason : null,
         ...(entry.applied !== undefined ? { applied: entry.applied } : {}),
         ...(entry.to !== undefined ? { to: entry.to } : {}),
       };
@@ -284,7 +284,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
     ? {
         from: held.carriedFrom.package,
         carried: held.carriedFrom.carried.length,
-        reconfirm: reconfirmItems(conversion, held.taken, first),
+        reconfirm: reconfirmItems(conversion, held, first),
         dropped: held.carriedFrom.dropped,
       }
     : null;
@@ -369,7 +369,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
 /** The items offered for re-confirmation: `decisions.json`'s entries that hold `earlier`. */
 function reconfirmItems(
   conversion: Conversion,
-  taken: ReadonlyMap<string, { readonly owner: string; readonly decision: string }>,
+  held: Pick<ReturnType<typeof holdDecisions>, 'taken' | 'verdicts'>,
   first: ReadonlyMap<string, ReportEntry>,
 ): ReconfirmItem[] {
   const file = conversion.decisions;
@@ -378,7 +378,13 @@ function reconfirmItems(
   return items.flatMap((item: unknown): ReconfirmItem[] => {
     if (!isRecord(item) || typeof item['id'] !== 'string' || !isRecord(item['earlier'])) return [];
     const earlier = item['earlier'];
-    const decision = taken.get(item['id']);
+    const decision = held.taken.get(item['id']);
+    // Confirmed once decided again as its kind is: a proposal accepted or rejected, by someone
+    // named, for a reason; a reported item owned and decided.
+    const confirmed =
+      first.get(item['id'])?.outcome === 'proposed'
+        ? held.verdicts.has(item['id'])
+        : Boolean(decision && LEGIBLE.test(decision.owner) && LEGIBLE.test(decision.decision));
     const changed = Array.isArray(earlier['changed'])
       ? earlier['changed'].filter((word): word is string => typeof word === 'string')
       : [];
@@ -396,7 +402,7 @@ function reconfirmItems(
             : {}) as EarlierDecision['madeOn'],
           changed,
         },
-        confirmed: Boolean(decision?.owner.trim() && decision.decision.trim()),
+        confirmed,
       },
     ];
   });

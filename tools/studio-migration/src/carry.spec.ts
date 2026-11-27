@@ -294,7 +294,7 @@ describe('carrying decisions to a new build of the package', () => {
     expect(runHarness(carried.input).blockers).toEqual(
       expect.arrayContaining([
         '1 reported item has no owner',
-        '2 proposals wait for a person to accept or reject them',
+        '1 proposal waits for a person to accept or reject it',
       ]),
     );
   });
@@ -355,5 +355,94 @@ describe('each deliberate breakage of carrying stands in the way of readiness', 
     expect(() =>
       CARRY_MUTATIONS.find((m) => m.name === 'carry-to-other-construct')?.apply(plain.conversion),
     ).toThrow(MutationError);
+  });
+});
+
+// What the independent reviews found, each now held.
+describe('carrying, as the reviews found it', () => {
+  it('carries nothing of a construct the earlier build held more than once, whichever was decided', () => {
+    // The view's dom-if written twice, alike: one identity for two conditions.
+    const twice = {
+      [VIEW]: (FILES[VIEW] ?? '')
+        .replace('<div role="widget"><label>Tags</label>', '<div role="widget"><label>Tags</label>')
+        .replace(
+          '  </template>\n  <script>',
+          `    <template is="dom-if" if="[[hasFacet(document, 'Versionable')]]">\n      <div role="widget"><label>Number again</label><div>[[document.properties.cl:number]]</div></div>\n    </template>\n  </template>\n  <script>`,
+        ),
+    };
+    const earlierInput = prepare(twice);
+    const conditions = constructsOf(earlierInput.inventory).filter(
+      (construct) => construct.kind === 'condition' && construct.file === VIEW,
+    );
+    expect(sharedIdentities(conditions).size).toBe(1);
+    const file = filled(earlierInput);
+    expect(file.shared).toEqual([...sharedIdentities(constructsOf(earlierInput.inventory))].sort());
+    // Only the first decided: the second left blank, as a person might.
+    const second = conditions.find((construct) => construct.id === `condition:${VIEW}#3`)?.id;
+    const earlier = {
+      ...file,
+      decisions: file.decisions.map((item) =>
+        item.id === second ? { ...item, owner: '', decision: '', reason: '' } : item,
+      ),
+    };
+    const later = prepare({ ...NEW_BUILD, [VIEW]: FILES[VIEW] ?? '' });
+    const carried = carriedTo(later, earlier);
+    const dropped = new Map(
+      (carried.file.carriedFrom?.dropped ?? []).map((item) => [item.id, item.why]),
+    );
+    // The condition decided once and left blank once: two entries of one identity, neither taken.
+    expect(dropped.get(`condition:${VIEW}#2`)).toBe(
+      'is one of 2 decisions of one construct, and which is meant cannot be told, so none is carried',
+    );
+    // The field that binds cl:number again, under it: the only one of its identity the file decides,
+    // and still one the earlier build held twice, which the file names.
+    expect(dropped.get(`layout-field:${VIEW}#6`)).toBe(
+      'is of a construct the earlier build held more than once, alike, so which one it was made on cannot be told, and it is not carried: decide it again',
+    );
+    expect(carried.file.decisions.find((item) => item.id === `condition:${VIEW}#2`)).toMatchObject({
+      decision: '',
+    });
+  });
+
+  it('offers an unconfirmed decision again on a run of the same build, and keeps saying what was carried', () => {
+    const first = carriedTo(prepare(NEW_BUILD), filled(prepare()));
+    expect(first.reconfirm).toBe(1);
+    // The same build again, from that file, nothing confirmed.
+    const again = carriedTo(prepare(NEW_BUILD), first.file);
+    expect(again.reconfirm).toBe(1);
+    const offered = again.file.decisions.find((item) => item.id === `search-field:${FORM}#2`);
+    expect(offered).toMatchObject({
+      owner: '',
+      decision: '',
+      earlier: { owner: 'Migration lead' },
+    });
+    expect(again.file.carriedFrom).toEqual(first.file.carriedFrom);
+    expect(summarise(again.input).carried?.reconfirm.map((item) => item.id)).toEqual([
+      `search-field:${FORM}#2`,
+    ]);
+  });
+
+  it('names no one by spaces or characters that show nothing', () => {
+    const input = prepare();
+    const file = filled(input);
+    const invisible = '​ ​';
+    const blank = {
+      ...file,
+      decisions: file.decisions.map((item, index) =>
+        item.outcome === 'proposed'
+          ? { ...item, owner: invisible, reason: invisible }
+          : index === 0
+            ? { ...item, owner: invisible }
+            : item,
+      ),
+    };
+    const held = holdDecisions(
+      input.conversion.report,
+      blank,
+      packageBuildOf(input.pkg),
+      identitiesOf(input.inventory),
+    );
+    expect(held).toMatchObject({ unowned: 1, unsigned: 1 });
+    expect(held.verdicts.size).toBe(0);
   });
 });

@@ -397,6 +397,92 @@ export function convert(
 }
 
 /**
+ * What people decided of the proposals as the report records the conversion was made with: each
+ * proposal's `applied`, with the rule it proposes. The checks hold the conversion to these, and
+ * readiness holds these to `decisions.json` (`madeOtherwise`), so that a conversion made before a
+ * decision is said to be, rather than failing a check it would pass made again.
+ */
+export function recordedVerdicts(
+  report: Pick<MigrationReport, 'constructs'>,
+): Map<string, Verdict> {
+  const verdicts = new Map<string, Verdict>();
+  const seen = new Set<string>();
+  for (const entry of Array.isArray(report.constructs) ? report.constructs : []) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    if (entry.outcome !== 'proposed' || entry.proposal !== true) continue;
+    if (entry.applied !== 'accept' && entry.applied !== 'reject') continue;
+    verdicts.set(entry.id, {
+      accepted: entry.applied === 'accept',
+      ...(entry.rule !== undefined ? { rule: entry.rule } : {}),
+      owner: '',
+      reason: '',
+    });
+  }
+  return verdicts;
+}
+
+/** What a report entry says of its construct, as the converter writes it. */
+const ENTRY_KEYS = [
+  'kind',
+  'file',
+  'label',
+  'property',
+  'outcome',
+  'to',
+  'note',
+  'rule',
+  'proposal',
+  'applied',
+] as const;
+
+/**
+ * Where `report.json` says otherwise of its constructs than the converter does, for this package
+ * with the allow-list and the proposals' decisions the report records: each such construct, by
+ * id, with the first key that differs. The converter writes the same report for the same package
+ * and decisions every time, so a report edited by hand, or written by another version of the tool,
+ * is told here. An entry the package does not hold, or one missing, is check 1's.
+ */
+export function reportDiffers(
+  conversion: Pick<Conversion, 'report'>,
+  pkg: StudioPackage,
+  inventory: Inventory,
+  catalogue: Catalogue,
+): { readonly id: string; readonly key: string }[] {
+  const report = conversion.report;
+  const fresh = convert(pkg, inventory, catalogue, {
+    allowList: recordedAllowList(conversion),
+    verdicts: recordedVerdicts(report),
+  });
+  const written = new Map(fresh.report.constructs.map((entry) => [entry.id, entry]));
+  const differs: { id: string; key: string }[] = [];
+  const seen = new Set<string>();
+  for (const entry of Array.isArray(report.constructs) ? report.constructs : []) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    const ours = written.get(entry.id);
+    if (!ours) continue;
+    const key = ENTRY_KEYS.find(
+      (candidate) =>
+        JSON.stringify(sortedKeys(entry[candidate])) !==
+        JSON.stringify(sortedKeys(ours[candidate])),
+    );
+    if (key) differs.push({ id: entry.id, key });
+  }
+  return differs;
+}
+
+function sortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sortedKeys((value as Record<string, unknown>)[key])]),
+  );
+}
+
+/**
  * The conversion made with the decisions an earlier file holds of its proposals: `earlier` is a
  * `decisions.json` as read, of this build or of another build of the package, carried as the
  * `decisions` command carries it (`decisionsFor`), so that what the conversion writes is what the

@@ -451,8 +451,8 @@ describe('holding the decisions to the report', () => {
 
   it('takes every decision of a file filled in, and leaves nothing unowned or undecided', () => {
     const held = hold(conversion.report, clone(decidedFile(conversion)), BUILD);
-    expect(held).toMatchObject({ findings: [], unowned: 0, undecided: 0, waiting: 1, unsigned: 0 });
-    // The reported items, and the proposal, accepted; the field it guards still waits on it.
+    expect(held).toMatchObject({ findings: [], unowned: 0, undecided: 0, waiting: 0, unsigned: 0 });
+    // The reported items, and the proposal, accepted; the field it guards follows it.
     expect([...held.taken.keys()].sort()).toEqual(
       [
         ...reported.map((entry) => entry.id),
@@ -802,7 +802,15 @@ describe('each deliberate breakage of the decisions stands in the way of readine
         (line) => !sound.includes(line),
       );
       expect(added.length).toBeGreaterThan(0);
-      expect(added.every((line) => /reported item|decisions\.json/.test(line))).toBe(true);
+      // `stale-decision` changes the report under its decision, as a newer converter would: the
+      // report then says otherwise than this converter does, and readiness says that too.
+      expect(
+        added.every(
+          (line) =>
+            /reported item|decisions\.json/.test(line) ||
+            (mutation.name === 'stale-decision' && line.startsWith('report.json says otherwise')),
+        ),
+      ).toBe(true);
     });
   }
 

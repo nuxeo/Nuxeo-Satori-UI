@@ -118,7 +118,18 @@ export interface DecisionsBuild {
 }
 
 const BUILD_KEYS = ['name', 'version', 'commit', 'buildTime', 'bundle'] as const;
-const FILE_KEYS: ReadonlySet<string> = new Set(['format', 'package', 'decisions', 'carriedFrom']);
+const FILE_KEYS: ReadonlySet<string> = new Set([
+  'format',
+  'package',
+  'decisions',
+  'shared',
+  'carriedFrom',
+]);
+
+/** The identities a build cannot tell apart, for its file to name, when it has any. */
+function sharedOf(shared: ReadonlySet<string>): { readonly shared?: readonly string[] } {
+  return shared.size > 0 ? { shared: [...shared].sort() } : {};
+}
 
 /** What a file carried from an earlier build of the package says it did, for the report. */
 export interface CarriedFrom {
@@ -145,6 +156,11 @@ export interface DecisionsFile {
   readonly format: typeof DECISIONS_FORMAT;
   readonly package: DecisionsBuild;
   readonly decisions: readonly OwnerDecision[];
+  /**
+   * The identities this build holds more than once, alike: a decision of one is carried to no
+   * other build, where which one it was made on cannot be told.
+   */
+  readonly shared?: readonly string[];
   readonly carriedFrom?: CarriedFrom;
 }
 
@@ -210,34 +226,36 @@ export function holdDecisions(
   let undecided = 0;
   for (const entry of decidedEntries(report, 'reported')) {
     const decision = reading.taken.get(entry.id);
-    if (!decision?.owner.trim()) unowned++;
-    else if (!decision.decision.trim()) undecided++;
+    if (!saysSomething(decision?.owner)) unowned++;
+    else if (!saysSomething(decision?.decision)) undecided++;
   }
   const verdicts = new Map<string, Verdict>();
   let waiting = 0;
   let unsigned = 0;
-  for (const entry of firstEntries(report)) {
-    if (entry.outcome !== 'proposed') continue;
-    // What a condition's proposal guards takes no decision of its own (`readDecisions` takes
-    // none), so it waits here until the conversion is made with its condition's decision.
+  // Only a proposal of its own waits for a person. What a condition's proposal guards takes no
+  // decision (`readDecisions` takes none): it follows the condition's, which waits, or which the
+  // conversion was made without (`madeOtherwise`).
+  for (const entry of decidedEntries(report, 'proposed')) {
     const decision = reading.taken.get(entry.id);
     const verdict = decision?.decision.trim();
     if (verdict !== ACCEPT && verdict !== REJECT) {
       waiting++;
       continue;
     }
-    if (!decision?.owner.trim() || !decision.reason?.trim()) {
+    if (!saysSomething(decision?.owner) || !saysSomething(decision?.reason)) {
       unsigned++;
       continue;
     }
     verdicts.set(entry.id, {
       accepted: verdict === ACCEPT,
       ...(entry.rule !== undefined ? { rule: entry.rule } : {}),
-      owner: decision.owner,
-      reason: decision.reason,
+      owner: decision?.owner ?? '',
+      reason: decision?.reason ?? '',
     });
   }
-  const carriedFrom = isRecord(raw) ? carriedFromOf(raw['carriedFrom']) : undefined;
+  // What a file carried from another build says it did, when the file is taken at all.
+  const carriedFrom =
+    isRecord(raw) && !reading.refused ? carriedFromOf(raw['carriedFrom']) : undefined;
   return {
     findings: reading.refused ? [reading.refused, ...reading.findings] : reading.findings,
     taken: reading.taken,
@@ -325,7 +343,7 @@ export function decisionsFor(
   if (!earlier) {
     const decisions = entries.map(blankOf);
     return {
-      file: { format: DECISIONS_FORMAT, package: { ...build }, decisions },
+      file: { format: DECISIONS_FORMAT, package: { ...build }, decisions, ...sharedOf(shared) },
       carried: 0,
       notCarried: [],
       reconfirm: 0,
@@ -338,7 +356,7 @@ export function decisionsFor(
   const given = isRecord(raw) && isRecord(raw['package']) ? raw['package'] : {};
   const sameBuild = BUILD_KEYS.every((key) => (given[key] ?? null) === build[key]);
   return sameBuild
-    ? carrySameBuild(report, build, identities, entries, blankOf, raw, file)
+    ? carrySameBuild(report, build, identities, shared, entries, blankOf, raw, file)
     : carryOtherBuild(
         build,
         identities,
@@ -374,14 +392,17 @@ export function earlierRefusal(raw: unknown, file: string, build: DecisionsBuild
   return null;
 }
 
-/** An entry that says nothing has nothing to carry, and nothing to lose: it is passed over. */
-const silent = (item: unknown): boolean =>
-  isRecord(item) && ![item['owner'], item['decision'], item['reason']].some(saysSomething);
+/**
+ * An entry that says nothing has nothing to carry, and nothing to lose: it is passed over. One that
+ * holds an earlier build's decision offered for re-confirmation is not: the offer is carried.
+ */
+const silent = (item: unknown): boolean => silentEntry(item);
 
 function carrySameBuild(
   report: MigrationReport,
   build: DecisionsBuild,
   identities: ReadonlyMap<string, string>,
+  shared: ReadonlySet<string>,
   entries: readonly ReportEntry[],
   blankOf: (entry: ReportEntry) => OwnerDecision,
   raw: unknown,
@@ -393,6 +414,11 @@ function carrySameBuild(
   let reconfirm = 0;
   const decisions = entries.map((entry): OwnerDecision => {
     const before = reading.taken.get(entry.id);
+    // An offer no one has confirmed yet is offered again, as it was.
+    if (before?.earlier && ![before.owner, before.decision, before.reason].some(saysSomething)) {
+      reconfirm++;
+      return { ...blankOf(entry), earlier: before.earlier };
+    }
     if (before) {
       carried++;
       return {
@@ -409,8 +435,16 @@ function carrySameBuild(
   });
   // One whose item changed is offered for re-confirmation, and says so, rather than to decide it.
   const offered = new Map([...reading.moved.values()].map((moved) => [moved.finding, moved]));
+  // What an earlier carry from another build did stays said, for the report.
+  const carriedFrom = isRecord(raw) ? carriedFromOf(raw['carriedFrom']) : undefined;
   return {
-    file: { format: DECISIONS_FORMAT, package: { ...build }, decisions },
+    file: {
+      format: DECISIONS_FORMAT,
+      package: { ...build },
+      decisions,
+      ...sharedOf(shared),
+      ...(carriedFrom ? { carriedFrom } : {}),
+    },
     carried,
     notCarried: reading.findings.map((line) => {
       const moved = offered.get(line);
@@ -435,7 +469,15 @@ function carryOtherBuild(
 ): CarriedDecisions {
   if (!Array.isArray(raw['decisions']))
     throw new DecisionsError(`${file} holds no list of decisions, so none of it is taken`);
-  const items = (raw['decisions'] as unknown[]).filter((item) => !silent(item));
+  const all = raw['decisions'] as unknown[];
+  const items = all.filter((item) => !silent(item));
+  // The identities the earlier build could not tell apart: as its file says, and any it names
+  // twice, said something or not.
+  const earlierShared = new Set(
+    Array.isArray(raw['shared'])
+      ? raw['shared'].filter((identity): identity is string => typeof identity === 'string')
+      : [],
+  );
   const from = describeBuild(given);
   const earlierBundle = typeof given['bundle'] === 'string' ? given['bundle'] : '';
   // This build's items, by their construct's identity.
@@ -446,7 +488,7 @@ function carryOtherBuild(
   }
   // An identity the earlier file decides twice cannot say which decision is meant.
   const times = new Map<string, number>();
-  for (const item of items)
+  for (const item of all)
     if (isRecord(item) && typeof item['identity'] === 'string')
       times.set(item['identity'], (times.get(item['identity']) ?? 0) + 1);
 
@@ -482,6 +524,13 @@ function carryOtherBuild(
       drop(
         item,
         `is one of ${times.get(identity)} decisions of one construct, and which is meant cannot be told, so none is carried`,
+      );
+      continue;
+    }
+    if (earlierShared.has(identity)) {
+      drop(
+        item,
+        'is of a construct the earlier build held more than once, alike, so which one it was made on cannot be told, and it is not carried: decide it again',
       );
       continue;
     }
@@ -546,6 +595,7 @@ function carryOtherBuild(
       format: DECISIONS_FORMAT,
       package: { ...build },
       decisions,
+      ...sharedOf(shared),
       carriedFrom: {
         package: buildOf(given),
         carried: [...carriedTo.keys()],
@@ -583,11 +633,14 @@ export function unfilled(
   decisions: readonly Pick<OwnerDecision, 'owner' | 'decision' | 'reason' | 'outcome'>[],
 ): number {
   return decisions.filter((item) => {
-    const owner = typeof item.owner === 'string' ? item.owner.trim() : '';
+    if (item.outcome !== 'proposed')
+      return !saysSomething(item.owner) || !saysSomething(item.decision);
     const decision = typeof item.decision === 'string' ? item.decision.trim() : '';
-    if (item.outcome !== 'proposed') return !owner || !decision;
-    const reason = typeof item.reason === 'string' ? item.reason.trim() : '';
-    return !owner || (decision !== ACCEPT && decision !== REJECT) || !reason;
+    return (
+      !saysSomething(item.owner) ||
+      (decision !== ACCEPT && decision !== REJECT) ||
+      !saysSomething(item.reason)
+    );
   }).length;
 }
 
@@ -597,7 +650,21 @@ export class DecisionsError extends Error {
 
 /** Whether an owner or a decision says anything: text that is not only spaces. */
 function saysSomething(value: unknown): boolean {
-  return typeof value === 'string' ? value.trim() !== '' : value !== undefined;
+  return typeof value === 'string' && LEGIBLE.test(value);
+}
+
+/**
+ * What says something a person can read: a letter or a digit. Spaces alone, or characters that
+ * show nothing, such as a zero-width space, say nothing, and name no one.
+ */
+export const LEGIBLE = /[\p{L}\p{N}]/u;
+
+/** An entry that says nothing has nothing to carry, and nothing to lose, unless it is an offer. */
+function silentEntry(item: unknown): boolean {
+  if (!isRecord(item) || item['earlier'] !== undefined) return false;
+  return [item['owner'], item['decision'], item['reason']].every(
+    (value) => value === undefined || (typeof value === 'string' && !LEGIBLE.test(value)),
+  );
 }
 
 /** The first entry of each id, in the report's order: an id listed twice is its first entry's. */
@@ -817,6 +884,9 @@ function readDecisions(
       owner: (item['owner'] as string | undefined) ?? '',
       decision: (item['decision'] as string | undefined) ?? '',
       ...(proposal ? { reason: (item['reason'] as string | undefined) ?? '' } : {}),
+      ...(isRecord(item['earlier'])
+        ? { earlier: item['earlier'] as unknown as EarlierDecision }
+        : {}),
     });
   });
   return { findings, taken, moved };

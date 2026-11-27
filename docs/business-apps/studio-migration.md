@@ -418,11 +418,14 @@ decision of its own: it follows its condition's. `convert --decisions <decisions
 becomes the `visibleWhen` of what the condition guards, and check 5 holds it on every row of its
 truth table, as it holds a converted condition's. What they rejected is written nowhere, and what
 it guards is reported, for a decision of its own. Nothing proposed is written unless a person
-accepted it: the checks read `decisions.json` too, so a rule written for a proposal nobody
-accepted fails check 5, and a field under an accepted rule that is not written fails it as well.
-The report keeps a proposal as `proposed`, records what the conversion was made with
-(`applied`), and says where an accepted one was written; a conversion made with other decisions
-than the file holds now stands in the way of readiness. A card an operation feeds, the favourites
+accepted it, held three ways. The report keeps a proposal as `proposed`, records what the
+conversion was made with (`applied`), and says where an accepted one was written. The checks hold
+the conversion to that record, so a rule written for a proposal not accepted fails check 5, and a
+field under an accepted rule that is not written fails it as well. Readiness holds the record to
+`decisions.json`, so a conversion made with other decisions than the file holds now stands in the
+way; and holds `report.json` to the converter, converting the package again with the allow-list
+and the decisions it records, so a proposal relabelled in the report by hand, as converted say, is
+said to be. A card an operation feeds, the favourites
 card, proposes nothing the converter can write yet, as no queue takes the list an operation gives:
 it can be rejected, and not accepted. Tidy labels for machine-generated ones are not proposals yet:
 a search form's field with one is reported, and its note says so.
@@ -448,9 +451,12 @@ whose digests are those of the conversion as it is now: any change voids it, and
 so. `approve` refuses while a decision is still to make. It is the only command that writes an
 approval; `migrate`, for one package or many, never runs it. It needs a person at a terminal, who
 types back the start of the digest it shows, and refuses to run where its input or output is not a
-terminal, as in a script, a pipeline or an agent's run: so an agent's own run cannot approve itself.
-That is a guard against a run approving itself unwatched, not a proof of who typed: an approval is a
-record of who said they approved, as a signature is, not a cryptographic one.
+terminal, as in a script, a pipeline or an agent's run: so no run of the tool approves itself, and a
+run with no terminal cannot approve at all. That is a guard against a run approving itself
+unwatched, not a proof of who typed. A program that drives a terminal can run `approve`, and
+`approval.json` is a file, which anyone who can write the conversion can write by hand, as they
+can `decisions.json`: an approval is a record of who said they approved, as a signature on paper
+is, not a cryptographic one.
 
 **Printed,** with the `report` command: the header, with the approval; the summary by kind and
 outcome, with how many proposals were accepted and rejected, and the coverage; what the harness
@@ -526,8 +532,9 @@ These sit inside the [development plan](development-plan.md):
   - **The reviewer's approval:** `approve` records who approved the report and its decisions,
     when, and the SHA-256 of `report.json`, `decisions.json` and the conversion's files.
     Readiness needs one that matches the conversion as it is; any change voids it, and the report
-    says so. It needs a person at a terminal, so an agent's own run, which has none, cannot approve
-    itself, and no other command writes one.
+    says so. It needs a person at a terminal, so a run with no terminal, an agent's or a
+    pipeline's, cannot approve, and no other command writes one. It is a record, not a signature:
+    a program driving a terminal, or a hand-written `approval.json`, is not told from a person.
   - **Carrying decisions to a new build,** by each construct's identity: carried when what it was
     made on is unchanged, offered for re-confirmation when it changed, dropped when the construct
     is gone or cannot be told apart, each said in the report, and never carried by place. `migrate

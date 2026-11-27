@@ -44,7 +44,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, join, resolve } from 'node:path';
 import type { CliIo } from './cli';
 import { allowListOf, packageBuildOf } from './convert';
-import { DECISIONS_FILE } from './decisions';
+import { DECISIONS_FILE, DECISIONS_FORMAT } from './decisions';
 import {
   CONVERSION_DIRECTORY,
   migrateOne,
@@ -570,11 +570,24 @@ function earlierRuns(from: string): Earlier {
     if (build !== null && typeof build === 'object') {
       const key = buildKey(build);
       byBuild.set(key, [...(byBuild.get(key) ?? []), folder]);
-      if (typeof build.name === 'string')
+      // Another build is carried by identity, which only a file of the second format names.
+      if (typeof build.name === 'string' && namesIdentities(join(from, PACKAGES_DIRECTORY, folder)))
         byName.set(build.name, [...(byName.get(build.name) ?? []), folder]);
     }
   }
   return { bySha, byBuild, byName };
+}
+
+/** Whether a folder's `decisions.json` is of the format that names each construct's identity. */
+function namesIdentities(folder: string): boolean {
+  try {
+    const file = JSON.parse(
+      readFileSync(join(folder, CONVERSION_DIRECTORY, DECISIONS_FILE), 'utf8'),
+    ) as { readonly format?: unknown } | null;
+    return file?.format === DECISIONS_FORMAT;
+  } catch {
+    return false;
+  }
 }
 
 /** A path under `<out>`, `/`-separated, as `summary.json` gives it. */

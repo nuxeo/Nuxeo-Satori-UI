@@ -919,11 +919,21 @@ the catalogue has learnt something, loses none of it.
   reported, and so is what it guards, for a decision of its own. The report keeps each proposal
   `proposed`, as it was proposed, and records `applied`, what the conversion was made with, and
   `to`, where an accepted one went.
-- **The checks read the decisions too.** `runHarness` gives the checks the inventory with the
-  proposals' decisions `decisions.json` holds, so check 5 holds an accepted rule on every row of
-  its truth table, a rule written for a proposal nobody accepted, or one rejected, as a rule no
-  condition gives, and an accepted rule's field left out as missing (`check-conditions.ts`). So
-  nothing proposed is written unless a person accepted it, and nothing accepted is left out.
+- **Held three ways.** `runHarness` gives the checks the inventory with the proposals' decisions
+  the report records the conversion was made with (`recordedVerdicts`), so check 5 holds an
+  accepted rule on every row of its truth table, a rule written for a proposal not accepted, or one
+  rejected, as a rule no condition gives, and an accepted rule's field left out as missing
+  (`check-conditions.ts`); an action left out is check 7's. Readiness holds what the report records
+  to `decisions.json` (`madeOtherwise`), so a conversion made before a decision, or with another,
+  is said to be, and passes its checks; and holds `report.json` to the converter, converting the
+  package again with the allow-list and the decisions the report records (`reportDiffers`), so a
+  proposal relabelled `converted` by hand, or any construct the report gives otherwise than the
+  converter does, is said to be. So nothing proposed is written unless a person accepted it, and
+  nothing accepted is left out.
+- **What waits.** Readiness counts a proposal of its own that no one has accepted or rejected as
+  waiting; what a proposed condition guards follows it and is not counted. A name, a decision or
+  a reason holds a letter or a digit: spaces, or characters that show nothing, such as a zero-width
+  space, are none.
 - **A construct's identity** ([`src/constructs.ts`](src/constructs.ts), `identityOf`) is a
   fingerprint of its kind, its file and what it is there, such as a field's element and the
   property it binds, a condition's test, a contribution's slot and name, or a card's heading, page
@@ -975,14 +985,15 @@ spacing alone does not.
   the package given. A decision filled in or changed, the conversion made again, a file edited by
   hand: each voids it, and the verdict and the report say which. It is never carried to another
   run.
-- **No run approves itself.** `approve` is the only command that writes an approval, and no other
-  runs it: `migrate`, for one package or many, never does. It refuses while a decision is still to
+- **No run of the tool approves itself.** `approve` is the only command that writes an approval,
+  and no other runs it: `migrate`, for one package or many, never does. It refuses while a decision is still to
   make. It refuses to run where its input or output is not a terminal, as in a script, a pipeline
   or an agent's run, and asks the person named with `--by` to type back the first 8 characters of
   the digest it shows. It writes only an `approval.json` the conversion does not hold.
 - **What it is not:** proof of who typed. Someone at a terminal, or a program driving one, can
-  type any name; the approval is a record of who said they approved, as a signature on paper is,
-  not a cryptographic one.
+  type any name, and `approval.json` is a file anyone who can write the conversion can write by
+  hand, as `decisions.json` is; the approval is a record of who said they approved, as a signature
+  on paper is, not a cryptographic one.
 
 **The report** ([`src/report.ts`](src/report.ts)): `report <package> <conversion>` prints it, and
 `--json` gives the same as data. It reads the package, the conversion, its decisions and its
@@ -1690,6 +1701,12 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   naming, as the checks write them, or a package file it names: a finding worded otherwise would be
   of no one file. The tests hold every finding of every control to a file, so a check whose wording
   changes is seen there.
+- **What a decision rests on, beyond its entry.** A decision is held to what its entry copies
+  from the report, and to its construct's identity. What else it rests on is not held: a condition's
+  proposal rests on the layout's host having Web UI's filter function, and a host whose script
+  changes to define it otherwise keeps the acceptance, though its script then is customer code,
+  pending, which stands in the way of readiness; and a condition's accepted rule is written on what
+  the condition guards in the new build, which may be another field.
 - **Identities across real builds.** A construct's identity holds its file's path, which Studio
   names after a layout's type and mode, a search's provider, a workflow and step; a project that
   renames one gets a new identity for everything in it, so its decisions are dropped, never carried

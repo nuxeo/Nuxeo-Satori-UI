@@ -158,10 +158,10 @@ describe('a proposal nobody has decided', () => {
     expect(entry(input.conversion, TAGS)).not.toHaveProperty('proposal');
   });
 
-  it('stands in the way of readiness, with what it guards', () => {
-    expect(runHarness(input).blockers).toContain(
-      '2 proposals wait for a person to accept or reject them',
-    );
+  it('stands in the way of readiness, and what it guards waits with it, uncounted', () => {
+    const blockers = runHarness(input).blockers;
+    expect(blockers).toContain('1 proposal waits for a person to accept or reject it');
+    expect(blockers.filter((line) => /proposal/.test(line))).toHaveLength(1);
   });
 
   it('is written nowhere when its decision names no one, or gives no reason', () => {
@@ -176,7 +176,8 @@ describe('a proposal nobody has decided', () => {
       expect(blockers).toContain(
         "1 proposal is accepted or rejected with no one's name, or no reason",
       );
-      expect(blockers).toContain('1 proposals wait for a person to accept or reject them');
+      // Decided, but not taken: it does not wait, it is in the way as it is.
+      expect(blockers.filter((line) => /proposals? waits?/.test(line))).toEqual([]);
     }
   });
 
@@ -192,7 +193,7 @@ describe('a proposal nobody has decided', () => {
     const run = decidedRun(input, file);
     expect(viewFields(run.conversion).has('cl:tags')).toBe(false);
     expect(runHarness(run).blockers).toContain(
-      '2 proposals wait for a person to accept or reject them',
+      '1 proposal waits for a person to accept or reject it',
     );
   });
 });
@@ -372,10 +373,36 @@ describe('readiness and the conversion the decisions were made for', () => {
     expect(blockers).toContain(
       `the conversion was made with 1 of its proposals decided otherwise than decisions.json decides them now, such as ${VIEW_IF}: convert it again with the decisions, as migrate --from does`,
     );
-    // And check 5 holds the accepted rule's field to be written.
-    expect(runCheck(after, 5)?.findings).toEqual([
-      "layouts/Claim/view.layout.json: cl:tags is missing, though Web UI's view layout of Claim shows it while a condition passes, and its rule converts",
-    ]);
+    // The checks hold the conversion to what its report records it was made with, so this one,
+    // made before the decision, still passes them: readiness says why it is not what was decided.
+    expect(runCheck(after, 5)?.findings).toEqual([]);
+    expect(runCheck(after, 2)?.findings).toEqual([]);
+  });
+
+  it('holds report.json to the converter, so a proposal relabelled in it is still a proposal', () => {
+    // Relabelled converted, the condition and the field it guards: no proposal waits, by the
+    // report's word, and the field is written nowhere.
+    const relabelled = {
+      ...input,
+      conversion: {
+        ...input.conversion,
+        report: {
+          ...input.conversion.report,
+          constructs: input.conversion.report.constructs.map((candidate) => {
+            if (candidate.id !== VIEW_IF && candidate.id !== TAGS) return candidate;
+            const { proposal: _proposal, note: _note, ...rest } = candidate;
+            return { ...rest, outcome: 'converted' as const, to: 'layouts/Claim/view.layout.json' };
+          }),
+        },
+      },
+    };
+    const blockers = runHarness(relabelled).blockers;
+    expect(blockers.filter((line) => /proposals? waits?/.test(line))).toEqual([]);
+    expect(blockers).toContain(
+      `report.json says otherwise than the converter of 2 of the package's constructs, such as ${TAGS}, its outcome: convert the package again, as migrate does`,
+    );
+    // A sound report says nothing of the kind.
+    expect(runHarness(input).blockers.filter((line) => line.startsWith('report.json'))).toEqual([]);
   });
 
   it('has no proposal in the way once each is decided and the conversion made with it', () => {
@@ -441,6 +468,35 @@ describe('each deliberate breakage of the proposals fails check 5', () => {
     if (!mutation) throw new Error(name);
     const broken = mutation.apply(run.conversion, run).conversion;
     expect(runCheck({ ...run, conversion: broken }, 5)?.findings).toEqual(findings);
+  });
+
+  it('leaves an accepted action out only as check 7 sees it, and drops no field there', () => {
+    // Only the button's proposal accepted: its action is written under the rule.
+    const button = decidedRun(corpus, filled(corpus, { [BUTTON_IF]: 'accept' }));
+    const drop = PROPOSAL_MUTATIONS.find((m) => m.name === 'drop-accepted-proposal');
+    expect(() => drop?.apply(button.conversion, button)).toThrow(
+      /no accepted proposal of the conversion has its rule on a field: check 7 holds an action/,
+    );
+    // Left out by hand, the action is missing to check 7.
+    const actions = button.conversion.app['actions.json'] as { actions: Record<string, unknown>[] };
+    const without = {
+      ...button,
+      conversion: {
+        ...button.conversion,
+        app: {
+          ...button.conversion.app,
+          'actions.json': {
+            ...actions,
+            actions: actions.actions.filter((action) => action['label'] !== 'Review'),
+          },
+        },
+      },
+    };
+    expect(runCheck(without, 7)?.findings).toEqual([
+      expect.stringMatching(
+        /^actions\.json: .* is missing, though Web UI's "reviewClaim" runs Claim\.Approve$/,
+      ),
+    ]);
   });
 
   it('refuses without the package, and says so where there is nothing to break', () => {
