@@ -144,6 +144,31 @@ class AppActionsTest {
         assertTrue(diagnostics(registry, ADJUSTER).get(0).contains("a computation is not run on the server"));
     }
 
+    /**
+     * An action on {@code card} shows on a card of the record page that names it, as the holds card
+     * names its place and release: one record, so its form's and the record's values are its own.
+     */
+    @Test
+    void anActionOnACardIsServedWithItsFormAndRecordValues() throws Exception {
+        String card = ACTIONS.replace("\"on\": [\"record\", \"row\"]", "\"on\": [\"card\"]");
+        AppRegistryEndpoint registry = registry(card, allowList(requestRecords()));
+        assertEquals(List.of("payers.claim.pay", "payers.claim.requestRecords"), ids(served(registry)));
+        RunnableAction action = registry.action(APP, "payers.claim.requestRecords", ADJUSTER);
+        assertEquals(Set.of("card"), action.placements());
+        assertTrue(action.runsOnOneRecord());
+        assertEquals(new RunnableAction.Input("note"), action.parameters().get("note"));
+        assertEquals(new RunnableAction.Field("claim:provider"), action.parameters().get("provider"));
+    }
+
+    @Test
+    void anActionOnAPlaceThatIsNoneIsLeftOut() throws Exception {
+        String cards = ACTIONS.replace("\"on\": [\"record\", \"row\"]", "\"on\": [\"cards\"]");
+        AppRegistryEndpoint registry = registry(cards, allowList(requestRecords()));
+        assertEquals(List.of("payers.claim.pay"), ids(served(registry)));
+        assertTrue(diagnostics(registry, ADJUSTER).get(0)
+                .contains("has an \"on\" that is not a list of \"record\", \"row\", \"card\" and \"bulk\""));
+    }
+
     @Test
     void aBulkActionGivesLiteralsOnly() throws Exception {
         String bulk = ACTIONS.replace("\"on\": [\"record\", \"row\"]", "\"on\": [\"row\", \"bulk\"]");

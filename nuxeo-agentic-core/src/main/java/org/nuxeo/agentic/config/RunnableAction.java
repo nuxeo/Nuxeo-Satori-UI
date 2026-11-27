@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * the operation was on the allow-list, and every parameter one it allows, when the registry was
  * built. The run checks both again ({@link AppActionRunner}).
  *
- * @param placements where it shows: {@code record}, {@code row} or {@code bulk}
+ * @param placements where it shows: {@code record}, {@code row}, {@code card} or {@code bulk}
  * @param parameters where each parameter's value comes from, by the parameter's name
  */
 record RunnableAction(String id, String operation, Set<String> placements, Map<String, Source> parameters) {
@@ -38,8 +38,11 @@ record RunnableAction(String id, String operation, Set<String> placements, Map<S
     record Input(String name) implements Source {
     }
 
-    /** Whether it runs on one record, the record page's or a row's: the only runs there are. */
+    /**
+     * Whether it runs on one record, the record page's, a row's, or that of a card of the record page
+     * that names it, such as the holds card: the only runs there are.
+     */
     boolean runsOnOneRecord() {
-        return placements.contains("record") || placements.contains("row");
+        return placements.contains("record") || placements.contains("row") || placements.contains("card");
     }
 }

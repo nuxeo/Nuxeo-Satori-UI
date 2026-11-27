@@ -1872,6 +1872,35 @@
     "yes": "Yes",
     "capture": {
       "link": "Take photos and file them here"
+    },
+    "create": {
+      "cancel": "Cancel",
+      "context": "For {{record}}, filed in {{folder}}.",
+      "done": "{{title}} created.",
+      "failed": "The record could not be created. Try again.",
+      "new": "New {{type}}",
+      "not-accepted": "The server did not accept this value.",
+      "save": "Create",
+      "saving": "Creating"
+    },
+    "holds": {
+      "empty": "No legal hold has been placed on this record.",
+      "failed": "The legal holds could not be read",
+      "held": "On legal hold",
+      "history": "Legal holds placed and released",
+      "hold": "Legal hold",
+      "loading": "Loading legal holds",
+      "not-held": "None",
+      "placed": "Legal hold placed",
+      "reason": "Reason",
+      "released": "Legal hold released",
+      "retention": "Retention",
+      "retention-ended": "Retention ended on {{date}}",
+      "retention-event": "Retained until an event ends it",
+      "retention-none": "Not under retention",
+      "retention-none-set": "A record, with no retention set",
+      "retention-until": "Retained until {{date}}",
+      "rule": "Rule"
     }
   },
   "drawer": {
@@ -2252,6 +2281,7 @@
     "shows-checklist": "This card shows a checklist. Its items are edited in the file.",
     "shows-comments": "This card shows the record's comments.",
     "shows-external": "This card shows a record of another system. Its fields are edited in the file.",
+    "shows-holds": "This card shows the record's retention and legal holds. Its actions are edited in the file.",
     "shows-related": "This card lists related records. Its columns are edited in the file.",
     "shows-timeline": "This card shows the record's timeline.",
     "source-failed": "The {{type}} {{mode}} could not be opened: {{problem}}",
@@ -3399,7 +3429,7 @@
     "asset-grid": {
       "label": "Assets",
       "select": "Select {{name}}",
-      "name-and-type": "{{name}} \u2014 {{type}}"
+      "name-and-type": "{{name}} — {{type}}"
     },
     "asset-facets-drawer": {
       "label": "Asset filters",

@@ -44,7 +44,13 @@
             }
           }
         },
-        { "field": "dsp:analyst", "widget": "user" }
+        { "field": "dsp:analyst", "widget": "user" },
+        {
+          "field": "dsp:case",
+          "widget": "document-link",
+          "parameters": { "types": ["OnboardingCase"] },
+          "readOnlyWhen": "core.true"
+        }
       ]
     },
     {

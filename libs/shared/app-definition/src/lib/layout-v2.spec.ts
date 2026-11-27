@@ -66,12 +66,25 @@ describe('the proposal and the validator agree', () => {
     expect(examples.filter((example) => 'checklist' in example)).toHaveLength(1);
   });
 
+  it("finds the holds card's and a related list's New among them", () => {
+    expect(examples.filter((example) => 'holds' in example)).toHaveLength(1);
+    expect(
+      examples.filter((example) => 'related' in example && 'create' in example['related']),
+    ).toHaveLength(1);
+  });
+
   examples.forEach((example, index) => {
     it(`example ${index + 1} has no finding`, () => {
       const form = JSON.stringify(example).includes('"checks"');
-      const card = ['fields', 'related', 'timeline', 'comments', 'external', 'checklist'].some(
-        (key) => key in example,
-      );
+      const card = [
+        'fields',
+        'related',
+        'timeline',
+        'comments',
+        'external',
+        'checklist',
+        'holds',
+      ].some((key) => key in example);
       const file =
         'version' in example
           ? example
@@ -903,7 +916,7 @@ describe('a checklist', () => {
       'cards[0].checklist: a checklist belongs in view mode only [structure]',
     ]);
     expect(messages(card({ field: 'case:checklist', items }, { timeline: {} }))).toEqual([
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds" [structure]',
     ]);
   });
 
@@ -1021,6 +1034,136 @@ describe('a checklist', () => {
   });
 });
 
+describe('a holds card', () => {
+  const card = (holds: unknown, more: Record<string, unknown> = {}) => ({
+    version: 2,
+    cards: [{ id: 'holds', labelKey: 'kit.holds', holds, ...more }],
+  });
+  /** The file's findings given the package's actions shown on a card, as the pipeline gives them. */
+  const held = (content: unknown, ...ids: string[]): string[] =>
+    validateLayoutV2(content, {
+      mode: 'view',
+      registries: { ...PACKAGED_REGISTRIES, cardActions: new Set(ids) },
+    }).map((finding) => `${finding.path}: ${finding.message} [${finding.kind}]`);
+  const both = { place: 'kit.placeHold', release: 'kit.releaseHold' };
+
+  it("shows only, or names the package's card actions that place and release a hold", () => {
+    expect(messages(card({}))).toEqual([]);
+    expect(messages(card({ ...both, pageSize: 5 }))).toEqual([]);
+    expect(held(card(both), 'kit.placeHold', 'kit.releaseHold')).toEqual([]);
+    expect(held(card({ place: 'kit.placeHold' }), 'kit.placeHold')).toEqual([]);
+  });
+
+  it("refuses, given the package's actions, one that is not among those shown on a card", () => {
+    expect(held(card(both), 'kit.placeHold')).toEqual([
+      `cards[0].holds.release: the action "kit.releaseHold" is not one of the package's actions.json that shows on a card ("on": ["card"]) [unknown]`,
+    ]);
+    expect(held(card(both))).toHaveLength(2);
+    // Without the package's actions, as the app loads a layout, the ids are held to their form only.
+    expect(messages(card(both))).toEqual([]);
+  });
+
+  it('refuses an id that is not one, the same action twice, and a bad page size', () => {
+    expect(messages(card({ place: 'has space' }))).toEqual([
+      `cards[0].holds.place: place names an action of the package's actions.json: 1 to 64 letters, digits, ".", "_" or "-" [structure]`,
+    ]);
+    expect(messages(card({ release: 7 }))).toEqual([
+      `cards[0].holds.release: release names an action of the package's actions.json: 1 to 64 letters, digits, ".", "_" or "-" [structure]`,
+    ]);
+    expect(messages(card({ place: 'kit.hold', release: 'kit.hold' }))).toEqual([
+      'cards[0].holds.release: place and release name two different actions [structure]',
+    ]);
+    expect(messages(card({ pageSize: 0 }))).toEqual([
+      'cards[0].holds.pageSize: pageSize is a whole number from 1 to 100 [structure]',
+    ]);
+  });
+
+  it('is refused outside view mode, beside other content, and as anything but an object', () => {
+    expect(messages(card({}), 'edit')).toEqual([
+      'cards[0].holds: holds belong in view mode only [structure]',
+    ]);
+    expect(messages(card({}, { timeline: {} }))).toEqual([
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds" [structure]',
+    ]);
+    expect(messages(card(['kit.placeHold']))).toEqual([
+      'cards[0].holds: holds is an object [structure]',
+    ]);
+  });
+
+  it('names a key version 2 does not have as unknown, so the app leaves out only that card', () => {
+    expect(findings(card({ delete: 'kit.delete' }))).toEqual([
+      {
+        path: 'cards[0].holds.delete',
+        kind: 'unknown',
+        message: '"delete" is not a key version 2 has',
+      },
+    ]);
+  });
+});
+
+describe("a related list's New", () => {
+  const card = (create: unknown) => ({
+    version: 2,
+    cards: [
+      {
+        id: 'disputes',
+        related: {
+          pageProvider: 'case_disputes',
+          parameters: [{ field: 'ecm:uuid' }],
+          columns: ['dc:title'],
+          create,
+        },
+      },
+    ],
+  });
+  const create = { type: 'DisputeCase', field: 'dsp:case' };
+
+  it('names the type, the property given the open record, and may name its words and its folder', () => {
+    expect(messages(card(create))).toEqual([]);
+    expect(
+      messages(
+        card({ ...create, labelKey: 'kit.newDispute', in: { pageProvider: 'kit_registers' } }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a missing or malformed type, and a property that is none or not the new record's own", () => {
+    const type =
+      'cards[0].related.create.type: needs the document type it creates: a letter, then letters, digits, "_" or "-" [structure]';
+    const field = `cards[0].related.create.field: needs the property "<prefix>:<name>" of the new record that holds the open record's id [structure]`;
+    expect(messages(card({ field: 'dsp:case' }))).toEqual([type]);
+    expect(messages(card({ type: 'Dispute Case', field: 'dsp:case' }))).toEqual([type]);
+    expect(messages(card({ type: 'DisputeCase' }))).toEqual([field]);
+    expect(messages(card({ type: 'DisputeCase', field: 'case' }))).toEqual([field]);
+    for (const reserved of ['ecm:parentId', 'var:case'])
+      expect(messages(card({ type: 'DisputeCase', field: reserved }))).toEqual([
+        `cards[0].related.create.field: ${reserved} is not a property a new record stores: the reference is one of its own [structure]`,
+      ]);
+  });
+
+  it('refuses a folder that is not a page provider, a key version 2 does not have, and a text', () => {
+    expect(messages(card({ ...create, in: '/default-domain' }))).toEqual([
+      'cards[0].related.create.in: in is { "pageProvider" } [structure]',
+    ]);
+    expect(messages(card({ ...create, in: { path: '/default-domain' } }))).toEqual([
+      'cards[0].related.create.in.path: "path" is not a key version 2 has [unknown]',
+      'cards[0].related.create.in.pageProvider: needs the name of a page provider defined on the server, whose first record is the folder [structure]',
+    ]);
+    expect(messages(card({ ...create, prefill: {} }))).toEqual([
+      'cards[0].related.create.prefill: "prefill" is not a key version 2 has [unknown]',
+    ]);
+    expect(messages(card('DisputeCase'))).toEqual([
+      'cards[0].related.create: create is an object: { "type", "field" } [structure]',
+    ]);
+  });
+
+  it('is refused in a form, where related records are', () => {
+    expect(messages(card(create), 'edit')).toEqual([
+      'cards[0].related: related records belong in view mode only [structure]',
+    ]);
+  });
+});
+
 describe('a timeline and comments', () => {
   const card = (content: Record<string, unknown>) => ({
     version: 2,
@@ -1055,7 +1198,7 @@ describe('a timeline and comments', () => {
 
   it('are refused beside fields, related records or each other', () => {
     const twice =
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]';
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds" [structure]';
     expect(messages(card({ timeline: {}, comments: {} }))).toEqual([twice]);
     expect(messages(card({ timeline: {}, fields: ['dc:title'] }))).toEqual([twice]);
     expect(
@@ -1124,7 +1267,7 @@ describe('a card from another system', () => {
         ),
       ),
     ).toEqual([
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds" [structure]',
     ]);
   });
 
@@ -1427,7 +1570,7 @@ const refusals: readonly { what: string; file: unknown; mode?: LayoutMode; found
     what: 'a card with neither fields, related records, a timeline, comments nor another system',
     file: { version: 2, cards: [{ id: 'c' }] },
     found:
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external", "checklist" or "holds" [structure]',
   },
   {
     what: 'a timeline that is not an object',

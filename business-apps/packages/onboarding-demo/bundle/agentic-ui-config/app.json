@@ -4,7 +4,7 @@
   "id": "onboarding",
   "label": "Onboarding and disputes",
   "labelKey": "onboarding.app",
-  "packageVersion": "0.1.0",
+  "packageVersion": "0.2.0",
   "platform": ">=0.2.0 <1.0.0",
   "address": "onboarding",
   "groups": ["onboarding-officers", "kyc-analysts", "dispute-analysts"],

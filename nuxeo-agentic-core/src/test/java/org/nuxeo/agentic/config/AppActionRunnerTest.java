@@ -185,6 +185,19 @@ class AppActionRunnerTest {
                         () -> runner().run(reader.session(), null, APP, REQUEST, null)).getKind());
     }
 
+    /** An action shown on a card of the record page runs on that one record, as one on its toolbar does. */
+    @Test
+    void anActionOnACardRunsOnItsRecord() {
+        String card = ACTIONS.replace("\"on\": [\"record\", \"row\"]", "\"on\": [\"card\"]");
+        AppActionRunner cardRunner = new AppActionRunner(registry(card, allowed), () -> allowed, automation);
+        cardRunner.run(reader.session(), asRequested, APP, REQUEST, "{\"note\":\"Before Friday\"}");
+        // The operation, then the record's history.
+        assertEquals(2, automation.runs.size());
+        assertEquals(REQUEST_RECORDS, automation.runs.get(0).operation());
+        assertEquals(AppActionRunner.AUDIT_OPERATION, automation.runs.get(1).operation());
+        assertEquals("Before Friday", automation.runs.get(0).parameters().get("note"));
+    }
+
     @Test
     void aBulkOnlyActionDoesNotRunOnOneRecord() {
         String bulk = ACTIONS.replace("\"on\": [\"record\", \"row\"]", "\"on\": [\"bulk\"]")

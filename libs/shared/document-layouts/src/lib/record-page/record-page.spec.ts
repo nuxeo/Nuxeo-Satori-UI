@@ -1806,6 +1806,63 @@ describe('RecordPageComponent', () => {
     });
   });
 
+  describe('a holds card and a related list New', () => {
+    const HELD_PAGE = {
+      version: 2,
+      columns: 2,
+      cards: [
+        { id: 'member', label: 'Member', fields: ['member:phone'] },
+        {
+          id: 'holds',
+          label: 'Holds',
+          holds: { place: 'kit.placeHold', release: 'kit.releaseHold', pageSize: 5 },
+        },
+        {
+          id: 'claims',
+          label: 'Claims',
+          related: {
+            pageProvider: 'member_claims',
+            parameters: [{ field: 'ecm:uuid' }],
+            columns: ['dc:title'],
+            create: { type: 'Claim', field: 'claim:member', label: 'New claim' },
+          },
+        },
+      ],
+    };
+
+    it('draws the holds card from the platform, and asks the audit for its holds alone', async () => {
+      const held = { ...member(), isRecord: true, hasLegalHold: true } as NuxeoDocument;
+      const root = await render(held, HELD_PAGE);
+      const card = root.querySelector<HTMLElement>('[data-card-id="holds"]');
+      expect(card?.querySelector('h3')?.textContent?.trim()).toBe('Holds');
+      expect(card?.querySelector('lib-record-holds')).not.toBeNull();
+      expect(card?.querySelector('[data-fact="hold"] dd')?.textContent?.trim()).toBe(
+        'On legal hold',
+      );
+      expect(documents.getAuditLog).toHaveBeenCalledWith('m1', 5, 0, {
+        eventIds: ['afterSetLegalHold', 'afterRemoveLegalHold'],
+        sortBy: 'eventDate',
+        sortOrder: 'desc',
+      });
+    });
+
+    it("offers the list's New over it, with the file's words, on a page that may change", async () => {
+      const root = await render(
+        { ...member(), parentRef: 'f0e1d2c3-b4a5-4968-8776-655443322110' },
+        HELD_PAGE,
+      );
+      const card = root.querySelector<HTMLElement>('[data-card-id="claims"]');
+      const create = card?.querySelector('lib-record-create');
+      expect(create).not.toBeNull();
+      // Before the list, so that it is met before the records it adds to.
+      expect(create?.compareDocumentPosition(card?.querySelector('lib-record-list') as Node)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      const readOnly = await render(member(), HELD_PAGE, true);
+      expect(readOnly.querySelector('[data-card-id="claims"] [data-record-create]')).toBeNull();
+    });
+  });
+
   describe('a checklist', () => {
     const ONBOARDING_PAGE = {
       version: 2,

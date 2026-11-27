@@ -128,6 +128,29 @@
       <pageSize>20</pageSize>
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>
+    <!-- A case's disputes, newest first, by the case's id: the case page's related list.
+         Written by hand, as the case's signature requests' are. -->
+    <coreQueryPageProvider name="onboarding_case_disputes">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'DisputeCase' AND (dsp:case = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dsp:openedOn" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <!-- The disputes registers, the oldest first: the first is where a dispute raised from a
+         case's page is filed (layout-v2.md, section 7, a related list's "in"). The reader's own
+         permissions decide which they see, and whether they may add to it. -->
+    <coreQueryPageProvider name="onboarding_dispute_registers">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'DisputeRegister'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:created" ascending="true" />
+      <pageSize>1</pageSize>
+      <maxPageSize>10</maxPageSize>
+    </coreQueryPageProvider>
     <coreQueryPageProvider name="onboarding_awaiting_signature">
       <pattern>
         SELECT * FROM Document WHERE ecm:primaryType = 'ESignatureRequest' AND (sigreq:status = 'sent')

@@ -880,6 +880,27 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(component.actionInProgress()).toBeNull();
     });
 
+    it("says the server's reason when it refuses the trash, as a legal hold does", async () => {
+      await build();
+      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
+      const held =
+        'This record is under a legal hold: it cannot be put in the trash or deleted until the hold is released.';
+      mockDetailService.trashDocument.mockReturnValue(
+        throwError(() => ({
+          status: 409,
+          error: { 'entity-type': 'exception', status: 409, message: held },
+        })),
+      );
+
+      component.trashDocument();
+
+      expect(toast.error).toHaveBeenCalledWith(held);
+      // A failure the server does not explain keeps the page's own words.
+      mockDetailService.trashDocument.mockReturnValue(throwError(() => new Error('offline')));
+      component.trashDocument();
+      expect(toast.error).toHaveBeenLastCalledWith(expect.not.stringContaining('offline'));
+    });
+
     it('refuses to trash without the Remove permission', async () => {
       await build(doc({ contextParameters: { permissions: ['Read'] } }));
       mockDialog.open.mockClear();

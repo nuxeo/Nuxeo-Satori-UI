@@ -372,7 +372,7 @@ provider, for the development server.
 | `label`, `labelKey`  | The button's text. One of them is required                                                                                                                                                                                                                                                                                         |
 | `icon`               | An icon of the platform's icon set, such as `check`                                                                                                                                                                                                                                                                                |
 | `order`              | A whole number. Lower comes first                                                                                                                                                                                                                                                                                                  |
-| `on`                 | Where it shows: `record`, the record page's toolbar; `row`, a queue's row menu; `bulk`, a queue's selection. `["record"]` when left out                                                                                                                                                                                            |
+| `on`                 | Where it shows: `record`, the record page's toolbar; `row`, a queue's row menu; `card`, a card of the record page that names it, as a holds card does; `bulk`, a queue's selection. `["record"]` when left out                                                                                                                     |
 | `visibleWhen`        | A rule: the button shows while it passes                                                                                                                                                                                                                                                                                           |
 | `enabledWhen`        | A rule: the button shows, and cannot be chosen, while it does not pass. Both rules are checked again before the action runs                                                                                                                                                                                                        |
 | `transition`         | A lifecycle transition. The button shows only when the record's lifecycle allows it, as phase 2's allowed-transitions enricher says                                                                                                                                                                                                |
@@ -477,8 +477,11 @@ The allow-list the pipeline reads, for the deployment a package is built for:
   `actions.json`: a file it served would be one the server's allow-list had not filtered. With no
   app open, before sign-in or on a server with no registry, no button is offered.
 - **An action on `record`** is a button on the document page's toolbar, and one on `row` an entry of
-  every list's row menu where the list names it: a queue's `rowActions`, or a related list's. Its
-  `visibleWhen` decides where it shows, and its `enabledWhen` whether it can be chosen.
+  every list's row menu where the list names it: a queue's `rowActions`, or a related list's. One
+  on `card` is in neither: the card of the record page that names it offers it, as a holds card
+  offers the actions that place and release a legal hold ([layout-v2.md](layout-v2.md), section 7),
+  and runs it the same way, on the record the page shows. A lifecycle button is never on a card.
+  Its `visibleWhen` decides where it shows, and its `enabledWhen` whether it can be chosen.
 - **Chosen,** its rules are checked again with the record it was chosen on, then a dialog asks its
   question, its `confirm` or the platform's naming the record, with its form drawn by the version 2
   form engine as a task form is. Run, the form's own checks must pass; the record is read again
