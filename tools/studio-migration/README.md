@@ -152,7 +152,7 @@ is byte-identical to the commands run by hand into the same paths:
 
 `migrate <package.zip or folder>... --out <new-directory>` ([`src/batch.ts`](src/batch.ts)) is the
 second piece of migration M4: a customer with several Studio projects runs them all at once, and
-[the guide](../../docs/business-apps/studio-migration-guide.md), section 8, walks them through it.
+[the guide](../../docs/business-apps/studio-migration-guide.md), section 9, walks them through it.
 One argument that is a package file runs as above, unchanged; several, or a folder, run so.
 
 - **From the command line.** `commandLine` in `cli.ts` runs it, and is `main` for every other
@@ -758,12 +758,14 @@ check that did not run does.
     recorded requests and their result counts need the server.
 - **Not run:** 9, plugins, which M3 brings.
 
-**Readiness.** A migration is ready only when all ten pass, nothing is pending, nothing proposed
-waits for a decision, and every reported item has an owner and a decision in `decisions.json`,
-with nothing wrong in that file (below, **The report**). Given `--allow-list`, the conversion must
-also have been made with that list, since a reported button's reason names the list it was made
-with. So an M1 run is never ready, and it lists what stands in the way. An id the report lists
-twice is read by its first entry.
+**Readiness.** A migration is ready only when all ten pass, nothing is pending, every proposal is
+accepted or rejected by someone named, for a reason, and the conversion was made with those
+decisions, every reported item has an owner and a decision in `decisions.json`, with nothing wrong
+in that file, and a person has approved the report and its decisions as they are, in
+`approval.json` (below, **The report**). Given `--allow-list`, the conversion must also have been
+made with that list, since a reported button's reason names the list it was made with. So an M1
+run is never ready, and it lists what stands in the way. An id the report lists twice is read by
+its first entry.
 
 **Negative controls.** [`src/mutations.ts`](src/mutations.ts) holds the controls of section 7 for
 the checks that run. Each breaks one thing and names the check that must then fail. The tests
@@ -856,6 +858,30 @@ so that it cannot pass by breaking one readiness already leaves aside. Each was 
 `mutate` to the made-up package's conversion, with and without M2's corpus, its decisions filled
 in, and `check` named it, where the unbroken copy had nothing of the decisions in the way. The
 sample is not in this repository, and was not used.
+
+**The controls of proposals, carrying and the approval.** Seven more, for what this slice holds
+([`src/proposals.spec.ts`](src/proposals.spec.ts), [`src/carry.spec.ts`](src/carry.spec.ts),
+[`src/approval.spec.ts`](src/approval.spec.ts)). The proposals' controls write the app as a
+converter that disobeyed `decisions.json` would, read the package, and fail check 5; the others
+break a carried decisions file or an approved conversion, and readiness must name them:
+
+| Mutation                   | Caught by | Breaks                                                                                          |
+| -------------------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `write-undecided-proposal` | check 5   | Writes a proposal no one has accepted or rejected, as if it were accepted                       |
+| `write-rejected-proposal`  | check 5   | Writes a proposal a person rejected, as if it were accepted                                     |
+| `drop-accepted-proposal`   | check 5   | Leaves out what a person accepted, as a conversion made without the decision would              |
+| `carry-to-other-construct` | decisions | Carries a decision to another construct, with that one's reason, as a carry by place would      |
+| `carry-changed-silently`   | decisions | Carries a changed construct's decision as it was made, rather than offer it for re-confirmation |
+| `approve-other-report`     | approval  | Makes the approval one of another report than the conversion holds                              |
+| `change-after-approval`    | approval  | Changes a reported item's decision after the report was approved                                |
+
+Each is applied by the tests to the made-up package: the proposals' to it with M2's corpus and the
+proposals the tests add, a button under a filter's known expression and a card the favourites
+operation feeds, one proposal accepted, one rejected and one undecided; carrying's to a new build
+of it, a field added above another, a search field relabelled, a theme property removed and the
+view's `dom-if` testing another facet; the approval's to a decided run approved through a stand-in
+for a terminal, and written to disk with `mutate`. Each was seen failing: a check, or readiness
+naming it. The sample is not in this repository, and was not used.
 
 ## The report
 
@@ -1533,6 +1559,41 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   for `browse.html`, which is an input, and not for `browse.scss`, which is not. The template the
   test now reads was added to the inputs.
 
+- **For proposals, carrying and the approval, 29 guards**, broken one at a time by a script kept
+  outside the repository that runs the specs meant to catch each and restores the file, each seen
+  turning them red:
+  - **Proposals:** an accepted verdict writing the rule, and only on the rule proposed now; the
+    checks reading the decisions; a proposal decided by someone named, for a reason; one of nothing
+    to write refused acceptance; what a proposal guards taking no decision; a conversion made with
+    other decisions said so; check 5 holding a field under an accepted rule to be there; `convert`
+    writing what was accepted, and `migrate --from` converting with it.
+  - **Carrying:** a decision held to its construct's identity; a changed construct offered, not
+    carried; a construct held twice, and an identity decided twice, carrying nothing; a repeated
+    card told from the card it repeats; another package refused before writing; a batch carrying
+    a new build by its package's name.
+  - **The approval:** readiness needing one; held to the report, the decisions, the files and the
+    package given; `approve` needing a terminal, the digest typed back, every decision made and a
+    name; the real shell giving it no terminal without one.
+  - **The report:** counting accepted and rejected proposals, and putting findings under the file
+    they name.
+
+  The first round, of 30, found two that left the specs green. One, a verdict on another rule than
+  the proposal's, has its test now. The other, a follower proposal counted as waiting in
+  `holdDecisions`, was a second layer behind `readDecisions`, which takes no decision of one, so it
+  could turn nothing red alone: it was removed, and the guard in front of it is among the 29.
+
+- **End to end, in a shell,** on the made-up packages, 27 November 2026: `migrate` of Acme-Claims
+  with and without M2's corpus, with and without the allow-list, its decisions filled in, the
+  proposals accepted, and run again with `--from`, which wrote each accepted rule and left nothing
+  of the decisions in the way but the approval; the proposals rejected and carried, which wrote
+  none of them; a new build of the package, another commit in its manifest, carrying every decision
+  by identity; `--from` another package, refused with nothing written; several packages, filled in
+  and run again with `--from`, each carrying its own; a new build among several, carried by its
+  package's name from a run that held one build of it, and carried nothing from a run that held
+  two, saying so; and `approve`, refused in that shell, which is no terminal, with nothing written.
+  The packages' bytes were the same after every run. No real package was run, and no reviewer
+  approved a report by hand.
+
 ## Not done yet
 
 - **The rest of migration M4:** the upload, which validates a package sent to a service and returns
@@ -1616,13 +1677,23 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Version 1 in the package pipeline.** The app-definition validator, and so the pipeline, checks
   nothing in a version 1 layout. Check 10 holds them to the documented contract, but the pipeline
   itself does not, until version 1's reader is shared from `libs/shared/document-layouts`.
-- **Accepting proposals.** A reported item takes an owner and a decision in `decisions.json`; a
-  proposal takes nothing yet. Accepting one means the converter writes what was accepted, a
-  condition's rule or the page provider of a card fed by an operation, so the decisions file would
-  feed `convert`, and check 5 would hold an accepted rule as it holds a converted one. Until then
-  every proposal waits, and the verdict says how many.
-- **A reviewer's approval of the report.** `report` prints what the reviewer approves, and no
-  command records that they did.
+- **A card an operation feeds,** such as the favourites card, proposes nothing the converter can
+  write: no queue takes the list an operation gives, and `home.json` has no card for a user's
+  favourites. It can be rejected, and not accepted, until the mapping agent proposes a target.
+- **Tidy labels as proposals.** A machine-generated label, such as "Hfs Fields Hfs S Object Id", is
+  named in a reported search field's note, and no tidy one is proposed: a tidy label would need
+  check 6 to take a label a person accepted where Web UI's differs.
+- **The approval is no signature.** It records who said they approved, at a terminal; it proves
+  neither who typed nor that a person did, as a cryptographic signature would. A program that
+  drives a terminal can approve. What it guards against is a run approving itself unwatched.
+- **Per-file findings are found by their words.** A finding is put under the file it starts by
+  naming, as the checks write them, or a package file it names: a finding worded otherwise would be
+  of no one file. The tests hold every finding of every control to a file, so a check whose wording
+  changes is seen there.
+- **Identities across real builds.** A construct's identity holds its file's path, which Studio
+  names after a layout's type and mode, a search's provider, a workflow and step; a project that
+  renames one gets a new identity for everything in it, so its decisions are dropped, never carried
+  to another construct. Two builds of one real project would show how often that happens.
 - **Contrast against the base palette:** a pair is checked only when the theme sets both tokens.
   A pair the theme sets only half of is not checked yet. Checking it needs the compiled palette's
   values, which are Sass and not JSON.

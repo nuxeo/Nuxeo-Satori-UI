@@ -738,7 +738,7 @@ function closingLines(summary: BatchSummary, request: BatchRequest): string[] {
     );
   }
   todo.push(
-    'docs/business-apps/studio-migration-guide.md, section 8, says what this summary means, and section 4 what each line of a verdict means.',
+    'docs/business-apps/studio-migration-guide.md, section 9, says what this summary means, and section 4 what each line of a verdict means.',
   );
   lines.push('', 'What to do next:', ...todo.map((item, index) => `  ${index + 1}. ${item}`));
   return lines;

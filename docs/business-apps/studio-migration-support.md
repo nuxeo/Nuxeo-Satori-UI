@@ -14,7 +14,7 @@ cover, in any of the ways section 10 lists.
 
 **Where it stands.** Today every migration's verdict is "not ready": some checks need a server
 that is not built yet, and some parts of a package wait for a later version of the tool (the
-guide, section 10). A support case is about what a run found, not about switching a customer over.
+guide, section 11). A support case is about what a run found, not about switching a customer over.
 No one outside the team has followed this playbook yet.
 
 ## 1. What the customer has
@@ -64,7 +64,8 @@ Read in this order: did it stop, did a check fail, what stands in the way, what 
    check: the table says what it means and who acts.
 3. **What stands in the way.** The verdict's lines, under "Verdict: not ready", each name one
    thing; section 9, "The verdict", says each. Most are waits: checks whose server half has not
-   run, constructs pending a later version of the tool, proposals no one can accept yet.
+   run, constructs pending a later version of the tool, proposals the customer is still to accept
+   or reject, and the reviewer's approval, which comes last.
 4. **What needs a decision.** The report's "Decisions needed" lists every reported item: its
    label, its file in the package, its id, why it is reported (`why:`), where it was written if it
    was (`written to:`), and its owner and decision, or `none` and `nothing yet`. Reported is not
@@ -79,7 +80,8 @@ Read in this order: did it stop, did a check fail, what stands in the way, what 
   the conversion recorded it". The converter's version does not say which commit of the
   repository ran: ask for that (section 5).
 - **The summary:** every construct of the package by kind and outcome. `converted` is done;
-  `proposed` waits for a person to accept or reject it, which is not built yet; `reported` is for a
+  `proposed` is for a person to accept or reject, and the accepted and rejected columns count
+  those decided; `reported` is for a
   decision, and `decided` counts those with an owner and a decision; `generated` is Studio's own
   packaging; `server` stays on the server, such as the data model; `pending` waits for a later
   version of the tool, such as custom code. `missing` must be 0, and **Coverage** 100%: anything
@@ -93,20 +95,34 @@ Read in this order: did it stop, did a check fail, what stands in the way, what 
 catalogue does not know or cannot map. The report's list, item by item, is the one
 `decisions.json` follows.
 
-**`conversion/decisions.json`** has a `format` (`studio-migration-decisions/1`), a `package`
+**`conversion/decisions.json`** has a `format` (`studio-migration-decisions/2`), a `package`
 naming the build it is for (name, version, Studio commit, build time and the bundle's SHA-256), and
-an entry for every reported item, in the report's order: its `id`, and copied from the report its
-`label`, `outcome`, `note`, and where there is one its `property`, `to` or `rule`; then `owner`
-and `decision`, blank. The customer writes `owner` and `decision`, and nothing else:
+an entry for every reported item and every proposal, in the report's order: its `id` and its
+construct's `identity`, and copied from the report its `label`, `outcome`, `note`, and where there
+is one its `property`, `to` or `rule`; then, blank, `owner` and `decision`, and for a proposal
+`reason`. The customer writes those, and nothing else: for a reported item who owns it and what
+they decided; for a proposal, a condition's rule the tool proposes, who decides it, `accept` or
+`reject`, and why. What a proposed condition guards, such as a field, has no entry of its own:
+it follows the condition's decision.
 
-- a decision counts only while the copied keys say what the report says, so an item whose reason
-  changes is decided again;
-- the file counts only for the build it names, so a new build of the package starts again;
-- `--from` an earlier run carries each decision that still holds into a new run, which counts it;
-  `decisions.txt` says how many were carried, and lists each that was not, with why.
+- a decision counts only while the copied keys say what the report says, and its `identity` is
+  that of the construct at its `id`, so an item whose reason changes is decided again;
+- `check` and `report` take the file only for the build it names;
+- `--from` an earlier run carries each decision that still holds into a new run, which counts it,
+  and writes what the customer accepted into the new run's `conversion/`. From another build of the
+  same package, it carries each decision by its construct's identity: offered for re-confirmation,
+  the earlier decision in `earlier` beside a blank one, where the construct changed, and dropped
+  where it is gone. `decisions.txt` says how many were carried and offered, and lists each that was
+  not carried, with why; the report lists what was carried, offered and dropped.
 
-An item counts as decided when both `owner` and `decision` say something other than spaces. What
-the file holds that the tool does not take is a finding of section 9, "decisions.json".
+An item counts as decided when both `owner` and `decision` say something other than spaces; a
+proposal, when it also has a `reason`, and its `decision` is `accept` or `reject`. What the file
+holds that the tool does not take is a finding of section 9, "decisions.json".
+
+**`conversion/approval.json`**, when there is one, is the reviewer's approval of the report and
+its decisions: who, when, and the SHA-256 of what they approved. Only `approve` writes it, run by
+the reviewer at a terminal, never by `migrate`, and any change to the conversion voids it (section
+9, "approval.json").
 
 ## 3. Who acts on a finding
 
@@ -259,10 +275,12 @@ npm run studio-migration -- migrate ~/studio/claims-1.0.0.zip ~/studio/policies-
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
   folder for the same bytes, whatever its file is called now; failing that, from the one folder of
   the same build: the same name, version, Studio commit, build time and bundle, which is what a run
-  of one package holds its decisions to. When the earlier run held that build under two sets of
-  bytes, neither is taken, and the line says so. A package the earlier run did not hold, or whose
-  run there wrote no decisions, starts again, and its line says "Nothing carried"; one whose run
-  stopped before its decisions step says "Not carried".
+  of one package holds its decisions to; failing that, from the one folder of another build of the
+  same package, by its name, carried by each construct's identity. When the earlier run held that
+  build under two sets of bytes, or several other builds of the package and not this one, none is
+  taken, and the line says so. A package the earlier run did not hold, or whose run there wrote no
+  decisions, starts again, and its line says "Nothing carried"; one whose run stopped before its
+  decisions step says "Not carried".
   `--from` a run of one package is refused: run that package on its own with `--from`. The other
   way round too: a run of one package given `--from` a run of several finds no decisions there;
   give it `--from <that run>/packages/<name>`.
@@ -291,9 +309,13 @@ A run that stops says why and what to do. What each stop means for support:
 - **`2. The conversion: refused`.** Usually a name in the package that cannot be a file name on
   every system: a limit of the tool, **Tool**. Escalate with the message and `inventory.txt`.
 - **The checks or the report refused,** "could not be read back": **Tool**, a defect.
-- **`The decisions, carried: refused`.** `--from` holds the decisions of another build, or a file
-  `migrate` did not write. **Decisions:** run without `--from` and fill them in again, copying
-  `owner` and `decision` by hand where an item is the same.
+- **`migrate: … so none of it is taken. Nothing was written.`** `--from` holds the decisions of
+  another package, or a first-format file of another build, or a file `migrate` did not write.
+  **Decisions:** give `--from` a run of this package, or run without it and fill them in again,
+  copying `owner` and `decision` by hand where an item is the same. Another build of the same
+  package is not refused: its decisions are carried by identity.
+- **`The decisions, carried: refused`.** The file `--from` names changed between the checks
+  before the run and its decisions step, or is not one `migrate` wrote. **Decisions**, as above.
 - **"… cannot be written: …"** The disk, or the folder's permissions: run again into a new folder
   the customer can write to.
 - **A stack trace, then "This is a defect in this tool"**: **Tool**. Escalate with all of it. In a
@@ -679,7 +701,7 @@ Each package's line in `summary.txt` starts with its result, and `summary.json` 
 
 | The finding reads  | Printed as                                                        | What it means                                                                                               | Who acts                                            |
 | ------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `ready`            | `ready`                                                           | Every step ran, no check failed, and the verdict is ready.                                                  | **Decide**: the reviewer's approval is next         |
+| `ready`            | `ready`                                                           | Every step ran, no check failed, every decision is made, and a reviewer approved the report as it is.       | **Decide**: nothing is left in the way              |
 | `not ready`        | `not ready, and no check failed`                                  | Every step ran and no check failed; the verdict lists what stands in the way. Every package reads so today. | **Decide**; **Wait** for the lines that wait        |
 | `check failed`     | `check <n> failed`, or `checks <n>, <n> failed`                   | Every step ran, and a check found something. Read its `check.txt`, and each finding's row above.            | **Tool** or **Package**, as each finding's row says |
 | `stopped`          | `stopped at step <n>, <step>`, or `stopped before its first step` | The run of that package stopped: `printed/<name>.txt` says why and what to do, as section 7 does.           | As section 7 says                                   |
