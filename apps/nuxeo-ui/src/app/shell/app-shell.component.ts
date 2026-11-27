@@ -223,11 +223,11 @@ export class AppShellComponent implements OnDestroy {
   );
   /** Whether the collapsed administration menu is open over the page. */
   readonly adminMenuOpen = signal(false);
-  /** Whether the open administration menu was opened by its button, which takes the focus back. */
+  /** Whether the open administration menu was opened by a person, by its button or the platform menu, so that the button takes the focus back when it closes. */
   private adminMenuOpenedByButton = false;
   /** `over` while the administration menu is collapsed: modal, with a backdrop and Escape. */
   protected readonly drawerMode = computed(() => (this.adminMenuCompact() ? 'over' : 'side'));
-  /** Whether the drawer shows: a collapsed administration menu only while its button opened it. */
+  /** Whether the drawer shows: a collapsed administration menu only while it is open over the page. */
   protected readonly drawerShown = computed(
     () => this.drawerOpen() && (!this.adminMenuCompact() || this.adminMenuOpen()),
   );
