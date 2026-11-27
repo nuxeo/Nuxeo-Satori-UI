@@ -197,13 +197,23 @@ final class Desk {
         return answer(repository, "POST", "/callback/standin", headers, body);
     }
 
+    /** A callback answered by an endpoint whose "now" is the clock's: a test of the window sets it exactly. */
+    static CallbackEndpoint.Response post(String repository, Map<String, String> headers, byte[] body, Clock clock) {
+        return answer(repository, "POST", "/callback/standin", headers, body, clock);
+    }
+
     static CallbackEndpoint.Response answer(String repository, String method, String path,
             Map<String, String> headers, byte[] body) {
+        return answer(repository, method, path, headers, body, Clock.systemUTC());
+    }
+
+    static CallbackEndpoint.Response answer(String repository, String method, String path,
+            Map<String, String> headers, byte[] body, Clock clock) {
         if (TransactionHelper.isTransactionActiveOrMarkedRollback()) {
             TransactionHelper.commitOrRollbackTransaction();
         }
         try {
-            return new CallbackEndpoint(Framework.getService(SignatureService.class), Clock.systemUTC(), repository)
+            return new CallbackEndpoint(Framework.getService(SignatureService.class), clock, repository)
                     .respond(method, path, headers, body);
         } finally {
             TransactionHelper.startTransaction();

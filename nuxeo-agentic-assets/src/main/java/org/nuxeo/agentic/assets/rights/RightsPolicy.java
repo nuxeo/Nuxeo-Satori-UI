@@ -26,7 +26,12 @@ import java.util.regex.Pattern;
  * channel over a later one;</li>
  * <li>a {@code <blob>} at a video's transcoded video or storyboard frame is left out: those places
  * are decided by their conversion's {@code <rendition>} and by {@code <storyboard>}, so a rule by
- * place would never be read.</li>
+ * place would never be read;</li>
+ * <li>a policy with {@code <territories>} and no {@code <windows>}, or the other way round, is
+ * <em>broken</em>: a territory with no window, or a window with no territory, decides nothing;</li>
+ * <li>a {@code <delivery>} in a policy with no territories, or one that is empty, names a use its
+ * policy does not list, a preview, a rendition or the storyboard, or gives an entry a channel or
+ * {@code preview}, is <em>broken</em>: every delivery of the type is refused.</li>
  * </ul>
  * {@link #problems()} lists each one, for the server log.
  */
@@ -68,8 +73,22 @@ public final class RightsPolicy {
 
     private final boolean broken;
 
+    private final String territoriesXpath;
+
+    private final String windowsXpath;
+
+    private final String windowsDocumentXpath;
+
+    private final String windowsDocumentType;
+
+    /** The delivery package's files, in its order; {@code null} when the policy has none. */
+    private final List<Use> delivery;
+
+    private final boolean deliveryBroken;
+
     private RightsPolicy(String type, String rightsEndXpath, String channelsXpath, String originalXpath,
-            Map<Use, Rule> rules, List<String> problems, boolean broken) {
+            Map<Use, Rule> rules, List<String> problems, boolean broken, String territoriesXpath, String windowsXpath,
+            String windowsDocumentXpath, String windowsDocumentType, List<Use> delivery, boolean deliveryBroken) {
         this.type = type;
         this.rightsEndXpath = rightsEndXpath;
         this.channelsXpath = channelsXpath;
@@ -77,6 +96,12 @@ public final class RightsPolicy {
         this.rules = Collections.unmodifiableMap(rules);
         this.problems = List.copyOf(problems);
         this.broken = broken;
+        this.territoriesXpath = territoriesXpath;
+        this.windowsXpath = windowsXpath;
+        this.windowsDocumentXpath = windowsDocumentXpath;
+        this.windowsDocumentType = windowsDocumentType;
+        this.delivery = delivery == null ? null : List.copyOf(delivery);
+        this.deliveryBroken = deliveryBroken;
     }
 
     /** The policy a descriptor describes, with each of its mistakes read as a refusal. */
@@ -138,7 +163,107 @@ public final class RightsPolicy {
         }
         // A use declared wrongly once is refused, whatever else declares it, before or after.
         rules.keySet().removeAll(malformed);
-        return new RightsPolicy(type, rightsEnd, channels, originalXpath, rules, problems, broken);
+
+        String territories = trimmed(descriptor.getTerritoriesXpath());
+        String windows = trimmed(descriptor.getWindowsXpath());
+        String windowsDocument = trimmed(descriptor.getWindowsDocumentXpath());
+        if (territories != null && windows == null) {
+            problems.add("<territories> with no <windows xpath=\"...\">: every use is refused");
+            broken = true;
+        } else if (territories == null && windows != null) {
+            problems.add("<windows> with no <territories xpath=\"...\">: every use is refused");
+            broken = true;
+        } else if (territories == null && windowsDocument != null) {
+            problems.add("<windows document=\"...\"> with no xpath: every use is refused");
+            broken = true;
+        }
+        String windowsType = trimmed(descriptor.getWindowsDocumentType());
+        if (windowsDocument != null && windowsType == null) {
+            // Any document could then lend its windows: the one named must be of the type said.
+            problems.add("<windows document=\"...\"> with no type=\"...\" for that document: every use is refused");
+            broken = true;
+        }
+        boolean territorial = territories != null && windows != null;
+
+        List<Use> delivery = null;
+        boolean deliveryBroken = false;
+        DeliveryDescriptor packaged = descriptor.getDelivery();
+        if (packaged != null) {
+            delivery = new ArrayList<>();
+            deliveryBroken = !delivery(packaged, rules, territorial, delivery, problems);
+        }
+        return new RightsPolicy(type, rightsEnd, channels, originalXpath, rules, problems, broken,
+                territorial ? territories : null, territorial ? windows : null, territorial ? windowsDocument : null,
+                territorial && windowsDocument != null ? windowsType : null, delivery, deliveryBroken);
+    }
+
+    /**
+     * Reads a delivery package into {@code files}, each use once, in its order. Answers whether it is
+     * sound: a mistake in it refuses every delivery, and is said in {@code problems}.
+     */
+    private static boolean delivery(DeliveryDescriptor descriptor, Map<Use, Rule> rules, boolean territorial,
+            List<Use> files, List<String> problems) {
+        boolean sound = true;
+        if (!territorial) {
+            problems.add("a <delivery> in a policy with no <territories> and <windows>: every delivery is refused");
+            sound = false;
+        }
+        List<UseDescriptor> entries = new ArrayList<>();
+        List<Use> uses = new ArrayList<>();
+        if (descriptor.getOriginal() != null) {
+            entries.add(descriptor.getOriginal());
+            uses.add(Use.ORIGINAL);
+        }
+        for (UseDescriptor view : descriptor.getViews()) {
+            String name = trimmed(view.getName());
+            entries.add(view);
+            uses.add(name == null ? null : Use.view(name));
+        }
+        for (UseDescriptor blob : descriptor.getBlobs()) {
+            String xpath = trimmed(blob.getXpath());
+            entries.add(blob);
+            uses.add(xpath == null ? null : Use.blob(xpath));
+        }
+        if (!descriptor.getRenditions().isEmpty() || descriptor.getStoryboard() != null) {
+            problems.add("a <delivery> names a rendition or the storyboard, which are not files the document holds:"
+                    + " every delivery is refused");
+            sound = false;
+        }
+        for (int i = 0; i < uses.size(); i++) {
+            Use use = uses.get(i);
+            UseDescriptor entry = entries.get(i);
+            if (use == null) {
+                problems.add("a <delivery> entry with no name or xpath: every delivery is refused");
+                sound = false;
+                continue;
+            }
+            if (trimmed(entry.getChannel()) != null || entry.isPreview()) {
+                problems.add("the <delivery> entry " + use + " has a channel or preview=\"true\", which its rule gives:"
+                        + " every delivery is refused");
+                sound = false;
+            }
+            if (use.equals(Use.ORIGINAL) && trimmed(entry.getXpath()) != null) {
+                problems.add("the <delivery> entry original has an xpath, which the policy's <original> gives:"
+                        + " every delivery is refused");
+                sound = false;
+            }
+            Rule rule = rules.get(use);
+            if (rule == null || rule.preview()) {
+                problems.add("the <delivery> entry " + use + " is not a use the policy clears for a channel:"
+                        + " every delivery is refused");
+                sound = false;
+            }
+            if (files.contains(use)) {
+                problems.add("the <delivery> entry " + use + " is listed twice: it is delivered once");
+            } else {
+                files.add(use);
+            }
+        }
+        if (files.isEmpty()) {
+            problems.add("a <delivery> with no file: every delivery is refused");
+            sound = false;
+        }
+        return sound;
     }
 
     private static void put(Map<Use, Rule> rules, Set<Use> malformed, List<String> problems, Use use,
@@ -210,5 +335,49 @@ public final class RightsPolicy {
     /** Each mistake read from the descriptor, and what it means. Empty for a sound policy. */
     public List<String> problems() {
         return problems;
+    }
+
+    /**
+     * Whether the policy reads territories and release windows: then a use with a channel is
+     * cleared only in a territory the asset holds, while a window for its channel is open there.
+     */
+    public boolean territorial() {
+        return territoriesXpath != null;
+    }
+
+    /** Where the asset may be delivered, or {@code null} for a policy with no territories. */
+    public String territoriesXpath() {
+        return territoriesXpath;
+    }
+
+    /** Its release windows, or {@code null} for a policy with no territories. */
+    public String windowsXpath() {
+        return windowsXpath;
+    }
+
+    /**
+     * The property of the asset holding the id of the document its windows are read from, or
+     * {@code null} when they are read from the asset itself.
+     */
+    public String windowsDocumentXpath() {
+        return windowsDocumentXpath;
+    }
+
+    /**
+     * The type the document named for the windows must be, such as {@code Film}; {@code null} when
+     * the windows are the asset's own.
+     */
+    public String windowsDocumentType() {
+        return windowsDocumentType;
+    }
+
+    /** The delivery package's files, in its order; {@code null} when the policy has no {@code <delivery>}. */
+    public List<Use> delivery() {
+        return delivery;
+    }
+
+    /** A delivery package with a mistake in it: every delivery of the type is refused. */
+    public boolean deliveryBroken() {
+        return deliveryBroken;
     }
 }

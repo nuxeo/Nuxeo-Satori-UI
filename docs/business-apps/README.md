@@ -75,6 +75,9 @@ Designer, the development plan and its decisions. Start here when you pick this 
     demo server, the logs, and what is not ready for production.
 17. [security-reviews.md](security-reviews.md): every security review the work needs, deferred
     until the app is finished: what each covers, where its notes are, and the decision it rests on.
+18. [embedded-panels.md](embedded-panels.md): a record page's panel inside another system's page,
+    and how a host page and its server use it: the element, the handshake, the token exchange and
+    the server's configuration.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):
@@ -93,6 +96,11 @@ recommendation, and waiting for its security review ([security-reviews.md](secur
   the provider's callback authenticated and taken once, and the signed file filed on the record as
   a new version with the provider's evidence (phase 7), with its kit,
   [onboarding and disputes](../../business-apps/packages/onboarding-demo/README.md).
+- [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md): the token exchange of
+  embedded panels, a host's signed assertion of its user for a short-lived token of the add-on's
+  own, signed in on the REST API alone and held to its host's origins and to reads (phase 7,
+  decision F). Not a domain module's: an add-on of its own, so that a server that embeds no panel
+  gets no endpoint.
 - [`nuxeo-agentic-records`](../../nuxeo-agentic-records/README.md): the disposition review, on the
   platform's retention module: the records due held in a run, approved by two people other than
   its starter, deleted, and a certificate kept; the audit export a records specialist reviews, and

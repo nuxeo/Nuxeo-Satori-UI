@@ -48,6 +48,33 @@
       so the use is refused. A policy with no rightsEnd or no channels refuses every use of its
       type, so a mistake refuses rather than lets through. A later policy for the same type
       replaces it whole, and enabled="false" removes it.
+
+      Media rights add territories, release windows and a delivery package:
+
+      <code>
+        <policy type="FilmVersion">
+          <rightsEnd xpath="dc:expired" />
+          <channels xpath="fver:channels" />
+          <territories xpath="fver:territories" />
+          <windows xpath="film:windows" document="fver:film" type="Film" />
+          <original xpath="files:files/0/file" channel="SVOD" />
+          <blob xpath="files:files/1/file" channel="SVOD" />
+          <delivery>
+            <original />
+            <blob xpath="files:files/1/file" />
+          </delivery>
+        </policy>
+      </code>
+
+      territories names a text or list property: where the asset may be delivered. windows names a
+      complex list of release windows, each a territory, a channel, a from day and an until day, in
+      UTC, both included; with document, it is read from the document whose id that property
+      holds, which must be of the type type names, such as a localised version's film. Then a use with a channel is cleared only while a
+      window for its channel is open: in a delivery's territory, which the asset must hold, or, for
+      a download, which names none, in any territory it holds. Codes territory-not-covered and
+      outside-window. One of territories and windows without the other refuses every use.
+      delivery lists the files a delivery package carries, each by a use the policy clears for a
+      channel; a MediaDelivery is refused whole when any of them is refused.
     </documentation>
     <object class="org.nuxeo.agentic.assets.rights.RightsPolicyDescriptor" />
   </extension-point>

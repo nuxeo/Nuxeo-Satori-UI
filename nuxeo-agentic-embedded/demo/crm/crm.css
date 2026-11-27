@@ -1,0 +1,61 @@
+/* The CRM's own styles, deliberately loud, so that the demo shows they stop at the panel's shadow
+   root: every heading red and serif, every button a slab, every element spaced out. */
+* {
+  letter-spacing: 0.5px;
+}
+
+body {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  color: rgb(20, 20, 60);
+  background: rgb(250, 247, 240);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: rgb(200, 0, 0);
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+
+button {
+  border: 4px solid rgb(0, 0, 0);
+  background: rgb(255, 230, 0);
+  font-size: 22px;
+}
+
+dl,
+dt,
+dd {
+  color: rgb(0, 128, 0);
+}
+
+.crm-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgb(20, 20, 60);
+  color: rgb(255, 255, 255);
+}
+
+.crm-main {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+  padding: 24px;
+}
+
+.crm-panel nuxeo-record-panel {
+  display: block;
+  border: 1px solid rgb(180, 180, 180);
+  min-height: 200px;
+}
+
+.crm-frame {
+  width: 320px;
+  height: 80px;
+  border: 1px dashed rgb(180, 180, 180);
+}

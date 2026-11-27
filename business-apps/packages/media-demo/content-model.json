@@ -1,0 +1,121 @@
+{
+  "doctypes": {
+    "Film": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "film"]
+    },
+    "FilmVersion": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "files", "filmversion"]
+    },
+    "MediaDelivery": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "media_delivery"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "film",
+      "prefix": "film",
+      "@prefix": "film",
+      "fields": {
+        "year": "long",
+        "director": "string",
+        "genre": "string",
+        "originalLanguage": "string",
+        "windows": {
+          "type": "complex[]",
+          "fields": {
+            "territory": "string",
+            "channel": "string",
+            "from": "date",
+            "until": "date"
+          }
+        }
+      }
+    },
+    {
+      "name": "files",
+      "fields": {
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "file": "blob"
+          }
+        }
+      }
+    },
+    {
+      "name": "filmversion",
+      "prefix": "fver",
+      "@prefix": "fver",
+      "fields": {
+        "film": "string",
+        "language": "string",
+        "territories": "string[]",
+        "channels": "string[]"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "media_delivery",
+      "prefix": "mdlv",
+      "@prefix": "mdlv",
+      "fields": {
+        "version": "string",
+        "distributor": "string",
+        "territory": "string",
+        "deliveredAt": "date",
+        "deliveredBy": "string",
+        "files": {
+          "type": "complex[]",
+          "fields": {
+            "use": "string",
+            "name": "string",
+            "channel": "string",
+            "filename": "string",
+            "mimeType": "string",
+            "length": "long",
+            "digest": "string"
+          }
+        }
+      }
+    }
+  ]
+}

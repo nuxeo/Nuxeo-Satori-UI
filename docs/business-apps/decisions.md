@@ -211,6 +211,24 @@ way.
     dropped from the kit, and every customer then gets the download permission, which refuses
     nothing until a policy is contributed.
 
+- **B, media rights in the assets add-on (26 November 2026).** Built against the recommendation,
+  "one add-on per domain module": territories, release windows, a localised version reading its
+  film's windows, and delivery packages are
+  [`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/README.md#media-rights-territories-windows-and-deliveries)
+  0.4.0, since they are an asset's rights, decided at the same endpoints as its rights end; the
+  media kit, [`media-demo`](../../business-apps/packages/media-demo/README.md), depends on it.
+  A delivery is a document filed, a `MediaDelivery`, which a synchronous listener decides, so
+  decision 3 is not touched: no operation and no button. Decision C is not touched either: a
+  delivery makes no share link and signs no one in. Decision G, tenancy, is not built. Its security
+  review is deferred until the app is finished, as every security review is; it is installed
+  nowhere. What changes if B goes another way:
+  - **One large add-on:** the bundle moves into that add-on's package as it is, and the media kit's
+    `package.xml` depends on that package. The `MediaDelivery` type, the `mdlv` schema and the
+    policy's elements do not change, so no kit's files do.
+  - **A media add-on of its own:** the delivery types and listener move into it, requiring
+    `org.nuxeo.agentic.assets.rights`, whose service decides a delivery; the territories and
+    windows stay in the assets add-on, since every download of an asset is decided there.
+
 - **B, the document control module's server add-on (26 November 2026).** Built against the
   recommendation: numbering, revisions and supersession are
   [`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/README.md), a Maven module beside
@@ -385,6 +403,38 @@ way.
   - **A separate service the client calls itself:** the cache and the events move to the service,
     and the card reads the same `age` from it.
   - **If F passes the reader's identity on,** the reader joins the cache's key.
+
+- **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
+  "exchange in phase 7": a record page's panel inside another system's page,
+  [embedded-panels.md](embedded-panels.md), and its server's half,
+  [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md). A host the server's
+  administrators register in `nxserver/config/`, never a package's bundle, exchanges its signed
+  assertion of a user for a short-lived token, for the Nuxeo user its configuration maps, never an
+  administrator unless it allows one; an OAuth 2.0 token exchange (RFC 8693), with the host's client
+  secret and key in the server's settings. The token is a JWT signed with a key of the add-on's own,
+  not the platform's `nuxeo.jwt.secret`, whose tokens the platform also takes at its JWT
+  authenticator and its OAuth 2.0 provider's JWT bearer grant; the add-on's own authenticator signs
+  the user in with it, in the REST API's two chains alone, which the add-on contributes again with it, and
+  the add-on's filter and that authenticator hold it to its host's origins and to reads; each exchange
+  is audited. The panel, `<nuxeo-record-panel>`, is
+  the layout engine's record page in a shadow root, given its token by `postMessage`. An add-on of
+  its own rather than `nuxeo-agentic-core`, so that a server that embeds no panel gets no endpoint;
+  on B's recommendation either way, since it is no runtime essential of every server. Its security
+  review is deferred until the app is finished, as every security review is; it is installed
+  nowhere, and its demo runs against a stand-in. The shell's token-based sign-in, the decision's
+  other half, is not touched: the shell signs in as before. What changes if F goes another way:
+  - **No token exchange:** the add-on and `apps/nuxeo-embedded-panels` go, with the package's
+    `embedded/v1/` files and the frontend module's build of them; nothing else uses either.
+  - **Exchange through Nuxeo's OAuth 2.0 provider,** should the platform gain a token exchange whose
+    tokens carry a scope it enforces: the add-on's servlet, `TokenExchange`, its codec and its
+    authenticator go, the host's contribution becomes the provider's client, and the REST API's chains
+    go back to the platform's. The panel does not change.
+  - **The platform's own JWT, with an audience the platform holds to a path:** not built, since the
+    provider's JWT bearer grant takes any token of the platform's JWT service and answers an access
+    token with no scope; it would be possible only once that grant checks a token's audience.
+  - **Connectors, decision D:** the panel's card from another system still reads through
+    `Connector.Read` with the service credential; passing the user's own identity on to the other
+    system is not built.
 
 - **5, the spike its recommendation asks for (25 November 2026).** Built as the recommendation
   says, "spike in phase 6": a prototype loader in `tools/plugin-spike`, which ships nothing, and

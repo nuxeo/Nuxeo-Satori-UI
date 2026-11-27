@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/app.schema.json",
+  "version": 2,
+  "id": "media",
+  "label": "Media rights",
+  "labelKey": "media.app",
+  "packageVersion": "0.1.0",
+  "platform": ">=0.2.0 <1.0.0",
+  "address": "media",
+  "groups": ["media-distribution", "media-rights"],
+  "branding": {
+    "applicationTitle": "Media rights"
+  }
+}
