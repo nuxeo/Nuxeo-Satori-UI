@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "vehicle-titles.home.title",
+  "cards": [
+    {
+      "id": "missing-documents",
+      "labelKey": "vehicle-titles.home.missingDocuments",
+      "kpi": { "pageProvider": "vtitles_deals_missing_documents" },
+      "queue": "vehicle-deals-missing-documents"
+    },
+    {
+      "id": "overdue",
+      "labelKey": "vehicle-titles.home.overdue",
+      "kpi": { "pageProvider": "vtitles_overdue_titles" },
+      "queue": "vehicle-titles-overdue"
+    },
+    {
+      "id": "lien-release",
+      "labelKey": "vehicle-titles.home.lienRelease",
+      "kpi": {
+        "pageProvider": "vtitles_awaiting_lien_release",
+        "aggregate": "vtitle_lienHolder_agg"
+      },
+      "queue": "vehicle-titles-awaiting-lien-release",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["vehicle-title-clerks"] }
+    }
+  ]
+}

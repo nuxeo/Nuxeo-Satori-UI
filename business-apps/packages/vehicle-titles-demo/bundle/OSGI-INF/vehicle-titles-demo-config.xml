@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<component name="nuxeo.config.vehicle-titles-demo" version="1.0">
+  <!-- Registers after Satori's defaults, so what it contributes applies on top of them. -->
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+
+  <!-- The app-layout and app-form generators add each layout here, inside an
+       org.nuxeo.agentic.ui.config "configuration" extension: the server serves a layout only when
+       this component names it, and the package pipeline refuses one named from anywhere but its
+       layouts/ file, and a layouts/ file this component does not name.
+
+       The app definition's files travel in this package: app.json, labels/, and what the generators
+       or a person add. The app registry in nuxeo-agentic-core serves them, after sign-in, to the
+       groups app.json names, as the <app> element below names each file
+       (docs/business-apps/app-definition-v2.md, section 10). The
+       app-registry generator writes it, and the generators that add a file keep it in step; run
+       app-registry again after writing a file by hand, such as the home or the menu.
+       There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
+
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <layout type="VehicleDeal" mode="view" src="agentic-ui-config/layouts/VehicleDeal/view.layout.json" />
+    <layout type="VehicleTitle" mode="view" src="agentic-ui-config/layouts/VehicleTitle/view.layout.json" />
+  </extension>
+
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <app id="vehicle-titles" src="agentic-ui-config/app.json">
+      <file path="labels/en.json" />
+      <file path="queues/vehicle-deals-missing-documents.json" />
+      <file path="queues/vehicle-titles-awaiting-lien-release.json" />
+      <file path="queues/vehicle-titles-overdue.json" />
+      <file path="home.json" />
+      <file path="navigation.json" />
+    </app>
+  </extension>
+</component>

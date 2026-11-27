@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "vehicle-titles.queue.vehicle-titles-awaiting-lien-release",
+  "pageProvider": "vtitles_awaiting_lien_release",
+  "columns": [
+    "vtitle:number",
+    "vtitle:vehicle",
+    "vtitle:vin",
+    "vtitle:lienHolder",
+    { "field": "vtitle:payoffSentOn", "widget": "date" },
+    "vtitle:issuingState",
+    { "field": "vtitle:clerk", "widget": "user" }
+  ],
+  "sort": [{ "field": "vtitle:payoffSentOn", "order": "asc" }],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "vtitle_lienHolder_agg", "labelKey": "vehicle-titles.facet.lienHolder" },
+    { "aggregate": "vtitle_issuingState_agg", "labelKey": "vehicle-titles.facet.issuingState" }
+  ],
+  "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["vehicle-title-clerks"] }
+}
