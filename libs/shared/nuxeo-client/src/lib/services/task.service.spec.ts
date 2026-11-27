@@ -201,4 +201,61 @@ describe('TaskService.getUserTasks — the newest open tasks', () => {
 
     expect(ids()).toEqual(['c', 'b', 'a']);
   });
+
+  describe('of one workflow model', () => {
+    const of = (id: string, day: number, workflowModelName: string): NuxeoTask => ({
+      ...task(id, day),
+      workflowModelName,
+    });
+
+    it('asks Nuxeo for its tasks alone, and keeps the newest of the unpaged list it answers', () => {
+      service
+        .getUserTasks('jsmith', 2, undefined, 'SerialDocumentReview')
+        .subscribe((tasks) => (result = tasks));
+
+      const list = http.expectOne((r) => r.url === TASK_URL);
+      expect(list.request.params.get('userId')).toBe('jsmith');
+      expect(list.request.params.get('workflowModelName')).toBe('SerialDocumentReview');
+      // As measured on Nuxeo 2025.10: with `workflowModelName` the list is every such task, with no
+      // paging fields at all, whatever the page size.
+      list.flush({
+        'entity-type': 'tasks',
+        entries: [
+          of('a', 1, 'SerialDocumentReview'),
+          of('c', 3, 'SerialDocumentReview'),
+          of('b', 2, 'SerialDocumentReview'),
+        ],
+      });
+
+      expect(ids()).toEqual(['c', 'b']);
+    });
+
+    it("leaves out another workflow's task, whatever the server sends", () => {
+      service
+        .getUserTasks('jsmith', 5, undefined, 'SerialDocumentReview')
+        .subscribe((tasks) => (result = tasks));
+
+      // A server that ignored the filter would send them all.
+      http
+        .expectOne((r) => r.url === TASK_URL)
+        .flush(
+          page(
+            [of('serial', 1, 'SerialDocumentReview'), of('parallel', 2, 'ParallelDocumentReview')],
+            2,
+          ),
+        );
+
+      expect(ids()).toEqual(['serial']);
+    });
+
+    it('asks for every workflow when it names none, as before', () => {
+      service.getUserTasks('jsmith', 5).subscribe((tasks) => (result = tasks));
+
+      const list = http.expectOne((r) => r.url === TASK_URL);
+      expect(list.request.params.has('workflowModelName')).toBe(false);
+      list.flush(page([of('serial', 1, 'SerialDocumentReview'), of('parallel', 2, 'Parallel')], 2));
+
+      expect(ids()).toEqual(['parallel', 'serial']);
+    });
+  });
 });

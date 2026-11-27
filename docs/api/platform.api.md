@@ -4849,7 +4849,7 @@ class DocumentImportService {
 }
 class DocumentService {
     getRecentlyEdited(pageSize?: number): Observable<NuxeoDocumentList>;
-    getRecentlyViewed(userId: string, pageSize?: number): Observable<NuxeoDocumentList>;
+    getRecentlyViewed(userId: string, pageSize?: number, types?: readonly string[]): Observable<NuxeoDocumentList>;
     getExpiredDocuments(pageSize?: number): Observable<NuxeoDocumentList>;
     getById(docId: string): Observable<NuxeoDocument>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocumentService, never>;
@@ -5626,7 +5626,7 @@ interface TaskDueDistance {
 class TaskService {
     readonly tasksChanged$: Subject<void>;
     notifyTasksChanged(): void;
-    getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>;
+    getUserTasks(userId: string, pageSize?: number, context?: HttpContext, workflowModelName?: string): Observable<NuxeoTask[]>;
     getTask(taskId: string): Observable<NuxeoTask>;
     getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>;
     completeTask(taskId: string, action: string, variables?: Record<string, unknown>, comment?: string): Observable<NuxeoTask>;

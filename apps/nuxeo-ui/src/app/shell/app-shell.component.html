@@ -14,7 +14,7 @@
        Host visible-label workaround from PR 246 removed per product request. IBM input_label_visible
        (4056183850) is expected to recur; track closure via documented a11y exception or upstream
        Satori fix, not by re-adding persistent visible text here. -->
-  <sat-platform-nav>
+  <sat-platform-nav [attr.inert]="adminMenuModal() ? '' : null">
     <sat-platform-nav-menu>
       @for (item of navItems(); track item.id) {
         <a
@@ -43,7 +43,7 @@
   </sat-platform-nav>
 
   <sat-platform-nav-main-content>
-    <sat-app-header>
+    <sat-app-header [attr.inert]="adminMenuModal() ? '' : null">
       <button
         type="button"
         mat-icon-button
@@ -272,13 +272,35 @@
     </mat-menu>
 
     <mat-sidenav-container class="shell-content">
+      <!--
+        At a phone's width the administration drawer is collapsed into the menu button below, and
+        opens over the page from it, modal: the focus is held in it, Escape and the backdrop close
+        it, and closing it gives the focus back to the button. Elsewhere it sits beside the page.
+      -->
       <mat-sidenav
-        mode="side"
+        #navDrawer
+        id="shell-nav-drawer"
+        [mode]="drawerMode()"
         position="start"
-        [opened]="drawerOpen()"
+        [opened]="drawerShown()"
+        (closedStart)="onDrawerClosing()"
         (closed)="onDrawerClose()"
         class="nav-drawer-sidenav"
+        [attr.role]="adminMenuCompact() ? 'dialog' : null"
+        [attr.aria-modal]="adminMenuCompact() ? 'true' : null"
+        [attr.aria-label]="adminMenuCompact() ? ('shell.admin-menu' | translate) : null"
       >
+        @if (adminMenuCompact()) {
+          <button
+            type="button"
+            mat-icon-button
+            class="admin-menu-close"
+            [attr.aria-label]="'shell.admin-menu-close' | translate"
+            (click)="closeAdminMenu()"
+          >
+            <mat-icon svgIcon="x_large" aria-hidden="true" />
+          </button>
+        }
         <app-nav-drawer
           [activeItem]="activeDrawerItem()"
           (itemSelected)="onDrawerItemSelected($event)"
@@ -437,7 +459,23 @@
         </div>
       </mat-sidenav>
 
-      <mat-sidenav-content>
+      <mat-sidenav-content [class.shell-main--admin-compact]="adminMenuCompact()">
+        @if (adminMenuCompact()) {
+          <div class="admin-menu-bar">
+            <button
+              #adminMenuTrigger
+              type="button"
+              mat-button
+              class="admin-menu-trigger"
+              aria-controls="shell-nav-drawer"
+              [attr.aria-expanded]="adminMenuOpen()"
+              (click)="openAdminMenu()"
+            >
+              <mat-icon svgIcon="bullet_list" aria-hidden="true" />
+              {{ 'shell.admin-menu' | translate }}
+            </button>
+          </div>
+        }
         <router-outlet />
       </mat-sidenav-content>
     </mat-sidenav-container>

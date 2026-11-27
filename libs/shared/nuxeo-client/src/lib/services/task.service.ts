@@ -55,9 +55,21 @@ export class TaskService {
    * @param pageSize how many to return, and the size of the first read
    * @param context passed to every request this makes, the task list and any target it reads for
    *   a title: `backgroundRequestContext()` for a read the application sends on its own
+   * @param workflowModelName only the tasks of this workflow model, such as
+   *   `SerialDocumentReview`. Nuxeo's task list takes it as `workflowModelName`, and then returns
+   *   every such task of the user in one unpaged list (Nuxeo 2025.10): they are sorted newest
+   *   first here as any others, and a task of another workflow is left out here too, whatever the
+   *   server returns.
    */
-  getUserTasks(userId: string, pageSize = 10, context?: HttpContext): Observable<NuxeoTask[]> {
-    return this.readUserTasks(userId, pageSize, 0, context).pipe(
+  getUserTasks(
+    userId: string,
+    pageSize = 10,
+    context?: HttpContext,
+    workflowModelName?: string,
+  ): Observable<NuxeoTask[]> {
+    const readPage = (size: number, offset: number) =>
+      this.readUserTasks(userId, size, offset, context, workflowModelName);
+    return readPage(pageSize, 0).pipe(
       switchMap((first) => {
         const read = first.entries.length;
         const remaining = Math.min(
@@ -67,14 +79,19 @@ export class TaskService {
         if (first.isNextPageAvailable !== true || read === 0 || remaining <= 0) {
           return of(first.entries);
         }
-        return this.readUserTasks(userId, remaining, read, context).pipe(
-          map((rest) => [...first.entries, ...rest.entries]),
-        );
+        return readPage(remaining, read).pipe(map((rest) => [...first.entries, ...rest.entries]));
       }),
       map((tasks) => {
         // A task created or ended between the two reads shifts the second by one, so the same task
         // can arrive in both.
-        const byId = new Map(tasks.map((task) => [task.id, task]));
+        const byId = new Map(
+          tasks
+            .filter(
+              (task) =>
+                workflowModelName === undefined || task.workflowModelName === workflowModelName,
+            )
+            .map((task) => [task.id, task]),
+        );
         // `pageSize` 0 is Nuxeo's "every task": one read returns them all, and all are kept.
         return [...byId.values()].sort(newestFirst).slice(0, pageSize > 0 ? pageSize : undefined);
       }),
@@ -88,9 +105,12 @@ export class TaskService {
     pageSize: number,
     offset: number,
     context?: HttpContext,
+    workflowModelName?: string,
   ): Observable<NuxeoTaskList> {
     let params = new HttpParams().set('userId', userId).set('pageSize', pageSize);
     if (offset > 0) params = params.set('offset', offset);
+    if (workflowModelName !== undefined)
+      params = params.set('workflowModelName', workflowModelName);
     return this.api.get<NuxeoTaskList>(
       '/nuxeo/api/v1/task',
       params,

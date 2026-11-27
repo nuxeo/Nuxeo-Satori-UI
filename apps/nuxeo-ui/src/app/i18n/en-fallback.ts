@@ -631,6 +631,8 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'shared.remove-item': 'Remove {{ name }}',
   'shared.remove-tag': 'Remove tag {{ name }}',
   'shared.view-citation': 'View citation {{ number }}',
+  'shell.admin-menu': 'Administration menu',
+  'shell.admin-menu-close': 'Close the administration menu',
   'shell.ai.clear': 'Clear chat',
   'shell.ai.close': 'Close chat',
   'shell.ai.input-placeholder': 'Ask anything about your documents...',

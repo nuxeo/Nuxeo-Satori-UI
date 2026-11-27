@@ -1,6 +1,13 @@
 import type { Routes } from '@angular/router';
-import { HOME_QUEUE_LINK, HomePageComponent } from '@agentic-ui/shared/home';
+import { HOME_QUEUE_LINK, HOME_TASKS_LINK, HomePageComponent } from '@agentic-ui/shared/home';
 import { QueuePageComponent, queueLink } from '@agentic-ui/shared/queues';
+
+/**
+ * The tasks page, `/tasks`, and a task on it, `/tasks/<id>` (`app.routes.ts`), for the home's lists
+ * of tasks: where the dashboard's and the drawer's tasks open too.
+ */
+export const tasksLink = (id?: string): string | readonly unknown[] =>
+  id === undefined ? '/tasks' : ['/tasks', id];
 
 /**
  * The pages an app definition draws (docs/business-apps/app-definition-v2.md): its home and its
@@ -10,12 +17,15 @@ import { QueuePageComponent, queueLink } from '@agentic-ui/shared/queues';
  * import that loads it lazily.
  */
 
-/** `/home`. Its links to queues open the queue page below. */
+/** `/home`. Its links to queues open the queue page below, and its tasks the tasks page. */
 export const homeRoutes: Routes = [
   {
     path: '',
     component: HomePageComponent,
-    providers: [{ provide: HOME_QUEUE_LINK, useValue: queueLink }],
+    providers: [
+      { provide: HOME_QUEUE_LINK, useValue: queueLink },
+      { provide: HOME_TASKS_LINK, useValue: tasksLink },
+    ],
   },
 ];
 

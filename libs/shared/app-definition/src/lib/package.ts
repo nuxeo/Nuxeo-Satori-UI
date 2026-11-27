@@ -223,7 +223,7 @@ function findingsOf(
     case 'navigation':
       return validateNavigation(content, { registries, queues: context.queues });
     case 'home':
-      return validateHome(content, { registries, queues: context.queues });
+      return validateHome(content, { registries, queues: context.queues, model: options.model });
     case 'task':
       return [
         ...(TASK.test(file.name)
