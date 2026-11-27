@@ -185,6 +185,15 @@ final class AppRegistryEndpoint {
         return snapshot;
     }
 
+    /**
+     * Every diagnostic this registry was built with, as the server logged them: the snapshot's, then
+     * what serving each app's {@code actions.json} left out. For the diagnostics page, which shows
+     * them to administrators alone.
+     */
+    List<Diagnostic> diagnostics() {
+        return diagnostics;
+    }
+
     AllowList allowList() {
         return allowList;
     }

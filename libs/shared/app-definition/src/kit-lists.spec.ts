@@ -103,6 +103,7 @@ describe('every list of kits kept outside the kits', () => {
         'onboarding-demo',
         'payers-claims-demo',
         'pc-claims-demo',
+        'vehicle-titles-demo',
       ]),
     );
   });

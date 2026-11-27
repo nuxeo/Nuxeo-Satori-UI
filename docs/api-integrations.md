@@ -2890,6 +2890,35 @@ the moves kit.
 
 ---
 
+## 44. Diagnostics Page — the Server's Report, through `nuxeo-agentic-core`
+
+| Field           | Value                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DiagnosticsService` (`libs/features/administration/src/lib/admin-diagnostics-page/diagnostics.service.ts`)               |
+| **Methods**     | `load()`, when the page opens and on Retry                                                                                |
+| **HTTP Method** | `GET` only: any other method, `HEAD` included, is `405` with `Allow: GET`                                                 |
+| **Endpoints**   | `/nuxeo/agentic-ui-apps/diagnostics.json`, after sign-in, below the app registry's servlet                                |
+| **Server side** | `DiagnosticsEndpoint` and `DiagnosticsReport` in `nuxeo-agentic-core`: administrators alone, by Nuxeo's `isAdministrator` |
+| **Turned on**   | Always: the page is at `/administration/diagnostics`, in the Administration menu for administrators                       |
+
+**Who may read it:** an administrator, `200`; anyone else, whatever their groups, `403` with
+`{ "error": "forbidden" }`, before anything of the server is read for the report; no sign-in, `401`.
+Every answer is `Cache-Control: no-store`.
+
+**The answer**, `format: "nuxeo-agentic-ui-diagnostics/1"`: `platform` (the product's name and
+version), `app` (the `nuxeo-agentic-ui` package's version and `nuxeo-agentic-core`'s build),
+`packages` (each installed Marketplace package's name, version, state, role and `signature:
+"not-recorded"`), `checks` (each by its id and state: `retention`, `template-rendering`, `ai`,
+`deployment-layer`, `development-overrides`, `operation-allow-list`), `configuration` (the
+bootstrap and manifest fragments and the layouts in force, with their provenance), `apps` (each
+app's package and deployment layers), `diagnostics` (the errors and warnings logged, at most 200,
+each cleaned of what looks personal or secret) and `diagnosticsOmitted`. No person is named in it,
+and no property's value is in it but the product's name and version, and, with the development
+overrides on, their directory in their own messages. The page refuses any other `format`. Run in
+`nuxeo-agentic-core`'s tests only: no server has this build yet.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |
