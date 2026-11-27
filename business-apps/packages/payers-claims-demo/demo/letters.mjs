@@ -202,10 +202,11 @@ export function textProblems(name, text, types, model) {
   for (const [, value] of text.matchAll(/\bstyle\s*=\s*("[^"]*"|'[^']*')/gi))
     if (/[(@\\]/.test(value))
       problems.push(`${name}'s style attribute holds a function, an at-rule or an escape`);
-  const withoutComments = text.replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE html>/i, '');
-  for (const [, slash, tag, attributes] of withoutComments.matchAll(
-    /<\s*(\/?)\s*([A-Za-z][A-Za-z0-9-]*)([^>]*)>/g,
+  // Each tag, a comment and the doctype matched and passed over rather than cut out of the text.
+  for (const [, slash, tag, attributes] of text.matchAll(
+    /<!--[\s\S]*?-->|<!DOCTYPE html>|<\s*(\/?)\s*([A-Za-z][A-Za-z0-9-]*)([^>]*)>/gi,
   )) {
+    if (tag === undefined) continue;
     const lowerTag = tag.toLowerCase();
     if (!TAGS.has(lowerTag)) {
       problems.push(`${name} has a <${lowerTag}> tag, which the add-on does not take`);
