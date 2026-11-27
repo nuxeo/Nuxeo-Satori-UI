@@ -658,6 +658,19 @@ customer's package, upgrades both, and checks that the configuration served and 
 before are as they were (the pipeline's section 10 lists what it would add); and holding every
 documented ID, not only those a kit names, to the platform's version.
 
+**Built on 27 November 2026:** the diagnostics page, for administrators, read only: the versions,
+each installed package with its version and its signature "not recorded by the server", the server
+checks the apps depend on, the configuration layers in force for each app and the configuration's
+errors, with a "copy for support" text, from `GET /nuxeo/agentic-ui-apps/diagnostics.json` in
+`nuxeo-agentic-core`, which answers administrators alone and `GET` alone
+([administrator-guide.md](administrator-guide.md), "The diagnostics page"). Performance budgets in
+CI, the `performance-budgets` job on every pull request into a staging branch: the initial bundle
+and each lazy chunk by size, and the home, a queue's first page and a record page's first render
+in Chromium, each the median of five cold loads, and the job lowering every budget on purpose to
+see it fail ([performance-budgets-ci.md](performance-budgets-ci.md)); it blocks a merge once the
+ruleset requires it. The endpoint has run in its tests only. Telemetry is a design only, open decision
+T ([telemetry.md](telemetry.md)): nothing sends anything.
+
 **Demo:**
 
 1. A release-candidate tour across every kit, on fresh servers installed from the Marketplace.

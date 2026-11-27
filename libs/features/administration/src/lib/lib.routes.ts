@@ -9,6 +9,7 @@ import { AdminVocabulariesPageComponent } from './admin-vocabularies-page/admin-
 import { AdminAuditPageComponent } from './admin-audit-page/admin-audit-page.component';
 import { AdminCloudServicesPageComponent } from './admin-cloud-services-page/admin-cloud-services-page.component';
 import { AdminNxqlSearchPageComponent } from './admin-nxql-search-page/admin-nxql-search-page.component';
+import { AdminDiagnosticsPageComponent } from './admin-diagnostics-page/admin-diagnostics-page.component';
 
 export const administrationRoutes: Route[] = [
   {
@@ -34,6 +35,13 @@ export const administrationRoutes: Route[] = [
       {
         path: 'nxql-search',
         component: AdminNxqlSearchPageComponent,
+        canActivate: [fullAdministratorGuard],
+      },
+      // Phase 10's diagnostics page (docs/business-apps/development-plan.md). The guard is for the
+      // menu: the server answers its report to administrators alone.
+      {
+        path: 'diagnostics',
+        component: AdminDiagnosticsPageComponent,
         canActivate: [fullAdministratorGuard],
       },
     ],
