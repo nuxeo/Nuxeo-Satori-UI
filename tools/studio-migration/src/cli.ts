@@ -68,7 +68,7 @@ import { describeElement } from './elements';
 import { ObservedError, readObserved } from './observed';
 import { nextSteps, PluginError, scaffoldPlugin } from './plugin';
 import { runPlugin, type PluginRun } from './plugin-run';
-import { readPlugins, WORKSPACE } from './plugins';
+import { readPlugins, WORKSPACE, type PluginsInput } from './plugins';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
 import { isDirectory, migrateMany } from './batch';
@@ -380,19 +380,24 @@ function refusal(error: unknown, io: CliIo): number {
 
 /**
  * `check`: the harness, with the plugins of the package's custom elements read from the repository
- * (`--plugins`, this one by default) for check 9, and, given, what running them found.
+ * (`--plugins`, this one by default) for check 9, or, from `--run-plugins`, the very files it ran
+ * and what running them found.
  */
 function check(
   args: readonly string[],
   values: ReadonlyMap<string, string>,
   json: boolean,
   io: CliIo,
-  runs?: Readonly<Record<string, PluginRun>>,
+  ran?: {
+    readonly pkg: StudioPackage;
+    readonly inventory: Inventory;
+    readonly plugins: PluginsInput;
+  },
 ): number {
-  const pkg = readPackage(io, args[0]);
+  const pkg = ran?.pkg ?? readPackage(io, args[0]);
   const conversion = readConversion(args[1]);
   const allowList = readAllowList(io, values.get('--allow-list'));
-  const read = inventory(pkg);
+  const read = ran?.inventory ?? inventory(pkg);
   const observedFile = values.get('--observed');
   const result = runHarness({
     pkg,
@@ -400,10 +405,11 @@ function check(
     catalogue: loadCatalogue(),
     conversion,
     ...(allowList ? { allowList } : {}),
-    plugins: readPlugins(values.get('--plugins') ?? WORKSPACE, read, {
-      ...(observedFile !== undefined ? { observed: readObserved(observedFile) } : {}),
-      ...(runs ? { runs } : {}),
-    }),
+    plugins:
+      ran?.plugins ??
+      readPlugins(values.get('--plugins') ?? WORKSPACE, read, {
+        ...(observedFile !== undefined ? { observed: readObserved(observedFile) } : {}),
+      }),
   });
   io.out(json ? `${JSON.stringify(result, null, 2)}\n` : harnessSummary(result, pkg, args[1]));
   io.checked?.(result);
@@ -423,8 +429,11 @@ async function checkRunningPlugins(argv: readonly string[], io: CliIo): Promise<
     const workspace = values.get('--plugins') ?? WORKSPACE;
     const observedFile = values.get('--observed');
     const observed = observedFile !== undefined ? readObserved(observedFile) : undefined;
+    // Read once: check 9 holds the plugins to the files that ran, and the run makes sure the files
+    // on disk are still those before its gates.
+    const plugins = readPlugins(workspace, read, { ...(observed ? { observed } : {}) });
     const runs: Record<string, PluginRun> = {};
-    for (const source of readPlugins(workspace, read).sources) {
+    for (const source of plugins.sources) {
       io.err(
         `Running ${source.library}: its tests, what it shows, and lint, test, typecheck and build\n`,
       );
@@ -434,7 +443,11 @@ async function checkRunningPlugins(argv: readonly string[], io: CliIo): Promise<
         gates: true,
       });
     }
-    return check(args, values, flags.includes('--json'), io, runs);
+    return check(args, values, flags.includes('--json'), io, {
+      pkg,
+      inventory: read,
+      plugins: { ...plugins, runs },
+    });
   } catch (error) {
     return refusal(error, io);
   }

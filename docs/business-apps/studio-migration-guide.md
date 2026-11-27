@@ -121,7 +121,6 @@ Verdict: not ready. What stands in the way:
   - check 5 ran only in part
   - check 6 ran only in part
   - check 7 ran only in part
-  - check 9 did not run
   - 3 constructs are pending a later phase
   - 2 proposals wait for a person to accept or reject them
   - 15 reported items have no owner
@@ -189,7 +188,7 @@ and the allow-list the actions were held to.
 | `reported`  | It does not migrate, or not exactly as Web UI shows it. The report says why. A person decides          |
 | `generated` | Studio's own packaging, records and templates, which need nothing.                                     |
 | `server`    | It stays on the server in your Studio package, and the new app reads it there, such as your data model |
-| `pending`   | A later version of the tool converts it, such as custom code.                                          |
+| `pending`   | A later version of the tool converts it, such as a field under a condition in a form.                  |
 | `missing`   | Not in the report at all. It must be 0.                                                                |
 
 `decided` counts the reported items with an owner and a decision (section 5). **Coverage** is the
@@ -298,18 +297,18 @@ npm run studio-migration -- report <your-package.zip> ~/studio/migration-1/conve
 The harness has ten checks. The command runs every check, or the half of a check, that needs only
 your package and its conversion:
 
-| #   | Check                    | Without a server                                                                                                                   | Its server half, on the migration lab server                                                                     |
-| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 1   | Nothing dropped          | Every part of the package is in the report once, counted two independent ways                                                      | None                                                                                                             |
-| 2   | Fields                   | Each layout shows the same fields, modes, required flags and widgets                                                               | None                                                                                                             |
-| 3   | Model                    | Every field, type, vocabulary and page provider your package defines exists                                                        | Confirms those the platform defines, from the server's own definitions                                           |
-| 4   | Labels                   | Every translation survives, in every language                                                                                      | None                                                                                                             |
-| 5   | Conditions               | Each rule decides as the original condition, read from both apps' code                                                             | Evaluates each original condition in Web UI itself, for test users and documents                                 |
-| 6   | What people see          | Labels and the order of buttons, menu entries and tabs                                                                             | Opens the same documents in both apps as the same user, compares every value, and takes screenshots side by side |
-| 7   | What the server is asked | Each list and button asks for the same page provider, operation and parameters                                                     | Records the requests both apps really send, and compares them and their result counts                            |
-| 8   | Theme                    | Colours mapped, files kept byte for byte, text contrast checked against WCAG 2.1 AA                                                | None                                                                                                             |
-| 9   | Plugins                  | Not run: it tests the plugins that replace custom elements, which a later version of the tool brings                               | -                                                                                                                |
-| 10  | Package                  | The new app's configuration passes the package pipeline's validator. Run by hand without the run's `--allow-list`, it runs in part | None                                                                                                             |
+| #   | Check                    | Without a server                                                                                                                                                     | Its server half, on the migration lab server                                                                     |
+| --- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1   | Nothing dropped          | Every part of the package is in the report once, counted two independent ways                                                                                        | None                                                                                                             |
+| 2   | Fields                   | Each layout shows the same fields, modes, required flags and widgets                                                                                                 | None                                                                                                             |
+| 3   | Model                    | Every field, type, vocabulary and page provider your package defines exists                                                                                          | Confirms those the platform defines, from the server's own definitions                                           |
+| 4   | Labels                   | Every translation survives, in every language                                                                                                                        | None                                                                                                             |
+| 5   | Conditions               | Each rule decides as the original condition, read from both apps' code                                                                                               | Evaluates each original condition in Web UI itself, for test users and documents                                 |
+| 6   | What people see          | Labels and the order of buttons, menu entries and tabs                                                                                                               | Opens the same documents in both apps as the same user, compares every value, and takes screenshots side by side |
+| 7   | What the server is asked | Each list and button asks for the same page provider, operation and parameters                                                                                       | Records the requests both apps really send, and compares them and their result counts                            |
+| 8   | Theme                    | Colours mapped, files kept byte for byte, text contrast checked against WCAG 2.1 AA                                                                                  | None                                                                                                             |
+| 9   | Plugins                  | Each custom element's plugin is the element's, safe, and built in. Run with `--run-plugins --observed`, its tests and gates pass and it shows what the element shows | Reading what each element shows in Web UI, for `--observed`                                                      |
+| 10  | Package                  | The new app's configuration passes the package pipeline's validator. Run by hand without the run's `--allow-list`, it runs in part                                   | None                                                                                                             |
 
 **The migration lab server** is a Nuxeo server with your Studio package installed, Web UI running,
 and the new app installed beside it on the same documents, with fictional test users and groups.
@@ -386,8 +385,8 @@ package, run that package on its own with `--from` that run.
   original does on every row.
 - **The migration server, the migration lab server:** the same server, of section 7.
 - **Phases M1 to M4:** the stages of the migration work, in the
-  [migration document](studio-migration.md), section 10. M3 brings plugins for custom code; M4 is
-  this command and what comes after it.
+  [migration document](studio-migration.md), section 10. M3 turns custom elements into plugins; M4
+  is this command and what comes after it.
 - **Layer 0, Layer 2:** levels of the new app's configuration: Layer 0 is what it reads as it
   starts, such as your theme's colours; Layer 2 is plugins, code a person reviews.
 - **A reference in a note,** such as "(layout-v2.md, section 10)" or "(app-definition-v2.md,
@@ -401,6 +400,11 @@ package, run that package on its own with `--from` that run.
 - **The server halves** of checks 5, 6 and 7 on your package, and the lab server they run on.
   Check 3's runs in the tool's lab mode, on a server.
 - **Accepting or rejecting a proposal.** A proposal waits, and stays in the way of readiness.
+- **Your custom elements as plugins, unattended.** Each custom element of your custom bundle is
+  proposed as a Layer 2 plugin, which an agent or a developer writes in your copy of this
+  repository with `npm run studio-migration -- plugin` and the studio-plugin skill, and check 9
+  holds to the element. It has been tried on made-up elements only, and what each element shows in
+  Web UI, which check 9's values need, is not read from Web UI yet.
 - **Carrying decisions to a new build** of your package.
 - **Installing the migrated app.** `conversion/app/` is the new app's configuration; installing it
   beside Web UI is not part of this guide.

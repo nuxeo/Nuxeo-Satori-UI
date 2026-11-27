@@ -3,10 +3,10 @@
   "scenarios": {
     "synthetic": {
       "code": 0,
-      "stdout": "dce7704aa45310474ff89b67c720da890bc7f0a3d3d5c5229f3d85ea0cc8851f",
+      "stdout": "46658d58a62d3ea7824742049b0587a95fca09c5a11e2fe98dcc28aa4ee3e81c",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "46f71a437fdd7cf7caa8527456a30709edd3c9b785a4447d9ec9d4c6984e6322",
+        "check.txt": "aca8eff7485504c57fda6de671796dc5fbeda0e9a80ade501a51c7f8527b7077",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "325a17c0539cc41419de0ef0cfda21e53e4c6bd630ed243d84d3cb319a6304fd",
@@ -23,16 +23,16 @@
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "2a51b176779a0145023509402ce1c6458aa88c815b395c3583de2f572c301658",
         "decisions.txt": "cfe6596bc77b6462566cfd87a96e89a412f454c75ddab8af98fa36cd9ef3878e",
-        "inventory.txt": "751a2df55f97789b301509ecd2d317cab2ef7cfb48b2a6a7c877ea36cbd853f2",
-        "report.txt": "bedc85e5d638eddea64f9d5505ea05d2913600fa957cfa21a79640f9ca26ca07"
+        "inventory.txt": "a5835bcde5f66863fedf8daf54c778429a3a391cf5ffa4933a57b3537064bead",
+        "report.txt": "06608fbca9745fec844dd1e2a006da493d9772fd8fcfb64629c346c795d8a528"
       }
     },
     "synthetic, with an allow-list": {
       "code": 0,
-      "stdout": "2db2f779c2133ba1abe5517fc20a47c9bf704fc35b8a50130d33c28dc220cf70",
+      "stdout": "5b35a127e0f64515df428cac5cfefbf2be0b77487dac3eda1ada260cd425fde3",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "0db4ed61287d38e890bccd7bef7f5f7cc5d221e8e02e8df82833c1370d100379",
+        "check.txt": "142796ffc05735d4b89a463292f27a310c58350d20faae443dd89dd3afe5bd9c",
         "conversion/app/actions.json": "2c781decffc72df343016b1bf3cd2639250199f2c39b1c0f770543796b4e2a00",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
@@ -50,16 +50,16 @@
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "076912052c0281a8b8da7e416b63337ecbd75912ab82376abb23520325e66a5e",
         "decisions.txt": "136647185391eb203ac75d14fe0ebd0d90225549119dc84e444fdf64323b0946",
-        "inventory.txt": "751a2df55f97789b301509ecd2d317cab2ef7cfb48b2a6a7c877ea36cbd853f2",
-        "report.txt": "05e382b9fb4572143407359d5fcc5ea7d0fed9b36918a0f906c476814615646d"
+        "inventory.txt": "a5835bcde5f66863fedf8daf54c778429a3a391cf5ffa4933a57b3537064bead",
+        "report.txt": "9f8ff90aa9f033cb625c8968f8c54e45d42a8b023d9c95524a9e76dee0d612ba"
       }
     },
     "m2": {
       "code": 0,
-      "stdout": "277f484e55c329da79f9f3506e020df03b6fd6cf252ae0984169293e973c7757",
+      "stdout": "64852408b21904ef08b599bea39f39e1dfb57438751dc87f469a4fc6b6c3fc75",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "b1b60a338c10287702161180d8b17c296e0e490cc56a7f90ce80f5a2320116db",
+        "check.txt": "b53711167585cf4ddabb9ee11032cf5ec8b66578851d3eaca95d4bf9c01b3558",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "e7399204e47799010d8d241de723e0d78c1db148d91aeac6fed427255fff492b",
@@ -74,22 +74,22 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "c4739c2d354aa845bef5129211beaf4c3a6c8ff5a7b7f208f636c8dc52712b53",
-        "conversion/report.json": "d1c3bd2e1b67d1d0c026d634e3814a7e97a7a932415b2267b5e22c68f0749ed7",
+        "conversion/decisions.json": "f3b1634fef3426234d6e44c4f653b633ef8699362c79308d772f51a8aa3196c2",
+        "conversion/report.json": "7768827b6a64f7a86247459835ea6a8f48c050663801639d709cc225128ef267",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
-        "conversion.txt": "3b6527d9cc434113a8bf4fcd80100dd8ac57f4e0e3c8a3de492d4a4586073899",
-        "decisions.txt": "54ebc010757ddf843786e4820dab21676e3a54ebdb93e580055d22e531d01b30",
-        "inventory.txt": "7ebf983c3e5e7a7cafd0fd66a1f36bf1b971a06b4d1ef3083de3493312fc1900",
-        "report.txt": "8d5a910b16de1b3add7574eb634e982b573cf87d09287cbae329eadecacc42de"
+        "conversion.txt": "fd0c9cba38422c1e66feb07e2a03b221fa8d69dbd49a19170aeb92fe40e5a312",
+        "decisions.txt": "dc95cb4d5b708a1fae8d474c4df953fbe82181d51b746b33d8e7cc74f0f45656",
+        "inventory.txt": "ac7b237d381e34bbdaa97a11e8a03c52b1cf6ed25b14e0140154ce40cfd56032",
+        "report.txt": "69030f22aaac7f522a0b78f1af4b1cdd725b92c3b8f833d1a83c91ac5afbf4eb"
       }
     },
     "m2, with an allow-list": {
       "code": 0,
-      "stdout": "f0ec09260922740ed8350d31be42da0b685ecc295ebb89626bd74cc65176b368",
+      "stdout": "d16fe312a747dec4bf79b28152cc81aaaae3c2ed3472e18cb37cb077aa9d154f",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "1d6393455032b9d73a239a1f59b694594707bbed957f49911f345f48f03c6c47",
+        "check.txt": "4ec9374fea951319a806bb21183d28132089b8fb3bafe3094c07182626db4338",
         "conversion/app/actions.json": "04e8788e6e7176efde7f8edb48edca6dfc0afe96906a15eecae6f69309611daf",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
@@ -105,22 +105,22 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "2e40b8a3662eb9e696da74e3256ad3ae9054a50fa663e4b0959f56dd4b98aa4c",
-        "conversion/report.json": "df338f7939735da23ec2dbe6452452cebebed6cd9baef41bf6fc372f85fd4a8f",
+        "conversion/decisions.json": "b589e873578ee8af3c4076cf863842d4e55a1f6601b25378012f7dd1dea5025a",
+        "conversion/report.json": "0407c19600b2339bb6c782bc42aa880902934f94d6bebad6d8a4a6de58f8a674",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
-        "conversion.txt": "a9de312ad9991a117eb74457f71c07762eef27f202df5f527a2f9bf30a27358a",
-        "decisions.txt": "6a5b5a31200162e1211fe2b898e5b5d5a4ef857e8bc8c4863f083b190f63b5e1",
-        "inventory.txt": "7ebf983c3e5e7a7cafd0fd66a1f36bf1b971a06b4d1ef3083de3493312fc1900",
-        "report.txt": "dd694f65d97803f1cc02c7520843949065dfe84ebab3d759a47f5ebbf78e3f1f"
+        "conversion.txt": "5ddc4d71df7bbe8e8ebfa84af8fe3b957e761af8624dcc567edb497ec548ffca",
+        "decisions.txt": "e525c25a6a9c6ba97e52435a31b7bf2db1ce4d635ff41e8bc5730b292cf6a019",
+        "inventory.txt": "ac7b237d381e34bbdaa97a11e8a03c52b1cf6ed25b14e0140154ce40cfd56032",
+        "report.txt": "c505963826c257b537cc43dfdc5e29e3900677f44a64b7001ecef97b5b4509d3"
       }
     },
     "synthetic, carrying the decisions of an earlier run": {
       "code": 0,
-      "stdout": "9f9090049702fca75933a95646f040100dd3f00e775e42e4f401e519e57b6f52",
+      "stdout": "d6ead4b890f1fa5969e6da4739ee9e1a33deab9835c095ff41c6388610d9dab1",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "b8d8d672dfa9f8ac86687f0dd92bb7ca10a6f666f285adad5a1cc3e910743f36",
+        "check.txt": "6a6c68a1b72fa86d5f6ce139a50201a0681a10b5f6a40a48898fcdf33412d531",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "325a17c0539cc41419de0ef0cfda21e53e4c6bd630ed243d84d3cb319a6304fd",
@@ -137,16 +137,16 @@
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "2a51b176779a0145023509402ce1c6458aa88c815b395c3583de2f572c301658",
         "decisions.txt": "4be317422ff0e46710028e0d06ed650958effc7d677358d4c8c1d3290df73265",
-        "inventory.txt": "751a2df55f97789b301509ecd2d317cab2ef7cfb48b2a6a7c877ea36cbd853f2",
-        "report.txt": "3c02b893d00f78abee13816d10ecc8cd9c5ec56845dc21c531d99129c91e5cae"
+        "inventory.txt": "a5835bcde5f66863fedf8daf54c778429a3a391cf5ffa4933a57b3537064bead",
+        "report.txt": "a652c66e0b169151ba076582ed8f21eea27b21c392f3c79dd8a2cb57ae66d13b"
       }
     },
     "m2, carrying the decisions of an earlier run": {
       "code": 0,
-      "stdout": "665f4430a161947f01261429fb6bd3ecc7ce1735b030219d6e3c8853f3444968",
+      "stdout": "617f89d2918cee446dc8681df54a90392c71f5c6111bb815a3eb14469582817c",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "675a8166e52a3b222ec3f2bc6d4ae31a5820ea8c2ed537ae5bd99b1058588e84",
+        "check.txt": "1e3f3824eb0d4887d99ef6b2bdffbe7e194e82817d5216927712e0fe6401cca7",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "e7399204e47799010d8d241de723e0d78c1db148d91aeac6fed427255fff492b",
@@ -161,14 +161,14 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "98815008efed34e590589d68c82a9c5c97201e52baa0d987f2c0cac100d2bc30",
-        "conversion/report.json": "d1c3bd2e1b67d1d0c026d634e3814a7e97a7a932415b2267b5e22c68f0749ed7",
+        "conversion/decisions.json": "b8bb422f7e5bcd94b1dc9b4e2e1ddfa98ea1758869dbb5f733b0327609753db9",
+        "conversion/report.json": "7768827b6a64f7a86247459835ea6a8f48c050663801639d709cc225128ef267",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
-        "conversion.txt": "3b6527d9cc434113a8bf4fcd80100dd8ac57f4e0e3c8a3de492d4a4586073899",
-        "decisions.txt": "b2df8c18ec77f878d0ff033bb357b4b695035c318341361e552a78649380298d",
-        "inventory.txt": "7ebf983c3e5e7a7cafd0fd66a1f36bf1b971a06b4d1ef3083de3493312fc1900",
-        "report.txt": "ffd1a9251bac4812364ad448e847a3d055ff0e687c63faebf5527ecb273a9284"
+        "conversion.txt": "fd0c9cba38422c1e66feb07e2a03b221fa8d69dbd49a19170aeb92fe40e5a312",
+        "decisions.txt": "8119849644671434befb1a161d127ca4f2b8f8c3a7ac8acbe5cacdd634c6348e",
+        "inventory.txt": "ac7b237d381e34bbdaa97a11e8a03c52b1cf6ed25b14e0140154ce40cfd56032",
+        "report.txt": "8a886b950928c0455dbe060200d40bd9ac186468ac6c7d5455c6b88d567a600a"
       }
     },
     "refused: --out holds an earlier run": {
@@ -200,12 +200,12 @@
       "stdout": "e8faad65f9b91ef366822ce84f762653f30a52e12ac3f0622e73e614b7a84fc2",
       "stderr": "a16f6feea59a3e1d4299ae55dab794f9d0c899a258f5d379a816ad6899fc2ead",
       "files": {
-        "inventory.txt": "f63a0225cde9e18880a459707c12ec20ae5d198fdbba7f2bbbf80d58efb5b077"
+        "inventory.txt": "5878fb0b2de130eb132661b263c7e6400bf095aa315a2355fbd7bca39a84f056"
       }
     },
     "refused at the decisions: --from another build": {
       "code": 1,
-      "stdout": "880612969c96be1f8d85b23672bdbeeac855948425d952bd4d31b9bbbf50b418",
+      "stdout": "e3a2fb07a9fb465a62fd1d4c2b729d5de5f6445d74e521d68f39100f9dcf335a",
       "stderr": "a1957edb3e89e7f25c77ce5a315b54a7446a4be1178090f82579e21562f33552",
       "files": {
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
@@ -222,11 +222,11 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/report.json": "d1c3bd2e1b67d1d0c026d634e3814a7e97a7a932415b2267b5e22c68f0749ed7",
+        "conversion/report.json": "7768827b6a64f7a86247459835ea6a8f48c050663801639d709cc225128ef267",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
-        "conversion.txt": "3b6527d9cc434113a8bf4fcd80100dd8ac57f4e0e3c8a3de492d4a4586073899",
-        "inventory.txt": "7ebf983c3e5e7a7cafd0fd66a1f36bf1b971a06b4d1ef3083de3493312fc1900"
+        "conversion.txt": "fd0c9cba38422c1e66feb07e2a03b221fa8d69dbd49a19170aeb92fe40e5a312",
+        "inventory.txt": "ac7b237d381e34bbdaa97a11e8a03c52b1cf6ed25b14e0140154ce40cfd56032"
       }
     },
     "refused: --out is a file": {
@@ -243,10 +243,10 @@
     },
     "an empty --out, which is new enough": {
       "code": 0,
-      "stdout": "dce7704aa45310474ff89b67c720da890bc7f0a3d3d5c5229f3d85ea0cc8851f",
+      "stdout": "46658d58a62d3ea7824742049b0587a95fca09c5a11e2fe98dcc28aa4ee3e81c",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "46f71a437fdd7cf7caa8527456a30709edd3c9b785a4447d9ec9d4c6984e6322",
+        "check.txt": "aca8eff7485504c57fda6de671796dc5fbeda0e9a80ade501a51c7f8527b7077",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "325a17c0539cc41419de0ef0cfda21e53e4c6bd630ed243d84d3cb319a6304fd",
@@ -263,16 +263,16 @@
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "2a51b176779a0145023509402ce1c6458aa88c815b395c3583de2f572c301658",
         "decisions.txt": "cfe6596bc77b6462566cfd87a96e89a412f454c75ddab8af98fa36cd9ef3878e",
-        "inventory.txt": "751a2df55f97789b301509ecd2d317cab2ef7cfb48b2a6a7c877ea36cbd853f2",
-        "report.txt": "bedc85e5d638eddea64f9d5505ea05d2913600fa957cfa21a79640f9ca26ca07"
+        "inventory.txt": "a5835bcde5f66863fedf8daf54c778429a3a391cf5ffa4933a57b3537064bead",
+        "report.txt": "06608fbca9745fec844dd1e2a006da493d9772fd8fcfb64629c346c795d8a528"
       }
     },
     "a check fails": {
       "code": 1,
-      "stdout": "485f0d0578942204c4ba5edde5efc321a377754df838df9f3295d8bf4606c2df",
+      "stdout": "cccc7e7b4c1074cf3d37798418eb212238ab534895256ceaca61542d861881db",
       "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": {
-        "check.txt": "517a4a218613d45f56f5f7be2df4fde2612e9c24aac435382a881ea8037ae8d7",
+        "check.txt": "0680d70dd7bd428612a84cebf3562746c2b4ab799a66bff7c7965417aa4bda4c",
         "conversion/app/app.json": "77c243ace6c9d8783bb8f4f0c6a5af7431b4c3feb087ad9e65583b7e9d20ae39",
         "conversion/app/home.json": "52fd3acf96cb523d266644ff4336e1c95ff0717d5cafae9992bb32b0ca07b28d",
         "conversion/app/labels/en.json": "325a17c0539cc41419de0ef0cfda21e53e4c6bd630ed243d84d3cb319a6304fd",
@@ -289,8 +289,8 @@
         "conversion/themes/acme.json": "53bbf8b834421d17aa8cc053d03f403a58ca0cd8473cfb2c4994bcb51a56af0f",
         "conversion.txt": "20f8c5cf57eba301f855669bf44df2fc9f3d3c77686e4016962418d63688c93f",
         "decisions.txt": "a4b4785cbf86a5d42d7f6d46a0e9ffcc0d94d65739177ebeda860e4cdd6ef0d0",
-        "inventory.txt": "57c1110f0d491d96a8536c1863545aa11d583ae66bca56d2a22667b243bec3ec",
-        "report.txt": "e40486f72ba637edec5207d57023bdee2944afa5a588ed91d1743977e3b9ee79"
+        "inventory.txt": "a118f5316f867ff2248f9d4d17decea67d98dfbb25ac899b0db74928b2aa9842",
+        "report.txt": "6af85749ba8b70e95da78c17c198c24754ca3adbf2783dcbc1a5cc882dff9d57"
       }
     }
   }

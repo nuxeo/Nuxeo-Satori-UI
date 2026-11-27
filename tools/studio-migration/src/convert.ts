@@ -363,7 +363,7 @@ function decide(
         ? { outcome: 'generated', note: known.name }
         : {
             outcome: 'reported',
-            note: "Customer code in a file Studio generates: the file is converted from its markup, and its code is not. M3's code track writes plugins for the custom bundle's elements only, so what this code adds is a person's to rewrite as a plugin, or leave behind",
+            note: "A script of a shape the catalogue records Studio generating for none of its files, so taken for customer code: its file is converted from its markup, and the script is not. M3's code track writes plugins for the custom bundle's elements only, so what the script adds is a person's to rewrite as a plugin, or leave behind; if Studio wrote it, the catalogue is to learn its shape",
           };
     }
     case 'condition': {
