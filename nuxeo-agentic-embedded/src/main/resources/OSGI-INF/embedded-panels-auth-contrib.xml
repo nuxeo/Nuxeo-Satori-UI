@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.embedded.authentication.contrib">
+
+  <!--
+    After every component of the platform's that sets the two chains below, since the platform
+    replaces a specific chain whole and the last contribution wins: nuxeo-automation-server's,
+    nuxeo-rest-api-server's, and nuxeo-platform-login-token's, which sets both again.
+  -->
+  <require>org.nuxeo.ecm.automation.server.auth.config</require>
+  <require>org.nuxeo.ecm.restapi.server.auth.config</require>
+  <require>org.nuxeo.ecm.login.token.authentication.contrib</require>
+
+  <!--
+    The panel's authenticator: it signs in the user of a panel's token, a JWT signed with the add-on's
+    own key, which no other plugin of the platform verifies. Stateless: no session is kept for it.
+  -->
+  <extension point="authenticators"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <authenticationPlugin name="AGENTIC_EMBEDDED_AUTH" enabled="true"
+                          class="org.nuxeo.agentic.embedded.PanelTokenAuthenticator">
+      <needStartingURLSaving>false</needStartingURLSaving>
+      <stateful>false</stateful>
+    </authenticationPlugin>
+  </extension>
+
+  <!--
+    The REST API's two chains, as LTS 2025.10.18 resolves them (nuxeo-platform-login-token's
+    OSGI-INF/token-authentication-contrib.xml), with the panel's authenticator last. Both, because
+    the platform picks the first chain whose pattern matches the request's address, in no set order,
+    and /nuxeo/api/v1/automation/<id> matches the Automation chain's as well as the REST API's.
+
+    The Automation chain's pattern also matches /nuxeo/site/automation/ and any address with
+    "automation" in it: the authenticator signs a panel's token in only on a path below api/v1/, as
+    the guard says (PanelTokenGuard), so nowhere else. An upgrade that changes either chain, and any
+    configuration that replaces one, must list AGENTIC_EMBEDDED_AUTH; the component logs an error at
+    start when either chain the server resolves lacks it. EmbeddedXmlTest holds these to the
+    2025.10.18 chains.
+  -->
+  <extension point="specificChains"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <specificAuthenticationChain name="Automation">
+      <urlPatterns>
+        <url>(.*)/automation.*</url>
+      </urlPatterns>
+      <replacementChain>
+        <plugin>AUTOMATION_BASIC_AUTH</plugin>
+        <plugin>TOKEN_AUTH</plugin>
+        <plugin>OAUTH2_AUTH</plugin>
+        <plugin>JWT_AUTH</plugin>
+        <plugin>AGENTIC_EMBEDDED_AUTH</plugin>
+      </replacementChain>
+    </specificAuthenticationChain>
+    <specificAuthenticationChain name="RestAPI">
+      <urlPatterns>
+        <url>(.*)/api/v.*</url>
+      </urlPatterns>
+      <replacementChain>
+        <plugin>AUTOMATION_BASIC_AUTH</plugin>
+        <plugin>TOKEN_AUTH</plugin>
+        <plugin>OAUTH2_AUTH</plugin>
+        <plugin>JWT_AUTH</plugin>
+        <plugin>AGENTIC_EMBEDDED_AUTH</plugin>
+      </replacementChain>
+    </specificAuthenticationChain>
+  </extension>
+
+  <!--
+    The panel's own files, which nuxeo-agentic-ui-package serves at /nuxeo/agentic-ui/embedded/: its
+    script and its translations, read by another system's page before anyone is signed in, as the
+    application's images are (nuxeo-agentic-core's agenticUIImages). They hold no data.
+  -->
+  <extension point="openUrl"
+             target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
+    <openUrl name="agenticEmbeddedPanels">
+      <grantPattern>${org.nuxeo.ecm.contextPath}/agentic-ui/embedded/.*</grantPattern>
+    </openUrl>
+  </extension>
+
+</component>

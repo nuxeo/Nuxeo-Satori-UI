@@ -186,6 +186,62 @@
           "defaultConfiguration": "development"
         }
       }
+    },
+    "nuxeo-embedded-panels": {
+      "projectType": "application",
+      "root": "apps/nuxeo-embedded-panels",
+      "sourceRoot": "apps/nuxeo-embedded-panels/src",
+      "prefix": "nxe",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "apps/nuxeo-embedded-panels/src/main.ts",
+            "index": false,
+            "tsConfig": "apps/nuxeo-embedded-panels/tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "outputPath": "dist/nuxeo-embedded-panels",
+            "outputHashing": "none",
+            "assets": [
+              {
+                "glob": "*.json",
+                "input": "apps/nuxeo-ui/public/i18n",
+                "output": "i18n",
+                "ignore": ["*.context.json"]
+              },
+              {
+                "glob": "satori-icons.svg",
+                "input": "node_modules/@hylandsoftware/satori-icons",
+                "output": "satori-icons"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "2.5mb",
+                  "maximumError": "3.5mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "120kB",
+                  "maximumError": "160kB"
+                }
+              ],
+              "optimization": true,
+              "outputHashing": "none"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
     }
   },
   "cli": {
