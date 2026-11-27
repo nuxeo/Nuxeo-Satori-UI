@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Embedded Panels
+Bundle-SymbolicName: org.nuxeo.agentic.embedded;singleton:=true
+Bundle-Version: 0.0.1
+Bundle-Vendor: Hyland Software
+Nuxeo-Component: OSGI-INF/embedded-panels-service.xml,
+ OSGI-INF/embedded-panels-auth-contrib.xml

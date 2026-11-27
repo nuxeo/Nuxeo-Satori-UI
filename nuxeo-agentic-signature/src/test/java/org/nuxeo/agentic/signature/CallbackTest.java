@@ -201,14 +201,24 @@ public class CallbackTest {
 
     @Test
     public void aStaleOrFutureCallbackIsRefused() {
-        byte[] body = StandInStub.callbackBody("evt_1", "envelope.signed", envelope, null);
+        // The endpoint's "now" is fixed, so the window's edges are tested to the second, whatever the
+        // time the test takes: a second past either edge is refused, the edges themselves taken.
         long now = Clock.systemUTC().instant().getEpochSecond();
-        unchanged(Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now - 301, body), body),
-                CallbackEndpoint.REFUSED);
-        unchanged(Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now + 301, body), body),
-                CallbackEndpoint.REFUSED);
+        Clock fixed = Clock.fixed(java.time.Instant.ofEpochSecond(now), java.time.ZoneOffset.UTC);
+        byte[] signed = StandInStub.callbackBody("evt_1", "envelope.signed", envelope, null);
+        unchanged(Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now - 301, signed), signed,
+                fixed), CallbackEndpoint.REFUSED);
+        unchanged(Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now + 301, signed), signed,
+                fixed), CallbackEndpoint.REFUSED);
+        // At the edges, events that change nothing, each its own, so the request stays out for the last.
+        byte[] earliest = StandInStub.callbackBody("evt_edge_1", "envelope.viewed", envelope, null);
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET,
+                now - 300, earliest), earliest, fixed));
+        byte[] latest = StandInStub.callbackBody("evt_edge_2", "envelope.viewed", envelope, null);
+        assertEquals(CallbackEndpoint.RECEIVED, Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET,
+                now + 300, latest), latest, fixed));
         assertEquals(CallbackEndpoint.RECEIVED,
-                Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now - 200, body), body));
+                Desk.post(repository, StandInStub.signedHeaders(StandInStub.SECRET, now - 200, signed), signed, fixed));
     }
 
     @Test

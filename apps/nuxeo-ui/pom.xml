@@ -46,6 +46,19 @@
             </configuration>
             <goals><goal>npm</goal></goals>
           </execution>
+          <!--
+            The embedded panel's one script, which nuxeo-agentic-ui-package serves at
+            /nuxeo/agentic-ui/embedded/v1/. It reads the server from its own address, so it takes no
+            base href.
+          -->
+          <execution>
+            <id>npm build embedded panels</id>
+            <phase>compile</phase>
+            <configuration>
+              <arguments>run build -- nuxeo-embedded-panels --configuration=production</arguments>
+            </configuration>
+            <goals><goal>npm</goal></goals>
+          </execution>
         </executions>
       </plugin>
     </plugins>

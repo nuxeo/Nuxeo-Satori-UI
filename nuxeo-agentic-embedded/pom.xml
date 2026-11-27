@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nuxeo.agentic</groupId>
+    <artifactId>nuxeo-agentic-ui-parent</artifactId>
+    <version>2026.0.2-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>nuxeo-agentic-embedded</artifactId>
+  <name>Nuxeo Agentic Embedded Panels</name>
+  <description>OSGi bundle: token exchange for embedded panels. A host application the server's configuration registers, with its own credentials and allowed origins, exchanges its signed assertion of a user for a short-lived, audience-bound Nuxeo token for that user (OAuth 2.0 token exchange, RFC 8693), signed with the add-on's own key and signed in by its own authenticator, on the REST API only. Only users the configuration maps, never an administrator unless allowed, scoped to reads unless configured otherwise, every exchange audited.</description>
+
+  <dependencies>
+    <!-- NuxeoPrincipal, the user an exchange is for. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The audit's entries are built from an event, as the platform builds its own. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-event</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-audit-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- UserManager: whether a mapped user exists, is an administrator, and their groups. -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-usermanager</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      UserIdentificationInfo, what the add-on's authentication plugin answers with: in
+      nuxeo-platform-api, with no servlet type, on 11.5 and on LTS 2025 alike. The plugin's interface,
+      which carries Jakarta servlet types on 2025, is a compile-time copy kept out of the jar (below).
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      The JWT library the platform ships in nxserver/lib: java-jwt 4.5.0 on LTS 2025.10.18, 3.12.0 for
+      the 11.5 artifacts the tests run on. It verifies a host's assertion and signs and verifies the
+      panel's own token, with the add-on's own key, never the platform's nuxeo.jwt.secret. Only what
+      the two versions share is called, by the same descriptors, and every time and claim check is the
+      add-on's own.
+    -->
+    <dependency>
+      <groupId>com.auth0</groupId>
+      <artifactId>java-jwt</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!-- The key-value store that keeps each assertion's id until it expires, cluster-wide. -->
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-kv</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-jtajca</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.common</groupId>
+      <artifactId>nuxeo-common</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      Nuxeo LTS 2025 runs on Tomcat 10.1, so the servlet API is Jakarta, as nuxeo-agentic-core's
+      servlets are. Nothing the servlet or the filter takes from the 11.5 artifacts carries a
+      servlet type.
+    -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <version>6.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+          <!--
+            The compile-time copy of the platform's NuxeoAuthenticationPlugin, never shipped: the
+            server's own is the one the plugin implements at run time.
+          -->
+          <excludes>
+            <exclude>org/nuxeo/ecm/**</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
