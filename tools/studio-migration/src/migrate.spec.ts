@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { main, type CliIo } from './cli';
 import type { CheckResult } from './harness';
 import { migrate, nextOut, SERVER_HALVES, type Command, type MigrateRequest } from './migrate';
@@ -120,7 +120,9 @@ function fill(path: string): void {
   const file = JSON.parse(readFileSync(path, 'utf8'));
   for (const item of file.decisions) {
     item.owner = 'Migration lead';
-    item.decision = 'Rebuilt by hand';
+    // A proposal is accepted or rejected, for a reason; a reported item is decided in words.
+    item.decision = item.outcome === 'proposed' ? 'accept' : 'Rebuilt by hand';
+    if (item.outcome === 'proposed') item.reason = 'The host has the function it calls';
   }
   writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
 }
@@ -176,7 +178,7 @@ describe.each([
         `\n  2. In ${join(conversion, 'decisions.json')}, write for each reported item still without them who owns it`,
       );
       expect(migrated.out).toContain(
-        `\n  3. To see your decisions counted, run again into a new directory, carrying them: npm run studio-migration -- migrate acme.zip --out ${out}-2${allow.length ? ' --allow-list allow.json' : ''} --from ${out}\n`,
+        `\n  3. To see your decisions counted, and what you accepted written, run again into a new directory, carrying them: npm run studio-migration -- migrate acme.zip --out ${out}-2${allow.length ? ' --allow-list allow.json' : ''} --from ${out}\n`,
       );
       // Check 10 holds the actions to the allow-list convert was given, so it never runs in part.
       expect(migrated.out).not.toContain('- 10 Package');
@@ -204,7 +206,7 @@ describe.each([
         out,
         [
           ['inventory', 'acme.zip'],
-          ['convert', 'acme.zip', conversion],
+          ['convert', 'acme.zip', conversion, '--decisions', decisions],
           ['decisions', 'acme.zip', conversion, '--from', decisions],
           ['check', 'acme.zip', conversion],
           ['report', 'acme.zip', conversion],
@@ -221,8 +223,13 @@ describe.each([
       // Counted by the checks and the report, which ran after them, and nothing is left to do with them.
       expect(readFileSync(join(out, 'check.txt'), 'utf8')).not.toMatch(/reported items? ha/);
       expect(migrated.out).toContain(
-        '\n  2. Every reported item has an owner and a decision: none is left to fill in.\n',
+        '\n  2. Every item has its decision: none is left to fill in.\n',
       );
+      // Then a person approves, at a terminal, themselves: migrate never does.
+      expect(migrated.out).toContain(
+        `\n  3. Once nothing else stands in the way, a reviewer approves the report and its decisions, at a terminal, themselves: npm run studio-migration -- approve acme.zip ${conversion} --by "<their name>".`,
+      );
+      expect(readdirSync(conversion)).not.toContain('approval.json');
       expect(migrated.out).not.toContain('To see your decisions counted');
       expect(readFileSync(join(out, 'report.txt'), 'utf8')).toMatch(
         /Decisions needed: (\d+) reported items, \1 of them decided/,
@@ -244,7 +251,7 @@ describe.each([
       const again = fresh();
       const carried = run(['migrate', 'acme.zip', '--out', again, '--from', spaced], files);
       expect(readFileSync(join(again, 'decisions.txt'), 'utf8')).toMatch(
-        /reported items, 1 of them still without an owner or a decision\n/,
+        /reported items and \d+ proposals?, 1 of them still to fill in\n/,
       );
       expect(carried.out).toContain('To see your decisions counted');
       expect(carried.out).not.toContain('none is left to fill in');
@@ -343,24 +350,71 @@ describe('migrate, its negative controls', () => {
     expect(refused.err).toContain(byHandConversion.err.trimEnd());
   });
 
-  it('stops at the decisions, before the checks, when --from holds the decisions of another build', () => {
+  it('refuses, before writing anything, --from the decisions of another package, or of a first-format file of another build', () => {
     const earlier = fresh();
     expect(run(['migrate', 'acme.zip', '--out', earlier], files).code).toBe(0);
+    const decisions = join(earlier, 'conversion', 'decisions.json');
+    fill(decisions);
+    const file = JSON.parse(readFileSync(decisions, 'utf8'));
+    const otherPackage = join(fresh(), 'other.json');
+    mkdirSync(dirname(otherPackage), { recursive: true });
+    writeFileSync(
+      otherPackage,
+      JSON.stringify({ ...file, package: { ...file.package, name: 'Other' } }),
+    );
+    const firstFormat = join(dirname(otherPackage), 'first.json');
+    writeFileSync(
+      firstFormat,
+      JSON.stringify({
+        ...file,
+        format: 'studio-migration-decisions/1',
+        package: { ...file.package, bundle: 'f'.repeat(64) },
+      }),
+    );
+    for (const [from, reason] of [
+      [
+        otherPackage,
+        /is for Other 1\.0\.0, bundle [0-9a-f]{12}, and the package given is Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, so none of it is taken\. Nothing was written\./,
+      ],
+      [
+        firstFormat,
+        /so none of it is taken: a studio-migration-decisions\/1 file names each item by its place alone, which another build can give another construct\. Nothing was written\./,
+      ],
+    ] as const) {
+      const out = fresh();
+      const refused = run(['migrate', 'acme.zip', '--out', out, '--from', from], files);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toBe('');
+      expect(refused.err).toMatch(reason);
+      expect(existsSync(out)).toBe(false);
+    }
+  });
+
+  it("carries the decisions of another build of the package, by each construct's identity, and writes what was accepted", () => {
+    const earlier = fresh();
+    expect(run(['migrate', 'acme.zip', '--out', earlier], files).code).toBe(0);
+    fill(join(earlier, 'conversion', 'decisions.json'));
     const out = fresh();
-    const refused = run(['migrate', 'other.zip', '--out', out, '--from', earlier], {
+    // The same name and version, another bundle: M2's corpus added to it.
+    const carried = run(['migrate', 'other.zip', '--out', out, '--from', earlier], {
       'other.zip': syntheticPackage({ bundle: m2CorpusFiles() }),
     });
-    expect(refused.code).toBe(1);
-    expect(refused.out).toMatch(/\n3\. The decisions, carried: refused\n$/);
-    expect(refused.err).toMatch(
-      /is for Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, and the package given is Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, so none of it is taken/,
+    expect(carried.code).toBe(0);
+    const printed = readFileSync(join(out, 'decisions.txt'), 'utf8');
+    expect(printed).toMatch(
+      /carried from .*decisions\.json, of another build of the package, Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, by each construct's identity: \d+\n/,
     );
-    expect(refused.err).toContain(
-      'Stopped at step 3, the decisions, carried: the 2 steps after it',
+    const written = JSON.parse(readFileSync(join(out, 'conversion', 'decisions.json'), 'utf8'));
+    expect(written.carriedFrom.package.name).toBe('Acme-Claims');
+    expect(written.carriedFrom.carried.length).toBeGreaterThan(0);
+    // The view layout's proposal was accepted in the earlier build: its rule is written in this one.
+    const view = JSON.parse(
+      readFileSync(join(out, 'conversion', 'app', 'layouts', 'Claim', 'view.layout.json'), 'utf8'),
     );
-    expect(refused.err).toContain('cannot be carried to this package');
-    expect(readdirSync(out).sort()).toEqual(['conversion', 'conversion.txt', 'inventory.txt']);
-    expect(existsSync(join(out, 'conversion', 'decisions.json'))).toBe(false);
+    expect(JSON.stringify(view)).toContain('"field":"cl:tags"');
+    expect(readFileSync(join(out, 'report.txt'), 'utf8')).toMatch(
+      /\nCarried from an earlier build, Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, by each construct's identity: \d+ carried, \d+ offered for re-confirmation, \d+ dropped\n/,
+    );
   });
 
   it('never writes over an earlier run, its decisions among them', () => {

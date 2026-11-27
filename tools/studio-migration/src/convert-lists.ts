@@ -342,9 +342,14 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     if (card.operation !== null) {
+      // A proposal a person decides, though it proposes nothing the converter can write yet: no
+      // queue takes the list an operation gives, so it can be rejected and not accepted.
+      const verdict = context.verdicts.get(id);
       context.decide(id, {
         outcome: 'proposed',
         note: `Its list comes from the operation ${card.operation}. An agent proposes the page provider that gives the same documents, such as the favourites collection read with default_content_collection for Favorite.Fetch`,
+        proposal: true,
+        ...(verdict && !verdict.accepted ? { applied: 'reject' as const } : {}),
       });
       return;
     }

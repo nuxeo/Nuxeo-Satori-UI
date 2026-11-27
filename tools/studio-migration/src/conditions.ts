@@ -131,6 +131,44 @@ const POLYMER_PATH = /^(?:\[\[|\{\{)\s*!?\s*[\w.:$*-]+\s*(?:\]\]|\}\})$/;
  * rather than written, since nothing could hold it to the condition.
  */
 export function decideCondition(condition: Condition): ConditionDecision {
+  const proposal = proposalOf(condition);
+  // A rule proposed for a known JavaScript pattern is written only once a person accepts it, and
+  // only the rule they accepted: one they rejected is reported, and one they decided on another
+  // rule than the converter proposes now is no decision of this one.
+  const verdict = condition.verdict;
+  if (proposal.kind !== 'proposed' || !verdict || !sameRule(verdict.rule, proposal.rule))
+    return proposal;
+  return verdict.accepted
+    ? { kind: 'rule', rule: proposal.rule, document: proposal.document }
+    : {
+        kind: 'reported',
+        note: `${REJECTED} ${JSON.stringify(proposal.rule)}, so nothing it guards is written under it`,
+      };
+}
+
+/** How a rejected proposal's condition is reported, before the rule a person rejected. */
+export const REJECTED = 'A person rejected the rule proposed for it,';
+
+/** Whether two rules are the same, whatever the order of an object's keys. */
+export function sameRule(a: unknown, b: unknown): boolean {
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(canonical)
+      : typeof value === 'object' && value !== null
+        ? Object.fromEntries(
+            Object.keys(value)
+              .sort()
+              .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
+          )
+        : value;
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+/**
+ * What a condition becomes as the converter reads it, before any person's decision: its rule, its
+ * rule proposed, or why it is reported.
+ */
+export function proposalOf(condition: Condition): ConditionDecision {
   const decision = decideOnce(condition);
   if (decision.kind === 'reported') return decision;
   // A task layout's document is the task's target as Web UI's task page fetches it, without its
