@@ -1,0 +1,275 @@
+/**
+ * The administration drawer at a phone's width: at 320 CSS pixels it collapses into a menu button
+ * above the page, so that each administration page has the window's width; the button opens it
+ * over the page, modal, and closing it gives the focus back. On a desktop it sits beside the page
+ * as before. PR #771 found it squeezing every administration page at 320.
+ *
+ * Real Chrome, real layout: Karma runs each spec in an iframe, and the iframe's width is the test
+ * window's, so resizing it is what a phone's screen does to the media queries, `BreakpointObserver`
+ * and the layout. The whole application is routed, the shell and the administration area with it,
+ * and axe runs at WCAG 2.2 AA, colour contrast and target size included, on what the change draws:
+ * the drawer, the button and the page beside them.
+ */
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import axe from 'axe-core';
+import { of } from 'rxjs';
+
+import { appConfig } from '../app.config';
+import { AuthService } from '../auth/auth.service';
+import { PHONE_WIDTH_QUERY } from './app-shell.component';
+
+const WCAG22 = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/** The test window resized: the iframe Karma runs the spec in, so the media queries follow it. */
+async function resizeTo(width: number): Promise<void> {
+  const frame = window.frameElement as HTMLIFrameElement | null;
+  if (frame === null)
+    throw new Error('Karma must run the specs in its iframe to resize the window');
+  frame.style.width = `${width}px`;
+  frame.style.height = '800px';
+  for (let tries = 0; tries < 100 && window.innerWidth !== width; tries++)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(window.innerWidth).withContext('the test window is resized').toBe(width);
+}
+
+async function axeViolations(root: Element): Promise<string[]> {
+  const results = await axe.run(root, { runOnly: { type: 'tag', values: WCAG22 } });
+  return results.violations.map(
+    (violation) =>
+      `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(' | ')}`,
+  );
+}
+
+describe('AppShellComponent: the administration menu at a phone width and on a desktop', () => {
+  const authMock = {
+    isAuthenticated: signal(true),
+    username: signal('Administrator'),
+    hasAdministrationAccess: signal(true),
+    isAdministrator: signal(true),
+    isPowerUser: signal(false),
+    groups: signal(['administrators']),
+    ensureHydrated: () => of(undefined),
+    basicCredentials: () => null,
+    shareAuthToken: () => null,
+    logout: () => undefined,
+  } as unknown as AuthService;
+
+  let http: HttpTestingController;
+  let harness: RouterTestingHarness;
+  /** The app's English catalogue, as Karma serves the app's assets, for the texts axe reads. */
+  let english: object = {};
+
+  beforeAll(async () => {
+    const response = await fetch('/i18n/en.json');
+    expect(response.ok).withContext('Karma serves the English catalogue').toBe(true);
+    english = (await response.json()) as object;
+  });
+
+  /**
+   * Every request answered: the English catalogue for it, an empty list for a vocabulary, and an
+   * empty page of documents otherwise, as a server with nothing in it would, so the pages settle.
+   */
+  function answerAll(): void {
+    for (const request of http.match(() => true)) {
+      if (request.cancelled) continue;
+      const url = request.request.urlWithParams;
+      request.flush(
+        /\/i18n\/en\.json$/.test(request.request.url) && !url.includes('satori')
+          ? english
+          : /\/i18n\//.test(url)
+            ? {}
+            : /Directory\.|\/directory\b/.test(url)
+              ? []
+              : {
+                  entries: [],
+                  resultsCount: 0,
+                  totalSize: 0,
+                  currentPageSize: 0,
+                  numberOfPages: 0,
+                },
+      );
+    }
+  }
+
+  /**
+   * Change detection as the application runs it, its after-render hooks included, where the drawer
+   * moves the focus; the requests answered; and time for the drawer's transition, 400 ms, to end,
+   * since the drawer takes or gives back the focus when it has. Detected last, after the wait.
+   */
+  async function step(ms = 800): Promise<void> {
+    for (let round = 0; round < 4; round++) {
+      answerAll();
+      harness.detectChanges();
+      TestBed.tick();
+      await new Promise((resolve) => setTimeout(resolve, ms / 4));
+    }
+    answerAll();
+    harness.detectChanges();
+    TestBed.tick();
+  }
+
+  async function open(width: number, url = '/administration/vocabularies'): Promise<HTMLElement> {
+    await resizeTo(width);
+    await TestBed.configureTestingModule({
+      providers: [...appConfig.providers, provideHttpClientTesting()],
+    })
+      .overrideProvider(AuthService, { useValue: authMock })
+      .compileComponents();
+    http = TestBed.inject(HttpTestingController);
+    harness = await RouterTestingHarness.create();
+    answerAll();
+    await harness.navigateByUrl(url);
+    await step();
+    const root = document.querySelector('app-shell');
+    if (!(root instanceof HTMLElement)) throw new Error('the shell did not render');
+    expect(root.querySelector('lib-administration-shell'))
+      .withContext('the administration area is routed')
+      .toBeTruthy();
+    return root;
+  }
+
+  const content = (root: HTMLElement) => root.querySelector('mat-sidenav-content') as HTMLElement;
+  const drawer = (root: HTMLElement) => root.querySelector('.nav-drawer-sidenav') as HTMLElement;
+  const trigger = (root: HTMLElement) =>
+    root.querySelector<HTMLButtonElement>('button.admin-menu-trigger');
+  const adminPage = (root: HTMLElement) =>
+    (root.querySelector('lib-administration-shell') as HTMLElement).getBoundingClientRect();
+
+  async function openMenu(root: HTMLElement): Promise<HTMLButtonElement> {
+    const button = trigger(root) as HTMLButtonElement;
+    button.focus();
+    button.click();
+    await step();
+    return button;
+  }
+
+  afterEach(() => {
+    if (http) {
+      answerAll();
+      http.verify();
+    }
+    const frame = window.frameElement as HTMLIFrameElement | null;
+    if (frame) {
+      frame.style.width = '';
+      frame.style.height = '';
+    }
+  });
+
+  describe('at 320 CSS pixels', () => {
+    it('collapses the drawer into a menu button, and gives the page the window width, which axe passes', async () => {
+      const root = await open(320);
+      expect(window.matchMedia(PHONE_WIDTH_QUERY).matches).toBe(true);
+      expect(drawer(root).classList.contains('mat-drawer-opened'))
+        .withContext('the drawer is collapsed, not beside the page')
+        .toBe(false);
+      const button = trigger(root);
+      expect(button).withContext('the menu button shows above the page').toBeTruthy();
+      expect(button?.textContent?.trim()).toBe('Administration menu');
+      expect(button?.getAttribute('aria-expanded')).toBe('false');
+      expect(document.getElementById(button?.getAttribute('aria-controls') ?? '')).toBe(
+        drawer(root),
+      );
+      // The page has the window's width: nothing beside it.
+      expect([Math.round(adminPage(root).left), Math.round(adminPage(root).width)]).toEqual([
+        0, 320,
+      ]);
+      expect(content(root).getBoundingClientRect().left).toBe(0);
+      expect(await axeViolations(root.querySelector('.shell-content') as Element)).toEqual([]);
+    });
+
+    it('opens the menu over the page, modal, with the focus in it, which axe passes', async () => {
+      const root = await open(320);
+      const button = await openMenu(root);
+      const opened = drawer(root);
+      expect(opened.classList.contains('mat-drawer-opened')).toBe(true);
+      expect(opened.classList.contains('mat-drawer-over'))
+        .withContext('over the page, not beside it')
+        .toBe(true);
+      expect([opened.getAttribute('role'), opened.getAttribute('aria-modal')]).toEqual([
+        'dialog',
+        'true',
+      ]);
+      expect(opened.getAttribute('aria-label')).toBe('Administration menu');
+      expect(button.getAttribute('aria-expanded')).toBe('true');
+      expect(opened.contains(document.activeElement))
+        .withContext('the focus moves into the menu')
+        .toBe(true);
+      expect(document.activeElement?.textContent?.trim()).toBe('Analytics');
+      // The focus is held in it: the trap's anchors are live on both sides of the drawer.
+      const anchors = [opened.previousElementSibling, opened.nextElementSibling].filter((element) =>
+        element?.classList.contains('cdk-focus-trap-anchor'),
+      );
+      expect(anchors.map((anchor) => anchor?.getAttribute('tabindex'))).toEqual(['0', '0']);
+      // The page beneath is not moved: the menu covers it.
+      expect(content(root).getBoundingClientRect().left).toBe(0);
+      expect(await axeViolations(root.querySelector('.shell-content') as Element)).toEqual([]);
+    });
+
+    it('closes on Escape, giving the focus back to the button', async () => {
+      const root = await open(320);
+      const button = await openMenu(root);
+      expect(drawer(root).contains(document.activeElement)).toBe(true);
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+      );
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
+      expect(button.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(button);
+      // The section stays: the button is still there to open the menu again.
+      expect(trigger(root)).toBe(button);
+    });
+
+    it('closes when a page is chosen in it, opens that page at the window width, and gives the focus back', async () => {
+      const root = await open(320);
+      await openMenu(root);
+      const audit = [
+        ...drawer(root).querySelectorAll<HTMLButtonElement>('button.settings-item'),
+      ].find((item) => item.textContent?.trim() === 'Audit');
+      expect(audit).withContext('the menu lists the audit page').toBeTruthy();
+      audit?.click();
+      await step();
+      await step();
+      expect(TestBed.inject(Router).url).toBe('/administration/audit');
+      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
+      expect(trigger(root)?.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(trigger(root));
+      expect(Math.round(adminPage(root).width)).toBe(320);
+    });
+  });
+
+  describe('on a desktop, 1280 CSS pixels', () => {
+    it('keeps the drawer beside the page, with no menu button, which axe passes', async () => {
+      const root = await open(1280);
+      expect(window.matchMedia(PHONE_WIDTH_QUERY).matches).toBe(false);
+      const side = drawer(root);
+      expect(side.classList.contains('mat-drawer-opened')).toBe(true);
+      expect(side.classList.contains('mat-drawer-side')).toBe(true);
+      expect(side.getAttribute('role')).toBeNull();
+      expect(trigger(root)).toBeNull();
+      // Beside it, not over it: the page starts where the drawer ends.
+      expect(Math.round(content(root).getBoundingClientRect().left)).toBe(
+        Math.round(side.getBoundingClientRect().right),
+      );
+      expect(await axeViolations(root.querySelector('.shell-content') as Element)).toEqual([]);
+    });
+
+    it('collapses the drawer when the window narrows to a phone, and puts it back when it widens', async () => {
+      const root = await open(1280);
+      await resizeTo(320);
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(false);
+      expect(trigger(root)).toBeTruthy();
+      // The focus is not moved for a resize: the menu was never opened by the button.
+      expect(document.activeElement).not.toBe(trigger(root));
+      await resizeTo(1280);
+      await step();
+      expect(drawer(root).classList.contains('mat-drawer-opened')).toBe(true);
+      expect(trigger(root)).toBeNull();
+    });
+  });
+});
