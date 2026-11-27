@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+  The kit's page providers over the delivery packages, which the assets add-on,
+  nuxeo-agentic-assets 0.4.0, registers. Not part of the stand-in model: they stay when a real
+  media model replaces media-demo-model.xml. Written by hand, since app-model writes page providers
+  for the stand-in's own types only.
+
+  Each reads the repository with the reader's permissions: a person who may not read the
+  deliveries folder sees no delivery.
+-->
+<component name="nuxeo.config.media-demo.queues" version="1.0">
+  <require>org.nuxeo.agentic.assets.delivery.types</require>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The queue of deliveries, the latest delivered first. -->
+    <coreQueryPageProvider name="media_deliveries">
+      <pattern>
+        SELECT * FROM MediaDelivery
+        WHERE ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="mdlv:deliveredAt" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- A localised version's deliveries, given the version's id, the latest first. -->
+    <coreQueryPageProvider name="media_version_deliveries">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM MediaDelivery WHERE mdlv:version = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="mdlv:deliveredAt" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

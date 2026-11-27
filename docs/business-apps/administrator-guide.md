@@ -12,24 +12,25 @@ wait for a security review, and some are built on open decisions
 
 ## 1. What there is to install
 
-| Package                     | What it is                                                                                                                                  | Depends on                                                   | On staging                       | Installed so far                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------- | ------------------------------------------------- |
-| `nuxeo-agentic-ui`          | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                      | 2026.0.2 once stamped            | Earlier builds, on the local server only          |
-| `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints and video operations, and an asset's share links             | Nothing                                                      | 0.3.0                            | Nowhere                                           |
-| `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page, kept per connector, and change events. **A bundle, no package yet**     | No package                                                   | 0.1.0, its jar 2026.0.2-SNAPSHOT | Nowhere                                           |
-| `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                            | Nowhere                                           |
-| `nuxeo-agentic-signature`   | The e-signature step: a record's file sent to its signers, the callback authenticated, the signed file filed. A stand-in provider only      | Nothing                                                      | 0.1.0                            | Nowhere                                           |
-| `nuxeo-agentic-capture`     | Capture: mail uploaded into an inbox classified, its fields extracted, matched and filed on its record, or queued for a person              | Nothing                                                      | 0.1.0                            | Nowhere                                           |
-| `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons              | `nuxeo-agentic-ui:2026.0.2`                                  | 0.7.0                            | 0.6.1 on the local server; 0.7.0 nowhere          |
-| `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.3.0`    | 0.2.4                            | 0.2.0 on the local server; 0.1.1 to 0.2.4 nowhere |
-| `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                            | Nowhere                                           |
-| `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                            | Nowhere                                           |
-| `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.0                            | Nowhere                                           |
-| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, three queues, a core-system card, a claims mail inbox         | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-capture:0.1.0`   | 0.2.0                            | Nowhere                                           |
-| `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents             | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                            | Nowhere                                           |
-| `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging              | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                            | Nowhere                                           |
-| `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                            | Nowhere                                           |
-| `onboarding-demo`           | The onboarding kit: cases with their KYC checklist and an e-signature step, disputes, three queues                                          | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-signature:0.1.0` | 0.1.0                            | Nowhere                                           |
+| Package                     | What it is                                                                                                                                                                                        | Depends on                                                   | On staging                       | Installed so far                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------- | ------------------------------------------------- |
+| `nuxeo-agentic-ui`          | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/`                                                       | Nothing                                                      | 2026.0.2 once stamped            | Earlier builds, on the local server only          |
+| `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints and video operations, an asset's share links, and media rights: territories, release windows and delivery packages | Nothing                                                      | 0.4.0                            | Nowhere                                           |
+| `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page, kept per connector, and change events. **A bundle, no package yet**                                                           | No package                                                   | 0.1.0, its jar 2026.0.2-SNAPSHOT | Nowhere                                           |
+| `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it                                                                  | Nothing                                                      | 0.1.0                            | Nowhere                                           |
+| `nuxeo-agentic-signature`   | The e-signature step: a record's file sent to its signers, the callback authenticated, the signed file filed. A stand-in provider only                                                            | Nothing                                                      | 0.1.0                            | Nowhere                                           |
+| `nuxeo-agentic-capture`     | Capture: mail uploaded into an inbox classified, its fields extracted, matched and filed on its record, or queued for a person                                                                    | Nothing                                                      | 0.1.0                            | Nowhere                                           |
+| `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals with their review workflow and two operation buttons                                                                    | `nuxeo-agentic-ui:2026.0.2`                                  | 0.7.0                            | 0.6.1 on the local server; 0.7.0 nowhere          |
+| `brand-assets-demo`         | The brand assets kit: an asset library, pictures and videos, whose rights the server enforces                                                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.3.0`    | 0.2.4                            | 0.2.0 on the local server; 0.1.1 to 0.2.4 nowhere |
+| `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                                                                                  | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                            | Nowhere                                           |
+| `facilities-demo`           | The tutorial's work-order app                                                                                                                                                                     | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                            | Nowhere                                           |
+| `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                                                                                     | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.0                            | Nowhere                                           |
+| `pc-claims-demo`            | The P&C claims kit: property claims and their policies, photos and documents, three queues, a core-system card, a claims mail inbox                                                               | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-capture:0.1.0`   | 0.2.0                            | Nowhere                                           |
+| `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents                                                                   | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                            | Nowhere                                           |
+| `nuxeo-agentic-records`     | The disposition review on the retention module: runs, two approvals, deletion, a certificate; the audit export, access logging                                                                    | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.2.0                            | Nowhere                                           |
+| `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page, the audit exports, a record's history                                                                                | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.2.0`   | 0.1.1                            | Nowhere                                           |
+| `onboarding-demo`           | The onboarding kit: cases with their KYC checklist and an e-signature step, disputes, three queues                                                                                                | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-signature:0.1.0` | 0.1.0                            | Nowhere                                           |
+| `media-demo`                | The media kit: a film's page with its release windows and localised versions, a version's page, the deliveries and a delivery's page                                                              | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.4.0`    | 0.1.0                            | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
@@ -46,8 +47,9 @@ installed on any server yet"), and the kits' READMEs:
 [moves](../../business-apps/packages/moves-demo/README.md),
 [P&C claims](../../business-apps/packages/pc-claims-demo/README.md),
 [controlled documents](../../business-apps/packages/controlled-documents-demo/README.md),
-[records](../../business-apps/packages/records-demo/README.md) and
-[onboarding](../../business-apps/packages/onboarding-demo/README.md); the
+[records](../../business-apps/packages/records-demo/README.md),
+[onboarding](../../business-apps/packages/onboarding-demo/README.md) and
+[media](../../business-apps/packages/media-demo/README.md); the
 [documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
 the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
 on any server"), the [e-signature add-on's README](../../nuxeo-agentic-signature/README.md)
@@ -485,6 +487,7 @@ groups give them, and gets every diagnostic.
 | `controlled-documents`            | `document-controllers`, `engineers`                         |
 | `records`                         | `records-managers`, `records-approvers`                     |
 | `onboarding`                      | `onboarding-officers`, `kyc-analysts`, `dispute-analysts`   |
+| `media`                           | `media-distribution`, `media-rights`                        |
 
 Read from each kit's `bundle/agentic-ui-config/app.json`.
 
@@ -516,6 +519,98 @@ files and `assets/` to everyone, before sign-in. "Put nothing secret in a fragme
 ([extension-reference.md](../extension-reference.md), "Where the manifest lives";
 [app-definition-v2.md](app-definition-v2.md), section 10). The registry's files are served only
 after sign-in.
+
+### Languages
+
+Read from `staging/enterprise-grade-app` on 27 November 2026. `npm run i18n:coverage` gives the
+numbers of the day, for the app and every kit, and names the keys each language is missing.
+
+**What the app shows.** A deployment's language is its Layer 0 `defaultLanguage`, which
+`availableLanguages` must list, as Satori's own defaults do in
+[`bootstrap.defaults.json`](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json),
+and a configuration package's `bootstrap.json` may change. The app runs in a language only when
+this build ships its catalogue, `apps/nuxeo-ui/public/i18n/<language>.json`; given another, it says
+so in the console and runs in English (`resolveStringLanguage` in
+[`provide-app-config.ts`](../../apps/nuxeo-ui/src/app/config/provide-app-config.ts)). Dates,
+numbers and amounts follow the same language, once it is offered.
+
+| Languages                                                               | State                                                                                                                             |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,355 keys                                                                    |
+| Spanish (`es`)                                                          | Requested from Crowdin. Its dates, numbers and amounts are ready; its catalogue is not on this branch, so it cannot be chosen yet |
+| Swedish, Arabic, Hebrew, Italian (`sv`, `ar`, `he`, `it`)               | Crowdin targets, not requested on this branch; dates, numbers and amounts ready; no catalogue here                                |
+| Danish, Finnish, Norwegian Bokmål (`da`, `fi`, `nb`)                    | Registered: dates, numbers and amounts ready. Not yet Crowdin targets, so not requested                                           |
+
+`main` is further along than this branch. Swedish, Italian, Arabic and Hebrew ship there already
+(NXSAT-754, #656 and #696), and Spanish, 99 % approved on Crowdin on 30 October
+([i18n-status.md](../i18n-status.md)), waits in Crowdin's pull request into `main`, #401, with
+2,774 keys. Each reaches this branch when `main` is merged into it. Danish, Finnish and Norwegian
+Bokmål are new: none was among the project's targets on 30 October, the last time they were read.
+
+**Every language falls back to English, key by key.** A key a catalogue does not give shows in
+English, never as the key, so a language at 60 % shows the other 40 % in English.
+
+**A kit's labels** are `labels/<language>.json` beside its `labels/en.json`, written by Crowdin
+from the English, never by hand ([app-definition-v2.md](app-definition-v2.md), section 7). The
+registry serves a language over English, key by key, and a language a kit has no file for shows the
+kit's English. No kit has a file in any language but English yet. The pipeline accepts a language
+that gives a subset of English's keys and refuses one with a key English lacks
+([package-pipeline.md](package-pipeline.md), section 2). The kits have a Crowdin config of their
+own, [`crowdin-kits.yml`](../../crowdin-kits.yml), and a pull of their own,
+[`crowdin-pull-kits.yaml`](../../.github/workflows/crowdin-pull-kits.yaml), because a kit's new file
+needs a person to name it and version the kit before the kit builds, and in the app's one pull
+request that would hold every app catalogue red with it.
+
+**The demos need approved translations first.** Phase 7's "the app in Spanish" and phase 8's "the
+app in French" each show the app only as far as Crowdin has approved it and the steps below have
+brought it here. French ships today at 60 %, and every kit label in French is English until its
+translations are approved and pulled. Spanish needs #401 merged, with step 3 below, and its kit
+labels the same as French. Translations are never written in this repository.
+
+**On Crowdin's side,** a Crowdin manager on project 160 of the Hyland tenant, with the Translation
+Team, does each of these:
+
+1. **Adds the target language,** before anyone requests it here: a pull fails as a whole on a
+   language the project does not have. Spanish `es`, Swedish `sv`, Danish `da`, Finnish `fi`. For
+   Norwegian Bokmål, choose **one** of Crowdin's two: "Norwegian Bokmal" (`nb`) or "Norwegian"
+   (`no`). Both configs write either as `nb.json`, the name the app reads; both would write the
+   same file.
+2. **Hides the `$schema` string** in each kit's labels file, once the kits' sources are on the
+   project. Crowdin Push uploads them on its next run: a change on `main` to any source, the app's
+   catalogue or context, or a kit's `labels/en.json`, starts one, or it can be run by hand. The
+   string is the address of a schema for editors, not a label; hidden, it is not shown to a
+   translator and exports as written.
+3. **Has the strings translated and approved.** Only approved translations are exported. A string
+   not yet approved arrives as its English source, and shows as English.
+4. **Confirms the project's own export settings keep approved-only export,** since they take
+   precedence over the pipeline's. It is the open owner action in `D8-standard`
+   ([i18n-localization-plan.md](../i18n-localization-plan.md)).
+
+**In the repository,** once approvals exist, a developer, on `main`:
+
+1. **For the app,** adds the language's `--language` to `download_translations_args` in
+   [`crowdin-pull.yaml`](../../.github/workflows/crowdin-pull.yaml) and waits for the nightly pull.
+   The id is Crowdin's: `no` if the project targets "Norwegian". In the pull request it opens, which
+   brings `apps/nuxeo-ui/public/i18n/<language>.json`, offers the language:
+   `SHIPPED_CATALOGUE_LANGUAGES` in
+   [`shipped-catalogues.ts`](../../apps/nuxeo-ui/src/app/i18n/shipped-catalogues.ts),
+   `availableLanguages` in `bootstrap.defaults.json` and in `DEFAULT_APP_BOOTSTRAP_CONFIG`
+   (`libs/shared/app-config/src/lib/bootstrap-config.ts`), and `DATE_FNS_LOCALES` in
+   `libs/shared/ui/src/lib/date-adapter/satori-date-adapter.ts`, where date-fns' `es`, `sv`, `da`,
+   `fi` and `nb` need no regional entry. Until then that pull request is red, on purpose: a
+   catalogue nobody offers ships and is never shown.
+2. **For the kits,** once a kit string is approved, sets the repository variable
+   `CROWDIN_KIT_LABELS_ENABLED` to `true`, which turns the kits' pull on, and in the same change
+   sets the pull's `download_translations_args` to the languages with approved kit strings: it
+   holds French alone until then, as a placeholder, and a language listed with no approval writes
+   every kit's file in English, each needing its kit named and versioned. In each pull request it
+   opens, for each kit with a new file, names it in the component
+   (`npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/<kit>`), and
+   raises the kit's version: a minor for a new language, a patch for changed texts. Until then the
+   package pipeline refuses the kit and that pull request is red, holding only the kits.
+
+**On the server,** an administrator then sets `defaultLanguage` in the deployment's Layer 0
+configuration, and installs the kits' new versions.
 
 ## 5. Upgrading a kit
 
@@ -598,7 +693,7 @@ has the Admin Center's install path been rehearsed
 ## 6. Removing a kit safely
 
 **Not run yet,** for any kit (each kit's README, "Removing it"). The steps follow the Payers
-kit's install, which was run; the contracts, facilities, moves and P&C claims kits were never
+kit's install, which was run; the contracts, facilities, moves, P&C claims and media kits were never
 installed.
 
 1. **Delete the kit's documents first, and empty them from the trash.** A document whose type is
@@ -606,7 +701,7 @@ installed.
    replace a kit's stand-in model. The seeded workspaces:
    `/default-domain/workspaces/payers-demo`, `/default-domain/workspaces/acme-brand-assets`,
    `/default-domain/workspaces/contracts-demo`, `/default-domain/workspaces/moves-demo`,
-   `/default-domain/workspaces/pc-claims-demo` and `/default-domain/workspaces/records-demo`; the records kit's seed also writes `/disposition-runs`
+   `/default-domain/workspaces/pc-claims-demo`, `/default-domain/workspaces/records-demo` and `/default-domain/workspaces/media-demo`; the records kit's seed also writes `/disposition-runs`
    and the rule `/RetentionRules/records-demo-one-minute`. Its records are records of the retention
    module: one under retention or a legal hold cannot be deleted, whoever asks. The facilities kit
    has no seed.

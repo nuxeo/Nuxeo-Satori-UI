@@ -1,0 +1,50 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "delivery",
+      "labelKey": "media.card.delivery.delivery",
+      "fields": [
+        "mdlv:distributor",
+        "mdlv:territory",
+        {
+          "field": "mdlv:version",
+          "widget": "document-link",
+          "parameters": { "types": ["FilmVersion"] }
+        }
+      ]
+    },
+    {
+      "id": "delivered",
+      "labelKey": "media.card.delivery.delivered",
+      "fields": [
+        { "field": "mdlv:deliveredAt", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "mdlv:deliveredBy", "widget": "user" }
+      ]
+    },
+    {
+      "id": "files",
+      "labelKey": "media.card.delivery.files",
+      "span": 2,
+      "fields": [
+        {
+          "field": "mdlv:files",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "mdlv:use", "labelKey": "media.column.use" },
+              { "field": "mdlv:name", "labelKey": "media.column.name" },
+              { "field": "mdlv:channel", "labelKey": "media.column.channel" },
+              { "field": "mdlv:filename", "labelKey": "media.column.filename" },
+              { "field": "mdlv:mimeType", "labelKey": "media.column.mimeType" },
+              { "field": "mdlv:length", "widget": "number", "labelKey": "media.column.length" },
+              { "field": "mdlv:digest", "labelKey": "media.column.digest" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
