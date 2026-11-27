@@ -57,15 +57,17 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * watermark's whole definition, why it was marked, the exact text drawn, and the person and the
  * territory where the text names them. So it is reused for that key alone, never served to someone
  * the text would not name, and never found once the file or the watermark has changed; it is then
- * dropped, by {@link WatermarkedCopiesListener} or the next job's sweep, and after
- * {@value #COPY_DAYS_PROPERTY} days whatever happens.</li>
+ * dropped, by {@link WatermarkedCopiesListener}, the next job's sweep or each node's sweep every
+ * {@link #SWEEP_EVERY}, as it is once it is {@value #COPY_DAYS_PROPERTY} days old.</li>
  * <li><strong>One job per key at a time, across the cluster:</strong> a job runs only while it holds
  * the key's lease in the platform's key/value store {@value #STORE}, taken by compare-and-set and
  * renewed while it runs; a job that finds it taken does nothing. A queued job's marker there keeps a
  * second request from queuing another.</li>
- * <li><strong>A failure</strong> is kept there for {@value #FAILURE_MINUTES_PROPERTY} minutes,
- * audited on the document, and answered to every request for the key until then, with its reason:
- * the unmarked file is never served, while the job runs or after it fails.</li>
+ * <li><strong>A failure</strong> of the video's own is kept there for
+ * {@value #FAILURE_MINUTES_PROPERTY} minutes, any other for {@value #TRANSIENT_FAILURE}, none for a
+ * job the work manager stopped; each is audited on the document, and answered to every request for
+ * the key until then, with its reason: the unmarked file is never served, while the job runs or
+ * after it fails.</li>
  * </ul>
  */
 public class MarkedVideosComponent extends DefaultComponent implements MarkedVideos {

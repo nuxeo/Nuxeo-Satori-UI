@@ -469,25 +469,30 @@ public class VideoWatermarkBackgroundTest {
         assertEquals(0, copies());
     }
 
-    /** The folder the copies are kept in is refused every rendition, as its tree's zip, to an administrator too. */
+    /**
+     * The folder the copies are kept in is refused every rendition, as its tree's zip, to an
+     * administrator too, holding no copy yet; and a folder holding a copy, the root here, with no
+     * asset in the repository, is refused its renditions as one holding an asset is.
+     */
     @Test
-    public void theCopiesFolderIsRefusedItsRenditions() throws Exception {
-        String video = video("long", 600, 200);
-        assertEquals(202, ask(video, OLGA).status());
-        awaitJobs();
-        DocumentModel folder = CoreInstance.doPrivileged(session,
-                (Function<CoreSession, DocumentModel>) privileged -> privileged.query(
-                        "SELECT * FROM " + WatermarkedCopies.CONTAINER_TYPE).get(0));
+    public void theCopiesFolderAndAFolderHoldingACopyAreRefusedTheirRenditions() throws Exception {
         Blob zip = new org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob(new byte[] { 1 }, "application/zip");
-        LoginComponent.pushPrincipal(ADMINISTRATOR);
-        try {
-            assertFalse(downloads.checkPermission(folder, null, zip, "rendition", Map.of("rendition", "zipTreeExport")));
-            assertFalse("nor the root, which holds it",
-                    downloads.checkPermission(session.getRootDocument(), null, zip, "rendition",
-                            Map.of("rendition", "zipTreeExport")));
-        } finally {
-            LoginComponent.popPrincipal();
-        }
+        Map<String, java.io.Serializable> export = Map.of("rendition", "zipTreeExport");
+        DocumentModel folder = CoreInstance.doPrivileged(session,
+                (Function<CoreSession, DocumentModel>) WatermarkedCopies::container);
+        commit();
+        assertFalse("the copies' folder, empty", check(ADMINISTRATOR, folder, null, zip, export));
+        DocumentModel root = session.getRootDocument();
+        assertTrue("no asset and no copy below the root yet", check(ADMINISTRATOR, root, null, zip, export));
+
+        MarkedVideos.Job job = new MarkedVideos.Job("0".repeat(64), session.getRepositoryName(), "no-such-document",
+                "AcmeVideo", "file:content", "original", "digest", "ACME OUTDOOR · olga", "bottom-right",
+                "fingerprint", "olga", "olga", "", "download", MarkedVideosComponent.QUEUED + "0");
+        CoreInstance.doPrivileged(session, (Function<CoreSession, DocumentModel>) privileged -> WatermarkedCopies.keep(
+                privileged, job, StandInVideoMarker.video("a copy", 600, 200), System.currentTimeMillis()));
+        commit();
+        assertFalse("the root, which holds a copy", check(ADMINISTRATOR, root, null, zip, export));
+        assertFalse(check(ADMINISTRATOR, folder, null, zip, export));
     }
 
     // ------------------------------------------------------------------ dropped
@@ -622,7 +627,7 @@ public class VideoWatermarkBackgroundTest {
 
     /** A kept copy's file, wherever else it is asked for, is refused to everyone, an administrator included. */
     @Test
-    public void aKeptCopysFileIsRefusedAtEveryOtherPath() throws Exception {
+    public void aKeptCopysFileIsRefusedByItsDocumentAndByItsStoredFile() throws Exception {
         String video = video("long", 600, 200);
         assertEquals(202, ask(video, OLGA).status());
         awaitJobs();
@@ -711,9 +716,15 @@ public class VideoWatermarkBackgroundTest {
     }
 
     private boolean check(NuxeoPrincipal person, DocumentModel doc, String xpath, Blob blob) {
+        return check(person, doc, xpath, blob, Map.of());
+    }
+
+    /** A download asked of the platform's download service as {@code person}; a rendition's name in {@code infos}. */
+    private boolean check(NuxeoPrincipal person, DocumentModel doc, String xpath, Blob blob,
+            Map<String, java.io.Serializable> infos) {
         LoginComponent.pushPrincipal(person);
         try {
-            return downloads.checkPermission(doc, xpath, blob, "download", Map.of());
+            return downloads.checkPermission(doc, xpath, blob, infos.isEmpty() ? "download" : "rendition", infos);
         } finally {
             LoginComponent.popPrincipal();
         }

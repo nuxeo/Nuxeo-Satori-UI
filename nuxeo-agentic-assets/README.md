@@ -684,9 +684,10 @@ long one is marked by a job in the platform's work manager, in a queue of its ow
   of its copies whose place holds another digest now, or that was kept under another watermark; after
   its removal, every one (`WatermarkedCopiesListener`); at the end of each job, the same source's
   copies at the same place of another digest or watermark, and, everywhere, up to 100 copies made
-  more than `nuxeo.agentic.watermark.video.copy.days` days ago, 7 unless set, or kept under a
-  watermark no policy in force has now; and those, up to 1000 at a time, by a sweep each node runs
-  every 6 hours, a quarter of an hour after it starts, whether or not a long video is marked. With the
+  more than `nuxeo.agentic.watermark.video.copy.days` days ago, 7 unless set, and up to 100 kept
+  under a watermark no policy in force has now; and those, in at most ten such rounds, by a sweep
+  each node runs every 6 hours, a quarter of an hour after it starts, whether or not a long video is
+  marked. With the
   rights service not running, the sweep drops copies past their days only. A copy past its days is
   not served, and its key's next job replaces it.
 - **One job per key at a time, across the cluster:** a job runs only while it holds the key's lease in
@@ -1259,11 +1260,14 @@ preparing, and after a failure. **Deliveries, 3:** a delivery made while its vid
 after its job failed; its copy kept once it is made. **The page, 6:** the marked video not asked
 for; polling unbounded; no backoff; a
 409 not said as `watermark-unavailable`; Check again not offered; JSON read as the marked file.
-Three guards are layered and were broken alone to be seen: a key that leaves out the person is red
+Five guards are layered and were broken alone to be seen: a key that leaves out the person is red
 in `MarkedVideosKeyTest`, since in a runtime the text drawn names the person too; the job's checks
 for a kept copy and a kept failure are each red in a test that queues a job directly, since the
-request's checks come first. The script that broke them is not in the repository; the list is in the
-pull request. **What the tests cannot reach:** the platform's tools marking a feature-length master
+request's checks come first; and the copies' folder's own refusal and a folder holding a copy's are
+each red in a test where the other cannot answer, an empty copies' folder and a root holding a copy
+and no asset. Those two stayed green on the run after the review, each masked by the other, until
+the test was split; and one breakage first missed its line, moved by the review's fixes, and was
+made again. The script that broke them is not in the repository; the list is in the pull request. **What the tests cannot reach:** the platform's tools marking a feature-length master
 on a server, its time and the disk its copies take; the REST API's answer to the 202 on LTS 2025;
 the key/value store's compare-and-set on a cluster's shared store, which the tests run in memory; the
 work manager's stream on the server; and the platform's deletion of a removed document's blobs, if
@@ -1609,7 +1613,7 @@ check, not what it found:
     taken the copy; and the work manager's own handling of a work's id.
 49. **What is dropped, and when:** a changed source's copies after its commit, in the background; a
     copy under another watermark at the next job's end; a copy past its days or its watermark at the
-    next job's end, up to 100, and by each node's sweep every 6 hours, up to 1000; a delivery's copy
+    next job's end, up to 100 of each, and by each node's sweep every 6 hours, ten rounds of that at most; a delivery's copy
     once the delivery is created. What a feature-length copy per person per day costs in storage,
     and whether the days should be fewer.
 50. **A failure:** that its reason, answered to the reader and written to the audit, says nothing of
