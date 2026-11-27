@@ -35,6 +35,7 @@ import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
+import org.nuxeo.runtime.test.runner.TransactionalFeature;
 import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
@@ -58,6 +59,10 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
 @Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-rights-service.xml")
 @Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-rights-download-permission.xml")
 @Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-watermark-operations-contrib.xml")
+@Deploy("org.nuxeo.runtime.kv")
+@Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-video-marker.xml")
+@Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-watermarked-copies-types.xml")
+@Deploy("org.nuxeo.agentic.assets:OSGI-INF/asset-video-watermark-service.xml")
 @Deploy("org.nuxeo.agentic.assets.test:OSGI-INF/test-video-model-contrib.xml")
 @Deploy("org.nuxeo.agentic.assets.test:OSGI-INF/test-watermark-policy-contrib.xml")
 public class VideoWatermarkTest {
@@ -66,6 +71,9 @@ public class VideoWatermarkTest {
 
     @Inject
     protected CoreSession session;
+
+    @Inject
+    protected TransactionalFeature transactions;
 
     private String video;
 
@@ -114,6 +122,46 @@ public class VideoWatermarkTest {
         double elsewhere = difference(plain, drawn, 0, 0, width / 2, height / 3);
         assertTrue("the mark at the bottom right: " + atTheMark + " against " + elsewhere,
                 atTheMark > 3 * elsewhere + 2);
+    }
+
+    /**
+     * Since 0.6.0, where ffmpeg is: a video over the bytes set, every one here, is marked in the
+     * background by the platform's own video tools, its copy kept and then served, the mark over its
+     * frames, and the same copy served to the same reader again.
+     */
+    @Test
+    public void whereFfmpegIsALongVideoIsMarkedInTheBackgroundAndItsCopyServed() throws Exception {
+        assumeTrue("ffmpeg and ffprobe are not installed here: VideoWatermarkBackgroundTest holds the job's lifecycle",
+                ffmpeg());
+        Framework.getProperties().setProperty(MarkedVideosComponent.BYTES_PROPERTY, "0");
+        try {
+            Blob preparing = VideoWatermarks.marked(session.getRepositoryName(), video, READER);
+            assertEquals("application/json", preparing.getMimeType());
+            assertTrue(preparing.getString(), preparing.getString().contains("\"status\":\"preparing\""));
+            transactions.nextTransaction();
+
+            Blob original = VideoWatermarks.kitVideo();
+            Blob marked = VideoWatermarks.marked(session.getRepositoryName(), video, READER);
+            assertEquals("video/webm", marked.getMimeType());
+            assertEquals("ast-511-watermarked.webm", marked.getFilename());
+            assertFalse("a new video, not the original", Arrays.equals(original.getByteArray(), marked.getByteArray()));
+            VideoInfo before = VideoHelper.getVideoInfo(original);
+            VideoInfo after = VideoHelper.getVideoInfo(marked);
+            assertEquals(before.getWidth(), after.getWidth());
+            assertEquals(before.getHeight(), after.getHeight());
+            BufferedImage plain = frame(original);
+            BufferedImage drawn = frame(marked);
+            int width = plain.getWidth();
+            int height = plain.getHeight();
+            double atTheMark = difference(plain, drawn, width / 2, height * 2 / 3, width, height);
+            double elsewhere = difference(plain, drawn, 0, 0, width / 2, height / 3);
+            assertTrue("the mark at the bottom right: " + atTheMark + " against " + elsewhere,
+                    atTheMark > 3 * elsewhere + 2);
+            Blob again = VideoWatermarks.marked(session.getRepositoryName(), video, READER);
+            assertTrue("the kept copy, served again", Arrays.equals(marked.getByteArray(), again.getByteArray()));
+        } finally {
+            Framework.getProperties().remove(MarkedVideosComponent.BYTES_PROPERTY);
+        }
     }
 
     /** The first frame of {@code video}, taken by the platform's own {@code ffmpeg-screenshot}. */

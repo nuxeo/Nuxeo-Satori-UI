@@ -6,7 +6,7 @@ import {
   type HttpResponse,
 } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { EMPTY, Observable, forkJoin, of, map, catchError, throwError } from 'rxjs';
+import { EMPTY, Observable, forkJoin, from, of, map, catchError, throwError } from 'rxjs';
 import { expand, filter, reduce, switchMap, tap } from 'rxjs/operators';
 
 import { CURRENT_USERNAME } from '../current-user.token';
@@ -40,6 +40,45 @@ import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-c
  */
 export const ANNOTATION_DOCUMENTS_QUERY =
   'SELECT * FROM Annotation WHERE ecm:ancestorId = ? AND comment:parentId = ? AND annotation:xpath = ? AND externalEntity:origin = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 ORDER BY dc:created ASC, ecm:uuid ASC';
+/**
+ * What `Asset.GetWatermarked` answers for a video, since `nuxeo-agentic-assets` 0.6.0: the file
+ * marked for the reader, or, while the server marks a long one in the background, that it is being
+ * prepared, and in how many seconds it suggests asking again.
+ */
+export type WatermarkedVideoAnswer =
+  | { readonly status: 'ready'; readonly file: Blob }
+  | { readonly status: 'preparing'; readonly retryAfter: number };
+
+/** The `preparing` answer's JSON read, its `retryAfter` held to 1 to 300 seconds; anything else throws. */
+function preparingAnswer(text: string): WatermarkedVideoAnswer {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error('The server answered JSON it could not read');
+  }
+  if (
+    typeof json !== 'object' ||
+    json === null ||
+    (json as { status?: unknown }).status !== 'preparing'
+  )
+    throw new Error('The server answered neither the marked file nor that it is being prepared');
+  const asked = Number((json as { retryAfter?: unknown }).retryAfter);
+  const retryAfter = Number.isFinite(asked) ? Math.min(Math.max(Math.round(asked), 1), 300) : 5;
+  return { status: 'preparing', retryAfter };
+}
+
+/** A blob's text, through `Blob.text()` where the browser has it, else a `FileReader`. */
+function blobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('The answer could not be read'));
+    reader.readAsText(blob);
+  });
+}
+
 /** A page of `getAnnotationDocuments`: Nuxeo's default largest page. */
 const ANNOTATION_PAGE_SIZE = 1000;
 /** How many pages it reads before it errors rather than answer part of a review. */
@@ -139,6 +178,32 @@ export class DocumentDetailService {
       { input: `doc:${uid}`, params: { use }, context: {} },
       { responseType: 'blob' },
     );
+  }
+
+  /**
+   * A video's use, marked for the reader, through `Asset.GetWatermarked`, as
+   * {@link fetchWatermarked}, once. Since `nuxeo-agentic-assets` 0.6.0 the server marks a long video
+   * in the background: until its copy is ready it answers 202, `{"status": "preparing",
+   * "retryAfter": <seconds>}`, and the same request, asked again, is how the reader learns it is
+   * ready. A marked video is never JSON, so JSON saying `preparing` is read as that whatever the
+   * status; any other JSON is an error. The caller decides when, and whether, to ask again.
+   */
+  fetchWatermarkedVideo(uid: string, use: string): Observable<WatermarkedVideoAnswer> {
+    return this.http
+      .post(
+        this.api.apiUrl('/nuxeo/api/v1/automation/Asset.GetWatermarked'),
+        { input: `doc:${uid}`, params: { use }, context: {} },
+        { observe: 'response', responseType: 'blob' },
+      )
+      .pipe(
+        switchMap((response): Observable<WatermarkedVideoAnswer> => {
+          const body = response.body;
+          if (!body) return throwError(() => new Error('The server answered no file'));
+          if (response.status !== 202 && !/^application\/json\b/i.test(body.type))
+            return of({ status: 'ready', file: body });
+          return from(blobText(body)).pipe(map((text) => preparingAnswer(text)));
+        }),
+      );
   }
 
   /**

@@ -76,7 +76,9 @@ class BundleTest {
                 "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml",
                 "OSGI-INF/asset-rights-video-operations-contrib.xml", "OSGI-INF/media-delivery-types.xml",
                 "OSGI-INF/media-delivery-listener.xml", "OSGI-INF/asset-watermark-operations-contrib.xml",
-                "OSGI-INF/asset-review-service.xml", "OSGI-INF/asset-review-listener.xml"), components);
+                "OSGI-INF/asset-review-service.xml", "OSGI-INF/asset-review-listener.xml",
+                "OSGI-INF/asset-video-marker.xml", "OSGI-INF/asset-watermarked-copies-types.xml",
+                "OSGI-INF/asset-video-watermark-service.xml"), components);
         for (String component : components) {
             byte[] xml = resource(component);
             assertDoesNotThrow(() -> parse(xml),
@@ -97,7 +99,7 @@ class BundleTest {
             collect(xml.getElementsByTagName("operation"), "class", classes);
             collect(xml.getElementsByTagName("listener"), "class", classes);
         }
-        assertEquals(23, classes.size(), classes::toString);
+        assertEquals(29, classes.size(), classes::toString);
         for (String name : classes) {
             assertDoesNotThrow(() -> Class.forName(name), name);
         }
@@ -185,7 +187,8 @@ class BundleTest {
         for (int i = 0; i < named.getLength(); i++) {
             events.add(named.item(i).getTextContent());
         }
-        assertEquals(List.of("aboutToCreate", "aboutToImport", "beforeDocumentModification", "aboutToRemove",
+        assertEquals(List.of("aboutToCreate", "documentCreated", "aboutToImport", "beforeDocumentModification",
+                "aboutToRemove",
                 "aboutToMove", "aboutToCopy", "documentCreatedByCopy", "aboutToCheckIn", "beforeRestoringDocument",
                 "documentTrashed"), events);
 
@@ -197,6 +200,55 @@ class BundleTest {
         assertEquals(List.of("version", "distributor", "territory", "deliveredAt", "deliveredBy", "files", "file", "use",
                 "name", "channel", "filename", "mimeType", "length", "digest", "watermarked", "watermarkedFor",
                 "watermark", "watermarkedFile"), fields("schemas/media_delivery.xsd"));
+    }
+
+    /**
+     * Since 0.6.0: long videos marked in a queue of their own, one at a time on a node; their copies'
+     * listener and the failures' audit writer both after the commit, in the background; the copy's
+     * type hidden, with the fields a job writes; and the marker its own service, so that a runtime
+     * without ffmpeg stands in for it. What each does is VideoWatermarkBackgroundTest's, in a runtime.
+     */
+    @Test
+    void longVideosAreMarkedInAQueueOfTheirOwnAndKeptAsCopies() throws Exception {
+        org.w3c.dom.Document service = parse(resource("OSGI-INF/asset-video-watermark-service.xml"));
+        assertEquals("org.nuxeo.agentic.assets.watermark.videos", service.getDocumentElement().getAttribute("name"));
+        Element queue = (Element) service.getElementsByTagName("queue").item(0);
+        assertEquals("agenticVideoWatermark", queue.getAttribute("id"));
+        assertEquals("1", queue.getElementsByTagName("maxThreads").item(0).getTextContent());
+        assertEquals("agenticVideoWatermark", queue.getElementsByTagName("category").item(0).getTextContent());
+        assertEquals("agenticVideoWatermark", org.nuxeo.agentic.assets.watermark.VideoWatermarkWork.CATEGORY);
+        NodeList listeners = service.getElementsByTagName("listener");
+        assertEquals(2, listeners.getLength());
+        Element copies = (Element) listeners.item(0);
+        assertEquals("true", copies.getAttribute("async"));
+        assertEquals("true", copies.getAttribute("postCommit"));
+        List<String> events = new ArrayList<>();
+        NodeList named = copies.getElementsByTagName("event");
+        for (int i = 0; i < named.getLength(); i++) {
+            events.add(named.item(i).getTextContent());
+        }
+        assertEquals(List.of("documentModified", "documentRemoved", "documentRestored"), events);
+        Element writer = (Element) listeners.item(1);
+        assertEquals("true", writer.getAttribute("async"));
+        assertEquals("true", writer.getAttribute("postCommit"));
+        assertEquals("assetWatermarkFailed", writer.getElementsByTagName("event").item(0).getTextContent());
+
+        org.w3c.dom.Document types = parse(resource("OSGI-INF/asset-watermarked-copies-types.xml"));
+        NodeList doctypes = types.getElementsByTagName("doctype");
+        assertEquals(2, doctypes.getLength());
+        for (int i = 0; i < doctypes.getLength(); i++) {
+            Element doctype = (Element) doctypes.item(i);
+            NodeList facets = doctype.getElementsByTagName("facet");
+            assertEquals(1, facets.getLength(), doctype.getAttribute("name"));
+            assertEquals("HiddenInNavigation", ((Element) facets.item(0)).getAttribute("name"));
+        }
+        assertEquals(AssetRightsComponent.COPY_TYPE, ((Element) doctypes.item(1)).getAttribute("name"));
+        assertEquals(List.of("key", "source", "sourceType", "xpath", "use", "digest", "fingerprint", "purpose",
+                "recipient", "user", "territory", "watermark", "made", "content"), fields("schemas/watermarked_copy.xsd"));
+
+        org.w3c.dom.Document marker = parse(resource("OSGI-INF/asset-video-marker.xml"));
+        assertEquals("org.nuxeo.agentic.assets.watermark.VideoMarker",
+                ((Element) marker.getElementsByTagName("provide").item(0)).getAttribute("interface"));
     }
 
     /** package.xml's version is the module's property, and the manifest's Bundle-Version repeats it. */

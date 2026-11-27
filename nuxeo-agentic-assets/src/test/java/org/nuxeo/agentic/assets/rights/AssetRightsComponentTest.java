@@ -196,7 +196,8 @@ class AssetRightsComponentTest {
             }
             assertNull(component.decideDownload(container, null, null, "thumbnail"));
         }
-        assertEquals(java.util.Set.of("AcmeAsset"), asked.get(0));
+        // Since 0.6.0, a long video's marked copy below counts as an asset does.
+        assertEquals(java.util.Set.of("AcmeAsset", AssetRightsComponent.COPY_TYPE), asked.get(0));
     }
 
     @Test

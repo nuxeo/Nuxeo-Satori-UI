@@ -20,6 +20,7 @@
     <listener name="agenticMediaDelivery" async="false" postCommit="false" priority="50"
       class="org.nuxeo.agentic.assets.delivery.DeliveryListener">
       <event>aboutToCreate</event>
+      <event>documentCreated</event>
       <event>aboutToImport</event>
       <event>beforeDocumentModification</event>
       <event>aboutToRemove</event>

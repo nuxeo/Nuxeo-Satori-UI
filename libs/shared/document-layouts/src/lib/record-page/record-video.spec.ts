@@ -6,18 +6,44 @@ import {
   DocumentDetailService,
   type AssetRightsExplanation,
   type NuxeoDocument,
+  type WatermarkedVideoAnswer,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import {
   RecordVideoComponent,
+  WATERMARK_POLL_LIMIT,
+  WATERMARK_POLL_WAIT,
   formatDuration,
   pickRendition,
   readStoryboard,
   readVideoFacts,
   readVideoRenditions,
+  watermarkPollDelay,
   type VideoRenditionEntry,
 } from './record-video';
+
+describe('watermarkPollDelay', () => {
+  it("waits the server's retryAfter, doubled at each answer up to a minute", () => {
+    const waits = Array.from({ length: WATERMARK_POLL_LIMIT - 1 }, (_, attempt) =>
+      watermarkPollDelay(attempt, 5),
+    );
+    expect(waits).toEqual([5, 10, 20, 40, 60, 60, 60, 60, 60, 60, 60].map((s) => s * 1000));
+  });
+
+  it('stops after its last answer: a bound on the asks, never an endless poll', () => {
+    expect(watermarkPollDelay(WATERMARK_POLL_LIMIT - 1, 5)).toBeNull();
+    expect(watermarkPollDelay(WATERMARK_POLL_LIMIT + 5, 5)).toBeNull();
+    expect(watermarkPollDelay(-1, 5)).toBeNull();
+    expect(watermarkPollDelay(1.5, 5)).toBeNull();
+  });
+
+  it("holds the server's retryAfter to 2 to 30 seconds", () => {
+    expect(watermarkPollDelay(0, 0)).toBe(2000);
+    expect(watermarkPollDelay(0, 600)).toBe(30_000);
+    expect(watermarkPollDelay(0, Number.NaN)).toBe(5000);
+  });
+});
 
 /** A transcoded video as Nuxeo 2025 writes one in `vid:transcodedVideos`. */
 function transcoded(name: string, mime: string, digest = `${name}-1`) {
@@ -250,6 +276,11 @@ describe('RecordVideoComponent', () => {
   let fetchRendition: ReturnType<typeof vi.fn>;
   let fetchBlobByXpath: ReturnType<typeof vi.fn>;
   let fetchAssetRights: ReturnType<typeof vi.fn>;
+  let fetchWatermarkedVideo: ReturnType<typeof vi.fn>;
+  /** Each marked video asked, in order, with its answer. */
+  let markedRequests: { key: string; answer: Subject<WatermarkedVideoAnswer> }[];
+  /** Each wait the page asked for before asking again, in order, and its end. */
+  let waits: { ms: number; over: Subject<void> }[];
   let rightsAnswer: Observable<AssetRightsExplanation | null>;
   /** Each request's answer, by `<uid> <what>`, in the order asked. */
   let requests: { key: string; answer: Subject<Blob> }[];
@@ -281,6 +312,13 @@ describe('RecordVideoComponent', () => {
     fetchBlobByXpath = vi.fn((uid: string, xpath: string) => asked(`${uid} ${xpath}`));
     rightsAnswer = of(noPrintRights());
     fetchAssetRights = vi.fn(() => rightsAnswer);
+    markedRequests = [];
+    waits = [];
+    fetchWatermarkedVideo = vi.fn((uid: string, use: string) => {
+      const answer = new Subject<WatermarkedVideoAnswer>();
+      markedRequests.push({ key: `${uid} ${use}`, answer });
+      return answer;
+    });
     // jsdom says it can play nothing; the browser under test plays MP4.
     canPlayType = vi
       .spyOn(HTMLMediaElement.prototype, 'canPlayType')
@@ -290,7 +328,15 @@ describe('RecordVideoComponent', () => {
       providers: [
         {
           provide: DocumentDetailService,
-          useValue: { fetchRendition, fetchBlobByXpath, fetchAssetRights },
+          useValue: { fetchRendition, fetchBlobByXpath, fetchAssetRights, fetchWatermarkedVideo },
+        },
+        {
+          provide: WATERMARK_POLL_WAIT,
+          useValue: (ms: number) => {
+            const over = new Subject<void>();
+            waits.push({ ms, over });
+            return over;
+          },
         },
       ],
     });
@@ -679,6 +725,157 @@ describe('RecordVideoComponent', () => {
       const root = await render(video({ 'vid:transcodedVideos': [] }));
       await refuse('v1 file:content', { status: 403 });
       expect(refusalOf(root)?.getAttribute('role')).toBe('alert');
+    });
+  });
+
+  describe('a video the rights serve only watermarked', () => {
+    /** The original served only marked for the reader, as nuxeo-agentic-assets 0.5.0 says. */
+    function markedRights(): AssetRightsExplanation {
+      const rights = noPrintRights();
+      return {
+        ...rights,
+        uses: rights.uses.map((use) =>
+          use.kind === 'original'
+            ? { ...use, allowed: false, reason: 'watermark-required' as const, channel: 'Print' }
+            : use,
+        ),
+      };
+    }
+
+    const originalOnly = () => video({ 'vid:transcodedVideos': [] });
+    const preparing = (retryAfter = 5): WatermarkedVideoAnswer => ({
+      status: 'preparing',
+      retryAfter,
+    });
+
+    async function answerMarked(answer: WatermarkedVideoAnswer): Promise<HTMLElement> {
+      const request = markedRequests.at(-1);
+      if (!request) throw new Error('no marked video was asked for');
+      request.answer.next(answer);
+      request.answer.complete();
+      return settle();
+    }
+
+    /** The last wait asked for, over. */
+    async function waited(): Promise<HTMLElement> {
+      const wait = waits.at(-1);
+      if (!wait) throw new Error('no wait was asked for');
+      wait.over.next();
+      wait.over.complete();
+      return settle();
+    }
+
+    beforeEach(() => {
+      rightsAnswer = of(markedRights());
+    });
+
+    it('asks for it marked once the 403 and the rights say so, plays it, and says it is marked', async () => {
+      const root = await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      expect(fetchAssetRights).toHaveBeenCalledWith('v1');
+      expect(fetchWatermarkedVideo).toHaveBeenCalledWith('v1', 'original');
+
+      await answerMarked({ status: 'ready', file: new Blob(['marked'], { type: 'video/webm' }) });
+      expect(player(root)?.getAttribute('src')).toBe('blob:video-1');
+      expect(root.querySelector('.record-video__watermarked')?.textContent).toContain(
+        "Watermarked for you: this asset's rights require it.",
+      );
+      expect(refusalOf(root)).toBeNull();
+      expect(waits).toHaveLength(0);
+    });
+
+    it('asks for a transcoded video marked by its name', async () => {
+      const rights = noPrintRights();
+      rightsAnswer = of({
+        ...rights,
+        uses: rights.uses.map((use) =>
+          use.name === 'MP4 480p'
+            ? { ...use, allowed: false, reason: 'watermark-required' as const }
+            : use,
+        ),
+      });
+      await render(video());
+      await refuse('v1 rendition MP4 480p', { status: 403 });
+      expect(fetchWatermarkedVideo).toHaveBeenCalledWith('v1', 'rendition:MP4 480p');
+    });
+
+    it('says it is being prepared, and asks again after a backoff, until it is ready', async () => {
+      const root = await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      await answerMarked(preparing());
+      expect(root.querySelector('[data-preparing="asking"]')?.textContent).toContain(
+        'The server is preparing a copy of this video watermarked for you.',
+      );
+      expect(root.querySelector('[data-preparing="asking"]')?.getAttribute('role')).toBe('status');
+      expect(player(root)).toBeNull();
+      expect(waits.map((wait) => wait.ms)).toEqual([5000]);
+      expect(fetchWatermarkedVideo).toHaveBeenCalledTimes(1);
+
+      await waited();
+      expect(fetchWatermarkedVideo).toHaveBeenCalledTimes(2);
+      await answerMarked(preparing());
+      expect(waits.map((wait) => wait.ms)).toEqual([5000, 10000]);
+
+      await waited();
+      await answerMarked({ status: 'ready', file: new Blob(['marked'], { type: 'video/webm' }) });
+      expect(player(root)?.getAttribute('src')).toMatch(/^blob:/);
+      expect(root.querySelector('[data-preparing]')).toBeNull();
+      // The unmarked file was asked once, refused, and never again.
+      expect(requests.filter((each) => each.key === 'v1 file:content')).toHaveLength(1);
+    });
+
+    it('stops asking after its bound, and asks again only on Check again', async () => {
+      const root = await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      for (let answered = 1; answered <= WATERMARK_POLL_LIMIT; answered++) {
+        await answerMarked(preparing());
+        if (answered < WATERMARK_POLL_LIMIT) await waited();
+      }
+      expect(fetchWatermarkedVideo).toHaveBeenCalledTimes(WATERMARK_POLL_LIMIT);
+      expect(waits).toHaveLength(WATERMARK_POLL_LIMIT - 1);
+      expect(Math.max(...waits.map((wait) => wait.ms))).toBe(60_000);
+      const stopped = root.querySelector('[data-preparing="stopped"]');
+      expect(stopped?.textContent).toContain(
+        'The watermarked copy of this video is still being prepared.',
+      );
+      expect(root.querySelector('[data-preparing="asking"]')).toBeNull();
+
+      root.querySelector<HTMLButtonElement>('.record-video__check-again')?.click();
+      await settle();
+      expect(fetchWatermarkedVideo).toHaveBeenCalledTimes(WATERMARK_POLL_LIMIT + 1);
+      expect(requests.filter((each) => each.key === 'v1 file:content')).toHaveLength(1);
+      await answerMarked({ status: 'ready', file: new Blob(['marked'], { type: 'video/webm' }) });
+      expect(player(root)?.getAttribute('src')).toMatch(/^blob:/);
+    });
+
+    it("says the rights' reason when the server cannot mark it", async () => {
+      const root = await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      const request = markedRequests.at(-1);
+      request?.answer.error({ status: 409 });
+      await settle();
+      expect(refusalOf(root)?.getAttribute('data-refusal')).toBe('watermark-unavailable');
+      expect(player(root)).toBeNull();
+    });
+
+    it('says any other failure as its status, and plays nothing', async () => {
+      const root = await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      markedRequests.at(-1)?.answer.error({ status: 500 });
+      await settle();
+      expect(refusalOf(root)).toBeNull();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+      expect(player(root)).toBeNull();
+    });
+
+    it('asks nothing more once the record changes', async () => {
+      await render(originalOnly());
+      await refuse('v1 file:content', { status: 403 });
+      await answerMarked(preparing());
+      expect(waits).toHaveLength(1);
+      await render(video({ 'vid:transcodedVideos': [] }, 'v2'));
+      await waited();
+      expect(fetchWatermarkedVideo.mock.calls.filter(([uid]) => uid === 'v1')).toHaveLength(1);
     });
   });
 });

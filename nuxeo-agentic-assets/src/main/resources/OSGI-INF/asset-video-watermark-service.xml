@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.watermark.videos" version="1.0">
+
+  <documentation>
+    Since 0.6.0, a video a rights policy's watermark marks: short, marked in the request, as
+    before; long, over nuxeo.agentic.watermark.video.background.bytes bytes or, read by ffprobe,
+    nuxeo.agentic.watermark.video.background.seconds seconds, marked by a job in the work
+    manager's queue agenticVideoWatermark, while Asset.GetWatermarked answers 202, preparing, and a
+    delivery is refused, watermark-pending, to be filed again once it is ready.
+
+    The marked copy is kept as a WatermarkedCopy, under a key naming the document, its file's
+    place and digest, the policy's watermark, why it was marked, the text drawn, and the person
+    and the territory where the text names them: so it is reused for that key alone, never
+    served to anyone else, and dropped when the file or the watermark changes, or once it is
+    nuxeo.agentic.watermark.video.copy.days days old. One job per key at a time across the
+    cluster: each holds the key's lease in the key/value store agenticWatermarks while it runs. A
+    failure is kept there, audited on the document, assetWatermarkFailed, and answered with its
+    reason for nuxeo.agentic.watermark.video.failure.minutes minutes. The unmarked video is never
+    served, while it is being marked or after it fails.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+  <require>org.nuxeo.agentic.assets.watermark.copies.types</require>
+
+  <implementation class="org.nuxeo.agentic.assets.watermark.MarkedVideosComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.watermark.MarkedVideos" />
+  </service>
+
+  <!-- One video marked at a time on a node: each runs ffmpeg over the whole video. -->
+  <extension target="org.nuxeo.ecm.core.work.service" point="queues">
+    <queue id="agenticVideoWatermark">
+      <name>Watermarked video copies</name>
+      <maxThreads>1</maxThreads>
+      <category>agenticVideoWatermark</category>
+    </queue>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <!-- A covered document's copies dropped once a change to it, or its removal, has committed. -->
+    <listener name="agenticWatermarkedCopies" async="true" postCommit="true"
+      class="org.nuxeo.agentic.assets.watermark.WatermarkedCopiesListener">
+      <event>documentModified</event>
+      <event>documentRemoved</event>
+      <event>documentRestored</event>
+    </listener>
+    <!-- A job's failure written to the platform's audit, after the job's commit. -->
+    <listener name="agenticWatermarkAuditWriter" async="true" postCommit="true"
+      class="org.nuxeo.agentic.assets.watermark.WatermarkAuditWriter">
+      <event>assetWatermarkFailed</event>
+    </listener>
+  </extension>
+
+</component>

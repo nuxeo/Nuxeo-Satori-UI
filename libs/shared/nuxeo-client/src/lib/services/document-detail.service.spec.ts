@@ -402,6 +402,71 @@ describe('DocumentDetailService permissions', () => {
     await expect(blob$).resolves.toBeInstanceOf(Blob);
   });
 
+  describe('fetchWatermarkedVideo', () => {
+    const operation = '/nuxeo/api/v1/automation/Asset.GetWatermarked';
+
+    it('posts the use to Asset.GetWatermarked and answers the marked file', async () => {
+      const answer$ = firstValueFrom(service.fetchWatermarkedVideo('doc-uid', 'original'));
+      const req = httpMock.expectOne(operation);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        input: 'doc:doc-uid',
+        params: { use: 'original' },
+        context: {},
+      });
+      expect(req.request.responseType).toBe('blob');
+      const file = new Blob(['marked'], { type: 'video/webm' });
+      req.flush(file);
+      const answer = await answer$;
+      expect(answer.status).toBe('ready');
+      expect(answer.status === 'ready' && answer.file).toBe(file);
+    });
+
+    it('reads a 202 as being prepared, with the server’s retryAfter', async () => {
+      const answer$ = firstValueFrom(service.fetchWatermarkedVideo('doc-uid', 'original'));
+      httpMock
+        .expectOne(operation)
+        .flush(
+          new Blob([JSON.stringify({ status: 'preparing', retryAfter: 7 })], {
+            type: 'application/json',
+          }),
+          { status: 202, statusText: 'Accepted' },
+        );
+      await expect(answer$).resolves.toEqual({ status: 'preparing', retryAfter: 7 });
+    });
+
+    it('reads JSON saying preparing as that whatever the status, and holds retryAfter to its range', async () => {
+      const answer$ = firstValueFrom(service.fetchWatermarkedVideo('doc-uid', 'original'));
+      httpMock.expectOne(operation).flush(
+        new Blob([JSON.stringify({ status: 'preparing', retryAfter: 9000 })], {
+          type: 'application/json',
+        }),
+      );
+      await expect(answer$).resolves.toEqual({ status: 'preparing', retryAfter: 300 });
+    });
+
+    it('errors on JSON that is neither, and never answers it as the file', async () => {
+      const answer$ = firstValueFrom(service.fetchWatermarkedVideo('doc-uid', 'original'));
+      httpMock
+        .expectOne(operation)
+        .flush(new Blob([JSON.stringify({ status: 'done' })], { type: 'application/json' }), {
+          status: 202,
+          statusText: 'Accepted',
+        });
+      await expect(answer$).rejects.toThrow(
+        'neither the marked file nor that it is being prepared',
+      );
+    });
+
+    it('passes a refusal on as the error it is', async () => {
+      const answer$ = firstValueFrom(service.fetchWatermarkedVideo('doc-uid', 'original'));
+      httpMock
+        .expectOne(operation)
+        .flush(new Blob(['refused']), { status: 409, statusText: 'Conflict' });
+      await expect(answer$).rejects.toMatchObject({ status: 409 });
+    });
+  });
+
   describe('getAnnotationDocuments', () => {
     type Query = { params: { currentPageIndex: number } };
     const isQuery = (index: number) => (r: { url: string; body: unknown }) =>

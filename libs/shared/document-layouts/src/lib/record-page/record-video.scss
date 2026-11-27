@@ -26,8 +26,33 @@
 }
 
 /* A file the server refused: its reason in the frame, where the player would be. */
-.record-video__refusal {
+.record-video__refusal,
+.record-video__still-preparing {
   max-width: 480px;
+}
+
+/* A marked copy the server is preparing: the spinner, and what it waits for, under it. */
+.record-video__preparing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+  text-align: center;
+}
+
+.record-video__preparing-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-video__watermarked {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .record-video__caption {

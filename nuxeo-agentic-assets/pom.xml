@@ -20,7 +20,8 @@
     and the asset's rights both hold. Media rights: an asset's territories and release windows, a
     localised version reading its film's windows, and a delivery package refused whole outside
     them. Since 0.5.0, watermarks a rights policy requires, and an asset's review decided on the
-    server, held to the add-on's ReviewAsset permission and audited. Its own Marketplace package,
+    server, held to the add-on's ReviewAsset permission and audited. Since 0.6.0, a long video
+    marked in the background, by the work manager, and kept for whom it was marked. Its own Marketplace package,
     beside nuxeo-agentic-core: one add-on per domain module (decision B's recommendation).
   </description>
 
@@ -30,7 +31,7 @@
       nuxeo-agentic-ui, and a package depends on it by this version. The manifest's Bundle-Version
       repeats it, and AddonPackageTest refuses a build where the two differ.
     -->
-    <assets.package.version>0.5.0</assets.package.version>
+    <assets.package.version>0.6.0</assets.package.version>
   </properties>
 
   <!--
@@ -155,6 +156,22 @@
     <dependency>
       <groupId>org.nuxeo.ecm.platform</groupId>
       <artifactId>nuxeo-platform-video</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      Since 0.6.0, a long video marked in the background: the work manager's AbstractWork and
+      WorkManager, and the key/value store a job's lease, marker and failure are kept in, with the
+      same names and signatures on the local Nuxeo LTS 2025.10.18 server, as the connectors add-on
+      uses them.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.core</groupId>
+      <artifactId>nuxeo-core-event</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-kv</artifactId>
       <scope>provided</scope>
     </dependency>
 

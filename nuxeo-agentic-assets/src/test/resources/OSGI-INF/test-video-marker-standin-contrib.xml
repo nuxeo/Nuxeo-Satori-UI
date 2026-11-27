@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- In place of the add-on's video marker, which runs the platform's video tools and ffmpeg: a
+     stand-in, so that the background job's lifecycle and every refusal are tested where ffmpeg is
+     not installed. What a server with ffmpeg does is VideoWatermarkTest's, which runs it. -->
+<component name="org.nuxeo.agentic.assets.test.video-marker-standin">
+
+  <implementation class="org.nuxeo.agentic.assets.watermark.StandInVideoMarker" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.watermark.VideoMarker" />
+  </service>
+
+</component>

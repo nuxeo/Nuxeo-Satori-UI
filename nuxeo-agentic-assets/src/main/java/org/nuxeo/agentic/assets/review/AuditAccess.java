@@ -36,7 +36,7 @@ import org.nuxeo.runtime.api.Framework;
  * <p>The documents and records add-ons' own, {@code nuxeo-agentic-documents}, copied as it is: the add-ons are
  * installed apart, and none depends on another.
  */
-final class AuditAccess {
+public final class AuditAccess {
 
     /** LTS 2025's audit service. */
     static final String AUDIT_SERVICE = "org.nuxeo.audit.service.AuditService";
@@ -47,11 +47,11 @@ final class AuditAccess {
     private AuditAccess() {
     }
 
-    static AuditLogger logger() {
+    public static AuditLogger logger() {
         return (AuditLogger) backend(AUDIT_SERVICE, AuditLogger.class);
     }
 
-    static AuditReader reader() {
+    public static AuditReader reader() {
         return (AuditReader) backend(AUDIT_SERVICE, AuditReader.class);
     }
 
@@ -85,7 +85,7 @@ final class AuditAccess {
     }
 
     /** An entry's extended information, by key, in their order: its values, as the audit gives them. */
-    static Map<String, Object> extended(LogEntry entry) {
+    public static Map<String, Object> extended(LogEntry entry) {
         Map<String, Object> values = new TreeMap<>();
         Method getExtended = method(entry.getClass(), "getExtended");
         if (getExtended != null) {

@@ -33,6 +33,12 @@ fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>
   // GET /id/{uid} with enrichers.document: assetRights (nuxeo-agentic-assets), read with
   // assetRights(doc): why the server's rights refused a use. Asked only after a 403, never to
   // decide what to offer: the server refuses whatever this says
+fetchWatermarked(uid: string, use: string): Observable<Blob>
+  // @op/Asset.GetWatermarked: a use marked for the reader, once the rights said watermark-required
+fetchWatermarkedVideo(uid: string, use: string): Observable<WatermarkedVideoAnswer>
+  // The same, for a video, once: { status: 'ready', file } or, while nuxeo-agentic-assets 0.6.0
+  // marks a long one in the background, 202 { status: 'preparing', retryAfter }. The caller asks
+  // again, bounded: record-video's watermarkPollDelay
 getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>
   // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>

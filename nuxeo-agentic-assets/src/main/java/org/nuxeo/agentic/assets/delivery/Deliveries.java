@@ -23,8 +23,10 @@ import org.nuxeo.agentic.assets.rights.AssetRightsService.DeliveryDecision;
 import org.nuxeo.agentic.assets.rights.AssetRightsService.PackageFile;
 import org.nuxeo.agentic.assets.rights.Decision;
 import org.nuxeo.agentic.assets.rights.RightsPolicy;
+import org.nuxeo.agentic.assets.rights.Use;
 import org.nuxeo.agentic.assets.rights.Watermark;
 import org.nuxeo.agentic.assets.watermark.AssetWatermarks;
+import org.nuxeo.agentic.assets.watermark.MarkedVideos;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -72,6 +74,12 @@ public class Deliveries {
     static final String DELIVERED_BY = "mdlv:deliveredBy";
 
     static final String FILES = "mdlv:files";
+
+    /**
+     * Since 0.6.0: a delivery refused, 409, while a long video it marks is being marked in the
+     * background; filed again once it is ready, it is delivered with it.
+     */
+    public static final String WATERMARK_PENDING = "watermark-pending";
 
     /** The most characters a distributor's name may have. */
     static final int MAX_DISTRIBUTOR = 200;
@@ -161,6 +169,7 @@ public class Deliveries {
         Watermark watermark = policy == null ? null : policy.watermark();
         LocalDate today = service.today();
         List<String> unmarkable = new ArrayList<>();
+        List<String> pending = new ArrayList<>();
         List<Map<String, Serializable>> files = new ArrayList<>();
         for (PackageFile file : decided.files()) {
             Blob blob = file.blob();
@@ -176,15 +185,33 @@ public class Deliveries {
             entry.put("watermarked", marks);
             if (marks) {
                 String text = watermark.text(distributor, principal.getName(), today, territory);
-                try {
-                    Blob marked = AssetWatermarks.mark(blob, text, watermark.placement());
-                    entry.put("watermarkedFor", distributor);
-                    entry.put("watermark", text);
-                    entry.put("watermarkedFile", (Serializable) marked);
-                } catch (AssetWatermarks.Unavailable e) {
-                    log.info("Media deliveries: the {} of {} could not be marked for {}: {}", file.use(), versionId,
-                            territory, e.getMessage());
-                    unmarkable.add(file.use().toString());
+                if (AssetWatermarks.isVideo(blob)) {
+                    // Since 0.6.0: a long video is marked in the background, and the delivery waits for it.
+                    MarkedVideos.Outcome outcome = video(version, policy, watermark, file, blob, text, distributor,
+                            principal.getName(), territory);
+                    if (outcome instanceof MarkedVideos.Marked marked) {
+                        entry.put("watermarkedFor", distributor);
+                        entry.put("watermark", text);
+                        entry.put("watermarkedFile", (Serializable) marked.file());
+                    } else if (outcome instanceof MarkedVideos.Preparing) {
+                        pending.add(file.use().toString());
+                    } else {
+                        String reason = outcome instanceof MarkedVideos.Refused refused ? refused.reason() : null;
+                        log.info("Media deliveries: the {} of {} could not be marked for {}: {}", file.use(), versionId,
+                                territory, reason);
+                        unmarkable.add(file.use() + (reason == null ? "" : " (" + reason + ")"));
+                    }
+                } else {
+                    try {
+                        Blob marked = AssetWatermarks.mark(blob, text, watermark.placement());
+                        entry.put("watermarkedFor", distributor);
+                        entry.put("watermark", text);
+                        entry.put("watermarkedFile", (Serializable) marked);
+                    } catch (AssetWatermarks.Unavailable e) {
+                        log.info("Media deliveries: the {} of {} could not be marked for {}: {}", file.use(), versionId,
+                                territory, e.getMessage());
+                        unmarkable.add(file.use().toString());
+                    }
                 }
             }
             files.add(entry);
@@ -193,6 +220,12 @@ public class Deliveries {
             throw new DeliveryRefusal(403, Decision.Reason.WATERMARK_UNAVAILABLE.code(),
                     "The delivery to " + territory + " is refused whole: " + String.join("; ", unmarkable)
                             + " cannot be marked as the version's rights require.");
+        }
+        if (!pending.isEmpty()) {
+            // Refused whole, and nothing is made: file it again once its marked files are ready.
+            throw new DeliveryRefusal(409, WATERMARK_PENDING, "The delivery to " + territory + " waits for its marked"
+                    + " files: " + String.join("; ", pending) + " " + (pending.size() == 1 ? "is" : "are")
+                    + " being marked for its distributor. File it again once they are ready.");
         }
         GregorianCalendar now = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
         now.setTimeInMillis(clock.millis());
@@ -209,6 +242,52 @@ public class Deliveries {
         log.info("Media deliveries: {} delivered {} to {} in {}: {}", principal.getName(), versionId,
                 distributor.length() > 80 ? distributor.substring(0, 80) + "…" : distributor, territory,
                 decided.files().stream().map(file -> file.use().toString()).toList());
+    }
+
+    /**
+     * Since 0.6.0, once a delivery is created, in its filer's transaction: the kept copies for
+     * deliveries of each file it holds marked dropped, so that the delivery alone holds that file, and
+     * no other path is refused it as a copy's. After its creation, so that it holds the file first.
+     */
+    @SuppressWarnings("unchecked")
+    void delivered(CoreSession session, DocumentModel delivery) {
+        if (!(delivery.getPropertyValue(FILES) instanceof List<?> files)) {
+            return;
+        }
+        MarkedVideos videos = null;
+        for (Object each : files) {
+            if (each instanceof Map<?, ?> file && Boolean.TRUE.equals(file.get("watermarked"))
+                    && file.get("watermarkedFile") instanceof Blob marked && AssetWatermarks.isVideo(marked)) {
+                videos = videos == null ? Framework.getService(MarkedVideos.class) : videos;
+                if (videos != null) {
+                    videos.delivered(session, marked);
+                }
+            }
+        }
+    }
+
+    /**
+     * Since 0.6.0, a video the watermark marks for this delivery: marked here when it is short; when
+     * it is long, the copy a job made for this distributor, filer, day and territory, or a job queued
+     * for it, or its failure.
+     */
+    private static MarkedVideos.Outcome video(DocumentModel version, RightsPolicy policy, Watermark watermark,
+            PackageFile file, Blob blob, String text, String distributor, String filer, String territory) {
+        MarkedVideos videos = Framework.getService(MarkedVideos.class);
+        if (videos == null) {
+            return new MarkedVideos.Refused("the server's marked videos are not running");
+        }
+        return videos.mark(MarkedVideos.Order.of(version, file.use().toString(), place(policy, file.use()), blob,
+                watermark, text, distributor, filer, territory, MarkedVideos.Purpose.DELIVERY));
+    }
+
+    /** Where a package's file is held: the original's place, or a blob's xpath; {@code null} for a view. */
+    static String place(RightsPolicy policy, Use use) {
+        return switch (use.kind()) {
+        case ORIGINAL -> policy.originalXpath();
+        case BLOB -> use.name();
+        default -> null;
+        };
     }
 
     /** A refused file as the refusal's message names it: its use, its reason, and its channel. */
