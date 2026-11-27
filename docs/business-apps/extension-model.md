@@ -1,13 +1,15 @@
 # The extension model: how customers extend Nuxeo Satori without our source
 
-**Status: a proposal for review, written on 27 November 2026.** Nothing here is decided. It needs
-these decisions:
+**Status: a proposal for review, written on 27 November 2026 and revised the same day with the
+plan of record for decision K.** Nothing here is decided except what [decisions.md](decisions.md)
+lists as settled: the kits in this repository are test fixtures and examples, not customer
+deliverables. It needs these decisions:
 
-- three new ones, **L**, **M** and **N**;
-- two already open, **K** and **5**.
+- **K**, how the tools reach customers;
+- **L**, **M** and **N**;
+- **5**, customer code.
 
-All five are in [decisions.md](decisions.md). Until they are taken, the plan's work goes on as it
-is.
+All are in [decisions.md](decisions.md). Until they are taken, the plan's work goes on as it is.
 
 ## The short version
 
@@ -16,27 +18,27 @@ is.
   depends on ours**, layered on top of what we ship, and never an edit of it. This is already the
   direction [`CUSTOMISING.md`](../../CUSTOMISING.md) sets: "ship your own Nuxeo Marketplace package
   that depends on ours … an upgrade of ours never touches them".
-- **What we ship, in four tiers:**
-  1. the platform;
-  2. the domain add-ons;
-  3. the industry kits;
-  4. the tools.
-
-  Each tier depends only on the ones before it.
-
+- **What we ship:** the platform, the domain add-ons and the tools. The kits in
+  `business-apps/packages/`, Payers among them, test the platform and show what it does. They are
+  not shipped to customers.
+- **Where a customer works: one config repository of their own,** created from
+  [Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config) as a starter. It holds all
+  of their configuration in one place: branding, what the app shows, and their app definitions.
+- **Their tools come from npm:** a command-line tool and an MCP server, pinned in their lockfile,
+  with the agent's skill and rules installed by the tool. **Their own AI IDE and agents** build the
+  configuration with them, as most customers already do. Upgrades arrive as a version bump.
 - **What a customer builds, in order of preference:**
   1. configuration;
   2. server logic in their own Studio project;
   3. user-interface code, only where configuration can't reach.
-- **Six gaps stand between this and what is built.** The first is structural: a customer's file
-  replaces ours whole, so extending one of our kits means copying it. Patch overlays fix that,
-  decision L.
 - **The proposed order:**
-  1. patch overlays;
-  2. publishing the Builder kit (K), the add-ons and the kits (N);
+  1. the tools on npm and the starter (K);
+  2. the starter's builder checking version 2's files;
   3. customers' own signing and promotion (M);
-  4. decision 5 again, now that a customer ships only packages;
-  5. the platform's 1.0 contract.
+  4. publishing the add-ons (N);
+  5. patch overlays (L);
+  6. decision 5 again, now that a customer ships only packages;
+  7. the platform's 1.0 contract.
 
 ## 1. The rule
 
@@ -55,15 +57,24 @@ ours, and is installed and upgraded on its own schedule. An upgrade of ours neve
 
 ## 2. What we ship
 
-| Tier                  | What it is                                                                                                                                                                                                                                               | Depends on               | State on 27 November 2026                                                                                                                                                                                                                                                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The platform       | `nuxeo-agentic-ui-package`: the app and `nuxeo-agentic-core`                                                                                                                                                                                             | Nuxeo LTS 2025           | Published to the Marketplace's preprod on demand by `build-marketplace.yml`, which ran it on 3, 12 and 18 November                                                                                                                                                                                                           |
-| 2. The domain add-ons | One Marketplace package per domain module (decision B): `nuxeo-agentic-assets`, `-records`, `-documents`, `-connectors`, `-signature`, `-embedded`, `-capture`, `-letters`                                                                               | The platform             | Built and tested on every pull request by `build-marketplace.yml`, whose steps say each zip "is not uploaded or published". **None is published**                                                                                                                                                                            |
-| 3. The industry kits  | App definition packages, each a starting point for one kind of business: Payers, property and casualty claims, onboarding and disputes, vehicle deals and titles, moves and damage claims, media, records, controlled documents, contracts, brand assets | The platform and add-ons | Each declares its dependencies in `package.xml`. For example, `records-demo` depends on `nuxeo-agentic-ui:2026.0.2` and `nuxeo-agentic-records:0.3.0`. `app-packages.yml` signs one and publishes it to preprod when an `app-package/<name>/<version>` tag is pushed, and no such tag has been pushed. **None is published** |
-| 4. The tools          | The Builder kit (the package pipeline, the generators, the MCP server and the app builder skill), the scaffolder, and the designer inside the app                                                                                                        | —                        | The designer ships in the app. **The rest runs only from a clone** of this repository: `@nuxeo-satori/builder-mcp` and `@nuxeo-satori/generators` are private, and `CUSTOMISING.md` calls the clone "a rough edge we intend to remove" (decision K)                                                                          |
+| What                  | Contents                                                                                                                                                                   | Depends on     | State on 27 November 2026                                                                                                                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The platform       | `nuxeo-agentic-ui-package`: the app and `nuxeo-agentic-core`                                                                                                               | Nuxeo LTS 2025 | Published to the Marketplace's preprod on demand by `build-marketplace.yml`, which ran it on 3, 12 and 18 November                                                                                                                     |
+| 2. The domain add-ons | One Marketplace package per domain module (decision B): `nuxeo-agentic-assets`, `-records`, `-documents`, `-connectors`, `-signature`, `-embedded`, `-capture`, `-letters` | The platform   | Built and tested on every pull request by `build-marketplace.yml`, whose steps say each zip "is not uploaded or published". **None is published**                                                                                      |
+| 3. The tools          | A command-line tool, an MCP server, the app builder skill and reusable CI workflows (section 5), and the designer inside the app                                           | —              | The designer ships in the app. **The rest runs only from a clone** of this repository: `@nuxeo-satori/builder-mcp` and `@nuxeo-satori/generators` are private, and `CUSTOMISING.md` calls the clone "a rough edge we intend to remove" |
 
-The kits are accelerators, not finished products. A customer is expected to start from one and make
-it theirs, which is why section 4 matters.
+**Not shipped: the kits.** The packages in `business-apps/packages/` are Payers, property and
+casualty claims, onboarding and disputes, vehicle deals and titles, moves, media, records,
+controlled documents, contracts and brand assets. They are **test fixtures and examples**:
+
+- CI builds every one, and each holds the platform to a real use, with its steps files and seed;
+- presales demos them on demo servers;
+- a customer's agent may read them as worked examples of what the platform does.
+
+A customer builds their own app on their own model, and does not install ours. Each kit's
+`package.xml` already declares its dependencies, such as `records-demo` on
+`nuxeo-agentic-ui:2026.0.2` and `nuxeo-agentic-records:0.3.0`. That is the shape a customer's own
+package follows.
 
 ## 3. What a customer builds
 
@@ -73,38 +84,38 @@ and upgrade.
 1. **Configuration, with no code.**
    - **Branding,** in Layer 0's `bootstrap.json`.
    - **What the app shows,** in Layer 1's `manifest.json`: hide, reorder, relabel and gate.
-   - **App definitions** in version 2's files: record pages, queues, home cards, the menu, task
-     forms, actions and labels. Either a new app on their own model, or an overlay on one of our
-     kits.
+   - **Their app definitions,** in version 2's files: record pages, queues, home cards, the menu,
+     task forms, actions and labels.
 
-   Written by hand, by the Builder kit's agent, or in the designer.
+   All of it sits in one package in their config repository (section 5). It is written by their AI
+   IDE's agent with our MCP server and skill, by hand, or in the designer.
 
 2. **Server logic they already own.** Their Studio project holds their document types, schemas,
    vocabularies, workflows and Automation chains, as it does for Web UI today. The app reads their
    model from the server. A button calls one of their chains only through the deployment's
    operation allow-list (decision 3). Most of a business's own rules already live here in Nuxeo,
    and they stay there.
-3. **User-interface code, only where configuration cannot reach.** A plugin written against the
-   published `@nuxeo/satori-platform` API, whose `package.json` publishes it to
-   `packages.nuxeo.com`, and shipped inside the customer's own package. Section 6 says what this
-   needs, since today a customer's code can only be built into the app from the template's source.
+3. **User-interface code, only where configuration cannot reach.** Section 6 says what this needs,
+   since today a customer's code can only be built into the app from the template.
 
-**How it composes, by kind of business.** Each is the customer's package, our kit, our add-ons and
-their Studio project:
+**How it composes, by kind of business.** Each is the customer's config package, our add-ons and
+their Studio project. Our example kit shows the agent what such an app looks like.
 
-| Business                | Starts from                             | Our add-ons                                     | What the customer adds                                                                           |
-| ----------------------- | --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Property and casualty   | The P&C claims kit                      | Connectors, capture, letters                    | Their fields and queues over the kit; a connector to their policy system; their letter templates |
-| Banking                 | The onboarding and disputes kit         | E-signature, records, connectors                | Their KYC checklist; their e-signature vendor's provider; their core-banking connector           |
-| Health payers           | The Payers kit                          | Letters, connectors                             | Their claim fields and workflows from Studio; their determination and appeal letters             |
-| Brand assets and media  | The brand assets or media kit           | Assets: rights, windows, watermarks, deliveries | Their rights policies, territories and distributors; their reviewer groups                       |
-| Engineering and records | The controlled documents or records kit | Documents, records                              | Their numbering series, export-control marks and retention rules                                 |
+| Business                | Our add-ons                                     | Their Studio project                                      | Their config package                                                               | Example kit to learn from     |
+| ----------------------- | ----------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------- |
+| Property and casualty   | Connectors, capture, letters                    | Claim and policy types, the claim workflow                | Claim pages, queues, a connector to their policy system, their letter templates    | P&C claims                    |
+| Banking                 | E-signature, records, connectors                | Case types, the KYC workflow                              | The onboarding case page with its checklist, their e-signature provider's settings | Onboarding and disputes       |
+| Health payers           | Letters, connectors                             | Member, claim and case types; review and appeal workflows | Claim and member pages, work queues, determination and appeal letters              | Payers                        |
+| Brand assets and media  | Assets: rights, windows, watermarks, deliveries | Asset and film types                                      | Asset pages, rights policies, territories, distributors, reviewer groups           | Brand assets, media           |
+| Engineering and records | Documents, records                              | Controlled document and record types                      | Document pages, numbering series, export-control marks, retention rules            | Controlled documents, records |
 
 ## 4. How the layers combine
 
 [architecture.md](architecture.md), section 10, sets the order: "starter kit, then customer, then
-tenant, then environment, merged on the server in that order". The designer's deployment layer sits
-above them, and holds an administrator's changes made in the browser.
+tenant, then environment, merged on the server in that order". With our kits not shipped, the
+bottom layer is any package below the customer's own: a partner's industry package, a business
+unit's shared package, or a kit we decide to ship later. The designer's deployment layer sits above
+them all, and holds an administrator's changes made in the browser.
 
 **What is built is replacement, not merging.**
 [extension-reference.md](../extension-reference.md) says it plainly: "a later package's file for
@@ -112,25 +123,27 @@ the same type and mode replaces yours whole". An app with the same id replaces i
 the deployment layer's live file wins over the package's file at the same path. Labels are the
 exception: they are looked up by key, and a customer's manifest labels win.
 
-So a customer who wants one more field on the Payers kit's claim page must copy the whole
-`layouts/Claim/view.layout.json` into their package. From then on, every fix we make to that page
-in a later kit version passes them by. The upgrade check
-([package-pipeline.md](package-pipeline.md), section 10) refuses what we _remove_, but it cannot
-tell a customer what they _missed_. At one customer this is a nuisance. Across hundreds, extending a
-kit and upgrading it would pull against each other, which is the problem a product's extension
-model exists to avoid.
+So any layer that wants one more field on a page below it must copy that page whole:
+
+- a business unit over the company's shared package;
+- a customer over a partner's package;
+- an administrator in the designer over the customer's package.
+
+From then on, every change made below passes the copy by. The upgrade check
+([package-pipeline.md](package-pipeline.md), section 10) refuses what a package _removes_, but it
+cannot tell a layer what it _missed_.
 
 ### Patch overlays (decision L)
 
-A customer's package changes our file by naming what it changes, not by replacing it. A sketch, not
-a format:
+A layer changes the file below it by naming what it changes, not by replacing it. A sketch, not a
+format:
 
 ```json
 {
   "format": "nuxeo-agentic-ui-overlay/1",
   "target": {
-    "package": "payers-claims-demo",
-    "range": "^0.8.0",
+    "package": "acme-claims",
+    "range": "^1.4.0",
     "file": "layouts/Claim/view.layout.json"
   },
   "operations": [
@@ -149,19 +162,22 @@ a format:
 
 - **What it addresses:** elements by what already names them. A card has an `id` in layout
   version 2, a field its property, a queue's column its property, a menu entry its id, and a home
-  card its id. An element with no stable name cannot be patched until it has one. That is a rule
-  for us, as the kits' authors, not for the customer.
+  card its id. An element with no stable name cannot be patched until it has one.
 - **Where it is merged:** on the server, in the section's order, before the registry serves the
   result. Every layer's patches apply to the layer below.
 - **Checks:** the validator checks the merged result as it checks a file today, and the pipeline
-  checks a patch against the kit version it names.
-- **On upgrade:** when a new kit version arrives, the upgrade check re-applies each customer's
+  checks a patch against the package version it names.
+- **On upgrade:** when a new version of the package below arrives, the upgrade check re-applies the
   patches to it. It reports any operation whose anchor is gone or moved, as a conflict for a person
   to settle, and never drops one silently.
-- **The designer:** for a file a kit owns, it writes a patch into the deployment layer, not a whole
-  copy.
-- **Replacing still exists,** for a customer who means to own a file outright, and the upgrade check
+- **The designer:** for a file a package owns, it writes a patch into the deployment layer, not a
+  whole copy.
+- **Replacing still exists,** for a layer that means to own a file outright, and the upgrade check
   names every replaced file on each upgrade.
+
+**L matters less while a customer has only their own package and the designer above it.** It
+becomes structural the day a partner's package, a shared business-unit package, or a kit of ours
+sits below a customer's. That is why the proposed order puts it after the tools.
 
 **Open within L:**
 
@@ -169,19 +185,75 @@ a format:
 - the operations' closed list;
 - whether a field needs an id of its own when one property is shown twice;
 - how a conflict is shown to an administrator;
-- the format's version and compatibility rules, since it becomes a long-term contract with every
-  customer.
+- the format's version and compatibility rules, since it becomes a long-term contract.
 
-## 5. Tools without the repository (decision K)
+## 5. The customer's config repository, and the tools on npm (decision K)
 
-Decision K is already open ([decisions.md](decisions.md), "Open: from phase 3"). In this model its
-recommendation reads:
+### One config repository per customer
 
-- **One versioned package:** the pipeline's command, the generators, the MCP server and the app
-  builder skill, run with `npx`, at the platform's version.
-- **The scaffolder,** distributed on its own, as `CUSTOMISING.md` already intends.
-- **Preview,** which runs the app's dev server, needs either a published dev-mode build of the app
-  or a hosted preview. Until one exists, a customer previews on their development server.
+[Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config) is public today and holds our
+own presales and hosted Beta packages. It becomes the **starter** a customer creates their
+repository from, as a GitHub template or with `npm create @nuxeo/satori-config`. Our presales
+packages stay in it.
+
+```text
+acme-satori/
+  package.json            devDependencies: @nuxeo/satori-cli, @nuxeo/satori-mcp (pinned in the lockfile)
+  AGENTS.md               written by the command-line tool: the rules any AI IDE reads
+  .cursor/  .claude/      the app builder skill, installed and refreshed by the tool
+  .mcp.json               the MCP server, run with npx; the server's address and credentials from the environment
+  config-packages/
+    acme-config/          one Marketplace package holding all of the customer's configuration
+      bundle/agentic-ui-config/
+        bootstrap.json    branding (Layer 0)
+        manifest.json     what the app shows (Layer 1)
+        app.json, home.json, navigation.json, layouts/, queues/, actions.json, tasks/, labels/
+  .github/workflows/      validate, build, sign, publish to preprod, promote: calling our reusable workflows
+```
+
+**One package holds all of it,** because a customer doesn't think in our layers. Branding, the
+manifest and their app definitions are their configuration, reviewed and released together.
+
+### The tools on npm
+
+**Today the starter copies three files.** `build.mjs` and the two schemas are copied from this
+repository into every package, pinned to one commit in `platform-ref.txt`, and checked by a
+weekly job that goes red when they drift. That works for one repository we own. Across hundreds of
+customer repositories the copies would drift.
+
+**Proposed: publish the tools**, at `packages.nuxeo.com/repository/npm-public/`, where
+`@nuxeo/satori-platform` is already set to publish. That registry needs no token.
+
+| Package               | What it does                                                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nuxeo/satori-cli`   | `create`, `validate`, `build`, `preview` against the customer's dev server, `upgrade-check` before each of our upgrades, `sign`, and `agents sync`, which installs or refreshes the app builder skill and `AGENTS.md` for Cursor, Claude Code, Copilot and other AI IDEs. It carries the JSON schemas and the same validator our pipeline runs |
+| `@nuxeo/satori-mcp`   | The MCP server: read the customer's model, page providers, workflows, vocabularies and operations from their development server; write a file only when the package then validates; preview                                                                                                                                                    |
+| Reusable CI workflows | The customer's workflows call ours, so a fix to a check reaches every customer when they bump the version                                                                                                                                                                                                                                      |
+
+**How a customer's agent builds something:**
+
+1. A developer asks their AI IDE's agent for, say, "a claims queue with an Approve button".
+2. The agent reads the skill and `AGENTS.md`, and uses the MCP server to read their server's model.
+3. It writes the files, and each write is kept only if it validates.
+4. The developer previews the result on their development server.
+5. CI checks, signs and publishes it.
+
+Nothing needs our source or our private packages.
+
+**How upgrades reach customers:** we release a platform version with tool versions to match.
+Renovate or Dependabot opens a pull request in the customer's repository, and their CI runs
+`upgrade-check` against the new version.
+
+### What has to be true
+
+- **The tools depend on no private package.** `npm ci` in this repository needs
+  `SATORI_GH_READONLY_TOKEN` for Hyland's packages. The validator and the pipeline must not.
+- **Preview runs against the customer's development server,** with Satori installed on it, not a
+  bundled copy of the app.
+- **The starter's builder checks version 2's files.** Today it checks none of an app definition's
+  version 2 files: layouts, queues, home, actions and the rest. The command-line tool replaces it.
+- **The MCP server reads the customer's server with their own credentials,** from the environment,
+  never from a file in the repository, as it does today.
 
 ## 6. Customer code without our source (decision 5)
 
@@ -229,8 +301,8 @@ What a customer needs:
 
 - **Their own signer,** named in their deployment's trusted-signers list: their CI's identity, or a
   key they hold. Our signer stays trusted for our packages.
-- **A starter repository** for their app package:
-  - a workflow that checks every change with the pipeline;
+- **The starter's workflows** (section 5):
+  - checking every change with the pipeline;
   - signing with their identity;
   - promotion through development, test and production servers, with a person's approval before
     production ([package-pipeline.md](package-pipeline.md), section 9, proposes the approval step).
@@ -239,24 +311,26 @@ What a customer needs:
 
 ## 8. Publishing and dependencies (decision N)
 
-- **Publish the add-ons and the kits to the Marketplace,** preprod first, with the dependencies
-  their `package.xml` files already declare. A kit then cannot be installed without the add-on
-  versions it needs.
-- **A release train:** the platform, the add-ons and the kits released together at known compatible
-  versions, with a matrix that says which kit versions run on which platform. The release
-  candidate ([package-pipeline.md](package-pipeline.md), section 11) is that train's check.
-- **Pushing `app-package/*` tags** starts publishing, and when to push the first one is the
-  product's call.
+- **Publish the add-ons to the Marketplace,** preprod first, beside the platform, which is already
+  published there. A customer's package declares the add-ons it needs, so it cannot be installed
+  without the versions it needs.
+- **A release train:** the platform, the add-ons and the tools released together at known
+  compatible versions, with a matrix that says which add-on versions run on which platform. The
+  release candidate ([package-pipeline.md](package-pipeline.md), section 11) is that train's check,
+  and it keeps building every kit as the train's tests.
+- **The kits stay unpublished as products.** If presales needs one on a demo server, it is
+  installed there from a build, or published to preprod under an `app-package/*` tag. When to push
+  the first such tag is the product's call.
 
 ## 9. The contract, and upgrades
 
-- **Registered IDs:** what a customer's package may name is what [extension-reference.md](../extension-reference.md)
-  registers. Nothing else is promised.
+- **Registered IDs:** what a customer's package may name is what
+  [extension-reference.md](../extension-reference.md) registers. Nothing else is promised.
 - **`@nuxeo/satori-platform` 1.0,** with a deprecation policy: a promised name is removed only
   after a deprecation period and a migration note. It is at 0.2.0 today. A 1.0.0 policy is not
   recorded yet.
-- **The upgrade check,** run on every customer package before every upgrade of ours: its offline
-  half and its server half, which is read-only. With patch overlays it also reports conflicts
+- **The upgrade check,** run in the customer's CI on every version bump of ours: its offline half,
+  and its server half, which is read-only. With patch overlays it also reports conflicts
   (section 4).
 - **Diagnostics:** the diagnostics page shows support what is installed and in force.
 
@@ -264,22 +338,27 @@ What a customer needs:
 
 - **Tenancy** (decision G), for providers serving many client organisations on one system.
 - **Partner certification:** a partner's industry package passes the pipeline and a security
-  review, and is then listed on the Marketplace beside our kits.
+  review, and is then listed on the Marketplace. Patch overlays (L) are what let a customer build on
+  it.
 
 ## 11. The proposed order
 
-1. **Decide L,** then build patch overlays: the merge on the server, the validator and pipeline
-   checks, the upgrade check's conflict report, and the designer writing patches. This changes how
-   every customer extends a kit, so it comes first.
-2. **Decide K and N,** then publish the Builder kit, the add-ons and the kits.
-3. **Decide M,** then build the starter repository and customer signing.
-4. **Take decision 5 again** with section 6's constraint. Its spike already ran on 25 November
+1. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows,
+   and turn Nuxeo-Satori-Config into the starter. This is what lets a customer's AI IDE build their
+   configuration at all, so it comes first.
+2. **The command-line tool checks version 2's files,** so that one config repository holds all of a
+   customer's configuration.
+3. **Decide M,** then customer signing and promotion in the starter's workflows.
+4. **Decide N,** then publish the add-ons beside the platform.
+5. **Decide L,** then build patch overlays, before the first partner package or shared package sits
+   below a customer's.
+6. **Take decision 5 again** with section 6's constraint. Its spike already ran on 25 November
    2026, so this is a decision, not more research.
-5. **Declare `@nuxeo/satori-platform` 1.0** and its deprecation policy.
+7. **Declare `@nuxeo/satori-platform` 1.0** and its deprecation policy.
 
 ## 12. What this rests on
 
-Checked in this repository on 27 November 2026:
+Checked on 27 November 2026, in this repository unless named:
 
 - the whole-file replacement, in [extension-reference.md](../extension-reference.md);
 - the kits' declared dependencies, in each `package/package.xml`;
@@ -287,10 +366,14 @@ Checked in this repository on 27 November 2026:
 - the platform package's preprod runs, in that workflow's history;
 - the single trusted signer, in `business-apps/trusted-signers.json`;
 - the private tool packages, in their `package.json`;
-- no `app-package/*` tag on the repository.
+- no `app-package/*` tag on the repository;
+- **in nuxeo/Nuxeo-Satori-Config:** public, not a template repository, holding `presales-demo` and
+  `satori-beta`. Its packages copy `build.mjs` and two schemas, pinned by `platform-ref.txt`, with a
+  weekly drift job, and publish through its own "Publish Configuration Package" workflow.
 
 **Not checked:**
 
 - whether `@nuxeo/satori-platform` is published at `packages.nuxeo.com` today;
+- whether the validator and the pipeline can run without Hyland's private packages;
 - how other Nuxeo products extend their own user interfaces;
 - what customers and partners need first, which presales would know.
