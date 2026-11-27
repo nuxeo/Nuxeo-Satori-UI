@@ -444,10 +444,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     ) {
       return false;
     }
-    return this.extensions.evaluateRule(rule, {
-      ...this.extensionRuleContext.context(),
-      document: this.doc(),
-    });
+    return this.extensions.evaluateOptInRule(
+      rule,
+      { ...this.extensionRuleContext.context(), document: this.doc() },
+      'app.tabs.view.preferARender',
+    );
   });
 
   /** The tab strip for `nxs-tabs`: labels translated, so a language change relabels it. */

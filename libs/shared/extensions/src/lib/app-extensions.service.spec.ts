@@ -6,6 +6,7 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { AppExtensionsService } from './app-extensions.service';
 import { EXTENSION_SLOTS } from './extension-slots';
+import { EMPTY_EXTENSION_RULE_CONTEXT } from './extension-rules';
 
 /**
  * NXSAT-755 — the reporting half of the refused-entry diagnostics.
@@ -44,6 +45,19 @@ describe('AppExtensionsService refused slot entries', () => {
     TestBed.tick();
     return service;
   };
+
+  it('reports an unknown feature opt-in once and leaves ordinary visibility behavior unchanged', () => {
+    const service = boot();
+    const setting = 'app.tabs.view.preferARender';
+    expect(service.evaluateOptInRule('typo', EMPTY_EXTENSION_RULE_CONTEXT, setting)).toBe(false);
+    expect(service.evaluateOptInRule('typo', EMPTY_EXTENSION_RULE_CONTEXT, setting)).toBe(false);
+    expect(service.evaluateRule('typo', EMPTY_EXTENSION_RULE_CONTEXT)).toBe(true);
+    expect(reports()).toEqual([
+      '[agentic-ui-extensions] app.tabs.view.preferARender: unknown rule "typo"; opt-in disabled',
+    ]);
+    service.registerRules({ typo: () => true });
+    expect(service.evaluateOptInRule('typo', EMPTY_EXTENSION_RULE_CONTEXT, setting)).toBe(true);
+  });
 
   it('surfaces a refused entry on a signal, alongside missingLayers and invalidRoutes', () => {
     manifest.set({

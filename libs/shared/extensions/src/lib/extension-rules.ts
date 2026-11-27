@@ -92,8 +92,9 @@ export type ExtensionRule = string | ExtensionRuleRef;
  * Recursively evaluate a nested rule reference.
  *
  * Passed to every evaluator so that composites (`core.every`, `core.some`,
- * `core.not`) are ordinary registered evaluators rather than special cases in
- * the registry. Nothing in {@link ExtensionRuleRegistry} knows they exist.
+ * `core.not`) are ordinary registered evaluators in the visibility path. The strict opt-in
+ * path recognises the packaged composites to validate every operand before short-circuiting;
+ * custom evaluators and overrides still control their own parameter semantics.
  */
 export type ExtensionRuleResolver = (rule: ExtensionRule) => boolean;
 
@@ -236,6 +237,58 @@ export class ExtensionRuleRegistry {
   evaluate(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean {
     if (rule === null || rule === undefined) return true;
     return this.evaluateRef(asRuleRef(rule), context, 0);
+  }
+
+  /**
+   * Explicit feature opt-ins must be known and valid, unlike visibility rules. An invalid
+   * nested reference invalidates the whole decision, even under `core.not`. Built-in
+   * composites resolve every operand so a short-circuit cannot hide a misspelt rule.
+   * Customer evaluators retain their parameter semantics and use the same strict resolver.
+   */
+  evaluateOptIn(
+    rule: ExtensionRule | null | undefined,
+    context: ExtensionRuleContext,
+    reportInvalid: (reason: string) => void,
+  ): boolean {
+    if (rule === null || rule === undefined) return false;
+    let valid = true;
+    const refuse = (reason: string): false => {
+      valid = false;
+      reportInvalid(reason);
+      return false;
+    };
+    const resolve = (candidate: unknown, depth: number): boolean => {
+      const ref = typeof candidate === 'string' ? { type: candidate } : candidate;
+      if (
+        !ref ||
+        typeof ref !== 'object' ||
+        Array.isArray(ref) ||
+        !('type' in ref) ||
+        typeof ref.type !== 'string' ||
+        !ref.type.trim()
+      ) {
+        return refuse('invalid rule reference');
+      }
+      const evaluator = this.evaluators.get(ref.type);
+      if (!evaluator) return refuse(`unknown rule "${ref.type}"`);
+      if (depth >= MAX_RULE_DEPTH) return refuse(`rule nesting limit exceeded at "${ref.type}"`);
+      const parameters = 'parameters' in ref ? ref.parameters : [];
+      if (!Array.isArray(parameters)) return refuse(`invalid parameters for rule "${ref.type}"`);
+      try {
+        if (
+          ['core.every', 'core.some', 'core.not'].includes(ref.type) &&
+          evaluator === CORE_RULE_EVALUATORS[ref.type]
+        ) {
+          const answers = new Map(parameters.map((nested) => [nested, resolve(nested, depth + 1)]));
+          return evaluator(context, parameters, (nested) => answers.get(nested) ?? false);
+        }
+        return evaluator(context, parameters, (nested) => resolve(nested, depth + 1));
+      } catch {
+        return refuse(`rule "${ref.type}" could not be evaluated`);
+      }
+    };
+    const result = resolve(rule, 0);
+    return valid && result;
   }
 
   /**

@@ -3592,6 +3592,7 @@ class AppExtensionsService {
     registerRules(evaluators: Readonly<Record<string, ExtensionRuleEvaluator>>): void;
     resolve<T extends ExtensionElement>(slot: ExtensionSlotId, context?: ExtensionRuleContext): readonly T[];
     evaluateRule(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean;
+    evaluateOptInRule(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext, setting: string): boolean;
     inventory(): Readonly<Record<string, readonly string[]>>;
     static ɵfac: i0.ɵɵFactoryDeclaration<AppExtensionsService, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
@@ -3787,6 +3788,7 @@ class ExtensionRuleRegistry {
     registeredRuleIds(): readonly string[];
     has(id: string): boolean;
     evaluate(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean;
+    evaluateOptIn(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext, reportInvalid: (reason: string) => void): boolean;
     static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionRuleRegistry, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }

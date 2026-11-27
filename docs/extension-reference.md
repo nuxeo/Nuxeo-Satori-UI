@@ -1433,9 +1433,13 @@ an earlier layer's MIME rule. A bare string does not replace an existing object-
 during layer merging; use the object form when changing an earlier selection.
 Contribute the field through `slots.tabs` using the packaged ID, **not** `overrides`, whose
 accepted fields are limited to visibility, order, label and rule. Omitting the field keeps the
-built-in viewer. A malformed field is ignored; valid references use the ordinary rule resolver,
-including its documented unknown-ID behavior. Nested `core.every`, `core.some` and `core.not`
-can combine MIME, type and facet rules. Later manifest layers may change the selection.
+built-in viewer. An unknown or invalid rule does not opt in. This is deliberately stricter than
+ordinary visibility rules: a typo must not enable a separately licensed viewer. The same applies
+to invalid nested rules, including under `core.not` and in short-circuited composite branches.
+The console reports the setting and reason with the `[agentic-ui-extensions]` prefix, deduplicated
+for the same refusal during the page session. A malformed top-level field is ignored.
+Nested `core.every`, `core.some` and `core.not` can combine MIME, type and facet rules.
+Later manifest layers may change the selection.
 
 `app.rules.hasMimeType` reads only `file:content['mime-type']`. Matching ignores case,
 surrounding whitespace and semicolon parameters. It accepts exact types and family patterns

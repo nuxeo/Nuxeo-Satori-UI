@@ -34,6 +34,93 @@ describe('ExtensionRuleRegistry', () => {
     registry.registerRules(DOCUMENT_RULE_EVALUATORS);
   });
 
+  describe('explicit opt-in rules (NXSAT-857)', () => {
+    it('denies an unknown opt-in without changing visibility-rule behavior', () => {
+      const report = vi.fn();
+      expect(
+        registry.evaluateOptIn('app.rules.hasMimeTyp', EMPTY_EXTENSION_RULE_CONTEXT, report),
+      ).toBe(false);
+      expect(report).toHaveBeenCalledWith('unknown rule "app.rules.hasMimeTyp"');
+      expect(registry.evaluate('app.rules.hasMimeTyp', EMPTY_EXTENSION_RULE_CONTEXT)).toBe(true);
+    });
+
+    it.each([
+      { type: 'core.not', parameters: ['typo'] },
+      { type: 'core.some', parameters: ['core.true', 'typo'] },
+      { type: 'core.every', parameters: ['core.false', 'typo'] },
+      { type: 'core.not', parameters: [{ type: 'core.some', parameters: ['typo'] }] },
+      { type: 'core.every', parameters: [null] },
+      { type: 'core.every', parameters: 'core.true' },
+    ])('does not allow invalid operands to be inverted or hidden by a composite: %j', (rule) => {
+      const report = vi.fn();
+      expect(
+        registry.evaluateOptIn(
+          rule as unknown as ExtensionRule,
+          EMPTY_EXTENSION_RULE_CONTEXT,
+          report,
+        ),
+      ).toBe(false);
+      expect(report).toHaveBeenCalled();
+    });
+
+    it('still evaluates valid composites, custom rules and MIME parameters normally', () => {
+      const report = vi.fn();
+      registry.registerRules({
+        'acme.rules.allowed': (_context, parameters) => parameters[0] === 'yes',
+      });
+      const rule = {
+        type: 'core.every',
+        parameters: [
+          { type: 'core.not', parameters: ['core.false'] },
+          { type: 'acme.rules.allowed', parameters: ['yes'] },
+          { type: 'app.rules.hasMimeType', parameters: ['application/pdf'] },
+        ],
+      };
+      const pdf = context({
+        document: {
+          ...doc(['Read']),
+          properties: { 'file:content': { 'mime-type': 'application/pdf' } },
+        },
+      });
+      expect(registry.evaluateOptIn(rule, pdf, report)).toBe(true);
+      expect(report).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown references resolved by customer evaluators even if they invert the result', () => {
+      registry.registerRules({
+        'acme.rules.inverse': (_context, _parameters, resolve) => !resolve('typo'),
+      });
+      expect(
+        registry.evaluateOptIn('acme.rules.inverse', EMPTY_EXTENSION_RULE_CONTEXT, vi.fn()),
+      ).toBe(false);
+    });
+
+    it('rejects excessive nesting and evaluator exceptions without opening the opt-in', () => {
+      registry.registerRules({
+        'acme.rules.loop': (_context, _parameters, resolve) => !resolve('acme.rules.loop'),
+        'acme.rules.throws': () => {
+          throw new Error('broken evaluator');
+        },
+      });
+      const report = vi.fn();
+      expect(registry.evaluateOptIn('acme.rules.loop', EMPTY_EXTENSION_RULE_CONTEXT, report)).toBe(
+        false,
+      );
+      expect(report).toHaveBeenCalledWith(expect.stringContaining('nesting limit exceeded'));
+      expect(
+        registry.evaluateOptIn('acme.rules.throws', EMPTY_EXTENSION_RULE_CONTEXT, report),
+      ).toBe(false);
+      expect(report).toHaveBeenCalledWith('rule "acme.rules.throws" could not be evaluated');
+    });
+
+    it('keeps an absent opt-in off without reporting a configuration error', () => {
+      const report = vi.fn();
+      expect(registry.evaluateOptIn(undefined, EMPTY_EXTENSION_RULE_CONTEXT, report)).toBe(false);
+      expect(registry.evaluateOptIn(null, EMPTY_EXTENSION_RULE_CONTEXT, report)).toBe(false);
+      expect(report).not.toHaveBeenCalled();
+    });
+  });
+
   it('registers the packaged document predicates under their published ids', () => {
     expect(registry.registeredRuleIds()).toEqual(
       expect.arrayContaining([
