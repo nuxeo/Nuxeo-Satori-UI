@@ -34,11 +34,13 @@ anywhere: it was built, tested, and checked against the server's own jars, read 
   id, parameters and answers, which decides the video it reads as a download of that file, refuses
   it with 403 when the rights do not cover it, and otherwise runs the platform's own (below, "The
   video operations").
-- **Not yet every path.** Other Automation operations that return a document's blob, or a
-  conversion of it, hand it over without naming the document to that permission, and so are not
-  refused; nor is what another add-on serves from its own endpoints. Until the security review
-  settles them (below, "What it does not cover"), this is a control on the download endpoints and
-  the video operations, not on every API.
+- **Not yet every path.** Other Automation operations that return a document's blob hand it over
+  without naming the document to that permission. Since 0.5.0, a stored file handed over so, as
+  `Document.GetBlob` or `Picture.GetView` hands one, is decided for the covered assets that hold it
+  (below, "Watermarks"); a conversion an operation makes of it is not refused, nor is what another
+  add-on serves from its own endpoints. Until the security review settles them (below, "What it
+  does not cover"), this is a control on the download endpoints, the stored files Automation hands
+  over and the video operations, not on every API.
 - **It says why,** through a document enricher, `assetRights`: the decision for each use, with a
   reason code a client translates. The enricher explains; the permission refuses.
 - **It enforces nothing on its own.** A package contributes a rights policy for its document type;
@@ -249,10 +251,11 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
 ## What it does not cover
 
 - **It decides the downloads the platform's download service is asked for with their document,
-  and the platform's `Video.*` operations.** A blob the platform hands over without naming its
-  document to that service, such as another Automation operation's result, and a blob another
-  add-on serves from its own endpoint, are not decided here. Which of those must be closed, and
-  how, is the security review's first question.
+  and the platform's `Video.*` operations;** since 0.5.0, a stored file the platform hands over with
+  no document, such as another Automation operation's result, for the covered assets that hold it.
+  A conversion such an operation makes, and a blob another add-on serves from its own endpoint, are
+  not decided here. Which of those must be closed, and how, is the security review's first
+  question.
 - **Who may write the rights.** A user who may read an asset and create a document somewhere, in
   their own workspace for one, can copy the asset there, write the copy's channels or rights end,
   and download the copy. Refusing that needs the rights fields written only by a rights manager,
@@ -964,7 +967,7 @@ mvn -pl nuxeo-agentic-assets -am package
 
 It runs the module's tests and writes the bundle and the Marketplace package,
 `nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.5.0.zip`. `build-marketplace.yml` builds it on
-every pull request it runs for, without uploading or publishing it. The tests but two need no Nuxeo
+every pull request it runs for, without uploading or publishing it. The tests but six need no Nuxeo
 runtime: documents are proxies that answer only what the code reads. `VideoRightsTest` runs in the
 Nuxeo test framework, as `nuxeo-agentic-documents`'s tests do: a runtime and a repository on H2,
 the platform's Video type and `Video.*` operations, its download service evaluating the contributed
@@ -974,7 +977,7 @@ delivery types and listener, the download permission, and the media kit's own ri
 schemas, which the build copies from the kit (`kit-media-policy`, `kit-media-schemas`), under the
 kit's types, which `KitMediaModelTest` holds to the kit's model file.
 
-Since 0.5.0, five more run there. `AssetReviewTest`: the review service and listener, the brand
+Since 0.5.0, four more run there. `AssetReviewTest`: the review service and listener, the brand
 kit's own review policy, which the build copies from the kit, Nuxeo's `Annotation` and `CommentRoot`
 types, written as the platform's comment manager writes them, the user manager with its test
 directories, and the platform's audit, on H2, as the documents add-on's tests run it.
