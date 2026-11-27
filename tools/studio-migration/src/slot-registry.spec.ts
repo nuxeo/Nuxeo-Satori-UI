@@ -114,6 +114,8 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
       priority: 0,
       hasTemplate: true,
       orderValue: extra.order ?? null,
+      pageNames: [],
+      listing: null,
       ...extra,
     });
     const a = contribution('a', 'DOCUMENT_ACTIONS');

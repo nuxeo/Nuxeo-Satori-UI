@@ -2,10 +2,12 @@
  * M1's home and menu: a Web UI dashboard's list cards become cards of `home.json`, and the left
  * menu's entries that open a search screen become entries of `navigation.json`
  * (docs/business-apps/app-definition-v2.md, sections 9 and 10). Each names the queue its list was
- * written as.
+ * written as. The dashboard's tasks card becomes a card of the person's tasks, and its recently
+ * viewed card is proposed as a card of their recent records, written once a person accepts it,
+ * since that lists what they created or edited, not what they opened.
  *
- * What neither file has a place for waits: the dashboard's tasks and recently viewed cards, and a
- * menu entry that opens anything but a search screen the conversion wrote as a queue.
+ * What neither file has a place for waits: a menu entry that opens anything but a search screen
+ * the conversion wrote as a queue.
  *
  * Both are worked out here from the inventory alone, so that the converter and harness check 7
  * read the same answer: which card or entry each is, and which queue it opens.
@@ -21,18 +23,32 @@ import {
   translatedLabelOf,
 } from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
-import { cardGuard, queueOwners, searchOfForm } from './convert-lists';
+import {
+  cardGuard,
+  homeCardId,
+  isRecentCard,
+  isTasksCard,
+  queueOwners,
+  recentCardEntry,
+  searchOfForm,
+  tasksCardEntry,
+} from './convert-lists';
 import { menuGuard, type Guard } from './guards';
 import type { Inventory, SlotContribution } from './inventory';
 import { slotRegistry } from './slot-registry';
 
-/** A card of `home.json`, from a dashboard card whose list is a queue. */
+/**
+ * A card of `home.json`, from a dashboard card: one whose list is a queue, the card of the
+ * person's tasks, or the recently viewed card once a person accepts the card proposed for it.
+ */
 export interface HomeCard {
   /** The dashboard card's place, from 0. */
   readonly index: number;
   readonly id: string;
-  /** The queue it opens, by its id. */
-  readonly queue: string;
+  /** What it shows: a link to a queue, the person's tasks, or their recent records. */
+  readonly kind: 'queue' | 'tasks' | 'recent';
+  /** The queue it opens, by its id, for a link to one. */
+  readonly queue?: string;
   readonly entry: Readonly<Record<string, unknown>>;
 }
 
@@ -52,23 +68,37 @@ export interface MenuEntry {
 const queueIdOf = (path: string): string => path.slice('queues/'.length, -'.json'.length);
 
 /**
- * One card per dashboard card that owns its queue, in the dashboard's order, with the card's
- * heading. A card whose list is not a queue has no card here.
+ * One card per dashboard card that becomes one, in the dashboard's order, with the card's heading:
+ * each that owns its queue; the card of the person's tasks; and the recently viewed card, once a
+ * person accepts the card proposed for it (`verdict`, as `withVerdicts` gives it). A card under a
+ * condition carries its rule where it reads the user only: no record is open on the home.
  */
 export function homeCards(inventory: Inventory): HomeCard[] {
   const owners = queueOwners(inventory);
   const cards: HomeCard[] = [];
   inventory.dashboard?.cards.forEach((card, index) => {
+    const id = homeCardId(index);
+    const guard = cardGuard(inventory, card);
+    if (isTasksCard(card) || (isRecentCard(card) && card.verdict?.accepted === true)) {
+      if (card.conditional && (guard.kind !== 'rule' || guard.document)) return;
+      const tasks = isTasksCard(card);
+      cards.push({
+        index,
+        id,
+        kind: tasks ? 'tasks' : 'recent',
+        entry: tasks ? tasksCardEntry(card, index, guard) : recentCardEntry(card, index, guard),
+      });
+      return;
+    }
     const path = queuePath(homeQueueId(card, index));
     const owner = owners.get(path);
     if (owner?.kind !== 'card' || owner.card !== card) return;
-    const id = `card-${index + 1}`;
     const queue = queueIdOf(path);
-    const guard = cardGuard(inventory, card);
     const rule = guard.kind === 'rule' && guard.rule !== 'core.true' ? guard.rule : null;
     cards.push({
       index,
       id,
+      kind: 'queue',
       queue,
       entry: {
         id,

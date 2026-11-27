@@ -311,10 +311,12 @@ describe('the conversion of layout blocks into cards', () => {
     });
   });
 
-  it("writes a block's section in version 1, and leaves its field under a condition pending", () => {
+  it("writes a block's card in an edit form of version 2, its field under a condition with its rule", () => {
+    const rule = { type: 'app.rules.hasFacet', parameters: ['Versionable'] };
+    // The block's fields only show their values, bound one way: read-only in the form.
     expect(input.conversion.app['layouts/Policy/edit.layout.json']).toEqual({
-      version: 1,
-      sections: [
+      version: 2,
+      cards: [
         {
           id: 'fields',
           fields: [{ field: 'po:number', label: 'Policy number', required: true }],
@@ -322,19 +324,26 @@ describe('the conversion of layout blocks into cards', () => {
         {
           id: 'acme-policy-summary',
           fields: [
-            { field: 'po:holder', label: 'Holder' },
-            { field: 'po:startDate', label: 'Start' },
+            { field: 'po:holder', label: 'Holder', readOnlyWhen: 'core.true' },
+            { field: 'po:startDate', label: 'Start', widget: 'date', readOnlyWhen: 'core.true' },
+            {
+              field: 'po:premium',
+              label: 'Premium',
+              readOnlyWhen: 'core.true',
+              visibleWhen: rule,
+            },
           ],
         },
       ],
     });
     const edit = `${UI}/document/policy/nuxeo-policy-edit-layout.html`;
     expect(entry(input.conversion, `block-field:${edit}#1.3`)).toMatchObject({
-      outcome: 'pending',
+      outcome: 'converted',
+      to: 'layouts/Policy/edit.layout.json',
     });
   });
 
-  it('leaves a block under a condition pending in version 1, which has no rules', () => {
+  it('gives a block under a condition its rule in an edit form, and reports it in version 1', () => {
     const edit = `${UI}/document/policy/nuxeo-policy-edit-layout.html`;
     const guarded = prepare({
       [edit]: `<dom-module id="nuxeo-policy-edit-layout"><template>
@@ -343,22 +352,48 @@ describe('the conversion of layout blocks into cards', () => {
 </template><script>Polymer({ is: 'nuxeo-policy-edit-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
     });
     expect(guarded.conversion.app['layouts/Policy/edit.layout.json']).toEqual({
-      version: 1,
-      sections: [{ id: 'fields', fields: [{ field: 'po:number', label: 'Policy number' }] }],
+      version: 2,
+      cards: [
+        { id: 'fields', fields: [{ field: 'po:number', label: 'Policy number' }] },
+        {
+          id: 'acme-policy-terms',
+          visibleWhen: 'app.rules.canWrite',
+          fields: [{ field: 'po:terms', label: 'Terms', readOnlyWhen: 'core.true' }],
+        },
+      ],
     });
-    expect(entry(guarded.conversion, `block-use:${edit}#1`)).toMatchObject({ outcome: 'pending' });
-    expect(entry(guarded.conversion, `block-field:${edit}#1.1`)).toMatchObject({
-      outcome: 'pending',
+    expect(entry(guarded.conversion, `block-use:${edit}#1`)).toMatchObject({
+      outcome: 'converted',
+      to: 'layouts/Policy/edit.layout.json cards.acme-policy-terms',
     });
-    // Pending whether or not its condition converts, as a field of version 1 under one is.
+    // A condition that does not convert leaves the block out, and says why.
     const unconvertible = prepare({
       [edit]: `<dom-module id="nuxeo-policy-edit-layout"><template>
 <nuxeo-filter document="[[document]]" path="/default-domain/archive"><template><acme-policy-terms document="{{document}}"></acme-policy-terms></template></nuxeo-filter>
 </template><script>Polymer({ is: 'nuxeo-policy-edit-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
     });
     expect(entry(unconvertible.conversion, `block-use:${edit}#1`)).toMatchObject({
-      outcome: 'pending',
+      outcome: 'reported',
+      note: expect.stringContaining('no rule reads a path'),
+    });
+    // The metadata layout is version 1, which has no rules: reported, never shown to everyone.
+    const metadata = `${UI}/document/policy/nuxeo-policy-metadata-layout.html`;
+    const panel = prepare({
+      [metadata]: `<dom-module id="nuxeo-policy-metadata-layout"><template>
+<div role="widget"><label>Policy number</label><div>[[document.properties.po:number]]</div></div>
+<nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><acme-policy-terms document="[[document]]"></acme-policy-terms></template></nuxeo-filter>
+</template><script>Polymer({ is: 'nuxeo-policy-metadata-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
+    });
+    expect(panel.conversion.app['layouts/Policy/metadata.layout.json']).toEqual({
+      version: 1,
+      sections: [{ id: 'fields', fields: [{ field: 'po:number', label: 'Policy number' }] }],
+    });
+    expect(entry(panel.conversion, `block-use:${metadata}#1`)).toMatchObject({
+      outcome: 'reported',
       note: expect.stringContaining('version 1 has no rules'),
+    });
+    expect(entry(panel.conversion, `block-field:${metadata}#1.1`)).toMatchObject({
+      outcome: 'reported',
     });
   });
 
@@ -547,14 +582,14 @@ describe('the checks on task forms, tabs and layout blocks', () => {
       [
         'var-in-layout',
         [
-          'app/layouts/Claim/view.layout.json cards[0].fields[0].field: "var:" names a task variable, which only a task form has',
+          'app/layouts/Claim/edit.layout.json cards[0].fields[0].field: "var:" names a task variable, which only a task form has',
         ],
       ],
       [
         'drop-block-card',
         [
-          "layouts/Policy/view.layout.json: po:holder is missing, though Web UI's view layout of Policy shows it",
-          "layouts/Policy/view.layout.json: po:startDate is missing, though Web UI's view layout of Policy shows it",
+          "layouts/Policy/edit.layout.json: po:holder is missing, though Web UI's edit layout of Policy shows it",
+          "layouts/Policy/edit.layout.json: po:startDate is missing, though Web UI's edit layout of Policy shows it",
         ],
       ],
       [
@@ -777,7 +812,7 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     ]);
   });
 
-  it('keeps a field Web UI edits editable however it is wrapped, and holds version 1 to what it cannot say', () => {
+  it('keeps a field Web UI edits editable however it is wrapped, and makes one it only shows read-only in an edit form', () => {
     const wrapped = prepare({
       [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
 <div role="widget"><label>Notes</label><nuxeo-textarea value="{{task.variables.notes}}"></nuxeo-textarea></div>
@@ -789,29 +824,23 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     };
     expect(form.cards[0].fields).toEqual([{ field: 'var:notes', label: 'Notes' }, 'var:decision']);
     expect(run(wrapped, 2)?.status).toBe('pass');
-    // Version 1 cannot make a field read-only: a field Web UI only shows is written, and reported.
+    // An edit form is version 2, which makes a field read-only: one Web UI only shows is, and
+    // check 2 holds it so.
     const edit1 = `${UI}/document/policy/nuxeo-policy-edit-layout.html`;
     expect(entry(input.conversion, `block-field:${edit1}#1.1`)).toMatchObject({
-      outcome: 'reported',
+      outcome: 'converted',
       to: 'layouts/Policy/edit.layout.json',
-      note: expect.stringContaining('version 1 cannot make a field read-only'),
     });
-    const unsaid = {
-      ...input,
-      conversion: {
-        ...input.conversion,
-        report: {
-          ...input.conversion.report,
-          constructs: input.conversion.report.constructs.map((construct) =>
-            construct.id === `block-field:${edit1}#1.1`
-              ? { ...construct, outcome: 'converted' as const, note: undefined }
-              : construct,
-          ),
-        },
-      },
-    };
-    expect(run(unsaid, 2)?.findings).toEqual([
-      "layouts/Policy/edit.layout.json: po:holder is editable, though Web UI's div only shows it, and the report does not say so",
+    const editable = edit(input, 'layouts/Policy/edit.layout.json', (file) => {
+      expect(file.cards[1].fields[0]).toMatchObject({
+        field: 'po:holder',
+        readOnlyWhen: 'core.true',
+      });
+      delete file.cards[1].fields[0].readOnlyWhen;
+      return file;
+    });
+    expect(run(editable, 2)?.findings).toEqual([
+      "layouts/Policy/edit.layout.json: po:holder is editable, but Web UI's div only shows it",
     ]);
   });
 });

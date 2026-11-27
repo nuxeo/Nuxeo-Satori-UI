@@ -33,7 +33,7 @@ describe('studio-migration inventory', () => {
       'Acme-Claims 1.0.0: a studio package for [2025.0,2026) (lts), depending on nuxeo-web-ui',
     );
     expect(out).toContain(
-      'Document layouts: 3\n  Claim: view (5 fields), edit (3 fields), metadata (3 fields)',
+      'Document layouts: 3\n  Claim: view (5 fields), edit (3 fields), metadata (4 fields)',
     );
     expect(out).toContain(
       'claims: a form with 2 fields; results with 3 columns, shown as nuxeo-data-table',
@@ -349,12 +349,12 @@ describe('studio-migration decisions and report', () => {
     const written = run(['decisions', 'acme.zip', out], files);
     expect(written).toMatchObject({ code: 0, err: '' });
     expect(written.out).toBe(
-      `Wrote ${join(out, 'decisions.json')}: 14 reported items and 1 proposal, 15 of them still to fill in\n`,
+      `Wrote ${join(out, 'decisions.json')}: 16 reported items and 1 proposal, 17 of them still to fill in\n`,
     );
     const file = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8'));
-    expect(file.decisions).toHaveLength(15);
+    expect(file.decisions).toHaveLength(17);
     expect(run(['check', 'acme.zip', out], files).out).toContain(
-      '  - 14 reported items have no owner',
+      '  - 16 reported items have no owner',
     );
 
     fill(out);
@@ -388,8 +388,8 @@ describe('studio-migration decisions and report', () => {
     });
     expect(carried.code).toBe(0);
     expect(carried.out).toContain(
-      ': 14 reported items and 1 proposal, 1 of them still to fill in\n' +
-        '  carried from old.json: 14\n' +
+      ': 16 reported items and 1 proposal, 1 of them still to fill in\n' +
+        '  carried from old.json: 16\n' +
         '  offered for re-confirmation, the earlier decision beside a blank one: 1\n' +
         '  not carried, and still in old.json: 1\n',
     );
@@ -435,9 +435,9 @@ describe('studio-migration decisions and report', () => {
     const printed = run(['report', 'acme.zip', out, '--allow-list', 'allow.json'], files);
     expect(printed.code).toBe(0);
     expect(printed.out).toMatch(/^Migration report: Acme-Claims 1\.0\.0\n/);
-    expect(printed.out).toContain('Decisions needed: 14 reported items, 0 of them decided');
+    expect(printed.out).toContain('Decisions needed: 16 reported items, 0 of them decided');
     expect(printed.out).toMatch(
-      /\nCoverage: 100%, 65 of the package's 65 constructs in the report\n/,
+      /\nCoverage: 100%, 66 of the package's 66 constructs in the report\n/,
     );
 
     const none = { ...files, 'none.json': Buffer.from('{"operations": []}') };
@@ -446,8 +446,8 @@ describe('studio-migration decisions and report', () => {
     expect(failing.out).toMatch(/\n {2}10 {2}Package +FAIL\n/);
 
     const json = JSON.parse(run(['report', 'acme.zip', out, '--json'], files).out);
-    expect(json.coverage).toEqual({ accounted: 65, constructs: 65, percent: 100 });
-    expect(json.reported).toHaveLength(14);
+    expect(json.coverage).toEqual({ accounted: 66, constructs: 66, percent: 100 });
+    expect(json.reported).toHaveLength(16);
     expect(run(['report', 'acme.zip'], files).code).toBe(2);
   });
 

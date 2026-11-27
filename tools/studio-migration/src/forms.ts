@@ -49,7 +49,7 @@ export function formPlaces(pkg: StudioPackage, inventory: Inventory): FormPlace[
       places.push({
         path,
         tab: tab.id,
-        source: tabSource(tab) as LayoutSource,
+        source: tabSource(tab),
         options: TAB_OPTIONS,
         what: `Web UI's tab ${tab.name} of ${type}`,
         tabPlan: tab,
