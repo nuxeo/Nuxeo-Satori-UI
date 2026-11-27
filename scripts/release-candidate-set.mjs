@@ -723,11 +723,13 @@ export function connectorIdsOf(componentXml) {
  * contributes, as `readKit` reads a zip's, and two names a kit holds that no server keeps one of
  * per kit, or that no zip carries. Each `[{ kind, key, file }]`, `file` from the kit's folder.
  *
- * - **Its own label keys,** in each `labels/<language>.json`: every key but the platform's, those
- *   `platformKeys` holds and the `layout.` keys that name a schema or a field, which every app may
- *   give a text of its own. On a server each app reads its own labels, so two kits' keys do not
- *   replace each other there; a key another kit has is still not this one's, begun with this
- *   app's name as app-definition-v2.md, section 7 asks, and it is most often a copied kit's.
+ * - **Its label keys,** `labelKeys`, apart from what it contributes: every key of each
+ *   `labels/<language>.json` but the platform's, those `platformKeys` holds and the `layout.` keys
+ *   that name a schema or a field, which every app may give a text of its own. On a server each
+ *   app reads its own labels, so two kits' keys do not replace each other there; but a key begun
+ *   with an app's name is that app's (app-definition-v2.md, section 7), and another kit that has
+ *   it is most often a copied one. The pipeline compares only such keys (`kitClashes`): a key
+ *   begun with neither kit's name, such as one the platform reads by a pattern, is no clash.
  * - **Its connectors,** each `<connector id>` of a component in `connectors/`, which the connectors
  *   add-on keeps one of, whichever kit contributes it.
  */
@@ -752,7 +754,7 @@ export function readKitFolder(directory, { platformKeys = new Set() } = {}) {
         if (!platformKeys.has(key) && !key.startsWith('layout.') && !keys.has(key))
           keys.set(key, `bundle/agentic-ui-config/labels/${file}`);
     }
-  for (const [key, file] of keys) contributes.push({ kind: 'label key', key, file });
+  const labelKeys = keys;
   const connectors = join(directory, 'connectors');
   if (existsSync(connectors))
     for (const file of readdirSync(connectors).sort())
@@ -761,7 +763,7 @@ export function readKitFolder(directory, { platformKeys = new Set() } = {}) {
           componentXmlOf(readFileSync(join(connectors, file), 'utf8')),
         ))
           contributes.push({ kind: 'connector', key: id, file: `connectors/${file}` });
-  return { name: descriptor.name, app, contributes, unknown };
+  return { name: descriptor.name, app, contributes, labelKeys, unknown };
 }
 
 /**

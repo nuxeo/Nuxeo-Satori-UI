@@ -35,7 +35,7 @@
     "permission": {
       "type": "string",
       "description": "The Nuxeo permission a person needs on the record for the card to read it. Defaults to Read.",
-      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
     },
     "credential": {
       "type": "boolean",
@@ -44,7 +44,7 @@
     },
     "header": {
       "type": "string",
-      "description": "With credential: the header the token goes in. Defaults to Authorization. Not Host, Cookie or Proxy-*."
+      "description": "With credential: the header the token goes in, letters, digits and '-'. Defaults to Authorization. Not one that changes where or how the request goes, such as Host, Cookie, Accept, Content-Type or Proxy-*, which the add-on refuses."
     },
     "prefix": {
       "type": "string",

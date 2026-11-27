@@ -132,10 +132,60 @@ const CATALOGUE = join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json');
 const OWN_MODEL = 'content-model.json';
 /** The repository's kits, which a kit among them is compared with by default (`--kits`). */
 const KITS = join(REPO, 'business-apps', 'packages');
-/** The connectors add-on's rules for what a contribution names (nuxeo-agentic-connectors/README.md). */
-const CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
-const CONNECTOR_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-const PROPERTY = /^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$/;
+/**
+ * The connectors add-on's rules for what a contribution names, as `Connector.of` holds them
+ * (nuxeo-agentic-connectors/src/main/java/org/nuxeo/agentic/connectors/Connector.java): the add-on
+ * leaves out a connector that breaks one, and its card then shows its error state.
+ */
+const CONNECTOR = {
+  id: /^[A-Za-z][A-Za-z0-9._-]{0,63}$/,
+  type: /^[A-Za-z][A-Za-z0-9_-]{0,127}$/,
+  field: /^[A-Za-z][A-Za-z0-9_]{0,63}$/,
+  xpath: /^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$/,
+  permission: /^[A-Za-z][A-Za-z0-9_-]{0,63}$/,
+  property: /^[A-Za-z][A-Za-z0-9._-]{0,127}$/,
+  env: /^[A-Z_][A-Z0-9_]{0,127}$/,
+  /** One name after the connector's own prefix: never a dot, so never another's setting. */
+  ownName: /^[A-Za-z0-9_-]{1,64}$/,
+  ownEnvName: /^[A-Z0-9]{1,64}$/,
+  header: /^[A-Za-z0-9-]{1,64}$/,
+  /** Headers the credential may not go in: Java's client refuses them, or they change the request. */
+  forbiddenHeaders: new Set([
+    'connection',
+    'content-length',
+    'expect',
+    'host',
+    'upgrade',
+    'transfer-encoding',
+    'te',
+    'trailer',
+    'keep-alive',
+    'proxy-authorization',
+    'proxy-connection',
+    'accept',
+    'cookie',
+    'content-type',
+  ]),
+  limits: {
+    connectTimeout: [100, 10_000],
+    timeout: [100, 30_000],
+    maxBytes: [1024, 1_048_576],
+    maxConcurrent: [1, 64],
+  },
+};
+
+/** `Connector.soundPath`: from `/`, `{key}` once, the add-on's characters, no empty or dot segment. */
+function soundConnectorPath(path) {
+  if (typeof path !== 'string' || path.length > 256 || !path.startsWith('/')) return false;
+  const at = path.indexOf('{key}');
+  if (at < 0 || path.indexOf('{key}', at + 1) >= 0) return false;
+  const around = `${path.slice(0, at)}k${path.slice(at + '{key}'.length)}`;
+  if (!/^[A-Za-z0-9/._~-]*$/.test(around)) return false;
+  return around
+    .slice(1)
+    .split('/')
+    .every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
@@ -214,6 +264,13 @@ function parse(argv) {
 const options = parse(process.argv.slice(2));
 if (!options || !existsSync(options.directory)) {
   console.error(options ? `${options.directory} does not exist.\n${USAGE}` : USAGE);
+  process.exit(2);
+}
+if (
+  options.kits !== undefined &&
+  !lstatSync(options.kits, { throwIfNoEntry: false })?.isDirectory()
+) {
+  console.error(`--kits ${options.kits} is not a folder of kits.\n${USAGE}`);
   process.exit(2);
 }
 process.exit(await withModel(options));
@@ -968,7 +1025,6 @@ function pageProvidersOf(directory) {
   return providers;
 }
 
-/** A JSON file of the app definition, or `null` when it cannot be read: the validator says why. */
 /**
  * The connectors the package contributes itself, each `<connector>` of a component in
  * `connectors/`, beside its bundle, as `app-connector` writes them: `[{ id, file, types, key,
@@ -1008,10 +1064,18 @@ function ownConnectors(directory) {
           file: path,
           types: texts('type'),
           key: tags('key')[0]?.xpath,
-          fields: tags('field').map((field) => field.name ?? ''),
+          fields: tags('field').map((field) => ({
+            name: field.name ?? '',
+            pointer: field.pointer,
+          })),
           address: tags('address'),
           addressText: texts('address'),
+          path: texts('path'),
+          permission: texts('permission'),
           credential: tags('credential')[0],
+          limits: Object.fromEntries(
+            Object.keys(CONNECTOR.limits).map((element) => [element, texts(element)]),
+          ),
           text: match[0],
         });
       }
@@ -1058,7 +1122,7 @@ function connectorFindings(directory, root, model) {
   for (const connector of connectors) {
     const at = `connectors.${connector.id || '?'}`;
     const { id, file } = connector;
-    if (!CONNECTOR_ID.test(id) || /\.(?:http|cache|events)$/.test(id))
+    if (!CONNECTOR.id.test(id) || /\.(?:http|cache|events)$/.test(id))
       say(
         file,
         at,
@@ -1074,7 +1138,18 @@ function connectorFindings(directory, root, model) {
       );
     seen.add(id);
     const prefix = `nuxeo.agentic.connectors.${id}.`;
-    const env = `NUXEO_CONNECTOR_${id.toUpperCase().replace(/[.-]/g, '_')}_`;
+    const envPrefix = `NUXEO_CONNECTOR_${id.toUpperCase().replace(/[.-]/g, '_')}_`;
+    /** `Connector.ownProperty`: the connector's prefix, then one name. */
+    const ownProperty = (name) =>
+      typeof name === 'string' &&
+      CONNECTOR.property.test(name) &&
+      name.startsWith(prefix) &&
+      CONNECTOR.ownName.test(name.slice(prefix.length));
+    const ownEnv = (name) =>
+      typeof name === 'string' &&
+      CONNECTOR.env.test(name) &&
+      name.startsWith(envPrefix) &&
+      CONNECTOR.ownEnvName.test(name.slice(envPrefix.length));
     if (/\/\/|\b(?:https?|ldaps?|ftps?|wss?):/i.test(connector.text))
       say(
         file,
@@ -1089,18 +1164,52 @@ function connectorFindings(directory, root, model) {
         'a connector has one <address property="..." />, the server property its address is in, and nothing in it',
         'structure',
       );
-    else if (
-      !(connector.address[0].property ?? '').startsWith(prefix) ||
-      connector.address[0].property === prefix
-    )
+    else if (!ownProperty(connector.address[0].property))
       say(
         file,
         `${at}.address`,
-        `its property is one of the connector's own, ${prefix}<name>`,
+        `its property is one of the connector's own, ${prefix}<name>, one name of letters, digits, "_" or "-"`,
+        'structure',
+      );
+    if (connector.path.length !== 1 || !soundConnectorPath(connector.path[0]))
+      say(
+        file,
+        `${at}.path`,
+        'a connector has one <path>, from "/", holding {key} once, and otherwise only letters, digits, "/", ".", "_", "~" and "-", with no empty, "." or ".." segment and no query',
+        'structure',
+      );
+    const permission = connector.permission[0] ?? '';
+    if (
+      connector.permission.length > 1 ||
+      (permission !== '' && !CONNECTOR.permission.test(permission))
+    )
+      say(
+        file,
+        `${at}.permission`,
+        'a connector names one Nuxeo permission, such as Read',
         'structure',
       );
     if (connector.credential) {
-      const { property, env: variable } = connector.credential;
+      const { header, prefix: written, property, env: variable } = connector.credential;
+      if (
+        header === undefined ||
+        !CONNECTOR.header.test(header) ||
+        CONNECTOR.forbiddenHeaders.has(header.toLowerCase()) ||
+        header.toLowerCase().startsWith('proxy-')
+      )
+        say(
+          file,
+          `${at}.credential`,
+          'a credential is sent in a header such as Authorization or X-Api-Key: not one that changes where or how the request goes',
+          'structure',
+        );
+      if (written !== undefined && (written.length > 32 || !/^[\x20-\x7e]*$/.test(written)))
+        say(
+          file,
+          `${at}.credential`,
+          'its prefix is up to 32 printable characters, such as "Bearer "',
+          'structure',
+        );
       if (property === undefined && variable === undefined)
         say(
           file,
@@ -1108,39 +1217,68 @@ function connectorFindings(directory, root, model) {
           'a credential names the server property or the environment variable it is in, never the credential',
           'structure',
         );
-      if (property !== undefined && (!property.startsWith(prefix) || property === prefix))
+      if (property !== undefined && !ownProperty(property))
         say(
           file,
           `${at}.credential`,
-          `its property is one of the connector's own, ${prefix}<name>`,
+          `its property is one of the connector's own, ${prefix}<name>, one name of letters, digits, "_" or "-"`,
           'structure',
         );
-      if (variable !== undefined && (!variable.startsWith(env) || variable === env))
+      if (variable !== undefined && !ownEnv(variable))
         say(
           file,
           `${at}.credential`,
-          `its environment variable is one of the connector's own, ${env}<NAME>`,
+          `its environment variable is one of the connector's own, ${envPrefix}<NAME>, in capitals and digits`,
           'structure',
         );
     }
-    if (connector.types.length === 0 || connector.types.length > 20)
-      say(file, `${at}.type`, 'a connector reads 1 to 20 document types', 'structure');
+    for (const [element, [least, most]] of Object.entries(CONNECTOR.limits)) {
+      const given = connector.limits[element];
+      if (given.length === 0) continue;
+      const value = Number(given[0]);
+      if (given.length > 1 || !/^\d+$/.test(given[0]) || value < least || value > most)
+        say(
+          file,
+          `${at}.${element}`,
+          `<${element}> is one whole number from ${least} to ${most}`,
+          'structure',
+        );
+    }
+    if (
+      connector.types.length === 0 ||
+      connector.types.length > 20 ||
+      !connector.types.every((type) => CONNECTOR.type.test(type))
+    )
+      say(
+        file,
+        `${at}.type`,
+        "a connector reads 1 to 20 document types, each a type's name",
+        'structure',
+      );
     if (connector.fields.length === 0 || connector.fields.length > 50)
       say(file, `${at}.field`, 'a connector returns 1 to 50 fields', 'structure');
-    connector.fields.forEach((name, index) => {
-      if (!CONNECTOR_FIELD.test(name))
+    const names = connector.fields.map((field) => field.name);
+    connector.fields.forEach(({ name, pointer }, index) => {
+      if (!CONNECTOR.field.test(name))
         say(
           file,
           `${at}.field[${index}]`,
           `"${name}" is not a field's name: letters, digits and "_", starting with a letter`,
           'structure',
         );
-      else if (connector.fields.indexOf(name) !== index)
+      else if (names.indexOf(name) !== index)
         say(file, `${at}.field[${index}]`, `the field "${name}" is listed twice`, 'structure');
+      else if (pointer !== undefined && (!pointer.startsWith('/') || pointer.length > 256))
+        say(
+          file,
+          `${at}.field[${index}]`,
+          `the pointer of "${name}" is a JSON pointer into the answer, from "/", up to 256 characters`,
+          'structure',
+        );
     });
     if (
       typeof connector.key !== 'string' ||
-      !PROPERTY.test(connector.key) ||
+      !CONNECTOR.xpath.test(connector.key) ||
       /^(?:ecm|var):/.test(connector.key)
     )
       say(
@@ -1207,11 +1345,11 @@ function connectorFindings(directory, root, model) {
           external.fields.forEach((entry, inner) => {
             const name =
               typeof entry === 'string' ? entry : isObject(entry) ? entry.name : undefined;
-            if (typeof name === 'string' && !connector.fields.includes(name))
+            if (typeof name === 'string' && !connector.fields.some((field) => field.name === name))
               say(
                 file,
                 `${place}.fields[${inner}]${typeof entry === 'string' ? '' : '.name'}`,
-                `the connector "${connector.id}" (connectors/${basename(connector.file)}) does not return the field "${name}": it returns ${connector.fields.join(', ')}`,
+                `the connector "${connector.id}" (connectors/${basename(connector.file)}) does not return the field "${name}": it returns ${connector.fields.map((field) => field.name).join(', ')}`,
                 'unknown',
               );
           });
@@ -1265,7 +1403,9 @@ function kitClashes(directory, folder) {
     return {
       kits: 0,
       findings: [],
-      notes: [`the package's names were not compared with other kits: ${error.message}`],
+      notes: [
+        `the package's names were not compared with other kits: a file of it could not be read as a kit's (${error.name ?? 'Error'}).`,
+      ],
     };
   }
   const name = basename(resolve(directory));
@@ -1280,14 +1420,36 @@ function kitClashes(directory, folder) {
     if (!entry.isDirectory() || entry.name === name) continue;
     const kit = join(folder, entry.name);
     if (!existsSync(join(kit, 'bundle', 'agentic-ui-config', 'app.json'))) continue;
+    // Read through no link: what is read can be named back, and a link can point anywhere.
+    if (firstLink(kit) !== null) {
+      notes.push(`${entry.name} was not compared: it holds a link, which is not followed.`);
+      continue;
+    }
     try {
       others.push({ folder: entry.name, read: readKitFolder(kit, { platformKeys }) });
     } catch (error) {
-      notes.push(`${entry.name} was not compared: ${error.message}`);
+      // The reason by its kind only: a parser's message can quote the file it could not read.
+      notes.push(
+        `${entry.name} was not compared: a file of it could not be read as a kit's (${error.name ?? 'Error'}).`,
+      );
     }
   }
   const findings = [];
   const seen = new Set();
+  // A label key is a clash only when it is begun with the app's name of one of the two kits: the
+  // app's own, which the other has too.
+  const appOf = (read) => (typeof read.app?.id === 'string' ? `${read.app.id}.` : null);
+  for (const [key, file] of own.labelKeys) {
+    const owners = others.filter(
+      (other) =>
+        other.read.labelKeys.has(key) &&
+        [appOf(own), appOf(other.read)].some((prefix) => prefix !== null && key.startsWith(prefix)),
+    );
+    if (owners.length === 0) continue;
+    findings.push(
+      `${join(directory, ...file.split('/'))}: labels[${JSON.stringify(key)}]: the label key is ${owners.map((owner) => owner.folder).join(' and ')}'s too, and is begun with an app's name, which makes it that app's own (app-definition-v2.md, section 7) [clash]`,
+    );
+  }
   for (const { kind, key, file } of own.contributes) {
     const id = `${kind}\u0000${key}`;
     if (seen.has(id)) continue;
@@ -1299,14 +1461,13 @@ function kitClashes(directory, folder) {
     const named = owners.map((owner) => owner.folder).join(' and ');
     const at = join(directory, ...file.split('/'));
     findings.push(
-      kind === 'label key'
-        ? `${at}: labels[${JSON.stringify(key)}]: the label key is ${named}'s too: a kit's own key is begun with its app's name (app-definition-v2.md, section 7) [clash]`
-        : `${at}: ${kind} ${JSON.stringify(key)}: ${named} ${owners.length === 1 ? 'contributes' : 'contribute'} it too [clash]`,
+      `${at}: ${kind} ${JSON.stringify(key)}: ${named} ${owners.length === 1 ? 'contributes' : 'contribute'} it too [clash]`,
     );
   }
   return { kits: others.length, findings, notes };
 }
 
+/** A JSON file of the app definition, or `null` when it cannot be read: the validator says why. */
 function definitionFile(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));

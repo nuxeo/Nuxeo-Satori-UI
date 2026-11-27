@@ -73,16 +73,20 @@ const withFields = (...fields: unknown[]): Record<string, unknown> => ({
   cards: [{ id: 'c', fields }],
 });
 
-/** The findings as the command line prints them. `given: null` checks with no model. */
+/**
+ * The findings as the command line prints them. `given: null` checks with no model; `references`
+ * holds what rules read to it too, as the command line and the pipeline ask.
+ */
 const messages = (
   content: unknown,
   {
     type = 'Member',
     mode = 'view',
     given = model,
-  }: { type?: string; mode?: LayoutMode; given?: ContentModel | null } = {},
+    references = false,
+  }: { type?: string; mode?: LayoutMode; given?: ContentModel | null; references?: boolean } = {},
 ): string[] =>
-  validateLayoutV2(content, { mode, model: given ?? undefined, type }).map(
+  validateLayoutV2(content, { mode, model: given ?? undefined, type, references }).map(
     (finding) => `${finding.path}: ${finding.message} [${finding.kind}]`,
   );
 
@@ -469,9 +473,13 @@ describe('validateLayoutV2, given the content model', () => {
     it('refuses each property the type lacks, naming what reads it', () => {
       const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.mine'] });
       expect(
-        validateLayoutV2(named, { mode: 'view', model, type: 'Member', registries }).map(
-          (finding) => `${finding.path}: ${finding.message} [${finding.kind}]`,
-        ),
+        validateLayoutV2(named, {
+          mode: 'view',
+          model,
+          type: 'Member',
+          registries,
+          references: true,
+        }).map((finding) => `${finding.path}: ${finding.message} [${finding.kind}]`),
       ).toEqual([
         'banners[0].visibleWhen.parameters[0].field: "member:joined" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
         'cards[0].visibleWhen.parameters[0].parameters[0].field: "member:state" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
@@ -485,27 +493,30 @@ describe('validateLayoutV2, given the content model', () => {
 
     it("passes the type's own properties, a form's rules and checks included, and the server's ecm: ones", () => {
       expect(
-        messages({
-          version: 2,
-          banners: [
-            {
-              id: 'late',
-              label: 'Late',
-              tone: 'warning',
-              visibleWhen: late('member:birthDate', 'dc:created'),
-            },
-          ],
-          cards: [
-            {
-              id: 'c',
-              visibleWhen: {
-                type: 'app.rules.fieldIn',
-                parameters: [{ field: 'ecm:currentLifeCycleState' }, 'project'],
+        messages(
+          {
+            version: 2,
+            banners: [
+              {
+                id: 'late',
+                label: 'Late',
+                tone: 'warning',
+                visibleWhen: late('member:birthDate', 'dc:created'),
               },
-              fields: ['dc:title'],
-            },
-          ],
-        }),
+            ],
+            cards: [
+              {
+                id: 'c',
+                visibleWhen: {
+                  type: 'app.rules.fieldIn',
+                  parameters: [{ field: 'ecm:currentLifeCycleState' }, 'project'],
+                },
+                fields: ['dc:title'],
+              },
+            ],
+          },
+          { references: true },
+        ),
       ).toEqual([]);
       expect(
         messages(
@@ -519,7 +530,7 @@ describe('validateLayoutV2, given the content model', () => {
               { type: 'core.notBefore', parameters: [{ field: 'member:birthDate' }], label: 'No' },
             ],
           }),
-          { mode: 'edit' },
+          { mode: 'edit', references: true },
         ),
       ).toEqual([]);
     });
@@ -529,10 +540,10 @@ describe('validateLayoutV2, given the content model', () => {
         field: 'member:birthDate',
         checks: [{ type: 'core.notBefore', parameters: [{ field: 'member:joined' }], label: 'No' }],
       });
-      expect(messages(checked, { mode: 'edit' })).toEqual([
+      expect(messages(checked, { mode: 'edit', references: true })).toEqual([
         'cards[0].fields[0].checks[0].parameters[0].field: "member:joined" is not a property of the type "Member" or of its facets, so the check naming it reads nothing [unknown]',
       ]);
-      expect(messages(named, { given: null })).toEqual([
+      expect(messages(named, { given: null, references: true })).toEqual([
         'cards[0].fields[2].visibleWhen: the rule "acme.rules.mine" is not registered [unknown]',
       ]);
     });
@@ -557,10 +568,40 @@ describe('validateLayoutV2, given the content model', () => {
               parameters: [{ field: 'dublincore:title' }, 'A'],
             },
           }),
+          { references: true },
         ),
       ).toEqual([
         'cards[0].fields[0].visibleWhen.parameters[0].field: "dublincore:title" is written "dc:title": the schema "dublincore" has the prefix "dc", so the rule naming it reads nothing [unknown]',
       ]);
+    });
+
+    it("holds nothing a rule reads unless asked, as the server's validator does not ask", () => {
+      const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.mine'] });
+      expect(validateLayoutV2(named, { mode: 'view', model, type: 'Member', registries })).toEqual(
+        [],
+      );
+    });
+
+    it('lets be a property a facet of the model brings, which a rule guarded by that facet reads', () => {
+      const guarded = {
+        version: 2,
+        banners: [
+          {
+            id: 'flagged',
+            label: 'Flagged',
+            tone: 'warning',
+            visibleWhen: {
+              type: 'core.every',
+              parameters: [
+                { type: 'app.rules.hasFacet', parameters: ['Flagged'] },
+                { type: 'app.rules.fieldIn', parameters: [{ field: 'flag:reason' }, 'fraud'] },
+              ],
+            },
+          },
+        ],
+        cards: [{ id: 'c', fields: ['dc:title'] }],
+      };
+      expect(messages(guarded, { references: true })).toEqual([]);
     });
   });
 

@@ -1794,6 +1794,15 @@ expectRefused(
   ['--kits', KITS],
 );
 expectBuilt(
+  "a label key another kit has, begun with neither kit's app: one the platform reads by a pattern",
+  ({ directory }) =>
+    jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
+      labels.labels['document-layouts.timeline.event.afterSetLegalHold'] = 'Put on legal hold';
+    }),
+  ['--kits', KITS],
+  'other kits in ',
+);
+expectBuilt(
   "a platform's label key another kit gives a text too: a layout.field key, and one of the catalogue's",
   ({ directory }) =>
     jsonEdit(directory, 'bundle/agentic-ui-config/labels/en.json', (labels) => {
@@ -1891,12 +1900,50 @@ ${fields.map((field) => `      <field name="${field}" pointer="/${field}" />`).j
     contribution({ address: '<address>https://core.example.test</address>' }),
     'connectors.pcclaims.policyPayments: holds an address: a connector names the server property its address is in, never the address [structure]',
   );
+  // The add-on's own rules, as Connector.of holds them: each break, which the add-on would refuse.
+  const broken = (from, to) => {
+    const xml = contribution();
+    if (!xml.includes(from))
+      throw new Error(`the connector control's edit does not apply: ${from}`);
+    return xml.replace(from, to);
+  };
+  withConnector(
+    "a credential from one of the server's own settings for the connector, two names down",
+    broken(`property="${SETTING}.token"`, `property="${SETTING}.events.secret"`),
+    `connectors.pcclaims.policyPayments.credential: its property is one of the connector's own, ${SETTING}.<name>, one name`,
+  );
+  withConnector(
+    "a credential from an environment variable of two names, which another connector's could be",
+    broken(
+      'NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_TOKEN',
+      'NUXEO_CONNECTOR_PCCLAIMS_POLICYPAYMENTS_VENDOR_TOKEN',
+    ),
+    'connectors.pcclaims.policyPayments.credential: its environment variable is one of the connector',
+  );
+  withConnector(
+    'a credential sent in a header that changes how the request goes',
+    broken('header="Authorization"', 'header="Content-Type"'),
+    'connectors.pcclaims.policyPayments.credential: a credential is sent in a header such as Authorization',
+  );
+  withConnector(
+    'a path with a query',
+    broken('<path>/claims/{key}</path>', '<path>/claims/{key}?all=1</path>'),
+    'connectors.pcclaims.policyPayments.path: a connector has one <path>',
+  );
+  withConnector(
+    "a timeout past the add-on's",
+    broken(
+      '<permission>Read</permission>',
+      '<permission>Read</permission>\n      <timeout>999999</timeout>',
+    ),
+    'connectors.pcclaims.policyPayments.timeout: <timeout> is one whole number from 100 to 30000',
+  );
   withConnector(
     "a connector whose address is another connector's setting",
     contribution({
       address: '<address property="nuxeo.agentic.connectors.payers.claimPayments.address" />',
     }),
-    `connectors.pcclaims.policyPayments.address: its property is one of the connector's own, ${SETTING}.<name> [structure]`,
+    `connectors.pcclaims.policyPayments.address: its property is one of the connector's own, ${SETTING}.<name>, one name`,
   );
 }
 

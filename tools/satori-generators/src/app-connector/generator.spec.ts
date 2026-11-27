@@ -115,6 +115,13 @@ describe('app-connector generator', () => {
       ['a field that is not a name', { fields: 'paid-amount' }, '"paid-amount" is not a field'],
       ['a pointer that is not one', { fields: 'a=payment' }, 'is not a JSON pointer'],
       ['a header that changes where the request goes', { header: 'Host' }, '--header "Host"'],
+      [
+        'a header the add-on refuses, Content-Type',
+        { header: 'Content-Type' },
+        '--header "Content-Type"',
+      ],
+      ['a header with a character the add-on refuses', { header: 'X_Key' }, '--header "X_Key"'],
+      ['a path longer than the add-on reads', { path: `/${'a'.repeat(260)}/{key}` }, 'at most 256'],
       ["a timeout past the add-on's", { timeout: 60000 }, '--timeout 60000'],
       [
         'a credential header with no credential',

@@ -55,7 +55,17 @@ export default async function appDependencyGenerator(tree: Tree, options: AppDep
   const xml = tree.read(file, 'utf-8');
   if (xml === null) throw new Error(`${pkg.root} has no ${file}.`);
   const markup = markupOnly(xml);
-  const entries = [...markup.matchAll(/<package>([^<]*)<\/package>/g)];
+  // Only the dependencies: a <conflicts> or <provides> entry of the same name is not one.
+  const opened = /<dependencies(?=[ \t\r\n>])[^>]*>/.exec(markup);
+  const closed = opened === null ? -1 : markup.indexOf('</dependencies>', opened.index);
+  const within =
+    opened === null || closed < 0 ? [] : ([opened.index + opened[0].length, closed] as const);
+  const entries =
+    within.length === 0
+      ? []
+      : [...markup.slice(within[0], within[1]).matchAll(/<package>([^<]*)<\/package>/g)].map(
+          (match) => Object.assign(match, { index: (match.index ?? 0) + within[0] }),
+        );
   const found = entries.find(([, text]) => text.trim().split(':')[0] === name);
   const entry = `<package>${name}:${options.version}</package>`;
   let written = xml;

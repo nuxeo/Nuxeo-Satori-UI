@@ -375,9 +375,10 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   `kit-lists.spec.ts`, in `libs/shared/app-definition`, fails a kit missing from either.
 - **Every write compares the kit's names with the other kits',** in the folder the package is in,
   as the release candidate's stage 3 does: the package's name, the app's id and address, its
-  queues, its actions, what its components register, its connectors and its own label keys. A
-  clash is a finding `[clash]` naming the other kit. Give the name another value; never change
-  the other kit.
+  queues, its actions, what its components register, its connectors, and a label key both have
+  that is begun with one of the two apps' names. A clash is a finding `[clash]` naming the other
+  kit. Give the name another value, a key begun with this app's own name; never change the other
+  kit.
 - **A connector the kit does not contribute** is the server's: an `external` card naming one is
   held to its form only, unless the pipeline is given what the server registers,
   `--registered <file>` (`{ "connectors": { "<id>": ["<field>", ...] } }`), as the connectors

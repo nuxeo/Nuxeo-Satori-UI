@@ -39,7 +39,11 @@ export const CONNECTORS = 'connectors';
 const TARGET = 'org.nuxeo.agentic.connectors';
 const POINT = 'connectors';
 
-/** The add-on's rules for what a contribution names (nuxeo-agentic-connectors/README.md). */
+/**
+ * The add-on's rules for what a contribution names, as `Connector.of` holds them
+ * (nuxeo-agentic-connectors/src/main/java/org/nuxeo/agentic/connectors/Connector.java): it leaves
+ * out a connector that breaks one. The package pipeline holds a kit's connectors to the same.
+ */
 const ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
 /** An id may not end so: the server's own settings for a connector are named there. */
 const RESERVED_END = /\.(?:http|cache|events)$/;
@@ -47,10 +51,25 @@ const FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 /** A JSON pointer into the other system's answer, `/policy/status`. */
 const POINTER = /^(?:\/(?:[^~/]|~[01])*)+$/;
 const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
-const PERMISSION = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-/** A header that would change where the request goes, which the add-on refuses. */
-const ROUTING_HEADER = /^(?:host|cookie|proxy-.*)$/i;
-const HEADER = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/;
+const PERMISSION = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const HEADER = /^[A-Za-z0-9-]{1,64}$/;
+/** Headers the credential may not go in: Java's client refuses them, or they change the request. */
+const FORBIDDEN_HEADERS = new Set([
+  'connection',
+  'content-length',
+  'expect',
+  'host',
+  'upgrade',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'keep-alive',
+  'proxy-authorization',
+  'proxy-connection',
+  'accept',
+  'cookie',
+  'content-type',
+]);
 const MAX_TYPES = 20;
 const MAX_FIELDS = 50;
 
@@ -67,6 +86,7 @@ const LIMITS = {
  * `.`, `_`, `~` and `-`, no empty, `.` or `..` segment, and no query (the add-on's rule).
  */
 function pathProblem(path: string): string | null {
+  if (path.length > 256) return 'is at most 256 characters';
   if (!path.startsWith('/')) return 'starts with /';
   if (path.split('{key}').length !== 2) return 'holds {key} once';
   if (
@@ -271,9 +291,13 @@ read: take the card out, or write it with another connector.
   const prefix = options.prefix ?? 'Bearer ';
   if (!credential && (options.header ?? options.prefix) !== undefined)
     throw new Error('--header and --prefix describe the credential: not with --credential=false.');
-  if (!HEADER.test(header) || ROUTING_HEADER.test(header))
+  if (
+    !HEADER.test(header) ||
+    FORBIDDEN_HEADERS.has(header.toLowerCase()) ||
+    header.toLowerCase().startsWith('proxy-')
+  )
     throw new Error(
-      `--header "${header}" is not a header the credential may go in: a header's name, and not Host, Cookie or Proxy-*, which change where the request goes.`,
+      `--header "${header}" is not a header the credential may go in: letters, digits and "-", such as Authorization or X-Api-Key, and not one that changes where or how the request goes (${[...FORBIDDEN_HEADERS].join(', ')}, proxy-*).`,
     );
   if (prefix.length > 32 || !/^[\x20-\x7e]*$/.test(prefix))
     throw new Error('--prefix is at most 32 printable characters, such as "Bearer ".');

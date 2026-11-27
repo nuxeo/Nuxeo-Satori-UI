@@ -43,8 +43,12 @@ describe('call.ts', () => {
     expect(call(['validate_package', 'not json']).status).toBe(2);
     expect(call(['validate_package', '[1]']).status).toBe(2);
     const unknown = call(['no_such_tool']);
-    expect(unknown.status).not.toBe(0);
-    expect(`${unknown.stdout}${unknown.stderr}`).toContain('no_such_tool');
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain('no_such_tool');
+    // Arguments the tool does not take: the server's refusal, exit 1, and no usage text.
+    const wrong = call(['validate_package', '{ "package": 3 }']);
+    expect(wrong.status).toBe(1);
+    expect(wrong.stderr).not.toContain('usage:');
   });
 
   it.skipIf(!PIPELINE_TESTS_RUN)('validates a kit, its arguments read from standard input', () => {

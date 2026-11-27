@@ -14,8 +14,9 @@
  * opens the session, calls the one tool, prints its answer to stdout, its JSON indented, and
  * stops the server. `-` reads the arguments from standard input, for a layout's whole content.
  *
- * Exit codes: 0, the tool answered; 1, it answered with an error, printed to stderr; 2, the
- * command was wrong, or the server did not answer.
+ * Exit codes: 0, the tool answered; 1, it answered with an error, or the server refused the call,
+ * such as for arguments the tool does not take, printed to stderr; 2, the command was wrong, or
+ * the server did not answer.
  */
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -62,7 +63,14 @@ child.stdout.on('data', (chunk: Buffer) => {
     const line = buffer.slice(0, at).trim();
     buffer = buffer.slice(at + 1);
     if (line === '') continue;
-    const message = JSON.parse(line) as Record<string, unknown>;
+    let message: Record<string, unknown>;
+    try {
+      message = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      // Not the protocol's: stdout is the protocol's only, so this is a server fault, said below.
+      stderr += `The server wrote a line that is not JSON-RPC.\n`;
+      continue;
+    }
     if (typeof message['id'] === 'number') pending.get(message['id'])?.(message);
   }
 });
@@ -109,7 +117,11 @@ const answer =
 pending.clear();
 clearTimeout(timer);
 stop();
-if (answer['error']) usage(`${tool}: ${(answer['error'] as { message: string }).message}`);
+// A tool's call the server refused, its arguments for one, is the tool's error: exit 1.
+if (answer['error']) {
+  process.stderr.write(`${tool}: ${(answer['error'] as { message: string }).message}\n`);
+  process.exit(tool === '--list' ? 2 : 1);
+}
 const result = answer['result'] as {
   tools?: { name: string; title?: string }[];
   isError?: boolean;

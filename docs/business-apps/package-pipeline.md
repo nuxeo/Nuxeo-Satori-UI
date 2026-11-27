@@ -195,19 +195,27 @@ or a related list's parameter names must be one of the type's or of a facet it d
 field must (`layout-model.ts`). A banner whose rule names a property the type lacks would never
 show, and the P&C kit's late-report banner, on `pclaim:reportedDate`, passed the pipeline before.
 A finding names the place and what reads it. Not looked for: the server's own `ecm:` properties,
-a task form's `var:` variables, and what a table's or a related list's column computes or gives a
-widget, which may be the row's; a column's `visibleWhen`, which is the open record's, is.
+a task form's `var:` variables, a property a facet of the model brings that the type does not
+declare, which a record given that facet at run time has, as a rule guarded by
+`app.rules.hasFacet` reads it, and what a table's or a related list's column computes or gives a
+widget, which may be the row's; a column's `visibleWhen`, which is the open record's, is. The
+command line, and so the pipeline, asks for this check; the server's validator does not, since it
+holds every live deployment layer to the model again on each rebuild and drops one it refuses for
+the package's own file, which a check added after the layer was written must not do.
 
 Step 2 reads the connectors the kit contributes itself: each `<connector>` of a component in
 `connectors/`, beside the bundle, which `app-connector` writes as
 `connectors/<package>-connectors-config.xml`. No zip carries it: it requires
 `org.nuxeo.agentic.connectors`, which has no Marketplace package yet, so a bundle carrying it would
 leave it pending on a server without the add-on, and a server with the add-on takes it in
-`nxserver/config/`. Each connector is held to the add-on's rules (`nuxeo-agentic-connectors`'s
-README, "The contribution"): an id of its form, once; its address only as a server property of its
-own, `nuxeo.agentic.connectors.<id>.<name>`, and no address anywhere in it; a credential, if any,
-named by a property of its own or an environment variable `NUXEO_CONNECTOR_<ID>_<NAME>`, never
-written; 1 to 20 types and 1 to 50 fields of the add-on's form; and a key, `<prefix>:<name>`. Given
+`nxserver/config/`. Each connector is held to the add-on's rules, as `Connector.of` in
+`nuxeo-agentic-connectors` holds them: an id of its form, once; its address only as a server
+property of its own, `nuxeo.agentic.connectors.<id>.<name>`, one name after its prefix, and no
+address anywhere in it; a path of the add-on's form; a permission's name; a credential, if any, in
+a header the add-on takes, named by a property of its own or an environment variable
+`NUXEO_CONNECTOR_<ID>_<NAME>`, `<NAME>` in capitals and digits, never written; its timeouts and
+limits within the add-on's bounds; 1 to 20 types and 1 to 50 fields of the add-on's form, each
+pointer from `/`; and a key, `<prefix>:<name>`. Given
 a content model, each type is in it and the key is a property of each, one value. Then each
 `external` card of a layout that names one of these connectors is held to it, as `--registered`
 holds a card to a server's: the layout's type is one the connector reads, and each field is one it
@@ -225,12 +233,14 @@ with the others there, as CI builds it, and a package anywhere else with none. W
 read by `readKitFolder` in `release-candidate-set.mjs`: the package's name; the app's id and
 address; each queue and each action; what its components register, the layouts by type and mode,
 the document types, schemas, facets, page providers and the rest stage 3 knows; its connectors
-(below); and its own label keys, every key of its labels files but the platform's catalogue's
-and the `layout.` keys every app may give a text. A label key is not a clash on a server, where
-each app reads its own, and is refused all the same: a kit's own key is begun with its app's name
-(app-definition-v2.md, section 7), and another kit's is most often a copied kit's. Each clash is a
-finding, `<file>: <kind> "<name>": <kit> contributes it too [clash]`. A kit folder that cannot be
-read is not compared, and a note names it. The write tools give `--kits` the folder the package
+(below); and a label key both kits have that is begun with the app's name of one of them, which
+makes it that app's own (app-definition-v2.md, section 7). A label key is not a clash on a server,
+where each app reads its own, and is refused all the same: another kit that has an app's own key is
+most often a copied one. A key begun with neither kit's name, such as one the platform reads by a
+pattern, `document-layouts.timeline.event.<id>`, and the platform's own keys, the catalogue's and
+the `layout.` ones, are not compared. Each clash is a finding,
+`<file>: <kind> "<name>": <kit> contributes it too [clash]`. A kit folder that holds a link, or
+that cannot be read, is not compared, and a note names it, by the kind of error only. The write tools give `--kits` the folder the package
 is in, so a staging copy is compared as the package itself would be.
 
 Step 2 holds the app the component contributes to the same files. The package contributes its app

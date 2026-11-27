@@ -39,6 +39,25 @@ describe('app-dependency generator', () => {
     expect(read(tree)).toBe(before);
   });
 
+  it('reads only the dependencies: a conflict of the same name is left as it is', async () => {
+    tree.write(
+      DESCRIPTOR,
+      read(tree).replace(
+        '  </dependencies>\n',
+        '  </dependencies>\n  <conflicts>\n    <package>nuxeo-agentic-signature</package>\n  </conflicts>\n',
+      ),
+    );
+    await generate({ version: '0.1.0' });
+    expect(read(tree)).toContain(
+      '    <package>nuxeo-agentic-signature:0.1.0</package>\n  </dependencies>',
+    );
+    expect(read(tree)).toContain('<conflicts>\n    <package>nuxeo-agentic-signature</package>\n');
+    await generate({ remove: true });
+    expect(read(tree)).toContain('<conflicts>\n    <package>nuxeo-agentic-signature</package>\n');
+    expect(read(tree)).not.toContain('nuxeo-agentic-signature:0.1.0');
+    await expect(generate({ remove: true })).rejects.toThrow('has no dependency on');
+  });
+
   const refusals: [string, Partial<AppDependencySchema>, string][] = [
     [
       'a name that is not a package',
