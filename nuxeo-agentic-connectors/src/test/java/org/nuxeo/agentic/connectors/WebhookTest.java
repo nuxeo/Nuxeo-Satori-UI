@@ -151,4 +151,18 @@ class WebhookTest {
         d.fields.add(field(name, xpath));
         return d;
     }
+
+    /** A contribution that breaks a rule, with the id of one registered, removes it: it fails closed. */
+    @Test
+    void aBrokenContributionRemovesTheWebhookItWouldHaveReplaced() {
+        WebhookComponent component = new WebhookComponent();
+        component.register(descriptor(), "the first");
+        assertNotNull(component.getWebhook("payers.claimUpdates"));
+        WebhookDescriptor broken = descriptor();
+        broken.fields.add(field("content", "file:content"));
+        component.register(broken, "a mistaken second");
+        assertNull(component.getWebhook("payers.claimUpdates"));
+        component.register(descriptor(), "a mended third");
+        assertNotNull(component.getWebhook("payers.claimUpdates"));
+    }
 }

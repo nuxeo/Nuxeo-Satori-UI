@@ -18,16 +18,18 @@ import org.nuxeo.runtime.kv.KeyValueStoreProvider;
  * restart and are shared by the cluster's nodes.
  *
  * <ul>
- * <li>{@code p:<id>}: in flight, pending or being sent, with its payload, for
- * {@link #IN_FLIGHT}.</li>
- * <li>{@code x:<id>}: a dead letter, with its payload, so that it can be sent again, for
- * {@link #DEAD}.</li>
- * <li>{@code d:<id>}: delivered, without its payload, for {@link #DELIVERED}, so that an
- * administrator sees the recent ones.</li>
+ * <li>{@code p:<id>}: in flight, pending or being sent, for {@link #IN_FLIGHT};</li>
+ * <li>{@code x:<id>}: a dead letter, for {@link #DEAD};</li>
+ * <li>{@code d:<id>}: delivered, for {@link #DELIVERED}, so that an administrator sees the recent
+ * ones;</li>
+ * <li>{@code b:<id>}: the payload, apart from the record, kept while the delivery is in flight and
+ * while it is a dead letter, and dropped once it is delivered. The records, which every node reads
+ * to find the due deliveries and an administrator reads in the list, never hold one.</li>
  * </ul>
  *
- * A delivery is claimed before each attempt by a compare-and-set of its in-flight record, so that
- * two nodes, or a retry and a resend, never send one attempt twice.
+ * Each move is a compare-and-set of the in-flight record as its owner last wrote it: an attempt is
+ * claimed so, and a delivery leaves flight so, delivered or a dead letter. A node whose claim was
+ * taken over, after {@link WebhookComponent#CLAIM_TIMEOUT}, changes nothing when it finishes.
  */
 final class WebhookDeliveries {
 
@@ -39,6 +41,8 @@ final class WebhookDeliveries {
 
     static final String DELIVERED_PREFIX = "d:";
 
+    static final String PAYLOAD_PREFIX = "b:";
+
     static final Duration IN_FLIGHT = Duration.ofDays(7);
 
     static final Duration DEAD = Duration.ofDays(30);
@@ -47,6 +51,10 @@ final class WebhookDeliveries {
 
     /** An in-flight record as read, so that the next write can be made only if it has not changed since. */
     record Stored(String json, WebhookDelivery delivery) {
+
+        static Stored of(WebhookDelivery delivery) {
+            return new Stored(delivery.toJson(), delivery);
+        }
     }
 
     private final Supplier<KeyValueStore> store;
@@ -55,8 +63,11 @@ final class WebhookDeliveries {
         this.store = store;
     }
 
-    void add(WebhookDelivery delivery) {
-        store.get().put(IN_FLIGHT_PREFIX + delivery.id(), delivery.toJson(), IN_FLIGHT.toSeconds());
+    /** A new delivery in flight, and its payload. */
+    void add(WebhookDelivery delivery, String payload) {
+        KeyValueStore kv = store.get();
+        kv.put(PAYLOAD_PREFIX + delivery.id(), payload, IN_FLIGHT.toSeconds());
+        kv.put(IN_FLIGHT_PREFIX + delivery.id(), delivery.toJson(), IN_FLIGHT.toSeconds());
     }
 
     Stored inFlight(String id) {
@@ -65,26 +76,50 @@ final class WebhookDeliveries {
         return delivery == null ? null : new Stored(json, delivery);
     }
 
+    /** The payload kept for a delivery, or {@code null}. */
+    String payload(String id) {
+        return store.get().getString(PAYLOAD_PREFIX + id);
+    }
+
     /** {@code next} in place of {@code was}, only if no one changed it since it was read. */
     boolean replace(Stored was, WebhookDelivery next) {
         return store.get()
                     .compareAndSet(IN_FLIGHT_PREFIX + next.id(), was.json(), next.toJson(), IN_FLIGHT.toSeconds());
     }
 
-    /** Delivered: kept without its payload, and no longer in flight. */
-    void delivered(WebhookDelivery delivery) {
+    /**
+     * Delivered: out of flight, if it is still as {@code mine} left it, then kept without its payload.
+     * {@code false}, and nothing written, when another node took it over.
+     */
+    boolean delivered(Stored mine, WebhookDelivery done) {
         KeyValueStore kv = store.get();
-        kv.put(DELIVERED_PREFIX + delivery.id(), delivery.with(delivery.state(), delivery.attempts(),
-                delivery.updated(), delivery.nextAt(), delivery.outcome(), delivery.status(), null).toJson(),
-                DELIVERED.toSeconds());
-        kv.put(IN_FLIGHT_PREFIX + delivery.id(), (String) null);
+        if (!kv.compareAndSet(IN_FLIGHT_PREFIX + done.id(), mine.json(), (String) null)) {
+            return false;
+        }
+        kv.put(DELIVERED_PREFIX + done.id(), done.with(done.state(), done.attempts(), done.updated(), done.nextAt(),
+                done.outcome(), done.status(), false).toJson(), DELIVERED.toSeconds());
+        kv.put(PAYLOAD_PREFIX + done.id(), (String) null);
+        return true;
     }
 
-    /** A dead letter, with its payload, and no longer in flight. */
-    void dead(WebhookDelivery delivery) {
+    /**
+     * A dead letter: out of flight, if it is still as {@code mine} left it, then kept, its payload with
+     * it for as long. {@code false}, and nothing written, when another node took it over.
+     */
+    boolean dead(Stored mine, WebhookDelivery dead) {
         KeyValueStore kv = store.get();
-        kv.put(DEAD_PREFIX + delivery.id(), delivery.toJson(), DEAD.toSeconds());
-        kv.put(IN_FLIGHT_PREFIX + delivery.id(), (String) null);
+        if (!kv.compareAndSet(IN_FLIGHT_PREFIX + dead.id(), mine.json(), (String) null)) {
+            return false;
+        }
+        boolean kept = kv.setTTL(PAYLOAD_PREFIX + dead.id(), DEAD.toSeconds());
+        kv.put(DEAD_PREFIX + dead.id(), dead.with(dead.state(), dead.attempts(), dead.updated(), dead.nextAt(),
+                dead.outcome(), dead.status(), kept).toJson(), DEAD.toSeconds());
+        return true;
+    }
+
+    /** A dead letter that never was in flight: a payload too large to send, kept without it. */
+    void deadAtOnce(WebhookDelivery dead) {
+        store.get().put(DEAD_PREFIX + dead.id(), dead.toJson(), DEAD.toSeconds());
     }
 
     WebhookDelivery deadLetter(String id) {
@@ -92,8 +127,8 @@ final class WebhookDeliveries {
     }
 
     /**
-     * A dead letter sent again: in flight once more, and no longer a dead letter. {@code false} when
-     * it is already in flight, by another resend.
+     * A dead letter sent again: in flight once more, its payload kept as long, and no longer a dead
+     * letter. {@code false} when it is already in flight, by another resend.
      */
     boolean revive(WebhookDelivery dead, WebhookDelivery pending) {
         KeyValueStore kv = store.get();
@@ -101,6 +136,7 @@ final class WebhookDeliveries {
                 IN_FLIGHT.toSeconds())) {
             return false;
         }
+        kv.setTTL(PAYLOAD_PREFIX + pending.id(), IN_FLIGHT.toSeconds());
         kv.put(DEAD_PREFIX + dead.id(), (String) null);
         return true;
     }

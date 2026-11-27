@@ -13,9 +13,11 @@ import java.net.InetAddress;
  * <li><b>Private and loopback</b> ({@code 10/8}, {@code 172.16/12}, {@code 192.168/16}, the shared
  * {@code 100.64/10}, {@code 127/8}, {@code fc00::/7}, the old site-local {@code fec0::/10},
  * {@code ::1}): only where the server sets the webhook's {@link Webhook#privateAllowedProperty}.</li>
- * <li><b>Never:</b> link-local ({@code 169.254/16}, {@code fe80::/10}, where cloud metadata services
- * answer), unspecified ({@code 0.0.0.0}, {@code ::}), multicast and broadcast, and the reserved and
- * documentation ranges, which no receiver should be on.</li>
+ * <li><b>Never:</b> link-local ({@code 169.254/16}, {@code fe80::/10}, where most cloud metadata
+ * services answer), the metadata services that answer elsewhere ({@code 100.100.100.200}, inside the
+ * shared {@code 100.64/10}, and {@code fd00:ec2::254}, inside {@code fc00::/7}), unspecified
+ * ({@code 0.0.0.0}, {@code ::}), multicast and broadcast, and the reserved and documentation ranges,
+ * which no receiver should be on.</li>
  * </ul>
  *
  * An IPv6 address that carries an IPv4 one, mapped ({@code ::ffff:a.b.c.d}), compatible
@@ -26,7 +28,7 @@ final class WebhookAddresses {
 
     /** What an address is, for the decision and the log. */
     enum Kind {
-        PUBLIC, PRIVATE, LOOPBACK, LINK_LOCAL, UNSPECIFIED, MULTICAST, RESERVED;
+        PUBLIC, PRIVATE, LOOPBACK, LINK_LOCAL, METADATA, UNSPECIFIED, MULTICAST, RESERVED;
 
         /** The name in the log and the audit. */
         String label() {
@@ -65,6 +67,10 @@ final class WebhookAddresses {
         }
         if (b0 == 10) {
             return Kind.PRIVATE;
+        }
+        if (b0 == 100 && b1 == 100 && b2 == 100 && (a[3] & 0xff) == 200) {
+            // A cloud's metadata service, inside the shared range below.
+            return Kind.METADATA;
         }
         if (b0 == 100 && b1 >= 64 && b1 <= 127) {
             return Kind.PRIVATE;
@@ -133,7 +139,10 @@ final class WebhookAddresses {
             return Kind.PRIVATE;
         }
         if ((a[0] & 0xfe) == 0xfc) {
-            return Kind.PRIVATE;
+            // fd00:ec2::254, a cloud's metadata service, inside the unique local range.
+            boolean metadata = w0 == 0xfd00 && w1 == 0x0ec2 && allZero(a, 4, 14) && (a[14] & 0xff) == 0x02
+                    && (a[15] & 0xff) == 0x54;
+            return metadata ? Kind.METADATA : Kind.PRIVATE;
         }
         // 100::/64, discard-only; and anything outside 2000::/3, the global unicast space.
         if (w0 == 0x0100 && w1 == 0 && allZero(a, 4, 8) || (a[0] & 0xe0) != 0x20) {

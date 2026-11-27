@@ -41,6 +41,7 @@ class WebhookPayloadTest {
         date.setTimeInMillis(1_795_694_400_000L);
         assertEquals("\"2026-11-26T12:00:00Z\"", WebhookPayload.value(date).toString());
         assertEquals("[\"water\",\"kitchen\"]", WebhookPayload.value(new String[] { "water", "kitchen" }).toString());
+        assertEquals("[\"water\",null]", WebhookPayload.value(new String[] { "water", null }).toString());
         assertEquals("[1,null,2]", WebhookPayload.value(java.util.Arrays.asList(1L, null, 2L)).toString());
     }
 

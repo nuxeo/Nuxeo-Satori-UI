@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
@@ -93,7 +94,7 @@ final class WebhookPayload {
             return NODES.nullNode();
         }
         if (value instanceof Object[] array) {
-            return list(List.of(array));
+            return list(Arrays.asList(array));
         }
         if (value instanceof Collection<?> collection) {
             return list(collection);

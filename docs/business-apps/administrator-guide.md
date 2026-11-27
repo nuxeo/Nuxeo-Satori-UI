@@ -457,7 +457,8 @@ sets its address and credential ([connectors README](../../nuxeo-agentic-connect
   or `dead`, lists the most recent, never their payloads; `Webhook.Resend`, with a dead letter's
   `delivery` id, sends it again from its first attempt, to the address the server sets then. Both
   are an administrator's only, and anyone else is refused with 403. Each attempt's outcome, and
-  each resend, is in the audit, category `agenticWebhooks`.
+  each resend, is written to the audit, category `agenticWebhooks`; the tests record what the
+  add-on gives the audit, and writing it on a server is not checked yet.
 - **Decision D is open, and the connectors' security review is pending.**
 
 ### The rights policy

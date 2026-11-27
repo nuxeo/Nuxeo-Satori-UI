@@ -188,7 +188,7 @@ class WebhookSenderTest {
         for (String address : new String[] { null, "", "hooks.example.com/in", "ftp://hooks.example.com/in",
                 "https://user@hooks.example.com/in", "https://hooks.example.com/in?token=x",
                 "https://hooks.example.com/in#part", "https:hooks.example.com", "https://hooks_example.com/in",
-                "https://[fe80::1%25en0]/in", "https://hooks.example.com:0/in", "https:///in", "https://hooks.example.com/in\r\nX: y" }) {
+                "https://[fe80::1%25en0]/in", "https://hooks.example.com:0/in", "https:///in", "https://hooks.example.com./in", "https://hooks.example.com/in\r\nX: y" }) {
             assertNull(WebhookSender.target(address, true), String.valueOf(address));
         }
     }
@@ -406,6 +406,66 @@ class WebhookSenderTest {
             server.stop(0);
             Files.deleteIfExists(store);
             Files.deleteIfExists(dir);
+        }
+    }
+
+    /**
+     * A receiver that answers the handshake with a TLS record it trickles a byte at a time: each read
+     * returns within its timeout, so only the attempt's own deadline, which closes the socket, ends it.
+     */
+    @Test
+    // Preemptive: a socket read does not end on an interrupt, so without the deadline this test would
+    // wait as long as the trickle lasts.
+    @org.junit.jupiter.api.Timeout(value = 10, threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    void theDeadlineHoldsThroughATlsRecordTrickledAByteAtATime() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 5, InetAddress.getLoopbackAddress())) {
+            Thread trickle = new Thread(() -> {
+                try (Socket socket = server.accept()) {
+                    socket.getInputStream().read(new byte[4096]);
+                    OutputStream out = socket.getOutputStream();
+                    // A handshake record of 16 KiB, announced, then sent a byte every 100 ms.
+                    out.write(new byte[] { 0x16, 0x03, 0x03, 0x40, 0x00 });
+                    for (int i = 0; i < 16_384; i++) {
+                        out.write(0x02);
+                        out.flush();
+                        Thread.sleep(100);
+                    }
+                } catch (IOException | InterruptedException e) {
+                    // The sender closed it at its deadline.
+                }
+            });
+            trickle.setDaemon(true);
+            trickle.start();
+            WebhookSender sender = new WebhookSender(host -> new InetAddress[] { InetAddress.getByName("127.0.0.1") },
+                    javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory());
+            long started = System.nanoTime();
+            Result result = sender.send(WebhookSender.target("https://receiver.example.test:" + server.getLocalPort()
+                    + "/in", false), true, HEADERS, BODY, CONNECT, Duration.ofMillis(800));
+            long took = Duration.ofNanos(System.nanoTime() - started).toMillis();
+            assertEquals(new Result(Outcome.TIMEOUT, 0, "deadline"), result);
+            assertTrue(took < 3_000, took + " ms");
+        }
+    }
+
+    /** A receiver, or what is in front of it, that closes the connection during the handshake: tried again. */
+    @Test
+    void aConnectionClosedDuringTheHandshakeIsUnreachableAndTriedAgain() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 5, InetAddress.getLoopbackAddress())) {
+            Thread closer = new Thread(() -> {
+                try (Socket socket = server.accept()) {
+                    socket.getInputStream().read(new byte[16]);
+                } catch (IOException e) {
+                    // Closed.
+                }
+            });
+            closer.setDaemon(true);
+            closer.start();
+            WebhookSender sender = new WebhookSender(host -> new InetAddress[] { InetAddress.getByName("127.0.0.1") },
+                    javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory());
+            Result result = sender.send(WebhookSender.target("https://receiver.example.test:" + server.getLocalPort()
+                    + "/in", false), true, HEADERS, BODY, CONNECT, TIMEOUT);
+            assertEquals(Outcome.UNREACHABLE, result.outcome(), result.toString());
+            assertTrue(result.outcome().retried);
         }
     }
 }

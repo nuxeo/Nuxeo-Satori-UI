@@ -313,6 +313,132 @@ public class WebhookRuntimeTest {
         assertEquals(2, Hooks.deliveries("delivered").get(0).get("attempts").asInt());
     }
 
+    /** The in-flight record of the one delivery in flight, as the store keeps it. */
+    private static WebhookDelivery inFlight() {
+        List<ObjectNode> pending = Hooks.deliveries("pending");
+        assertEquals(1, pending.size());
+        return WebhookDelivery.fromJson(Hooks.store().getString(WebhookDeliveries.IN_FLIGHT_PREFIX
+                + pending.get(0).get("id").asText()));
+    }
+
+    /** The delivery made to look claimed by a node that stopped, three minutes ago, after this many attempts. */
+    private void claimedByANodeThatStopped(WebhookDelivery delivery, int attempts) {
+        long then = hooks.clock.millis() - Duration.ofMinutes(3).toMillis();
+        Hooks.store().put(WebhookDeliveries.IN_FLIGHT_PREFIX + delivery.id(),
+                delivery.with(WebhookDelivery.State.SENDING, attempts, then, delivery.nextAt(), delivery.outcome(),
+                        delivery.status(), delivery.kept()).toJson());
+    }
+
+    /**
+     * A claim its node never finished is taken again after two minutes, as the next attempt; and,
+     * when that was its last attempt, it is not made again: the delivery is a dead letter, and
+     * nothing is sent.
+     */
+    @Test
+    public void aClaimItsNodeNeverFinishedIsTakenAgainOrDeadLetteredAfterItsLastAttempt() throws Exception {
+        hooks.receiver.answer(Hooks.PATH, Answer.json("{}").status(503));
+        Hooks.claim(session, "claim-l1", "CLAIM-000144");
+        commit();
+        WebhookDelivery first = inFlight();
+        claimedByANodeThatStopped(first, 2);
+        hooks.receiver.answer(Hooks.PATH, Answer.json("").status(204));
+        // Not before two minutes: claimed three minutes ago, by the clock of the test, so due now.
+        assertEquals(1, hooks.retry());
+        assertEquals(2, hooks.posts().size());
+        ObjectNode delivered = Hooks.deliveries("delivered").get(0);
+        assertEquals(first.id(), delivered.get("id").asText());
+        assertEquals(3, delivered.get("attempts").asInt());
+
+        hooks.receiver.answer(Hooks.PATH, Answer.json("{}").status(503));
+        Hooks.claim(session, "claim-l2", "CLAIM-000145");
+        commit();
+        assertEquals(3, hooks.posts().size());
+        claimedByANodeThatStopped(inFlight(), 3);
+        assertEquals(1, hooks.retry());
+        assertEquals("its last attempt is not made again", 3, hooks.posts().size());
+        ObjectNode letter = Hooks.deliveries("dead").get(0);
+        assertEquals("timeout", letter.get("outcome").asText());
+        assertEquals(3, letter.get("attempts").asInt());
+        assertTrue(letter.get("resendable").asBoolean());
+        String entry = hooks.audit.entries.get(hooks.audit.entries.size() - 1);
+        assertTrue(entry, entry.startsWith(WebhookAudit.DEAD_LETTERED + " ") && entry.contains("reason=claim-expired"));
+    }
+
+    /**
+     * A node slow to finish is taken over: both attempts reach the receiver, the delivery is
+     * delivered once in the store, by the node that took it over, and the slow node's outcome is
+     * audited and changes nothing.
+     */
+    @Test
+    public void aSlowNodesOutcomeChangesNothingOnceItsClaimIsTakenOver() throws Exception {
+        hooks.receiver.answer(Hooks.PATH, Answer.json("{}").status(503));
+        Hooks.claim(session, "claim-m", "CLAIM-000146");
+        commit();
+        String id = inFlight().id();
+        hooks.receiver.answer(Hooks.PATH, Answer.json("").status(204).delay(1_500));
+        hooks.clock.advance(Duration.ofSeconds(30));
+
+        java.util.concurrent.ExecutorService nodes = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.Future<?> slow = nodes.submit(() -> Hooks.component().deliver(id));
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (hooks.posts().size() < 2 && inFlight().state() != WebhookDelivery.State.SENDING
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
+        Thread.sleep(200);
+        hooks.clock.advance(Duration.ofMinutes(3));
+        java.util.concurrent.Future<?> other = nodes.submit(() -> Hooks.component().deliver(id));
+        slow.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        other.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        nodes.shutdown();
+
+        assertEquals("the first attempt, the slow node's, the other node's", 3, hooks.posts().size());
+        assertEquals(List.of(), Hooks.deliveries("pending"));
+        assertEquals(List.of(), Hooks.deliveries("dead"));
+        List<ObjectNode> delivered = Hooks.deliveries("delivered");
+        assertEquals(1, delivered.size());
+        assertEquals(3, delivered.get(0).get("attempts").asInt());
+        assertEquals(1, hooks.audit.entries.stream().filter(e -> e.contains("reason=superseded")).count());
+        assertEquals(2, hooks.audit.events().stream().filter(WebhookAudit.DELIVERED::equals).count());
+    }
+
+    /** Anything an attempt throws is its outcome: retried, then a dead letter, never claimed for ever. */
+    @Test
+    public void anAttemptThatThrowsIsAFailureRetriedThenADeadLetter() throws Exception {
+        Hooks.component().sender(new WebhookSender(host -> {
+            throw new IllegalStateException("not an address, for the test");
+        }, javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory()));
+        Hooks.claim(session, "claim-n", "CLAIM-000147");
+        commit();
+        hooks.clock.advance(Duration.ofHours(1));
+        hooks.retry();
+        hooks.clock.advance(Duration.ofHours(1));
+        hooks.retry();
+        assertEquals(List.of(), Hooks.deliveries("pending"));
+        ObjectNode letter = Hooks.deliveries("dead").get(0);
+        assertEquals("failed", letter.get("outcome").asText());
+        assertEquals(3, letter.get("attempts").asInt());
+        assertTrue(hooks.audit.entries.get(2), hooks.audit.entries.get(2).contains("reason=IllegalStateException"));
+        assertEquals(List.of(), hooks.receiver.received);
+    }
+
+    /**
+     * A webhook whose secret is the events secret of the connector with its id sends nothing: one
+     * scheme over one id, a delivery could otherwise be replayed to that connector's change events.
+     */
+    @Test
+    public void aSecretSharedWithTheConnectorOfTheSameIdSendsNothing() throws Exception {
+        hooks.set(Connector.PROPERTY_PREFIX + Hooks.WEBHOOK + ".events.secret", hooks.secret);
+        Hooks.claim(session, "claim-o", "CLAIM-000148");
+        commit();
+        assertEquals(List.of(), hooks.receiver.received);
+        assertEquals(List.of(), Hooks.deliveries(null));
+        Hooks.unset(Connector.PROPERTY_PREFIX + Hooks.WEBHOOK + ".events.secret");
+        Hooks.claim(session, "claim-o2", "CLAIM-000149");
+        commit();
+        assertEquals(1, hooks.posts().size());
+    }
+
     @Test
     public void anAnswerNoRetryWouldChangeIsADeadLetterAtOnce() throws Exception {
         hooks.receiver.answer(Hooks.PATH, Answer.json("{}").status(400));

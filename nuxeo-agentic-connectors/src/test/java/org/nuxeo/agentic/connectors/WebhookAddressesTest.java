@@ -53,7 +53,11 @@ class WebhookAddressesTest {
         expected.put("::", Kind.UNSPECIFIED);
         expected.put("fe80::1", Kind.LINK_LOCAL);
         expected.put("febf::1", Kind.LINK_LOCAL);
-        expected.put("fd00:ec2::254", Kind.PRIVATE);
+        expected.put("fd00:ec2::254", Kind.METADATA);
+        expected.put("fd00:ec2::253", Kind.PRIVATE);
+        expected.put("100.100.100.200", Kind.METADATA);
+        expected.put("100.100.100.201", Kind.PRIVATE);
+        expected.put("::ffff:100.100.100.200", Kind.METADATA);
         expected.put("fc00::1", Kind.PRIVATE);
         expected.put("fec0::1", Kind.PRIVATE);
         expected.put("ff02::1", Kind.MULTICAST);
@@ -85,7 +89,8 @@ class WebhookAddressesTest {
         assertFalse(WebhookAddresses.allowed(Kind.LOOPBACK, false));
         assertTrue(WebhookAddresses.allowed(Kind.PRIVATE, true));
         assertTrue(WebhookAddresses.allowed(Kind.LOOPBACK, true));
-        for (Kind never : new Kind[] { Kind.LINK_LOCAL, Kind.UNSPECIFIED, Kind.MULTICAST, Kind.RESERVED }) {
+        for (Kind never : new Kind[] { Kind.LINK_LOCAL, Kind.METADATA, Kind.UNSPECIFIED, Kind.MULTICAST,
+                Kind.RESERVED }) {
             assertFalse(WebhookAddresses.allowed(never, true), never.name());
             assertFalse(WebhookAddresses.allowed(never, false), never.name());
         }

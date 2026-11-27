@@ -3,6 +3,8 @@ package org.nuxeo.agentic.connectors;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.event.Event;
 import org.nuxeo.ecm.core.event.EventBundle;
@@ -24,6 +26,8 @@ import org.nuxeo.runtime.api.Framework;
  * </ul>
  */
 public class WebhookListener implements PostCommitFilteringEventListener {
+
+    private static final Logger log = LogManager.getLogger(WebhookListener.class);
 
     @Override
     public boolean acceptEvent(Event event) {
@@ -52,8 +56,16 @@ public class WebhookListener implements PostCommitFilteringEventListener {
             DocumentModel document = ((DocumentEventContext) event.getContext()).getSourceDocument();
             String repository = document.getRepositoryName() != null ? document.getRepositoryName()
                     : event.getContext().getRepositoryName();
-            if (seen.add(trigger + " " + repository + " " + document.getId())) {
+            if (!seen.add(trigger + " " + repository + " " + document.getId())) {
+                continue;
+            }
+            try {
                 webhooks.enqueue(trigger, repository, document.getId(), document.getType());
+            } catch (RuntimeException e) {
+                // One event's failure, the key/value store refusing its delivery say, is that event's
+                // alone: the bundle's others are still sent. The class only: its message may hold a value.
+                log.error("Webhooks: the {} event of document {} could not be kept, so it is not sent ({})", trigger.id,
+                        document.getId(), e.getClass().getSimpleName());
             }
         }
     }

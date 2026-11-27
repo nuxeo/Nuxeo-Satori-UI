@@ -9,7 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * One delivery of a webhook: a document event to send, sent, or given up on.
+ * One delivery of a webhook: a document event to send, sent, or given up on. Its record holds no
+ * payload: the payload is kept apart ({@link WebhookDeliveries}), so that what is read to find due
+ * deliveries, and what an administrator is shown, never holds a field's value.
  *
  * <ul>
  * <li>{@code id}: 32 hexadecimal digits, the payload's {@code delivery}, the same on every attempt
@@ -18,14 +20,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * document by its id;</li>
  * <li>{@code state}, {@code attempts}, {@code nextAt}, {@code outcome}, {@code status}: where it is,
  * how many times it was tried, when it may be tried next, and what the last attempt came to;</li>
- * <li>{@code body}: the payload, as signed and sent, kept only while it may still be sent: in
- * flight and as a dead letter. A delivered one keeps none.</li>
+ * <li>{@code kept}: whether its payload is kept, in flight and as a dead letter; a delivered one,
+ * and one too large to send, keep none.</li>
  * </ul>
- *
- * {@link #listing} is what an administrator is shown: never the body, so never a field's value.
  */
 record WebhookDelivery(String id, String webhook, String event, String document, String type, State state,
-        int attempts, long created, long updated, long nextAt, String outcome, int status, String body) {
+        int attempts, long created, long updated, long nextAt, String outcome, int status, boolean kept) {
 
     /** Where a delivery is. */
     enum State {
@@ -55,9 +55,9 @@ record WebhookDelivery(String id, String webhook, String event, String document,
     static final ObjectMapper JSON = new ObjectMapper();
 
     WebhookDelivery with(State state, int attempts, long updated, long nextAt, String outcome, int status,
-            String body) {
+            boolean kept) {
         return new WebhookDelivery(id, webhook, event, document, type, state, attempts, created, updated, nextAt,
-                outcome, status, body);
+                outcome, status, kept);
     }
 
     /** As kept in the store. */
@@ -66,9 +66,7 @@ record WebhookDelivery(String id, String webhook, String event, String document,
         node.put("created", created);
         node.put("updated", updated);
         node.put("nextAt", nextAt);
-        if (body != null) {
-            node.put("body", body);
-        }
+        node.put("kept", kept);
         return node.toString();
     }
 
@@ -87,7 +85,7 @@ record WebhookDelivery(String id, String webhook, String event, String document,
                     node.path("event").asText(), node.path("document").asText(), node.path("type").asText(), state,
                     node.path("attempts").asInt(), node.path("created").asLong(), node.path("updated").asLong(),
                     node.path("nextAt").asLong(), node.path("outcome").isTextual() ? node.path("outcome").asText() : null,
-                    node.path("status").asInt(), node.path("body").isTextual() ? node.path("body").asText() : null);
+                    node.path("status").asInt(), node.path("kept").asBoolean());
         } catch (IOException e) {
             return null;
         }
@@ -95,7 +93,7 @@ record WebhookDelivery(String id, String webhook, String event, String document,
 
     /**
      * What an administrator is shown: the delivery's id, its webhook, event, document and type, its
-     * state, attempts and last outcome, and when. Never its body.
+     * state, attempts and last outcome, and when. Never its payload, which this record does not hold.
      */
     ObjectNode listing() {
         return listing(true);
@@ -122,7 +120,7 @@ record WebhookDelivery(String id, String webhook, String event, String document,
             if (state == State.PENDING) {
                 node.put("nextAttempt", Instant.ofEpochMilli(nextAt).toString());
             }
-            node.put("resendable", state == State.DEAD && body != null);
+            node.put("resendable", state == State.DEAD && kept);
         }
         return node;
     }

@@ -58,7 +58,7 @@ reviewer.
 | `src/main/resources/OSGI-INF/connectors-webhooks-service.xml`            | The component `org.nuxeo.agentic.connectors.webhooks`, its service, its `webhooks` extension point, its post-commit listener and its work queue                                                                                                                                                                    |
 | `src/main/resources/OSGI-INF/connectors-webhooks-operations-contrib.xml` | Registers `Webhook.Deliveries` and `Webhook.Resend`, an administrator's                                                                                                                                                                                                                                            |
 | `src/main/resources/OSGI-INF/deployment-fragment.xml`                    | Maps the change events' servlet on `/agentic-connectors/events/*`, with no authentication filter                                                                                                                                                                                                                   |
-| `src/test/java/`                                                         | 150 tests, with embedded HTTP stubs (`SystemOfRecordStub`, and raw sockets for the webhooks' sender); 25 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`), the webhooks' deliveries made by the work manager                                       |
+| `src/test/java/`                                                         | 158 tests, with embedded HTTP stubs (`SystemOfRecordStub`, and raw sockets for the webhooks' sender); 30 of them in the Nuxeo test framework's runtime and repository, the change events sent over HTTP (`ServletBridge`), the webhooks' deliveries made by the work manager                                       |
 | `demo/core-system.mjs`                                                   | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims, and `notify`, which sends a signed change event                                                                                                                                                                |
 | `demo/change-event.mjs`                                                  | How the stand-in signs a change event                                                                                                                                                                                                                                                                              |
 | `demo/core-system.selftest.mjs`                                          | Its controls, 16 of them                                                                                                                                                                                                                                                                                           |
@@ -298,12 +298,14 @@ them and the secret it signs them with. Nothing else of the document leaves Nuxe
 | `timeout`        | No       | One attempt, whole: 100 to 30000 ms. Default 10000                                                                                                                                                   |
 
 A webhook that breaks a rule is not registered, and the log names every problem. A later
-contribution with the same id replaces it whole, and `enabled="false"` removes it.
+contribution with the same id replaces it whole, and `enabled="false"` removes it. **A later one
+that breaks a rule removes the one it would have replaced,** unlike a connector's: a mistake in a
+contribution meant to narrow a webhook must not leave the wider one sending.
 
 | Server property                               | Default    | What it does                                                                                                                                             |
 | --------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `nuxeo.agentic.webhooks.<id>.address`         | Unset: off | The receiver's address: `https`, a host, a path, no user, query or fragment                                                                              |
-| `nuxeo.agentic.webhooks.<id>.secret`          | Unset: off | The secret each delivery is signed with, at least 32 characters. Shorter is off                                                                          |
+| `nuxeo.agentic.webhooks.<id>.secret`          | Unset: off | The secret each delivery is signed with, at least 32 characters. Shorter, or the events secret of the connector with the same id, is off                 |
 | `nuxeo.agentic.webhooks.<id>.http.allowed`    | Unset      | `true` lets it send to a plain `http` address. For a demo server only                                                                                    |
 | `nuxeo.agentic.webhooks.<id>.private.allowed` | Unset      | `true` lets the address resolve to a private or loopback address. Link-local, multicast, unspecified and reserved addresses are refused whatever it says |
 
@@ -392,40 +394,50 @@ signs (`WebhookReceiverInteropTest`).
   header, the TLS SNI and the certificate check, so a second DNS answer cannot move it.
 - **Allowed:** public addresses. Private (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`,
   `fc00::/7`) and loopback (`127/8`, `::1`) only where the server sets the webhook's
-  `private.allowed`. **Never:** link-local (`169.254/16`, `fe80::/10`, where cloud metadata services
-  answer), unspecified, multicast, broadcast, and the reserved and documentation ranges. An IPv6
+  `private.allowed`. **Never:** link-local (`169.254/16`, `fe80::/10`, where most cloud metadata
+  services answer), the metadata services that answer elsewhere (`100.100.100.200`, inside
+  `100.64/10`, and `fd00:ec2::254`, inside `fc00::/7`), unspecified, multicast, broadcast, and the
+  reserved and documentation ranges. An IPv6
   address that carries an IPv4 one (`::ffff:a.b.c.d`, `::a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4
   `2002::/16`) is judged by the IPv4 address; Teredo is refused.
 - **No proxy, and no redirect followed:** a `3xx` is the attempt's outcome, its `Location` never
   read. The add-on writes its own HTTP/1.1 request on the JDK's sockets for this: Java's HTTP client
   resolves the name itself when it connects.
 - **TLS** with the JVM's default trust, the host name as SNI, and the certificate checked against
-  it as an HTTPS client checks it.
-- **Bounds:** the connect timeout, and one deadline for the whole attempt, the handshake, the
-  request and the status line, which a receiver trickling bytes cannot pass. Only the status line
-  is read, at most 8 KiB of it; the rest of the answer never is.
+  it as an HTTPS client checks it. A host name that ends in a dot is refused: TLS takes none as SNI.
+- **Bounds:** the connect timeout, and one deadline for the whole attempt, the connection, the
+  handshake, the request and the status line, held by closing the socket when it passes: neither a
+  receiver that does not read the request nor one that trickles a TLS record a byte at a time can
+  outlast it. Only the status line is read, at most 8 KiB of it; the rest of the answer never is.
+  The name's resolution is the JVM's, with its own timeouts, before the deadline starts.
 
 ### Retries and dead letters
 
-| Outcome                                                                    | Then                  |
-| -------------------------------------------------------------------------- | --------------------- |
-| `delivered`: a `2xx`                                                       | Done                  |
-| `failed`: a `5xx`, `408`, `425`, `429`, or an answer that is not HTTP      | Tried again           |
-| `unreachable`: the name does not resolve, or the address cannot be reached | Tried again           |
-| `timeout`: no status within the attempt's deadline                         | Tried again           |
-| `redirected`: a `3xx`, never followed                                      | A dead letter at once |
-| `rejected`: any other `4xx`                                                | A dead letter at once |
-| `tls`: the handshake failed, a certificate not trusted or not the host's   | A dead letter at once |
-| `address-refused`: an address it may not send to; nothing sent             | A dead letter at once |
-| `not-configured`: the address or the secret gone; nothing sent             | A dead letter at once |
-| `unknown-webhook`: the webhook no longer registered; nothing sent          | A dead letter at once |
-| `too-large`: a payload over 64 KiB; nothing sent                           | A dead letter at once |
+| Outcome                                                                                                                       | Then                  |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `delivered`: a `2xx`                                                                                                          | Done                  |
+| `failed`: a `5xx`, `408`, `425`, `429`, or an answer that is not HTTP                                                         | Tried again           |
+| `unreachable`: the name does not resolve, the address cannot be reached, or the connection is closed during the TLS handshake | Tried again           |
+| `timeout`: no status within the attempt's deadline                                                                            | Tried again           |
+| `failed`, too: anything else an attempt throws                                                                                | Tried again           |
+| `redirected`: a `3xx`, never followed                                                                                         | A dead letter at once |
+| `rejected`: any other `4xx`                                                                                                   | A dead letter at once |
+| `tls`: the handshake failed otherwise: a certificate not trusted or not the host's, a protocol refused                        | A dead letter at once |
+| `address-refused`: an address it may not send to; nothing sent                                                                | A dead letter at once |
+| `not-configured`: the address or the secret gone; nothing sent                                                                | A dead letter at once |
+| `unknown-webhook`: the webhook no longer registered; nothing sent                                                             | A dead letter at once |
+| `too-large`: a payload over 64 KiB; nothing sent                                                                              | A dead letter at once |
+| `no-payload`: its payload no longer kept; nothing sent                                                                        | A dead letter at once |
 
 **The wait:** 30 seconds after the first attempt, then four times longer each time, 2 minutes,
 8, 32, 2 hours 8 minutes, up to 6 hours. With the default six attempts, the last is about 2 hours
 50 minutes after the first. Every server node looks for due deliveries every 30 seconds, and
-claims each attempt with a compare-and-set before it sends it, so two nodes never make one attempt
-twice; an attempt claimed by a node that stopped is taken again after two minutes.
+claims each attempt with a compare-and-set before it sends it, so two nodes do not make one attempt
+at once. **An attempt not finished within two minutes**, by a node that stopped or stalled, is
+taken over as the next attempt, or, when it was the last, the delivery is a dead letter, `timeout`,
+and nothing more is sent. A delivery leaves flight, delivered or a dead letter, only by a
+compare-and-set of its record as its owner left it, so the stalled node's late outcome changes
+nothing: it is logged and audited, `reason=superseded`, since it may have reached the receiver.
 
 **After its last attempt**, or at once for an outcome no attempt would change, a delivery is a
 **dead letter**: kept with its payload for 30 days, for an administrator to see, fix the cause of,
@@ -433,7 +445,9 @@ and send again from its first attempt, its id and payload as they were, signed a
 address the server names then.
 
 **Where they are kept:** the platform's key/value store `agenticWebhooks`: in flight for up to 7
-days, dead letters for 30, delivered ones for a day, without their payload. It is the kind of the
+days, dead letters for 30, delivered ones for a day, without their payload. Each payload is kept
+apart from its delivery's record, so that what every node reads to find the due deliveries, and
+what an administrator is listed, never holds a field's value. It is the kind of the
 server's `default` store: on the local LTS 2025.10.18 server, in its database
 (`nxserver/config/sql-kvstore-config.xml`, read from it), so deliveries outlive a restart and every
 node sees them; on a server whose default store is in memory, they do not.
@@ -548,7 +562,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -pl nuxeo-agentic-connectors -am verify
-# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 150 tests
+# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 158 tests
 node nuxeo-agentic-connectors/demo/core-system.selftest.mjs      # 16 of 16
 node nuxeo-agentic-connectors/demo/webhook-receiver.selftest.mjs # 15 of 15
 ```
@@ -769,12 +783,14 @@ for it, not its findings.
     sets, `nuxeo.agentic.webhooks.<id>.address`, read at each attempt; nothing from a document, an
     event or a payload reaches it. The host is resolved once per attempt, every address it resolves
     to is judged (`WebhookAddresses`), and the connection is made to the address judged, so a
-    second DNS answer cannot move it; no proxy; no redirect followed. Link-local, unspecified,
-    multicast, broadcast and reserved addresses are refused whatever the server sets; private and
+    second DNS answer cannot move it; no proxy; no redirect followed. Link-local, the metadata
+    services' own addresses, unspecified, multicast, broadcast and reserved addresses are refused
+    whatever the server sets; private and
     loopback ones only with the webhook's `private.allowed`. Check: whether `private.allowed` is
     acceptable on your network, since with it on, a DNS answer for the receiver's name may point
     the attempt at any private host; whether the reserved ranges listed are complete enough for
-    you; that `http.allowed` stays off outside demos; and that the JVM's trust store is the one
+    you, and whether a NAT64 prefix your network chooses itself, which is judged public, needs
+    adding; that `http.allowed` stays off outside demos; and that the JVM's trust store is the one
     you mean, since a webhook trusts what it trusts;
   - **what they send:** the delivery's id, the event, the document's id and type, and the fields the
     webhook names, read as the document is stored with the system's rights, so whatever the user
@@ -787,10 +803,13 @@ for it, not its findings.
     logged (`WebhookLogTest`). A fresh timestamp and nonce for each attempt, so a receiver that
     keeps the nonces it saw for 300 seconds refuses a replay. Rotation is one secret at a time:
     deliveries between the server's change and the receiver's are refused, then dead letters,
-    and can be sent again;
-  - **at least once, not exactly once:** an attempt claimed by a node that stopped is made again
-    after two minutes, and a node that stops between a `2xx` and recording it sends it again, so a
-    receiver may see a delivery twice. Its `delivery` id is what tells it;
+    and can be sent again. A webhook whose secret is the events secret of the connector with its id
+    sends nothing, since a delivery could otherwise be replayed to that connector's change events;
+  - **at least once, not exactly once:** an attempt not finished within two minutes is taken over,
+    and a node that stops between a `2xx` and recording it leaves it to be sent again, so a
+    receiver may see a delivery twice. Its `delivery` id is what tells it. Two attempts are not
+    made at once by the add-on's compare-and-set, tested on the in-memory key/value store; that the
+    database's and Redis's stores hold the same is the platform's;
   - **what is kept, and where:** each delivery's payload, field values included, in the platform's
     key/value store `agenticWebhooks`, while in flight, up to 7 days, and as a dead letter, 30
     days; a delivered one, without its payload, a day. On a server whose key/value stores are in
@@ -805,9 +824,11 @@ for it, not its findings.
     secret, signature, nonce, address or value. The tests record what the add-on gives the audit
     (`Hooks.Audit`); writing it to the platform's audit is `nuxeo-agentic-embedded`'s code path,
     not run by a test here;
-  - **the load:** the attempts run in their own queue, two threads, each attempt bounded by its
-    timeout, at most 30 seconds, so a slow receiver holds two threads; but a bulk change makes one
-    delivery per document and event, each kept and sent, with no rate limit of their own.
+  - **the load:** the attempts run in their own queue, two threads shared by every webhook, each
+    attempt bounded by its deadline, at most 30 seconds, so a slow receiver holds both threads for
+    that long per attempt and delays the others; a bulk change makes one delivery per document and
+    event, each kept and sent, with no rate limit or cap of their own, and every node reads every
+    in-flight record, without its payload, every 30 seconds.
 
 ## Not done, and not checked
 
@@ -832,6 +853,8 @@ for it, not its findings.
   that reaches the internet only through one cannot send to a receiver outside it.
 - **One receiver per webhook, one secret at a time,** and no ordering: retries can reorder
   deliveries, and a webhook that names `dc:modified` gives its receiver what it needs to order them.
+- **An event the key/value store refuses is lost:** the listener logs it, by its event and
+  document, and goes on with the transaction's other events; nothing retries keeping it.
 - **A Marketplace package** for the add-on, and the pipeline reading a kit's own connector
   contributions instead of a `--registered` file.
 - **Hot reload:** unregistering a contribution that replaced another removes the connector rather

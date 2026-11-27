@@ -158,12 +158,12 @@ const server = createServer((request, response) => {
     const payload = delivery(body);
     if (!payload) return done(400, 'not-a-delivery');
     const about = `${payload.event} of a ${payload.document.type} ${payload.document.id} [${Object.keys(payload.fields).join(',')}]`;
-    if (answerStatus !== 204 && answerStatus !== 200) {
+    if (answerStatus < 200 || answerStatus > 299) {
       return done(answerStatus, `answered ${payload.delivery} ${about}`);
     }
-    if (taken.has(payload.delivery)) return done(204, `duplicate ${payload.delivery}`);
+    if (taken.has(payload.delivery)) return done(answerStatus, `duplicate ${payload.delivery}`);
     taken.add(payload.delivery);
-    return done(204, `accepted ${payload.delivery} ${about}`);
+    return done(answerStatus, `accepted ${payload.delivery} ${about}`);
   });
 });
 

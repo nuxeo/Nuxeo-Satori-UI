@@ -18,6 +18,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,10 +46,12 @@ import javax.net.ssl.SSLSocketFactory;
  * {@code 3xx} is an outcome, {@link Outcome#REDIRECTED}, and its {@code Location} is not read.</li>
  * <li><b>TLS:</b> for {@code https}, the server's default trust, the host name sent as SNI, and the
  * certificate checked against the host name, as an HTTPS client checks it.</li>
- * <li><b>Bounds:</b> a connect timeout, and one deadline for the whole attempt, the handshake, the
- * request and the status line; a status line longer than {@value #MAX_STATUS_LINE} bytes is not
- * read further. The answer's headers past the status and its body are never read: the connection
- * is closed.</li>
+ * <li><b>Bounds:</b> a connect timeout, and one deadline for the whole attempt, the connection,
+ * the handshake, the request and the status line, held by closing the socket when it passes, so
+ * that neither a write the receiver does not read nor a TLS record trickled a byte at a time can
+ * outlast it; a status line longer than {@value #MAX_STATUS_LINE} bytes is not read further. The
+ * answer's headers past the status and its body are never read: the connection is closed. The
+ * name's resolution is the JVM's, with its own timeouts, before the deadline starts.</li>
  * </ul>
  *
  * The JDK's own sockets, so that the connection goes to the address checked; Java's HTTP client
@@ -81,7 +88,10 @@ final class WebhookSender {
         UNREACHABLE(true),
         /** No status within the attempt's deadline. */
         TIMEOUT(true),
-        /** The TLS handshake failed: a certificate the server does not trust, or not the host's. */
+        /**
+         * The TLS handshake failed for a reason another attempt would not change: a certificate the
+         * server does not trust, or not the host's, or a protocol the receiver refuses.
+         */
         TLS(false),
         /** The host resolved to an address a webhook may not send to: nothing was sent. */
         ADDRESS_REFUSED(false),
@@ -90,7 +100,9 @@ final class WebhookSender {
         /** The webhook is no longer registered: nothing was sent. */
         UNKNOWN_WEBHOOK(false),
         /** The payload is larger than a delivery may be: nothing was sent. */
-        TOO_LARGE(false);
+        TOO_LARGE(false),
+        /** The payload is no longer kept, its time in the store passed: nothing was sent. */
+        NO_PAYLOAD(false);
 
         final boolean retried;
 
@@ -186,8 +198,9 @@ final class WebhookSender {
         }
         String host = uri.getHost();
         String bare = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
-        if (bare.isEmpty() || bare.contains("%")) {
-            // No IPv6 zone: an interface of the server's is not a receiver's address.
+        if (bare.isEmpty() || bare.contains("%") || bare.endsWith(".")) {
+            // No IPv6 zone: an interface of the server's is not a receiver's address. No trailing dot:
+            // TLS takes no such name as SNI, nor checks a certificate against it.
             return null;
         }
         int defaultPort = scheme.equals("https") ? 443 : 80;
@@ -227,7 +240,15 @@ final class WebhookSender {
         InetAddress pinned = addresses[0];
         long deadline = System.nanoTime() + timeout.toNanos();
         byte[] request = request(target, headers, body);
-        try (Socket socket = new Socket(Proxy.NO_PROXY)) {
+        Socket socket = new Socket(Proxy.NO_PROXY);
+        // The deadline, whatever the socket is doing: a read waits at most until it, but a write, or a
+        // TLS record trickled a byte at a time, would not; closing the socket ends either.
+        AtomicBoolean expired = new AtomicBoolean();
+        ScheduledFuture<?> watchdog = DEADLINES.schedule(() -> {
+            expired.set(true);
+            close(socket);
+        }, timeout.toNanos(), TimeUnit.NANOSECONDS);
+        try (socket) {
             int connect = (int) Math.max(1, Math.min(connectTimeout.toMillis(), timeout.toMillis()));
             socket.connect(new InetSocketAddress(pinned, target.port()), connect);
             Socket channel = socket;
@@ -250,13 +271,47 @@ final class WebhookSender {
             int status = status(new BufferedInputStream(channel.getInputStream()), channel, deadline);
             return status < 0 ? Result.of(Outcome.FAILED, "not-http")
                     : new Result(Outcome.ofStatus(status), status, null);
-        } catch (SocketTimeoutException e) {
-            return Result.of(Outcome.TIMEOUT, e.getClass().getSimpleName());
-        } catch (SSLException e) {
-            return Result.of(Outcome.TLS, e.getClass().getSimpleName());
         } catch (IOException e) {
+            if (expired.get() || e instanceof SocketTimeoutException) {
+                return Result.of(Outcome.TIMEOUT, expired.get() ? "deadline" : e.getClass().getSimpleName());
+            }
+            if (e instanceof SSLException tlsFailure) {
+                return Result.of(tls(tlsFailure), e.getClass().getSimpleName());
+            }
             return Result.of(Outcome.UNREACHABLE, e.getClass().getSimpleName());
+        } finally {
+            watchdog.cancel(false);
         }
+    }
+
+    /** One thread for every attempt's deadline: it only closes sockets. */
+    private static final ScheduledExecutorService DEADLINES = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "agentic-webhooks-deadlines");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    private static void close(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException e) {
+            // Closed already.
+        }
+    }
+
+    /**
+     * A TLS failure no other attempt would change, a certificate not trusted or not the host's, or a
+     * protocol the receiver refuses, is {@link Outcome#TLS}; the connection ended by the receiver or
+     * what is in front of it during the handshake, as a restart does, is {@link Outcome#UNREACHABLE},
+     * and tried again.
+     */
+    static Outcome tls(SSLException failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.io.EOFException || cause instanceof java.net.SocketException) {
+                return Outcome.UNREACHABLE;
+            }
+        }
+        return Outcome.TLS;
     }
 
     /** An IPv4 or IPv6 literal, which is not sent as SNI. */

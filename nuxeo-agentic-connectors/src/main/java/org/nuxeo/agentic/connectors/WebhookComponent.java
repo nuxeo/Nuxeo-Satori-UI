@@ -64,10 +64,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <li><b>Retried:</b> an attempt that may come to something else next time, a 5xx, a 408, 425 or
  * 429, a timeout or an unreachable receiver, is made again after {@link #backoff}, 30 seconds and
  * four times longer each time, up to six hours, until the webhook's {@code maxAttempts}. Every
- * node looks for due deliveries every {@value #RETRY_EVERY_SECONDS} seconds.</li>
+ * node looks for due deliveries every {@value #RETRY_EVERY_SECONDS} seconds. An attempt claimed and
+ * not finished within {@link #CLAIM_TIMEOUT} is taken over; the late outcome of the node that
+ * claimed it is audited and changes nothing ({@link WebhookDeliveries}).</li>
  * <li><b>Then a dead letter:</b> after its last attempt, or at once for an outcome no attempt would
- * change, a redirect, a 4xx, a TLS failure, an address refused or a webhook not configured. Kept
- * with its payload for 30 days, for an administrator to see and send again
+ * change, a redirect, a 4xx, a certificate or protocol failure, an address refused or a webhook not
+ * configured. Kept with its payload for 30 days, for an administrator to see and send again
  * ({@link #deliveries}, {@link #resend}).</li>
  * <li><b>Audited:</b> every attempt's outcome, and every resend ({@link WebhookAudit}).</li>
  * </ol>
@@ -146,7 +148,15 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         try {
             webhook = Webhook.of(descriptor);
         } catch (IllegalArgumentException e) {
-            log.error("A webhook contributed by {} is not registered: {}", component, e.getMessage());
+            // Fails closed: a mistake in a contribution that meant to narrow a webhook must not leave the
+            // wider one it replaces sending.
+            String id = descriptor.getId();
+            boolean removed = id != null && webhooks.remove(id) != null;
+            if (removed) {
+                sources.remove(id);
+            }
+            log.error("A webhook contributed by {} is not registered{}: {}", component,
+                    removed ? ", and the one registered before with its id is removed" : "", e.getMessage());
             return;
         }
         webhooks.put(webhook.id(), webhook);
@@ -247,10 +257,23 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         return WebhookSender.target(property(webhook.addressProperty()), flag(webhook.httpAllowedProperty()));
     }
 
-    /** The webhook's secret, or {@code null} when the server sets none of at least 32 characters. */
+    /**
+     * The webhook's secret, or {@code null} when the server sets none of at least 32 characters, or
+     * sets the same one as the events secret of the connector with the same id: the two are signed in
+     * one scheme over the same id, so a delivery could otherwise be replayed to that connector's
+     * change events, within their window, and verify.
+     */
     private String secret(Webhook webhook) {
         String secret = property(webhook.secretProperty());
-        return secret == null || secret.length() < MIN_SECRET_LENGTH ? null : secret;
+        if (secret == null || secret.length() < MIN_SECRET_LENGTH) {
+            return null;
+        }
+        if (secret.equals(property(Connector.PROPERTY_PREFIX + webhook.id() + ".events.secret"))) {
+            warn(webhook.id() + " shared secret", "Webhook {}: nothing is sent: its secret is the events secret of the"
+                    + " connector with the same id; give each its own", webhook.id());
+            return null;
+        }
+        return secret;
     }
 
     /**
@@ -275,8 +298,8 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
             }
             if (secret(webhook) == null) {
                 warn(webhook.id() + " secret", "Webhook {}: an event is not sent, nor kept: the server property {} is"
-                        + " not set, or shorter than {} characters", webhook.id(), webhook.secretProperty(),
-                        MIN_SECRET_LENGTH);
+                        + " not set, or shorter than {} characters, or another's", webhook.id(),
+                        webhook.secretProperty(), MIN_SECRET_LENGTH);
                 continue;
             }
             sending.add(webhook);
@@ -310,14 +333,14 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
             long now = clock.millis();
             if (payload.body().length > WebhookPayload.MAX_BYTES) {
                 WebhookDelivery dead = new WebhookDelivery(payload.id(), webhook.id(), trigger.id, documentId, type,
-                        State.DEAD, 0, now, now, now, Outcome.TOO_LARGE.label(), 0, null);
-                store.dead(dead);
+                        State.DEAD, 0, now, now, now, Outcome.TOO_LARGE.label(), 0, false);
+                store.deadAtOnce(dead);
                 given(webhook, dead, Result.of(Outcome.TOO_LARGE, payload.body().length + "-bytes"));
                 return;
             }
             WebhookDelivery delivery = new WebhookDelivery(payload.id(), webhook.id(), trigger.id, documentId, type,
-                    State.PENDING, 0, now, now, now, null, 0, new String(payload.body(), StandardCharsets.UTF_8));
-            store.add(delivery);
+                    State.PENDING, 0, now, now, now, null, 0, true);
+            store.add(delivery, new String(payload.body(), StandardCharsets.UTF_8));
             log.debug("Webhook {}: delivery {} of {} on a {}, document {}, kept", webhook.id(), payload.id(),
                     trigger.id, type, documentId);
             schedule(delivery, TransactionHelper.isTransactionActive());
@@ -358,18 +381,33 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         if (!due(was, now)) {
             return;
         }
-        WebhookDelivery claimed = was.with(State.SENDING, was.attempts() + 1, now, was.nextAt(), was.outcome(),
-                was.status(), was.body());
+        Webhook webhook = webhooks.get(was.webhook());
+        // A claim that expired: its node stopped, or stalled, before it finished. Its last attempt is
+        // not made again; any other is, as the next.
+        boolean lost = was.state() == State.SENDING && webhook != null && was.attempts() >= webhook.maxAttempts();
+        WebhookDelivery claimed = was.with(State.SENDING, lost ? was.attempts() : was.attempts() + 1, now,
+                was.nextAt(), was.outcome(), was.status(), was.kept());
         if (!store.replace(stored, claimed)) {
             // Another node, or another work, claimed it first.
             return;
         }
-        Webhook webhook = webhooks.get(claimed.webhook());
-        Result result = attempt(webhook, claimed);
-        finish(store, new WebhookDeliveries.Stored(claimed.toJson(), claimed), webhook, result);
+        WebhookDeliveries.Stored mine = WebhookDeliveries.Stored.of(claimed);
+        Result result;
+        if (lost) {
+            result = Result.of(Outcome.TIMEOUT, "claim-expired");
+        } else {
+            try {
+                result = attempt(store, webhook, claimed);
+            } catch (RuntimeException e) {
+                // Whatever it was, the delivery's outcome, so that it is retried, then a dead letter,
+                // rather than claimed again for ever. The class only: its message may hold the address.
+                result = Result.of(Outcome.FAILED, e.getClass().getSimpleName());
+            }
+        }
+        finish(store, mine, webhook, result);
     }
 
-    private Result attempt(Webhook webhook, WebhookDelivery delivery) {
+    private Result attempt(WebhookDeliveries store, Webhook webhook, WebhookDelivery delivery) {
         if (webhook == null) {
             return Result.of(Outcome.UNKNOWN_WEBHOOK, null);
         }
@@ -381,10 +419,11 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         if (secret == null) {
             return Result.of(Outcome.NOT_CONFIGURED, "secret");
         }
-        if (delivery.body() == null) {
-            return Result.of(Outcome.TOO_LARGE, "no-payload");
+        String payload = store.payload(delivery.id());
+        if (payload == null) {
+            return Result.of(Outcome.NO_PAYLOAD, null);
         }
-        byte[] body = delivery.body().getBytes(StandardCharsets.UTF_8);
+        byte[] body = payload.getBytes(StandardCharsets.UTF_8);
         Map<String, String> headers = signed(webhook.id(), secret, Long.toString(clock.instant().getEpochSecond()),
                 randomHex(), body);
         return sender.send(target, flag(webhook.privateAllowedProperty()), headers, body, webhook.connectTimeout(),
@@ -413,18 +452,20 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         Outcome outcome = result.outcome();
         if (outcome == Outcome.DELIVERED) {
             WebhookDelivery done = claimed.with(State.DELIVERED, claimed.attempts(), now, now, outcome.label(),
-                    result.status(), claimed.body());
-            store.delivered(done);
-            given(webhook, done, result);
+                    result.status(), false);
+            if (store.delivered(mine, done)) {
+                given(webhook, done, result);
+            } else {
+                superseded(done, result);
+            }
             return;
         }
         if (outcome.retried && webhook != null && claimed.attempts() < webhook.maxAttempts()) {
             Duration wait = backoff(claimed.attempts());
             WebhookDelivery pending = claimed.with(State.PENDING, claimed.attempts(), now, now + wait.toMillis(),
-                    outcome.label(), result.status(), claimed.body());
+                    outcome.label(), result.status(), claimed.kept());
             if (!store.replace(mine, pending)) {
-                log.warn("Webhook {}: delivery {} changed while it was being sent; its attempt {} is not recorded",
-                        claimed.webhook(), claimed.id(), claimed.attempts());
+                superseded(pending, result);
                 return;
             }
             log.warn("Webhook {}: delivery {} ({} of a {}, document {}), attempt {} of {}: {}{}{}; tried again in {} s",
@@ -436,9 +477,28 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
             return;
         }
         WebhookDelivery dead = claimed.with(State.DEAD, claimed.attempts(), now, now, outcome.label(),
-                result.status(), claimed.body());
-        store.dead(dead);
-        given(webhook, dead, result);
+                result.status(), claimed.kept());
+        if (store.dead(mine, dead)) {
+            given(webhook, dead, result);
+        } else {
+            superseded(dead, result);
+        }
+    }
+
+    /**
+     * An attempt whose claim another node took over before it finished: what it came to is logged,
+     * counted and audited, since it may have reached the receiver, and changes nothing in the store,
+     * which is the other node's to write.
+     */
+    private void superseded(WebhookDelivery delivery, Result result) {
+        Outcome outcome = result.outcome();
+        metrics().webhookAttempt(delivery.webhook(), outcome.label());
+        log.warn("Webhook {}: delivery {} ({} of a {}, document {}), attempt {}: {}{}{}; it was taken over by another"
+                + " node meanwhile, so this outcome changes nothing", delivery.webhook(), delivery.id(),
+                delivery.event(), delivery.type(), delivery.document(), delivery.attempts(), outcome.label(),
+                status(result), detail(result));
+        audit.record(outcome == Outcome.DELIVERED ? WebhookAudit.DELIVERED : WebhookAudit.RETRYING,
+                WebhookAudit.comment(delivery, null, "superseded"));
     }
 
     /** A delivery done with: delivered, or a dead letter. Logged, counted and audited. */
@@ -545,11 +605,11 @@ public class WebhookComponent extends DefaultComponent implements WebhookService
         if (dead == null || dead.state() != State.DEAD) {
             throw new NuxeoException("No dead letter has this id", 404);
         }
-        if (dead.body() == null) {
-            throw new NuxeoException("This dead letter's payload was never kept, so it cannot be sent again", 409);
+        if (!dead.kept() || store.payload(id) == null) {
+            throw new NuxeoException("This dead letter's payload is not kept, so it cannot be sent again", 409);
         }
         long now = clock.millis();
-        WebhookDelivery pending = dead.with(State.PENDING, 0, now, now, "resent", 0, dead.body());
+        WebhookDelivery pending = dead.with(State.PENDING, 0, now, now, "resent", 0, true);
         if (!store.revive(dead, pending)) {
             throw new NuxeoException("This delivery is already being sent again", 409);
         }
