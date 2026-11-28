@@ -1,0 +1,13 @@
+{
+  "name": "@nuxeo/satori-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The one builder of a customer's Nuxeo Satori configuration: validate and build a configuration package of Layer 0, Layer 1, assets, version 1 layouts and version 2 app definitions into its Marketplace zip, hold it to what it was, pull a server's content model, and scaffold a configuration repository. Built into plain JavaScript that needs Node alone. Not published: publishing waits for decision K.",
+  "bin": {
+    "satori": "satori.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

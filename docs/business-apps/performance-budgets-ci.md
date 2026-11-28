@@ -60,6 +60,31 @@ one. A page that did not draw in a run counts as not measured, and its median th
 The run fails, whatever its times, if a page threw, asked for something the stand-in has no answer
 for, or asked a host other than the stand-in and the shell's icon font, which is not resolved.
 
+**A cold runner's first navigations.** A freshly launched Chromium's first navigation sometimes
+does not finish in 30 seconds on a CI runner: on 27 November 2026 the job of #787 failed so, in
+the control's own run of the check, the browser's very first load, `#/home, load 1: page.goto:
+Timeout 30000ms exceeded.`, and passed when it was run again. The check then waited for the `load`
+event, so its log cannot say whether the page had been answered, or had even drawn; and it was not
+reproduced here, in 45 loads in one browser and 30 in browsers each launched for three. So,
+without letting a page that did not draw pass:
+
+- **A warm-up round first,** not measured: each page loaded once in its own new context, so that
+  the browser's first navigations are not measured ones. Its times and a stall in it are printed
+  and kept in the report under `warmup`; a page error in it still fails the run, as in any load.
+- **Each load waits for its navigation to commit, not for the `load` event.** What is measured is
+  the page drawn, by its own clock from navigation, so the `load` event never mattered to it, and
+  a request the page does not wait for could hold it.
+- **A navigation that does not commit is tried once more,** in a new context, and said:
+  `home.firstRenderMs load 1: its navigation did not commit (…); tried once more`, and under
+  `retries` in the report. That is the only failure tried again. A page that navigated and then did
+  not draw in 30 seconds, or threw, fails its load at once, and the error names the requests the
+  page and the stand-in were still on. A second stall of the same load fails it, and so does a page
+  whose navigation stalled on two of its loads, however both retries went.
+
+`--stall-navigations <n|all>` holds that many measured navigations past `--navigation-timeout`, on
+purpose, to see this work: with `1` the stalled load is tried again and the run passes, saying so;
+with `2` the retry stalls too and the run fails, the page not measured; with `all` every page fails.
+
 <!-- table: pages -->
 
 | Measure                | Budget  | Why there                                                                                                                                                                                                                                                                                 |
@@ -199,7 +224,8 @@ That run's guard went red, on its own control rather than on a budget: the check
 `queue.firstPageMs` lowered was a single load, and on that load the home page did not draw or
 threw, which the control did not print, so it could not say the budget alone had failed the run.
 The control now runs three loads, judged on their median as the check is, and prints which check
-failed, with its detail, when one does.
+failed, with its detail, when one does. The warm-up round and the one retry of a navigation that
+did not commit, above, came after the same stall failed #787's job on 27 November 2026.
 
 ## What this does not measure
 

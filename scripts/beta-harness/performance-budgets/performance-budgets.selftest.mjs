@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
+  NavigationTimeout,
   PAGE_MEASURES,
   checkBudgets,
   failures,
@@ -21,6 +22,8 @@ import {
   lowered,
   median,
   readBudgets,
+  retriesCheck,
+  withNavigationRetry,
 } from './budgets.mjs';
 import { measureBundles, parseLowered, staticClosure } from './bundles.mjs';
 import { lineControls, loweredLine } from './controls.mjs';
@@ -358,6 +361,74 @@ describe("the guard's own controls", () => {
       { id: 'queue.firstPageMs', limit: 100 },
     ]);
     assert.throws(() => parseLowered(['queue.firstPageMs']), /<budget id>=<whole limit>/);
+  });
+});
+
+describe("a cold runner's stalled navigation", () => {
+  const stalled = () => new NavigationTimeout('page.goto: Timeout 30000ms exceeded.');
+
+  it('is tried once more, and the retry told, when the navigation did not commit', async () => {
+    const told = [];
+    let calls = 0;
+    const result = await withNavigationRetry(
+      async (attempt) => {
+        calls += 1;
+        if (attempt === 0) throw stalled();
+        return 1612.4;
+      },
+      { onRetry: (error, attempt) => told.push(`${attempt}: ${error.message}`) },
+    );
+    assert.deepEqual(result, { value: 1612.4, retried: 1 });
+    assert.equal(calls, 2);
+    assert.deepEqual(told, ['1: page.goto: Timeout 30000ms exceeded.']);
+  });
+
+  it('fails the load when the navigation stalls a second time', async () => {
+    let calls = 0;
+    await assert.rejects(
+      withNavigationRetry(async () => {
+        calls += 1;
+        throw stalled();
+      }),
+      NavigationTimeout,
+    );
+    assert.equal(calls, 2, 'one retry, never more');
+  });
+
+  it('never tries again a page that navigated and did not draw, or threw', async () => {
+    for (const failure of [
+      new Error('did not draw within 30000 ms; the page still waited on nothing'),
+      Object.assign(new Error('page.waitForFunction: Timeout 30000ms exceeded.'), {
+        name: 'TimeoutError',
+      }),
+      new TypeError('a page error'),
+    ]) {
+      let calls = 0;
+      await assert.rejects(
+        withNavigationRetry(async () => {
+          calls += 1;
+          throw failure;
+        }),
+        (error) => error === failure,
+      );
+      assert.equal(calls, 1, `${failure.message} is not tried again`);
+    }
+  });
+
+  it('tries nothing again when the first navigation commits', async () => {
+    assert.deepEqual(await withNavigationRetry(async () => 1500), { value: 1500, retried: 0 });
+  });
+
+  it('fails the run when one page needed a retry on two of its loads', () => {
+    assert.equal(retriesCheck([]).pass, true);
+    assert.equal(retriesCheck([{ page: '#/home' }, { page: '#/queues/library' }]).pass, true);
+    const twice = retriesCheck([
+      { page: '#/home' },
+      { page: '#/queues/library' },
+      { page: '#/home' },
+    ]);
+    assert.equal(twice.pass, false);
+    assert.equal(twice.detail, '#/home: 2');
   });
 });
 
