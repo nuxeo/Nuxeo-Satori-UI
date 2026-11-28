@@ -38,6 +38,8 @@ export const PUBLISHED_FILES = [
   'platform/',
   'templates/',
   'agents/',
+  'knowledge/',
+  'examples/',
   'mcp.mjs',
   'mcp-generator.mjs',
   'generators/',

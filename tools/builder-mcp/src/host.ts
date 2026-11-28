@@ -52,6 +52,11 @@ export interface Host {
   readonly platform: { readonly file: string; readonly shown: string };
   /** How a customer's model is written to a file, for a refusal that names it. */
   readonly modelExport: string;
+  /**
+   * What `read_reference` reads: the tool's knowledge pack and examples, bundled; this repository's
+   * authored knowledge pack, here, whose generated files and examples the tool's build writes.
+   */
+  readonly reference: readonly { readonly name: string; readonly directory: string }[];
   /** What the tools' descriptions say of this place, so that none names what is not there. */
   readonly words: Words;
 }
@@ -97,6 +102,7 @@ function repositoryHost(): Host {
     generatorRoot: root,
     runner: join(HERE, 'run-generator.ts'),
     platform: { file: join(root, 'libs', 'platform', 'package.json'), shown: 'libs/platform' },
+    reference: [{ name: 'knowledge', directory: join(root, 'tools', 'satori-cli', 'knowledge') }],
     modelExport:
       '`npm run app-package:model -- --server <address> --out tmp/content-model.json`, into the checkout (its tmp/ is ignored by git)',
     words: {
@@ -135,6 +141,10 @@ function bundledHost(): Host {
     generatorRoot: carried,
     runner: join(tool, 'mcp-generator.mjs'),
     platform: { file: join(tool, 'platform', 'platform.json'), shown: "the tool's platform" },
+    reference: [
+      { name: 'knowledge', directory: join(tool, 'knowledge') },
+      { name: 'examples', directory: join(tool, 'examples') },
+    ],
     modelExport:
       "`satori model pull --server <address> --out content-model.json`, kept out of git if it is a customer's",
     words: {

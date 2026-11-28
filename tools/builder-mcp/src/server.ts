@@ -42,6 +42,7 @@ import {
 } from './package-writes.ts';
 import { describeDefinition, describePageProvider, listPageProviders } from './page-providers.ts';
 import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
+import { listReference, readReference } from './reference.ts';
 import { HOST } from './host.ts';
 import {
   releaseCheck,
@@ -342,6 +343,33 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       annotations: READS,
     },
     reading((reader, { name }: { name: string }) => describeWorkflow(reader, name)),
+  );
+
+  server.registerTool(
+    'read_reference',
+    {
+      title: 'Read the Nuxeo Satori reference',
+      description:
+        'The reference this version of the tools carries, for building Nuxeo Satori configuration:' +
+        ' every file a package holds and which tool writes it, recipes for each kind of request, a' +
+        ' worked example of a claims app, branding and the colour tokens the application reads, the' +
+        ' ids the platform registers, and read-only example apps. Given no path, lists every file' +
+        ' with its title; given one, such as knowledge/README.md, answers its text. Read' +
+        ' knowledge/README.md first.',
+      inputSchema: z.object({
+        path: z
+          .string()
+          .optional()
+          .describe('A file of the list, such as knowledge/recipes.md. Omit it for the list'),
+      }),
+      annotations: READS,
+    },
+    (args: { path?: string }) =>
+      answer(async () =>
+        args.path === undefined || args.path === ''
+          ? { files: listReference() }
+          : readReference(args.path),
+      ),
   );
 
   server.registerTool(

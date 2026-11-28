@@ -12,14 +12,24 @@ server, or code: the types, schemas, page providers and lifecycles come from Nux
 model package, and are on the server already.
 
 Everything you need is in this repository: `@nuxeo/satori-cli`, installed by `npm ci` and pinned
-in `package.json`, carries the checks, the JSON Schemas, the generators and the MCP server. You
-need no other repository, and no source of Nuxeo Satori's.
+in `package.json`, carries the checks, the JSON Schemas, the generators, the MCP server and the
+reference. You need no other repository, and no source of Nuxeo Satori's.
+
+**Read the reference first:** `read_reference` with `{ "path": "knowledge/README.md" }`, or
+`node_modules/@nuxeo/satori-cli/knowledge/README.md`. It holds every file a package has and which
+tool writes it, a recipe for each kind of request, a worked example of a claims app, branding and
+the colour tokens, every id the platform registers, and read-only example apps. It is this
+version's, as the checks are.
+
+**The customer's configuration is one package,** the one `satori create` wrote in
+`config-packages/`: their branding, what the app shows, and their app definition, together. Add
+to it; do not make another package unless the person asks for one.
 
 ## What exists, and what does not
 
 | Step                  | How                                                                                        | State                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| 1. Read the server    | The MCP server `nuxeo-satori`, `satori mcp`                                                | Built: 11 read-only tools                                            |
+| 1. Read the server    | The MCP server `nuxeo-satori`, `satori mcp`                                                | Built: 12 read-only tools, the reference among them                  |
 | 2. Write the files    | `apply_generator`, `write_package_file`, `remove_package_file` and `apply_package_changes` | Built: each keeps only what passes `satori validate`'s steps         |
 | 3. Check them         | Each write checks first; `satori validate` with the model as well                          | Built. The write tools take no model                                 |
 | 4. See it on a server | A person installs the built zip on the development server                                  | **`preview_package` does not run here**: it refuses, serving nothing |
@@ -35,9 +45,13 @@ step as done that this table says is not built.
 - **A development server whose model you may share with the model you run on.** Everything the
   tools answer goes to you. Never point them at production, or at a server holding data you may
   not share.
-- **Credentials from the environment only:** `NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS`, exported
-  before the IDE starts the server. There is no default account. Never write them into a file, a
-  command's arguments, an address or a message, and never ask for the password in the chat.
+- **Credentials never pass through you:** `NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS` reach the
+  server from its environment: exported before a terminal IDE starts it, or, in the Claude app,
+  from `.claude/settings.local.json`, which the person writes with
+  `./node_modules/.bin/satori connect` in a terminal (the app's terminal pane). There is no default
+  account. Never run `connect`, never read or edit `.claude/settings.local.json`, never write a
+  credential into a file, a command's arguments, an address or a message, and never ask for the
+  password in the chat.
 - **When the server cannot be read,** every server read refuses at once, naming what is missing.
   Tell the person, and ask them to export the three and restart the server, or to go on without:
   `validate_package` and the write tools need no credential.
@@ -57,9 +71,11 @@ server or be registered in the platform; a guess is refused, or worse, passes an
 | the vocabularies, and one's entries               | `list_vocabularies`, `get_vocabulary` `{ "name" }` |
 | the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow` `{ "name" }` |
 | an operation's parameters                         | `list_operations`, `describe_operation` `{ "id" }` |
+| how to do what the person asks, and the examples  | `read_reference`, `{ "path"? }`                    |
 
-- **The type the person names must exist.** If it does not, stop: creating it is Studio's, not
-  yours. Say which types are there.
+- **The type the person names must exist.** If it does not, say which types are there: creating
+  one is Studio's. Only for a demo or a prototype, and only on the person's yes, offer a stand-in
+  model (step 2, `app-model`).
 - **A page provider's `?` parameters are filled in order.** A queue has no open record, so a page
   provider that needs a parameter takes a literal.
 - **An indexed page provider lags a write** (`list_page_providers` marks them): a record created a
@@ -112,49 +128,58 @@ is no finding. Read the answer every time:
 `write_package_file` writes `app.json`, `home.json`, `navigation.json`, `actions.json`,
 `queues/<id>.json`, `labels/<language>.json`, `tasks/<workflow>.<step>.layout.json` and
 `layouts/<Type>/<mode>.layout.json`, under `bundle/agentic-ui-config/`, each a JSON object of
-`"version": 2`. The generators write the rest: `package.xml`, the manifest, the component, the
+`"version": 2`; and the package's two layers there, `bootstrap.json` (branding, themes, colours)
+and `manifest.json` (what the app shows), when its component names them, as `satori create`'s
+does. Their checks hold a theme to what the application shows: `knowledge/branding.md` and
+`knowledge/theme-tokens.md` say how to write one. The generators write the rest: `package.xml`, the manifest, the component, the
 kit's connectors. The options are those of each generator's schema, by name; the tool gives
 `package` from its `package` argument. `modelServer` is refused: a generator would send the
 credentials to the address it is given. Give `model` instead, the file of step 1.
 
-**A new app is a package of its own,** beside the configuration package `satori create` wrote, so
-that each is released on its own version:
+**The app goes in the customer's package.** One with no `bundle/agentic-ui-config/app.json` has no
+app yet: ask the person its name and its groups, then add it in one call, its `packageVersion`
+the one `package/package.xml` has:
 
 ```jsonc
-// apply_generator: the package, its app for the app registry, and its first record page
-{ "package": "config-packages/acme-claims", "generator": "app-package",
-  "options": { "owner": "acme", "title": "Acme Claims", "groups": "claims-handlers",
-               "type": "Claim", "model": "tmp/content-model.json" } }
+// apply_package_changes: the app, its labels, and app-registry, which names it in the component
+{ "package": "config-packages/acme-config", "changes": [
+    { "kind": "write", "path": "bundle/agentic-ui-config/app.json",
+      "content": "{ \"version\": 2, \"id\": \"acme-claims\", \"label\": \"Acme Claims\", \"packageVersion\": \"1.0.0\", \"platform\": \">=0.2.0 <1.0.0\", \"address\": \"acme-claims\", \"groups\": [\"claims-handlers\"] }" },
+    { "kind": "write", "path": "bundle/agentic-ui-config/labels/en.json",
+      "content": "{ \"version\": 2, \"labels\": {} }" },
+    { "kind": "generator", "generator": "app-registry" } ] }
+
+// apply_generator: a record page
+{ "package": "config-packages/acme-config", "generator": "app-layout",
+  "options": { "type": "Claim", "model": "tmp/content-model.json" } }
 
 // apply_generator: another record page, and the Edit form with the fields it must have
-{ "package": "config-packages/acme-claims", "generator": "app-layout",
+{ "package": "config-packages/acme-config", "generator": "app-layout",
   "options": { "type": "Policy", "model": "tmp/content-model.json" } }
-{ "package": "config-packages/acme-claims", "generator": "app-form",
+{ "package": "config-packages/acme-config", "generator": "app-form",
   "options": { "type": "Claim", "mode": "edit", "required": "dc:title,claim:number",
                "model": "tmp/content-model.json" } }
 
 // apply_generator: a queue, on a page provider describe_page_provider showed
-{ "package": "config-packages/acme-claims", "generator": "app-queue",
+{ "package": "config-packages/acme-config", "generator": "app-queue",
   "options": { "id": "open-claims", "pageProvider": "acme_open_claims",
                "columns": "claim:number,dc:title,claim:status", "sort": "claim:number" } }
 
 // apply_generator: a lifecycle button, on the record page and the queue's rows
-{ "package": "config-packages/acme-claims", "generator": "app-action",
+{ "package": "config-packages/acme-config", "generator": "app-action",
   "options": { "id": "acme-claims.approve", "transition": "approve", "on": "record,row",
                "type": "Claim", "confirm": "Approve this claim?", "queue": "open-claims" } }
 
 // apply_package_changes: the home written by hand, and the app-registry that names it
-{ "package": "config-packages/acme-claims", "changes": [
+{ "package": "config-packages/acme-config", "changes": [
     { "kind": "write", "path": "bundle/agentic-ui-config/home.json", "content": "{ ... }" },
     { "kind": "generator", "generator": "app-registry" } ] }
 ```
 
 What each writes, and what it leaves to you:
 
-- **`app-package`:** `app.json`, `labels/en.json`, the component, `package/` and the manifest. The
-  component contributes the app to the app registry, so "Switch app" can list it. A package with
-  no record page is refused, so give it `type`. Its id and address: an address that is a platform
-  route (`search`, `tasks` and the others) is refused; give `address` another.
+- **`app-package`:** a package of its own, with its app: only when the person asks for a second
+  package. An address that is a platform route (`search`, `tasks` and the others) is refused.
 - **`app-layout`:** one card per schema of the type, leaving out Nuxeo's own unless `schemas`
   names them, a widget only where the model says more than the type. Its "Left out" names what it
   did not write, and why.
@@ -170,8 +195,12 @@ What each writes, and what it leaves to you:
 - **`app-connector`:** a connector of the package's own, for a card of another system's fields.
   It writes no address and no credential: each is a server setting a person sets.
 - **`app-dependency`:** a package this one depends on, in `package.xml`.
-- **`app-model`** is for a demo with a stand-in model, and refused on a package that has none: on
-  the customer's server the types are the server's.
+- **`app-model`** writes a stand-in type, its schema and page providers, for a demo or a
+  prototype only. It is refused on a package with no `content-model.json`: the types of a
+  customer's server are Studio's. On the person's yes, for a development server, make the package a
+  stand-in model's with `./node_modules/.bin/satori model pull --server "$NUXEO_URL/nuxeo" --out config-packages/<package>/content-model.json`,
+  which they approve when asked, then call `app-model` once a type. Never write a type the server
+  has. `knowledge/recipes.md`, "A stand-in model", and `knowledge/payers.md` show it.
 
 Then edit what the generators wrote, with `write_package_file`, as the person asks. Write the whole
 file each time, starting from what the package holds now:
@@ -235,7 +264,7 @@ pages show must be on the server, with the types the package names.
 1. The person raises the version in `package/package.xml`, `app.json`'s `packageVersion` and the
    manifest's `Bundle-Version`, together, as far as the changes need: a removed queue, layout or
    label key needs a major. The write tools do not raise a version.
-2. **Check it is ready with `release_check`,** `{ "package": "config-packages/acme-claims",
+2. **Check it is ready with `release_check`,** `{ "package": "config-packages/acme-config",
 "previous": "<the zip installed now>" }`, or `./node_modules/.bin/satori release-check
 config-packages/acme-claims --previous <zip>`. It builds and validates the package, holds it to
    the version installed when `previous` is given, and checks that its tag,
@@ -248,6 +277,16 @@ config-packages/acme-claims --previous <zip>`. It builds and validates the packa
 
 **Never run the tag or push commands yourself, never sign a package, and never present one as
 released:** give the person the commands, and say what is left for them.
+
+## After every change: check and build, then say what is the person's
+
+1. Run `npm run validate` and `npm run build` yourself, and report what they print: the zip's
+   name and its sha256, or the step that refused it and why.
+2. Before a change is installed over an earlier one, raise the version:
+   `./node_modules/.bin/satori version config-packages/<package> patch`, which changes
+   `package.xml`, the manifest and `app.json` together.
+3. Say what is left for the person: committing and pushing; installing the zip on the development
+   server, which restarts it; creating the app's groups there, with people in them; releasing.
 
 ## Done means
 
@@ -268,3 +307,5 @@ released:** give the person the commands, and say what is left for them.
   `nuxeo-satori` server in `.mcp.json`. The tool replaces them.
 - Install a package or a connector, set an address or a credential on a server, tag, push a tag,
   or sign: each is a person's.
+- Run `satori connect`, or read or edit `.claude/settings.local.json`: the credentials are the
+  person's, and the settings deny you the file.

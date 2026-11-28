@@ -87,6 +87,25 @@ change had no effect. Your own entry needs an `id`; `base` says which shipped th
 and `tokens` overrides individual colours on top of that. Themes you list are merged over the
 shipped ones by `id`, so restyling one does not mean restating the other three.
 
+**The colour tokens** are CSS custom properties.
+
+- **The main ones:**
+  - `--mat-sys-primary` with `--mat-sys-on-primary`: buttons, links, focus, and the side
+    navigation unless `--sat-platform-nav-background` is set;
+  - `--mat-sys-primary-container` with `--mat-sys-on-primary-container`: selected fills;
+  - `--mat-sys-tertiary`: the nearest to an accent;
+  - `--mat-sys-surface` and its `-container` shades: backgrounds;
+  - `--mat-sys-on-surface`: text.
+- **Set them in pairs:** a colour with the one read on it.
+- **What the package pipeline refuses**, each a change that would show nothing:
+  - a token that does not begin with `--`;
+  - a colour token whose value is not a CSS colour;
+  - a `base` other than the four;
+  - a `defaultThemeId` naming no theme.
+
+`scripts/package-pipeline/theme-tokens.mjs` is the full list, and `@nuxeo/satori-cli` prints it as
+`knowledge/theme-tokens.md`.
+
 And `bundle/agentic-ui-config/manifest.json` hides the Trash entry, renames Collections, and shows
 Administration to administrators only:
 

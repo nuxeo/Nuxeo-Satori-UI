@@ -5,3 +5,7 @@ config-packages/*/dist/
 # A server's content model, written by satori model pull for the checks and the agent to read:
 # the customer's, and never committed.
 tmp/
+# The server's address and credentials, which satori connect writes for the Claude app, and
+# Claude's own local notes: the developer's, and never committed.
+.claude/settings.local.json
+CLAUDE.local.md

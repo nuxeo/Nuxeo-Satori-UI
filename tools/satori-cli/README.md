@@ -24,6 +24,8 @@ satori upgrade-check <package> --previous <directory or zip> [--deployment <file
 satori model pull --server <address> --out <file>
 satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
 satori agents sync [<directory>] [--check]
+satori connect [<directory>] [--server <origin>] [--user <name>] [--password-stdin] [--check]
+satori version <package> <x.y.z | patch | minor | major>
 satori mcp [--root <directory>] [--tmp <directory>]
 satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]
 satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
@@ -33,6 +35,18 @@ satori release-check <package> [--previous <directory or zip>] [--json] [options
 
 `validate`, `build` and `release-check` take `--tmp <directory>` among their options.
 
+- **`connect`** gives the MCP server the development server's address and an account, for an AI
+  IDE that does not start it from a shell, as the Claude desktop app does not.
+  - It asks for them: the password unshown, from a terminal, or from standard input with
+    `--password-stdin`. With neither, it refuses.
+  - It checks them against `GET /nuxeo/api/v1/me`, with the MCP server's own rule for the
+    address.
+  - It writes them into `.claude/settings.local.json`'s `env` at mode 0600. It refuses unless the
+    folder is a git repository that ignores the file and does not track it.
+  - It never prints the password. `--check` writes nothing and says whether the server answers.
+- **`version`** raises a package's version in `package/package.xml`, the bundle's
+  `Bundle-Version` and `app.json`'s `packageVersion` together. It refuses a version that is not
+  higher, and a package whose three disagree.
 - **`validate`** takes every step `build` takes and writes nothing: the zip is built and verified
   in a scratch folder, which is then removed.
 - **`build`** writes the package's Marketplace zip and its `.sha256` into `--out`, the package's
@@ -183,6 +197,19 @@ publishes or promotes a package.
 
 ## The agent files: `agents sync`
 
+**Since 0.4.0, for the Claude app as well:**
+
+- `CLAUDE.md`'s section imports `AGENTS.md` (`@AGENTS.md`), since Claude Code reads `AGENTS.md`
+  only while there is no `CLAUDE.md`.
+- `.claude/settings.json` gets the tool's entries, each an item of a list, everything else kept:
+  - `nuxeo-satori` in `enabledMcpjsonServers`;
+  - the MCP server's tools, `mcp__nuxeo-satori`, and the checks and builds in `permissions.allow`: `npm run validate` and `build`, and
+    `satori validate`, `build`, `upgrade-check`, `release-check`, `version`, `agents sync` and
+    `connect --check`;
+  - reading and editing `.claude/settings.local.json` in `permissions.deny`.
+- Not allowed without asking: `connect`, `sign`, `model pull` (how a package takes a stand-in
+  model), `npm` installs and `git push`. The selftest refuses a version that allows them.
+
 ```bash
 satori agents sync            # in the repository, or: satori agents sync <directory>
 satori agents sync --check    # writes nothing; exit 1 names what differs
@@ -217,6 +244,15 @@ satori agents sync --check    # writes nothing; exit 1 names what differs
   nothing of Nuxeo Satori UI's source.
 
 ## The MCP server: `satori mcp`
+
+**The reference, since 0.4.0.** The package carries a knowledge pack for the agent, and the
+server's `read_reference` lists and reads it in any AI IDE.
+
+- **`knowledge/`:** this folder's authored files, which are every file a package holds, the
+  recipes, a worked claims app and branding. Beside them, `theme-tokens.md` and `registered.md`,
+  which the build writes from the pipeline's token list and the platform snapshot, so they say what
+  this version checks.
+- **`examples/`:** the kits' app definitions, read-only, with no `$schema` naming this repository.
 
 ```bash
 satori mcp                    # started by the IDE, in the repository, from .mcp.json
@@ -327,8 +363,8 @@ map, a test or a fixture, a key or an archive, a hidden file of a working copy, 
 `node_modules`, text shaped like a private key or a token, or this repository's folder or the
 builder's home named in a file. The only code from `node_modules` is what `bundle.mjs` bundles into
 `mcp.mjs` and `mcp-generator.mjs`, with each package's licence in `licenses/`. `LICENSE` is the Apache
-License 2.0's text, byte for byte as the Apache Software Foundation gives it. At 0.3.1 the tarball
-is 65 files, 1.85 MB packed and 7.5 MB unpacked.
+License 2.0's text, byte for byte as the Apache Software Foundation gives it. At 0.4.0 the tarball
+is 197 files, 1.9 MB packed and 7.8 MB unpacked, 132 of them the knowledge pack and the examples.
 
 **How it is published.** [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml),
 which follows `publish-platform.yml`: dispatched by hand, a dry run unless `dryRun` is false, and

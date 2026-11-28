@@ -50,7 +50,31 @@ In the repository, from `node_modules/.bin`, or through the `validate` and `buil
 ```
 
 Then install the zip `dist/` holds on a development server, as the user Nuxeo runs as, and restart:
-`nuxeoctl mp-install dist/acme-config-1.0.0.zip`.
+`nuxeoctl mp-install dist/acme-config-1.0.0.zip`. Before you install a change over it, raise the
+package's version in every place it is at once: `./node_modules/.bin/satori version config-packages/acme-config patch`.
+
+### With an agent, in the Claude app or any AI IDE
+
+`create` writes what an agent needs:
+
+- `AGENTS.md`, and `CLAUDE.md`, which imports it;
+- the app builder skill;
+- the MCP server `nuxeo-satori` in `.mcp.json` and `.cursor/mcp.json`;
+- for Claude, `.claude/settings.json`, which approves the server and allows the checks and builds.
+
+The agent reads the reference this version carries, `knowledge/` and `examples/` in this package,
+through the server's `read_reference`.
+
+The Claude desktop app does not read your shell's profile, so give the server its address and an
+account once, in a terminal:
+
+```bash
+./node_modules/.bin/satori connect
+```
+
+It checks them against the server, then keeps them in `.claude/settings.local.json`, which git must
+ignore. It refuses otherwise, and the agent may not read it. In a terminal IDE, export
+`NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS` instead.
 
 Run the tool from `node_modules/.bin`, never as `npx satori`: when the install has not put it there,
 `npx` fetches whatever package of that name npm's registry has.

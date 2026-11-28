@@ -82,14 +82,61 @@ tool, refresh them:
 ./node_modules/.bin/satori agents sync --check   # writes nothing; exit 1 names what differs
 ```
 
-It writes the app builder skill, as `satori-app-builder`, into `.cursor/`, `.claude/` and
-`.agent/`, `AGENTS.md`'s section between its two markers, and the server `nuxeo-satori` into
-`.mcp.json`, which Claude Code reads, and `.cursor/mcp.json`, which Cursor reads. Your own text in
-`AGENTS.md` outside the section, and your own servers in the MCP files, are kept to the byte.
+It writes:
 
-**The server's address and credentials come from your environment, never from a file.** The MCP
-entries name `NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS` as references, which the IDE fills in when
-it starts the server, so set them in the shell you start the IDE from:
+- the app builder skill, as `satori-app-builder`, into `.cursor/`, `.claude/` and `.agent/`;
+- `AGENTS.md`'s section between its two markers, which every AI IDE reads;
+- `CLAUDE.md`'s section, `@AGENTS.md`: Claude Code reads `AGENTS.md` only while a repository has
+  no `CLAUDE.md`, so this keeps the rules read when you add your own;
+- the server `nuxeo-satori` into `.mcp.json`, which Claude Code reads, and `.cursor/mcp.json`,
+  which Cursor reads;
+- its entries in `.claude/settings.json`: the server approved, so Claude starts it without asking;
+  the checks and builds allowed, so the agent runs `npm run validate` and `npm run build` without
+  asking; and `.claude/settings.local.json` closed to the agent.
+
+Your own text outside the sections, your own servers in the MCP files and your own settings are
+kept.
+
+The agent also reads the reference the tool carries, `node_modules/@nuxeo/satori-cli/knowledge/`,
+through the MCP server's `read_reference`:
+
+- every file a package holds;
+- a recipe for each kind of request;
+- a worked example of a claims app;
+- branding and the colour tokens;
+- every id the platform registers;
+- read-only example apps.
+
+It is versioned with the tool, so it says what this version checks.
+
+### In the Claude app
+
+The Claude desktop app does not read your shell's profile, so the MCP server cannot take the
+server's address and credentials from exported variables there. Run this once, in a terminal (the
+app's terminal pane will do), in the repository:
+
+```bash
+./node_modules/.bin/satori connect
+```
+
+- **What it asks for:** the development server's address, a user, and the password, which is not
+  shown.
+- **What it checks first:** that the server answers `/nuxeo/api/v1/me` with that account. Nothing
+  is written otherwise.
+- **Where it writes them:** `.claude/settings.local.json`, readable by you alone. Claude gives
+  that file's `env` to the MCP server.
+- **What keeps it out of git:** it refuses unless git ignores the file and does not track it.
+  `create` writes the `.gitignore` line.
+- **What the agent can do:** the checked-in settings deny the agent reading or editing the file,
+  and the agent never runs `connect`.
+
+Then reconnect the server in Claude with `/mcp`. `satori connect --check` says whether it still
+answers. Use a development server, never production: what the tools read goes to the agent.
+
+### In a terminal IDE
+
+The MCP entries name `NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS` as references, which the IDE fills
+in when it starts the server, so set them in the shell you start the IDE from:
 
 ```bash
 export NUXEO_URL=https://nuxeo-dev.acme.example     # the server's origin, without /nuxeo
@@ -99,10 +146,21 @@ export NUXEO_PASS=<its password>
 
 Use a development server, never production: what the tools read goes to the agent.
 
-Then ask the agent for what you want, in your own words:
+Then ask the agent for what you want, in your own words. For example:
+
+> Brand the app as Acme Claims: primary #0B5FFF with white text on it, accent #FF6B00.
 
 > Add a record page for our `Claim` documents: the claimant, the amount and the status at the top,
 > the documents attached below, and an Approve button that runs our `Claim.Approve` operation.
+
+> Add a queue of the claims waiting for review, with their number, amount and status, and put it
+> in the menu and on the home page.
+
+All of it goes into the one package in `config-packages/`: its branding in `bootstrap.json`, and
+the app's files beside it. When the package has no app yet, the agent asks for the app's name and
+the groups it is for, and adds one. After each change it runs `npm run validate` and
+`npm run build` and says what they printed. Installing the zip, raising its version before you
+install it again (`satori version`, section 5), and pushing are yours.
 
 The agent reads the skill and `AGENTS.md`, and works through the MCP server's tools. It reads your
 server's types, schemas, page providers, workflows, vocabularies and operations, and writes the
@@ -172,9 +230,17 @@ nuxeoctl mp-install acme-config-1.0.0.zip
 
 Then restart Nuxeo: the server reads the configuration at startup. To see it took,
 `curl https://nuxeo-dev.acme.example/nuxeo/agentic-ui-config/bootstrap.json` returns your values
-merged over Satori's. To go back, `nuxeoctl mp-remove acme-config` and restart. Raise the version
-in `config-packages/acme-config/package/package.xml` for each change you install: Nuxeo keeps a
-package it already has at the same version. [CUSTOMISING.md](../../CUSTOMISING.md), sections 5 and
+merged over Satori's. To go back, `nuxeoctl mp-remove acme-config` and restart.
+
+**Raise the version for each change you install:** Nuxeo keeps a package it already has at the same
+version. One command changes `package/package.xml`, the bundle's `Bundle-Version` and `app.json`'s
+`packageVersion` together, as the build requires:
+
+```bash
+./node_modules/.bin/satori version config-packages/acme-config patch    # or minor, major, or x.y.z
+```
+
+It refuses a version that is not higher, and a package whose three already disagree. [CUSTOMISING.md](../../CUSTOMISING.md), sections 5 and
 "If something goes wrong", says more.
 
 ## 6. CI

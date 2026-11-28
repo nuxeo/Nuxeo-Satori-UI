@@ -66,7 +66,9 @@ import {
 } from '../../../scripts/package-pipeline/upgrade-check.mjs';
 import { unpack } from '../../../scripts/release-candidate-set.mjs';
 import { agentsCommand } from './agents.mjs';
+import { connectCommand } from './connect.mjs';
 import { createCommand } from './create.mjs';
+import { versionCommand } from './version.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const HERE = dirname(SELF);
@@ -110,8 +112,16 @@ const USAGE = `usage: satori <command> [arguments]
       Scaffold a configuration repository, with a first package that builds, its agent files
       and a workflow that validates, builds and, once trusted-signers.json says who, signs.
   satori agents sync [<directory>] [--check]
-      Install or refresh the app builder skill, AGENTS.md's section and the MCP server's entry
-      in .mcp.json and .cursor/mcp.json. --check writes nothing, and exits 1 when they differ.
+      Install or refresh the app builder skill, AGENTS.md's and CLAUDE.md's sections, the MCP
+      server's entry in .mcp.json and .cursor/mcp.json, and the tool's entries in
+      .claude/settings.json. --check writes nothing, and exits 1 when they differ.
+  satori connect [<directory>] [--server <origin>] [--user <name>] [--password-stdin] [--check]
+      Give the MCP server the development server's address and an account, for an AI IDE that
+      does not start it from a shell, such as the Claude app: asked for in a terminal, checked
+      against the server, and kept in .claude/settings.local.json, which git must ignore.
+  satori version <package> <x.y.z | patch | minor | major>
+      Raise a package's version in package.xml, its bundle's manifest and app.json together,
+      so that a change installs over the one before it.
   satori mcp [--root <directory>] [--tmp <directory>]
       The Builder MCP server, over stdio, for an AI IDE, in a configuration repository.
   satori sign <zip> --key <file> | --ephemeral-key --signers-out <file> [--commit <sha>] [--out <file>]
@@ -217,6 +227,10 @@ async function dispatch(name, args) {
       return createCommand(args, { here: HERE, version: VERSION });
     case 'agents':
       return agentsCommand(args, { here: HERE, version: VERSION });
+    case 'connect':
+      return connectCommand(args);
+    case 'version':
+      return versionCommand(args);
     case 'mcp':
       return mcp(args);
     case 'sign':

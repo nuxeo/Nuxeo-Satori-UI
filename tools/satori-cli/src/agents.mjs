@@ -8,7 +8,10 @@
  *   .claude/skills/satori-app-builder/SKILL.md   the same, for Claude Code
  *   .agent/skills/satori-app-builder/SKILL.md    the same, for any other agent
  *   AGENTS.md                                    the section between its markers
+ *   CLAUDE.md                                    the section between its markers: `@AGENTS.md`
  *   .mcp.json, .cursor/mcp.json                  the server `nuxeo-satori`, `satori mcp`
+ *   .claude/settings.json                        the server approved, the checks allowed, and the
+ *                                                local credentials closed to the agent
  *
  * - **The skill files are the tool's, whole.** The skill is the customer edition of this
  *   repository's `app-builder` skill, carried as `agents/skills/satori-app-builder/SKILL.md`, the
@@ -27,6 +30,17 @@
  *   with two spaces, a byte-order mark kept. A file that is not a JSON object is refused, and so is
  *   one that JSON would not give back as it is, with a key twice, a number it rounds or an escape it
  *   spells otherwise, since writing it again would change more than the entry.
+ * - **`CLAUDE.md` imports `AGENTS.md`.** Claude Code reads `AGENTS.md` only while a repository
+ *   has no `CLAUDE.md`: the section, `@AGENTS.md`, keeps the rules read once a customer adds one.
+ *   Its markers, and what is kept around them, are `AGENTS.md`'s.
+ * - **In `.claude/settings.json`, only the tool's entries are the tool's**, each one an item of a
+ *   list: `nuxeo-satori` in `enabledMcpjsonServers`, so that Claude starts the server without
+ *   asking; the checks and builds in `permissions.allow`, so that the agent runs them without
+ *   asking (never `connect`, `sign`, `model pull`, which is how a package takes a stand-in model,
+ *   or an install); and reading or editing `.claude/settings.local.json` in `permissions.deny`, the
+ *   file `satori connect` writes the server's credentials to. Every other key and item is kept; a
+ *   file in step is not written; one that is not a JSON object, or that JSON would not give back as
+ *   it is, is refused, as an MCP file is.
  * - **Nothing is followed.** A target, or a folder on the way to it, that is a link, or is not
  *   what it should be, is refused, so nothing is written outside the repository.
  * - **All or nothing.** Every file is worked out first; with one refused, none is written. Each
@@ -48,6 +62,35 @@ export const SKILL = 'satori-app-builder';
 export const SERVER = 'nuxeo-satori';
 const BEGIN = '<!-- BEGIN satori agents';
 const END = '<!-- END satori agents -->';
+/** What `CLAUDE.md`'s section holds: Claude Code's import of `AGENTS.md`, and why. */
+const CLAUDE_SECTION = [
+  '@AGENTS.md',
+  '',
+  "Claude Code reads AGENTS.md only while this repository has no CLAUDE.md: the line above imports it, with the tool's rules in it. Write your rules for every AI IDE in AGENTS.md, and those for Claude alone here, outside these markers.",
+].join('\n');
+/** The file `satori connect` writes the server's address and credentials to, never committed. */
+export const LOCAL_SETTINGS = '.claude/settings.local.json';
+/**
+ * The tool's entries in `.claude/settings.json`, by the list each is an item of. The checks and the
+ * builds only: what changes a server, signs, or makes a package a stand-in model's asks first.
+ */
+const CLAUDE_SETTINGS = {
+  enabledMcpjsonServers: [SERVER],
+  allow: [
+    // The MCP server's tools: its reads, and its writes, each kept only when the package passes.
+    'mcp__nuxeo-satori',
+    'Bash(npm run validate)',
+    'Bash(npm run build)',
+    'Bash(./node_modules/.bin/satori validate *)',
+    'Bash(./node_modules/.bin/satori build *)',
+    'Bash(./node_modules/.bin/satori upgrade-check *)',
+    'Bash(./node_modules/.bin/satori release-check *)',
+    'Bash(./node_modules/.bin/satori version *)',
+    'Bash(./node_modules/.bin/satori agents sync *)',
+    'Bash(./node_modules/.bin/satori connect --check)',
+  ],
+  deny: [`Read(./${LOCAL_SETTINGS})`, `Edit(./${LOCAL_SETTINGS})`],
+};
 /** What the server reads, each given to it as a reference to the environment, never a value. */
 export const SERVER_VARIABLES = ['NUXEO_URL', 'NUXEO_USER', 'NUXEO_PASS'];
 
@@ -176,9 +219,11 @@ export function agentFiles(directory, { here, version }) {
     '{{version}}',
     version,
   );
-  plan('AGENTS.md', (now) => withSection(now, section, version));
+  plan('AGENTS.md', (now) => withSection(now, section, version, '# AGENTS.md'));
+  plan('CLAUDE.md', (now) => withSection(now, CLAUDE_SECTION, version, '# CLAUDE.md'));
 
   for (const { file, entry } of MCP_FILES) plan(file, (now) => withServer(now, entry()));
+  plan(join('.claude', 'settings.json'), (now) => withSettings(now));
   return problems.length > 0 ? { problems } : { files };
 }
 
@@ -189,8 +234,8 @@ function skillText(text, version) {
   return `${header[0]}\n<!-- Written by satori agents sync, from @nuxeo/satori-cli ${version}, and replaced whole by it: keep your own rules in AGENTS.md, outside its satori section. -->\n${text.slice(header[0].length)}`;
 }
 
-/** `AGENTS.md` with the tool's section in it, everything else as it was, to the byte. */
-function withSection(now, section, version) {
+/** A file with the tool's section in it, everything else as it was, to the byte. */
+function withSection(now, section, version, title) {
   // The section's own line ending when it has one, else the file's first, else a line feed.
   const marked = now === null ? -1 : now.indexOf(BEGIN);
   const from = marked < 0 ? (now ?? '') : now.slice(marked);
@@ -200,7 +245,7 @@ function withSection(now, section, version) {
     ...section.replace(/\n+$/, '').split('\n'),
     END,
   ].join(eol);
-  if (now === null) return `# AGENTS.md${eol}${eol}${block}${eol}`;
+  if (now === null) return `${title}${eol}${eol}${block}${eol}`;
   // A byte-order mark is the file's, not its first line's.
   const mark = now.startsWith('\uFEFF') ? 1 : 0;
   const lines = now.slice(mark).split(/\r?\n/);
@@ -268,6 +313,59 @@ function withServer(now, entry) {
     text: `${mark}${JSON.stringify({ ...value, mcpServers: servers }, null, 2)}\n`,
     same: false,
   };
+}
+
+/**
+ * `.claude/settings.json` with the tool's entries in it, every other key and item as it was:
+ * `{ text, same }`, `same` when each entry is there already, or `{ problem }`.
+ */
+function withSettings(now) {
+  let value = {};
+  const mark = now?.startsWith('\uFEFF') ? '\uFEFF' : '';
+  if (now !== null) {
+    try {
+      value = JSON.parse(now.slice(mark.length));
+    } catch (error) {
+      return { problem: `it is not JSON (${error.message}), so its settings cannot be kept.` };
+    }
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+      return { problem: 'it is not a JSON object.' };
+  }
+  const isList = (list) => list === undefined || Array.isArray(list);
+  const permissions = value.permissions ?? {};
+  if (permissions === null || typeof permissions !== 'object' || Array.isArray(permissions))
+    return { problem: '"permissions" is not an object.' };
+  for (const [name, list] of [
+    ['enabledMcpjsonServers', value.enabledMcpjsonServers],
+    ['permissions.allow', permissions.allow],
+    ['permissions.deny', permissions.deny],
+  ])
+    if (!isList(list)) return { problem: `"${name}" is not a list.` };
+  const merged = (list, items) => [
+    ...(list ?? []),
+    ...items.filter((item) => !(list ?? []).includes(item)),
+  ];
+  const servers = merged(value.enabledMcpjsonServers, CLAUDE_SETTINGS.enabledMcpjsonServers);
+  const allow = merged(permissions.allow, CLAUDE_SETTINGS.allow);
+  const deny = merged(permissions.deny, CLAUDE_SETTINGS.deny);
+  if (
+    now !== null &&
+    servers.length === (value.enabledMcpjsonServers ?? []).length &&
+    allow.length === (permissions.allow ?? []).length &&
+    deny.length === (permissions.deny ?? []).length
+  )
+    return { text: now, same: true };
+  if (now !== null && compact(now.slice(mark.length)) !== JSON.stringify(value))
+    return {
+      problem:
+        "JSON would not give it back as it is: a key given twice, a number it rounds, or an escape it spells otherwise. Written again it would change more than the tool's entries; make it plain JSON, or add them by hand, and run it again.",
+    };
+  const next = {
+    ...value,
+    enabledMcpjsonServers: servers,
+    permissions: { ...permissions, allow, deny },
+  };
+  return { text: `${mark}${JSON.stringify(next, null, 2)}\n`, same: false };
 }
 
 /** JSON's text without the white space between its tokens. */
