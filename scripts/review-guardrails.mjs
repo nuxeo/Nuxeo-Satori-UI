@@ -11824,7 +11824,7 @@ function checkGeneratorsEsmSafe() {
           const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
           fail(
             `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
-              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              "this source with Node's native type stripping, where the module is ESM and it is " +
               'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
               'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
               'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
@@ -12615,6 +12615,243 @@ function checkNxsControlsNotBypassed() {
             '`nxs-text-field` for a text field and `nxs-select` for a select.',
         );
       }
+    }
+  }
+}
+
+/**
+ * The engines whose screens are drawn entirely with the `nxs-` components, which
+ * `checkEnginesDrawNoMaterial` holds there. A library joins once it has moved, and does not leave.
+ *
+ * The layout engine (`libs/shared/document-layouts`) draws the record pages, metadata layouts and
+ * forms an app's configuration describes, and the queue engine (`libs/shared/queues`) draws its
+ * queues. What a customer configures has to look like what Storybook shows, so these two draw only
+ * with the components Storybook documents: `nxs-tabs`, `nxs-dialog`, `nxs-checkbox`, `nxs-select`,
+ * `nxs-text-field`, `nxs-button`, `nxs-table` and the rest. Angular Material drawn directly is a
+ * second look and a second keyboard contract, which no story shows and no customer can theme
+ * through the library.
+ */
+const NXS_ONLY_ENGINES = Object.freeze(['libs/shared/document-layouts', 'libs/shared/queues']);
+
+/**
+ * What an engine may take from `@angular/material/dialog`: what opens a dialog and what its
+ * component reads. None of them draws. `MatDialogModule`, `MatDialogTitle`, `MatDialogContent`,
+ * `MatDialogActions` and `MatDialogClose` do, so they are not here: `nxs-dialog` draws the frame.
+ */
+const ENGINE_DIALOG_SYMBOLS = new Set([
+  'MatDialog',
+  'MatDialogRef',
+  'MatDialogConfig',
+  'MAT_DIALOG_DATA',
+]);
+
+/** Material's own package or one of its entry points, `@angular/material/dialog/testing` included. */
+function isMaterialSpecifier(specifier) {
+  return specifier === '@angular/material' || specifier.startsWith('@angular/material/');
+}
+
+/** Material's selectors on a template tag: a `mat-` element, and each `mat-` or `matX` attribute. */
+function materialSelectorsOn({ element, attributes }) {
+  return [
+    ...(element.startsWith('mat-') ? [`<${element}>`] : []),
+    ...attributes.filter((name) => name.toLowerCase().startsWith('mat-') || /^mat[A-Z]/.test(name)),
+  ];
+}
+
+/**
+ * Every Material import of one engine source file that the engines may not have, from its syntax
+ * tree: an import, a re-export, an `import x = require()`, a dynamic `import()` and an
+ * `import('…')` type. `@angular/material/dialog` is allowed only as named bindings of
+ * `ENGINE_DIALOG_SYMBOLS`; a namespace, a default, a bare side-effect import, an `export *` or a
+ * dynamic import of it takes the whole entry point, so each fails. Each finding is the line and
+ * what was taken.
+ */
+function engineMaterialImports(file, body) {
+  const source = ts.createSourceFile(file, body, ts.ScriptTarget.Latest, true);
+  const findings = [];
+  const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const take = (node, specifier, what) => findings.push({ line: lineOf(node), specifier, what });
+
+  /** The names an import or export clause takes from the dialog that `ENGINE_DIALOG_SYMBOLS` does not allow. */
+  const refused = (elements) =>
+    elements
+      .map((element) => (element.propertyName ?? element.name).text)
+      .filter((name) => !ENGINE_DIALOG_SYMBOLS.has(name));
+
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      isMaterialSpecifier(node.moduleSpecifier.text)
+    ) {
+      const specifier = node.moduleSpecifier.text;
+      if (specifier !== '@angular/material/dialog') {
+        take(node, specifier, 'the entry point');
+      } else if (ts.isImportDeclaration(node)) {
+        const clause = node.importClause;
+        if (!clause) take(node, specifier, 'the whole entry point, as a side-effect import');
+        else if (clause.name) take(node, specifier, 'a default import');
+        else if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+          take(node, specifier, 'the whole entry point, as a namespace');
+        } else if (clause.namedBindings) {
+          const names = refused([...clause.namedBindings.elements]);
+          if (names.length > 0) take(node, specifier, names.map((n) => `\`${n}\``).join(', '));
+        }
+      } else if (!node.exportClause || ts.isNamespaceExport(node.exportClause)) {
+        take(node, specifier, 'the whole entry point, re-exported');
+      } else {
+        const names = refused([...node.exportClause.elements]);
+        if (names.length > 0) take(node, specifier, names.map((n) => `\`${n}\``).join(', '));
+      }
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression) &&
+      isMaterialSpecifier(node.moduleReference.expression.text)
+    ) {
+      take(node, node.moduleReference.expression.text, 'the whole entry point, through `require`');
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      isMaterialSpecifier(node.arguments[0].text)
+    ) {
+      take(node, node.arguments[0].text, 'the whole entry point, as a dynamic import');
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal) &&
+      isMaterialSpecifier(node.argument.literal.text)
+    ) {
+      take(node, node.argument.literal.text, 'a type through `import()`');
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return { source, findings };
+}
+
+/**
+ * The inline templates of a source file's `@Component` decorators, each with the line its text
+ * starts on. The convention is `templateUrl`, so this is insurance: an inline template is still a
+ * template the engine ships.
+ */
+function inlineTemplates(source) {
+  const templates = [];
+  const visit = (node) => {
+    if (
+      ts.isDecorator(node) &&
+      ts.isCallExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Component'
+    ) {
+      for (const argument of node.expression.arguments) {
+        if (!ts.isObjectLiteralExpression(argument)) continue;
+        for (const property of argument.properties) {
+          if (!ts.isPropertyAssignment(property) || property.name.getText(source) !== 'template') {
+            continue;
+          }
+          const value = property.initializer;
+          let text = null;
+          if (ts.isStringLiteralLike(value)) text = value.text;
+          else if (ts.isTemplateExpression(value)) {
+            text = value.head.text + value.templateSpans.map((span) => span.literal.text).join('');
+          }
+          if (text === null) continue;
+          const line = source.getLineAndCharacterOfPosition(value.getStart(source)).line + 1;
+          templates.push({ text, line });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return templates;
+}
+
+/**
+ * The layout and queue engines draw with the `nxs-` components only: no Angular Material element,
+ * attribute or module in what they ship.
+ *
+ * `checkNxsControlsNotBypassed` holds a listed feature to the four `nxs-` controls, and only where
+ * those four replace Material: a feature there may still draw `mat-tab-group`, `mat-checkbox` or a
+ * dialog's `mat-dialog-content`. The engines may not, because what they draw is what a customer's
+ * configuration produces, and that has to be what Storybook shows. So every shipped template of a
+ * library in `NXS_ONLY_ENGINES` is read tag by tag (`templateTags`, so a comment, a class or a
+ * translation key that spells a selector is not a use), and fails on any element named `mat-…`
+ * and any attribute that is Material's — named `mat-…` (`mat-dialog-title`, `[mat-dialog-close]`,
+ * `mat-stroked-button`, `mat-tab-label`) or `matX` (`matInput`, `matTabContent`, `*matCellDef`,
+ * `[matButton]`, `matTooltip`). The inline template of a `@Component`, if one appears, is read
+ * the same way. Every shipped `.ts` is read from its syntax tree, and fails on any import of
+ * `@angular/material` or an entry point under it — a re-export, a type-only, a dynamic import and
+ * an `import()` type included — except named bindings of `@angular/material/dialog` that open a
+ * dialog or read its data (`ENGINE_DIALOG_SYMBOLS`).
+ *
+ * ## What this does not claim
+ *
+ * - **Not `MatDialog` itself.** Opening a dialog, and its `MatDialogRef` and `MAT_DIALOG_DATA`,
+ *   draw nothing, and no `nxs-` service opens one; `nxs-dialog` draws the frame inside it.
+ * - **Not the CDK.** `@angular/cdk/*` — `LiveAnnouncer`, `Clipboard`, the `cdk-visually-hidden`
+ *   class — is behaviour and a utility class, not Material's look, and stays allowed.
+ * - **Not stylesheets.** A rule naming `.mat-mdc-…` is not read here: with no Material element
+ *   left it matches nothing in the engine's own view.
+ * - **Not specs**, their host templates or spec-only helpers (`NXS_CONTROL_SCAN_SKIP`), which ship
+ *   nothing and may use Material's test harnesses.
+ * - **Not what an `nxs-` component draws inside itself.** `nxs-tabs` is Material's tab group
+ *   underneath; that is the component library's business, and the reason the engines use it.
+ */
+function checkEnginesDrawNoMaterial() {
+  const files = git(['ls-files', '--cached', '--others', '--exclude-standard']).split('\n');
+  const advice =
+    'Draw it with the `nxs-` component that Storybook shows — `nxs-tabs`, `nxs-dialog`, ' +
+    '`nxs-checkbox`, `nxs-select`, `nxs-text-field`, `nxs-button`, `nxs-table` — from ' +
+    '`@nuxeo/satori-platform/components`, and add what a spot needs to that component.';
+  for (const library of NXS_ONLY_ENGINES) {
+    const sources = files.filter(
+      (file) =>
+        file.startsWith(`${library}/src/`) &&
+        (file.endsWith('.ts') || file.endsWith('.html')) &&
+        !NXS_CONTROL_SCAN_SKIP.test(file) &&
+        fileExists(file),
+    );
+    if (!sources.some((file) => file.endsWith('.ts'))) {
+      fail(
+        `${library} is listed in NXS_ONLY_ENGINES and has no source under ${library}/src/, so no ` +
+          'file of it was checked. Remove the entry if the library is gone, or fix the path.',
+      );
+      continue;
+    }
+
+    const reportTags = (file, body, offset) => {
+      for (const tag of templateTags(body)) {
+        const used = materialSelectorsOn(tag);
+        if (used.length === 0) continue;
+        fail(
+          `${file}:${tag.line + offset} draws ${used.map((name) => `\`${name}\``).join(', ')}, ` +
+            `Angular Material's own. ${library} draws only with the \`nxs-\` components ` +
+            `(NXS_ONLY_ENGINES). ${advice}`,
+        );
+      }
+    };
+
+    for (const file of sources) {
+      const body = read(file);
+      if (file.endsWith('.html')) {
+        reportTags(file, body, 0);
+        continue;
+      }
+      const { source, findings } = engineMaterialImports(file, body);
+      for (const { line, specifier, what } of findings) {
+        fail(
+          `${file}:${line} takes ${what} from \`${specifier}\`. ${library} draws only with the ` +
+            '`nxs-` components (NXS_ONLY_ENGINES), and may take from Material no more than ' +
+            '`MatDialog`, `MatDialogRef`, `MatDialogConfig` and `MAT_DIALOG_DATA` from ' +
+            `\`@angular/material/dialog\`, which open a dialog and draw nothing. ${advice}`,
+        );
+      }
+      for (const { text, line } of inlineTemplates(source)) reportTags(file, text, line - 1);
     }
   }
 }
@@ -14547,6 +14784,7 @@ const GUARDRAILS = [
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
   checkNxsControlsNotBypassed,
+  checkEnginesDrawNoMaterial,
   checkWorkflowRefGates,
   checkGateInventory,
   checkPluginSpikeIsolated,
