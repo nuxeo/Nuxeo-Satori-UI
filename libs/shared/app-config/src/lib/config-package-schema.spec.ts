@@ -63,6 +63,20 @@ describe('the configuration package schemas', () => {
     }
   });
 
+  it('list every key of a theme, and of its preview, the application reads, and no other', () => {
+    // A theme's keys were not listed as closed, so a misspelt one was taken and did nothing.
+    const themes = deref(bootstrap, bootstrap.properties?.['themes'] ?? {}) as Schema & {
+      items?: Schema;
+    };
+    const theme = themes.items ?? {};
+    const shipped = DEFAULT_APP_BOOTSTRAP_CONFIG.themes[0];
+    expect(theme.additionalProperties).toBe(false);
+    expect(keys(theme.properties)).toEqual(keys(shipped));
+    const preview = theme.properties?.['preview'] ?? {};
+    expect(preview.additionalProperties).toBe(false);
+    expect(keys(preview.properties)).toEqual(keys(shipped.preview));
+  });
+
   it('hold a preset to the same keys as a fragment', () => {
     const preset = bootstrap.properties?.['presales']?.properties?.['presets']
       ?.additionalProperties as Schema;

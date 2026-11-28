@@ -59,6 +59,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -98,6 +99,8 @@ const AGENT_FILES = [
   'AGENTS.md',
   '.mcp.json',
   '.cursor/mcp.json',
+  'CLAUDE.md',
+  '.claude/settings.json',
 ];
 const SECTION_BEGIN = '<!-- BEGIN satori agents';
 const SECTION_END = '<!-- END satori agents -->';
@@ -149,6 +152,7 @@ try {
   await modelPull(satori, confined);
   reservedNames();
   agentsSync(satori, tool);
+  await connectAndVersion(satori);
   oneGenerator(tool);
   customerSkill(tool, tools);
   workflowTemplate(tool);
@@ -440,6 +444,8 @@ async function outsideTheRepository(tool, kitDigest, tools) {
     '.agent/skills/satori-app-builder/SKILL.md',
     '.mcp.json',
     '.cursor/mcp.json',
+    'CLAUDE.md',
+    '.claude/settings.json',
   ];
   const missing = expected.filter((file) => !existsSync(join(repository, ...file.split('/'))));
   if (created.status !== 0 || missing.length > 0)
@@ -726,6 +732,74 @@ function refusals(satori) {
     json(BOOTSTRAP, (value) => (value.branding.applicationTitel = 'Acme')),
     2,
     'branding.applicationTitel: "applicationTitel" is not a key a bootstrap fragment has there',
+    none,
+  );
+  // A theme that would change nothing: each the application takes, and then does not show.
+  const theme = (change) =>
+    json(BOOTSTRAP, (value) => {
+      value.themes = [
+        { id: 'acme', label: 'Acme', base: 'nuxeo', tokens: { '--mat-sys-primary': '#0b5fff' } },
+      ];
+      value.defaultThemeId = 'acme';
+      change(value);
+    });
+  refused(
+    'a theme key the application does not read',
+    first,
+    theme((value) => (value.themes[0].colour = '#0b5fff')),
+    2,
+    'themes[0].colour: "colour" is not a key a bootstrap fragment has there',
+    none,
+  );
+  refused(
+    'a theme whose base the application has no palette for',
+    first,
+    theme((value) => (value.themes[0].base = 'midnight')),
+    2,
+    'themes[0].base: "midnight" is not a theme the application has (nuxeo, dark, kawaii, light)',
+    none,
+  );
+  refused(
+    'a token that is not a CSS custom property',
+    first,
+    theme((value) => (value.themes[0].tokens = { primary: '#0b5fff' })),
+    2,
+    'themes[0].tokens.primary: "primary" is not a CSS custom property',
+    none,
+  );
+  refused(
+    'a colour token whose value is not a colour',
+    first,
+    theme((value) => (value.themes[0].tokens['--mat-sys-primary'] = 'brand blue')),
+    2,
+    'themes[0].tokens.--mat-sys-primary: "brand blue" is not a CSS colour',
+    none,
+  );
+  refused(
+    'a defaultThemeId that names no theme',
+    first,
+    theme((value) => (value.defaultThemeId = 'acme-dark')),
+    2,
+    'defaultThemeId: "acme-dark" names no theme',
+    none,
+  );
+  passes(
+    'a theme of its own, its colours in pairs, chosen by defaultThemeId and by a preset',
+    first,
+    theme((value) => {
+      value.themes[0].tokens = {
+        '--mat-sys-primary': '#0B5FFF',
+        '--mat-sys-on-primary': '#ffffff',
+        '--mat-sys-tertiary': 'rgb(255 107 0)',
+        '--sat-platform-nav-background': 'var(--mat-sys-surface-container)',
+        '--nxs-button-radius': '4px',
+      };
+      value.presales = {
+        presetSwitching: true,
+        presets: { night: { label: 'Night', bootstrap: { defaultThemeId: 'dark' } } },
+      };
+    }),
+    'satori validate: the package passes every step',
     none,
   );
   refused(
@@ -1210,6 +1284,23 @@ async function modelPull(satori, confined) {
   await new Promise((listening) => server.listen(0, '127.0.0.1', listening));
   try {
     const { port } = server.address();
+    // With no --server, the server is NUXEO_URL's: a command an agent runs then holds no variable.
+    const byEnvironment = join(scratch, 'pulled-model-by-environment.json');
+    const pulledByEnvironment = await nodeAsync([satori, 'model', 'pull', '--out', byEnvironment], {
+      env: {
+        ...process.env,
+        NUXEO_USER: user,
+        NUXEO_PASS: secret,
+        NUXEO_URL: `http://127.0.0.1:${server.address().port}`,
+      },
+    });
+    if (pulledByEnvironment.status !== 0 || !existsSync(byEnvironment))
+      fail(
+        'satori model pull, its server from NUXEO_URL',
+        `exit ${pulledByEnvironment.status}`,
+        pulledByEnvironment.output,
+      );
+    else held++;
     const out = join(scratch, 'pulled-model.json');
     const env = { ...process.env, NUXEO_USER: user, NUXEO_PASS: secret };
     const pulled = await nodeAsync(
@@ -1505,6 +1596,78 @@ function agentsSync(satori, tool) {
     fail('satori agents sync --check, in step', `exit ${inStep.status}`, inStep.output);
   else held++;
 
+  // The Claude app's: CLAUDE.md imports AGENTS.md, and the settings approve the server, allow the
+  // checks and builds only, and close the local credentials to the agent.
+  const claude = readFileSync(join(repository, 'CLAUDE.md'), 'utf8');
+  const settingsFile = join(repository, '.claude', 'settings.json');
+  const settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
+  const allowed = settings.permissions?.allow ?? [];
+  if (
+    !claude.startsWith('# CLAUDE.md') ||
+    !new RegExp(`${SECTION_BEGIN}[^\\n]*\\n@AGENTS\\.md\\n`).test(claude) ||
+    !claude.includes(SECTION_END)
+  )
+    fail(
+      'the CLAUDE.md agents sync writes',
+      'it does not import AGENTS.md inside its section',
+      claude,
+    );
+  else held++;
+  if (
+    !settings.enabledMcpjsonServers?.includes('nuxeo-satori') ||
+    !allowed.includes('Bash(npm run validate)') ||
+    !allowed.includes('mcp__nuxeo-satori') ||
+    !allowed.includes('Bash(./node_modules/.bin/satori build *)') ||
+    !settings.permissions?.deny?.includes('Read(./.claude/settings.local.json)') ||
+    !settings.permissions?.deny?.includes('Edit(./.claude/settings.local.json)')
+  )
+    fail(
+      'the .claude/settings.json agents sync writes',
+      'an entry of the tool is missing',
+      JSON.stringify(settings),
+    );
+  else held++;
+  // What changes a server, signs, takes the credentials, or makes a stand-in model asks first.
+  const tooMuch = allowed.filter((rule) =>
+    /satori (connect(?! --check)|sign|model pull|create)|npm (ci|install)|nuxeoctl|curl|git push/.test(
+      rule,
+    ),
+  );
+  if (tooMuch.length > 0)
+    fail(
+      'the .claude/settings.json agents sync writes',
+      `it allows ${tooMuch.join(', ')} without asking`,
+    );
+  else held++;
+  // A customer's own settings kept, and the tool's entries put back once taken out.
+  const theirSettings = {
+    model: 'their-choice',
+    enabledMcpjsonServers: ['acme-tools'],
+    permissions: { allow: ['Bash(make lint)'], deny: ['Read(./secrets/**)'] },
+  };
+  writeFileSync(settingsFile, `${JSON.stringify(theirSettings, null, 2)}\n`);
+  const settingsDrifted = sync('--check');
+  const settingsSynced = sync();
+  const keptSettings = JSON.parse(readFileSync(settingsFile, 'utf8'));
+  if (
+    settingsDrifted.status !== 1 ||
+    !settingsDrifted.output.includes('.claude/settings.json') ||
+    settingsSynced.status !== 0 ||
+    keptSettings.model !== 'their-choice' ||
+    keptSettings.enabledMcpjsonServers.join() !== 'acme-tools,nuxeo-satori' ||
+    keptSettings.permissions.allow[0] !== 'Bash(make lint)' ||
+    !keptSettings.permissions.allow.includes('Bash(npm run validate)') ||
+    keptSettings.permissions.deny[0] !== 'Read(./secrets/**)' ||
+    !keptSettings.permissions.deny.includes('Read(./.claude/settings.local.json)') ||
+    sync('--check').status !== 0
+  )
+    fail(
+      "satori agents sync, with a customer's own Claude settings",
+      "their settings were not keptSettings, or the tool's entries were not put back, or --check did not see them missing",
+      `${settingsDrifted.output}\n${settingsSynced.output}\n${JSON.stringify(keptSettings)}`,
+    );
+  else held++;
+
   // A customer's own text and servers, kept; the tool's section and entry, put back.
   const agents = join(repository, 'AGENTS.md');
   const ours = readFileSync(agents, 'utf8');
@@ -1641,6 +1804,25 @@ function agentsSync(satori, tool) {
     'JSON would not give it back as it is',
   );
   refusedWith(
+    'with a .claude/settings.json that is not JSON',
+    (folder) => {
+      mkdirSync(join(folder, '.claude'), { recursive: true });
+      writeFileSync(join(folder, '.claude', 'settings.json'), '{ "permissions": { // a comment\n');
+    },
+    'it is not JSON',
+  );
+  refusedWith(
+    'with a .claude/settings.json whose permissions.allow is not a list',
+    (folder) => {
+      mkdirSync(join(folder, '.claude'), { recursive: true });
+      writeFileSync(
+        join(folder, '.claude', 'settings.json'),
+        '{ "permissions": { "allow": "Bash(npm run validate)" } }\n',
+      );
+    },
+    '"permissions.allow" is not a list',
+  );
+  refusedWith(
     'with .claude a link to a folder elsewhere',
     (folder) => {
       const elsewhere = join(scratch, 'agents-elsewhere');
@@ -1651,6 +1833,289 @@ function agentsSync(satori, tool) {
   );
   if (existsSync(join(scratch, 'agents-elsewhere', 'skills')))
     fail('satori agents sync, with .claude a link', 'it wrote through the link');
+}
+
+/**
+ * `satori connect`, against a stand-in Nuxeo that answers `/nuxeo/api/v1/me` to one account; and
+ * `satori version`. git runs with no global or system configuration, so that what ignores the local
+ * settings is the repository's own `.gitignore`, as on a customer's machine.
+ */
+async function connectAndVersion(satori) {
+  const user = 'selftest-user';
+  const secret = `selftest-${randomBytes(12).toString('hex')}`;
+  const expected = `Basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`;
+  const leaked = [];
+  const server = createServer((request, response) => {
+    if (request.url.includes(secret)) leaked.push(request.url);
+    const signedIn = request.headers.authorization === expected;
+    const me = new URL(request.url, 'http://localhost').pathname === '/nuxeo/api/v1/me';
+    response.writeHead(!signedIn ? 401 : me ? 200 : 404, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(signedIn && me ? { 'entity-type': 'user', id: user } : {}));
+  });
+  await new Promise((listening) => server.listen(0, '127.0.0.1', listening));
+  const noConfig = join(scratch, 'connect-no-git-config');
+  mkdirSync(noConfig, { recursive: true });
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    XDG_CONFIG_HOME: noConfig,
+  };
+  const repository = join(scratch, 'connect');
+  const local = join(repository, '.claude', 'settings.local.json');
+  const run = (args, input) =>
+    new Promise((resolveRun) => {
+      const child = spawn(process.execPath, [satori, 'connect', ...args], {
+        cwd: repository,
+        env,
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      });
+      let output = '';
+      child.stdout.on('data', (chunk) => (output += chunk));
+      child.stderr.on('data', (chunk) => (output += chunk));
+      child.on('close', (status) => resolveRun({ status, output }));
+      if (input !== undefined) child.stdin.end(input);
+    });
+  try {
+    const { port } = server.address();
+    const origin = `http://127.0.0.1:${port}`;
+    const given = ['--server', origin, '--user', user, '--password-stdin'];
+    node([satori, 'create', repository, '--name', 'acme-config', '--owner', 'acme']);
+    const refusedAs = async (what, args, input, says) => {
+      const answer = await run(args, input);
+      if (answer.status !== 1 || !answer.output.includes(says) || existsSync(local))
+        fail(
+          `satori connect, ${what}`,
+          `exit ${answer.status}, or no "${says}", or the file written`,
+          answer.output,
+        );
+      else if (answer.output.includes(secret))
+        fail(`satori connect, ${what}`, 'it printed the password');
+      else held++;
+    };
+    await refusedAs('outside a git repository', given, secret, 'is not a git repository');
+    spawnSync('git', ['init', '-q'], { cwd: repository, env });
+    await refusedAs(
+      'with no terminal and no --password-stdin',
+      ['--server', origin, '--user', user],
+      undefined,
+      'there is none here',
+    );
+    await refusedAs(
+      'with a password the server refuses',
+      given,
+      `${secret}-wrong`,
+      'refused selftest-user with HTTP 401',
+    );
+    await refusedAs(
+      'to a server over http off this machine',
+      ['--server', 'http://nuxeo.example.invalid', '--user', user, '--password-stdin'],
+      secret,
+      'clear text',
+    );
+    const ignore = join(repository, '.gitignore');
+    const ignored = readFileSync(ignore, 'utf8');
+    writeFileSync(ignore, ignored.replace('.claude/settings.local.json\n', ''));
+    await refusedAs(
+      'where .gitignore does not ignore the file',
+      given,
+      secret,
+      'does not ignore .claude/settings.local.json',
+    );
+    writeFileSync(ignore, ignored);
+    mkdirSync(dirname(local), { recursive: true });
+    writeFileSync(local, '{}\n');
+    spawnSync('git', ['add', '-f', '.claude/settings.local.json'], { cwd: repository, env });
+    const tracked = await run(given, secret);
+    if (tracked.status !== 1 || !tracked.output.includes('git tracks .claude/settings.local.json'))
+      fail('satori connect, where git tracks the file', `exit ${tracked.status}`, tracked.output);
+    else held++;
+    spawnSync('git', ['rm', '-q', '--cached', '.claude/settings.local.json'], {
+      cwd: repository,
+      env,
+    });
+    // The developer's own keys in the file are kept.
+    writeFileSync(local, `${JSON.stringify({ permissions: { allow: ['Bash(ls)'] } })}\n`);
+    const connected = await run(given, secret);
+    const written = existsSync(local) ? JSON.parse(readFileSync(local, 'utf8')) : {};
+    const mode = existsSync(local) ? lstatSync(local).mode & 0o777 : 0;
+    const status = spawnSync('git', ['status', '--porcelain', '--ignored=no'], {
+      cwd: repository,
+      env,
+      encoding: 'utf8',
+    }).stdout;
+    if (
+      connected.status !== 0 ||
+      written.env?.NUXEO_URL !== origin ||
+      written.env?.NUXEO_USER !== user ||
+      written.env?.NUXEO_PASS !== secret ||
+      written.permissions?.allow?.[0] !== 'Bash(ls)' ||
+      (process.platform !== 'win32' && mode !== 0o600) ||
+      status.includes('settings.local.json') ||
+      connected.output.includes(secret) ||
+      leaked.length > 0
+    )
+      fail(
+        'satori connect, with the right account',
+        `exit ${connected.status}, mode ${mode.toString(8)}, or the file not as written, tracked, or the password printed or sent in an address`,
+        connected.output,
+      );
+    else held++;
+    const checked = await run(['--check']);
+    if (
+      checked.status !== 0 ||
+      !checked.output.includes(`answers as ${user}`) ||
+      checked.output.includes(secret)
+    )
+      fail('satori connect --check', `exit ${checked.status}`, checked.output);
+    else held++;
+    if (process.platform !== 'win32') {
+      chmodSync(local, 0o644);
+      const open = await run(['--check']);
+      if (open.status !== 1 || !open.output.includes('can be read by others'))
+        fail(
+          'satori connect --check, with the file readable by others',
+          `exit ${open.status}`,
+          open.output,
+        );
+      else held++;
+    }
+  } finally {
+    server.close();
+  }
+
+  // satori tool: the MCP server's tools from the command line, the same reads and validated writes.
+  const tool = (...args) => node([satori, 'tool', ...args], { cwd: repository });
+  const listedTools = tool('--list');
+  let names = [];
+  try {
+    names = JSON.parse(listedTools.output).map(({ name }) => name);
+  } catch {
+    names = [];
+  }
+  if (
+    listedTools.status !== 0 ||
+    !names.includes('read_reference') ||
+    !names.includes('write_package_file')
+  )
+    fail(
+      'satori tool --list',
+      `exit ${listedTools.status}, tools ${names.join(', ') || 'none'}`,
+      listedTools.output,
+    );
+  else held++;
+  const readme = tool('read_reference', '{ "path": "knowledge/README.md" }');
+  if (readme.status !== 0 || !readme.output.includes('Nuxeo Satori, for the agent'))
+    fail('satori tool read_reference', `exit ${readme.status}`, readme.output);
+  else held++;
+  const bootstrapFile = join(
+    repository,
+    'config-packages',
+    'acme-config',
+    'bundle',
+    'agentic-ui-config',
+    'bootstrap.json',
+  );
+  const bootstrapBefore = readFileSync(bootstrapFile, 'utf8');
+  const badTheme = tool(
+    'write_package_file',
+    JSON.stringify({
+      package: 'config-packages/acme-config',
+      path: 'bundle/agentic-ui-config/bootstrap.json',
+      content: JSON.stringify({ themes: [{ id: 'acme', base: 'midnight' }] }),
+    }),
+  );
+  if (
+    badTheme.status !== 1 ||
+    !badTheme.output.includes('is not a theme the application has') ||
+    readFileSync(bootstrapFile, 'utf8') !== bootstrapBefore
+  )
+    fail(
+      'satori tool write_package_file, a theme the pipeline refuses',
+      `exit ${badTheme.status}, or the file changed`,
+      badTheme.output,
+    );
+  else held++;
+  const goodTheme = tool(
+    'write_package_file',
+    JSON.stringify({
+      package: 'config-packages/acme-config',
+      path: 'bundle/agentic-ui-config/bootstrap.json',
+      content: `${JSON.stringify({ branding: { applicationTitle: 'Acme' }, themes: [{ id: 'acme', base: 'nuxeo', tokens: { '--mat-sys-primary': '#0b5fff' } }], defaultThemeId: 'acme' }, null, 2)}\n`,
+    }),
+  );
+  if (
+    goodTheme.status !== 0 ||
+    !readFileSync(bootstrapFile, 'utf8').includes('"defaultThemeId": "acme"')
+  )
+    fail(
+      'satori tool write_package_file, a theme that passes',
+      `exit ${goodTheme.status}`,
+      goodTheme.output,
+    );
+  else held++;
+
+  // satori version: the three places together, never lower, never from places that disagree.
+  const pkg = join(repository, 'config-packages', 'acme-config');
+  const versions = () => ({
+    xml: /<package\b[^>]*\bversion="([^"]+)"/.exec(
+      readFileSync(join(pkg, 'package', 'package.xml'), 'utf8'),
+    )?.[1],
+    manifest: /^Bundle-Version:\s*(\S+)/m.exec(
+      readFileSync(join(pkg, 'bundle', 'META-INF', 'MANIFEST.MF'), 'utf8'),
+    )?.[1],
+    app: existsSync(join(pkg, 'bundle', 'agentic-ui-config', 'app.json'))
+      ? JSON.parse(readFileSync(join(pkg, 'bundle', 'agentic-ui-config', 'app.json'), 'utf8'))
+          .packageVersion
+      : undefined,
+  });
+  const patched = node([satori, 'version', pkg, 'patch']);
+  if (
+    patched.status !== 0 ||
+    JSON.stringify(versions()) !== JSON.stringify({ xml: '1.0.1', manifest: '1.0.1' })
+  )
+    fail(
+      'satori version patch',
+      `exit ${patched.status}, ${JSON.stringify(versions())}`,
+      patched.output,
+    );
+  else held++;
+  writeFileSync(
+    join(pkg, 'bundle', 'agentic-ui-config', 'app.json'),
+    `${JSON.stringify({ version: 2, id: 'acme', label: 'Acme', packageVersion: '1.0.1', platform: '>=0.2.0 <1.0.0', groups: ['acme'] }, null, 2)}\n`,
+  );
+  const minor = node([satori, 'version', pkg, 'minor']);
+  if (
+    minor.status !== 0 ||
+    JSON.stringify(versions()) !== JSON.stringify({ xml: '1.1.0', manifest: '1.1.0', app: '1.1.0' })
+  )
+    fail(
+      'satori version minor, with an app.json',
+      `exit ${minor.status}, ${JSON.stringify(versions())}`,
+      minor.output,
+    );
+  else held++;
+  const lower = node([satori, 'version', pkg, '1.0.9']);
+  if (
+    lower.status !== 1 ||
+    !lower.output.includes('is not higher than 1.1.0') ||
+    versions().xml !== '1.1.0'
+  )
+    fail('satori version, lower', `exit ${lower.status}`, lower.output);
+  else held++;
+  const manifestFile = join(pkg, 'bundle', 'META-INF', 'MANIFEST.MF');
+  writeFileSync(
+    manifestFile,
+    readFileSync(manifestFile, 'utf8').replace('Bundle-Version: 1.1.0', 'Bundle-Version: 1.1.4'),
+  );
+  const apart = node([satori, 'version', pkg, 'patch']);
+  if (
+    apart.status !== 1 ||
+    !apart.output.includes("the package's versions disagree") ||
+    versions().xml !== '1.1.0'
+  )
+    fail('satori version, with its places disagreeing', `exit ${apart.status}`, apart.output);
+  else held++;
 }
 
 /** Every file under `directory`, by its path, with its SHA-256. */

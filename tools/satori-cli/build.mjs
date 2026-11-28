@@ -151,6 +151,70 @@ cpSync(
 );
 cpSync(join(HERE, 'agents', 'AGENTS.section.md'), join(OUT, 'agents', 'AGENTS.section.md'));
 
+// The knowledge pack, for the agent: what knowledge/ holds, and what is written from the sources
+// the checks read, so that it says what this version checks: the colour tokens, from the
+// pipeline's own list, and the registered ids, from the platform below.
+cpSync(join(HERE, 'knowledge'), join(OUT, 'knowledge'), { recursive: true });
+const { COLOUR_TOKENS, SHIPPED_THEMES } = await import(
+  pathOf(REPO, 'scripts', 'package-pipeline', 'theme-tokens.mjs')
+);
+writeFileSync(
+  join(OUT, 'knowledge', 'theme-tokens.md'),
+  [
+    '# The colour tokens the application reads',
+    '',
+    `Written by the tool's build from the list \`satori validate\` holds a theme to. A theme's \`base\` is one of ${SHIPPED_THEMES.map((name) => `\`${name}\``).join(', ')}; its \`tokens\` set these over it. Each takes a CSS colour: \`#rrggbb\`, \`rgb()\`, \`hsl()\` or \`var(--…)\`. Set a colour with the one read on it.`,
+    '',
+    '| Token | What it changes |',
+    '| ----- | --------------- |',
+    ...[...COLOUR_TOKENS].map(([token, what]) => `| \`${token}\` | ${what} |`),
+    '',
+    "Other tokens, such as a component's own `--nxs-*`, are taken as they are written.",
+    '',
+  ].join('\n'),
+);
+// The examples: each app Nuxeo builds and tests the platform with, its app definition only, read-only.
+const KITS = join(REPO, 'business-apps', 'packages');
+const examples = [];
+for (const kit of readdirSync(KITS).sort()) {
+  const config = join(KITS, kit, 'bundle', 'agentic-ui-config');
+  if (!existsSync(join(config, 'app.json'))) continue;
+  const app = JSON.parse(readFileSync(join(config, 'app.json'), 'utf8'));
+  const into = join(OUT, 'examples', kit);
+  const copy = (from, to) => {
+    for (const entry of readdirSync(from, { withFileTypes: true })) {
+      if (entry.name === 'assets') continue;
+      const source = join(from, entry.name);
+      const target = join(to, entry.name);
+      if (entry.isDirectory()) copy(source, target);
+      else if (entry.name.endsWith('.json')) {
+        // Its \`$schema\` names this repository's sources: the examples name none.
+        const value = JSON.parse(readFileSync(source, 'utf8'));
+        delete value.$schema;
+        mkdirSync(to, { recursive: true });
+        writeFileSync(target, `${JSON.stringify(value, null, 2)}\n`);
+      }
+    }
+  };
+  copy(config, into);
+  const layouts = join(config, 'layouts');
+  const types = existsSync(layouts) ? readdirSync(layouts).sort() : [];
+  examples.push(`| \`${kit}/\` | ${app.label ?? app.id} | ${types.map((type) => `\`${type}\``).join(', ') || '—'} |`);
+}
+writeFileSync(
+  join(OUT, 'examples', 'README.md'),
+  [
+    '# Examples',
+    '',
+    "The app definitions of the apps Nuxeo builds and tests the platform with, as the tool's build copied them. Read them as worked examples of every file a package holds. They are not installed, and their ids, types and groups are theirs: never copy them into a customer's package. Their types come from stand-in models, not a customer's.",
+    '',
+    '| Example | App | Record pages for |',
+    '| ------- | --- | ---------------- |',
+    ...examples,
+    '',
+  ].join('\n'),
+);
+
 // For mcp: the Builder MCP server, bundled, with what its generators read.
 const { bundleServer } = await import(pathOf(REPO, 'tools', 'builder-mcp', 'bundle.mjs'));
 let server;
@@ -167,9 +231,42 @@ if (platform.missing.length > 0) {
   console.error(`The platform's sources are not all here: ${platform.missing.join(', ')}.`);
   process.exit(1);
 }
+const snapshot = platformSnapshot(platform);
+writeFileSync(join(OUT, 'platform', 'platform.json'), `${JSON.stringify(snapshot, null, 1)}\n`);
+// The registered ids, for the agent: written from the same snapshot the upgrade check reads.
+const named = (kind) =>
+  snapshot.surface
+    .filter((entry) => entry.startsWith(`${kind} `))
+    .map((entry) => entry.slice(kind.length + 1))
+    .sort();
+const ids = named('id');
+const group = (prefix) => ids.filter((id) => id.startsWith(prefix));
+const list = (items) => items.map((item) => `- \`${item}\``).join('\n');
 writeFileSync(
-  join(OUT, 'platform', 'platform.json'),
-  `${JSON.stringify(platformSnapshot(platform), null, 1)}\n`,
+  join(OUT, 'knowledge', 'registered.md'),
+  [
+    '# What the platform registers',
+    '',
+    `Written by the tool's build from the platform it carries, ${snapshot.version}: what a package may name. A name not here, or not the package's own, is refused.`,
+    '',
+    '## Widgets a layout field may take',
+    '',
+    list(named('widget')),
+    '',
+    '## Rules, for visibleWhen, enabledWhen and a banner',
+    '',
+    list(group('app.rules.')),
+    '',
+    '## Computations, for a figure or a value',
+    '',
+    list(group('core.')),
+    '',
+    "## What Layer 1's overrides can hide, rename or reorder",
+    '',
+    ...['app.navbar.', 'app.toolbar.', 'app.tabs.', 'app.contextMenu.', 'app.rowActions.', 'app.bulkActions.', 'app.documentList.', 'app.sidebar.', 'app.page.'].flatMap(
+      (prefix) => [`### \`${prefix}*\``, '', list(group(prefix)), ''],
+    ),
+  ].join('\n'),
 );
 
 // The published package.json: the project's, field by field, so that nothing reaches the registry

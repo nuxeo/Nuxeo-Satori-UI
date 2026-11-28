@@ -14,6 +14,8 @@ install did not put it there.
 | Sign a zip with a key you hold, outside this repository    | `./node_modules/.bin/satori sign dist/<zip> --key <file>`                                      |
 | Verify a zip against the signers you trust                 | `./node_modules/.bin/satori verify dist/<zip> --trusted-signers trusted-signers.json`          |
 | Check a package is ready to release, and get its tag       | `./node_modules/.bin/satori release-check config-packages/<package> --previous <zip>`          |
+| Raise a package's version before it is installed again     | `./node_modules/.bin/satori version config-packages/<package> patch`                           |
+| Give the MCP server the server and an account (a person)   | `./node_modules/.bin/satori connect`, in a terminal; `--check` to see it answers               |
 | Refresh this section, the skill and the MCP server's entry | `./node_modules/.bin/satori agents sync`, after every upgrade of the tool                      |
 
 `validate` and `build` take the same steps and refuse the same things; each refusal names the step,
@@ -21,14 +23,25 @@ the file, the place and the reason. A change is done when `validate` passes.
 
 ## Nuxeo Satori: building with an agent
 
+- **The reference:** `node_modules/@nuxeo/satori-cli/knowledge/README.md`, also through the MCP
+  server's `read_reference`: every file a package holds, a recipe for each kind of request, a
+  worked example, branding and its colour tokens, every registered id, and example apps. Read it
+  first; it is this version's.
 - **The skill:** `satori-app-builder`, in `.cursor/skills/`, `.claude/skills/` and `.agent/skills/`.
   Read it before writing a package.
+- **One package holds the customer's configuration:** the one in `config-packages/`, with its
+  branding, what the app shows and its app definition. Add to it.
 - **The MCP server:** `nuxeo-satori`, in `.mcp.json` and `.cursor/mcp.json`, which runs
   `satori mcp`. It reads the development server's content model, page providers, workflows,
   vocabularies and operations, and writes a package's file only when the package then passes
   `satori validate`'s steps. Write every package file through it, never with your own file tools.
-- **Its server and account come from the environment:** `NUXEO_URL`, `NUXEO_USER` and
-  `NUXEO_PASS`, exported in the shell the IDE starts from. They are never written in a file here.
+  Where the IDE cannot run it, as under a policy that allows only the MCP servers an organisation
+  lists, `./node_modules/.bin/satori tool <name> '<json>'` calls the same tools from the command
+  line, and `satori tool --list` lists them.
+- **Its server and account come from its environment:** `NUXEO_URL`, `NUXEO_USER` and
+  `NUXEO_PASS`, exported in the shell a terminal IDE starts from; or, for the Claude app, written by
+  a person with `satori connect` into `.claude/settings.local.json`, which git ignores and the
+  agent never reads. They are in no committed file.
 
 ## Nuxeo Satori: where things go
 
@@ -52,12 +65,13 @@ registers: <https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/docs/extension-re
 - **Nothing secret, ever.** A fragment is served before sign-in, without authentication: no
   password, token, private address or customer's real data in any file here.
 - **The server's address and credentials come from the environment,** `NUXEO_URL`, `NUXEO_USER`
-  and `NUXEO_PASS`, never from a file in this repository and never in an address.
+  and `NUXEO_PASS`, or `.claude/settings.local.json`, which `satori connect` writes and git
+  ignores: never from a committed file, never in an address, and never read by the agent.
 - **A signing key is never in this repository.** `satori sign --key` refuses one inside it.
 - **Hiding something is not a security control.** Nuxeo's permissions decide what each user may do.
-- **Raise the version for every change that is installed:** `package/package.xml`, and with an app
-  definition `app.json`'s `packageVersion` and the manifest's `Bundle-Version`, together. Nuxeo
-  keeps a package of the same version.
+- **Raise the version for every change that is installed,** with `satori version`, which changes
+  `package/package.xml`, the manifest's `Bundle-Version` and `app.json`'s `packageVersion`
+  together. Nuxeo keeps a package of the same version.
 - **Do not edit `build.mjs` or `schema/`** in a package: they are the platform's, and the tool
   builds with its own.
 - **Do not use a name Satori itself uses,** `defaults` or `nuxeo-agentic-ui`, for a package or a

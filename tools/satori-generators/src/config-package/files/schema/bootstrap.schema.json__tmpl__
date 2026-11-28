@@ -195,6 +195,7 @@
       "items": {
         "type": "object",
         "required": ["id"],
+        "additionalProperties": false,
         "properties": {
           "id": {
             "type": "string",
@@ -207,13 +208,38 @@
             "type": "string"
           },
           "base": {
-            "type": "string"
+            "type": "string",
+            "enum": ["nuxeo", "dark", "kawaii", "light"]
           },
           "preview": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sidebar": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "header": {
+                "type": "string"
+              },
+              "accent": {
+                "type": "string"
+              },
+              "tile": {
+                "type": "string"
+              }
+            }
           },
           "tokens": {
-            "type": "object"
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^--"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       }
