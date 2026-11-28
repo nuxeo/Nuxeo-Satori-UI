@@ -188,15 +188,15 @@ describe('the decisions file the `decisions` command writes', () => {
 
   it('copies what each was made on from the report, and its construct’s identity, and leaves the rest to a person', () => {
     const edit = file.decisions.find(
-      (item) => item.id === `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`,
+      (item) => item.id === `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`,
     );
     expect(edit).toEqual({
-      id: `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`,
-      identity: IDS.get(`layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`),
+      id: `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`,
+      identity: IDS.get(`layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`),
       label: 'cl:adjuster ("Adjuster")',
       property: 'cl:adjuster',
       outcome: 'reported',
-      to: 'layouts/Claim/edit.layout.json',
+      to: 'layouts/Claim/metadata.layout.json',
       note: expect.stringMatching(/version 1 cannot name the user widget/),
       owner: '',
       decision: '',
@@ -610,7 +610,7 @@ describe('holding the decisions to the report', () => {
   });
 
   it('takes no decision made on another label, property, place, reason or rule than the report gives now', () => {
-    const edit = `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`;
+    const edit = `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`;
     const cases: [Partial<ReportEntry>, string][] = [
       [{ label: 'cl:adjuster ("Handler")' }, 'label'],
       [{ property: 'cl:handler' }, 'property'],
@@ -854,7 +854,7 @@ describe('each deliberate breakage of the decisions stands in the way of readine
   describe('names what broke', () => {
     const plain = PLAIN;
     const filled = decidedInput(plain).conversion;
-    const id = `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`;
+    const id = `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#3`;
     const converted = plain.conversion.report.constructs.find(
       (entry) => entry.outcome === 'converted',
     )?.id;

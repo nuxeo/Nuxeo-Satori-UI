@@ -827,6 +827,9 @@ export function reportSummary(summary: MigrationSummary): string {
       `      id: ${oneLine(item.id)}`,
       `      why: ${oneLine(item.note)}`,
     );
+    // What accepting it writes, where it is no rule, which the reason gives: a card of home.json.
+    if (item.proposes !== undefined)
+      lines.push(`      proposes: ${oneLine(JSON.stringify(item.proposes))}`);
     if (item.status === 'follows')
       lines.push(
         '      decided: with the condition it shows under, whose proposal is still to decide, or the conversion is to be made again with its decision',

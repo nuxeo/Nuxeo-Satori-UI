@@ -39,6 +39,93 @@ export function queueColumn(column: ResultColumn): unknown {
   return { field: column.field, ...label, ...(widget !== null ? { widget } : {}) };
 }
 
+/** How one column of a list is written, or why it is not. */
+export type ColumnPlan =
+  | {
+      readonly kind: 'write';
+      readonly field: string;
+      readonly entry: unknown;
+      /** The conditions it shows under, whose rule is its `visibleWhen`; absent for none. */
+      readonly guard?: Extract<Guard, { kind: 'rule' }>;
+    }
+  | {
+      readonly kind: 'skip';
+      readonly outcome: 'reported' | 'proposed';
+      readonly note: string;
+    };
+
+/**
+ * How each column of a list is written, in order (docs/business-apps/studio-migration.md, section
+ * 3): one in no condition of its own as Web UI shows it, and one under a condition with the rule of
+ * what it shows under as its `visibleWhen` (app-definition-v2.md, section 4; layout-v2.md, section
+ * 7), where the list can carry the rule: a queue has no open record, so there a rule that reads one
+ * is reported, while a list of related records on a record page reads the open one (`record`).
+ * A column with no property, one whose condition does not convert, and one whose property another
+ * column shows to everyone are not written, and say why. Shared with checks 2, 5 and 6, which hold
+ * the list to it.
+ */
+export function columnPlans(
+  inventory: Inventory,
+  path: string,
+  columns: readonly ResultColumn[],
+  record: boolean,
+): ColumnPlan[] {
+  const always = new Set(
+    columns.filter((column) => column.field !== null && !column.conditional).map((c) => c.field),
+  );
+  return columns.map((column): ColumnPlan => {
+    const field = column.field;
+    if (field === null)
+      return { kind: 'skip', outcome: 'reported', note: 'It shows no property a list can name' };
+    if (!column.conditional) return { kind: 'write', field, entry: queueColumn(column) };
+    if (always.has(field))
+      return {
+        kind: 'skip',
+        outcome: 'reported',
+        note: `It shows ${field} only while a condition passes, and another column of the list shows it to everyone: that one is kept`,
+      };
+    const guard = guardOfSet(inventory, path, column.conditions);
+    if (guard.kind !== 'rule') return { kind: 'skip', outcome: guard.kind, note: guard.note };
+    if (guard.document && !record)
+      return {
+        kind: 'skip',
+        outcome: 'reported',
+        note: 'It shows only while a condition on a document passes, and no record is open in a queue: it is left out rather than shown to everyone, for a person to decide',
+      };
+    if (guard.rule === 'core.true') return { kind: 'write', field, entry: queueColumn(column) };
+    const written = queueColumn(column);
+    return {
+      kind: 'write',
+      field,
+      entry: {
+        ...(typeof written === 'string' ? { field: written } : (written as object)),
+        visibleWhen: guard.rule,
+      },
+      guard,
+    };
+  });
+}
+
+/**
+ * The guard of a search screen's table: the condition it sits in, and those that one sits in. A
+ * queue is one list, so a screen of several tables, one of them under a condition, is reported:
+ * which of its columns shows to whom is a person's call.
+ */
+export function tableGuard(inventory: Inventory, search: SearchLayout): Guard {
+  const tables = search.views.flatMap((view, index) =>
+    view === 'nuxeo-data-table' ? [search.viewConditions[index] ?? []] : [],
+  );
+  const same = (a: readonly number[], b: readonly number[]): boolean =>
+    a.length === b.length && a.every((index, at) => index === b[at]);
+  if (tables.some((conditions) => !same(conditions, tables[0])))
+    return {
+      kind: 'reported',
+      note: `Its results show ${tables.length} tables, not all of them in the same condition, and a queue is one list: which of their columns shows to whom is a person's call, and the list is not shown to everyone meanwhile`,
+      conditions: [],
+    };
+  return guardOfSet(inventory, search.path, tables[0] ?? []);
+}
+
 /** The sort Web UI's results open with: the option marked selected, if any. */
 export function openingSort(search: SearchLayout): { field: string; order: string }[] {
   const selected = search.sortOptions.find((option) => option.selected);
@@ -101,19 +188,21 @@ export function convertSearches(context: ConvertContext): void {
     );
     const queueId = searchQueueId(search);
     const path = queuePath(queueId);
-    const report = (note: string, outcome: 'reported' | 'pending' = 'reported'): void => {
-      const which = outcome === 'reported' ? 'reported' : 'pending';
+    const report = (
+      note: string,
+      outcome: 'reported' | 'pending' | 'proposed' = 'reported',
+    ): void => {
       context.decide(id, { outcome, note });
       search.columnDetails.forEach((_, index) =>
         context.decide(`search-column:${search.path}#${index + 1}`, {
           outcome,
-          note: `Its results are ${which}`,
+          note: `Its results are ${outcome}`,
         }),
       );
       search.views.forEach((_, index) =>
         context.decide(`search-view:${search.path}#${index + 1}`, {
           outcome,
-          note: `Its results are ${which}`,
+          note: `Its results are ${outcome}`,
         }),
       );
     };
@@ -121,30 +210,28 @@ export function convertSearches(context: ConvertContext): void {
       report('It names no page provider, through a @search annotation or its form');
       continue;
     }
-    if (isConditionalTable(search)) {
+    // A table under a condition: the queue shows to whom the table does, where its rule reads only
+    // the user, as no record is open in a queue.
+    const table = isConditionalTable(search) ? tableGuard(inventory, search) : null;
+    if (table && table.kind !== 'rule') {
+      report(table.note, table.kind);
+      continue;
+    }
+    if (table?.kind === 'rule' && table.document) {
       report(
-        "Its table shows only while a condition passes, and M2 converts no condition on a search screen's table: a person decides it, and the list is not shown to everyone meanwhile",
+        'Its table shows only while a condition on a document passes, and no record is open in a queue: a person decides it, and the list is not shown to everyone meanwhile',
       );
       continue;
     }
+    const plans = columnPlans(inventory, search.path, search.columnDetails, false);
     const columns: unknown[] = [];
-    search.columnDetails.forEach((column, index) => {
+    plans.forEach((plan, index) => {
       const columnId = `search-column:${search.path}#${index + 1}`;
-      if (column.conditional) {
-        context.decide(columnId, {
-          outcome: 'reported',
-          note: "It shows only while a condition passes, and M2 converts no condition on a list's column: a person decides it, and it is not shown to everyone meanwhile",
-        });
+      if (plan.kind === 'skip') {
+        context.decide(columnId, { outcome: plan.outcome, note: plan.note });
         return;
       }
-      if (column.field === null) {
-        context.decide(columnId, {
-          outcome: 'reported',
-          note: 'It shows no property a queue can name',
-        });
-        return;
-      }
-      columns.push(queueColumn(column));
+      columns.push(plan.entry);
       context.decide(columnId, { outcome: 'converted', to: path });
     });
     search.views.forEach((view, index) =>
@@ -160,17 +247,18 @@ export function convertSearches(context: ConvertContext): void {
     );
     // A queue needs at least one column (app-definition-v2.md, section 4).
     if (columns.length === 0) {
-      const waiting = search.columnDetails.some((column) => column.conditional);
+      const waiting = plans.some((plan) => plan.kind === 'skip' && plan.outcome === 'proposed');
+      const outcome = waiting ? 'proposed' : 'reported';
       context.decide(id, {
-        outcome: waiting ? 'pending' : 'reported',
+        outcome,
         note: waiting
-          ? 'Every column it can show is under a condition, which M2 converts, and a queue needs at least one'
-          : 'None of its columns shows a property a queue can name, and a queue needs at least one',
+          ? 'Every column it can show is under a condition whose rule is proposed, and a queue needs at least one: it is written once a person accepts one'
+          : 'None of its columns can be written, each says why, and a queue needs at least one',
       });
       search.views.forEach((_, index) =>
         context.decide(`search-view:${search.path}#${index + 1}`, {
-          outcome: waiting ? 'pending' : 'reported',
-          note: `Its results are ${waiting ? 'pending' : 'reported'}`,
+          outcome,
+          note: `Its results are ${outcome}`,
         }),
       );
       continue;
@@ -183,13 +271,20 @@ export function convertSearches(context: ConvertContext): void {
     const sort = openingSort(search);
     // A queue needs a name: the menu's, or else its page provider's.
     const named = labelOf(menuLabel(context, search));
+    const rule = table?.kind === 'rule' && table.rule !== 'core.true' ? table.rule : null;
     context.files[path] = {
       version: 2,
       ...(Object.keys(named).length > 0 ? named : { label: search.provider }),
       pageProvider: search.provider,
       ...(columns.length > 0 ? { columns } : {}),
       ...(sort.length > 0 ? { sort } : {}),
+      ...(rule !== null ? { visibleWhen: rule } : {}),
     };
+    if (table) carry(context.carried, table, path);
+    plans.forEach((plan) => {
+      if (plan.kind === 'write' && plan.guard)
+        carry(context.carried, plan.guard, `${path} ${plan.field}`);
+    });
     context.decide(id, { outcome: 'converted', to: path });
   }
 }
@@ -215,15 +310,26 @@ export type QueueOwner =
 export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
   const owners = new Map<string, QueueOwner>();
   for (const search of inventory.searches) {
-    if (search.part !== 'results' || search.provider === null || isConditionalTable(search))
-      continue;
-    if (!search.columnDetails.some((column) => column.field !== null && !column.conditional))
-      continue;
+    if (search.part !== 'results' || search.provider === null) continue;
+    // A table under a condition is a list too when its rule can travel to a queue, which reads the
+    // user only.
+    if (isConditionalTable(search)) {
+      const guard = tableGuard(inventory, search);
+      if (guard.kind !== 'rule' || guard.document) continue;
+    }
+    const plans = columnPlans(inventory, search.path, search.columnDetails, false);
+    if (!plans.some((plan) => plan.kind === 'write')) continue;
     const path = queuePath(searchQueueId(search));
     if (!owners.has(path)) owners.set(path, { kind: 'search', search });
   }
   inventory.dashboard?.cards.forEach((card, index) => {
-    if (!isListCard({ ...card, conditional: false }) || !card.columns.some((c) => c.field !== null))
+    if (!isListCard({ ...card, conditional: false })) return;
+    const dashboardPath = inventory.dashboard?.path ?? '';
+    if (
+      !columnPlans(inventory, dashboardPath, card.columns, false).some(
+        (plan) => plan.kind === 'write',
+      )
+    )
       return;
     // A card under a condition is a list too when its rule can travel to the home, which reads
     // the user only.
@@ -353,17 +459,40 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (card.elements.includes('nuxeo-tasks-list')) {
+    const shows = cardShows(card);
+    if (shows.length > 1) {
+      const words = {
+        list: 'a list of a page provider',
+        tasks: "the person's tasks",
+        recent: 'recently viewed documents',
+      };
       context.decide(id, {
-        outcome: 'pending',
-        note: "A card of the user's tasks: home.json has no card for them yet (app-definition-v2.md, section 10)",
+        outcome: 'reported',
+        note: `It shows ${shows.map((kind) => words[kind]).join(' and ')}, and a card of home.json shows one thing: a person decides which, and nothing of it is written meanwhile`,
       });
       return;
     }
-    if (card.elements.includes('nuxeo-document-storage')) {
+    if (isTasksCard(card)) {
       context.decide(id, {
-        outcome: 'pending',
-        note: 'A card of recently viewed documents: home.json has no card for them yet (app-definition-v2.md, section 10)',
+        outcome: 'converted',
+        to: `home.json ${homeCardId(index)}`,
+        note: TASKS_NOTE,
+      });
+      return;
+    }
+    if (isRecentCard(card)) {
+      // A proposal, not a conversion: home.json's recent lists another set of records than Web
+      // UI's recently viewed card. Written only once a person accepts it.
+      const verdict = card.verdict;
+      context.decide(id, {
+        outcome: 'proposed',
+        note: RECENT_NOTE,
+        proposal: true,
+        proposes: recentCardEntry(card, index, guard),
+        ...(verdict
+          ? { applied: verdict.accepted ? ('accept' as const) : ('reject' as const) }
+          : {}),
+        ...(verdict?.accepted ? { to: `home.json ${homeCardId(index)}` } : {}),
       });
       return;
     }
@@ -380,16 +509,23 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const path = queuePath(homeQueueId(card, index));
-    // A column under a condition is left out, as a search screen's is: M2 converts no condition
-    // on a list's column, and it is not shown to everyone meanwhile.
-    const hidden = card.columns.filter((column) => column.field !== null && column.conditional);
-    const columns = card.columns
-      .filter((column) => column.field !== null && !column.conditional)
-      .map(queueColumn);
+    // A column under a condition carries its rule, which on the home reads the user only; one
+    // that cannot carry it is left out, never shown to everyone, and the card says so.
+    const plans = columnPlans(context.inventory, dashboard.path, card.columns, false);
+    const columns = plans.flatMap((plan) => (plan.kind === 'write' ? [plan.entry] : []));
+    const left = plans.flatMap((plan, position) =>
+      plan.kind === 'skip'
+        ? [
+            `its column ${position + 1}${card.columns[position].field ? `, ${card.columns[position].field},` : ''} is left out: ${plan.note}`,
+          ]
+        : [],
+    );
     if (columns.length === 0) {
       context.decide(id, {
-        outcome: 'reported',
-        note: 'Its list shows no column a queue can name, and a queue needs at least one',
+        outcome: plans.some((plan) => plan.kind === 'skip' && plan.outcome === 'proposed')
+          ? 'proposed'
+          : 'reported',
+        note: `Its list shows no column a queue can write, and a queue needs at least one: ${left.join('; ')}`,
       });
       return;
     }
@@ -413,24 +549,33 @@ export function convertDashboard(context: ConvertContext): void {
       // The queue a card under a condition opens shows to whom the card does.
       ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
     };
-    const home = cards.find((candidate) => candidate.index === index);
-    const notes = [
-      ...(card.pageSize !== null && pageSize === null
-        ? [
-            `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
-          ]
-        : []),
-      ...(hidden.length > 0
-        ? [
-            `Its columns ${hidden.map((column) => column.field).join(', ')} show only while a condition passes, and are left out: M2 converts no condition on a list's column, and a person decides them`,
-          ]
-        : []),
-    ];
-    context.decide(id, {
-      outcome: 'converted',
-      to: `home.json ${home?.id ?? `card-${index + 1}`}, its list in ${path}`,
-      ...(notes.length > 0 ? { note: notes.join('. ') } : {}),
+    plans.forEach((plan) => {
+      if (plan.kind === 'write' && plan.guard)
+        carry(context.carried, plan.guard, `${path} ${plan.field}`);
     });
+    const home = cards.find((candidate) => candidate.index === index);
+    const to = `home.json ${home?.id ?? homeCardId(index)}, its list in ${path}`;
+    const sized =
+      card.pageSize !== null && pageSize === null
+        ? `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`
+        : null;
+    // Written, but without what it cannot show as Web UI does: reported, for a person to decide.
+    context.decide(
+      id,
+      left.length > 0
+        ? {
+            // What it leaves out only waits for a proposal: it follows that proposal, as a field does.
+            outcome:
+              !sized && plans.every((plan) => plan.kind === 'write' || plan.outcome === 'proposed')
+                ? 'proposed'
+                : 'reported',
+            to,
+            note: [`Written without what Web UI shows of it: ${left.join('; ')}`, sized]
+              .filter(Boolean)
+              .join('. '),
+          }
+        : { outcome: 'converted', to, ...(sized ? { note: sized } : {}) },
+    );
   });
   if (cards.length > 0) {
     context.files['home.json'] = { version: 2, cards: cards.map((c) => c.entry) };
@@ -439,7 +584,74 @@ export function convertDashboard(context: ConvertContext): void {
       if (!source.conditional) continue;
       const guard = cardGuard(context.inventory, source);
       carry(context.carried, guard, `home.json ${card.id}`);
-      carry(context.carried, guard, `queues/${card.queue}.json`);
+      if (card.queue !== undefined) carry(context.carried, guard, `queues/${card.queue}.json`);
     }
   }
+}
+
+/** The id a dashboard card's card of `home.json` takes: `card-<n>`, by its place. */
+export function homeCardId(index: number): string {
+  return `card-${index + 1}`;
+}
+
+/** True for a card of the person's tasks, `nuxeo-tasks-list`, which `home.json`'s `tasks` lists. */
+export function isTasksCard(card: DashboardCard): boolean {
+  return card.repeatOf === null && card.operation === null && cardShows(card).join() === 'tasks';
+}
+
+/** True for Web UI's recently viewed card, read from the browser by `nuxeo-document-storage`. */
+export function isRecentCard(card: DashboardCard): boolean {
+  return card.repeatOf === null && card.operation === null && cardShows(card).join() === 'recent';
+}
+
+/**
+ * What a dashboard card shows: a list of a page provider, the person's tasks, their recently viewed
+ * documents. A card of `home.json` shows one thing, so a card that shows several is reported.
+ */
+export function cardShows(card: DashboardCard): ('list' | 'tasks' | 'recent')[] {
+  return [
+    ...(card.provider !== null ? (['list'] as const) : []),
+    ...(card.elements.includes('nuxeo-tasks-list') ? (['tasks'] as const) : []),
+    ...(card.elements.includes('nuxeo-document-storage') ? (['recent'] as const) : []),
+  ];
+}
+
+export const TASKS_NOTE =
+  "home.json's tasks card lists the person's open tasks of every workflow, the newest 5, with a link to the tasks page (app-definition-v2.md, section 10). Which of them Web UI's nuxeo-tasks-list shows, and how many at once, is its own, and not read from the package";
+
+export const RECENT_NOTE =
+  "Web UI's card lists the documents the person opened last, which Web UI keeps in their browser (nuxeo-document-storage). Nuxeo keeps no list of what a person opens, so home.json's recent card lists the records the person created or edited last instead (app-definition-v2.md, section 10): another list, which is why it is proposed rather than converted. Accepted, it is written as that card, its records shown with their type and the day each last changed, not with the columns of Web UI's table; rejected, it is written nowhere";
+
+/**
+ * The card of `home.json` a dashboard card of the person's tasks becomes: every workflow's tasks,
+ * as `nuxeo-tasks-list` lists them, under the card's heading, shown to whom the card is.
+ */
+export function tasksCardEntry(
+  card: DashboardCard,
+  index: number,
+  guard: Guard | null,
+): Record<string, unknown> {
+  return {
+    id: homeCardId(index),
+    ...labelOf(card.heading),
+    tasks: {},
+    ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
+  };
+}
+
+/**
+ * The card of `home.json` proposed for Web UI's recently viewed card: the person's recent records,
+ * of every type, under the card's heading, shown to whom the card is.
+ */
+export function recentCardEntry(
+  card: DashboardCard,
+  index: number,
+  guard: Guard | null,
+): Record<string, unknown> {
+  return {
+    id: homeCardId(index),
+    ...labelOf(card.heading),
+    recent: {},
+    ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
+  };
 }

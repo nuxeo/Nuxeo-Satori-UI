@@ -21,9 +21,10 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import { appIdOf, queuePageSize } from './app-files';
 import { sameJson } from './app-walk';
 import { recordedAllowList } from './convert';
-import { homeCards, menuEntries } from './convert-home';
-import { openingSort, queueOwners } from './convert-lists';
+import { homeCards, menuEntries, type HomeCard } from './convert-home';
+import { homeCardId, isRecentCard, openingSort, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
+import { formPlaces, tabOf } from './forms';
 import type { CheckOutcome, HarnessInput } from './harness';
 
 export function checkRequests({
@@ -69,6 +70,7 @@ export function checkRequests({
       findings.push(
         `${path}: it asks for pages of ${JSON.stringify(queue['pageSize'] ?? 10)}, where Web UI asks for ${pageSize ?? "the page provider's own size"}`,
       );
+    findings.push(...offered(path, queue, "Web UI's list"));
   };
 
   // Each queue against the one list that owns its path, as the converter decides it, and no
@@ -101,19 +103,66 @@ export function checkRequests({
     if (path.startsWith('queues/') && !expectedQueues.has(path))
       findings.push(`${path}: it asks for a list that no screen or card of the package asks for`);
 
+  // A tab whose page is a list asks, as its card of related records, what Web UI's page asks: the
+  // same page provider, with the same parameters, the open record among them where the page passes
+  // it, the same opening sort and the same page size. A tab or a card missing is check 2's.
+  const related = new Set<string>();
+  for (const place of formPlaces(pkg, inventory)) {
+    const listing = place.tabPlan?.listing;
+    const tab = place.tabPlan;
+    if (!listing || !tab) continue;
+    const written = tabOf(app[place.path], tab.id);
+    related.add(`${place.path} ${tab.id} ${listing.cardId}`);
+    const cards = written && Array.isArray(written.tab['cards']) ? written.tab['cards'] : [];
+    const card = cards.find((item) => isRecord(item) && item['id'] === listing.cardId);
+    const asked = isRecord(card) && isRecord(card['related']) ? card['related'] : null;
+    if (asked === null) continue;
+    const where = `${place.path} tab ${tab.id}`;
+    const source = `Web UI's tab ${tab.name}`;
+    if (asked['pageProvider'] !== listing.provider)
+      findings.push(
+        `${where}: it asks the page provider ${JSON.stringify(asked['pageProvider'])}, where ${source} asks ${listing.provider}`,
+      );
+    const parameters = Array.isArray(asked['parameters']) ? asked['parameters'] : [];
+    if (!sameJson(parameters, listing.parameters))
+      findings.push(
+        `${where}: it sends the parameters ${JSON.stringify(parameters)}, where ${source} sends ${JSON.stringify(listing.parameters)}`,
+      );
+    const sorted = Array.isArray(asked['sort']) ? asked['sort'] : [];
+    if (!sameJson(sorted, listing.sort))
+      findings.push(
+        `${where}: it sorts by ${JSON.stringify(sorted)}, where ${source} opens sorted by ${JSON.stringify(listing.sort)}`,
+      );
+    if ((asked['pageSize'] ?? null) !== listing.pageSize)
+      findings.push(
+        `${where}: it asks for pages of ${JSON.stringify(asked['pageSize'] ?? 10)}, where ${source} asks for ${listing.pageSize ?? "the page provider's own size"}`,
+      );
+    findings.push(...offered(where, asked, source));
+  }
+  // Nothing else asks for related records: each such card is a tab's whose page is a list.
+  for (const [path, file] of Object.entries(app)) {
+    if (!path.startsWith('layouts/') || !isRecord(file)) continue;
+    const holders: { tab: string | null; cards: unknown[] }[] = [
+      { tab: null, cards: Array.isArray(file['cards']) ? file['cards'] : [] },
+      ...(Array.isArray(file['tabs']) ? file['tabs'] : []).map((tab) => ({
+        tab: isRecord(tab) && typeof tab['id'] === 'string' ? tab['id'] : null,
+        cards: isRecord(tab) && Array.isArray(tab['cards']) ? tab['cards'] : [],
+      })),
+    ];
+    for (const { tab, cards } of holders)
+      for (const card of cards) {
+        if (!isRecord(card) || !('related' in card)) continue;
+        if (tab !== null && related.has(`${path} ${tab} ${String(card['id'])}`)) continue;
+        const asked = isRecord(card['related']) ? card['related']['pageProvider'] : undefined;
+        findings.push(
+          `${path}: the card ${String(card['id'])} lists ${JSON.stringify(asked ?? null)} as related records, which no tab of the package lists`,
+        );
+      }
+  }
+
   // The home and the menu open the same lists as Web UI's dashboard and left menu, and no other.
   findings.push(
-    ...opened(
-      'home.json',
-      app['home.json'],
-      'cards',
-      homeCards(inventory).map((card) => ({
-        id: card.id,
-        queue: card.queue,
-        source: `Web UI's dashboard card ${card.index + 1}`,
-      })),
-      'no dashboard card of the package shows',
-    ),
+    ...homeOpened(app['home.json'], homeCards(inventory), inventory),
     ...opened(
       'navigation.json',
       app['navigation.json'],
@@ -172,8 +221,111 @@ export function checkRequests({
 }
 
 /**
- * A home's cards or a menu's entries against those the package's dashboard or left menu gives:
- * each there once, opening the same queue, and none besides.
+ * The home's cards against those the package's dashboard gives (`homeCards`): each there once,
+ * showing what its card shows, a link to the same queue, the person's tasks of every workflow, or,
+ * once a person accepted it, their recent records of every type; no KPI, which Web UI's dashboard
+ * never shows; and none besides. A card of recent records no one accepted is said to be.
+ */
+function homeOpened(
+  content: unknown,
+  expected: readonly HomeCard[],
+  inventory: HarnessInput['inventory'],
+): string[] {
+  const findings: string[] = [];
+  const file = 'home.json';
+  const written = isRecord(content) && Array.isArray(content['cards']) ? content['cards'] : [];
+  const shows = (card: HomeCard): string =>
+    card.kind === 'queue'
+      ? `opens queues/${card.queue}.json`
+      : card.kind === 'tasks'
+        ? "lists the person's tasks"
+        : "is proposed as the person's recent records, which a person accepted";
+  for (const want of expected) {
+    const source = `Web UI's dashboard card ${want.index + 1}`;
+    const matches = written.filter((item) => isRecord(item) && item['id'] === want.id);
+    if (matches.length === 0) {
+      findings.push(`${file}: ${want.id} is missing, though ${source} ${shows(want)}`);
+      continue;
+    }
+    if (matches.length > 1)
+      findings.push(`${file}: ${want.id} is there ${matches.length} times, not once`);
+    const [item] = matches as Record<string, unknown>[];
+    // Web UI's dashboard shows a list, never a figure: a KPI asks a page provider for a count
+    // nothing in the package asks for.
+    if ('kpi' in item)
+      findings.push(`${file}: ${want.id} asks for a KPI, which ${source} does not show`);
+    if (want.kind === 'queue') {
+      if (item['queue'] !== want.queue)
+        findings.push(
+          `${file}: ${want.id} opens ${JSON.stringify(item['queue'] ?? item['page'] ?? null)}, where ${source} opens queues/${want.queue}.json`,
+        );
+      continue;
+    }
+    const list = item[want.kind];
+    if (!isRecord(list)) {
+      findings.push(
+        `${file}: ${want.id} shows ${describeCard(item)}, where ${source} ${shows(want)}`,
+      );
+      continue;
+    }
+    // Every workflow's tasks, or every type's records, as many as home.json's own number: the
+    // package names no workflow, type or number, and a person accepted the card as proposed.
+    const expected = want.entry[want.kind];
+    if (!sameJson(list, expected))
+      findings.push(
+        `${file}: ${want.id} lists them as ${JSON.stringify(list)}, where ${source} ${shows(want)}, as ${JSON.stringify(expected)}`,
+      );
+  }
+  const dashboard = inventory.dashboard;
+  for (const item of written) {
+    const id = isRecord(item) ? item['id'] : undefined;
+    if (expected.some((want) => want.id === id)) continue;
+    const index = dashboard?.cards.findIndex((_, position) => homeCardId(position) === id) ?? -1;
+    const card = index === -1 ? undefined : dashboard?.cards[index];
+    findings.push(
+      card && isRecentCard(card) && isRecord(item) && 'recent' in item
+        ? `${file}: ${String(id)} lists the person's recent records, which only a person accepting the card proposed for Web UI's recently viewed card ${index + 1} writes, and no one has`
+        : `${file}: ${JSON.stringify(id)} opens a list no dashboard card of the package shows`,
+    );
+  }
+  return findings;
+}
+
+/**
+ * What a list offers that Web UI's list, as the package writes it, does not: actions on its rows or
+ * a selection, a record to create, or a search before it lists anything. The converter writes none
+ * of them, so each asks the server for something the package does not.
+ */
+function offered(where: string, list: Record<string, unknown>, source: string): string[] {
+  const findings: string[] = [];
+  for (const [key, what] of [
+    ['rowActions', 'actions on its rows'],
+    ['bulkActions', 'actions on a selection'],
+  ] as const)
+    if (Array.isArray(list[key]) && list[key].length > 0)
+      findings.push(
+        `${where}: it offers ${what}, ${JSON.stringify(list[key])}, which ${source} does not`,
+      );
+  if ('create' in list)
+    findings.push(`${where}: it offers to create a record, which ${source} does not`);
+  if ('search' in list)
+    findings.push(
+      `${where}: it waits for a search before it lists anything, where ${source} does not`,
+    );
+  return findings;
+}
+
+/** What a card of the home shows, in words. */
+function describeCard(item: Record<string, unknown>): string {
+  if ('tasks' in item) return "the person's tasks";
+  if ('recent' in item) return "the person's recent records";
+  if ('queue' in item) return `a link to ${JSON.stringify(item['queue'])}`;
+  return 'nothing a dashboard card shows';
+}
+
+/**
+ * A menu's entries against those the package's left menu gives: each there once, opening the same
+ * queue, and none besides.
  */
 function opened(
   file: string,

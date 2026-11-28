@@ -31,9 +31,16 @@ import { planFields } from './convert-layouts';
 import { formPlaces, shownIn, tabOf } from './forms';
 import { slotRegistry } from './slot-registry';
 import { ALWAYS, fieldWidget } from './widgets';
-import { cardGuard, isConditionalTable, queueOwners } from './convert-lists';
+import {
+  cardGuard,
+  columnPlans,
+  isConditionalTable,
+  queueOwners,
+  tableGuard,
+} from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
+import type { ResultColumn } from './inventory';
 
 export function checkConditions({
   pkg,
@@ -164,6 +171,30 @@ export function checkConditions({
           `${place.path}: its tab ${tab.id} shows to everyone, though Web UI shows the tab ${tab.name} only while a condition passes`,
         );
     }
+    // A tab whose page is a list: its card under the conditions inside the page around the list,
+    // and each column under its own.
+    const listing = tab?.listing;
+    const written = tab && listing ? tabOf(file, tab.id) : null;
+    if (tab && listing && written) {
+      const cards = Array.isArray(written.tab['cards']) ? written.tab['cards'] : [];
+      const card = cards.find((item) => isRecord(item) && item['id'] === listing.cardId);
+      if (isRecord(card)) {
+        if (listing.guard && !('visibleWhen' in card))
+          findings.push(
+            `${place.path}: its card ${listing.cardId} shows the list of the tab ${tab.name} to everyone who sees the tab, though Web UI's page shows the list only while a condition passes`,
+          );
+        findings.push(
+          ...columnsWidened(
+            `${place.path} tab ${tab.id}`,
+            card['related'],
+            inventory,
+            listing.source,
+            listing.columns,
+            true,
+          ),
+        );
+      }
+    }
   }
 
   const actions = conversion.app['actions.json'];
@@ -203,24 +234,17 @@ export function checkConditions({
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );
   });
-  // A card's column under a condition, which its queue shows, shows to everyone what Web UI shows
-  // only while the condition passes.
+  // A list's column under a condition shows only with its rule, and one that cannot carry it not
+  // at all: either way, never to everyone.
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
     const queue = conversion.app[path];
     if (queue === undefined) return;
     const owner = lists.get(path);
     if (owner?.kind !== 'card' || owner.card !== card) return;
-    const always = new Set(
-      card.columns.filter((column) => !column.conditional).map((column) => column.field),
+    findings.push(
+      ...columnsWidened(path, queue, inventory, inventory.dashboard?.path ?? '', card.columns),
     );
-    for (const column of card.columns) {
-      if (!column.conditional || column.field === null || always.has(column.field)) continue;
-      if (listColumns(queue).some((shown) => shown.field === column.field))
-        findings.push(
-          `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
-        );
-    }
   });
   for (const search of inventory.searches) {
     if (search.part !== 'results') continue;
@@ -229,23 +253,24 @@ export function checkConditions({
     if (queue === undefined) continue;
     const owner = lists.get(path);
     if (isConditionalTable(search)) {
-      if (!owner)
+      if (!owner || owner.kind !== 'search' || owner.search !== search) {
+        if (!owner)
+          findings.push(
+            `${path}: it lists ${search.provider ?? 'its records'} for everyone, though Web UI shows the table only while a condition passes`,
+          );
+        continue;
+      }
+      const guard = tableGuard(inventory, search);
+      if (
+        !(guard.kind === 'rule' && guard.rule === 'core.true') &&
+        (!isRecord(queue) || !('visibleWhen' in queue))
+      )
         findings.push(
           `${path}: it lists ${search.provider ?? 'its records'} for everyone, though Web UI shows the table only while a condition passes`,
         );
-      continue;
     }
     if (owner?.kind !== 'search' || owner.search !== search) continue;
-    const always = new Set(
-      search.columnDetails.filter((column) => !column.conditional).map((column) => column.field),
-    );
-    for (const column of search.columnDetails) {
-      if (!column.conditional || column.field === null || always.has(column.field)) continue;
-      if (listColumns(queue).some((shown) => shown.field === column.field))
-        findings.push(
-          `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
-        );
-    }
+    findings.push(...columnsWidened(path, queue, inventory, search.path, search.columnDetails));
   }
 
   // The home and the menu: a card or an entry for a dashboard card or a menu entry under a
@@ -346,11 +371,35 @@ function guardFor(
     );
     return entry ? menuGuard(inventory, entry.item, entry.page) : null;
   }
-  if (path.startsWith('queues/') && at === 'visibleWhen') {
+  if (path.startsWith('queues/')) {
     const owner = queueOwners(inventory).get(path);
-    return owner?.kind === 'card' && inventory.dashboard
-      ? guardOfSet(inventory, inventory.dashboard.path, owner.card.conditions)
-      : null;
+    if (!owner) return null;
+    // The queue's own rule: its card's, or its search screen's table's.
+    if (at === 'visibleWhen')
+      return owner.kind === 'card' && inventory.dashboard
+        ? guardOfSet(inventory, inventory.dashboard.path, owner.card.conditions)
+        : owner.kind === 'search' && isConditionalTable(owner.search)
+          ? tableGuard(inventory, owner.search)
+          : null;
+    // A column's: columns.<j>.visibleWhen, by the property it shows.
+    if (parts.length === 3 && parts[0] === 'columns' && parts[2] === 'visibleWhen')
+      return owner.kind === 'card'
+        ? columnGuard(
+            inventory,
+            inventory.dashboard?.path ?? '',
+            owner.card.columns,
+            file,
+            Number(parts[1]),
+            false,
+          )
+        : columnGuard(
+            inventory,
+            owner.search.path,
+            owner.search.columnDetails,
+            file,
+            Number(parts[1]),
+            false,
+          );
   }
   return null;
 }
@@ -390,6 +439,28 @@ function formGuard(
   if (rest[0] !== 'cards') return null;
   const card = list(isRecord(container) ? container['cards'] : undefined)[Number(rest[1])];
   if (!isRecord(card)) return null;
+  // A tab whose page is a list: its card of related records, by its id, and a column of it, by
+  // the property it shows.
+  const listing = place.tabPlan?.listing;
+  if (listing) {
+    if (card['id'] !== listing.cardId) return null;
+    if (rest.length === 3 && rest[2] === 'visibleWhen') return listing.guard ?? null;
+    if (
+      rest.length === 6 &&
+      rest[2] === 'related' &&
+      rest[3] === 'columns' &&
+      rest[5] === 'visibleWhen'
+    )
+      return columnGuard(
+        inventory,
+        listing.source,
+        listing.columns,
+        card['related'],
+        Number(rest[4]),
+        true,
+      );
+    return null;
+  }
   const planned = planFields({ catalogue, inventory }, place.source, place.options);
   const index = planned.cards.findIndex((candidate) => candidate.id === card['id']);
   if (index === -1) return null;
@@ -411,6 +482,74 @@ function formGuard(
   return placed.field.conditions.length > 0
     ? guardOfSet(inventory, placed.conditionsIn, placed.field.conditions)
     : null;
+}
+
+/**
+ * What a list shows of its columns under a condition to others than Web UI shows them to: one
+ * written with its rule shown without it, or one left out shown at all. A property a column in no
+ * condition shows to everyone is that column's. `columns` are Web UI's, in the file at `source`.
+ */
+function columnsWidened(
+  path: string,
+  list: unknown,
+  inventory: HarnessInput['inventory'],
+  source: string,
+  columns: readonly ResultColumn[],
+  record = false,
+): string[] {
+  const findings: string[] = [];
+  const plans = columnPlans(inventory, source, columns, record);
+  const always = new Set(
+    columns.filter((column) => !column.conditional).map((column) => column.field),
+  );
+  // Property by property: the list's columns of it, each paired with the column the converter
+  // writes at that place among them. One more than it writes, or one without the rule its own
+  // has, shows to others than Web UI shows it to.
+  const fields = new Set(
+    columns
+      .filter((column) => column.conditional && column.field !== null && !always.has(column.field))
+      .map((column) => column.field),
+  );
+  for (const field of fields) {
+    const written = plans.filter((plan) => plan.kind === 'write' && plan.field === field);
+    listColumns(list)
+      .filter((candidate) => candidate.field === field)
+      .forEach((shown, occurrence) => {
+        const plan = written[occurrence];
+        const ruled = plan?.kind === 'write' && plan.guard !== undefined;
+        if (
+          plan === undefined ||
+          (ruled && !(isRecord(shown.entry) && 'visibleWhen' in shown.entry))
+        )
+          findings.push(
+            `${path}: it shows the column ${field} to everyone, though Web UI shows it only while a condition passes`,
+          );
+      });
+  }
+  return findings;
+}
+
+/**
+ * The guard of the rule of the column at `at` of a written list, by the property it shows and its
+ * place among the list's columns of that property: the conditions of the column the converter
+ * writes there (`columnPlans`), or `null` when it writes none with a rule. Two columns of one
+ * property under different conditions are each held to their own.
+ */
+function columnGuard(
+  inventory: HarnessInput['inventory'],
+  source: string,
+  columns: readonly ResultColumn[],
+  list: unknown,
+  at: number,
+  record: boolean,
+): Guard | null {
+  const written = listColumns(list);
+  const field = written[at]?.field ?? null;
+  const occurrence = written.slice(0, at).filter((column) => column.field === field).length;
+  const plan = columnPlans(inventory, source, columns, record).filter(
+    (candidate) => candidate.kind === 'write' && candidate.field === field,
+  )[occurrence];
+  return plan?.kind === 'write' ? (plan.guard ?? null) : null;
 }
 
 /** The card a field entry sits in, from its place: `cards.1.fields.0`, `tabs.0.cards.1.fields.0`. */

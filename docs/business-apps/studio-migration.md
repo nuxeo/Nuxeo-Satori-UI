@@ -110,36 +110,39 @@ The figures in this section are what the `inventory` command of
 an agent suggests the target with its reason, and a person accepts it. "Reported" means it does
 not migrate, and the report says why and what to do instead.
 
-| In Studio Designer                                                                                                                                | In the new app                                                                                           | How            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------- |
-| Types, schemas, lifecycles, page providers, workflows, chains                                                                                     | Nothing to convert: they stay on the server in the Studio package, and the new app reads them            | —              |
-| Document layouts in 5 modes                                                                                                                       | Layout files: version 2 for `view`, version 1 for the rest; `import` has none                            | Automatic      |
-| A field bound to `document.properties.<prefix>:<field>`                                                                                           | A field with the matching widget (table below)                                                           | Automatic      |
-| `required`, labels, names                                                                                                                         | Field rules; labels as keys in `labels/<locale>.json`                                                    | Automatic      |
-| Machine-generated labels ("Hfs Fields Hfs S Object Id")                                                                                           | A tidy label, kept as a translation                                                                      | Agent proposes |
-| Repeated fields, repeated dashboard cards                                                                                                         | Kept once                                                                                                | Reported       |
-| Search form and results: predicates, columns, sorts, views                                                                                        | A search form and a list over the same page provider, with typed columns, sorts and a table or grid view | Automatic      |
-| Slot contributions in mapped slots (`DOCUMENT_ACTIONS`, selection actions, tabs, drawer items and pages)                                          | Entries in the matching slot (`toolbar`, `bulk-actions`, `tabs`, `navbar` and its `sidebar`)             | Automatic      |
-| Application pages (`PAGES`)                                                                                                                       | Routes, once what each page shows is mapped                                                              | Agent proposes |
-| Contributions in slots the app lacks (user menu, administration, create popup, collection, blob and upload actions, trash, publishing, analytics) | A runtime slot first, decided per slot by demand (parity plan 10.2)                                      | Reported       |
-| `nuxeo-operation-button` with an operation and parameters                                                                                         | An action bound to the same operation, if it is on the allow-list                                        | Automatic      |
-| A button with no operation, or one not on the allow-list                                                                                          | Nothing until someone decides                                                                            | Reported       |
-| Structured conditions: type, facet, permission, group, lifecycle state, path                                                                      | Rules from the registered list                                                                           | Automatic      |
-| Free JavaScript conditions that match a known pattern (`user.isMember(…)`, `user.hasPermission(doc, …)`, `document.facets.indexOf(…)`)            | The equivalent structured rule, proven with truth tables (section 6)                                     | Agent proposes |
-| Any other free JavaScript condition                                                                                                               | Nothing                                                                                                  | Reported       |
-| Tabs whose page is a layout block                                                                                                                 | Tabs of each type's record page                                                                          | Automatic      |
-| Tabs whose page is a listing                                                                                                                      | A card of related records over the page provider; not written yet (section 10)                           | Reported       |
-| Dashboard (`nuxeo-home`) cards: a page provider, tasks, recently viewed                                                                           | Home cards                                                                                               | Automatic      |
-| Theme: `--nuxeo-*` custom properties and a logo                                                                                                   | Theme tokens and a logo (Layer 0), through a token map                                                   | Automatic      |
-| Theme properties with no token                                                                                                                    | Nothing: no custom CSS (parity decision 5)                                                               | Reported       |
-| Translations, including added languages                                                                                                           | `labels/<locale>.json`                                                                                   | Automatic      |
-| Login branding: images, logo, colours                                                                                                             | Sign-in branding in the bootstrap configuration                                                          | Automatic      |
-| Workflow task layouts                                                                                                                             | Task forms per workflow step                                                                             | Automatic      |
-| Reusable layout blocks                                                                                                                            | A card wherever a layout uses one: version 2 has no reusable block                                       | Automatic      |
-| Custom elements of the custom bundle                                                                                                              | A Layer 2 Angular plugin each (section 4)                                                                | Agent proposes |
-| Other code in the custom bundle, and customer code in a file Studio generates                                                                     | Nothing: a plugin, if a person writes one                                                                | Reported       |
-| HTML blocks with inline scripts, uploaded CSS                                                                                                     | Nothing (parity decisions 2 and 5)                                                                       | Reported       |
-| Features of the JSF UI                                                                                                                            | Out of scope: Studio is retiring them                                                                    | —              |
+| In Studio Designer                                                                                                                                | In the new app                                                                                                                                                     | How            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| Types, schemas, lifecycles, page providers, workflows, chains                                                                                     | Nothing to convert: they stay on the server in the Studio package, and the new app reads them                                                                      | —              |
+| Document layouts in 5 modes                                                                                                                       | Layout files: version 2 for `view`, `edit` and `create`, version 1 for `metadata`, the only one the app reads there; `import` has none                             | Automatic      |
+| A field bound to `document.properties.<prefix>:<field>`                                                                                           | A field with the matching widget (table below)                                                                                                                     | Automatic      |
+| `required`, labels, names                                                                                                                         | Field rules; labels as keys in `labels/<locale>.json`                                                                                                              | Automatic      |
+| Machine-generated labels ("Hfs Fields Hfs S Object Id")                                                                                           | A tidy label, kept as a translation                                                                                                                                | Agent proposes |
+| Repeated fields, repeated dashboard cards                                                                                                         | Kept once                                                                                                                                                          | Reported       |
+| Search form and results: predicates, columns, sorts, views                                                                                        | A search form and a list over the same page provider, with typed columns, sorts and a table or grid view                                                           | Automatic      |
+| Slot contributions in mapped slots (`DOCUMENT_ACTIONS`, selection actions, tabs, drawer items and pages)                                          | Entries in the matching slot (`toolbar`, `bulk-actions`, `tabs`, `navbar` and its `sidebar`)                                                                       | Automatic      |
+| Application pages (`PAGES`)                                                                                                                       | Routes, once what each page shows is mapped                                                                                                                        | Agent proposes |
+| Contributions in slots the app lacks (user menu, administration, create popup, collection, blob and upload actions, trash, publishing, analytics) | A runtime slot first, decided per slot by demand (parity plan 10.2)                                                                                                | Reported       |
+| `nuxeo-operation-button` with an operation and parameters                                                                                         | An action bound to the same operation, if it is on the allow-list                                                                                                  | Automatic      |
+| A button with no operation, or one not on the allow-list                                                                                          | Nothing until someone decides                                                                                                                                      | Reported       |
+| Structured conditions: type, facet, permission, group, lifecycle state, path                                                                      | Rules from the registered list                                                                                                                                     | Automatic      |
+| A condition on a field of the `metadata` layout, which the app reads in version 1 alone                                                           | Nothing: version 1 holds no rule, so the field is left out rather than shown to everyone                                                                           | Reported       |
+| A condition on a list's column, or on a search screen's table                                                                                     | The column's, or the queue's, `visibleWhen`, where it reads the user only: no record is open in a queue                                                            | Automatic      |
+| Free JavaScript conditions that match a known pattern (`user.isMember(…)`, `user.hasPermission(doc, …)`, `document.facets.indexOf(…)`)            | The equivalent structured rule, proven with truth tables (section 6)                                                                                               | Agent proposes |
+| Any other free JavaScript condition                                                                                                               | Nothing                                                                                                                                                            | Reported       |
+| Tabs whose page is a layout block                                                                                                                 | Tabs of each type's record page                                                                                                                                    | Automatic      |
+| Tabs whose page is a listing                                                                                                                      | A card of related records in the tab of each type's record page, over the same page provider, with the open record as its parameter where the page passes it whole | Automatic      |
+| Dashboard (`nuxeo-home`) cards: a page provider, tasks                                                                                            | Home cards: a link to the list's queue, and a list of the person's tasks                                                                                           | Automatic      |
+| The dashboard's recently viewed card                                                                                                              | A list of the records the person created or edited last, which is not what they opened: Nuxeo keeps no list of views                                               | Agent proposes |
+| Theme: `--nuxeo-*` custom properties and a logo                                                                                                   | Theme tokens and a logo (Layer 0), through a token map                                                                                                             | Automatic      |
+| Theme properties with no token                                                                                                                    | Nothing: no custom CSS (parity decision 5)                                                                                                                         | Reported       |
+| Translations, including added languages                                                                                                           | `labels/<locale>.json`                                                                                                                                             | Automatic      |
+| Login branding: images, logo, colours                                                                                                             | Sign-in branding in the bootstrap configuration                                                                                                                    | Automatic      |
+| Workflow task layouts                                                                                                                             | Task forms per workflow step                                                                                                                                       | Automatic      |
+| Reusable layout blocks                                                                                                                            | A card wherever a layout uses one: version 2 has no reusable block                                                                                                 | Automatic      |
+| Custom elements of the custom bundle                                                                                                              | A Layer 2 Angular plugin each (section 4)                                                                                                                          | Agent proposes |
+| Other code in the custom bundle, and customer code in a file Studio generates                                                                     | Nothing: a plugin, if a person writes one                                                                                                                          | Reported       |
+| HTML blocks with inline scripts, uploaded CSS                                                                                                     | Nothing (parity decisions 2 and 5)                                                                                                                                 | Reported       |
+| Features of the JSF UI                                                                                                                            | Out of scope: Studio is retiring them                                                                                                                              | —              |
 
 Every slot, and where a contribution to it goes, is in
 [`tools/studio-migration/catalogue/slots.json`](../../tools/studio-migration/catalogue/slots.json).
@@ -242,6 +245,25 @@ an owner and a decision, and a person has approved the report and its decisions 
 - **6:** the labels of tabs, task forms and blocks.
 - **10:** the task forms, through the validator's own rules for them.
 
+**For what M2 left over**, since 27 November 2026, the same checks cover a tab whose page is a list,
+the `edit` and `create` forms in version 2, the conditions on list columns and search tables, and
+the dashboard's tasks and recently viewed cards:
+
+- **2:** each tab whose page is a list holds its one card of related records, with the list's
+  columns in Web UI's order and their widgets; each `edit` and `create` form is version 2, its
+  fields read-only where Web UI only shows them.
+- **5:** the rule of each field and block card of a form, of each list column and search table, and
+  of a listing's card and columns, held to their truth tables; none of them shown to everyone, and
+  nothing under a condition on the `metadata` layout, which version 1 cannot rule.
+- **6:** the labels of a listing's columns.
+- **7:** each listing asks the same page provider, with the same parameters, the open record among
+  them where the page passes it, the same sort and the same page size, and no card of related
+  records is written that no tab gives, nor a list that offers actions, a new record or a search
+  Web UI's does not; the home holds the person's tasks, of every workflow, where
+  Web UI's dashboard does, and their recent records only where a person accepted the card proposed
+  for the recently viewed one.
+- **10:** the forms, cards of related records and home cards, through the validator.
+
 **In phase M3**, check 9 holds each custom element's plugin to the element
 ([`tools/studio-migration`](../../tools/studio-migration/README.md), **The code track**):
 
@@ -340,6 +362,13 @@ variable its step and workflow lack (3), put a task's variable in a document's l
 block's card or a tab (2), make a field Web UI only shows editable in a task form (2), drop a
 tab's rule (5), change a tab's label (6), and drop a block's use from the report (1).
 
+**For what M2 left over**, seven more, each failing its check on the made-up package with M2's
+corpus and its leftovers: drop the card of related records a listing tab becomes (2), point it at
+another page provider (7), drop the open record from its parameters (7), drop the rule of a field
+of an edit form (5), show a list column Web UI shows only under a condition to everyone, by
+dropping its rule (5), write the card proposed for the recently viewed card with no one's
+acceptance (7), and drop the card of the person's tasks (7).
+
 **For Web UI's slot registration** (`nuxeo-slots.js`: `disabled`, `priority`, and a later
 contribution of the same name replacing or changing an earlier one), which actions, the menu and
 tabs follow, five more: make an action of a disabled button, keep a replaced or an outranked
@@ -427,7 +456,10 @@ For the sample, M1's report lists:
   - the favourites card, which reads an operation, proposed;
   - the first card, converted to a card of `home.json` that opens its list, written as a queue. The
     app does not draw a card that is only a link to a queue until phase 1's queue page exists;
-  - the tasks and recently viewed cards, pending: `home.json` has no card for either yet;
+  - the tasks and recently viewed cards, pending: `home.json` had no card for either then. Since 27
+    November 2026 the converter writes a tasks card as a card of the person's tasks, and proposes a
+    card of their recent records for a recently viewed card; the sample has not been converted
+    again since;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
   of 4.43 and 4.17;
@@ -454,7 +486,10 @@ Readiness needs a decision taken for every reported item and every proposal, and
 the file.
 
 **Accepting or rejecting a proposal.** A proposal is a condition's rule in a known JavaScript
-pattern, or a card an operation feeds. What it guards, a field under the condition, say, takes no
+pattern, a card an operation feeds, or the card of recent records proposed for the recently viewed
+card, which lists what the person created or edited rather than what they opened: accepted, it is
+written to `home.json` as the report's `proposes` gives it, and a change to that is decided again.
+What it guards, a field under the condition, say, takes no
 decision of its own: it follows its condition's. `convert --decisions <decisions.json>`, which
 `migrate --from` runs, writes what a person accepted, by someone named, for a reason: the rule
 becomes the `visibleWhen` of what the condition guards, and check 5 holds it on every row of its
@@ -647,8 +682,12 @@ These sit inside the [development plan](development-plan.md):
   them for a new build. No reviewer has approved a report at a terminal by hand: the tests drive
   `approve` through a stand-in for one, and a real shell with no terminal was seen refusing it.
 
-**Where M2 stands, 23 November 2026:**
+**Where M2 stands, 27 November 2026:**
 
+- **Checked on made-up packages only.** Everything below was built and checked on Acme-Claims, the
+  made-up package of `tools/studio-migration/src/testing/`, with M2's corpus and its leftovers. No
+  real package was run: the sample holds none of these constructs, and no other package has
+  arrived.
 - **Built: task forms, tabs and layout blocks.** A workflow task layout becomes the task form of
   its step, `tasks/<workflow>.<step>.layout.json`, its fields bound to the task's variables as
   `var:` fields, with the names' case from the package's variables schemas. A layout block becomes
@@ -657,34 +696,88 @@ These sit inside the [development plan](development-plan.md):
   and 10 hold them, with nine more negative controls. They are read from Web UI's own sources
   (`nuxeo-document-task.js`, `nuxeo-browser.js`, the stock task layouts and tabs) and tested on the
   synthetic corpus: the sample holds none of them.
+- **Built, 27 November 2026: what M2 had left over.**
+  - **A tab whose page is a list,** a `nuxeo-page-provider` and its `nuxeo-data-table` in the
+    element the page is, becomes the tab's one card of related records (layout-v2.md, section 7),
+    over the same page provider, with its columns, sort and page size, the tab's conditions as
+    its rule. Where the page provider's `params` bind a query parameter whole to the open record,
+    `[[document.uid]]` say, the card sends that record's property, `{ "field": "ecm:uuid" }`.
+  - **The `edit` and `create` forms are written in version 2,** as the app draws them, so that a
+    field, or a layout block's card, under a condition there carries its rule, a field names its
+    widget, and one Web UI only shows is read-only.
+  - **Conditions on a list's column and on a search screen's table** carry their rule as the
+    column's, or the queue's, `visibleWhen`, where it reads the user only, as no record is open in
+    a queue; a listing's column may read the open record. **On a field of the `metadata` layout,**
+    which the app reads in version 1 alone, a condition cannot travel, and the field is reported.
+  - **The dashboard's tasks card** becomes a card of the person's tasks of every workflow,
+    `"tasks": {}`.
+  - **Its recently viewed card is a proposal,** not a conversion: `home.json`'s `recent` lists the
+    records the person created or edited last, since Nuxeo keeps no list of views, which is not
+    what Web UI's card lists. A person accepts or rejects it in `decisions.json`; accepted, the card
+    the report proposes is written, and a change to it is decided again.
+  - Checks 2, 5, 6, 7 and 10 hold them, with seven more negative controls (section 7), each seen
+    failing.
 - **Reported, against section 3's table:** what has no version 2 equivalent, or cannot be told from
   the package. A permission test in a task layout, whose document Web UI's task page fetches
   without its permissions; a task layout whose names' case the package does not give; a tab on
-  every type, on a type with no view file, or whose page is not a block; a tab whose page is a
-  listing; a block inside a block, or given no document. A field Web UI only shows becomes a
-  read-only field of a task form, and is reported in a version 1 form, which cannot say so.
+  every type, on a type with no view file, or whose page is neither a block nor a list; a block
+  inside a block, or given no document. A field Web UI only shows becomes a read-only field of a
+  task, edit or create form.
+- **Reported, of what M2 left over:** a listing whose page provider takes a named parameter, or a
+  query parameter bound to the page otherwise than whole to the open record, which a card of
+  related records cannot send; a page with two page providers, no table or two, something besides
+  its list, such as a button, or a custom element of its own; a table that does not name its page
+  provider as the one it lists; a page provider given anything that could list other records, a
+  `query` or `quick-filters` say; a sort it cannot read; a property of the open record sent on a
+  type without it; a column or a table whose condition reads a document where no record is open,
+  or reads each row, `document="[[item]]"`; a search screen of several tables not in one
+  condition; a dashboard card that shows two of a list, the person's tasks and recently viewed
+  documents; a field or a block under a condition in the `metadata` layout. A listing written
+  without part of what Web UI's page shows, a grid view, a column, a page size, and a dashboard
+  card written without a column, are written and reported, each saying what was left out, or
+  follow the proposal a column waits on.
+- **Reviewed twice, independently,** for correctness and adversarially, asking whether a condition
+  Web UI enforces could be lost, or a listing pointed at the wrong records, and still pass. The
+  adversarial review found five ways, among them a search screen's second table under a condition
+  shown to everyone, a condition inside a tasks card lost, and a page provider's quick filters
+  ignored; the correctness review found a rejected card's condition left pending for good, and a
+  listing whose table lists other records than its page provider's. Each is fixed with a test
+  that failed before it; the tool's README lists them, and what was left.
 - **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
   decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
   one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
   calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
-  The rule travels as the `visibleWhen` of what the condition hides: a view field where it shows
-  its property, an action by its button, a menu entry by its icon and its page's search form, and
-  a home card and its queue by its list. Check 5 holds every rule to its condition's truth table,
-  without a server.
+  The rule travels as the `visibleWhen` of what the condition hides: a field of a view, edit or
+  create layout where it shows its property, a layout block's card, a tab, an action by its
+  button, a menu entry by its icon and its page's search form, a home card and its queue by its
+  list, a list's column, and a search screen's queue by its table. Check 5 holds every rule to its
+  condition's truth table, without a server. A condition whose rule nothing carries waits while
+  something it guards waits, and is reported once each is.
 - **Reported, against the table above:** a `path` test, which no registered rule makes, and
   `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
   holds no user is reported too: a document layout and the stock home are given none, so it never
   passes in Web UI. So is `!document.facets.indexOf(…) !== -1`, which is always true, and a
   condition whose truth table would be too large to run.
 - **Not yet:**
-  - a tab whose page is a listing, which would be a card of related records;
-  - version 2 in the `edit` and `create` forms, which the app now draws, so that a field or a block
-    under a condition there carries its rule;
-  - conditions on version 1 fields, list columns and search tables;
   - the truth tables' server half, which evaluates each original in Web UI on the migration
-    server.
+    server;
+  - how Studio writes a tab whose page is a list, and how a page passes the open record to its page
+    provider: no package in hand shows either, so the corpus's form,
+    `params='{"queryParams": "[[document.uid]]"}'`, read as a dashboard card's `params` are, is an
+    assumption a real package will confirm or correct. Polymer makes such an attribute a compound
+    binding, whose value is text: whether `nuxeo-page-provider` reads it so is lab mode's to
+    confirm;
+  - a dashboard card's page provider, read for its provider, `params` and page size alone, as M1
+    reads it: its sort and what could narrow it are not held;
+  - a condition inside a column's template hides that column's cells in Web UI, its heading
+    staying; the app shows the column, heading and cells, only to those its rule passes for;
+  - a card of related records offering **New**, its `create` key: a list as the converter reads it
+    creates nothing, and a page holding a button is reported;
+  - the converted `edit` and `create` forms drawn by the app: they were held to the validator and
+    the harness, and not opened in the app;
+  - a condition on the `metadata` layout, which travels once the app reads version 2 there.
 
-**Where M1 stands, 23 November 2026:**
+**Where M1 stands, 27 November 2026:**
 
 - **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md), the
   declarative track:
@@ -694,14 +787,19 @@ These sit inside the [development plan](development-plan.md):
     pipeline's validator accepts;
   - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
     exists. With M0's, there are twenty-three negative controls.
-- **On the sample:**
+- **Since 27 November 2026,** with what M2 left over (above): the `edit` and `create` layouts in
+  version 2, the dashboard's tasks card as a card of the person's tasks, and its recently viewed
+  card proposed as a card of their recent records, for a person to accept or reject. Checked on the
+  made-up packages only.
+- **On the sample,** when M1 was built, on 23 November 2026; it has not been converted again since,
+  and is not in this repository:
   - checks 1, 2, 4, 5 and 10 pass;
   - checks 3, 6 and 7 run in part;
   - check 8 finds the two colours below AA.
 - **Waiting:**
   - the migration lab server, for the server halves of checks 3, 5, 6 and 7;
-  - card kinds of `home.json` for the tasks and recently viewed cards;
-  - M2, for conditions, tabs, task forms and layout blocks;
+  - a target for the card an operation feeds, the favourites card, which the mapping agent
+    proposes;
   - real packages: only the sample has arrived, and phase 4 needs three.
 
 **Where M0 stood, 22 November 2026:**
@@ -735,6 +833,10 @@ These sit inside the [development plan](development-plan.md):
   local server has it.
 - Studio's Git access to the generated UI files, on a real project.
 - The token map from `--nuxeo-*` properties to Satori's tokens.
+- What M2 left over, a tab whose page is a list, the `edit` and `create` forms in version 2, the
+  conditions on list columns and search tables, and the dashboard's tasks and recently viewed
+  cards, on a real package: checked on the made-up corpus only, whose listing tab is in a form no
+  real package has shown yet. The converted forms were not opened in the app.
 - Accepting and rejecting proposals, carrying decisions to a new build and the reviewer's
   approval, on a real package or by a real reviewer: they were checked on the made-up packages
   only, and `approve` at a terminal only through a stand-in for one in the tests. Whether a

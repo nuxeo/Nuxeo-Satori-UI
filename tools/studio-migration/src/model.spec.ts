@@ -128,6 +128,7 @@ describe('the widget each element becomes', () => {
         dateFormat,
         formatsDate,
         conditional: false,
+        conditions: [],
       });
     expect(column(['nuxeo-user-tag'])).toBe('user');
     expect(column(['nuxeo-date'], 'relative')).toBe('relative-date');

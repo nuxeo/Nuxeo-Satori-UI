@@ -32,9 +32,11 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
-import { appIdOf, labelsPath, labelTexts } from './app-files';
+import { appIdOf, labelsPath, labelTexts, placed } from './app-files';
+import { blockFieldId, blockUseId } from './blocks';
 import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
 import { proposalOf, sameRule } from './conditions';
+import { chainOf } from './guards';
 import { constructsOf, sharedIdentities, type Construct, type ConstructKind } from './constructs';
 import { convertBlocks } from './convert-blocks';
 import { convertElements } from './convert-elements';
@@ -83,6 +85,11 @@ export interface ReportEntry {
    * condition's is accepted.
    */
   readonly proposal?: true;
+  /**
+   * For a proposal of something other than a rule: what accepting it writes, such as the card of
+   * `home.json` proposed for Web UI's recently viewed card. A person decides on it, as on a rule.
+   */
+  readonly proposes?: unknown;
   /**
    * For a proposal, what a person decided of it when the conversion was made: what it wrote.
    * Absent when it was made with no decision of it, so nothing proposed was written.
@@ -167,6 +174,7 @@ export function withVerdicts(
   verdicts: ReadonlyMap<string, Verdict> | undefined,
 ): Inventory {
   if (!verdicts || verdicts.size === 0) return inventory;
+  const dashboard = inventory.dashboard;
   return {
     ...inventory,
     conditions: inventory.conditions.map((condition) => {
@@ -175,6 +183,17 @@ export function withVerdicts(
         ? { ...condition, verdict: { accepted: verdict.accepted, rule: verdict.rule } }
         : condition;
     }),
+    // A card proposed as a card of home.json, the recently viewed one, is written once accepted.
+    dashboard:
+      dashboard === null
+        ? null
+        : {
+            ...dashboard,
+            cards: dashboard.cards.map((card, index) => {
+              const verdict = verdicts.get(`dashboard-card:${dashboard.path}#${index + 1}`);
+              return verdict ? { ...card, verdict: { accepted: verdict.accepted } } : card;
+            }),
+          },
   };
 }
 
@@ -184,7 +203,7 @@ export class ConversionError extends Error {
 
 export type Decision = Pick<
   ReportEntry,
-  'outcome' | 'to' | 'note' | 'rule' | 'proposal' | 'applied'
+  'outcome' | 'to' | 'note' | 'rule' | 'proposal' | 'proposes' | 'applied'
 >;
 
 /** What the parts of the conversion share: what they read, and what they write and decide. */
@@ -374,13 +393,15 @@ export function convert(
   };
 
   const constructs = constructsOf(inventory);
+  const guards = guardedBy(inventory);
   const entries: ReportEntry[] = constructs.map((construct) => ({
     id: construct.id,
     kind: construct.kind,
     file: construct.file,
     label: construct.label,
     ...(construct.property ? { property: construct.property } : {}),
-    ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue, context.carried)),
+    ...(decided.get(construct.id) ??
+      decide(construct, inventory, catalogue, context.carried, guards, (id) => decided.get(id))),
   }));
 
   return {
@@ -436,6 +457,7 @@ const ENTRY_KEYS = [
   'note',
   'rule',
   'proposal',
+  'proposes',
   'applied',
 ] as const;
 
@@ -516,12 +538,70 @@ export function convertWithDecisions(
   return verdicts.size === 0 ? base : convert(pkg, inventory, catalogue, { ...options, verdicts });
 }
 
+/**
+ * What each condition guards, by `<file>#<index>`: the constructs that show only while it passes,
+ * read from the inventory, as their ids. A construct sits under each condition of the chain of
+ * every condition it shows under.
+ */
+function guardedBy(inventory: Inventory): Map<string, string[]> {
+  const guarded = new Map<string, string[]>();
+  const add = (path: string, indexes: readonly number[], id: string): void => {
+    for (const index of indexes)
+      for (const condition of chainOf(inventory, path, index)) {
+        const key = `${condition.path}#${condition.index}`;
+        guarded.set(key, [...(guarded.get(key) ?? []), id]);
+      }
+  };
+  for (const layout of inventory.layouts)
+    layout.fields.forEach((field, index) =>
+      add(layout.path, field.conditions, `layout-field:${layout.path}#${index + 1}`),
+    );
+  for (const task of inventory.taskLayouts)
+    task.fields.forEach((field, index) =>
+      add(task.path, field.conditions, `task-field:${task.path}#${index + 1}`),
+    );
+  for (const use of inventory.blockUses) {
+    add(use.path, use.conditions, blockUseId(use));
+    inventory.blocks
+      .find((block) => block.path === use.block)
+      ?.fields.forEach((field, index) =>
+        add(use.block, field.conditions, blockFieldId(use, index)),
+      );
+  }
+  for (const search of inventory.searches) {
+    search.fields.forEach((field, index) =>
+      add(search.path, field.conditions, `search-field:${search.path}#${index + 1}`),
+    );
+    search.columnDetails.forEach((column, index) =>
+      add(search.path, column.conditions, `search-column:${search.path}#${index + 1}`),
+    );
+    search.viewConditions.forEach((conditions, index) =>
+      add(search.path, conditions, `search-view:${search.path}#${index + 1}`),
+    );
+  }
+  for (const { contribution, index } of placed(inventory.slotContributions)) {
+    const id = `slot-contribution:${contribution.path}#${index}`;
+    add(contribution.path, contribution.conditions, id);
+    for (const column of contribution.listing?.columns ?? [])
+      add(contribution.path, column.conditions, id);
+  }
+  const dashboard = inventory.dashboard;
+  dashboard?.cards.forEach((card, index) => {
+    const id = `dashboard-card:${dashboard.path}#${index + 1}`;
+    add(dashboard.path, card.conditions, id);
+    for (const column of card.columns) add(dashboard.path, column.conditions, id);
+  });
+  return guarded;
+}
+
 /** The outcome of a construct no part of the conversion decided. */
 function decide(
   construct: Construct,
   inventory: Inventory,
   catalogue: Catalogue,
   carried: ReadonlyMap<string, readonly string[]>,
+  guards: ReadonlyMap<string, readonly string[]>,
+  decisionOf: (id: string) => Decision | undefined,
 ): Decision {
   const key = Number(construct.id.slice(construct.id.lastIndexOf('#') + 1));
   switch (construct.kind) {
@@ -576,16 +656,37 @@ function decide(
         };
       }
       if (proposal.kind === 'reported') return { outcome: 'reported', note: proposal.note };
-      // Converted only where a rule was written: what it guards says why it was not otherwise.
-      return where.length > 0
+      if (where.length > 0)
+        return {
+          outcome: 'converted',
+          to: `the visibleWhen of ${where.join(', ')}`,
+          rule: proposal.rule,
+        };
+      // Converted only where a rule was written: what it guards says why it was not otherwise. It
+      // waits while something it guards waits, for a later phase or a person's acceptance; where
+      // each is reported, nothing will carry it, and it is reported too.
+      const guarded = guards.get(`${condition.path}#${condition.index}`) ?? [];
+      // A proposal a person decided, accepted or rejected, waits for no one: one undecided does, and
+      // so does what follows a proposed condition.
+      const waits = guarded.some((id) => {
+        const decision = decisionOf(id);
+        return (
+          decision?.outcome === 'pending' ||
+          (decision?.outcome === 'proposed' && decision.applied === undefined)
+        );
+      });
+      return waits
         ? {
-            outcome: 'converted',
-            to: `the visibleWhen of ${where.join(', ')}`,
+            outcome: 'pending',
+            note: 'Its rule is decided, but nothing it guards carries one yet: each says why',
             rule: proposal.rule,
           }
         : {
-            outcome: 'pending',
-            note: 'Its rule is decided, but nothing it guards carries one yet: each says why',
+            outcome: 'reported',
+            note:
+              guarded.length > 0
+                ? 'Its rule is decided, but nothing it guards carries it, and nothing will: each is reported, or a proposal a person decided, and says why'
+                : 'Its rule is decided, but it guards nothing the conversion writes, such as a field, a card, a column or a button',
             rule: proposal.rule,
           };
     }

@@ -9,6 +9,7 @@ import { MUTATIONS } from './mutations';
 import { fileOfFinding, summarise, TALLIES } from './report';
 import { readStudioPackage } from './studio-package';
 import { m2CorpusFiles } from './testing/m2-corpus';
+import { m2AllFiles } from './testing/m2-leftovers-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
 
 const UI = 'web/nuxeo.war/ui';
@@ -166,7 +167,12 @@ describe('the report of a sound conversion', () => {
       summary.files.find(
         (file) => file.path === `${UI}/document/claim/nuxeo-claim-edit-layout.html`,
       ),
-    ).toMatchObject({ tallies: { converted: 3, reported: 1, generated: 1 } });
+    ).toEqual(expect.objectContaining({ tallies: { converted: 4, generated: 1 } }));
+    expect(
+      summary.files.find(
+        (file) => file.path === `${UI}/document/claim/nuxeo-claim-metadata-layout.html`,
+      ),
+    ).toMatchObject({ tallies: { converted: 3, reported: 3, generated: 1 } });
   });
 
   it('says a file became only where its constructs were converted, not where one was reported', () => {
@@ -268,9 +274,9 @@ describe('the report as text', () => {
     );
     expect(text).toContain("Allow-list: Claim.Approve, the deployment's, as given\n");
     expect(text).toMatch(
-      /\n {2}kind +total +converted +proposed +accepted +rejected +reported +decided +generated +server +pending +missing\n/,
+      /\n {2}kind +total +converted +proposed +accepted +rejected +reported +decided +generated +server +missing\n/,
     );
-    expect(text).toMatch(/\n {2}translation +6 +6 +0 +0 +0 +0 +0 +0 +0 +0 +0\n/);
+    expect(text).toMatch(/\n {2}translation +6 +6 +0 +0 +0 +0 +0 +0 +0 +0\n/);
     expect(text).not.toContain('not an outcome');
     expect(text).toMatch(/\nCoverage: 100%, (\d+) of the package's \1 constructs in the report\n/);
   });
@@ -280,14 +286,21 @@ describe('the report as text', () => {
     expect(text).toContain('\n  Verdict: not ready\n');
     expect(text).toContain('    - 1 reported item has no owner\n');
     expect(text).toMatch(/\nDecisions needed: (\d+) reported items, \d+ of them decided\n/);
+    // The one left undecided, the first reported, and one written all the same, decided.
     expect(text).toContain(
-      `  - cl:adjuster ("Adjuster"), in ${UI}/document/claim/nuxeo-claim-edit-layout.html\n` +
-        `      id: layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3\n`,
+      `  - cl:reserve ("Reserve"), in ${UI}/document/claim/nuxeo-claim-metadata-layout.html\n` +
+        `      id: layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#3\n`,
+    );
+    expect(text).toMatch(
+      /\n {6}why: Condition 1 of its file does not convert: [^\n]*\n {6}owner: none; decided: nothing yet\n/,
     );
     expect(text).toContain(
-      '      written to: layouts/Claim/edit.layout.json\n      owner: none; decided: nothing yet\n',
+      `  - cl:adjuster ("Adjuster"), in ${UI}/document/claim/nuxeo-claim-metadata-layout.html\n` +
+        `      id: layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4\n`,
     );
-    expect(text).toContain('      owner: Migration lead; decided: Rebuilt by hand\n');
+    expect(text).toContain(
+      '      written to: layouts/Claim/metadata.layout.json\n      owner: Migration lead; decided: Rebuilt by hand\n',
+    );
     expect(text).toMatch(
       /\nProposals: 2: 0 accepted, 0 rejected, 1 waiting for a person to accept or reject them, and 1 decided with the condition each shows under\n/,
     );
@@ -341,9 +354,14 @@ describe('the report as text', () => {
   it('shows what an item’s decision says even where it names no owner', () => {
     const conversion = decided(input.conversion);
     const raw = conversion.decisions as { decisions: Record<string, unknown>[] };
-    raw.decisions[0]['owner'] = '';
+    const tag = raw.decisions.find(
+      (item) =>
+        item['id'] === `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`,
+    );
+    if (!tag) throw new Error('the metadata layout reports no user tag');
+    tag['owner'] = '';
     expect(reportSummary(summarise({ ...input, conversion }))).toContain(
-      '      written to: layouts/Claim/edit.layout.json\n      owner: none; decided: Rebuilt by hand\n',
+      '      written to: layouts/Claim/metadata.layout.json\n      owner: none; decided: Rebuilt by hand\n',
     );
   });
 
@@ -363,13 +381,13 @@ describe('the report as text', () => {
         : entry,
     );
     const odd = reportSummary(summarise(withConstructs(input, entries)));
-    expect(odd).toMatch(/ pending +not an outcome +missing\n/);
+    expect(odd).toMatch(/ server +not an outcome +missing\n/);
     expect(odd).toContain('\nProposals: none\n');
   });
 });
 
 describe('what the harness found, file by file', () => {
-  const pkg = readStudioPackage(syntheticPackage({ bundle: m2CorpusFiles() }));
+  const pkg = readStudioPackage(syntheticPackage({ bundle: m2AllFiles() }));
   const read = inventory(pkg);
   const corpus: HarnessInput = {
     pkg,
