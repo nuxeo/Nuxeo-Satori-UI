@@ -16,11 +16,19 @@ Case screens with no Angular code, in two days or less, and a prospect would acc
 (section 4), and proposes the second, one "that is not Payers and starts from files" (section 13).
 Its section 7 asks for the tutorial "tested by someone outside the team".
 
-**Status, 25 November 2026: no test has run.** No participant has been found, the
-[demo server](../../business-apps/demo-server/README.md) has never been started, and the two steps
-files have never run against a server: they were checked for syntax, by the harness's assertion
-audit, and by their shared checks' offline controls ([section 7](#7-the-steps-files)). Test C also
-waits for Claude seats approved under Hyland's AI use requirements (phase 3, "Needs").
+**Status, 25 November 2026: no test has run.** No participant has been found, the demo server
+then planned, the compose project in [`business-apps/demo-server`](../../business-apps/demo-server/README.md),
+has never been started, and the two steps files have never run against a server: they were checked
+for syntax, by the harness's assertion audit, and by their shared checks' offline controls
+([section 7](#7-the-steps-files)). Test C also waits for Claude seats approved under Hyland's AI use
+requirements (phase 3, "Needs").
+
+**The server, since 28 November 2026,** is the hosted Beta server: the business apps' shared demo
+server, for every phase's demo and acceptance test ([decisions.md](decisions.md), "Settled"; #794).
+No pull request merged by that day installs a kit or runs a test there. The kits of tests A, B and
+D need add-ons, the Payers kit `nuxeo-agentic-letters` and the brand assets kit
+`nuxeo-agentic-assets`, so they wait there until those add-ons are published (decision N). Until
+then a session runs on a server of its own ([section 2](#2-preparing-a-server-for-tests-a-b-and-d)).
 
 ## 1. Rules for every test
 
@@ -282,10 +290,15 @@ to the doc it was missing from.
 ## 2. Preparing a server for tests A, B and D
 
 Tests A, B and D rebuild a kit's pages on a server that has the kit's stand-in model and seed: the
-same types and records the reference kit was written on. The server is the
-[demo server](../../business-apps/demo-server/README.md), stood up from a release candidate, or a
-local Docker Nuxeo with the kits installed by hand. Test C needs the opposite, a server without its
-kit ([section 5](#5-test-c-an-app-with-the-agent-in-a-day-phase-3)).
+same types and records the reference kit was written on. Their shared server is the hosted Beta
+server, chosen on 28 November 2026 ([decisions.md](decisions.md), "Settled"), once their kits are
+installed there: the Payers kit waits for `nuxeo-agentic-letters` to be published, and the brand
+assets kit for `nuxeo-agentic-assets` (decision N). No pull request merged by that day installs
+either kit there, and this section has no steps for that server yet. Until then a session runs on a server of
+its own: the compose project in [`business-apps/demo-server`](../../business-apps/demo-server/README.md),
+stood up from a release candidate, or a local Docker Nuxeo with the kits installed by hand, as
+below. Test C needs the opposite, a server without its kit
+([section 5](#5-test-c-an-app-with-the-agent-in-a-day-phase-3)).
 
 ### The facilitator's checkout
 
@@ -314,10 +327,12 @@ The last line is the harness's own prerequisite ([beta harness README](../../scr
 
 ### The demo server, from a release candidate
 
-**Not run yet:** the demo server was built and checked offline, and has never been started against
-Docker (its README, "What was checked, and what was not"; the
-[administrator's guide](administrator-guide.md), section 7). The first session's preparation is its
-first run: do it at least a day before, and fall back to the local server below if it fails.
+**Not run yet:** this is the compose project in `business-apps/demo-server`, which this page called
+the demo server until the hosted Beta server was chosen on 28 November 2026. It was built and
+checked offline, and has never been started against Docker (its README, "What was checked, and what
+was not"; the [administrator's guide](administrator-guide.md), section 7). The first session that
+uses it makes its first run: do it at least a day before, and fall back to the local server below if
+it fails.
 
 It needs Docker and Compose v2, signed in to `docker-private.packages.nuxeo.com` with your own
 account; Maven with a JDK, `unzip` and `tar` for the release candidate; and three secrets, exported
@@ -465,8 +480,8 @@ export SESSION=~/Desktop/agentic-ui-evidence/business-apps/acceptance/<test>-<YY
 
 ### A two-day test's night
 
-Leave the demo server running between the two days, or stop it and start it again with its own
-project, never `up` (its README, "Stopping, starting, removing"):
+Leave the `demo-server` project running between the two days, or stop it and start it again with
+its own project, never `up` (its README, "Stopping, starting, removing"):
 
 ```bash
 docker compose -f business-apps/demo-server/compose.yml -p satori-demo-acceptance stop
@@ -686,9 +701,10 @@ lists as a need not yet met.
 
 - **A development Nuxeo with `nuxeo-agentic-ui` installed, and without the facilities kit:** the
   tutorial builds `WorkOrder` and `Building` as a stand-in model, and its first read must find
-  neither. **Not the demo server,** which installs every kit of the candidate, the facilities kit's
-  `WorkOrder` among them. The local Docker Nuxeo the tutorial was checked on has the other kits and
-  not this one. The facilitator checks it with the tutorial's step 1 commands, with an
+  neither. **Not the demo server:** the hosted Beta server is to take the facilities kit among its
+  first ([decisions.md](decisions.md), "Settled"), and the `demo-server` compose project installs
+  every kit of the candidate, the facilities kit's `WorkOrder` among them. The local Docker Nuxeo
+  the tutorial was checked on has the other kits and not this one. The facilitator checks it with the tutorial's step 1 commands, with an
   administrator's `NUXEO_USER` and `NUXEO_PASS` exported:
 
   ```bash
@@ -921,8 +937,8 @@ The facilitator's `session.md`, one per session:
 # <test>-<YYYY-MM-DD>-<code>
 
 - Test: A | B | C | D. Day 1 of 1 | Day <n> of 2
-- Commit: <the session's commit>. Server: demo server <project> | local, Nuxeo <version>,
-  kits <name version, ...>
+- Commit: <the session's commit>. Server: hosted Beta | demo-server <project> | local, Nuxeo
+  <version>, kits <name version, ...>
 - Control run, this morning: <reference demo verdict and counts>; <acceptance steps file on the
   copy: the one expected failure, and the rest passed>
 - Participant: <code>. Profile: <presales | developer>, <years with Nuxeo>, <has used Studio: yes |

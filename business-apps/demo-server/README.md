@@ -2,14 +2,25 @@
 
 Phase 0 of the [development plan](../../docs/business-apps/development-plan.md) is done when, among
 other things, "the demo server is up", and every phase after ends in a demo on it, installed from
-packages the pipeline built. This folder holds the one documented, repeatable way to stand one up
-from a [release candidate](../../docs/business-apps/package-pipeline.md#11-a-release-candidate-across-all-kits)'s
-output directory, for whoever runs the shared server.
+packages the pipeline built. This folder was written as the way to stand that shared server up.
+**Since 28 November 2026 the shared demo server is the hosted Beta server instead**
+([decisions.md](../../docs/business-apps/decisions.md), "Settled"; #794): it runs the UI package
+`build-marketplace.yml` builds from `staging/enterprise-grade-app`, and a kit that needs an add-on
+waits there until that add-on is published (decision N). No pull request merged by that day
+installs a kit or runs a demo there.
 
-Status, 25 November 2026: **built, and not run against Docker.** No stack has been started from it
-anywhere: the machine it was written on runs the local Nuxeo on 8080, which a test run would have
-stood beside. What was checked is offline: its controls, and its dry run on a candidate built from
-`staging/enterprise-grade-app` ([below](#what-was-checked-and-what-was-not)).
+What this folder still does is stand up a server of its own, on one machine, from a
+[release candidate](../../docs/business-apps/package-pipeline.md#11-a-release-candidate-across-all-kits)'s
+output directory, with every package of the candidate installed, add-ons included. No decision
+gives it a role of its own now. The acceptance tests' protocol names it, beside a local Docker
+Nuxeo, for a session whose kit the Beta server does not hold yet
+([acceptance-tests.md](../../docs/business-apps/acceptance-tests.md), section 2).
+
+Status, 25 November 2026, and unchanged by any pull request merged to 28 November 2026: **built,
+and not run against Docker.** No stack has been started from it anywhere: the machine it was written
+on runs the local Nuxeo on 8080, which a test run would have stood beside. What was checked is
+offline: its controls, and its dry run on a candidate built from `staging/enterprise-grade-app`
+([below](#what-was-checked-and-what-was-not)).
 
 ## The short version
 
