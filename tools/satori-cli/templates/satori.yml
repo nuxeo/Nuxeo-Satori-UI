@@ -1,0 +1,53 @@
+name: Satori configuration
+
+# Every package in config-packages/ is checked and built by @nuxeo/satori-cli, the version
+# package.json pins, on every pull request and on every push to main: the checks the server makes,
+# and the app definition's, before anything reaches a server. Written by `satori create`.
+#
+# The tool is run from node_modules/.bin, never through npx, which would fetch a package of that
+# name from the registry if the install had not put it there.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Validate and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # npm ci installs what package-lock.json pins, which the first npm install writes: commit it.
+      - name: Install the tool, as package-lock.json pins it
+        run: npm ci
+
+      - name: Validate and build every package
+        run: |
+          set -euo pipefail
+          built=0
+          for dir in config-packages/*/; do
+            dir="${dir%/}"
+            ./node_modules/.bin/satori validate "$dir" --kits config-packages
+            ./node_modules/.bin/satori build "$dir" --out dist --kits config-packages
+            built=$((built + 1))
+          done
+          if [ "$built" -eq 0 ]; then
+            echo "::error::config-packages/ holds no package, so nothing was checked"; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: configuration-packages
+          path: dist/
+          if-no-files-found: error

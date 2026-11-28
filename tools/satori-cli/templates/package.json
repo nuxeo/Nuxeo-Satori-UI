@@ -1,0 +1,13 @@
+{
+  "name": "{{repository}}",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Nuxeo Satori configuration: one Marketplace package for each folder of config-packages/, checked and built with @nuxeo/satori-cli.",
+  "scripts": {
+    "validate": "satori validate config-packages/{{name}} --kits config-packages",
+    "build": "satori build config-packages/{{name}} --out dist --kits config-packages"
+  },
+  "devDependencies": {
+    "@nuxeo/satori-cli": "{{version}}"
+  }
+}
