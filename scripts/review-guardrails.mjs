@@ -14687,9 +14687,13 @@ function checkPublishWorkflows() {
 
     // 6. Every npm publish: alpha alone, Nuxeo's registry; a real one in the token's job, with
     //    no script run; never latest.
-    const registry = new RegExp(
-      `--registry[=\\s]+['"]?${PUBLISH_REGISTRY.replace(/[.]/g, '\\.')}['"]?(?:\\s|$)`,
-    );
+    // Compared as a string, the value as written: no pattern built from the address.
+    const registry = {
+      test: (command) => {
+        const named = [...command.matchAll(/--registry(?:=|\s+)(['"]?)([^\s'"]+)\1(?=\s|$)/g)];
+        return named.length === 1 && named[0][2] === PUBLISH_REGISTRY;
+      },
+    };
     for (const job of jobs) {
       for (const command of publishCommands(job.lines)) {
         const shown = command.replace(/\s+/g, ' ').trim();
