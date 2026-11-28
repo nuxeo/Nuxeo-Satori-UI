@@ -9,7 +9,7 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its modules in scripts/package-pipeline/ and the release check over them, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its modules in scripts/package-pipeline/ and the release check over them, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, the kit stand-in's script with what it reads of each kit's demo data, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
@@ -22,6 +22,9 @@
         "{workspaceRoot}/scripts/package-signature.mjs",
         "{workspaceRoot}/scripts/beta-harness/identity-guard.mjs",
         "{workspaceRoot}/scripts/dev-config.mjs",
+        "{workspaceRoot}/scripts/kit-stand-in.mjs",
+        "{workspaceRoot}/scripts/kit-stand-in/*.mjs",
+        "{workspaceRoot}/business-apps/packages/*/demo/data.mjs",
         "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/agentic-ui-config/*.defaults.json",
         "{workspaceRoot}/libs/shared/app-definition/src/**/*",
         "{workspaceRoot}/tools/satori-generators/src/**/*",

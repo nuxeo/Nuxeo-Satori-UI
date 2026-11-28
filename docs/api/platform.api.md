@@ -708,7 +708,7 @@ interface NxsBannerInputs {
     readonly actions: InputSignal<readonly NxsBannerAction[]>;
     }
 }
-type NxsBannerTone = 'error' | 'info' | 'warning';
+type NxsBannerTone = 'error' | 'info' | 'success' | 'warning';
 interface NxsBreadcrumbItem {
     readonly label: string;
     readonly routerLink?: string | readonly (string | number)[];
@@ -4050,6 +4050,7 @@ interface ExtensionRuleContext {
     readonly flags: Readonly<Record<string, boolean>>;
     readonly today?: Date;
     readonly timeZone?: string;
+    readonly linked?: (id: string, xpath: string) => unknown;
     }
 }
 class ExtensionRuleContextService {

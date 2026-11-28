@@ -84,6 +84,8 @@
     "sync:derived-selftest": "node scripts/sync-derived.selftest.mjs",
     "build": "nx build",
     "config:dev": "node scripts/dev-config.mjs",
+    "kit:stand-in": "node scripts/kit-stand-in.mjs",
+    "kit:stand-in-selftest": "node scripts/kit-stand-in.selftest.mjs",
     "config:verify-zip": "node scripts/verify-package-zip.mjs",
     "config:verify-zip-selftest": "node scripts/verify-package-zip.selftest.mjs",
     "dev": "nx serve nuxeo-ui",

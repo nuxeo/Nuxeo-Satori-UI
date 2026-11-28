@@ -107,6 +107,8 @@
     "layout.field.sigreq:declineReason": "Reason given",
     "layout.field.sigreq:cancelledBy": "Cancelled by",
     "layout.field.sigreq:signedVersion": "The case's signed version",
+    "layout.field.sigreq:signedFile": "Signed file",
+    "layout.field.sigreq:evidence": "The service's evidence",
     "layout.field.sigreq:sentDigest": "SHA-256 of the file sent",
     "layout.field.sigreq:signedDigest": "SHA-256 of the signed file",
     "layout.field.sigreq:evidenceDigest": "SHA-256 of the evidence",

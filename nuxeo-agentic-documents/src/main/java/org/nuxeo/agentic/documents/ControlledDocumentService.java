@@ -44,8 +44,10 @@ public interface ControlledDocumentService {
 
     /**
      * Enter a review cycle's fence to write one of its comments, until the current transaction
-     * ends: {@code false}, and nothing entered, when the cycle is being closed or has closed.
-     * While one transaction is in, no close is let through ({@link #closeCycle}).
+     * ends: {@code false}, and nothing entered, when the cycle is being closed or has closed. One
+     * write at a time: while another transaction is writing in the cycle, this one waits for it to
+     * end, a few seconds at most, and is refused, 409, when it has not. While one transaction is in,
+     * no close is let through ({@link #closeCycle}).
      */
     boolean enterCycle(String cycleId);
 

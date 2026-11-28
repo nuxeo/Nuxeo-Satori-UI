@@ -130,6 +130,10 @@ const oneOf =
       ? null
       : `must be one of ${allowed.map((a) => JSON.stringify(a)).join(', ')}`;
 
+/** `true` or `false`: a widget's switch, such as `number`'s `grouping`. */
+const flag: ParameterCheck = (value) =>
+  typeof value === 'boolean' ? null : 'must be true or false';
+
 const textList: ParameterCheck = (value) =>
   Array.isArray(value) &&
   value.length > 0 &&
@@ -162,18 +166,45 @@ const tones: ParameterCheck = (value) => {
     : `gives ${wrong.map(([key]) => key).join(', ')} a tone that is not one of ${TONES.join(', ')}`;
 };
 
+/** A property of a linked record, as a layout names one: never the server's `ecm:` or a task's `var:`. */
+export function isLinkedXpath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    XPATH.test(value) &&
+    !value.startsWith('ecm:') &&
+    !value.startsWith('var:')
+  );
+}
+
 /**
  * What a `document-link` shows of the record it names in place of its title, `show`
- * (layout-v2.md, section 12): one of that record's own properties, as a layout names one, and
- * never the server's `ecm:` or a task's `var:`.
+ * (layout-v2.md, section 12): one of that record's own properties, `"<prefix>:<name>"`, shown by its
+ * schema type; or `{ "field", "widget"?, "parameters"? }`, that property through one of
+ * {@link SHOWN_WIDGETS}, which the checker holds to its own parameters.
  */
 const linkedProperty: ParameterCheck = (value) =>
-  typeof value === 'string' &&
-  XPATH.test(value) &&
-  !value.startsWith('ecm:') &&
-  !value.startsWith('var:')
+  isLinkedXpath(value) || (isRecord(value) && isLinkedXpath(value['field']))
     ? null
-    : 'must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:';
+    : 'must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:, or { "field": <that property>, "widget", "parameters" }';
+
+/**
+ * What a `document-link`'s `show` names, in either of its forms: the linked record's property, and
+ * the widget it is shown through, with its parameters, or `null` for its schema type's. `null` for a
+ * `show` that is neither form, which the checker has a finding for.
+ */
+export function linkedShowOf(show: unknown): {
+  readonly field: string;
+  readonly widget: string | null;
+  readonly parameters: Readonly<Record<string, unknown>>;
+} | null {
+  if (isLinkedXpath(show)) return { field: show, widget: null, parameters: {} };
+  if (!isRecord(show) || !isLinkedXpath(show['field'])) return null;
+  return {
+    field: show['field'],
+    widget: typeof show['widget'] === 'string' ? show['widget'] : null,
+    parameters: isRecord(show['parameters']) ? show['parameters'] : {},
+  };
+}
 
 /** A table's columns are field entries, checked with the rest of the layout. */
 const columns: ParameterCheck = (value) =>
@@ -183,7 +214,11 @@ export const PACKAGED_WIDGETS: Readonly<Record<string, WidgetDefinition>> = {
   text: { accepts: ['string'], parameters: {} },
   'long-text': { accepts: ['string'], parameters: { rows: integer(2, 20) } },
   'rich-text': { accepts: ['string'], parameters: {} },
-  number: { accepts: ['long', 'double'], parameters: { decimals: integer(0, 10) } },
+  /**
+   * `grouping`, default `true`: whether the number is written with the locale's group separators,
+   * `2,024`; `false` writes `2024`, for a year or a number that is a code (layout-v2.md, section 3).
+   */
+  number: { accepts: ['long', 'double'], parameters: { decimals: integer(0, 10), grouping: flag } },
   currency: { accepts: ['long', 'double'], parameters: { currency }, required: ['currency'] },
   percent: { accepts: ['long', 'double'], parameters: { scale: oneOf(1, 100) } },
   date: { accepts: ['date'], parameters: { format: oneOf('short', 'long') } },
@@ -207,6 +242,11 @@ export const PACKAGED_WIDGETS: Readonly<Record<string, WidgetDefinition>> = {
   'status-badge': { accepts: ['string'], parameters: { tones }, required: ['tones'] },
   table: { accepts: ['complex[]'], parameters: { columns }, required: ['columns'] },
   image: { accepts: ['blob'], parameters: {} },
+  /**
+   * One file, by its name, which a record page downloads on a press: a property holding one blob,
+   * such as a signed agreement (layout-v2.md, section 3). In a form, read-only, as `image` is.
+   */
+  file: { accepts: ['blob'], parameters: {} },
   'file-list': { accepts: ['blob[]', 'complex[]'], parameters: {} },
 };
 
@@ -345,6 +385,58 @@ export const PACKAGED_PAGES: ReadonlySet<string> = new Set([
  * its settings, so until then an app that turns one on is refused.
  */
 export const PACKAGED_MODULES: ReadonlySet<string> = new Set();
+
+/**
+ * The widgets a `document-link`'s `show` may show the linked record's property through
+ * (layout-v2.md, section 12): those that show one text, number, date or boolean as text, which is
+ * drawn inside the link to that record, `status-badge` as a badge. Not `document-link`, one link
+ * away only; not `phone` and `email`, whose own links cannot sit inside one; nor the lookups,
+ * `user`, `group` and `vocabulary`, whose names would be read after the record they come from; nor
+ * those that show a complex value, a list or a file. The same set as {@link EXTERNAL_WIDGETS}, for
+ * the same reason: the value is another record's, shown as text.
+ */
+export const SHOWN_WIDGETS: ReadonlySet<string> = new Set([
+  'text',
+  'long-text',
+  'number',
+  'currency',
+  'percent',
+  'date',
+  'relative-date',
+  'boolean',
+  'status-badge',
+]);
+
+/**
+ * A linked record's property that a rule reads (layout-v2.md, section 5), written as a
+ * `document-link`'s parameters are: `field`, the open record's property holding the linked record's
+ * id; `types`, the types it links to, whose schemas hold the property; and `show`, the property.
+ * Exactly those three keys: anything else is a value of another kind, or a finding.
+ */
+export interface LinkedReference {
+  readonly field: string;
+  readonly types: readonly string[];
+  readonly show: string;
+}
+
+/** Whether `value` is meant as a {@link LinkedReference}: an object naming a `show`. */
+export function isLinkedReferenceShape(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && 'show' in value;
+}
+
+/** Whether `value` is a well-formed {@link LinkedReference}, and nothing else. */
+export function isLinkedReference(value: unknown): value is LinkedReference {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 3 &&
+    typeof value['field'] === 'string' &&
+    XPATH.test(value['field']) &&
+    !value['field'].startsWith('ecm:') &&
+    !value['field'].startsWith('var:') &&
+    textList(value['types']) === null &&
+    isLinkedXpath(value['show'])
+  );
+}
 
 /**
  * The widgets an `external` card's field may use: those that show one text, number, date or

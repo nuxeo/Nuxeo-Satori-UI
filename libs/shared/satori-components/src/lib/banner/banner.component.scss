@@ -28,6 +28,14 @@
   color: var(--mat-sys-on-error-container);
 }
 
+// A success in the tertiary colours, which are success's in this design system: what
+// `nxs-status-tag` draws its success tone with, so a banner saying something went right reads as
+// the tag beside it does. Material's own roles, so no Satori token is named here.
+:host([data-tone='success']) {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
 .nxs-banner__icon {
   flex-shrink: 0;
   width: 22px;

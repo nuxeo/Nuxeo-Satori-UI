@@ -87,7 +87,7 @@
         "buyerEmail": "string",
         "buyerPhone": "string",
         "vin": "string",
-        "year": "string",
+        "year": "long",
         "make": "string",
         "model": "string",
         "price": "double",

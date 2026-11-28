@@ -24,7 +24,7 @@ const meta: Meta<NxsBannerComponent> = {
     message: { control: 'text', description: 'The message, already translated.' },
     tone: {
       control: 'select',
-      options: ['info', 'warning', 'error'],
+      options: ['info', 'warning', 'error', 'success'],
       description: 'What kind of notice it is: the icon and colours follow from it.',
     },
     announce: {

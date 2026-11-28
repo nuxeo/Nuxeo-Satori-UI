@@ -84,8 +84,12 @@ export function checklistUsers(checklist: RecordChecklistEntry, value: unknown):
  * - **The item's first entry,** the one the page reads its state from, changes. Ticked, it holds
  *   `done` `true`, `by` as `doneBy` and `on` as `doneOn`; unticked, it keeps its entry with `done`
  *   `false`, and the who and when it held, which the page does not show for an item not done.
- * - **An item with no entry** gets one at the end when ticked. Unticked, there is nothing to change,
- *   and the value is answered as it was.
+ * - **An item with no entry** gets one at the end when ticked. Unticked, there is nothing to change.
+ * - **Every item of `shown` with no entry gets one too,** at the end, in their order, `done`
+ *   `false` and no one or day: the items the page shows over the same property, on every card it
+ *   draws (layout-v2.md, section 7). So once a record is ticked, it holds an entry for each item it
+ *   is held to, and a query can find it by one not done: the items are the file's, and NXQL sees
+ *   only the record's entries. An item `shown` names twice gets one entry.
  *
  * Who and when are the client's: `by` is the signed-in user's name and `on` the page's clock. The
  * server's audit log, and the record's timeline, say who changed the property and when.
@@ -96,6 +100,7 @@ export function tickedChecklist(
   done: boolean,
   by: string,
   on: string,
+  shown: readonly string[] = [],
 ): unknown[] {
   const entries: unknown[] = Array.isArray(value) ? [...value] : [];
   const first = entries.findIndex((entry) => isRecord(entry) && subfield(entry, 'item') === item);
@@ -103,6 +108,17 @@ export function tickedChecklist(
     done ? { ...entry, item, done: true, doneBy: by, doneOn: on } : { ...entry, done: false };
   if (first >= 0) entries[first] = written(entries[first] as Json);
   else if (done) entries.push(written({}));
+  const held = new Set(
+    entries.flatMap((entry) => {
+      const id = isRecord(entry) ? subfield(entry, 'item') : undefined;
+      return typeof id === 'string' ? [id] : [];
+    }),
+  );
+  for (const missing of shown) {
+    if (held.has(missing)) continue;
+    held.add(missing);
+    entries.push({ item: missing, done: false });
+  }
   return entries;
 }
 

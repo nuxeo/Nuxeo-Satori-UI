@@ -62,6 +62,7 @@ export const FORM_INPUTS_SHOWN_AS_VERSION_1: Readonly<Record<string, string>> = 
   address: 'each of its subfields, not only its parts',
   table: 'each of its subfields, not only its columns',
   image: 'read-only, its file by name: files are changed in Attachments',
+  file: 'read-only, its file by name: files are changed in Attachments',
   'file-list': 'read-only, its files by name: files are changed in Attachments',
 };
 

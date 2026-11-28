@@ -61,4 +61,10 @@ describe('NxsBannerComponent — tone colours', () => {
     expect(error).toMatch(/background:\s*var\(--mat-sys-error-container\)/);
     expect(error).toMatch(/color:\s*var\(--mat-sys-on-error-container\)/);
   });
+
+  it("draws a success in the tertiary colours, which are success's, as a success tag is", () => {
+    const success = block(":host([data-tone='success'])");
+    expect(success).toMatch(/background:\s*var\(--mat-sys-tertiary-container\)/);
+    expect(success).toMatch(/color:\s*var\(--mat-sys-on-tertiary-container\)/);
+  });
 });

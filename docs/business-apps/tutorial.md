@@ -1251,7 +1251,13 @@ addressed, each marked **since fixed**, and the steps above follow the tools as 
    property to a type: `wo:building` was given its widget by hand, and the form edits it as an id.
 8. **Dev mode shows a demo kit's shell, not its pages.** The home's figure is "Unavailable", the
    queue "Something went wrong", and the record pages cannot be opened at all, until a server has
-   the package and records of its types. For a demo kit, the preview is half a preview.
+   the package and records of its types. For a demo kit, the preview is half a preview. **Since
+   fixed, for the kits whose `demo/data.mjs` exports `EXPECTED`:** `npm run kit:stand-in` answers a
+   kit's model, its records, read-only, and its page providers from its own files, between the dev
+   server and the local Nuxeo, and `preview_package` gives its commands
+   ([package-pipeline.md](package-pipeline.md#a-demo-kits-pages-in-dev-mode)). It reads the
+   vehicle titles, P&C claims, contracts and moves kits. This tutorial's facilities kit has no demo
+   data, so its pages are still the shell.
 9. **The local Nuxeo opens the app as Anonymous.** A person must find Sign Out behind "AN" before
    logging in; nothing on the page says the app is a guest's. **Since fixed, on this page:** "Before
    you start" and step 9 say so before the page is opened. The app itself still does not.

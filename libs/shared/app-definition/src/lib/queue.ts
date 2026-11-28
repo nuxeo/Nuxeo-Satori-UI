@@ -39,9 +39,11 @@ export const SEARCH_OPEN: readonly string[] = ['single'];
 /**
  * The widgets a facet's buckets may be shown through (app-definition-v2.md, section 4): a
  * `document-link`, for an aggregate on a reference, whose buckets are records' ids, shown by their
- * records' titles. Without one, a bucket shows its key as the server returns it.
+ * records' titles; a `user` or a `group`, for an aggregate on a property holding user or group
+ * names, whose buckets are shown by the person's or the group's display name, as a `user` column
+ * shows them. Without one, a bucket shows its key as the server returns it.
  */
-export const FACET_WIDGETS: readonly string[] = ['document-link'];
+export const FACET_WIDGETS: readonly string[] = ['document-link', 'user', 'group'];
 
 /** The keys each part of a queue may hold, which its JSON Schema must list too. */
 export const QUEUE_V2_KEYS = { queue: QUEUE_KEYS, facet: FACET_KEYS, search: SEARCH_KEYS } as const;
@@ -113,7 +115,7 @@ function facets(c: Checker, value: unknown): void {
         c.add(
           join(at, 'widget'),
           'parameter',
-          `a facet shows its buckets as the server returns them, or through ${FACET_WIDGETS.map((each) => `"${each}"`).join(' or ')}, not "${widget}"`,
+          `a facet shows its buckets as the server returns them, or through ${FACET_WIDGETS.map((each) => `"${each}"`).join(', ')}, not "${widget}"`,
         );
     }
     if (typeof facet['aggregate'] !== 'string' || !NAME.test(facet['aggregate']))

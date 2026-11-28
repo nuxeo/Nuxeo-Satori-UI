@@ -1,4 +1,4 @@
-import { NgTemplateOutlet, formatDate } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet, formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -16,10 +16,12 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { isLinkedReference, type LinkedReference } from '@agentic-ui/shared/app-definition';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import {
   NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsCheckboxComponent,
   NxsCommentsComponent,
   NxsIconComponent,
@@ -40,9 +42,12 @@ import {
   BrowseService,
   CURRENT_USERNAME,
   DocumentChangesService,
+  DocumentDetailService,
   NuxeoDocument,
+  PERMISSION_DENIED_KEY,
   canWriteDocument,
   docTypeLabel,
+  isPermissionDeniedError,
   renderTrustedHtml,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, filter, forkJoin, map, merge, of, switchMap } from 'rxjs';
@@ -64,7 +69,7 @@ import {
   subfieldDefinition,
   viewText,
 } from './record-field-view';
-import type { LinkedProperty } from './linked-record';
+import { isDocumentId, type LinkedProperty } from './linked-record';
 import { listParameters } from './list-parameters';
 import {
   type RecordChecklistItemShown,
@@ -107,6 +112,7 @@ import {
   propertiesReadBy,
   showKey,
   showOf,
+  showWidgetOf,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
@@ -131,6 +137,7 @@ const BANNER_TONE: Readonly<Record<RecordBannerTone, NxsBannerTone>> = {
   info: 'info',
   warning: 'warning',
   negative: 'error',
+  positive: 'success',
 };
 
 /** A banner as the page shows it: what `nxs.primitives.banner` is given. */
@@ -166,6 +173,11 @@ export interface RecordFieldShown {
   readonly value: RecordValueView;
   /** For a `badge`: the inputs of the design system's status tag. */
   readonly tag?: { readonly label: string; readonly status: NxsTagStatus };
+  /**
+   * For `records` shown through `status-badge` (layout-v2.md, section 12): each record's status
+   * tag, by its place among them, drawn inside its link; `null` for one with no tone.
+   */
+  readonly tags?: readonly ({ readonly label: string; readonly status: NxsTagStatus } | null)[];
   /** For `html`: the value through the platform's sanitiser, never the raw text. */
   readonly html?: SafeHtml;
 }
@@ -333,8 +345,70 @@ function showEntries(layout: ResolvedRecordLayout): RecordPropertyField[] {
 }
 
 /**
- * What each `show` on the page reads, by its entry (`showKey`): `null` where none of its types has
- * it. An entry not in it is still being read.
+ * Every rule of the page, as written: the banners', the tabs', the cards' and their fields', a
+ * computation's (whose `core.choose` takes one), a table's columns', a related list's columns' and
+ * the fields' of a card from another system. Each is evaluated for the open record.
+ */
+function rulesOf(layout: ResolvedRecordLayout): unknown[] {
+  const rules: unknown[] = [];
+  for (const banner of layout.banners) rules.push(banner.visibleWhen);
+  for (const tab of layout.tabs ?? []) rules.push(tab.visibleWhen);
+  for (const card of cardsOf(layout)) {
+    rules.push(card.visibleWhen);
+    for (const field of card.fields) {
+      rules.push(field.visibleWhen);
+      if (field.kind === 'computed') rules.push(field.computed);
+      for (const column of tableColumns(field.parameters['columns']))
+        rules.push(column.visibleWhen);
+    }
+    for (const column of card.related?.columns ?? []) rules.push(column.visibleWhen);
+    for (const field of card.external?.fields ?? []) rules.push(field.visibleWhen);
+  }
+  return rules;
+}
+
+/**
+ * How deep the walk for a rule's linked records goes: the validator reads no deeper, and the rule
+ * registry answers fewer levels still, so nothing it evaluates lies below.
+ */
+const MAX_RULE_WALK = 256;
+
+/**
+ * The linked records' properties `rules` read (layout-v2.md, section 5), each once, in the order
+ * met: every `{ "field", "types", "show" }` among their parameters. Walked with a stack, not by
+ * recursion, and no deeper than {@link MAX_RULE_WALK}.
+ */
+function linkedReadsIn(rules: readonly unknown[]): LinkedReference[] {
+  const found = new Map<string, LinkedReference>();
+  const stack: [unknown, number][] = rules.map((rule) => [rule, 0]);
+  while (stack.length > 0) {
+    const [value, depth] = stack.pop() as [unknown, number];
+    if (isLinkedReference(value)) {
+      found.set(ruleReadKey(value), value);
+      continue;
+    }
+    if (depth >= MAX_RULE_WALK) continue;
+    if (Array.isArray(value)) for (const item of value) stack.push([item, depth + 1]);
+    else if (isRecord(value))
+      for (const item of Object.values(value)) stack.push([item, depth + 1]);
+  }
+  return [...found.values()];
+}
+
+/** What a rule's linked property is read for: the types and the property, as a `show` is. */
+function ruleReadKey(reference: LinkedReference): string {
+  return JSON.stringify(['rule', reference.field, reference.show, reference.types]);
+}
+
+/** The linked properties a rule reads, itself or nested, by {@link ruleReadKey}. */
+function ruleReadKeys(rule: unknown): string[] {
+  return linkedReadsIn([rule]).map(ruleReadKey);
+}
+
+/**
+ * What each `show` on the page reads, by its entry (`showKey`), and each linked property its rules
+ * read, by {@link ruleReadKey}: `null` where none of its types has it. An entry not in it is still
+ * being read.
  */
 type Shows = ReadonlyMap<string, LinkedProperty | null>;
 
@@ -375,6 +449,7 @@ function usableShow(linked: LinkedProperty | null | undefined): linked is Linked
     MatTabsModule,
     NgTemplateOutlet,
     NxsBannerComponent,
+    NxsButtonComponent,
     NxsCheckboxComponent,
     NxsCommentsComponent,
     NxsIconComponent,
@@ -509,8 +584,11 @@ export class RecordPageComponent {
       // An id it gives a `user`, `group`, `vocabulary` or `document-link` widget is a stored value
       // or a literal it chose, which no label changes. A template's text can change with its
       // placeholders' labels; it is a name already, not an id, and only its unlabelled text is
-      // asked for, to no effect.
-      const unlabelled = this.valueContext(document, NO_LABELS, NO_RECORDS);
+      // asked for, to no effect. It is worked out with the linked records read so far, so that a
+      // `core.choose` over a rule that reads one names the value it chooses once that record is
+      // read: until then it chooses neither, as the field shows neither. The records it chooses by
+      // are named by the rule itself, below, so a new read only adds the chosen value's own.
+      const unlabelled = this.valueContext(document, NO_LABELS, this.records());
       const read = new Set<string>();
       for (const field of fieldsOf(layout)) {
         if (field.kind === 'computed') {
@@ -551,6 +629,12 @@ export class RecordPageComponent {
         if (definition && !fieldShowing(layout, xpath))
           named(null, {}, definition, properties[xpath]);
       }
+      // The record each linked property a rule reads is on, named as a `document-link` field
+      // names it, whatever the rule's outcome: read once for the page, with the schemas above.
+      for (const reference of linkedReadsIn(rulesOf(layout))) {
+        if (usableShow(this.shows()?.get(ruleReadKey(reference))))
+          named('document-link', {}, { type: 'string' }, properties[reference.field]);
+      }
       // The record each banner links to, named as a `document-link` field names it, whether or
       // not the banner's rule passes yet: as a field's, it is read once for the page.
       for (const banner of layout.banners) {
@@ -584,15 +668,23 @@ export class RecordPageComponent {
   private readonly shows = toSignal(
     toObservable(this.layout).pipe(
       switchMap((layout): Observable<Shows> => {
-        const entries = showEntries(layout);
+        // The fields' and lists' `show`s, and the linked properties the page's rules read.
+        const entries = [
+          ...showEntries(layout).map((entry) => ({
+            key: showKey(entry),
+            types: linkedTypesOf(entry),
+            show: showOf(entry) as string,
+          })),
+          ...linkedReadsIn(rulesOf(layout)).map((reference) => ({
+            key: ruleReadKey(reference),
+            types: [...reference.types],
+            show: reference.show,
+          })),
+        ];
         if (entries.length === 0) return of(new Map());
         return forkJoin(
-          entries.map((entry) =>
-            this.layouts.linkedProperty(linkedTypesOf(entry), showOf(entry) as string),
-          ),
-        ).pipe(
-          map((read) => new Map(entries.map((entry, index) => [showKey(entry), read[index]]))),
-        );
+          entries.map((entry) => this.layouts.linkedProperty(entry.types, entry.show)),
+        ).pipe(map((read) => new Map(entries.map((entry, index) => [entry.key, read[index]]))));
       }),
     ),
     { initialValue: null },
@@ -612,7 +704,12 @@ export class RecordPageComponent {
    */
   private readonly showsKnown = computed(() => {
     const shows = this.shows();
-    return shows !== null && showEntries(this.layout()).every((entry) => shows.has(showKey(entry)));
+    const layout = this.layout();
+    return (
+      shows !== null &&
+      showEntries(layout).every((entry) => shows.has(showKey(entry))) &&
+      linkedReadsIn(rulesOf(layout)).every((reference) => shows.has(ruleReadKey(reference)))
+    );
   });
 
   private readonly records = toSignal(
@@ -780,6 +877,7 @@ export class RecordPageComponent {
       done,
       username,
       `${day}T00:00:00.000Z`,
+      this.shownItems(checklist.field),
     );
     this.ticking.set({ card: card.id, item: item.id, done });
     this.injector
@@ -811,6 +909,68 @@ export class RecordPageComponent {
         error: (failure: unknown) => {
           this.ticking.set(null);
           this.toast.error(this.tickFailure(failure));
+        },
+      });
+  }
+
+  /**
+   * The items the page shows now over the checklist property `field`, on every card it draws, in
+   * the page's order: those a tick writes an entry for where the record has none (layout-v2.md,
+   * section 7). A card its rule hides, or a tab's, is not drawn, so its items are not written: a
+   * cash deal is not given the finance documents' entries.
+   */
+  private shownItems(field: string): string[] {
+    const page = this.shown();
+    const cards = page.tabs ? page.tabs.flatMap((tab) => tab.cards) : page.cards;
+    return cards.flatMap((card) =>
+      card.checklist !== null && this.cardChecklist(card.id)?.field === field
+        ? card.checklist.items.map((shown) => shown.id)
+        : [],
+    );
+  }
+
+  /**
+   * The files being downloaded, by their fields' places: a press on one meanwhile asks for nothing.
+   * Its button is not disabled, so that the keyboard's focus stays on it.
+   */
+  private readonly downloading = new Set<string>();
+
+  /**
+   * A `file` field's download (layout-v2.md, section 3): the property's blob, fetched through the
+   * blob service as the reader, `clientReason` `download` as the row action's is, saved under its
+   * name through a blob URL revoked at once. The server decides whether the reader may read it; a
+   * refusal, or any failure, is said in a toast, and the page stays as it was. One at a time per
+   * field. A read, so offered on a read-only page too.
+   */
+  protected download(field: RecordFieldShown): void {
+    const value = field.value;
+    if (value.kind !== 'file' || this.downloading.has(field.place)) return;
+    const uid = this.current().uid;
+    const place = field.place;
+    this.downloading.add(place);
+    this.injector
+      .get(DocumentDetailService)
+      .fetchBlobByXpath(uid, value.xpath, { clientReason: 'download' })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          this.downloading.delete(place);
+          const url = URL.createObjectURL(blob);
+          const link = this.injector.get(DOCUMENT).createElement('a');
+          link.href = url;
+          link.download = value.name;
+          link.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (failure: unknown) => {
+          this.downloading.delete(place);
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(failure)
+                ? PERMISSION_DENIED_KEY
+                : 'document-layouts.file.download-failed',
+            ),
+          );
         },
       });
   }
@@ -921,24 +1081,80 @@ export class RecordPageComponent {
     records: LinkedRecords,
   ): RecordValueContext {
     const today = this.today();
+    const lookups = recordLookups(
+      records,
+      this.translate.instant('document-layouts.record.unavailable'),
+      (title, label) => this.translate.instant('document-layouts.record.version', { title, label }),
+    );
     const ruleContext = {
       ...this.ruleContext.context(),
       document,
       today,
       timeZone: this.timeZone,
+      // A linked record's property, for a rule that reads one (layout-v2.md, section 5): only what
+      // the page's search returned to the reader for that record, as a `show` shows it.
+      linked: lookups.linkedValue,
     };
     return {
       locale: this.locale,
       today,
       timeZone: this.timeZone,
       ...labelLookups(labels),
-      ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),
+      ...lookups,
       property: (xpath) => document.properties[xpath],
       label: (label) => this.text(label),
       flagText: (flag) =>
         this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
-      rule: (rule) => rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext),
+      rule: (rule) =>
+        rule === null ||
+        (this.linkedDecided(rule, document, records) &&
+          this.rules.evaluate(rule as ExtensionRule, ruleContext)),
     };
+  }
+
+  /**
+   * Whether a rule that reads a linked record's property can be decided yet (layout-v2.md, section
+   * 5): its linked types are read, one of them has the property, which is no reference, and the
+   * record the open record names is read, or known to be unreadable, or the value is no id. Until
+   * then it does not pass, so what it shows waits rather than showing for a moment; and one whose
+   * property none of its types has does not pass at all, and the console says why, as a `show` is
+   * left out. A rule with no linked property is decided at once.
+   */
+  private linkedDecided(rule: unknown, document: NuxeoDocument, records: LinkedRecords): boolean {
+    return this.linkedState(rule, document, records) === 'decided';
+  }
+
+  /**
+   * Where the linked records the rules in `value` read stand: `decided` once every one is read,
+   * known unreadable, or named by no id; `reading` while a linked type or a record is read; and
+   * `refused` where none of a rule's types has its property, or it is a reference, which the
+   * console is told. `value` is a rule, or a computation whose `core.choose` holds some.
+   */
+  private linkedState(
+    value: unknown,
+    document: NuxeoDocument,
+    records: LinkedRecords,
+  ): 'decided' | 'reading' | 'refused' {
+    const references = linkedReadsIn([value]);
+    if (references.length === 0) return 'decided';
+    const shows = this.shows();
+    let reading = false;
+    for (const reference of references) {
+      const linked = shows?.get(ruleReadKey(reference));
+      if (linked === undefined) {
+        reading = true;
+        continue;
+      }
+      if (!usableShow(linked)) {
+        this.tell(
+          `a rule reading ${reference.show} of the record ${reference.field} names does not pass: none of the types it links to, ${reference.types.join(', ')}, has it, it is a reference, or their schemas could not be read`,
+        );
+        return 'refused';
+      }
+      const id = document.properties[reference.field];
+      if (isDocumentId(id) && !records.has(id)) reading = true;
+    }
+    return reading ? 'reading' : 'decided';
   }
 
   /** What a computation reads of the record: its values, their display, its rules and today. */
@@ -983,6 +1199,19 @@ export class RecordPageComponent {
         context,
       );
       return [this.withExtras({ place: field.place, key: field.xpath, label, value })];
+    }
+    // A computation whose `core.choose` reads a linked record waits for it, as a banner does, so
+    // that it never shows the other value for a moment; one that can never read it is left out.
+    const linked = this.linkedState(field.computed, document, this.records());
+    if (linked === 'reading')
+      return [
+        { place: field.place, key: field.id, label, value: { kind: 'records', records: [] } },
+      ];
+    if (linked === 'refused') {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: its rule reads a linked record's property none of its types has`,
+      );
+      return [];
     }
     const result = compute(field.computed, this.computationContext(layout, document, context));
     if (!result.ok) {
@@ -1040,12 +1269,19 @@ export class RecordPageComponent {
       );
       return [];
     }
+    const { widget, parameters } = showWidgetOf(field);
+    if (widget !== null && !widgetAccepts(widget, linked.definition)) {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: the widget "${widget}" does not show ${show}, a ${linked.definition.type} property`,
+      );
+      return [];
+    }
     const value = showLinkedProperty(
       document.properties[field.xpath],
-      { xpath: show, definition: linked.definition },
+      { xpath: show, definition: linked.definition, widget, parameters },
       context,
     );
-    return [{ place: field.place, key, label, value }];
+    return [this.withExtras({ place: field.place, key, label, value })];
   }
 
   /**
@@ -1080,6 +1316,16 @@ export class RecordPageComponent {
     const { value } = field;
     if (value.kind === 'badge')
       return { ...field, tag: { label: value.text, status: TAG_STATUS[value.tone] } };
+    // A linked record's value through `status-badge`: each a badge, drawn inside its link.
+    if (value.kind === 'records' && value.records.some((record) => record.tone !== undefined))
+      return {
+        ...field,
+        tags: value.records.map((record) =>
+          record.tone === undefined
+            ? null
+            : { label: record.text, status: TAG_STATUS[record.tone] },
+        ),
+      };
     if (value.kind === 'html') {
       return { ...field, html: renderTrustedHtml(this.sanitizer, value.html, RICH_TEXT_HTML) };
     }

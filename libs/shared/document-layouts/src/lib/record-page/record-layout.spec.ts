@@ -1598,7 +1598,7 @@ describe('banners, as the app reads them', () => {
     expect(
       readRecordLayout(page([{ id: 'x', label: 'X', tone: 'loud' }]), { rules: known }),
     ).toEqual({
-      invalid: 'banners[0].tone: tone is one of info, warning, negative',
+      invalid: 'banners[0].tone: tone is one of info, warning, negative, positive',
     });
   });
 

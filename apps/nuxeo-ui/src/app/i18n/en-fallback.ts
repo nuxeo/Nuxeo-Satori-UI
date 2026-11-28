@@ -278,6 +278,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.note-image-picker-dialog.select-all': 'Select all',
   'document-layouts.checklist.saving': 'Saving',
   'document-layouts.external.loading': 'Loading from the other system',
+  'document-layouts.file.download': 'Download {{name}}',
   'document-layouts.holds.loading': 'Loading legal holds',
   'document-layouts.loading-form': 'Loading the form',
   'document-layouts.picture.alt': '{{title}}, {{view}} view',

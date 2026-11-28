@@ -325,13 +325,37 @@
           <span class="record-page__separator">, </span>
         }
         @if (record.url !== null) {
-          <a class="record-page__link record-page__record" [routerLink]="record.url">{{
-            record.text
-          }}</a>
+          @let tag = field.tags?.[$index];
+          @if (tag) {
+            <!-- A linked record's value through status-badge: the badge inside the link that
+                 opens that record (layout-v2.md, section 12). -->
+            <a
+              class="record-page__link record-page__record record-page__record--badge"
+              [routerLink]="record.url"
+              ><lib-extension-outlet
+                class="record-page__badge"
+                [componentId]="statusTagId"
+                [componentInputs]="tag"
+            /></a>
+          } @else {
+            <a class="record-page__link record-page__record" [routerLink]="record.url">{{
+              record.text
+            }}</a>
+          }
         } @else {
           <span class="record-page__unavailable">{{ record.text }}</span>
         }
       }
+    }
+    @case ('file') {
+      <!-- One file, by its name, downloaded as the reader when pressed (layout-v2.md, section 3). -->
+      <nxs-button
+        class="record-page__file"
+        icon="download"
+        [label]="'document-layouts.file.download' | translate: { name: field.value.name }"
+        (press)="download(field)"
+        >{{ field.value.name }}</nxs-button
+      >
     }
     @case ('lines') {
       <span class="record-page__lines">

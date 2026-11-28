@@ -399,6 +399,8 @@ export class DocumentLayoutFormComponent {
       ...recordLookups(
         this.records(),
         this.translate.instant('document-layouts.record.unavailable'),
+        (title, label) =>
+          this.translate.instant('document-layouts.record.version', { title, label }),
       ),
       property: value,
       label,

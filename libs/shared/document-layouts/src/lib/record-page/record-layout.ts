@@ -1,6 +1,7 @@
 import {
   BANNER_TONES,
   PACKAGED_REGISTRIES,
+  linkedShowOf,
   loadable,
   validateLayoutV2,
   withRegistered,
@@ -47,12 +48,26 @@ export interface RecordPropertyField extends RecordFieldBase {
 
 /**
  * The property of the linked record a `document-link` field shows in place of its title, its
- * `show` (layout-v2.md, section 12), or `null` for one that shows the title, and for any other
- * widget. The validator has refused a `show` that is not `<prefix>:<name>`.
+ * `show` (layout-v2.md, section 12), written alone or as `{ "field", "widget", "parameters" }`, or
+ * `null` for one that shows the title, and for any other widget. The validator has refused a `show`
+ * that is not `<prefix>:<name>`.
  */
 export function showOf(field: Pick<RecordFieldBase, 'widget' | 'parameters'>): string | null {
-  const show = field.parameters['show'];
-  return field.widget === 'document-link' && typeof show === 'string' ? show : null;
+  if (field.widget !== 'document-link') return null;
+  return linkedShowOf(field.parameters['show'])?.field ?? null;
+}
+
+/**
+ * The widget a `document-link`'s `show` shows the linked record's property through, with its
+ * parameters (layout-v2.md, section 12): `null` for its schema type's, as a field with none. The
+ * validator holds it to `SHOWN_WIDGETS` and to the parameters it takes.
+ */
+export function showWidgetOf(field: Pick<RecordFieldBase, 'widget' | 'parameters'>): {
+  readonly widget: string | null;
+  readonly parameters: Readonly<Record<string, unknown>>;
+} {
+  const shown = field.widget === 'document-link' ? linkedShowOf(field.parameters['show']) : null;
+  return { widget: shown?.widget ?? null, parameters: shown?.parameters ?? {} };
 }
 
 /** The types a `document-link` field says it links to, its `types`, as texts. */

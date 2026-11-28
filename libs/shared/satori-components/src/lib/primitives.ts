@@ -118,7 +118,7 @@ export interface NxsErrorStateInputs {
 }
 
 /** The tone of a banner: what kind of notice it is. The icon and colours follow from it. */
-export type NxsBannerTone = 'info' | 'warning' | 'error';
+export type NxsBannerTone = 'info' | 'warning' | 'error' | 'success';
 
 /**
  * Whether a screen reader announces a banner as it appears: `alert` interrupts, `status` waits for

@@ -111,8 +111,8 @@
           "type": "string"
         },
         "widget": {
-          "enum": ["document-link"],
-          "description": "For an aggregate on a reference: each bucket, a record's id, shown by that record's title (app-definition-v2.md, section 4)."
+          "enum": ["document-link", "user", "group"],
+          "description": "document-link, for an aggregate on a reference: each bucket, a record's id, shown by that record's title; user or group, for an aggregate on user or group names: each bucket shown by the display name (app-definition-v2.md, section 4)."
         }
       }
     },
@@ -199,6 +199,7 @@
             "status-badge",
             "table",
             "image",
+            "file",
             "file-list"
           ]
         },
