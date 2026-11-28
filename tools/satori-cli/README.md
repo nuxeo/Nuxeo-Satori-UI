@@ -334,6 +334,19 @@ The first publish, 0.3.0, ran on 28 November 2026, from `staging/enterprise-grad
 run of the same commit. Both packed the same tarball, 65 files with the shasum
 `b8b782ce6ffdf2e7c20696473c56e3d5a6a59c6c`, and the registry serves that shasum.
 
+The same day it was installed from the registry as a customer would, on macOS with Node 24, an
+empty npm configuration and no token in the environment. These ran as the customer guide gives
+them, and each passed:
+
+- `npx … @nuxeo/satori-cli@alpha create`;
+- `npm install` through the `.npmrc` it wrote, which took one package, at the published integrity;
+- `agents sync --check`, `validate` and `build`;
+- after the commit, `npm ci` with an empty cache and the workflow's steps, which left the working
+  tree clean.
+
+`build` wrote a three-file zip with the same sha256 as `validate`'s scratch build. A key the
+application does not read, added to `bootstrap.json`, was refused at step 2 with exit 1.
+
 `checkPublishWorkflows` in `scripts/review-guardrails.mjs` holds both publish workflows to that: a
 token, in any letter case or as `secrets['...']`, in a job that checks the repository out, runs
 `npm ci`, `node`, `git` or another's action, or in more than one job, or at the workflow's level; a
