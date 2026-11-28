@@ -15008,6 +15008,361 @@ expectRed(
   /trusted\.pem is named like key material/,
 );
 
+/* ---------------- checkPublishWorkflows ---------------- */
+
+/**
+ * Controls for the publish workflows' check: `publish-platform.yml` and `publish-satori-cli.yml`
+ * give `NPM_PACKAGES_TOKEN` only to a job that checks nothing out and publishes a tarball the
+ * token-less build job handed on, by hand, to `alpha` on Nuxeo's registry. `PUBLISHING` is that
+ * shape reduced to what the check reads; each control breaks one rule of it in one of the two.
+ */
+/** A workflow's references to its secrets, as GitHub writes them: references, never values. */
+const READ_TOKEN = '${{ secrets.SATORI_GH_READONLY_TOKEN }}';
+const PUBLISH_TOKEN_REFERENCE = '${{ secrets.NPM_PACKAGES_TOKEN }}';
+const PUBLISHING = (name) => `name: Publish ${name}
+
+# A comment naming secrets.NPM_PACKAGES_TOKEN and npm publish --tag latest is not code.
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry run only.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${name}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${READ_TOKEN}
+      - name: Dry-run publish
+        run: |
+          npm publish --dry-run --tag alpha \\
+            --registry https://packages.nuxeo.com/repository/npm-public/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          path: tarball/*.tgz
+
+  publish:
+    needs: build
+    if: \${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball
+      - name: Publish (alpha)
+        env:
+          NODE_AUTH_TOKEN: ${PUBLISH_TOKEN_REFERENCE}
+        run: |
+          npm publish "./$TARBALL" --tag alpha --ignore-scripts \\
+            --registry https://packages.nuxeo.com/repository/npm-public/ \\
+            --userconfig "$RUNNER_TEMP/npmrc"
+`;
+const PLATFORM_PUBLISH = '.github/workflows/publish-platform.yml';
+const CLI_PUBLISH = '.github/workflows/publish-satori-cli.yml';
+const PUBLISH_OK = {
+  [PLATFORM_PUBLISH]: PUBLISHING('platform'),
+  [CLI_PUBLISH]: PUBLISHING('satori-cli'),
+};
+/** `PUBLISH_OK` with `was` replaced by `is` in the CLI's workflow, which must contain it. */
+const publishBroken =
+  (was, is, file = CLI_PUBLISH) =>
+  (write) => {
+    if (!PUBLISH_OK[file].includes(was))
+      throw new Error(`the control's edit does not apply: ${was}`);
+    write(file, PUBLISH_OK[file].replace(was, is));
+  };
+
+expectGreen('both publish workflows as they should be', 'checkPublishWorkflows', PUBLISH_OK);
+
+expectRed(
+  'the token in the build job, which checks the repository out and runs npm ci',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}\n',
+  ),
+  /publish-satori-cli\.yml: job build has secrets\.NPM_PACKAGES_TOKEN and checks the repository out/,
+);
+
+expectRed(
+  "the token at the workflow's level, where every job has it",
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    'permissions:\n  contents: read\n',
+    'permissions:\n  contents: read\n\nenv:\n  NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}\n',
+  ),
+  /names secrets\.NPM_PACKAGES_TOKEN outside its jobs/,
+);
+
+expectRed(
+  'a publish job that checks the repository out',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - uses: actions/download-artifact@v4\n',
+    '      - uses: actions/checkout@v4\n      - uses: actions/download-artifact@v4\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and checks the repository out/,
+);
+
+expectRed(
+  'a publish job that installs the repository',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - name: Publish (alpha)\n',
+    '      - run: npm ci\n      - name: Publish (alpha)\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and runs `npm ci`/,
+);
+
+expectRed(
+  'a publish job that runs on a dry run too',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('    if: ${{ !inputs.dryRun }}\n', ''),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN, and its if: is not \$\{\{ !inputs\.dryRun \}\} alone/,
+);
+
+expectRed(
+  'a publish job whose if: names the dry run, and runs anyway',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('    if: ${{ !inputs.dryRun }}\n', '    if: ${{ !inputs.dryRun || true }}\n'),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN, and its if: is not \$\{\{ !inputs\.dryRun \}\} alone/,
+);
+
+expectRed(
+  'the token in the build job, named in lower case, which GitHub reads as the same secret',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          NODE_AUTH_TOKEN: ${{ secrets.npm_packages_token }}\n',
+  ),
+  /publish-satori-cli\.yml: job build has secrets\.NPM_PACKAGES_TOKEN and checks the repository out/,
+);
+
+expectRed(
+  "the token in the build job, as secrets['...']",
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    "          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          NODE_AUTH_TOKEN: ${{ secrets['NPM_PACKAGES_TOKEN'] }}\n",
+  ),
+  /publish-satori-cli\.yml: job build has secrets\.NPM_PACKAGES_TOKEN and checks the repository out/,
+);
+
+expectRed(
+  'every secret handed to the build job at once',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          ALL: ${{ toJSON(secrets) }}\n',
+  ),
+  /publish-satori-cli\.yml hands every secret on at once \(toJSON\(secrets\)\)/,
+);
+
+expectRed(
+  'every secret inherited by a called workflow, in any workflow',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  (write) =>
+    write(
+      '.github/workflows/e2e.yml',
+      'name: E2E\non:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  e2e:\n    uses: ./.github/workflows/reusable.yml\n    secrets: inherit\n',
+    ),
+  /e2e\.yml hands every secret on at once \(secrets: inherit\)/,
+);
+
+expectRed(
+  "a publish job that gives the token to someone else's action",
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - name: Publish (alpha)\n',
+    '      - uses: example/publish-action@v1\n        with:\n          token: ${{ secrets.NPM_PACKAGES_TOKEN }}\n      - name: Publish (alpha)\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and uses example\/publish-action@v1, which would run with it/,
+);
+
+expectRed(
+  'a publish job that fetches code',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - name: Publish (alpha)\n',
+    '      - run: git clone https://example.invalid/x.git && bash x/run.sh\n      - name: Publish (alpha)\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and runs `git`/,
+);
+
+expectRed(
+  'a publish job that runs a script out of the tarball',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - name: Publish (alpha)\n',
+    '      - run: tar -xzf "$TARBALL" && bash package/x.sh\n      - name: Publish (alpha)\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and runs `tar`/,
+);
+
+expectRed(
+  'the token named by an expression, where no check can read it',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    "          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          NODE_AUTH_TOKEN: ${{ secrets[format('NPM_{0}_TOKEN', 'PACKAGES')] }}\n",
+  ),
+  /publish-satori-cli\.yml hands every secret on at once \(secrets\[/,
+);
+
+expectRed(
+  'a dry run that is not one, --dry-run=false, in the build job',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          npm publish --dry-run --tag alpha',
+    '          npm publish --dry-run=false --tag alpha',
+  ),
+  /job build runs `npm publish --dry-run=false --tag alpha[^`]*`, which is not a dry run, and is not the job given/,
+);
+
+expectRed(
+  'a push trigger on a publish workflow',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    'on:\n  workflow_dispatch:\n',
+    'on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n',
+    PLATFORM_PUBLISH,
+  ),
+  /publish-platform\.yml: it publishes, and is started by push, workflow_dispatch/,
+);
+
+expectRed(
+  'dryRun false by default',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('        default: true\n', '        default: false\n'),
+  /it has no dryRun input that is a boolean and true by default/,
+);
+
+expectRed(
+  'a write permission',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'),
+  /its permissions are not `contents: read` alone/,
+);
+
+expectRed(
+  'runs that are not serialised',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('  cancel-in-progress: false\n', '  cancel-in-progress: true\n'),
+  /its runs are not serialised/,
+);
+
+expectRed(
+  'a real publish without --tag alpha',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('npm publish "./$TARBALL" --tag alpha', 'npm publish "./$TARBALL"'),
+  /job publish runs `npm publish "\.\/\$TARBALL" --ignore-scripts[^`]*`, whose one --tag is not alpha/,
+);
+
+expectRed(
+  'a real publish with a second --tag after alpha',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    'npm publish "./$TARBALL" --tag alpha',
+    'npm publish "./$TARBALL" --tag alpha --tag "$CHANNEL"',
+  ),
+  /job publish runs `npm publish "\.\/\$TARBALL" --tag alpha --tag[^`]*`, whose one --tag is not alpha/,
+);
+
+expectRed(
+  'a real publish that runs the package scripts with the token',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('--tag alpha --ignore-scripts', '--tag alpha'),
+  /job publish runs `npm publish "\.\/\$TARBALL" --tag alpha --registry[^`]*`, a publish with the token, without --ignore-scripts/,
+);
+
+expectRed(
+  'the latest tag',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    'npm publish "./$TARBALL" --tag alpha',
+    'npm publish "./$TARBALL" --tag latest',
+    PLATFORM_PUBLISH,
+  ),
+  /publish-platform\.yml: it names the latest tag/,
+);
+
+expectRed(
+  'another registry',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '--ignore-scripts \\\n            --registry https://packages.nuxeo.com/repository/npm-public/',
+    '--ignore-scripts \\\n            --registry https://registry.npmjs.org/',
+  ),
+  /without --registry https:\/\/packages\.nuxeo\.com\/repository\/npm-public\//,
+);
+
+expectRed(
+  'a real publish in the build job',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken('          npm publish --dry-run --tag alpha', '          npm publish --tag alpha'),
+  /job build runs `npm publish --tag alpha[^`]*`, which is not a dry run, and is not the job given/,
+);
+
+expectRed(
+  'a publish workflow that is missing, so the check would hold nothing of it',
+  'checkPublishWorkflows',
+  { [PLATFORM_PUBLISH]: PUBLISHING('platform') },
+  null,
+  /publish-satori-cli\.yml was not found as a workflow that publishes/,
+);
+
+expectRed(
+  'a third workflow that publishes from the job that builds',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  (write) =>
+    write(
+      '.github/workflows/release.yml',
+      'name: Release\non:\n  push:\n    tags: [v*]\npermissions:\n  contents: read\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci\n      - run: npm publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}\n',
+    ),
+  /release\.yml: job release has secrets\.NPM_PACKAGES_TOKEN and checks the repository out/,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

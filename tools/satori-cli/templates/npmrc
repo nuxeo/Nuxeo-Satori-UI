@@ -1,0 +1,4 @@
+# @nuxeo/satori-cli is on Nuxeo's npm registry, which needs no token to read. npm install, npm ci
+# and Renovate or Dependabot find it there; every other package comes from npm's own registry.
+# Nothing secret belongs in this file: it is committed.
+@nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/

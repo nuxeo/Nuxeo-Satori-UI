@@ -28,7 +28,9 @@
  *   server, `mcp-generator.mjs`, its generators' process, `generators/`, what they read outside a
  *   package, and `licenses/`, the licence of each package those two bundle. They alone may bundle
  *   what is installed, and only the packages `bundle.mjs` lists for each.
- * - **`package.json`**, this project's, with the files it ships, and `README.md`.
+ * - **`package.json`**, the published one: the fields of this project's that `published.mjs`
+ *   names, not `private`, and the files it ships; and **`README.md`**, `README.npm.md`, written for
+ *   a reader of the registry, which links to nothing by a path of this repository.
  *
  * Every module but the two entries is bundled with an `import.meta.url` of its own: esbuild gives
  * every module of a bundle the bundle's, which would make a "was I started directly?" guard, such
@@ -50,6 +52,7 @@ import {
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import '../../libs/shared/app-definition/src/typescript-hook.mjs';
+import { PUBLISHED_FIELDS, PUBLISHED_FILES } from './published.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -135,7 +138,10 @@ cpSync(
   join(OUT, 'platform', 'en.json'),
 );
 cpSync(join(HERE, 'templates'), join(OUT, 'templates'), { recursive: true });
-cpSync(join(HERE, 'README.md'), join(OUT, 'README.md'));
+cpSync(join(HERE, 'README.npm.md'), join(OUT, 'README.md'));
+// The Apache License 2.0's text, as https://www.apache.org/licenses/LICENSE-2.0.txt gives it, for
+// the tool's own code; what it bundles of others' is under licenses/.
+cpSync(join(HERE, 'LICENSE'), join(OUT, 'LICENSE'));
 
 // For agents sync: the customer edition of the app builder skill, and AGENTS.md's section.
 mkdirSync(join(OUT, 'agents', 'skills', 'satori-app-builder'), { recursive: true });
@@ -166,31 +172,23 @@ writeFileSync(
   `${JSON.stringify(platformSnapshot(platform), null, 1)}\n`,
 );
 
+// The published package.json: the project's, field by field, so that nothing reaches the registry
+// that is not named here. It is not `private`: the project's own is, so that its folder of sources
+// cannot be published by mistake, and this one, the built folder `npm pack` packs, can be.
 const manifest = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8'));
+const published = {};
+for (const field of PUBLISHED_FIELDS) {
+  if (manifest[field] === undefined) {
+    console.error(
+      `tools/satori-cli/package.json has no "${field}", which the published one needs.`,
+    );
+    process.exit(1);
+  }
+  published[field] = manifest[field];
+}
 writeFileSync(
   join(OUT, 'package.json'),
-  `${JSON.stringify(
-    {
-      ...manifest,
-      files: [
-        'satori.mjs',
-        'validator.mjs',
-        'builder/',
-        'config-package/',
-        'schemas/',
-        'platform/',
-        'templates/',
-        'agents/',
-        'mcp.mjs',
-        'mcp-generator.mjs',
-        'generators/',
-        'licenses/',
-        'README.md',
-      ],
-    },
-    null,
-    2,
-  )}\n`,
+  `${JSON.stringify({ ...published, files: PUBLISHED_FILES }, null, 2)}\n`,
 );
 
 console.log(

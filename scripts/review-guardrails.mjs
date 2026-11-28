@@ -14725,6 +14725,311 @@ function checkPluginSpikeIsolated() {
   }
 }
 
+/** The workflows that publish to a registry, which `checkPublishWorkflows` must find and hold. */
+const PUBLISH_WORKFLOWS = [
+  '.github/workflows/publish-platform.yml',
+  '.github/workflows/publish-satori-cli.yml',
+];
+/** The registry they publish to, Nuxeo's. */
+const PUBLISH_REGISTRY = 'https://packages.nuxeo.com/repository/npm-public/';
+const PUBLISH_TOKEN = 'secrets.NPM_PACKAGES_TOKEN';
+/**
+ * The token, however a workflow names it: GitHub reads a secret's name in any letter case, and
+ * `secrets['NAME']` is the same secret as `secrets.NAME`.
+ */
+const PUBLISH_TOKEN_NAMED =
+  /\bsecrets\s*(?:\.\s*NPM_PACKAGES_TOKEN\b|\[\s*['"]NPM_PACKAGES_TOKEN['"]\s*\])/i;
+/** What hands every secret on at once, the token with them, to whatever it runs. */
+const EVERY_SECRET =
+  /\btoJSON\s*\(\s*secrets\s*\)|^\s*secrets\s*:\s*inherit\b|\bsecrets\s*\[\s*(?!['"][\w-]+['"]\s*\])/im;
+/** A dry run, as npm reads the flag: `--dry-run`, or `--dry-run=true`, and not `--dry-run=false`. */
+const DRY_RUN = /--dry-run(?:=true)?(?=\s|$|['"\\])/;
+/** The actions the token's job may use: the build job's artifact, and nothing else of anyone's. */
+const TOKEN_JOB_ACTIONS = /^actions\/download-artifact@/;
+
+/**
+ * A workflow that publishes to a registry keeps its token out of every job that runs this
+ * repository's code, publishes only when a person dispatches it, and only to `alpha`.
+ *
+ * ## Why
+ *
+ * `publish-platform.yml` (NXSAT-666) and `publish-satori-cli.yml` publish packages that customers
+ * install, with `NPM_PACKAGES_TOKEN`, which can publish any version of an `@nuxeo` package. A job
+ * that checks the repository out runs its code, and `npm ci` runs what is installed, so the token
+ * is given only to a job that checks nothing out, installs nothing, and publishes the tarball the
+ * token-less build job handed on. Until this check, that split was written once in each file and
+ * kept by care: nothing would have seen the token moved into the build job's `npm ci` step.
+ *
+ * ## The rules, each decided from the workflow's text
+ *
+ * No workflow at all hands every secret on at once, `toJSON(secrets)` or `secrets: inherit`, or
+ * names one by an expression, `secrets[format(...)]`: it would give the token to whatever it runs,
+ * or name it where no check can read it. A publish workflow is one that names the token, in any
+ * letter case or as `secrets['...']`, or runs an `npm publish` that is not a dry run; each of
+ * {@link PUBLISH_WORKFLOWS} must be one, or the check asserted nothing.
+ *
+ * 1. **Dispatch only:** `on:` has `workflow_dispatch` and no other event.
+ * 2. **A dry run unless told:** a `dryRun` input, a boolean, `default: true`.
+ * 3. **Read only:** the workflow's `permissions:` are `contents: read` and nothing else, and no
+ *    job asks for more.
+ * 4. **Serialised:** a `concurrency:` group with `cancel-in-progress: false`.
+ * 5. **The token in one job,** never at the workflow's level, where every job would have it. That
+ *    job checks nothing out, uses no action but `actions/download-artifact`, runs nothing that
+ *    installs, fetches or runs code (`npm ci`, `npm install`, `npm run`, `npx`, `node`, `git`,
+ *    `curl`, `wget`, `tar`, a shell or another interpreter), needs the build job, and runs when `!inputs.dryRun` and only then: its `if:`
+ *    is that and nothing more.
+ * 6. **Every `npm publish`** passes one `--tag`, `alpha`, and `--registry` Nuxeo's; one that is not
+ *    a dry run is in the token's job and passes `--ignore-scripts`, so that nothing the package
+ *    names runs with the token in its environment; and nothing names the `latest` tag.
+ *
+ * Not checked, because no workflow text can show it: who may dispatch, and from which branch. A
+ * dispatch runs the workflow as the branch it names has it, so a person with write access could
+ * dispatch a copy edited on another branch. A protected environment holding the token, limited to
+ * `main` and with required reviewers, is what closes that, and it is the repository's settings.
+ *
+ * Hand-read, for the reason `parseWorkflowTriggersAndGates` gives: no YAML parser is a declared
+ * dependency. Comments are blanked first, so a rule quoted in a comment is not read as code.
+ */
+function checkPublishWorkflows() {
+  const workflows = walk('.github/workflows', (path) => /\.ya?ml$/.test(path)).sort();
+  const publishers = [];
+  for (const file of workflows) {
+    const code = read(file)
+      .split('\n')
+      .map((line) => (/^\s*#/.test(line) ? '' : line));
+    const text = code.join('\n');
+    if (EVERY_SECRET.test(text))
+      fail(
+        `${file} hands every secret on at once (${EVERY_SECRET.exec(text)[0].trim()}), and with them ${PUBLISH_TOKEN}: name each secret a step needs.`,
+      );
+    const publishes = publishCommands(code).some((command) => !DRY_RUN.test(command));
+    if (PUBLISH_TOKEN_NAMED.test(text) || publishes) publishers.push({ file, code, text });
+  }
+  for (const expected of PUBLISH_WORKFLOWS)
+    if (!publishers.some(({ file }) => file === expected))
+      fail(
+        `${expected} was not found as a workflow that publishes with ${PUBLISH_TOKEN}, so ` +
+          'checkPublishWorkflows held nothing of it. If it moved, point PUBLISH_WORKFLOWS at it.',
+      );
+
+  for (const { file, code, text } of publishers) {
+    const problem = (message) => fail(`${file}: ${message}`);
+
+    // 1. Dispatch only.
+    const parsed = parseWorkflowTriggersAndGates(text);
+    const events = parsed === null ? [] : [...parsed.events.keys()];
+    if (events.length !== 1 || events[0] !== 'workflow_dispatch')
+      problem(
+        `it publishes, and is started by ${events.join(', ') || 'nothing it can read'}: a ` +
+          'publish workflow is started by workflow_dispatch alone, by a person.',
+      );
+
+    // 2. A dry run unless told otherwise.
+    const dryRun = code.findIndex((line) => /^\s+dryRun\s*:\s*$/.test(line));
+    const dryRunBlock =
+      dryRun === -1
+        ? ''
+        : code.slice(dryRun, yamlBlockEnd(code, dryRun, yamlIndent(code[dryRun]))).join('\n');
+    if (
+      !/^\s+type\s*:\s*boolean\s*$/m.test(dryRunBlock) ||
+      !/^\s+default\s*:\s*true\s*$/m.test(dryRunBlock)
+    )
+      problem('it has no dryRun input that is a boolean and true by default.');
+
+    // 3. Read only.
+    const block = (key) => {
+      const at = code.findIndex((line) => new RegExp(`^${key}\\s*:`).test(line));
+      if (at === -1) return null;
+      return {
+        inline: code[at].slice(code[at].indexOf(':') + 1).trim(),
+        lines: code
+          .slice(at + 1, yamlBlockEnd(code, at, 0))
+          .map((line) => line.trim())
+          .filter(Boolean),
+      };
+    };
+    const permissions = block('permissions');
+    if (
+      permissions === null ||
+      permissions.inline !== '' ||
+      JSON.stringify(permissions.lines) !== JSON.stringify(['contents: read'])
+    )
+      problem("its permissions are not `contents: read` alone, at the workflow's level.");
+
+    // 4. Serialised.
+    const concurrency = block('concurrency');
+    if (
+      concurrency === null ||
+      !concurrency.lines.some((line) => /^group\s*:\s*\S/.test(line)) ||
+      !concurrency.lines.includes('cancel-in-progress: false')
+    )
+      problem('its runs are not serialised: a concurrency group with cancel-in-progress: false.');
+
+    // 5. The token in one job, which runs nothing of the repository, nor anyone's.
+    const jobs = workflowJobs(code);
+    if (jobs === null) {
+      problem('its jobs could not be read, so where its token is was not checked.');
+      continue;
+    }
+    const outside = code
+      .filter((_, index) => !jobs.some(({ start, end }) => index >= start && index < end))
+      .join('\n');
+    if (PUBLISH_TOKEN_NAMED.test(outside))
+      problem(`it names ${PUBLISH_TOKEN} outside its jobs, which gives it to every job.`);
+    for (const job of jobs) {
+      const asked = jobKey(job, 'permissions');
+      if (asked !== null && /\bwrite(?:-all)?\b/.test([asked.inline, ...asked.lines].join('\n')))
+        problem(`job ${job.id} asks for a write permission.`);
+    }
+    const holders = jobs.filter((job) => PUBLISH_TOKEN_NAMED.test(job.lines.join('\n')));
+    if (holders.length > 1)
+      problem(
+        `it names ${PUBLISH_TOKEN} in ${holders.length} jobs, ${holders.map((job) => job.id).join(', ')}: give it to the one that publishes, alone.`,
+      );
+    for (const job of holders) {
+      const jobText = job.lines.join('\n');
+      if (/\buses\s*:\s*['"]?actions\/checkout@/.test(jobText))
+        problem(
+          `job ${job.id} has ${PUBLISH_TOKEN} and checks the repository out, so the token shares a ` +
+            "runner with the repository's code. Build and pack in a job with no token, and hand on the tarball alone.",
+        );
+      for (const [, action] of jobText.matchAll(/^\s*(?:-\s+)?uses\s*:\s*['"]?([^\s'"]+)/gm))
+        if (!/^actions\/checkout@/.test(action) && !TOKEN_JOB_ACTIONS.test(action))
+          problem(
+            `job ${job.id} has ${PUBLISH_TOKEN} and uses ${action}, which would run with it: the job with the token downloads the tarball and publishes it, and nothing else.`,
+          );
+      const runs =
+        /\bnpm\s+(?:ci|install|i|add|run|run-script|exec|x|rebuild|link)\b|\bnpx\b|\b(?:pnpm|yarn|git|curl|wget|tar|unzip|bash|sh|zsh|python3?|perl|ruby|deno|bun|eval|source)\b|(?:^|[\s;&|(])node\s/m.exec(
+          jobText,
+        );
+      if (runs)
+        problem(
+          `job ${job.id} has ${PUBLISH_TOKEN} and runs \`${runs[0].trim()}\`: the job with the token runs npm publish on the tarball, and nothing else.`,
+        );
+      if (jobKey(job, 'needs') === null)
+        problem(
+          `job ${job.id} has ${PUBLISH_TOKEN} and needs no build job to hand it the tarball.`,
+        );
+      const gate = jobKey(job, 'if');
+      if (
+        gate === null ||
+        !/^(?:\$\{\{\s*)?(?:!\s*inputs\.dryRun|inputs\.dryRun\s*==\s*false)(?:\s*\}\})?$/.test(
+          unquoteYamlScalar(gate.inline),
+        )
+      )
+        problem(
+          `job ${job.id} has ${PUBLISH_TOKEN}, and its if: is not \${{ !inputs.dryRun }} alone, so it may run on a dry run.`,
+        );
+    }
+
+    // 6. Every npm publish: alpha alone, Nuxeo's registry; a real one in the token's job, with
+    //    no script run; never latest.
+    // Compared as a string, the value as written: no pattern built from the address.
+    const registry = {
+      test: (command) => {
+        const named = [...command.matchAll(/--registry(?:=|\s+)(['"]?)([^\s'"]+)\1(?=\s|$)/g)];
+        return named.length === 1 && named[0][2] === PUBLISH_REGISTRY;
+      },
+    };
+    for (const job of jobs) {
+      for (const command of publishCommands(job.lines)) {
+        const shown = command.replace(/\s+/g, ' ').trim();
+        const tags = command.match(/--tag\b/g) ?? [];
+        if (tags.length !== 1 || !/--tag[=\s]+['"]?alpha['"]?(?:\s|$)/.test(command))
+          problem(`job ${job.id} runs \`${shown}\`, whose one --tag is not alpha.`);
+        if (!registry.test(command))
+          problem(`job ${job.id} runs \`${shown}\`, without --registry ${PUBLISH_REGISTRY}.`);
+        if (DRY_RUN.test(command)) continue;
+        if (!holders.includes(job))
+          problem(
+            `job ${job.id} runs \`${shown}\`, which is not a dry run, and is not the job given ${PUBLISH_TOKEN}.`,
+          );
+        if (!/--ignore-scripts\b/.test(command))
+          problem(
+            `job ${job.id} runs \`${shown}\`, a publish with the token, without --ignore-scripts.`,
+          );
+      }
+    }
+    if (/--tag[=\s]+['"]?latest\b|\bdist-tag\s+add\b[^\n]*\blatest\b/.test(text))
+      problem(
+        'it names the latest tag: promoting a version to latest is a separate, deliberate step.',
+      );
+  }
+}
+
+/**
+ * Each `npm publish` command of `lines`, with the lines a trailing `\` continues it on joined.
+ *
+ * @param {string[]} lines
+ */
+function publishCommands(lines) {
+  const commands = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/\bnpm\s+publish\b/.test(lines[index])) continue;
+    let command = lines[index];
+    while (/\\\s*$/.test(command) && index + 1 < lines.length)
+      command = `${command.replace(/\\\s*$/, ' ')}${lines[++index].trim()}`;
+    commands.push(command.slice(command.search(/\bnpm\s+publish\b/)));
+  }
+  return commands;
+}
+
+/**
+ * The jobs of a workflow, `{ id, start, end, lines }` with `end` exclusive, or `null` when `jobs:`
+ * cannot be read as a block of job keys.
+ *
+ * @param {string[]} lines the workflow, its comments blanked
+ */
+function workflowJobs(lines) {
+  const at = lines.findIndex((line) => /^jobs\s*:\s*$/.test(line));
+  if (at === -1) return null;
+  const end = yamlBlockEnd(lines, at, 0);
+  const indents = lines
+    .slice(at + 1, end)
+    .filter((line) => line.trim() !== '')
+    .map(yamlIndent);
+  if (indents.length === 0) return null;
+  const indent = Math.min(...indents);
+  const jobs = [];
+  for (let index = at + 1; index < end; index += 1) {
+    if (lines[index].trim() === '' || yamlIndent(lines[index]) !== indent) continue;
+    const key = /^\s*([A-Za-z_][\w-]*)\s*:\s*$/.exec(lines[index]);
+    if (!key) return null;
+    const jobEnd = yamlBlockEnd(lines, index, indent);
+    jobs.push({ id: key[1], start: index, end: jobEnd, lines: lines.slice(index, jobEnd) });
+    index = jobEnd - 1;
+  }
+  return jobs;
+}
+
+/**
+ * A job's own key, `{ inline, lines }`, its value on the key's line and the lines of its block, or
+ * `null`: only at the job's key column, so a step's `if:` or a `with:` input is not the job's.
+ *
+ * @param {{ lines: string[] }} job one of {@link workflowJobs}
+ * @param {string} key
+ */
+function jobKey(job, key) {
+  const own = job.lines.slice(1).filter((line) => line.trim() !== '');
+  if (own.length === 0) return null;
+  const indent = yamlIndent(own[0]);
+  const pattern = new RegExp(`^\\s*['"]?${key}['"]?\\s*:(.*)$`);
+  for (let index = 1; index < job.lines.length; index += 1) {
+    const line = job.lines[index];
+    if (line.trim() === '' || yamlIndent(line) !== indent) continue;
+    const found = pattern.exec(line);
+    if (!found) continue;
+    return {
+      inline: stripTrailingYamlComment(found[1]).trim(),
+      lines: job.lines
+        .slice(index + 1, yamlBlockEnd(job.lines, index, indent))
+        .map((each) => each.trim())
+        .filter(Boolean),
+    };
+  }
+  return null;
+}
+
 const GUARDRAILS = [
   checkGeneratorsEsmSafe,
   checkPackageToolLaunches,
@@ -14786,6 +15091,7 @@ const GUARDRAILS = [
   checkNxsControlsNotBypassed,
   checkEnginesDrawNoMaterial,
   checkWorkflowRefGates,
+  checkPublishWorkflows,
   checkGateInventory,
   checkPluginSpikeIsolated,
 ];

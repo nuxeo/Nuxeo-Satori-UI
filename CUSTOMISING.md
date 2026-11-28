@@ -30,10 +30,12 @@ cd Nuxeo-Satori-UI
 
 > Cloning our repository to reach the scaffolder is a rough edge we intend to remove. The route
 > that will replace it is `@nuxeo/satori-cli`, one command-line tool that scaffolds a configuration
-> repository of your own and checks and builds every file in it, app definitions included
-> ([its README](tools/satori-cli/README.md)). It is not published yet. Until it is, this is the
-> route, and it is the only thing you need the clone for: your package is a directory of JSON and
-> XML that you move into your own repository once it is created.
+> repository of your own and checks and builds every file in it, app definitions included:
+> [Your configuration repository, from nothing](docs/business-apps/customer-config-repository.md)
+> follows it from `npx @nuxeo/satori-cli@alpha create` to a signed release, with no clone and no
+> token. It is ready to publish, and is not published yet: the first publish is a person's step.
+> Until it runs, this is the route, and it is the only thing you need the clone for: your package
+> is a directory of JSON and XML that you move into your own repository once it is created.
 
 ## 2. Create your configuration package
 
