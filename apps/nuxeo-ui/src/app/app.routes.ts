@@ -43,6 +43,14 @@ export const routes: Routes = [
         loadComponent: placeholder,
       },
       {
+        path: 'configurable-view',
+        loadComponent: placeholder,
+        data: {
+          descriptionKey: 'app.placeholder-page.configurable-view-description',
+          messageKey: 'app.placeholder-page.configurable-view-message',
+        },
+      },
+      {
         path: 'search',
         loadChildren: () => import('@agentic-ui/feature-search').then((m) => m.searchRoutes),
       },

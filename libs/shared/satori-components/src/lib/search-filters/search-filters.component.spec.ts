@@ -53,6 +53,7 @@ const AGGREGATIONS: SearchAggregations = {
   imports: [NxsSearchFiltersComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-search-filters
+    [layout]="layout()"
     [(filters)]="filters"
     [aggregations]="aggregations()"
     [optionLabels]="labels()"
@@ -61,6 +62,7 @@ const AGGREGATIONS: SearchAggregations = {
   />`,
 })
 class HostComponent {
+  readonly layout = signal<'vertical' | 'horizontal'>('vertical');
   readonly filters = signal<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   readonly aggregations = signal<SearchAggregations>(AGGREGATIONS);
   readonly labels = signal<NxsFacetLabels>({});
@@ -92,6 +94,214 @@ describe('NxsSearchFiltersComponent', () => {
   let getTagSuggestions: ReturnType<typeof vi.fn>;
 
   const el = () => fixture.nativeElement as HTMLElement;
+
+  const menuTrigger = (prefix: string) =>
+    [...el().querySelectorAll<HTMLButtonElement>('.filter-trigger')].find((button) =>
+      button.textContent?.trim().startsWith(prefix),
+    )!;
+  const panel = () => document.querySelector<HTMLElement>('.filter-panel')!;
+
+  beforeEach(async () => {
+    getUserCollections = vi.fn((): Observable<SearchCollectionOption[]> =>
+      of([
+        { id: 'col-1', title: 'Claims', itemCount: 4 },
+        { id: 'col-2', title: 'Board', itemCount: 1 },
+      ]),
+    );
+    getTagSuggestions = vi.fn((term: string): Observable<string[]> =>
+      of(['annual', 'archive'].filter((tag) => tag.startsWith(term))),
+    );
+    await configure();
+    await render();
+  });
+
+  afterEach(() => {
+    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
+  });
+
+  it('keeps date multi-selection and displays the selected range in its trigger', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('Date').click();
+    await render();
+    panel().querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    await render();
+    expect(host.filters().modified).toEqual(['last24h']);
+    expect(menuTrigger('Date').textContent).toContain('Last 24h');
+    menuTrigger('Properties').click();
+    await render();
+    expect(document.querySelectorAll('.filter-panel')).toHaveLength(1);
+    expect(panel().textContent).toContain('Nature');
+    expect(host.filters().modified).toEqual(['last24h']);
+  });
+
+  it('stages Files until Apply and discards a draft when closed', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('In:').click();
+    await render();
+    panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click();
+    await render();
+    expect(host.filters().filesOnly).toBeFalsy();
+    panel().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+    await render();
+    menuTrigger('In:').click();
+    await render();
+    expect(panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[0].checked).toBe(true);
+    panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click();
+    await render();
+    [...panel().querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Apply')!
+      .click();
+    await render();
+    expect(host.filters().filesOnly).toBe(true);
+    expect(menuTrigger('In:').textContent).toContain('Files');
+    expect(document.querySelector('.filter-panel')).toBeNull();
+  });
+
+  it('shows counts for multiple filters and clears only the date through Any time', async () => {
+    host.layout.set('horizontal');
+    host.filters.set({
+      ...NXS_EMPTY_SEARCH_FILTERS,
+      modified: ['last24h', 'lastWeek'],
+      nature: ['contract'],
+      size: ['tiny'],
+      subjects: ['unknown-category'],
+    });
+    await render();
+    expect(menuTrigger('Properties').textContent).toContain('(2)');
+    expect(menuTrigger('Date').textContent).toContain('(2)');
+    expect(menuTrigger('Categories').textContent).toContain('unknown-category');
+    menuTrigger('Date').click();
+    await render();
+    [...panel().querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Any time')!
+      .click();
+    await render();
+    expect(host.filters().modified).toEqual([]);
+    expect(host.filters().nature).toEqual(['contract']);
+    expect(host.filters().size).toEqual(['tiny']);
+    expect(menuTrigger('Date').textContent).toContain('Any time');
+    expect(document.querySelector('.filter-panel')).toBeNull();
+  });
+
+  it('toggles a menu closed and loads collections only once across repeated openings', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('Collections').click();
+    await render();
+    expect(panel().textContent).toContain('Claims');
+    expect(getUserCollections).toHaveBeenCalledTimes(1);
+    menuTrigger('Collections').click();
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    menuTrigger('Collections').click();
+    await render();
+    expect(getUserCollections).toHaveBeenCalledTimes(1);
+    panel().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await render();
+    expect(document.querySelector('.filter-panel')).not.toBeNull();
+  });
+
+  it('dismisses a panel without taking focus from a clicked external control', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const external = document.createElement('button');
+    external.textContent = 'External action';
+    document.body.append(external);
+    const focus = vi.spyOn(external, 'focus');
+    try {
+      external.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      external.click();
+      await render();
+      expect(document.querySelector('.filter-panel')).toBeNull();
+      expect(focus).toHaveBeenCalled();
+    } finally {
+      external.remove();
+    }
+  });
+
+  it('keeps focus on an external icon button when its SVG child dismisses the panel', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').focus();
+    menuTrigger('People').click();
+    await render();
+    const external = document.createElement('button');
+    external.setAttribute('aria-label', 'External icon action');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    svg.append(path);
+    external.append(svg);
+    document.body.append(external);
+    try {
+      path.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      path.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await render();
+      expect(document.querySelector('.filter-panel')).toBeNull();
+      expect(document.activeElement).toBe(external);
+    } finally {
+      external.remove();
+    }
+  });
+
+  it.each([
+    { menu: 'People', field: 'authors', value: 'Administrator' },
+    { menu: 'Collections', field: 'collections', value: 'col-1' },
+    { menu: 'Tags', field: 'tags', value: 'annual' },
+  ] as const)(
+    'keeps keyboard focus in the $menu input after choosing an option',
+    async ({ menu, field, value }) => {
+      host.layout.set('horizontal');
+      await render();
+      menuTrigger(menu).click();
+      await render();
+      const box = panel().querySelector<HTMLInputElement>('input')!;
+      if (field === 'tags') {
+        type(box, 'ann');
+        await new Promise((resolve) => setTimeout(resolve, 275));
+        await render();
+      }
+      const option = panel().querySelector<HTMLButtonElement>('.filter-option')!;
+      expect(option).not.toBeNull();
+      option.focus();
+      option.click();
+      await render();
+      expect(host.filters()[field]).toEqual([value]);
+      expect(document.activeElement).toBe(box);
+    },
+  );
+
+  it('restores the latest trigger after switching panels and closing with Escape', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const coverage = menuTrigger('Coverage');
+    const focus = vi.spyOn(coverage, 'focus');
+    coverage.click();
+    await render();
+    panel().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    expect(focus).toHaveBeenCalled();
+  });
+
+  it('keeps focus on the latest trigger when a switched panel closes before rendering', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const coverage = menuTrigger('Coverage');
+    coverage.focus();
+    coverage.click();
+    coverage.click();
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    expect(document.activeElement).toBe(coverage);
+  });
 
   async function render(): Promise<void> {
     fixture.detectChanges();
@@ -158,20 +368,6 @@ describe('NxsSearchFiltersComponent', () => {
     return [...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option')];
   }
 
-  beforeEach(async () => {
-    getUserCollections = vi.fn((): Observable<SearchCollectionOption[]> =>
-      of([
-        { id: 'col-1', title: 'Claims', itemCount: 4 },
-        { id: 'col-2', title: 'Board', itemCount: 1 },
-      ]),
-    );
-    getTagSuggestions = vi.fn((term: string): Observable<string[]> =>
-      of(['annual', 'archive'].filter((tag) => tag.startsWith(term))),
-    );
-    await configure();
-    await render();
-  });
-
   /**
    * Creates the host with these providers added, so a test can register a component under an ID.
    * A reset discards the global translate providers, so `configure` brings them back.
@@ -190,10 +386,6 @@ describe('NxsSearchFiltersComponent', () => {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
   }
-
-  afterEach(() => {
-    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
-  });
 
   describe('choices and counts', () => {
     it('lists every modification-date range with the server’s count, Modification Date open', () => {
@@ -549,6 +741,30 @@ describe('NxsSearchFiltersComponent', () => {
       expect(el().querySelector('nxs-test-probe-chip-set')).toBeNull();
       expect(chips('Tags').text).toEqual(['q1']);
       (el().querySelector('nxs-chip-set mat-chip button') as HTMLButtonElement).click();
+      expect(host.filters().tags).toEqual([]);
+    });
+
+    it('honours the registered chip set in the horizontal Tags panel too', async () => {
+      await renderTags([
+        provideSatoriExtensions({
+          components: { [NXS_PRIMITIVE_IDS.chipSet]: ProbeChipSetComponent },
+        }),
+      ]);
+      host.layout.set('horizontal');
+      await render();
+      const trigger = [...el().querySelectorAll<HTMLButtonElement>('.filter-trigger')].find(
+        (button) => button.textContent?.includes('Tags'),
+      );
+      expect(trigger).toBeDefined();
+      trigger?.click();
+      await render();
+      await new Promise((resolve) => setTimeout(resolve));
+      await render();
+      const chip = document.querySelector<HTMLButtonElement>(
+        '.cdk-overlay-container nxs-test-probe-chip-set .probe-chip',
+      );
+      expect(chip?.textContent?.trim()).toBe('q1');
+      chip?.click();
       expect(host.filters().tags).toEqual([]);
     });
 

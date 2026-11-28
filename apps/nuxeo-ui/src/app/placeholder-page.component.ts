@@ -1,4 +1,5 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 
 /** PoC placeholder for routes not yet backed by feature libraries. */
@@ -15,4 +16,9 @@ import { TranslatePipe } from '@ngx-translate/core';
     `,
   ],
 })
-export class PlaceholderPageComponent {}
+export class PlaceholderPageComponent {
+  private readonly route = inject(ActivatedRoute);
+  readonly descriptionKey = this.route.snapshot.data['descriptionKey'] ?? '';
+  readonly messageKey =
+    this.route.snapshot.data['messageKey'] ?? 'app.placeholder-page.coming-soon';
+}

@@ -6,7 +6,96 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { AppExtensionsService } from './app-extensions.service';
 import { ExtensionRuleContextService } from './extension-rule-context.service';
 import { ExtensionRuleRegistry } from './extension-rules';
-import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from './nav-items';
+import { EXTENSION_SLOTS } from './extension-slots';
+import { APP_NAV_ITEMS, APP_SEARCH_QUEUE_ITEM, PACKAGED_NAV_ITEMS } from './nav-items';
+
+describe('APP_SEARCH_QUEUE_ITEM — independently resolved queue', () => {
+  const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
+
+  beforeEach(() => {
+    manifest.set({ extensionLayers: [] });
+    TestBed.configureTestingModule({
+      providers: [{ provide: AppConfigService, useValue: { manifest } }],
+    });
+  });
+
+  it('registers the queue without exposing a Search sidebar entry', () => {
+    const nav = TestBed.inject(APP_NAV_ITEMS);
+    expect(nav().some((item) => item.id === 'app.navbar.search')).toBe(false);
+    expect(TestBed.inject(APP_SEARCH_QUEUE_ITEM)()?.path).toBe('/search');
+    expect(nav().some((item) => item.id === 'app.navbar.search')).toBe(false);
+  });
+
+  it('resolves queue labels and paths by stable ID through manifest contributions', () => {
+    manifest.set({
+      extensionLayers: [
+        {
+          slots: { navbar: [{ id: 'app.navbar.search', path: '/custom-search' }] },
+          overrides: { 'app.navbar.search': { label: 'Review queue' } },
+        },
+      ],
+    });
+    expect(TestBed.inject(APP_SEARCH_QUEUE_ITEM)()).toEqual(
+      expect.objectContaining({
+        id: 'app.navbar.search',
+        path: '/custom-search',
+        label: 'Review queue',
+      }),
+    );
+    expect(TestBed.inject(APP_SEARCH_QUEUE_ITEM)()?.labelKey).toBeUndefined();
+    expect(TestBed.inject(APP_NAV_ITEMS)().some((item) => item.id === 'app.navbar.search')).toBe(
+      false,
+    );
+  });
+
+  it('honors manifest hiding and unresolved fail-closed queue rules without a fallback', () => {
+    const queue = TestBed.inject(APP_SEARCH_QUEUE_ITEM);
+    manifest.set({ extensionLayers: [{ overrides: { 'app.navbar.search': { visible: false } } }] });
+    expect(queue()).toBeNull();
+    manifest.set({
+      extensionLayers: [
+        { overrides: { 'app.navbar.search': { rule: 'app.rules.hasAdministrationAccess' } } },
+      ],
+    });
+    expect(queue()).toBeNull();
+  });
+
+  it('preserves a queue descriptor already registered by a customer library', () => {
+    TestBed.inject(AppExtensionsService).register(EXTENSION_SLOTS.navbar, [
+      {
+        id: 'app.navbar.search',
+        label: 'Customer queue',
+        path: '/review',
+        icon: 'folder',
+        hasDrawer: true,
+      },
+    ]);
+    const queue = TestBed.inject(APP_SEARCH_QUEUE_ITEM);
+    expect(queue()?.label).toBe('Customer queue');
+    expect(queue()?.path).toBe('/review');
+    expect(TestBed.inject(APP_NAV_ITEMS)().some((item) => item.id === 'app.navbar.search')).toBe(
+      false,
+    );
+  });
+
+  it('re-evaluates a queue rule when its context changes', () => {
+    TestBed.inject(AppExtensionsService).registerRules({
+      'customer.queue.administrator': (context) => context.user.isAdministrator,
+    });
+    manifest.set({
+      extensionLayers: [
+        { overrides: { 'app.navbar.search': { rule: 'customer.queue.administrator' } } },
+      ],
+    });
+    const queue = TestBed.inject(APP_SEARCH_QUEUE_ITEM);
+    const context = TestBed.inject(ExtensionRuleContextService);
+    expect(queue()).toBeNull();
+    context.isAdministrator.set(true);
+    expect(queue()?.id).toBe('app.navbar.search');
+    context.isAdministrator.set(false);
+    expect(queue()).toBeNull();
+  });
+});
 
 /**
  * Administration visibility, which Phase 2 moved from a hardcoded

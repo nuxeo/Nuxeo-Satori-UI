@@ -6,17 +6,18 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { NavigationEnd, NavigationStart, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   Subject,
   catchError,
-  debounceTime,
   distinctUntilChanged,
   filter,
   finalize,
@@ -24,6 +25,7 @@ import {
   of,
   switchMap,
   Subscription,
+  timer,
 } from 'rxjs';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -41,6 +43,7 @@ import {
   DocumentDetailService,
   BrowseContextService,
   SearchService,
+  SearchAggregationService,
   SelectionService,
   readClipboardDocs,
   isBrowseRouterUrl,
@@ -52,13 +55,18 @@ import {
 import { SelectionTopbarComponent } from '@nuxeo/satori-platform/ui';
 import { AiChatService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
+import {
+  APP_NAV_ITEMS,
+  APP_SEARCH_QUEUE_ITEM,
+  PACKAGED_NAV_ITEMS,
+  PACKAGED_SEARCH_QUEUE_ITEM,
+} from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { SessionTimeoutService } from '../auth/session-timeout.service';
 import { BrandLogoFallbackDirective } from '../config/brand-logo-fallback.directive';
-import { AppNavItem, SETTINGS_DRAWER_ITEMS, toAppNavItem } from '../platform-nav-items';
+import { AppNavItem, SETTINGS_DRAWER_ITEMS, navGroup, toAppNavItem } from '../platform-nav-items';
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
 import { drawerToOpenForRoute } from './drawer-route-match';
 import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
@@ -108,6 +116,7 @@ export class AppShellComponent implements OnDestroy {
 
   private readonly router = inject(Router);
   private readonly platformNavState = inject(SatPlatformNavState);
+  readonly platformNavCollapsed = this.platformNavState.collapsed;
   private readonly auth = inject(AuthService);
   private readonly sessionTimeout = inject(SessionTimeoutService);
   private readonly snackBar = inject(MatSnackBar);
@@ -115,6 +124,7 @@ export class AppShellComponent implements OnDestroy {
   private readonly collectionService = inject(CollectionService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly searchService = inject(SearchService);
+  private readonly searchState = inject(SearchAggregationService);
   private readonly browseContext = inject(BrowseContextService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly appConfig = inject(AppConfigService);
@@ -149,6 +159,8 @@ export class AppShellComponent implements OnDestroy {
    * test could do none of those.
    */
   private readonly navDescriptors = inject(APP_NAV_ITEMS);
+  private readonly searchQueueDescriptor = inject(APP_SEARCH_QUEUE_ITEM);
+  protected readonly navGroup = navGroup;
   protected readonly navItems = computed(() => this.navDescriptors().map(toAppNavItem));
 
   readonly displayName = computed(() => this.auth.username() ?? 'User');
@@ -182,7 +194,22 @@ export class AppShellComponent implements OnDestroy {
 
   readonly highlightedSearchTerm = computed(() => this.globalSearchTerm().trim());
 
-  private readonly currentUrl = signal(this.router.url.split('?')[0]);
+  private lastCompletedUrl = this.router.url;
+  private readonly currentUrl = signal(this.lastCompletedUrl.split('?')[0]);
+  readonly searchExpanded = computed(() => this.currentUrl() === '/search');
+  private searchReturnUrl = '/dashboard';
+  private hasKeywordDraft = false;
+  private readonly appliedKeyword = computed(
+    () => this.searchState.drawerFilters()['ecm_fulltext'] ?? '',
+  );
+  private readonly syncSearchKeywords = effect(() => {
+    const term = this.appliedKeyword();
+    this.searchState.keywordSyncVersion();
+    untracked(() => {
+      this.clearGlobalSearch();
+      this.globalSearchTerm.set(term);
+    });
+  });
 
   readonly pageTitle = computed(() => {
     const url = this.currentUrl();
@@ -222,10 +249,13 @@ export class AppShellComponent implements OnDestroy {
     // unfiltered settings list is used here while the drawer uses
     // `visibleSettingsDrawerItems` — the theming flag hides the *link*, and
     // `themingGuard` closes the *route*; neither should blank the title.
+    const queue = this.searchQueueDescriptor();
     const candidates = [
       ...this.navItems(),
+      ...(queue ? [toAppNavItem(queue)] : []),
       ...PACKAGED_NAV_ITEMS.map(toAppNavItem),
       ...SETTINGS_DRAWER_ITEMS,
+      toAppNavItem(PACKAGED_SEARCH_QUEUE_ITEM),
     ];
     const match = candidates.find((item) => url === item.path || url.startsWith(item.path + '/'));
     // Layer 0: the product name on an unmatched route is branding, not a literal.
@@ -284,18 +314,34 @@ export class AppShellComponent implements OnDestroy {
 
     this.router.events
       .pipe(
-        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        filter(
+          (e): e is NavigationEnd | NavigationStart =>
+            e instanceof NavigationEnd || e instanceof NavigationStart,
+        ),
         takeUntilDestroyed(),
       )
       .subscribe((e) => {
+        if (e instanceof NavigationStart) {
+          // Initial deep-link navigation started before this shell existed. Only future entries
+          // have an origin to return to; keep Dashboard as the direct Search link's fallback.
+          if (e.url.split('?')[0] === '/search' && !this.searchExpanded()) {
+            this.searchReturnUrl = this.lastCompletedUrl;
+          }
+          return;
+        }
         const nextPath = e.urlAfterRedirects.split('?')[0];
         const previousPath = this.currentUrl();
         if (previousPath !== nextPath) {
           this.selectionService.clear();
         }
+        this.lastCompletedUrl = e.urlAfterRedirects;
         this.currentUrl.set(nextPath);
         this.refreshClipboardCount();
-        this.clearGlobalSearch();
+        if (nextPath !== '/search') {
+          this.clearGlobalSearch();
+        } else if (previousPath !== '/search' && !this.hasKeywordDraft) {
+          this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+        }
         this.syncDrawerToRoute(nextPath);
       });
 
@@ -308,9 +354,17 @@ export class AppShellComponent implements OnDestroy {
     // reload needs the current route applied once here.
     this.syncDrawerToRoute(this.router.url.split('?')[0]);
 
+    effect(() => {
+      this.searchQueueDescriptor();
+      untracked(() => {
+        if (this.router.parseUrl(this.router.url).queryParams['searchQueue'] === 'true') {
+          this.syncDrawerToRoute(this.currentUrl());
+        }
+      });
+    });
+
     this.searchInput$
       .pipe(
-        debounceTime(250),
         distinctUntilChanged(),
         switchMap((value) => {
           const term = value.trim();
@@ -320,18 +374,22 @@ export class AppShellComponent implements OnDestroy {
             return of<GlobalSearchSuggestion[]>([]);
           }
 
-          this.globalSearchLoading.set(true);
-          this.globalSearchError.set(null);
-
-          return this.searchService
-            .suggestFromSuggestersLauncher(term)
-            .pipe(finalize(() => this.globalSearchLoading.set(false)));
+          // Every input/reset cancels the previous timer/request immediately. Debounce only the
+          // next request, so a reset cannot be swallowed by a rapid same-keyword reopen.
+          return timer(250).pipe(
+            switchMap(() => {
+              this.globalSearchLoading.set(true);
+              this.globalSearchError.set(null);
+              return this.searchService
+                .suggestFromSuggestersLauncher(term)
+                .pipe(finalize(() => this.globalSearchLoading.set(false)));
+            }),
+          );
         }),
         takeUntilDestroyed(),
       )
       .subscribe((results) => {
         this.globalSearchResults.set(results);
-        this.globalSearchOpen.set(this.globalSearchTerm().trim().length >= 2);
         this.loadThumbnailsForResults(results);
       });
   }
@@ -405,6 +463,16 @@ export class AppShellComponent implements OnDestroy {
       this.platformNavState.toggleCollapsed();
     }
 
+    // Search owns its filters in the workspace. Its drawer is reserved for the optional queue.
+    if (item.path === '/search') {
+      event.preventDefault();
+      this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+      this.drawerOpen.set(false);
+      this.activeDrawerItem.set(null);
+      void this.router.navigateByUrl(this.searchWorkspaceUrl());
+      return;
+    }
+
     if (item.hasDrawer) {
       event.preventDefault();
       event.stopPropagation();
@@ -459,6 +527,17 @@ export class AppShellComponent implements OnDestroy {
    * that drawer for the Browse tree.
    */
   private syncDrawerToRoute(currentPath: string): void {
+    if (this.router.parseUrl(this.router.url).queryParams['searchQueue'] === 'true') {
+      const searchItem = this.searchQueueDescriptor();
+      this.activeDrawerItem.set(searchItem ? toAppNavItem(searchItem) : null);
+      this.drawerOpen.set(searchItem !== null);
+      return;
+    }
+    if (currentPath === '/search') {
+      this.activeDrawerItem.set(null);
+      this.drawerOpen.set(false);
+      return;
+    }
     const drawer = drawerToOpenForRoute(
       this.navItems(),
       currentPath,
@@ -505,6 +584,7 @@ export class AppShellComponent implements OnDestroy {
   }
 
   onGlobalSearchInput(value: string): void {
+    this.hasKeywordDraft = true;
     this.globalSearchTerm.set(value);
     const hasEnoughChars = value.trim().length >= 2;
     this.globalSearchOpen.set(hasEnoughChars);
@@ -513,6 +593,54 @@ export class AppShellComponent implements OnDestroy {
 
   onGlobalSearchFocus(): void {
     this.globalSearchOpen.set(this.globalSearchTerm().trim().length >= 2);
+    if (this.globalSearchOpen()) this.searchInput$.next(this.globalSearchTerm());
+  }
+
+  onGlobalSearchActivate(): void {
+    if (!this.searchExpanded() && !this.hasKeywordDraft) {
+      this.globalSearchTerm.set(this.appliedKeyword());
+    }
+    this.openSearchWorkspace();
+    this.onGlobalSearchFocus();
+  }
+
+  private openSearchWorkspace(): void {
+    if (!this.searchExpanded()) {
+      this.searchReturnUrl = this.lastCompletedUrl;
+      this.drawerOpen.set(false);
+      this.activeDrawerItem.set(null);
+      void this.router.navigateByUrl(this.searchWorkspaceUrl());
+    }
+  }
+
+  private searchWorkspaceUrl(): string {
+    // Returning from the queue must carry the applied scope into the page's URL hydration.
+    return this.searchState.drawerFilters()['filesOnly'] === 'true'
+      ? '/search?quickFilters=noFolder'
+      : '/search';
+  }
+
+  submitGlobalSearch(): void {
+    this.openSearchWorkspace();
+    this.globalSearchOpen.set(false);
+    this.searchInput$.next('');
+    this.searchState.keywordRequest.set({ term: this.globalSearchTerm().trim() });
+  }
+
+  clearSearchKeywords(): void {
+    this.hasKeywordDraft = true;
+    this.globalSearchTerm.set('');
+    this.submitGlobalSearch();
+  }
+
+  closeSearch(): void {
+    this.searchState.keywordRequest.set(null);
+    this.clearGlobalSearch();
+    // The expanded Close button disappears on navigation; keep focus on the surviving input.
+    this.globalSearchContainer?.nativeElement
+      .querySelector<HTMLInputElement>('#global-header-search-input')
+      ?.focus();
+    if (this.searchExpanded()) void this.router.navigateByUrl(this.searchReturnUrl);
   }
 
   onGlobalSearchFocusOut(event: FocusEvent): void {
@@ -523,7 +651,7 @@ export class AppShellComponent implements OnDestroy {
       return;
     }
 
-    this.clearGlobalSearch();
+    this.globalSearchOpen.set(false);
   }
 
   onGlobalSearchSelect(result: GlobalSearchSuggestion): void {
@@ -539,6 +667,8 @@ export class AppShellComponent implements OnDestroy {
   }
 
   private clearGlobalSearch(): void {
+    this.hasKeywordDraft = false;
+    this.searchInput$.next('');
     this.globalSearchTerm.set('');
     this.globalSearchLoading.set(false);
     this.globalSearchError.set(null);

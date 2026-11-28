@@ -44,6 +44,10 @@ let nextId = 0;
   host: { class: 'nxs-saved-search-select' },
 })
 export class NxsSavedSearchSelectComponent {
+  /** Translation key for the visible and accessible field label. */
+  readonly labelKey = input('satori-components.saved-search-select.label');
+  /** Optional translated label for the empty-ID choice, such as Default. */
+  readonly defaultLabel = input('');
   /** The saved search open now, or an empty string for none. */
   readonly selectedId = input('');
   /** Its title, shown in the box. */
@@ -71,14 +75,20 @@ export class NxsSavedSearchSelectComponent {
   protected readonly options = computed(() => {
     const term = this.text().trim().toLowerCase();
     const all = this.searches();
-    if (!term || term === this.selectedTitle().trim().toLowerCase()) return all;
+    if (
+      !term ||
+      term === this.selectedTitle().trim().toLowerCase() ||
+      term === this.defaultLabel().trim().toLowerCase()
+    )
+      return all;
     return all.filter((search) => search.title.toLowerCase().includes(term));
   });
 
   constructor() {
     effect(() => {
       const title = this.selectedTitle();
-      untracked(() => this.text.set(title));
+      const defaultLabel = this.defaultLabel();
+      untracked(() => this.text.set(title || defaultLabel));
     });
     // A new `refresh` drops the list, so the next opening reads it again; an open panel reads now.
     let first = true;
@@ -115,6 +125,11 @@ export class NxsSavedSearchSelectComponent {
   }
 
   protected choose(id: string): void {
+    if (!id && this.defaultLabel()) {
+      this.text.set(this.defaultLabel());
+      this.selectedChange.emit({ id: '', title: '' });
+      return;
+    }
     const search = this.searches().find((entry) => entry.id === id);
     if (!search) return;
     this.text.set(search.title);
@@ -134,9 +149,10 @@ export class NxsSavedSearchSelectComponent {
 
   /** Puts the open search's title back when the box is left without a choice. */
   protected restore(): void {
-    this.text.set(this.selectedTitle());
+    this.text.set(this.selectedTitle() || this.defaultLabel());
   }
 
   protected readonly display = (id: string | null): string =>
-    this.searches().find((entry) => entry.id === id)?.title ?? this.selectedTitle();
+    this.searches().find((entry) => entry.id === id)?.title ??
+    (this.selectedTitle() || this.defaultLabel());
 }

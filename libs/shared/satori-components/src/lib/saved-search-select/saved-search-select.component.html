@@ -1,6 +1,4 @@
-<label class="nxs-saved-search-select__label" [for]="inputId">{{
-  'satori-components.saved-search-select.label' | translate
-}}</label>
+<label class="nxs-saved-search-select__label" [for]="inputId">{{ labelKey() | translate }}</label>
 <div class="nxs-saved-search-select__wrap">
   <input
     class="nxs-saved-search-select__input"
@@ -32,6 +30,9 @@
   (optionSelected)="choose($event.option.value)"
   (closed)="restore()"
 >
+  @if (defaultLabel()) {
+    <mat-option value="">{{ defaultLabel() }}</mat-option>
+  }
   @if (state() !== 'loaded') {
     <mat-option disabled>{{
       'satori-components.saved-search-select.loading' | translate

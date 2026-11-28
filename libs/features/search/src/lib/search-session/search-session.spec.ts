@@ -43,6 +43,7 @@ describe('SearchSession', () => {
     deleteSavedSearch: vi.fn((_id?: string): Observable<unknown> => of(undefined)),
   };
   const shared = {
+    keywordSyncVersion: signal(0),
     drawerFilters: signal<Record<string, string>>({}),
     items: signal<SearchResultItem[]>([]),
     aggregations: signal({}),
@@ -77,6 +78,219 @@ describe('SearchSession', () => {
   }
 
   const flush = () => TestBed.tick();
+
+  it('saves Files scope as view state, restores it and clears it on update', async () => {
+    session.setFilters({ ...NXS_EMPTY_SEARCH_FILTERS, filesOnly: true });
+    expect(session.hasFilters()).toBe(true);
+    expect(session.request().quickFilters).toBe('noFolder');
+    await firstValueFrom(session.saveAs('Files'));
+    expect(searchService.saveSavedSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    searchService.getSavedSearchById.mockReturnValue(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ unrelated: 'kept', nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('scope', 'Files'));
+    expect(session.filters().filesOnly).toBe(true);
+    session.setFilters(NXS_EMPTY_SEARCH_FILTERS);
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenCalledWith(
+      'scope',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ unrelated: 'kept', nxsFilesOnly: false }),
+      }),
+    );
+    expect(session.request().quickFilters).toBeUndefined();
+    session.reset();
+    expect(session.hasFilters()).toBe(false);
+  });
+
+  it('changes page size and returns to the first page, ignoring unsupported sizes', () => {
+    session.setPageIndex(3);
+    session.setPageSize(25);
+    expect(session.request()).toEqual(expect.objectContaining({ pageSize: 25, pageIndex: 0 }));
+    session.setPageSize(0);
+    expect(session.pageSize()).toBe(25);
+  });
+
+  it('leaves unrelated legacy view data untouched when only metadata filters change', async () => {
+    searchService.getSavedSearchById.mockReturnValue(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: 'legacy opaque state' }),
+    );
+    await firstValueFrom(session.openSavedSearch('legacy', 'Legacy search'));
+    session.setFilters({ ...session.filters(), authors: ['alice'] });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'contentViewData',
+    );
+  });
+
+  it.each(['legacy opaque state', '["legacy"]', '"legacy"', 'null', 'false', '42'])(
+    'rejects Files persistence without replacing unsupported view data: %s',
+    async (contentViewData) => {
+      searchService.getSavedSearchById.mockReturnValueOnce(
+        of({ ...EMPTY_SAVED_PARAMS, contentViewData }),
+      );
+      await firstValueFrom(session.openSavedSearch('legacy', 'Legacy search'));
+      session.setFilters({ ...session.filters(), filesOnly: true });
+
+      await expect(firstValueFrom(session.save())).rejects.toThrow(
+        'Unsupported saved-search view data',
+      );
+      expect(searchService.updateSavedSearch).not.toHaveBeenCalled();
+      expect(session.savedSearchId()).toBe('legacy');
+      expect(session.dirty()).toBe(true);
+
+      session.setFilters({ ...session.filters(), filesOnly: false, authors: ['alice'] });
+      await firstValueFrom(session.save());
+      expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+        'contentViewData',
+      );
+      expect(session.dirty()).toBe(false);
+
+      session.setFilters({ ...session.filters(), filesOnly: true });
+      await expect(firstValueFrom(session.save())).rejects.toThrow(
+        'Unsupported saved-search view data',
+      );
+      expect(searchService.updateSavedSearch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('retains presentation settings across a metadata save followed by a Files-only save', async () => {
+    const presentation = { layout: 'grid', columns: ['title', 'type'] };
+    searchService.getSavedSearchById.mockReturnValue(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: JSON.stringify(presentation) }),
+    );
+    await firstValueFrom(session.openSavedSearch('view', 'My view'));
+    session.setFilters({ ...session.filters(), authors: ['alice'] });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'contentViewData',
+    );
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+      'view',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ ...presentation, nxsFilesOnly: true }),
+      }),
+    );
+  });
+
+  it.each([false, true])(
+    'keeps Save As presentation state separate from its source with Files initially %s',
+    async (filesOnly) => {
+      searchService.getSavedSearchById.mockReturnValueOnce(
+        of({
+          ...EMPTY_SAVED_PARAMS,
+          contentViewData: JSON.stringify({ layout: 'grid', columns: ['title', 'type'] }),
+        }),
+      );
+      await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+      session.setFilters({ ...session.filters(), authors: ['alice'], filesOnly });
+      searchService.saveSavedSearch.mockReturnValueOnce(of({ id: 'copy', title: 'New search' }));
+      await firstValueFrom(session.saveAs('New search'));
+      expect(searchService.saveSavedSearch).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          title: 'New search',
+          params: expect.objectContaining({ dc_creator_agg: '["alice"]' }),
+          ...(filesOnly ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) } : {}),
+        }),
+      );
+      if (!filesOnly)
+        expect(searchService.saveSavedSearch.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'contentViewData',
+        );
+      session.setFilters({ ...session.filters(), filesOnly: !filesOnly });
+      await firstValueFrom(session.save());
+      expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+        'copy',
+        expect.objectContaining({
+          contentViewData: JSON.stringify({ nxsFilesOnly: !filesOnly }),
+        }),
+      );
+    },
+  );
+
+  it('preserves the source search cache when Save As fails', async () => {
+    const presentation = { layout: 'grid', columns: ['title', 'type'] };
+    searchService.getSavedSearchById.mockReturnValueOnce(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: JSON.stringify(presentation) }),
+    );
+    await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+    searchService.saveSavedSearch.mockReturnValueOnce(throwError(() => new Error('Save failed')));
+    await expect(firstValueFrom(session.saveAs('New search'))).rejects.toThrow('Save failed');
+    expect(session.savedSearchId()).toBe('source');
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+      'source',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ ...presentation, nxsFilesOnly: true }),
+      }),
+    );
+  });
+
+  it('does not update the source search when Save As returns no saved ID', async () => {
+    searchService.getSavedSearchById.mockReturnValueOnce(of({ ...EMPTY_SAVED_PARAMS }));
+    await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+    searchService.saveSavedSearch.mockReturnValueOnce(of({}));
+    await firstValueFrom(session.saveAs('New search'));
+    expect(session.savedSearchId()).toBe('');
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).not.toHaveBeenCalled();
+  });
+
+  it('tracks No Containers removal across page recreation after reopening a Files saved search', async () => {
+    const query = { quickFilters: 'noFolder', sortBy: null, sortOrder: null };
+    session.setPageQuery(query);
+    expect(session.filters().filesOnly).toBe(true);
+    session.setPageQuery({ ...query, quickFilters: '' });
+    expect(session.filters().filesOnly).toBeFalsy();
+    expect(session.request().quickFilters).toBeUndefined();
+    session.setPageQuery(query);
+    searchService.getSavedSearchById.mockReturnValueOnce(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('files', 'Files'));
+    session.setPageQuery({ ...query, quickFilters: '' });
+    expect(session.filters().filesOnly).toBeFalsy();
+    expect(session.request().quickFilters).toBeUndefined();
+    expect(session.dirty()).toBe(true);
+  });
+
+  it('preserves a newly opened Files saved scope before its first URL synchronization', async () => {
+    const query = { quickFilters: '', sortBy: null, sortOrder: null };
+    session.setPageQuery(query);
+    searchService.getSavedSearchById.mockReturnValueOnce(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('files', 'Files'));
+    session.setPageQuery(query);
+    expect(session.filters().filesOnly).toBe(true);
+    expect(session.request().quickFilters).toBe('noFolder');
+  });
+
+  it('requests keyword draft synchronization on reset and opening identical saved criteria', async () => {
+    const version = shared.keywordSyncVersion();
+    session.reset();
+    expect(shared.keywordSyncVersion()).toBe(version + 1);
+    searchService.getSavedSearchById.mockReturnValue(of({ ...EMPTY_SAVED_PARAMS }));
+    await firstValueFrom(session.openSavedSearch('empty', 'Empty search'));
+    expect(shared.keywordSyncVersion()).toBe(version + 2);
+  });
 
   describe('the one search', () => {
     it('sends nothing until something subscribes, then one request shared by every subscriber', () => {

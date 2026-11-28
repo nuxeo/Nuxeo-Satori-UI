@@ -3,6 +3,7 @@ import {
   DestroyRef,
   computed,
   inject,
+  input,
   linkedSignal,
   signal,
   ChangeDetectionStrategy,
@@ -36,8 +37,10 @@ import {
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
 import { loadFacetLabels } from './facet-labels';
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import { quickFilterQuery } from '../search-session/quick-filter-query';
 import {
   SEARCH_PAGE_PROVIDER,
+  SEARCH_PAGE_SIZE,
   SearchSession,
   type SearchResultsState,
 } from '../search-session/search-session';
@@ -74,8 +77,10 @@ const QUEUE_QUICK_FILTER_OPTIONS = [
   templateUrl: './search-filters-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search-filters-drawer.component.scss',
+  host: { '[class.inline]': 'inline()' },
 })
 export class SearchFiltersDrawerComponent {
+  readonly inline = input(false);
   private readonly session = inject(SearchSession);
   private readonly searchAggregationService = inject(SearchAggregationService);
   private readonly directoryService = inject(DirectoryService);
@@ -90,6 +95,7 @@ export class SearchFiltersDrawerComponent {
   readonly viewMode = signal<DrawerViewMode>('filter');
   readonly selectedDocumentId = signal('');
   readonly selectedQueueQuickFilters = signal<ReadonlySet<string>>(new Set());
+  private urlQuickFilters = '';
 
   readonly filters = this.session.filters;
   readonly savedSearchId = this.session.savedSearchId;
@@ -144,11 +150,35 @@ export class SearchFiltersDrawerComponent {
             ? urlParts[docIndex + 1].split('?')[0]
             : '',
         );
+        this.hydrateQueueQuery(event.urlAfterRedirects);
       });
 
     this.activatedRoute.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      this.selectedQueueQuickFilters.set(this.parseQuickFilters(params.get('quickFilters') ?? ''));
+      this.urlQuickFilters = params.get('quickFilters') ?? '';
+      this.selectedQueueQuickFilters.set(this.parseQuickFilters(this.urlQuickFilters));
+      if (params.get('searchQueue') === 'true') this.viewMode.set('queue');
     });
+    this.hydrateQueueQuery(this.router.url);
+  }
+
+  /** A queue deep link must restore its request even when the search page has not been opened. */
+  private hydrateQueueQuery(url: string): void {
+    const params = this.router.parseUrl(url).queryParamMap;
+    // The search page owns its URL. Read completed queue navigations so an outgoing queue URL
+    // cannot overwrite filters just applied by a saved search or a reset on the search page.
+    if (url.split('?')[0] === '/search' || params.get('searchQueue') !== 'true') return;
+
+    const sortOrder = params.get('sortOrder');
+    this.session.setPageQuery({
+      quickFilters: (params.get('quickFilters') ?? '').trim(),
+      sortBy: params.get('sortBy'),
+      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : null,
+    });
+    const rawPageSize = Number(params.get('pageSize'));
+    const pageSize = [25, 40, 50, 100].includes(rawPageSize) ? rawPageSize : SEARCH_PAGE_SIZE;
+    if (pageSize !== this.session.pageSize()) this.session.setPageSize(pageSize);
+    const page = Number.parseInt(params.get('page') ?? '', 10);
+    this.session.setPageIndex(Number.isFinite(page) && page > 1 ? page - 1 : 0);
   }
 
   onFiltersChange(filters: NxsSearchFilters): void {
@@ -213,7 +243,7 @@ export class SearchFiltersDrawerComponent {
   switchToFilterView(): void {
     this.viewMode.set('filter');
     void this.router.navigate(['/search'], {
-      queryParams: { quickFilters: this.toQuickFiltersQueryParam() },
+      queryParams: { quickFilters: this.toQuickFiltersQueryParam(), searchQueue: null },
       queryParamsHandling: 'merge',
     });
   }
@@ -250,15 +280,19 @@ export class SearchFiltersDrawerComponent {
 
   /** A change made from another page shows its results on the search page. */
   private ensureSearchRoute(): void {
-    if (this.router.url.split('?')[0] !== '/search') void this.router.navigateByUrl('/search');
+    if (this.router.url.split('?')[0] !== '/search') {
+      // Carry the newly applied scope, not the old queue's quick filters, page or sort.
+      const url = this.filters().filesOnly ? '/search?quickFilters=noFolder' : '/search';
+      void this.router.navigateByUrl(url);
+    }
   }
 
   private toQuickFiltersQueryParam(): string | null {
-    const selected = this.selectedQueueQuickFilters();
-    const ordered = QUEUE_QUICK_FILTER_OPTIONS.map((option) => option.value).filter((value) =>
-      selected.has(value),
+    return quickFilterQuery(
+      this.urlQuickFilters,
+      this.selectedQueueQuickFilters(),
+      QUEUE_QUICK_FILTER_OPTIONS.map((option) => option.value),
     );
-    return ordered.length > 0 ? ordered.join(',') : null;
   }
 
   private parseQuickFilters(value: string): Set<string> {

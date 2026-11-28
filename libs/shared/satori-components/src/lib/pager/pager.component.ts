@@ -10,6 +10,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { nxsVisibleText } from '../visible-text';
@@ -29,11 +30,20 @@ import { nxsVisibleText } from '../visible-text';
   standalone: true,
   templateUrl: './pager.component.html',
   styleUrl: './pager.component.scss',
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule, TranslatePipe],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, MatSelectModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-pager' },
 })
 export class NxsPagerComponent {
+  /** Optional page sizes; an empty list preserves the previous/next-only pager. */
+  readonly pageSizeOptions = input<readonly number[]>([]);
+  /** The selected page size. The host loads that size and resets its page index. */
+  readonly pageSizeChange = output<number>();
+  /** Adds First and, when the total is known, Last navigation buttons. */
+  readonly showEdges = input(false);
+  protected readonly lastPage = computed(() =>
+    Math.max(0, Math.ceil(this.totalSize() / this.pageSize()) - 1),
+  );
   /** The page on screen, from zero. */
   readonly pageIndex = input(0, { transform: numberAttribute });
   /** How many items a full page holds. */
@@ -46,6 +56,8 @@ export class NxsPagerComponent {
   readonly hasNextPage = input(false, { transform: booleanAttribute });
   /** Disables both buttons while a page loads. */
   readonly disabled = input(false, { transform: booleanAttribute });
+  /** Keeps disabled navigation buttons focusable; does not prevent the pager itself being hidden. */
+  readonly preserveFocus = input(false, { transform: booleanAttribute });
   /**
    * The navigation landmark's accessible name, already translated. Blank, or only whitespace or
    * zero-width characters, names it "Pages".
@@ -55,7 +67,9 @@ export class NxsPagerComponent {
   /** The page index to load: one less or one more than `pageIndex`. */
   readonly pageChange = output<number>();
 
-  protected readonly visible = computed(() => this.pageIndex() > 0 || this.hasNextPage());
+  protected readonly visible = computed(
+    () => this.pageSizeOptions().length > 0 || this.pageIndex() > 0 || this.hasNextPage(),
+  );
   protected readonly first = computed(() =>
     this.itemCount() > 0 ? this.pageIndex() * this.pageSize() + 1 : 0,
   );

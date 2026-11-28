@@ -1,3 +1,6 @@
 <div class="placeholder">
-  <p>{{ 'app.placeholder-page.coming-soon' | translate }}</p>
+  @if (descriptionKey) {
+    <p>{{ descriptionKey | translate }}</p>
+  }
+  <p>{{ messageKey | translate }}</p>
 </div>

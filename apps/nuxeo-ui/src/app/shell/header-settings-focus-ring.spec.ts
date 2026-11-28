@@ -69,6 +69,9 @@ describe('header Settings menu — keyboard focus indicator (NXENG-872)', () => 
     }).compileComponents();
 
     fixture = TestBed.createComponent(HeaderSettingsHostComponent);
+    // Paint a themed surface like the real header. A transparent fixture otherwise
+    // compares a dark-scheme ring against the white fallback, which is not its backdrop.
+    fixture.nativeElement.style.backgroundColor = 'var(--mat-sys-surface)';
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
     await fixture.whenStable();

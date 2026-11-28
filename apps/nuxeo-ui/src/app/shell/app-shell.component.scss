@@ -48,7 +48,19 @@ sat-platform-nav-container.has-selection-topbar {
 }
 
 .shell-content {
-  height: calc(100% - var(--selection-topbar-height));
+  flex: 1;
+  min-height: 0;
+}
+
+sat-platform-nav-main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+sat-app-header {
+  flex-shrink: 0;
 }
 
 .nav-drawer-sidenav {
@@ -118,11 +130,10 @@ sat-platform-nav-container.has-selection-topbar {
   position: relative;
   height: 42px;
   border-radius: 20px;
-  background: #fff;
-  // Pill is always light; foreground tokens stay on the wrapper so label, icon and input
-  // share one scheme regardless of page theme (NXENG-798).
-  --shell-header-search-muted-foreground: #667085;
-  --shell-header-search-foreground: #101828;
+  background: var(--mat-sys-surface-container-high);
+  // Keep the label, icon and input in the same theme-aware colour scheme (NXENG-798).
+  --shell-header-search-muted-foreground: var(--mat-sys-on-surface-variant);
+  --shell-header-search-foreground: var(--mat-sys-on-surface);
 }
 
 .header-search-icon {
@@ -197,7 +208,7 @@ sat-platform-nav-container.has-selection-topbar {
 }
 
 // `outline-offset` puts the ring entirely outside the field, with the gap showing what is
-// behind it — so the colour it has to contrast with is the header's, not the field's white.
+// behind it — so the colour it has to contrast with is the header's, not the field's fill.
 // That is why the ring tracks `--mat-sys-primary` and is deliberately NOT pinned to the
 // light scheme: the header follows the colour scheme, so the ring must too. Measured
 // against the header across the four packaged themes and both OS schemes: lowest 5.80:1
@@ -232,8 +243,9 @@ sat-platform-nav-container.has-selection-topbar {
   right: 0;
   max-height: 360px;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #e4e7ec;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 12px;
   box-shadow: 0 12px 24px rgb(16 24 40 / 12%);
   z-index: 30;
@@ -242,7 +254,7 @@ sat-platform-nav-container.has-selection-topbar {
 
 .header-search-state {
   padding: 12px;
-  color: #475467;
+  color: var(--mat-sys-on-surface-variant);
   font-size: 13px;
 }
 
@@ -253,6 +265,7 @@ sat-platform-nav-container.has-selection-topbar {
   width: 100%;
   border: none;
   background: none;
+  color: inherit;
   font: inherit;
   text-align: left;
   padding: 10px;
@@ -260,7 +273,7 @@ sat-platform-nav-container.has-selection-topbar {
   cursor: pointer;
 
   &:hover {
-    background: #f2f4f7;
+    background: var(--mat-sys-surface-container-highest);
   }
 }
 
@@ -318,7 +331,7 @@ sat-platform-nav-container.has-selection-topbar {
 
 .header-search-option-path {
   font-size: 12px;
-  color: #667085;
+  color: var(--mat-sys-on-surface-variant);
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -326,8 +339,8 @@ sat-platform-nav-container.has-selection-topbar {
 }
 
 .header-search-highlight {
-  background: #fff3bf;
-  color: inherit;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
   font-weight: 700;
   border-radius: 2px;
   padding: 0;
@@ -782,4 +795,82 @@ $ai-radius: 14px;
 :host ::ng-deep button[satPlatformNavUserProfile] mat-icon {
   flex-shrink: 0;
   // NXENG-894 — CSS codepoint workaround removed in NXSAT-673 — now uses svgIcon="user_circle".
+}
+
+.nav-group-divider {
+  margin: 12px 16px;
+  border: 0;
+  border-top: 1px solid var(--sat-platform-nav-outline, var(--mat-sys-outline));
+
+  &--collapsed {
+    // The Satori menu already has 4px padding on each side of its 56px rail.
+    // Keep a 40px section separator instead of reducing it to a 16px dash.
+    margin-inline: 4px;
+  }
+}
+
+.search-expanded {
+  [satAppHeaderTitle],
+  .app-brand-logo,
+  sat-word-mark-logo {
+    display: none;
+  }
+  .header-search {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: calc(100% - 48px);
+    max-width: 100%;
+    min-width: 0;
+  }
+  .header-search-input-wrap {
+    flex: 1;
+    min-width: 120px;
+  }
+  .header-search-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+:host ::ng-deep sat-app-header.search-expanded .sat-app-header-leading-container {
+  width: 0;
+  max-width: 0;
+}
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+:host ::ng-deep sat-app-header.search-expanded .sat-app-header-trailing-container {
+  flex: 1;
+  width: auto;
+  max-width: 100%;
+}
+@media (max-width: 600px) {
+  /* Keep the mobile navigation toggle outside the expanded search field. */
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  :host ::ng-deep sat-app-header.search-expanded .sat-app-header-leading-container {
+    width: 32px;
+    max-width: 32px;
+  }
+  .search-expanded .header-search-input-wrap {
+    min-width: 64px;
+  }
+  .search-expanded .header-search {
+    gap: 4px;
+  }
+  .search-expanded .header-search-actions {
+    gap: 0;
+  }
+}
+
+.search-expanded h1[satAppHeaderTitle] {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

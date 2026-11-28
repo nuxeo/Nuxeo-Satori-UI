@@ -1,261 +1,589 @@
-<div class="nxs-search-filters__fields">
-  <div class="nxs-search-filters__field">
-    <label class="nxs-search-filters__title" [for]="ids.fulltext">{{
-      'satori-components.search-filters.fulltext' | translate
-    }}</label>
-    <div class="nxs-search-filters__input-wrap">
-      <input
-        class="nxs-search-filters__input"
-        type="search"
-        [id]="ids.fulltext"
-        [placeholder]="'satori-components.search-filters.fulltext-placeholder' | translate"
-        [value]="fulltextDraft()"
-        (input)="fulltextDraft.set($any($event.target).value)"
-        (keydown.enter)="applyFulltext()"
-      />
-      @if (fulltextDraft().trim()) {
-        <button
-          mat-icon-button
-          type="button"
-          class="nxs-search-filters__clear"
-          [attr.aria-label]="'satori-components.search-filters.clear-fulltext' | translate"
-          (click)="clearFulltext()"
+@if (layout() === 'horizontal') {
+  <div class="filter-triggers">
+    @for (menu of horizontalMenus; track menu) {
+      <button
+        type="button"
+        class="filter-trigger"
+        cdkOverlayOrigin
+        #origin="cdkOverlayOrigin"
+        [attr.aria-expanded]="activeMenu() === menu"
+        aria-haspopup="dialog"
+        [attr.aria-controls]="activeMenu() === menu ? ids.fulltext + '-panel' : null"
+        (click)="openPanel(menu, origin)"
+      >
+        {{ menuLabel(menu) }} <mat-icon aria-hidden="true" svgIcon="chevron_down" />
+      </button>
+    }
+  </div>
+  @if (panelOrigin(); as origin) {
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="origin"
+      [cdkConnectedOverlayOpen]="activeMenu() !== null"
+      [cdkConnectedOverlayPositions]="panelPositions"
+      [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayViewportMargin]="12"
+      (overlayOutsideClick)="outsidePanel($event)"
+      (overlayKeydown)="panelKeydown($event)"
+    >
+      <dialog
+        open
+        class="filter-panel"
+        [class.filter-panel--compact]="activeMenu() === 'modified'"
+        [id]="ids.fulltext + '-panel'"
+        [attr.aria-label]="panelTitle()"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+      >
+        <header class="filter-panel__header">
+          <h2>{{ panelTitle() }}</h2>
+          <button
+            mat-icon-button
+            type="button"
+            [attr.aria-label]="'common.close' | translate"
+            (click)="closePanel()"
+          >
+            <mat-icon aria-hidden="true" svgIcon="x_large" />
+          </button>
+        </header>
+        <div class="filter-panel__body">
+          @switch (activeMenu()) {
+            @case ('scope') {
+              <mat-radio-group
+                [value]="scopeDraft()"
+                (change)="scopeDraft.set($event.value)"
+                [attr.aria-label]="'search.workspace.search-in' | translate"
+              >
+                <mat-radio-button [value]="false">{{
+                  'search.workspace.files-folders' | translate
+                }}</mat-radio-button>
+                <mat-radio-button [value]="true">{{
+                  'search.workspace.files' | translate
+                }}</mat-radio-button>
+              </mat-radio-group>
+            }
+            @case ('logic') {
+              <p>{{ 'search.workspace.logic-unavailable' | translate }}</p>
+            }
+            @case ('properties') {
+              @for (group of propertyGroups(); track group.field) {
+                <h3>{{ group.titleKey | translate }}</h3>
+                <ng-container
+                  [ngTemplateOutlet]="panelOptions"
+                  [ngTemplateOutletContext]="{ $implicit: group }"
+                />
+              }
+            }
+            @case ('authors') {
+              <label [for]="ids.authors">{{
+                'satori-components.search-filters.authors' | translate
+              }}</label>
+              <input
+                class="nxs-search-filters__input"
+                [id]="ids.authors"
+                [value]="authorText()"
+                [placeholder]="'satori-components.search-filters.authors-placeholder' | translate"
+                (input)="authorText.set($any($event.target).value)"
+              />
+              <div class="filter-panel__choices">
+                @for (option of authorOptions(); track option.value) {
+                  <button
+                    type="button"
+                    class="filter-option"
+                    (click)="addChoice('authors', option.value)"
+                  >
+                    {{ option.value }} <span>{{ option.count }}</span>
+                  </button>
+                } @empty {
+                  <p>{{ 'satori-components.search-filters.no-results' | translate }}</p>
+                }
+              </div>
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet0
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('authors', filters().authors),
+                    label: ('satori-components.search-filters.chosen-authors' | translate),
+                    removeHandler: chipRemover('authors'),
+                  }"
+                />
+                @if (chipsOutlet0.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-authors' | translate"
+                    [items]="chipItems('authors', filters().authors)"
+                    [removeHandler]="chipRemover('authors')"
+                  />
+                }
+              </div>
+            }
+            @case ('collections') {
+              <label [for]="ids.collections">{{
+                'satori-components.search-filters.collections' | translate
+              }}</label>
+              <input
+                class="nxs-search-filters__input"
+                [id]="ids.collections"
+                [value]="collectionText()"
+                [placeholder]="
+                  'satori-components.search-filters.collections-placeholder' | translate
+                "
+                (input)="collectionText.set($any($event.target).value)"
+              />
+              <div class="filter-panel__choices">
+                @if (collectionsState() === 'loading') {
+                  <p>{{ 'satori-components.search-filters.loading-collections' | translate }}</p>
+                } @else if (collectionsState() === 'failed') {
+                  <p>{{ 'satori-components.search-filters.collections-failed' | translate }}</p>
+                } @else {
+                  @for (option of collectionOptions(); track option.id) {
+                    <button
+                      type="button"
+                      class="filter-option"
+                      (click)="addChoice('collections', option.id)"
+                    >
+                      {{ option.title }} <span>{{ option.itemCount }}</span>
+                    </button>
+                  } @empty {
+                    <p>{{ 'satori-components.search-filters.no-results' | translate }}</p>
+                  }
+                }
+              </div>
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet1
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('collections', filters().collections),
+                    label: ('satori-components.search-filters.chosen-collections' | translate),
+                    removeHandler: chipRemover('collections'),
+                  }"
+                />
+                @if (chipsOutlet1.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-collections' | translate"
+                    [items]="chipItems('collections', filters().collections)"
+                    [removeHandler]="chipRemover('collections')"
+                  />
+                }
+              </div>
+            }
+            @case ('tags') {
+              <label [for]="ids.tags">{{
+                'satori-components.search-filters.tags' | translate
+              }}</label>
+              <input
+                class="nxs-search-filters__input"
+                [id]="ids.tags"
+                [value]="tagText()"
+                [placeholder]="'satori-components.search-filters.tags-placeholder' | translate"
+                (input)="onTagInput($any($event.target).value)"
+              />
+              <div class="filter-panel__choices">
+                @for (tag of tagOptions(); track tag) {
+                  <button type="button" class="filter-option" (click)="addChoice('tags', tag)">
+                    {{ tag }}
+                  </button>
+                } @empty {
+                  <p>
+                    {{
+                      (tagText().trim()
+                        ? 'satori-components.search-filters.no-results'
+                        : 'satori-components.search-filters.tags-hint'
+                      ) | translate
+                    }}
+                  </p>
+                }
+              </div>
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet2
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('tags', filters().tags),
+                    label: ('satori-components.search-filters.chosen-tags' | translate),
+                    removeHandler: chipRemover('tags'),
+                  }"
+                />
+                @if (chipsOutlet2.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-tags' | translate"
+                    [items]="chipItems('tags', filters().tags)"
+                    [removeHandler]="chipRemover('tags')"
+                  />
+                }
+              </div>
+            }
+            @default {
+              @if (activeGroup(); as group) {
+                @if (group.field === 'modified') {
+                  <button class="filter-option" type="button" (click)="clearDate()">
+                    {{ 'search.workspace.any-time' | translate }}
+                  </button>
+                }
+                <ng-container
+                  [ngTemplateOutlet]="panelOptions"
+                  [ngTemplateOutletContext]="{ $implicit: group }"
+                />
+              }
+            }
+          }
+        </div>
+        @if (activeMenu() === 'scope') {
+          <footer class="filter-panel__footer">
+            <button mat-button type="button" (click)="scopeDraft.set(false)">
+              {{ 'search.workspace.reset' | translate }}
+            </button>
+            <button mat-flat-button type="button" (click)="applyScope()">
+              {{ 'search.workspace.apply' | translate }}
+            </button>
+          </footer>
+        }
+      </dialog>
+    </ng-template>
+  }
+  <ng-template #panelOptions let-group>
+    <fieldset class="filter-panel__choices" [attr.aria-label]="group.titleKey | translate">
+      @for (option of group.options; track option.value) {
+        <mat-checkbox
+          [checked]="isChecked(group.field, option.value)"
+          (change)="toggleOption(group.field, option.value)"
         >
-          <mat-icon aria-hidden="true" svgIcon="x_large" />
-        </button>
-      }
-    </div>
-  </div>
-
-  @for (group of groups().before; track group.field) {
-    <ng-container
-      [ngTemplateOutlet]="checkboxGroup"
-      [ngTemplateOutletContext]="{ $implicit: group }"
-    />
-  }
-
-  <div class="nxs-search-filters__field">
-    <label class="nxs-search-filters__title" [for]="ids.authors">{{
-      'satori-components.search-filters.authors' | translate
-    }}</label>
-    <input
-      class="nxs-search-filters__input"
-      type="text"
-      [id]="ids.authors"
-      [placeholder]="'satori-components.search-filters.authors-placeholder' | translate"
-      [value]="authorText()"
-      [matAutocomplete]="authorsPanel"
-      (input)="authorText.set($any($event.target).value)"
-    />
-    <mat-autocomplete
-      #authorsPanel="matAutocomplete"
-      class="nxs-search-filters__panel"
-      [displayWith]="emptyDisplay"
-      (optionSelected)="addChoice('authors', $event.option.value)"
-    >
-      @for (option of authorOptions(); track option.value) {
-        <mat-option [value]="option.value">{{ option.value }} ({{ option.count }})</mat-option>
+          {{
+            optionLabelKey(group, option.value)
+              ? (optionLabelKey(group, option.value) | translate)
+              : optionText(group, option.value)
+          }}
+          @if (option.count !== null) {
+            <span class="nxs-search-filters__count">({{ option.count }})</span>
+          }
+        </mat-checkbox>
       } @empty {
-        <mat-option disabled class="nxs-search-filters__hint">{{
-          'satori-components.search-filters.no-results' | translate
-        }}</mat-option>
+        <p>{{ 'satori-components.search-filters.no-available-results' | translate }}</p>
       }
-    </mat-autocomplete>
-    <ng-container
-      [ngTemplateOutlet]="chips"
-      [ngTemplateOutletContext]="{
-        field: 'authors',
-        values: filters().authors,
-        titleKey: 'satori-components.search-filters.chosen-authors',
-      }"
-    />
-  </div>
-
-  <div class="nxs-search-filters__field">
-    <label class="nxs-search-filters__title" [for]="ids.collections">{{
-      'satori-components.search-filters.collections' | translate
-    }}</label>
-    <input
-      class="nxs-search-filters__input"
-      type="text"
-      [id]="ids.collections"
-      [placeholder]="'satori-components.search-filters.collections-placeholder' | translate"
-      [value]="collectionText()"
-      [matAutocomplete]="collectionsPanel"
-      (focus)="onCollectionsFocus()"
-      (input)="collectionText.set($any($event.target).value)"
-    />
-    <mat-autocomplete
-      #collectionsPanel="matAutocomplete"
-      class="nxs-search-filters__panel"
-      [displayWith]="emptyDisplay"
-      (optionSelected)="addChoice('collections', $event.option.value)"
-    >
-      @if (collectionsState() === 'loading') {
-        <mat-option disabled class="nxs-search-filters__hint">{{
-          'satori-components.search-filters.loading-collections' | translate
-        }}</mat-option>
-      } @else if (collectionsState() === 'failed') {
-        <mat-option disabled class="nxs-search-filters__hint">{{
-          'satori-components.search-filters.collections-failed' | translate
-        }}</mat-option>
-      } @else {
-        @for (option of collectionOptions(); track option.id) {
-          <mat-option [value]="option.id">{{ option.title }} ({{ option.itemCount }})</mat-option>
-        } @empty {
-          <mat-option disabled class="nxs-search-filters__hint">{{
-            'satori-components.search-filters.no-results' | translate
-          }}</mat-option>
-        }
-      }
-    </mat-autocomplete>
-    <ng-container
-      [ngTemplateOutlet]="chips"
-      [ngTemplateOutletContext]="{
-        field: 'collections',
-        values: filters().collections,
-        titleKey: 'satori-components.search-filters.chosen-collections',
-      }"
-    />
-  </div>
-
-  <div class="nxs-search-filters__field">
-    <label class="nxs-search-filters__title" [for]="ids.tags">{{
-      'satori-components.search-filters.tags' | translate
-    }}</label>
-    <input
-      class="nxs-search-filters__input"
-      type="text"
-      [id]="ids.tags"
-      [placeholder]="'satori-components.search-filters.tags-placeholder' | translate"
-      [value]="tagText()"
-      [matAutocomplete]="tagsPanel"
-      (input)="onTagInput($any($event.target).value)"
-    />
-    <mat-autocomplete
-      #tagsPanel="matAutocomplete"
-      class="nxs-search-filters__panel"
-      [displayWith]="emptyDisplay"
-      (optionSelected)="addChoice('tags', $event.option.value)"
-    >
-      @if (!tagText().trim()) {
-        <mat-option disabled class="nxs-search-filters__hint">{{
-          'satori-components.search-filters.tags-hint' | translate
-        }}</mat-option>
-      } @else {
-        @for (label of tagOptions(); track label) {
-          <mat-option [value]="label">{{ label }}</mat-option>
-        } @empty {
-          <mat-option disabled class="nxs-search-filters__hint">{{
-            'satori-components.search-filters.no-results-for'
-              | translate: { term: tagText().trim() }
-          }}</mat-option>
-        }
-      }
-    </mat-autocomplete>
-    <ng-container
-      [ngTemplateOutlet]="chips"
-      [ngTemplateOutletContext]="{
-        field: 'tags',
-        values: filters().tags,
-        titleKey: 'satori-components.search-filters.chosen-tags',
-      }"
-    />
-  </div>
-
-  @for (group of groups().after; track group.field) {
-    <ng-container
-      [ngTemplateOutlet]="checkboxGroup"
-      [ngTemplateOutletContext]="{ $implicit: group }"
-    />
-  }
-</div>
-
-<div class="nxs-search-filters__footer">
-  <button mat-stroked-button type="button" [disabled]="!hasFilters()" (click)="resetFilters()">
-    {{ 'satori-components.search-filters.reset' | translate }}
-  </button>
-  <button
-    mat-flat-button
-    color="primary"
-    type="button"
-    [disabled]="!hasFilters()"
-    (click)="saveAs.emit()"
-  >
-    {{ 'satori-components.search-filters.save-as' | translate }}
-  </button>
-</div>
-
-<ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
-  @if (values.length > 0) {
-    <div class="nxs-search-filters__chips">
-      <lib-extension-outlet
-        #chipsOutlet
-        [componentId]="chipSetId"
-        [componentInputs]="{
-          items: chipItems(field, values),
-          label: titleKey | translate,
-          removeHandler: chipRemover(field),
-        }"
+    </fieldset>
+  </ng-template>
+} @else {
+  <div class="nxs-search-filters__fields">
+    @if (layout() === 'vertical') {
+      <div class="nxs-search-filters__field">
+        <label class="nxs-search-filters__title" [for]="ids.fulltext">{{
+          'satori-components.search-filters.fulltext' | translate
+        }}</label>
+        <div class="nxs-search-filters__input-wrap">
+          <input
+            class="nxs-search-filters__input"
+            type="search"
+            [id]="ids.fulltext"
+            [placeholder]="'satori-components.search-filters.fulltext-placeholder' | translate"
+            [value]="fulltextDraft()"
+            (input)="fulltextDraft.set($any($event.target).value)"
+            (keydown.enter)="applyFulltext()"
+          />
+          @if (fulltextDraft().trim()) {
+            <button
+              mat-icon-button
+              type="button"
+              class="nxs-search-filters__clear"
+              [attr.aria-label]="'satori-components.search-filters.clear-fulltext' | translate"
+              (click)="clearFulltext()"
+            >
+              <mat-icon aria-hidden="true" svgIcon="x_large" />
+            </button>
+          }
+        </div>
+      </div>
+    }
+    @if (layout() === 'horizontal') {
+      <details
+        class="nxs-search-filters__field choice-field properties-field"
+        [open]="propertiesOpen()"
+      >
+        <summary (click)="toggleChoice('properties', $event)">
+          {{ 'search.workspace.properties' | translate }}<mat-icon svgIcon="chevron_down" />
+        </summary>
+        <div class="choice-panel property-panel">
+          @for (group of groups().after; track group.field) {
+            @if (group.field === 'nature' || group.field === 'size') {
+              <ng-container
+                [ngTemplateOutlet]="checkboxGroup"
+                [ngTemplateOutletContext]="{ $implicit: group }"
+              />
+            }
+          }
+        </div>
+      </details>
+    }
+    @for (group of groups().before; track group.field) {
+      <ng-container
+        [ngTemplateOutlet]="checkboxGroup"
+        [ngTemplateOutletContext]="{ $implicit: group }"
       />
-      @if (chipsOutlet.unresolved()) {
-        <nxs-chip-set
-          [label]="titleKey | translate"
-          [items]="chipItems(field, values)"
-          [removeHandler]="chipRemover(field)"
+    }
+
+    <details
+      class="nxs-search-filters__field choice-field"
+      [open]="layout() === 'vertical' || horizontalExpanded() === 'authors'"
+    >
+      <summary [hidden]="layout() === 'vertical'" (click)="toggleChoice('authors', $event)">
+        {{
+          (layout() === 'horizontal'
+            ? 'search.workspace.people'
+            : 'satori-components.search-filters.authors'
+          ) | translate
+        }}
+        <mat-icon svgIcon="chevron_down" />
+      </summary>
+      <div class="choice-panel">
+        <label class="nxs-search-filters__title" [for]="ids.authors">{{
+          'satori-components.search-filters.authors' | translate
+        }}</label>
+        <input
+          class="nxs-search-filters__input"
+          type="text"
+          [id]="ids.authors"
+          [placeholder]="'satori-components.search-filters.authors-placeholder' | translate"
+          [value]="authorText()"
+          [matAutocomplete]="authorsPanel"
+          (input)="authorText.set($any($event.target).value)"
+        />
+        <mat-autocomplete
+          #authorsPanel="matAutocomplete"
+          class="nxs-search-filters__panel"
+          [displayWith]="emptyDisplay"
+          (optionSelected)="addChoice('authors', $event.option.value)"
+        >
+          @for (option of authorOptions(); track option.value) {
+            <mat-option [value]="option.value">{{ option.value }} ({{ option.count }})</mat-option>
+          } @empty {
+            <mat-option disabled class="nxs-search-filters__hint">{{
+              'satori-components.search-filters.no-results' | translate
+            }}</mat-option>
+          }
+        </mat-autocomplete>
+        <ng-container
+          [ngTemplateOutlet]="chips"
+          [ngTemplateOutletContext]="{
+            field: 'authors',
+            values: filters().authors,
+            titleKey: 'satori-components.search-filters.chosen-authors',
+          }"
+        />
+      </div>
+    </details>
+
+    <details
+      class="nxs-search-filters__field choice-field"
+      [open]="layout() === 'vertical' || horizontalExpanded() === 'collections'"
+    >
+      <summary [hidden]="layout() === 'vertical'" (click)="toggleChoice('collections', $event)">
+        {{ 'satori-components.search-filters.collections' | translate }}
+        <mat-icon svgIcon="chevron_down" />
+      </summary>
+      <div class="choice-panel">
+        <label class="nxs-search-filters__title" [for]="ids.collections">{{
+          'satori-components.search-filters.collections' | translate
+        }}</label>
+        <input
+          class="nxs-search-filters__input"
+          type="text"
+          [id]="ids.collections"
+          [placeholder]="'satori-components.search-filters.collections-placeholder' | translate"
+          [value]="collectionText()"
+          [matAutocomplete]="collectionsPanel"
+          (focus)="onCollectionsFocus()"
+          (input)="collectionText.set($any($event.target).value)"
+        />
+        <mat-autocomplete
+          #collectionsPanel="matAutocomplete"
+          class="nxs-search-filters__panel"
+          [displayWith]="emptyDisplay"
+          (optionSelected)="addChoice('collections', $event.option.value)"
+        >
+          @if (collectionsState() === 'loading') {
+            <mat-option disabled class="nxs-search-filters__hint">{{
+              'satori-components.search-filters.loading-collections' | translate
+            }}</mat-option>
+          } @else if (collectionsState() === 'failed') {
+            <mat-option disabled class="nxs-search-filters__hint">{{
+              'satori-components.search-filters.collections-failed' | translate
+            }}</mat-option>
+          } @else {
+            @for (option of collectionOptions(); track option.id) {
+              <mat-option [value]="option.id"
+                >{{ option.title }} ({{ option.itemCount }})</mat-option
+              >
+            } @empty {
+              <mat-option disabled class="nxs-search-filters__hint">{{
+                'satori-components.search-filters.no-results' | translate
+              }}</mat-option>
+            }
+          }
+        </mat-autocomplete>
+        <ng-container
+          [ngTemplateOutlet]="chips"
+          [ngTemplateOutletContext]="{
+            field: 'collections',
+            values: filters().collections,
+            titleKey: 'satori-components.search-filters.chosen-collections',
+          }"
+        />
+      </div>
+    </details>
+
+    <details
+      class="nxs-search-filters__field choice-field"
+      [open]="layout() === 'vertical' || horizontalExpanded() === 'tags'"
+    >
+      <summary [hidden]="layout() === 'vertical'" (click)="toggleChoice('tags', $event)">
+        {{ 'satori-components.search-filters.tags' | translate }}
+        <mat-icon svgIcon="chevron_down" />
+      </summary>
+      <div class="choice-panel">
+        <label class="nxs-search-filters__title" [for]="ids.tags">{{
+          'satori-components.search-filters.tags' | translate
+        }}</label>
+        <input
+          class="nxs-search-filters__input"
+          type="text"
+          [id]="ids.tags"
+          [placeholder]="'satori-components.search-filters.tags-placeholder' | translate"
+          [value]="tagText()"
+          [matAutocomplete]="tagsPanel"
+          (input)="onTagInput($any($event.target).value)"
+        />
+        <mat-autocomplete
+          #tagsPanel="matAutocomplete"
+          class="nxs-search-filters__panel"
+          [displayWith]="emptyDisplay"
+          (optionSelected)="addChoice('tags', $event.option.value)"
+        >
+          @if (!tagText().trim()) {
+            <mat-option disabled class="nxs-search-filters__hint">{{
+              'satori-components.search-filters.tags-hint' | translate
+            }}</mat-option>
+          } @else {
+            @for (label of tagOptions(); track label) {
+              <mat-option [value]="label">{{ label }}</mat-option>
+            } @empty {
+              <mat-option disabled class="nxs-search-filters__hint">{{
+                'satori-components.search-filters.no-results-for'
+                  | translate: { term: tagText().trim() }
+              }}</mat-option>
+            }
+          }
+        </mat-autocomplete>
+        <ng-container
+          [ngTemplateOutlet]="chips"
+          [ngTemplateOutletContext]="{
+            field: 'tags',
+            values: filters().tags,
+            titleKey: 'satori-components.search-filters.chosen-tags',
+          }"
+        />
+      </div>
+    </details>
+
+    @for (group of groups().after; track group.field) {
+      @if (layout() === 'vertical' || (group.field !== 'nature' && group.field !== 'size')) {
+        <ng-container
+          [ngTemplateOutlet]="checkboxGroup"
+          [ngTemplateOutletContext]="{ $implicit: group }"
         />
       }
+    }
+  </div>
+
+  @if (layout() === 'vertical') {
+    <div class="nxs-search-filters__footer">
+      <button mat-stroked-button type="button" [disabled]="!hasFilters()" (click)="resetFilters()">
+        {{ 'satori-components.search-filters.reset' | translate }}
+      </button>
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        [disabled]="!hasFilters()"
+        (click)="saveAs.emit()"
+      >
+        {{ 'satori-components.search-filters.save-as' | translate }}
+      </button>
     </div>
   }
-</ng-template>
 
-<ng-template #checkboxGroup let-group>
-  <div class="nxs-search-filters__field">
-    <!-- `aria-controls` only while the group is open: the options element below is rendered only
-         then, so naming it while collapsed is a reference to an element that is not in the
-         document. -->
-    <button
-      type="button"
-      class="nxs-search-filters__toggle"
-      [id]="ids.group(group.field) + '-toggle'"
-      [attr.aria-expanded]="isExpanded(group.field)"
-      [attr.aria-controls]="isExpanded(group.field) ? ids.group(group.field) : null"
-      (click)="toggleGroup(group.field)"
-    >
-      <span>{{ group.titleKey | translate }}</span>
-      <mat-icon
-        aria-hidden="true"
-        [svgIcon]="isExpanded(group.field) ? 'expand_less' : 'chevron_down'"
-      />
-    </button>
-    @if (isExpanded(group.field)) {
-      <div
-        class="nxs-search-filters__options"
-        role="group"
-        [id]="ids.group(group.field)"
-        [attr.aria-labelledby]="ids.group(group.field) + '-toggle'"
-      >
-        @for (option of group.options; track option.value) {
-          <mat-checkbox
-            class="nxs-search-filters__checkbox"
-            [checked]="isChecked(group.field, option.value)"
-            (change)="toggleOption(group.field, option.value)"
-          >
-            @if (optionLabelKey(group, option.value); as key) {
-              {{ key | translate }}
-            } @else {
-              {{ optionText(group, option.value) }}
-            }
-            @if (option.count !== null) {
-              <span class="nxs-search-filters__count">({{ option.count }})</span>
-            }
-          </mat-checkbox>
-        } @empty {
-          <p class="nxs-search-filters__empty">
-            {{ 'satori-components.search-filters.no-available-results' | translate }}
-          </p>
+  <ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
+    @if (values.length > 0) {
+      <div class="nxs-search-filters__chips">
+        <lib-extension-outlet
+          #chipsOutlet3
+          [componentId]="chipSetId"
+          [componentInputs]="{
+            items: chipItems(field, values),
+            label: (titleKey | translate),
+            removeHandler: chipRemover(field),
+          }"
+        />
+        @if (chipsOutlet3.unresolved()) {
+          <nxs-chip-set
+            [label]="titleKey | translate"
+            [items]="chipItems(field, values)"
+            [removeHandler]="chipRemover(field)"
+          />
         }
       </div>
     }
-  </div>
-</ng-template>
+  </ng-template>
+
+  <ng-template #checkboxGroup let-group>
+    <div class="nxs-search-filters__field">
+      <button
+        type="button"
+        class="nxs-search-filters__toggle"
+        [id]="ids.group(group.field) + '-toggle'"
+        [attr.aria-expanded]="isExpanded(group.field)"
+        [attr.aria-controls]="isExpanded(group.field) ? ids.group(group.field) : null"
+        (click)="toggleGroup(group.field)"
+      >
+        <span
+          >{{ group.titleKey | translate }}
+          @if (layout() === 'horizontal' && selectedCount(group.field)) {
+            ({{ selectedCount(group.field) }})
+          }
+        </span>
+        <mat-icon
+          aria-hidden="true"
+          [svgIcon]="isExpanded(group.field) ? 'expand_less' : 'chevron_down'"
+        />
+      </button>
+      @if (isExpanded(group.field)) {
+        <div
+          class="nxs-search-filters__options"
+          role="group"
+          [id]="ids.group(group.field)"
+          [attr.aria-labelledby]="ids.group(group.field) + '-toggle'"
+        >
+          @for (option of group.options; track option.value) {
+            <mat-checkbox
+              class="nxs-search-filters__checkbox"
+              [checked]="isChecked(group.field, option.value)"
+              (change)="toggleOption(group.field, option.value)"
+            >
+              @if (optionLabelKey(group, option.value); as key) {
+                {{ key | translate }}
+              } @else {
+                {{ optionText(group, option.value) }}
+              }
+              @if (option.count !== null) {
+                <span class="nxs-search-filters__count">({{ option.count }})</span>
+              }
+            </mat-checkbox>
+          } @empty {
+            <p class="nxs-search-filters__empty">
+              {{ 'satori-components.search-filters.no-available-results' | translate }}
+            </p>
+          }
+        </div>
+      }
+    </div>
+  </ng-template>
+}

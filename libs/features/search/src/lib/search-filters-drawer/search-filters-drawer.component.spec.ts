@@ -186,6 +186,34 @@ describe('SearchFiltersDrawerComponent', () => {
     expect(path()).toBe('/search');
   });
 
+  describe.each([false, true])('redirecting with Files scope %s', (filesOnly) => {
+    it.each(['filters', 'reset', 'clear', 'saved'] as const)(
+      'serializes current scope and drops stale queue parameters after %s',
+      async (action) => {
+        await router.navigateByUrl(
+          '/doc/abc?quickFilters=noFolder,onlyValidated&searchQueue=true&page=3&sortBy=dc:title',
+        );
+        session.setFilters({ ...NXS_EMPTY_SEARCH_FILTERS, filesOnly });
+        if (action === 'filters') component.onFiltersChange(session.filters());
+        else if (action === 'reset') component.onReset();
+        else if (action === 'clear') component.onSavedSearchCleared();
+        else {
+          searchService.getSavedSearchById.mockReturnValueOnce(
+            of({
+              ...EMPTY_SAVED_PARAMS,
+              contentViewData: JSON.stringify({ nxsFilesOnly: filesOnly }),
+            }),
+          );
+          component.onSavedSearchChosen({ id: 'scope', title: 'Scope' });
+        }
+        await fixture.whenStable();
+        expect(router.url).toBe(
+          filesOnly && action !== 'clear' ? '/search?quickFilters=noFolder' : '/search',
+        );
+      },
+    );
+  });
+
   it('says so when a chosen saved search cannot be opened', () => {
     searchService.getSavedSearchById.mockReturnValue(of({}));
     component.onSavedSearchChosen({ id: 'ss-1', title: 'Mine' });

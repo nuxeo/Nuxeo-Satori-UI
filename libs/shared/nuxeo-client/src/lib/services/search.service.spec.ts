@@ -60,6 +60,26 @@ describe('SearchService', () => {
 
   afterEach(() => http.verify());
 
+  it('shows the launcher label for document suggestions instead of their IDs', async () => {
+    const result = firstValueFrom(service.suggestFromSuggestersLauncher('NEV'));
+    const req = http.expectOne('/nuxeo/api/v1/automation/Search.SuggestersLauncher');
+    expect(req.request.body.params).toEqual({ searchTerm: 'NEV' });
+    req.flush([
+      {
+        id: 'doc-1',
+        type: 'DOCUMENT',
+        label: 'NEV contract',
+        url: 'nxdoc/default/doc-1/view_documents',
+      },
+    ]);
+    expect((await result)[0]).toMatchObject({
+      id: 'doc-1',
+      documentUid: 'doc-1',
+      kind: 'document',
+      displayLabel: 'NEV contract',
+    });
+  });
+
   /** Runs one search and returns the request it sent, answered with `executeResponse`. */
   async function send(params: SearchQueryParams): Promise<TestRequest> {
     const result = firstValueFrom(service.search(params));
@@ -269,6 +289,28 @@ describe('SearchService', () => {
   });
 
   describe('saved searches', () => {
+    it('round-trips optional view state separately from search parameters', async () => {
+      const contentViewData = JSON.stringify({ nxsFilesOnly: true });
+      const saved = firstValueFrom(
+        service.saveSavedSearch({ title: 'Files', params: {}, contentViewData }),
+      );
+      const post = http.expectOne('/nuxeo/api/v1/search/saved');
+      expect(post.request.body.contentViewData).toBe(contentViewData);
+      expect(post.request.body.params.nxsFilesOnly).toBeUndefined();
+      post.flush({ id: 'scope' });
+      await saved;
+      const read = firstValueFrom(service.getSavedSearchById('scope'));
+      http.expectOne('/nuxeo/api/v1/search/saved/scope').flush({ params: {}, contentViewData });
+      expect(await read).toEqual({ contentViewData });
+      const updated = firstValueFrom(
+        service.updateSavedSearch('scope', { title: 'Files', params: {}, contentViewData: '{}' }),
+      );
+      const put = http.expectOne('/nuxeo/api/v1/search/saved/scope');
+      expect(put.request.body.contentViewData).toBe('{}');
+      put.flush({ id: 'scope' });
+      await updated;
+    });
+
     it('reads a list parameter back as JSON, so a value containing a comma stays one value', async () => {
       const result = firstValueFrom(service.getSavedSearchById('ss/1'));
       const req = http.expectOne('/nuxeo/api/v1/search/saved/ss%2F1');

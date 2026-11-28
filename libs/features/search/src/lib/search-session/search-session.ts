@@ -10,6 +10,7 @@ import {
   startWith,
   switchMap,
   tap,
+  throwError,
 } from 'rxjs';
 
 import {
@@ -91,8 +92,11 @@ export class SearchSession {
   readonly hasFilters = computed(() => nxsHasSearchFilters(this.filters()));
 
   private readonly pageQuery = signal<SearchPageQuery>(EMPTY_PAGE_QUERY, { equal: samePageQuery });
+  private urlFilesOnly: boolean | undefined;
   private readonly attempt = signal(0);
   private readonly pageIndexSignal = signal(0);
+  private readonly pageSizeSignal = signal(SEARCH_PAGE_SIZE);
+  readonly pageSize = this.pageSizeSignal.asReadonly();
   /** The page on screen, from zero. */
   readonly pageIndex = this.pageIndexSignal.asReadonly();
 
@@ -100,7 +104,7 @@ export class SearchSession {
   readonly request = computed<SearchQueryParams>(() => ({
     ...nxsSearchFiltersToQuery(this.filters(), this.pageQuery()),
     pageIndex: this.pageIndexSignal(),
-    pageSize: SEARCH_PAGE_SIZE,
+    pageSize: this.pageSizeSignal(),
   }));
 
   readonly results$: Observable<SearchResultsState> = combineLatest([
@@ -164,14 +168,26 @@ export class SearchSession {
     this.shared.drawerFilters.set(nxsSearchFiltersToRecord(filters));
   }
 
-  /** The search page's URL changed: its quick filters and sort are part of the query. */
+  /** A search or queue URL changed: its quick filters and sort are part of the query. */
   setPageQuery(query: SearchPageQuery): void {
+    const filesOnly = query.quickFilters.split(',').some((value) => value.trim() === 'noFolder');
+    // The session outlives the search page while the document queue is open.
+    if ((filesOnly || this.urlFilesOnly === true) && filesOnly !== !!this.filters().filesOnly) {
+      this.setFilters({ ...this.filters(), filesOnly });
+    }
+    this.urlFilesOnly = filesOnly;
     this.pageQuery.set(query);
   }
 
   /** The page the URL or the pager asks for, from zero. */
   setPageIndex(pageIndex: number): void {
     this.pageIndexSignal.set(Math.max(0, Math.floor(pageIndex)));
+  }
+
+  setPageSize(pageSize: number): void {
+    if (![25, 40, 50, 100].includes(pageSize)) return;
+    this.pageSizeSignal.set(pageSize);
+    this.setPageIndex(0);
   }
 
   /** Runs the current query again. */
@@ -181,8 +197,10 @@ export class SearchSession {
 
   /** Clears the filters and closes the open saved search. */
   reset(): void {
+    this.urlFilesOnly = undefined;
     this.closeSavedSearch();
     this.setFilters(NXS_EMPTY_SEARCH_FILTERS);
+    this.shared.keywordSyncVersion.update((version) => version + 1);
   }
 
   /** Forgets the open saved search, keeping the filters. */
@@ -213,13 +231,23 @@ export class SearchSession {
       map((params) => {
         // A late answer for a search the user has already left is dropped.
         if (this.savedSearchId() !== id) return;
-        const filters = nxsSearchFiltersFromParams(params);
+        let filesOnly = false;
+        try {
+          filesOnly = JSON.parse(params['contentViewData'] || '{}').nxsFilesOnly === true;
+        } catch {
+          /* Older searches may carry opaque view data. */
+        }
+        const filters = nxsSearchFiltersFromParams({
+          ...params,
+          ...(filesOnly ? { filesOnly: 'true' } : {}),
+        });
         this.loadedParams = params;
         this.savedFilters.set(filters);
         // Opening a search starts it from the first page, even when its filters match the ones on
         // screen, which `setFilters` alone would not reset.
         this.setPageIndex(0);
         this.setFilters(filters);
+        this.shared.keywordSyncVersion.update((version) => version + 1);
       }),
       catchError((error: unknown) => {
         if (this.savedSearchId() === id) this.closeSavedSearch();
@@ -231,11 +259,16 @@ export class SearchSession {
   /** Saves the filters as a new saved search, and opens it. */
   saveAs(title: string): Observable<void> {
     const filters = this.filters();
+    const params = nxsSearchFiltersToSavedParams(filters);
+    const viewState: Record<string, string> = filters.filesOnly
+      ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) }
+      : {};
     return this.searchService
       .saveSavedSearch({
         title,
-        params: nxsSearchFiltersToSavedParams(filters),
+        params,
         pageProviderName: SEARCH_PAGE_PROVIDER,
+        ...viewState,
       })
       .pipe(
         map((saved) => {
@@ -246,6 +279,7 @@ export class SearchSession {
             typeof record['title'] === 'string' && record['title'] ? record['title'] : title,
           );
           this.savedFilters.set(id ? filters : null);
+          this.loadedParams = id ? { ...params, ...viewState } : {};
           this.shared.markSavedSearchDirty();
         }),
       );
@@ -260,17 +294,39 @@ export class SearchSession {
       ...nxsSavedParamsToClear(this.loadedParams),
       ...nxsSearchFiltersToSavedParams(filters),
     };
+    let viewData: Record<string, unknown> | null = null;
+    try {
+      const stored: unknown = JSON.parse(this.loadedParams['contentViewData'] || '{}');
+      if (stored && typeof stored === 'object' && !Array.isArray(stored))
+        viewData = stored as Record<string, unknown>;
+    } catch {
+      /* Opaque legacy view data must not be overwritten with our scope flag. */
+    }
+    const writesScope =
+      filters.filesOnly ||
+      this.savedFilters()?.filesOnly ||
+      (viewData !== null && 'nxsFilesOnly' in viewData);
+    if (writesScope && viewData === null)
+      return throwError(() => new Error('Unsupported saved-search view data'));
+    const contentViewData = writesScope
+      ? JSON.stringify({ ...viewData, nxsFilesOnly: !!filters.filesOnly })
+      : undefined;
     return this.searchService
       .updateSavedSearch(id, {
         title: this.savedSearchTitle(),
         params,
         pageProviderName: SEARCH_PAGE_PROVIDER,
+        ...(contentViewData !== undefined ? { contentViewData } : {}),
       })
       .pipe(
         map(() => {
           if (this.savedSearchId() !== id) return;
           this.savedFilters.set(filters);
-          this.loadedParams = params;
+          this.loadedParams = {
+            ...this.loadedParams,
+            ...params,
+            ...(contentViewData !== undefined ? { contentViewData } : {}),
+          };
         }),
       );
   }

@@ -32,6 +32,7 @@ const SEARCHES: SavedSearchOption[] = [
     [selectedTitle]="selectedTitle()"
     [pageProvider]="pageProvider()"
     [refresh]="refresh()"
+    [defaultLabel]="defaultLabel()"
     (selectedChange)="chosen.push($event)"
     (cleared)="clearedCount = clearedCount + 1"
   />`,
@@ -41,6 +42,7 @@ class HostComponent {
   readonly selectedTitle = signal('');
   readonly pageProvider = signal('default_search');
   readonly refresh = signal(0);
+  readonly defaultLabel = signal('');
   readonly chosen: NxsSavedSearchChoice[] = [];
   clearedCount = 0;
 }
@@ -203,6 +205,38 @@ describe('NxsSavedSearchSelectComponent', () => {
     await render();
     expect(host.chosen).toEqual([{ id: 'ss-2', title: 'Board papers' }]);
     expect(box().value).toBe('Board papers');
+  });
+
+  it('offers Default and emits an empty selection when it is chosen', async () => {
+    host.defaultLabel.set('Default');
+    host.selectedId.set('ss-1');
+    host.selectedTitle.set('Contracts this month');
+    await render();
+    await open();
+    const defaultOption = [...document.querySelectorAll<HTMLElement>('mat-option')].find(
+      (option) => option.textContent?.trim() === 'Default',
+    );
+    expect(defaultOption).toBeDefined();
+    defaultOption!.click();
+    host.selectedId.set('');
+    host.selectedTitle.set('');
+    await render();
+    expect(host.chosen).toEqual([{ id: '', title: '' }]);
+    expect(box().value).toBe('Default');
+  });
+
+  it('displays known saved titles and falls back to the current title or Default', async () => {
+    await open();
+    const component = fixture.debugElement.query(By.directive(NxsSavedSearchSelectComponent))
+      .componentInstance as unknown as { display(id: string | null): string };
+    expect(component.display('ss-2')).toBe('Board papers');
+    host.selectedTitle.set('Current search');
+    await render();
+    expect(component.display('missing')).toBe('Current search');
+    host.selectedTitle.set('');
+    host.defaultLabel.set('Default');
+    await render();
+    expect(component.display(null)).toBe('Default');
   });
 
   it('shows the open search’s title, lists everything while it is in the box, and marks it', async () => {

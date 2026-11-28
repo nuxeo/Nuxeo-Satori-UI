@@ -147,8 +147,9 @@ describe('branding.favicon', () => {
     ).toBeUndefined();
     // A key that is absent from the base is still *settable*, and still refused when unusable:
     // optional must not mean unvalidated.
-    expect(mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon)
-      .toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
     expect(
       mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api/v1/me' } } }).branding
         .favicon,

@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { DocumentDetailService } from './document-detail.service';
 import type { NuxeoDocument } from '../models/document.model';
@@ -9,6 +9,9 @@ type SelectionPreview = string | null;
 @Injectable({ providedIn: 'root' })
 export class SelectionService {
   private readonly documentDetailService = inject(DocumentDetailService);
+  private readonly selectionCleared = new Subject<void>();
+  /** Cancels pending selection work synchronously from every shared Clear entry point. */
+  readonly cleared$ = this.selectionCleared.asObservable();
 
   readonly selectedIds = signal<Set<string>>(new Set());
   readonly selectedLabels = signal<Map<string, string>>(new Map());
@@ -136,6 +139,7 @@ export class SelectionService {
   }
 
   clear(): void {
+    this.selectionCleared.next();
     this.selectedIds.set(new Set());
     this.selectedLabels.set(new Map());
     this.selectedPreviews.set(new Map());

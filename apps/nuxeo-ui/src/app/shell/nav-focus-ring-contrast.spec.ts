@@ -58,7 +58,7 @@ const NAV_ITEMS_UNDER_TEST = [
   { navId: 'app.navbar.dashboard', ticket: 'NXENG-893' },
   { navId: 'app.navbar.trash', ticket: 'NXENG-932' },
   { navId: 'app.navbar.browse', ticket: 'NXENG-794' },
-  { navId: 'app.navbar.search', ticket: 'NXENG-785' },
+  { navId: 'app.navbar.configurableView', ticket: 'NXENG-785' },
   { navId: 'app.navbar.administration', ticket: 'NXENG-795' },
   { navId: 'app.navbar.clipboard', ticket: 'NXENG-873' },
   { navId: 'app.navbar.assets', ticket: 'NXENG-797' },
@@ -282,7 +282,7 @@ describe('sidebar nav focus ring contrast (NXENG-761)', () => {
       .withContext('PACKAGED_NAV_ITEMS must expose the Expired Queue descriptor')
       .toBeDefined();
     expect(packaged!.path).toBe('/expired-queue');
-    expect(packaged!.label).toBe('Expired Queue');
+    expect(packaged!.label).toBe('Expired Queues');
   });
 
   it('keeps the packaged Tasks descriptor IBM Issue 4267408435 names (NXENG-931)', () => {

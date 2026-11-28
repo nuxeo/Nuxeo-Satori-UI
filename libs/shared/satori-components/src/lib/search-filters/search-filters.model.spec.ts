@@ -48,6 +48,16 @@ const EVERYTHING = filters({
 });
 
 describe('search filters — the record a host keeps', () => {
+  it('round-trips Files-only and merges its existing noFolder filter without duplicates', () => {
+    const files = filters({ filesOnly: true });
+    expect(nxsSearchFiltersToRecord(files)).toEqual({ filesOnly: 'true' });
+    expect(nxsSearchFiltersFromParams({ filesOnly: 'true' })).toEqual(files);
+    expect(nxsSearchFiltersFromParams({ filesOnly: 'false' })).toEqual(NXS_EMPTY_SEARCH_FILTERS);
+    expect(nxsSearchFiltersToQuery(files).quickFilters).toBe('noFolder');
+    expect(
+      nxsSearchFiltersToQuery(files, { quickFilters: 'validated,noFolder' }).quickFilters,
+    ).toBe('validated,noFolder');
+  });
   it('leaves out every empty field', () => {
     expect(nxsSearchFiltersToRecord(NXS_EMPTY_SEARCH_FILTERS)).toEqual({});
     expect(

@@ -2146,12 +2146,17 @@ interface NxsOpenPublishDialogOptions {
     }
 }
 class NxsPagerComponent {
+    readonly pageSizeOptions: import("@angular/core").InputSignal<readonly number[]>;
+    readonly pageSizeChange: import("@angular/core").OutputEmitterRef<number>;
+    readonly showEdges: import("@angular/core").InputSignal<boolean>;
+    protected readonly lastPage: import("@angular/core").Signal<number>;
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly itemCount: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly preserveFocus: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly pageChange: import("@angular/core").OutputEmitterRef<number>;
     protected readonly visible: import("@angular/core").Signal<boolean>;
@@ -2165,6 +2170,16 @@ class NxsPagerComponent {
     next(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsPagerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsPagerComponent, "nxs-pager", never, {
+    "pageSizeOptions": {
+    "alias": "pageSizeOptions";
+    "required": false;
+    "isSignal": true;
+    };
+    "showEdges": {
+    "alias": "showEdges";
+    "required": false;
+    "isSignal": true;
+    };
     "pageIndex": {
     "alias": "pageIndex";
     "required": false;
@@ -2195,12 +2210,18 @@ class NxsPagerComponent {
     "required": false;
     "isSignal": true;
     };
+    "preserveFocus": {
+    "alias": "preserveFocus";
+    "required": false;
+    "isSignal": true;
+    };
     "label": {
     "alias": "label";
     "required": false;
     "isSignal": true;
     };
     }, {
+    "pageSizeChange": "pageSizeChange";
     "pageChange": "pageChange";
     }, never, never, true, never>;
     }
@@ -2529,6 +2550,8 @@ interface NxsSavedSearchChoice {
     }
 }
 class NxsSavedSearchSelectComponent {
+    readonly labelKey: import("@angular/core").InputSignal<string>;
+    readonly defaultLabel: import("@angular/core").InputSignal<string>;
     readonly selectedId: import("@angular/core").InputSignal<string>;
     readonly selectedTitle: import("@angular/core").InputSignal<string>;
     readonly pageProvider: import("@angular/core").InputSignal<string>;
@@ -2549,6 +2572,16 @@ class NxsSavedSearchSelectComponent {
     protected readonly display: (id: string | null) => string;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsSavedSearchSelectComponent, "nxs-saved-search-select", never, {
+    "labelKey": {
+    "alias": "labelKey";
+    "required": false;
+    "isSignal": true;
+    };
+    "defaultLabel": {
+    "alias": "defaultLabel";
+    "required": false;
+    "isSignal": true;
+    };
     "selectedId": {
     "alias": "selectedId";
     "required": false;
@@ -2576,6 +2609,7 @@ class NxsSavedSearchSelectComponent {
     }
 }
 interface NxsSearchFilters {
+    readonly filesOnly?: boolean;
     readonly fulltext: string;
     readonly modified: readonly string[];
     readonly authors: readonly string[];
@@ -2589,6 +2623,22 @@ interface NxsSearchFilters {
     }
 }
 class NxsSearchFiltersComponent {
+    protected readonly horizontalMenus: readonly FilterMenu[];
+    protected readonly activeMenu: WritableSignal<FilterMenu | null>;
+    protected readonly panelOrigin: WritableSignal<CdkOverlayOrigin | null>;
+    protected readonly scopeDraft: WritableSignal<boolean>;
+    protected readonly panelPositions: ConnectedPosition[];
+    protected readonly propertyGroups: import("@angular/core").Signal<CheckboxGroup[]>;
+    protected readonly activeGroup: import("@angular/core").Signal<CheckboxGroup | undefined>;
+    protected menuLabel(menu: FilterMenu): string;
+    protected panelTitle(): string;
+    protected openPanel(menu: FilterMenu, origin: CdkOverlayOrigin): void;
+    protected closePanel(restoreFocus?: boolean): void;
+    protected outsidePanel(event: MouseEvent): void;
+    protected panelKeydown(event: KeyboardEvent): void;
+    protected applyScope(): void;
+    protected clearDate(): void;
+    readonly layout: import("@angular/core").InputSignal<"horizontal" | "vertical">;
     protected readonly chipSetId: "nxs.primitives.chipSet";
     readonly filters: import("@angular/core").ModelSignal<NxsSearchFilters>;
     readonly aggregations: import("@angular/core").InputSignal<SearchAggregations>;
@@ -2603,22 +2653,28 @@ class NxsSearchFiltersComponent {
     group: (field: string) => string;
     };
     protected readonly hasFilters: import("@angular/core").Signal<boolean>;
-    protected readonly fulltextDraft: import("@angular/core").WritableSignal<string>;
-    protected readonly authorText: import("@angular/core").WritableSignal<string>;
-    protected readonly collectionText: import("@angular/core").WritableSignal<string>;
-    protected readonly tagText: import("@angular/core").WritableSignal<string>;
+    protected readonly fulltextDraft: WritableSignal<string>;
+    protected readonly authorText: WritableSignal<string>;
+    protected readonly collectionText: WritableSignal<string>;
+    protected readonly tagText: WritableSignal<string>;
+    protected readonly horizontalExpanded: WritableSignal<CheckboxField | ChoiceField | 'properties' | null>;
+    protected readonly propertiesOpen: import("@angular/core").Signal<boolean>;
+    protected toggleChoice(field: ChoiceField | 'properties', event: Event): void;
+    protected closeOutside(event: Event): void;
+    protected closeMenus(): void;
     protected readonly groups: import("@angular/core").Signal<{
     before: CheckboxGroup[];
     after: CheckboxGroup[];
     }>;
     protected readonly authorOptions: import("@angular/core").Signal<NxsFacetOption[]>;
-    protected readonly collections: import("@angular/core").WritableSignal<readonly SearchCollectionOption[]>;
-    protected readonly collectionsState: import("@angular/core").WritableSignal<"failed" | "idle" | "loaded" | "loading">;
+    protected readonly collections: WritableSignal<readonly SearchCollectionOption[]>;
+    protected readonly collectionsState: WritableSignal<"failed" | "idle" | "loaded" | "loading">;
     protected readonly collectionOptions: import("@angular/core").Signal<SearchCollectionOption[]>;
     protected readonly emptyDisplay: () => string;
     protected readonly tagOptions: import("@angular/core").Signal<string[]>;
     constructor();
     protected isExpanded(field: CheckboxField): boolean;
+    protected selectedCount(field: CheckboxField): number;
     protected toggleGroup(field: CheckboxField): void;
     protected isChecked(field: CheckboxField, value: string): boolean;
     protected toggleOption(field: CheckboxField, value: string): void;
@@ -2636,6 +2692,11 @@ class NxsSearchFiltersComponent {
     protected collectionTitle(id: string): string;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, {
+    "layout": {
+    "alias": "layout";
+    "required": false;
+    "isSignal": true;
+    };
     "filters": {
     "alias": "filters";
     "required": false;
@@ -3576,10 +3637,11 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo/satori-platform/extensions
 
-65 exported symbol(s).
+67 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
+const APP_SEARCH_QUEUE_ITEM: InjectionToken<Signal<NavItemDescriptor | null>>;
 class AppExtensionsService {
     readonly config: import("@angular/core").Signal<ExtensionConfig>;
     readonly missingLayers: import("@angular/core").Signal<readonly string[]>;
@@ -3841,6 +3903,7 @@ const PACKAGED_DOCUMENT_TABS: readonly ExtensionTabDescriptor[];
 const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[];
 const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[];
 const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[];
+const PACKAGED_SEARCH_QUEUE_ITEM: NavItemDescriptor;
 interface PartitionedExtensionRoutes {
     readonly accepted: readonly ExtensionRouteDescriptor[];
     readonly rejected: readonly RejectedExtensionRoute[];
@@ -4962,6 +5025,10 @@ interface SavedSearchOption {
     }
 }
 class SearchAggregationService {
+    readonly keywordRequest: import("@angular/core").WritableSignal<{
+    term: string;
+    } | null>;
+    readonly keywordSyncVersion: import("@angular/core").WritableSignal<number>;
     readonly aggregations: import("@angular/core").WritableSignal<SearchAggregations>;
     readonly items: import("@angular/core").WritableSignal<SearchResultItem[]>;
     readonly drawerFilters: import("@angular/core").WritableSignal<Record<string, string>>;
@@ -5060,6 +5127,7 @@ class SearchService {
     }
 }
 class SelectionService {
+    readonly cleared$: Observable<void>;
     readonly selectedIds: import("@angular/core").WritableSignal<Set<string>>;
     readonly selectedLabels: import("@angular/core").WritableSignal<Map<string, string>>;
     readonly selectedPreviews: import("@angular/core").WritableSignal<Map<string, SelectionPreview>>;

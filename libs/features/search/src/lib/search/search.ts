@@ -9,6 +9,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import {
+  APP_SEARCH_QUEUE_ITEM,
   DescriptorLabelPipe,
   ExtensionOutletComponent,
   descriptorLabel,
@@ -25,6 +26,12 @@ import {
   Subject,
   debounceTime,
   distinctUntilChanged,
+  EMPTY,
+  expand,
+  reduce,
+  takeUntil,
+  finalize,
+  merge,
 } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -43,6 +50,9 @@ import {
 } from '@nuxeo/satori-platform/ui';
 import {
   SelectionService,
+  SearchService,
+  SearchAggregationService,
+  type SavedSearchOption,
   DocumentDetailService,
   FOLDERISH_TYPES,
   NuxeoApiBase,
@@ -65,6 +75,7 @@ import {
   NxsFavoriteToggleComponent,
   NxsPagerComponent,
   NxsSavedSearchActionsComponent,
+  NxsSavedSearchSelectComponent,
   NxsSpinnerComponent,
   NxsTagComponent,
   NxsThumbnailComponent,
@@ -80,6 +91,8 @@ import {
 } from '@nuxeo/satori-platform/components';
 
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import { quickFilterQuery } from '../search-session/quick-filter-query';
+import { SearchFiltersDrawerComponent } from '../search-filters-drawer/search-filters-drawer.component';
 import {
   SEARCH_PAGE_SIZE,
   SearchSession,
@@ -197,6 +210,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   selector: 'lib-search',
   standalone: true,
   imports: [
+    SearchFiltersDrawerComponent,
     NxsBannerComponent,
     ExtensionOutletComponent,
     NxsCardComponent,
@@ -205,6 +219,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsFavoriteToggleComponent,
     NxsPagerComponent,
     NxsSavedSearchActionsComponent,
+    NxsSavedSearchSelectComponent,
     NxsSpinnerComponent,
     NxsTagComponent,
     NgTemplateOutlet,
@@ -228,6 +243,35 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   styleUrl: './search.scss',
 })
 export class SearchComponent {
+  readonly advancedFiltersOpen = signal(true);
+  protected readonly queueItem = inject(APP_SEARCH_QUEUE_ITEM);
+  protected readonly searchState = inject(SearchAggregationService);
+  private readonly headerSearch = effect(() => {
+    const request = this.searchState.keywordRequest();
+    if (request)
+      untracked(() => {
+        if (this.aiSearchMode()) this.toggleAiSearch();
+        this.keywordDraft.set(request.term);
+        this.applyKeywords();
+        this.session.setPageIndex(0);
+        this.searchState.keywordRequest.set(null);
+      });
+  });
+
+  openQueue(): void {
+    if (!this.queueItem() || this.busy()) return;
+    const first = this.results()[0];
+    let commands: string[] = [];
+    if (first?.type === 'Collection') commands = ['/collections', first.id];
+    else if (first && FOLDERISH_TYPES.has(first.type) && first.path)
+      commands = ['/browse' + first.path];
+    else if (first) commands = ['/doc', first.id];
+    void this.router.navigate(commands, {
+      relativeTo: this.route,
+      queryParams: { searchQueue: 'true' },
+      queryParamsHandling: 'merge',
+    });
+  }
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -254,6 +298,96 @@ export class SearchComponent {
    * `aiSearchExecuted` or overwrite the restored standard-search thumbnails after the UI has left.
    */
   private aiRequestGeneration = 0;
+
+  private readonly searchService = inject(SearchService);
+  readonly filterSets = signal<SavedSearchOption[]>([]);
+
+  loadFilterSets(): void {
+    this.searchService
+      .getSavedSearches()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (searches) => this.filterSets.set(searches),
+        error: () => this.savedSearchFailed('search.message.failed-to-open-saved-search'),
+      });
+  }
+
+  selectFilterSet(id: string, selectedTitle?: string): void {
+    if (!id) {
+      this.resetSearch();
+      return;
+    }
+    const title =
+      selectedTitle ?? this.filterSets().find((search) => search.id === id)?.title ?? '';
+    this.session
+      .openSavedSearch(id, title)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        error: () => this.savedSearchFailed('search.message.failed-to-open-saved-search'),
+      });
+  }
+
+  readonly keywordDraft = signal('');
+  private readonly appliedKeyword = computed(() => this.session.filters().fulltext);
+  private readonly syncKeywords = effect(() => this.keywordDraft.set(this.appliedKeyword()));
+
+  applyKeywords(): void {
+    this.session.setFilters({ ...this.session.filters(), fulltext: this.keywordDraft().trim() });
+  }
+
+  clearKeywords(): void {
+    this.keywordDraft.set('');
+    this.applyKeywords();
+  }
+
+  highlightedTitle(title: string): { text: string; matched: boolean }[] {
+    const term = this.session.filters().fulltext.trim();
+    if (!term) return [{ text: title, matched: false }];
+    const foldedTitle = title.toLowerCase();
+    const foldedTerm = term.toLowerCase();
+    let index = foldedTitle.indexOf(foldedTerm);
+    if (index === -1) return [{ text: title, matched: false }];
+
+    // Lowercasing can expand a code point (İ → i + combining dot). Match in the folded
+    // string, but map every matched UTF-16 position back to its original code point.
+    const ranges: { start: number; end: number }[] = [];
+    let originalOffset = 0;
+    for (const character of title) {
+      const range = { start: originalOffset, end: originalOffset + character.length };
+      ranges.push(...Array.from({ length: character.toLowerCase().length }, () => range));
+      originalOffset = range.end;
+    }
+    const parts: { text: string; matched: boolean }[] = [];
+    let offset = 0;
+    while (index !== -1) {
+      const start = ranges[index].start;
+      const end = ranges[index + foldedTerm.length - 1].end;
+      if (start > offset) parts.push({ text: title.slice(offset, start), matched: false });
+      if (end > offset) {
+        parts.push({ text: title.slice(Math.max(start, offset), end), matched: true });
+        offset = end;
+      }
+      index = foldedTitle.indexOf(foldedTerm, index + foldedTerm.length);
+    }
+    if (offset < title.length) parts.push({ text: title.slice(offset), matched: false });
+    return parts;
+  }
+
+  clearAsk(): void {
+    this.supersedeAiRequest();
+    this.resetAiSearchState();
+    this.aiSuggestSubject.next('');
+  }
+
+  resetSearch(): void {
+    this.selectedQuickFilters.set(new Set());
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { quickFilters: null, page: null },
+      queryParamsHandling: 'merge',
+    });
+    this.session.reset();
+  }
 
   // AI Search state
   readonly aiSearchMode = signal(false);
@@ -333,6 +467,12 @@ export class SearchComponent {
   /** Whether the filters differ from the open saved search's: Save is offered only then. */
   readonly savedSearchDirty = this.session.dirty;
   readonly hasFilters = this.session.hasFilters;
+  readonly canReset = computed(
+    () =>
+      this.hasFilters() ||
+      this.selectedQuickFilters().size > 0 ||
+      !!this.session.request().quickFilters?.trim(),
+  );
 
   /** Which error state `error` shows: the status of the search request that failed. */
   readonly errorStatus = computed<NxsErrorStatus>(() => nxsErrorStatus(this.resultsState().error));
@@ -356,6 +496,7 @@ export class SearchComponent {
    */
   private applyPageQuery(params: { get(name: string): string | null }): void {
     const quickFilters = params.get('quickFilters') ?? '';
+    this.urlQuickFilters = quickFilters;
     this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
 
     const sortBy = params.get('sortBy');
@@ -375,6 +516,9 @@ export class SearchComponent {
     this.session.setPageQuery({ quickFilters: quickFilters.trim(), sortBy, sortOrder });
 
     // The URL counts pages from one; the session from zero. No `page` means the first.
+    const pageSize = Number(params.get('pageSize'));
+    this.urlPageSize = [25, 40, 50, 100].includes(pageSize) ? pageSize : SEARCH_PAGE_SIZE;
+    if (this.session.pageSize() !== this.urlPageSize) this.session.setPageSize(this.urlPageSize);
     const page = Number.parseInt(params.get('page') ?? '', 10);
     this.urlPageIndex = Number.isFinite(page) && page > 1 ? page - 1 : 0;
     this.session.setPageIndex(this.urlPageIndex);
@@ -397,7 +541,7 @@ export class SearchComponent {
   );
 
   readonly gridTemplate = computed(() =>
-    ['40px', ...this.visibleColumns().map((c) => c.width), '40px'].join(' '),
+    ['80px', ...this.visibleColumns().map((c) => c.width), '40px'].join(' '),
   );
 
   readonly filteredResults = computed(() => {
@@ -452,7 +596,12 @@ export class SearchComponent {
     const total = this.resultsState().totalSize;
     return total >= 0 ? total : this.resultCount();
   });
-  readonly pageSize = SEARCH_PAGE_SIZE;
+  get pageSize(): number {
+    return this.session.pageSize();
+  }
+  changePageSize(value: number): void {
+    this.session.setPageSize(value);
+  }
   /**
    * The paging of the last answer, which the pager reads. It stays on screen while the next page
    * loads: a control removed while focused loses the keyboard user's place.
@@ -460,6 +609,8 @@ export class SearchComponent {
   readonly pager = signal({ pageIndex: 0, itemCount: 0, totalSize: -1, hasNextPage: false });
   /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
   private urlPageIndex = 0;
+  private urlPageSize = SEARCH_PAGE_SIZE;
+  private urlQuickFilters = '';
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
   readonly SORTABLE_COLUMNS = new Set(['name', 'modified', 'contributor', 'author', 'created']);
 
@@ -484,14 +635,10 @@ export class SearchComponent {
 
     this.selectedQuickFilters.set(next);
 
-    const orderedSelected = QUICK_FILTER_OPTIONS.map((filter) => filter.value).filter(
-      (filterValue) => next.has(filterValue),
-    );
-
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
-        quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null,
+        quickFilters: this.quickFiltersQueryParam(next),
         page: null,
       },
       queryParamsHandling: 'merge',
@@ -521,11 +668,13 @@ export class SearchComponent {
   }
 
   toggleSelection(id: string): void {
+    this.cancelSelection.next();
     const row = this.displayResults().find((r) => r.id === id);
     this.selectionService.toggle(id, row?.name ?? id);
   }
 
   toggleAll(): void {
+    this.cancelSelection.next();
     if (this.isAllSelected()) {
       this.selectionService.clear();
     } else {
@@ -541,6 +690,58 @@ export class SearchComponent {
     }
   }
 
+  readonly selectingAll = signal(false);
+  private readonly cancelSelection = new Subject<void>();
+  private readonly selectionQueryChanged = effect(() => {
+    this.session.request();
+    this.aiSearchMode();
+    this.cancelSelection.next();
+  });
+
+  selectPage(): void {
+    this.cancelSelection.next();
+    const rows = this.displayResults();
+    this.selectionService.selectAll(
+      rows.map((row) => row.id),
+      Object.fromEntries(rows.map((row) => [row.id, row.name])),
+    );
+  }
+
+  selectAllResults(): void {
+    if (this.selectingAll()) return;
+    if (this.aiSearchMode()) {
+      this.selectPage();
+      return;
+    }
+    const request = { ...this.session.request(), pageSize: 1000, pageIndex: 0 };
+    this.selectingAll.set(true);
+    this.searchService
+      .search(request)
+      .pipe(
+        expand((page, index) =>
+          page.hasNextPage && page.items.length
+            ? this.searchService.search({ ...request, pageIndex: index + 1 })
+            : EMPTY,
+        ),
+        reduce((items, page) => {
+          // The accumulator belongs to this operation; do not recopy earlier pages.
+          for (const item of page.items) items.push(item);
+          return items;
+        }, [] as SearchResultItem[]),
+        takeUntil(merge(this.cancelSelection, this.selectionService.cleared$)),
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.selectingAll.set(false)),
+      )
+      .subscribe({
+        next: (items) =>
+          this.selectionService.selectAll(
+            items.map((item) => item.id),
+            Object.fromEntries(items.map((item) => [item.id, item.title])),
+          ),
+        error: () => this.savedSearchFailed('search.workspace.selection-failed'),
+      });
+  }
+
   deleteSelected(): void {
     this.selectionService
       .deleteSelected()
@@ -550,6 +751,7 @@ export class SearchComponent {
   }
 
   clearSelection(): void {
+    this.cancelSelection.next();
     this.selectionService.clear();
   }
 
@@ -819,6 +1021,15 @@ export class SearchComponent {
     );
   }
 
+  /** Changing packaged filters must retain customer filters carried by the current URL. */
+  private quickFiltersQueryParam(selected: ReadonlySet<string>): string | null {
+    return quickFilterQuery(
+      this.urlQuickFilters,
+      selected,
+      QUICK_FILTER_OPTIONS.map((option) => option.value),
+    );
+  }
+
   /** Save the filters as a new saved search, under a name the user gives. */
   onSaveAs(): void {
     this.withSavedSearchName({ heading: this.translate.instant('ui.saved-search') }, (name) =>
@@ -928,17 +1139,34 @@ export class SearchComponent {
       );
     });
 
-    // The page on screen is kept in the URL, so a deep link reopens it. A page the pager or a
-    // filter change moved to is written back, replacing the history entry rather than adding one.
+    // A filter change may update both scope and page. Write them together so competing
+    // navigations cannot merge the old URL and discard either half of the change.
     effect(() => {
+      const filesOnly = !!this.session.filters().filesOnly;
       const pageIndex = this.session.pageIndex();
+      const pageSize = this.session.pageSize();
       untracked(() => {
-        if (pageIndex === this.urlPageIndex) return;
+        const scopeChanged = filesOnly !== this.isQuickFilterSelected('noFolder');
+        if (!scopeChanged && pageIndex === this.urlPageIndex && pageSize === this.urlPageSize)
+          return;
+        const scopeParams: { quickFilters?: string | null } = {};
+        if (scopeChanged) {
+          const selected = new Set(this.selectedQuickFilters());
+          if (filesOnly) selected.add('noFolder');
+          else selected.delete('noFolder');
+          this.selectedQuickFilters.set(selected);
+          scopeParams.quickFilters = this.quickFiltersQueryParam(selected);
+        }
         void this.router.navigate([], {
           relativeTo: this.route,
-          queryParams: { page: pageIndex > 0 ? pageIndex + 1 : null },
+          queryParams: {
+            ...scopeParams,
+            page: pageIndex > 0 ? pageIndex + 1 : null,
+            pageSize: pageSize === SEARCH_PAGE_SIZE ? null : pageSize,
+          },
           queryParamsHandling: 'merge',
-          replaceUrl: true,
+          // Scope changes remain navigable history; paging alone replaces the current entry.
+          replaceUrl: !scopeChanged,
         });
       });
     });
@@ -961,9 +1189,10 @@ export class SearchComponent {
         distinctUntilChanged(),
         switchMap((q) => {
           if (q.length < 3) return of({ suggestions: [] as string[] });
-          return this.aiGateway
-            .nlToNxqlSuggestions(q)
-            .pipe(catchError(() => of({ suggestions: [] as string[] })));
+          return this.aiGateway.nlToNxqlSuggestions(q).pipe(
+            map((response) => (q === this.aiQuery() ? response : { suggestions: [] as string[] })),
+            catchError(() => of({ suggestions: [] as string[] })),
+          );
         }),
         takeUntilDestroyed(this.destroyRef),
       )
@@ -988,7 +1217,7 @@ export class SearchComponent {
 
   onAiQueryInput(value: string): void {
     this.aiQuery.set(value);
-    this.aiSuggestSubject.next(value);
+    if (this.featureFlags.aiEnabled()) this.aiSuggestSubject.next(value);
   }
 
   selectAiSuggestion(suggestion: string): void {
@@ -1020,7 +1249,7 @@ export class SearchComponent {
 
   executeAiSearch(): void {
     const query = this.aiQuery().trim();
-    if (!query) return;
+    if (!query || !this.featureFlags.aiEnabled()) return;
 
     // Supersedes any in-flight AI request and releases its loading state: an NXQL request already
     // running had set `loading`, and its callbacks are about to start returning at the guard.

@@ -1769,6 +1769,11 @@ Restore, and the Publish action on the live document and on a version.
 
 ## 31. Search — `default_search`, Saved Searches and Tag Suggestions
 
+NXSAT-820 keeps the existing search endpoints and range/aggregation parameters. The existing
+Files-only `noFolder` quick filter is stored as `nxsFilesOnly` inside the saved-search endpoint's
+optional JSON-string `contentViewData` and restored on reopen. It is not sent as a page-provider
+parameter. Updating that state preserves unrelated `contentViewData` fields.
+
 | Field             | Value                                                                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Service**       | `SearchService` (`libs/shared/nuxeo-client/src/lib/services/search.service.ts`)                                                                         |

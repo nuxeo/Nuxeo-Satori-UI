@@ -665,22 +665,27 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
-| ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
-| ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
-| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |
-| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                    | —        |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | `core.not(app.rules.isExternalUser)` | —        |
-| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                    | —        |
-| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                    | —        |
-| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                    | —        |
-| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                    | —        |
-| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                    | —        |
-| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | `core.not(app.rules.isExternalUser)` | —        |
-| `app.navbar.collections`        | Collections         | `/collections`         | 110   | `core.not(app.rules.isExternalUser)` | —        |
-| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                    | —        |
-| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                    | —        |
-| `app.navbar.trash`              | Trash               | `/trash`               | 140   | `core.not(app.rules.isExternalUser)` | —        |
-| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess`  | —        |
+| ID                              | Label                    | Path                   | Order | Rule                                 | Notes                 |
+| ------------------------------- | ------------------------ | ---------------------- | ----- | ------------------------------------ | --------------------- |
+| `app.navbar.knowledgeDiscovery` | Knowledge Discovery      | `/knowledge-discovery` | 10    | —                                    | Disabled              |
+| `app.navbar.dashboard`          | Dashboard                | `/dashboard`           | 20    | —                                    | —                     |
+| `app.navbar.browse`             | Browse                   | `/browse`              | 30    | `core.not(app.rules.isExternalUser)` | —                     |
+| `app.navbar.assets`             | Assets                   | `/documents`           | 40    | —                                    | —                     |
+| `app.navbar.collections`        | Collections              | `/collections`         | 50    | `core.not(app.rules.isExternalUser)` | —                     |
+| `app.navbar.personalSpace`      | Personal Space           | `/personal-space`      | 60    | —                                    | —                     |
+| `app.navbar.recentlyViewed`     | Recently viewed          | `/recently-viewed`     | 70    | —                                    | —                     |
+| `app.navbar.favorites`          | Favorites                | `/favorites`           | 80    | `core.not(app.rules.isExternalUser)` | —                     |
+| `app.navbar.clipboard`          | Clipboard                | `/clipboard`           | 90    | —                                    | —                     |
+| `app.navbar.configurableView`   | User’s Configurable View | `/configurable-view`   | 100   | —                                    | Prototype placeholder |
+| `app.navbar.tasks`              | Tasks                    | `/tasks`               | 110   | —                                    | —                     |
+| `app.navbar.expiredQueue`       | Expired Queues           | `/expired-queue`       | 120   | —                                    | —                     |
+| `app.navbar.administration`     | Administration           | `/administration`      | 130   | `app.rules.hasAdministrationAccess`  | —                     |
+| `app.navbar.trash`              | Trash                    | `/trash`               | 140   | `core.not(app.rules.isExternalUser)` | —                     |
+
+The optional search queue registers `app.navbar.search` in the navbar extension slot and resolves it
+independently through `APP_SEARCH_QUEUE_ITEM`. Manifest labels, paths, visibility and rules apply to
+the queue; a hidden or unresolved descriptor does not open a fallback drawer. `APP_NAV_ITEMS` excludes
+this stable ID from the rendered sidebar. Global search is opened from the header.
 
 A share recipient, a `transient/` user, gets Browse, Favorites, Collections and Trash hidden by
 default through `app.rules.isExternalUser`. This is presentation only: the server still refuses those

@@ -116,3 +116,22 @@ export const POWERUSER_ADMINISTRATION_DRAWER_ITEMS: DrawerLinkItem[] = [
   },
   { labelKey: 'drawer.administration-audit', label: 'Audit', path: '/administration/audit' },
 ];
+
+/** Registered IDs retain grouping when a customer overrides a route. */
+export function navGroup(id: string): number {
+  if (
+    [
+      'personalSpace',
+      'recentlyViewed',
+      'favorites',
+      'clipboard',
+      'configurableView',
+      'search',
+    ].some((key) => id === 'app.navbar.' + key)
+  )
+    return 1;
+  if (['tasks', 'expiredQueue'].some((key) => id === 'app.navbar.' + key)) return 2;
+  if (id === 'app.navbar.administration') return 3;
+  if (id === 'app.navbar.trash') return 4;
+  return 0;
+}

@@ -418,6 +418,17 @@ The same field and calendar button in both, holding 31 December. A typed date is
 
 ### Pager
 
+`pageSizeOptions` optionally adds the shared Material select and emits `pageSizeChange`.
+`showEdges` adds First/Last navigation (Last requires a known total). Both are opt-in,
+so existing consumers retain their previous controls. Search retains its 40-item default
+and additionally offers 25, 50 and 100 items per page.
+
+`preserveFocus` optionally keeps disabled navigation buttons focusable using Material's
+`disabledInteractive` behavior and `aria-disabled`; unavailable actions still emit nothing.
+Search enables it so reaching the first or last page preserves keyboard focus. It does not
+keep a hidden pager mounted or change the page-size select's disabled behavior. The default
+remains `false`, preserving native disabled buttons for existing consumers.
+
 | Field           | Value                            |
 | --------------- | -------------------------------- |
 | Component       | `NxsPagerComponent`              |
@@ -515,6 +526,22 @@ An upload in progress: one file uploaded, one on its way with its own progress b
 
 ### Search filters
 
+The horizontal layout uses CDK connected overlays with focus trapping, Escape/Close focus
+restoration, outside dismissal, and viewport-bounded positioning. Its In panel stages the
+existing Files-only filter until Apply; Reset in that panel resets the draft. Date retains
+the existing range keys and multi-selection. People, Tags and Collections show lookup
+choices inside the panel, avoiding a second overlay. Coverage keeps geographic semantics.
+Department, app-area Location and new search scopes are deliberately excluded.
+
+The search workspace uses `layout="horizontal"` to present the existing metadata and date
+criteria as compact disclosure menus above the results. This layout omits the component's full-text
+field and footer because Keywords is provided by the expandable app header, and Save Search and Reset
+are provided by the workspace. Horizontal menus group Nature and Size under Properties, Authors under
+People and Subjects under Categories; Coverage retains its geographic label. Opening another menu, pressing Escape,
+or clicking outside dismisses the active menu. The default
+`vertical` layout remains available for drawers and existing consumers; both layouts edit the same
+filter model and use the same lookup services.
+
 | Field           | Value                                 |
 | --------------- | ------------------------------------- |
 | Component       | `NxsSearchFiltersComponent`           |
@@ -527,6 +554,10 @@ An upload in progress: one file uploaded, one on its way with its own progress b
 The search filters with a full-text term, a date range, an author and a nature chosen: the same boxes, collapsible groups and checkboxes in both, each choice with the count the server gave it. The theme sets the type, the colours of the checkboxes and the buttons, and the focus rings.
 
 ### Saved search select
+
+`labelKey` customizes the translated label; `defaultLabel` adds an explicit empty-ID
+choice. Search uses these for Filter set / Default while retaining saved-search lookup,
+keyboard navigation and loading/error handling from the shared component.
 
 | Field           | Value                                  |
 | --------------- | -------------------------------------- |

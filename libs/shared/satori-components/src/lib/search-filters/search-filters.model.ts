@@ -7,6 +7,8 @@ import type { AggregateResult, SearchQueryParams } from '@nuxeo/satori-platform/
  * server's aggregate returns, and an empty string or list means "not filtered".
  */
 export interface NxsSearchFilters {
+  /** Existing noFolder quick filter, presented as the Files scope. */
+  readonly filesOnly?: boolean;
   /** Full text, sent as `ecm_fulltext`. */
   readonly fulltext: string;
   /** Modification-date ranges, the `dc_modified_agg` buckets — see {@link NXS_MODIFIED_RANGES}. */
@@ -96,6 +98,7 @@ export function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<stri
   put('author', filters.authors);
   put('collection', filters.collections);
   put('tag', filters.tags);
+  if (filters.filesOnly) record['filesOnly'] = 'true';
   return record;
 }
 
@@ -197,6 +200,10 @@ export function nxsSearchFiltersToQuery(
   if (record['coverage']) query.coverage = record['coverage'];
   if (record['size']) query.size = record['size'];
   if (page.quickFilters?.trim()) query.quickFilters = page.quickFilters.trim();
+  if (filters.filesOnly)
+    query.quickFilters = [...new Set([...(query.quickFilters?.split(',') ?? []), 'noFolder'])].join(
+      ',',
+    );
   if (page.sortBy) query.sortBy = page.sortBy;
   if (page.sortOrder) query.sortOrder = page.sortOrder;
   return query;
@@ -240,6 +247,7 @@ export function nxsSearchFiltersFromParams(
   };
 
   return {
+    ...(source['filesOnly'] === 'true' ? { filesOnly: true } : {}),
     query: text('q', 'query'),
     fulltext: text('ecm_fulltext', 'ecmFulltext'),
     modified: uniqueValues(
@@ -276,6 +284,7 @@ export function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): 
     JSON.stringify([
       filters.query.trim(),
       filters.fulltext.trim(),
+      !!filters.filesOnly,
       sorted(filters.authors),
       sorted(filters.collections),
       sorted(filters.tags),

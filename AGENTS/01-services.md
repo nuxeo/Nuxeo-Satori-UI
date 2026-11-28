@@ -144,6 +144,7 @@ readonly drawerFilters: Signal<Record<string, string>>
 readonly selectedSavedSearchId: Signal<string>
 readonly selectedSavedSearchTitle: Signal<string>
 readonly savedSearchVersion: Signal<number>
+readonly keywordSyncVersion: Signal<number>
 
 markSavedSearchDirty(): void
 ```
@@ -152,6 +153,9 @@ markSavedSearchDirty(): void
 the one search the page and the drawer show, and publishes its `items` and `aggregations` here; the
 drawer's queue reads `items`. Search for results through the session, not by calling
 `SearchService.search` beside it.
+
+`keywordSyncVersion` changes on explicit reset/open actions so a keyword draft can be restored
+even when the applied text is unchanged. Metadata-only updates do not replace the draft.
 
 ## SearchService (`search.service.ts`)
 
@@ -164,7 +168,7 @@ suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestio
 getUserCollections(): Observable<SearchCollectionOption[]>
 getTagSuggestions(term: string): Observable<string[]>          // TagService.suggestTags; [] when blank or on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
-getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
+getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON; optional contentViewData retained
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>
 updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>
 renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>  // keeps params
@@ -372,6 +376,10 @@ CreateBlobHoldingDocumentOptions;
 ## SelectionService (`selection.service.ts`)
 
 Manages multi-select state in browse/search. Uses signals.
+
+`cleared$: Observable<void>` emits synchronously for every `clear()` call, including the shell
+topbar and reset paths. Pending selection work subscribes to it to prevent late results from
+restoring a cleared selection.
 
 ```typescript
 toggle(id: string, label?: string, preview?: SelectionPreview, type?: string): void

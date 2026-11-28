@@ -1,37 +1,40 @@
-<div class="drawer-header">
-  <nxs-saved-search-select
-    class="drawer-saved-searches"
-    [selectedId]="savedSearchId()"
-    [selectedTitle]="savedSearchTitle()"
-    [pageProvider]="pageProvider"
-    [refresh]="savedSearchesVersion()"
-    (selectedChange)="onSavedSearchChosen($event)"
-    (cleared)="onSavedSearchCleared()"
-  />
-  <button
-    mat-icon-button
-    type="button"
-    class="queue-toggle-btn"
-    [class.active]="viewMode() === 'queue'"
-    [matTooltip]="
-      (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
-        | translate
-    "
-    [attr.aria-label]="
-      (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
-        | translate
-    "
-    (click)="viewMode() === 'filter' ? switchToQueueView() : switchToFilterView()"
-  >
-    <mat-icon aria-hidden="true" [svgIcon]="viewMode() === 'filter' ? 'bullet_list' : 'filter'" />
-  </button>
-</div>
+@if (!inline()) {
+  <div class="drawer-header">
+    <nxs-saved-search-select
+      class="drawer-saved-searches"
+      [selectedId]="savedSearchId()"
+      [selectedTitle]="savedSearchTitle()"
+      [pageProvider]="pageProvider"
+      [refresh]="savedSearchesVersion()"
+      (selectedChange)="onSavedSearchChosen($event)"
+      (cleared)="onSavedSearchCleared()"
+    />
+    <button
+      mat-icon-button
+      type="button"
+      class="queue-toggle-btn"
+      [class.active]="viewMode() === 'queue'"
+      [matTooltip]="
+        (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
+          | translate
+      "
+      [attr.aria-label]="
+        (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
+          | translate
+      "
+      (click)="viewMode() === 'filter' ? switchToQueueView() : switchToFilterView()"
+    >
+      <mat-icon aria-hidden="true" [svgIcon]="viewMode() === 'filter' ? 'bullet_list' : 'filter'" />
+    </button>
+  </div>
 
-<mat-divider />
+  <mat-divider />
+}
 
-@if (viewMode() === 'filter') {
+@if (inline() || viewMode() === 'filter') {
   <nxs-search-filters
     class="drawer-filters"
+    [layout]="inline() ? 'horizontal' : 'vertical'"
     [filters]="filters()"
     [aggregations]="aggregations()"
     [optionLabels]="facetLabels()"
