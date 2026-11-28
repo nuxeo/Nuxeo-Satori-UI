@@ -50,7 +50,7 @@ describe('check 2, fields', () => {
 
   it('fails on a field Web UI does not show, and on a layout file no Web UI layout gives', () => {
     const extra = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
-      file.sections[0].fields.push('cl:amount');
+      file.cards[0].fields.push('cl:amount');
       return file;
     });
     expect(run(extra, 2)?.findings).toEqual([
@@ -66,19 +66,27 @@ describe('check 2, fields', () => {
   });
 
   it('fails on a version 1 file that names a widget, which version 1 ignores', () => {
-    const named = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
-      file.sections[0].fields[1] = { field: 'cl:incidentDate', widget: 'date' };
+    const named = edit(input, 'layouts/Claim/metadata.layout.json', (file) => {
+      file.sections[0].fields[0] = { field: 'cl:number', label: 'Claim number', widget: 'text' };
       return file;
     });
     expect(run(named, 2)?.findings).toContain(
-      'layouts/Claim/edit.layout.json: sections.0.fields.1 names a widget, which version 1 cannot do and ignores',
+      'layouts/Claim/metadata.layout.json: sections.0.fields.0 names a widget, which version 1 cannot do and ignores',
     );
   });
 
   it('fails on a file of the wrong version for its mode', () => {
-    const v2 = edit(input, 'layouts/Claim/edit.layout.json', (file) => ({ ...file, version: 2 }));
+    // The app draws the edit and create forms of version 2, and reads metadata in version 1 alone.
+    const v1 = edit(input, 'layouts/Claim/edit.layout.json', (file) => ({ ...file, version: 1 }));
+    expect(run(v1, 2)?.findings).toContain(
+      'layouts/Claim/edit.layout.json: it is not version 2, which the app reads in edit mode',
+    );
+    const v2 = edit(input, 'layouts/Claim/metadata.layout.json', (file) => ({
+      ...file,
+      version: 2,
+    }));
     expect(run(v2, 2)?.findings).toContain(
-      'layouts/Claim/edit.layout.json: it is not version 1, which the app reads in edit mode',
+      'layouts/Claim/metadata.layout.json: it is not version 1, which the app reads in metadata mode',
     );
   });
 
@@ -121,11 +129,12 @@ describe('check 2, fields', () => {
   });
 
   it('accepts a field the report reports, with its reason, as accounted for', () => {
-    const dropped = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
+    const dropped = edit(input, 'layouts/Claim/metadata.layout.json', (file) => {
+      expect(file.sections[0].fields.at(-1)).toEqual({ field: 'cl:adjuster', label: 'Adjuster' });
       file.sections[0].fields.pop();
       return file;
     });
-    // cl:adjuster is reported: version 1 cannot show it as a user picker.
+    // cl:adjuster is reported: version 1 cannot show it as a user.
     expect(run(dropped, 2)?.findings).toEqual([]);
   });
 });
@@ -219,7 +228,7 @@ describe('check 5, conditions', () => {
       'queues/claims.json: visibleWhen holds a rule that no condition of the package gives',
     ]);
     const required = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
-      file.sections[0].fields[0].required = 'app.rules.canWrite';
+      file.cards[0].fields[0].required = 'app.rules.canWrite';
       return file;
     });
     expect(run(required, 5)?.findings).toHaveLength(1);
@@ -455,8 +464,8 @@ describe('what the review found', () => {
       },
     });
     expect(input.conversion.app['layouts/Claim/edit.layout.json']).toEqual({
-      version: 1,
-      sections: [
+      version: 2,
+      cards: [
         { id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number', required: true }] },
       ],
     });
@@ -465,14 +474,17 @@ describe('what the review found', () => {
   });
 
   it('drops a field the report says was converted, so drop-field always breaks something check 2 holds', () => {
+    // A field version 1 cannot show as Web UI does, written and reported, comes first in the first
+    // layout: the metadata one, with no edit layout before it.
+    const metadata = `${UI}/document/claim/nuxeo-claim-metadata-layout.html`;
     const input = prepare({
+      without: [edit2],
       bundle: {
-        [edit2]: syntheticBundleFiles()
-          [edit2].replace(/<nuxeo-user-suggestion[^>]*><\/nuxeo-user-suggestion>/, '')
-          .replace(
-            '<template>',
-            '<template><nuxeo-user-suggestion role="widget" value="{{document.properties.cl:adjuster}}" label="Adjuster"></nuxeo-user-suggestion>',
-          ),
+        [metadata]: layoutFile(
+          'nuxeo-claim-metadata-layout',
+          `<nuxeo-user-tag role="widget" user="[[document.properties.cl:adjuster]]" label="Adjuster"></nuxeo-user-tag>
+           <div role="widget"><label>Claim number</label><div>[[document.properties.cl:number]]</div></div>`,
+        ),
       },
     });
     const mutation = MUTATIONS.find((m) => m.name === 'drop-field');
@@ -690,7 +702,7 @@ describe("what Copilot's review found", () => {
   const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
   const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
 
-  it('leaves a list column under a condition pending, and fails one shown to everyone', () => {
+  it('reports a list column under a condition that does not convert, and fails one shown to everyone', () => {
     const input = prepare();
     expect(input.conversion.app['queues/claims.json']).toMatchObject({
       columns: [
@@ -700,7 +712,10 @@ describe("what Copilot's review found", () => {
     });
     expect(
       input.conversion.report.constructs.find((entry) => entry.id === `search-column:${results}#3`),
-    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/condition/) });
+    ).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/^Condition 1 of its file does not convert: .*given no user/),
+    });
     for (const number of [2, 5]) expect(run(input, number)?.findings).toEqual([]);
     const widened = edit(input, 'queues/claims.json', (file) => {
       file.columns.push({ field: 'cl:reserve', label: 'Reserve' });
@@ -712,7 +727,7 @@ describe("what Copilot's review found", () => {
     expect(run(widened, 2)?.findings).toEqual([]);
   });
 
-  it('leaves a list whose table sits in a condition pending, and fails one written for everyone', () => {
+  it('reports a list whose table sits in a condition that does not convert, and fails one written for everyone', () => {
     const files = syntheticBundleFiles();
     const input = prepare({
       bundle: {
@@ -727,7 +742,10 @@ describe("what Copilot's review found", () => {
     expect(input.conversion.app['queues/claims.json']).toBeUndefined();
     expect(
       input.conversion.report.constructs.find((entry) => entry.id === `search:${results}#search`),
-    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/condition/) });
+    ).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/^Condition \d+ of its file does not convert: .*given no user/),
+    });
     expect(run(input, 2)?.findings).toEqual([]);
     const widened = edit(input, 'queues/claims.json', () => ({
       version: 2,
@@ -753,7 +771,7 @@ describe("what Copilot's review found", () => {
     });
     expect(run(parameters, 5)?.findings).toEqual([]);
     const optional = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
-      file.sections[0].fields[1] = { field: 'cl:incidentDate', required: false };
+      file.cards[0].fields[1] = { field: 'cl:incidentDate', widget: 'date', required: false };
       return file;
     });
     expect(run(optional, 5)?.findings).toEqual([]);
@@ -1014,6 +1032,7 @@ describe('the home and the menu', () => {
     const missing = edit(input, 'home.json', () => undefined);
     expect(run(missing, 7)?.findings).toEqual([
       "home.json: card-1 is missing, though Web UI's dashboard card 1 opens queues/home-1-claims.json",
+      "home.json: card-3 is missing, though Web UI's dashboard card 3 lists the person's tasks",
     ]);
   });
 
@@ -1347,6 +1366,7 @@ describe('M2: conditions become rules, held by truth tables', () => {
         cards: [
           { id: 'card-1' },
           { id: 'card-3', queue: 'home-3-claims', visibleWhen: rule('supervisors') },
+          { id: 'card-4', tasks: {} },
         ],
       });
       expect(groups.conversion.app['queues/home-3-claims.json']).toMatchObject({
@@ -1538,7 +1558,7 @@ describe('M2: where a condition cannot travel', () => {
     for (const number of [2, 5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
   });
 
-  it("leaves out a card's column under a condition, and fails a queue that shows it", () => {
+  it("leaves out a card's column under a condition that does not convert, reports the card, and fails a queue that shows it", () => {
     const input = prepare({
       bundle: {
         [home]: files[home].replace(
@@ -1550,10 +1570,12 @@ describe('M2: where a condition cannot travel', () => {
     const queue = input.conversion.app['queues/home-3-claims.json'];
     expect(JSON.stringify(queue)).not.toContain('cl:reserve');
     expect(queue).not.toHaveProperty('visibleWhen');
+    // Written without the column, and reported, so that a person decides it.
     expect(outcome(input, `dashboard-card:${home}#3`)).toMatchObject({
-      outcome: 'converted',
+      outcome: 'reported',
+      to: 'home.json card-3, its list in queues/home-3-claims.json',
       note: expect.stringMatching(
-        /columns cl:reserve show only while a condition passes, and are left out/,
+        /^Written without what Web UI shows of it: its column 2, cl:reserve, is left out: Condition 1 of its file does not convert: Its permission test, Write, is no registered rule/,
       ),
     });
     for (const number of [2, 5, 6, 7, 10]) expect(run(input, number)?.findings).toEqual([]);

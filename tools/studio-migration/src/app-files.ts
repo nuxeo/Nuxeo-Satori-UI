@@ -30,12 +30,17 @@ export function queuePageSize(card: Pick<DashboardCard, 'pageSize'>): number | n
 /** An app definition's ids (app-definition-v2.md, section 2). */
 export const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
-/** The layout modes the app has, and the version each is written in. */
+/**
+ * The layout modes the app has, and the version each is written in: version 2 wherever the app
+ * draws it, the record page and the Edit and Create forms, so that a field, a layout block or a
+ * tab under a condition there carries its rule. The Properties panel reads version 1 alone: the
+ * app refuses version 2 in `metadata` mode (layout-v2.md, sections 10 and 11).
+ */
 export const LAYOUT_VERSION: Readonly<Record<string, 1 | 2>> = {
   view: 2,
   metadata: 1,
-  edit: 1,
-  create: 1,
+  edit: 2,
+  create: 2,
 };
 
 export function layoutPath(type: string, mode: string): string {

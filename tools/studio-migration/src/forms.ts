@@ -34,7 +34,7 @@ export interface FormPlace {
 
 export function formPlaces(pkg: StudioPackage, inventory: Inventory): FormPlace[] {
   const places: FormPlace[] = [];
-  const tabs = tabPlans({ inventory });
+  const tabs = tabPlans({ inventory, pkg });
   for (const [path, layout] of writtenLayouts(inventory)) {
     const type = layout.docType as string;
     const typeTabs = layout.mode === 'view' ? tabs.filter((tab) => tab.types.includes(type)) : [];
@@ -49,7 +49,7 @@ export function formPlaces(pkg: StudioPackage, inventory: Inventory): FormPlace[
       places.push({
         path,
         tab: tab.id,
-        source: tabSource(tab) as LayoutSource,
+        source: tabSource(tab),
         options: TAB_OPTIONS,
         what: `Web UI's tab ${tab.name} of ${type}`,
         tabPlan: tab,

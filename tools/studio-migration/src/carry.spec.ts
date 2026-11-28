@@ -28,14 +28,16 @@ const catalogue = loadCatalogue();
 const ALLOW_LIST: ReadonlySet<string> = new Set(['Claim.Approve']);
 const FILES = syntheticBundleFiles();
 const EDIT = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
+const METADATA = `${UI}/document/claim/nuxeo-claim-metadata-layout.html`;
 const VIEW = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
 const FORM = `${UI}/search/claims/nuxeo-claims-search-form.html`;
 const THEME = `${UI}/themes/acme/theme.html`;
 
 /**
- * A new build of the made-up package: a field added at the top of its edit layout, so that every
- * field after it has another place; a search field relabelled; a theme property removed, so the
- * one after it moves up; and the view layout's `dom-if` testing another facet.
+ * A new build of the made-up package: a field added at the top of its edit and metadata layouts,
+ * so that every field after it has another place, the metadata layout's reported ones among them;
+ * a search field relabelled; a theme property removed, so the one after it moves up; and the view
+ * layout's `dom-if` testing another facet.
  */
 const NEW_BUILD: Readonly<Record<string, string>> = {
   'META-INF/MANIFEST.MF':
@@ -43,6 +45,10 @@ const NEW_BUILD: Readonly<Record<string, string>> = {
   [EDIT]: (FILES[EDIT] ?? '').replace(
     '<template>\n',
     '<template>\n    <nuxeo-input role="widget" value="{{document.properties.dc:title}}" label="Title"></nuxeo-input>\n',
+  ),
+  [METADATA]: (FILES[METADATA] ?? '').replace(
+    '<template>\n',
+    '<template>\n    <div role="widget"><label>Amount</label><div>[[document.properties.cl:amount]]</div></div>\n',
   ),
   [FORM]: (FILES[FORM] ?? '').replace('label="Status"', 'label="Claim status"'),
   [THEME]: (FILES[THEME] ?? '').replace(
@@ -138,10 +144,17 @@ describe("a construct's identity", () => {
     expect(after.find((construct) => construct.id === `layout-field:${EDIT}#3`)?.identity).not.toBe(
       adjuster[0]?.identity,
     );
+    // So for a field the metadata layout reports: its user tag, from the fourth place to the fifth.
+    const tag = [byLabel(before, METADATA, 'cl:adjuster'), byLabel(after, METADATA, 'cl:adjuster')];
+    expect(tag.map((construct) => construct?.id)).toEqual([
+      `layout-field:${METADATA}#4`,
+      `layout-field:${METADATA}#5`,
+    ]);
+    expect(tag[0]?.identity).toBe(tag[1]?.identity);
   });
 
   it('is the same for every construct a build left unchanged', () => {
-    const changed = new Set([EDIT, FORM, THEME, VIEW, 'META-INF/MANIFEST.MF']);
+    const changed = new Set([EDIT, METADATA, FORM, THEME, VIEW, 'META-INF/MANIFEST.MF']);
     const kept = before.filter((construct) => !changed.has(construct.file));
     const identities = new Set(after.map((construct) => construct.identity));
     expect(kept.length).toBeGreaterThan(20);
@@ -184,14 +197,19 @@ describe('carrying decisions to a new build of the package', () => {
   it('carries each decision to the construct of its identity, wherever it sits now', () => {
     expect(packageBuildOf(later.pkg).commit).toBe('2b1f');
     expect(carried.otherBuild).toMatch(/^Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}$/);
-    // The adjuster's decision, made at #3, is carried to #4, where the field is now.
-    expect(byId.get(`layout-field:${EDIT}#4`)).toMatchObject({
+    // The user tag's decision, made at #4, is carried to #5, where the field is now; and the
+    // reserve's, made at #3, to #4: by identity, never by place.
+    expect(byId.get(`layout-field:${METADATA}#5`)).toMatchObject({
       label: 'cl:adjuster ("Adjuster")',
       owner: 'Migration lead',
       decision: 'Decided on cl:adjuster ("Adjuster")',
     });
-    // The new field at #3 is converted, and takes no decision: nothing landed on it.
-    expect(byId.has(`layout-field:${EDIT}#3`)).toBe(false);
+    expect(byId.get(`layout-field:${METADATA}#4`)).toMatchObject({
+      label: 'cl:reserve ("Reserve")',
+      decision: 'Decided on cl:reserve ("Reserve")',
+    });
+    // The new field at #1 is converted, and takes no decision: nothing landed on it.
+    expect(byId.has(`layout-field:${METADATA}#1`)).toBe(false);
     // The theme property after the one removed moved up a place, and kept its decision.
     const primary = carried.file.decisions.find((item) => item.label === '--primary-text-color');
     expect(primary).toMatchObject({

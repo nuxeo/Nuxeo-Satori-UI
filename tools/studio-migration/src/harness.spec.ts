@@ -20,7 +20,7 @@ import {
   syntheticPackage,
   type SyntheticPackageOptions,
 } from './testing/synthetic-package';
-import { m2CorpusFiles } from './testing/m2-corpus';
+import { m2AllFiles } from './testing/m2-leftovers-corpus';
 
 const UI = 'web/nuxeo.war/ui';
 const catalogue = loadCatalogue();
@@ -98,7 +98,8 @@ describe('the harness on a sound conversion', () => {
       'check 5 ran only in part',
       'check 6 ran only in part',
       'check 7 ran only in part',
-      expect.stringMatching(/^\d+ constructs are pending a later phase$/),
+      // Nothing is pending: the tasks card is a card of home.json, and the metadata field under a
+      // condition is reported, as version 1 holds no rule.
       '1 proposal waits for a person to accept or reject it',
       expect.stringMatching(/^\d+ reported items have no owner$/),
       'no one has approved the report and its decisions: a person does, with the approve command, once every decision is made',
@@ -143,11 +144,12 @@ describe('the harness on a sound conversion', () => {
 // The negative controls of docs/business-apps/studio-migration.md, section 7, for the checks the
 // harness runs: each mutation must make the check it names fail.
 describe('each deliberate breakage fails the check that guards it', () => {
-  // The made-up package with M2's corpus, which holds what each control breaks: task forms, tabs
-  // and layout blocks besides M1's.
+  // The made-up package with M2's corpus and its leftovers, which holds what each control breaks:
+  // task forms, tabs, layout blocks, tabs whose page is a list, conditions in forms and on list
+  // columns, and the dashboard's tasks and recently viewed cards, besides M1's.
   // Read once: a control breaks a copy, never the conversion it is given, and each package read
   // holds its parsed documents, so reading one per control runs the worker out of memory.
-  const corpus = prepare({ bundle: m2CorpusFiles() });
+  const corpus = prepare({ bundle: m2AllFiles() });
   const pristine = JSON.stringify(corpus.conversion);
   for (const mutation of MUTATIONS) {
     it(`${mutation.name}: ${mutation.description}`, () => {
@@ -195,7 +197,7 @@ describe('each deliberate breakage fails the check that guards it', () => {
       ],
       [
         'date-to-text',
-        ['layouts/Claim/view.layout.json: cl:incidentDate shows as text, not as date'],
+        ['layouts/Claim/edit.layout.json: cl:incidentDate shows as text, not as date'],
       ],
       [
         'drop-required',
@@ -204,13 +206,13 @@ describe('each deliberate breakage fails the check that guards it', () => {
       [
         'rename-field',
         [
-          'layouts/Claim/edit.layout.json sections.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
+          'layouts/Claim/edit.layout.json cards.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
         ],
       ],
       [
         'slip-free-javascript',
         [
-          'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
+          'layouts/Claim/edit.layout.json: cards.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
         ],
       ],
       [
@@ -244,7 +246,7 @@ describe('each deliberate breakage fails the check that guards it', () => {
       [
         'unregistered-widget',
         [
-          'app/layouts/Claim/view.layout.json cards[0].fields[0].widget: the widget "signature" is not registered',
+          'app/layouts/Claim/edit.layout.json cards[0].fields[0].widget: the widget "signature" is not registered',
         ],
       ],
       [

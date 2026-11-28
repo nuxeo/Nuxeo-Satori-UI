@@ -115,6 +115,7 @@ describe('inventory', () => {
       ['dc:title', null],
       ['cl:number', null],
       ['cl:reserve', 0],
+      ['cl:adjuster', null],
     ]);
     expect(synthetic.conditions.map((c) => [c.path, c.index, c.element, c.attributes])).toEqual([
       [
@@ -311,6 +312,7 @@ describe('inventory', () => {
       'nuxeo-tasks-list': 1,
       'nuxeo-theme': 1,
       'nuxeo-user-suggestion': 1,
+      'nuxeo-user-tag': 1,
     });
     expect(synthetic.elements.has('dom-module')).toBe(false);
     expect(synthetic.elements.has('nuxeo-menu-item')).toBe(false);

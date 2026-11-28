@@ -200,6 +200,20 @@ export function checkModelParts({ pkg, inventory, conversion }: HarnessInput): M
       const type = layout[1];
       if (!model.types.has(type)) platform.add({ kind: 'type', name: type });
       for (const field of layoutFields(file)) entry(`${path} ${field.at}`, field.entry, type);
+      // A card of related records: its page provider, its columns, of the records it lists, and
+      // each property of the open record it sends; the repository's own, `ecm:`, are no schema's.
+      for (const { at, related } of relatedCards(file)) {
+        provider(`${path} ${at}`, related['pageProvider']);
+        listColumns(related).forEach((column) =>
+          entry(`${path} ${at}.${column.at}`, column.entry, null),
+        );
+        (Array.isArray(related['parameters']) ? related['parameters'] : []).forEach(
+          (parameter, index) => {
+            if (isRecord(parameter) && fieldOf(parameter)?.startsWith('ecm:') !== true)
+              entry(`${path} ${at}.parameters.${index}`, parameter, type);
+          },
+        );
+      }
       continue;
     }
     if (path.startsWith('queues/')) {
@@ -222,6 +236,24 @@ export function checkModelParts({ pkg, inventory, conversion }: HarnessInput): M
   // would have defined would otherwise be taken for the platform's.
   findings.push(...model.problems.map((problem) => `the model: ${problem}`));
   return { findings, platform: [...platformNames.values()], model };
+}
+
+/** Each card of related records of a layout file, its own or a tab's, with where it is. */
+function relatedCards(
+  file: unknown,
+): { readonly at: string; readonly related: Record<string, unknown> }[] {
+  const found: { at: string; related: Record<string, unknown> }[] = [];
+  if (!isRecord(file)) return found;
+  const cards = (list: unknown, at: string): void =>
+    (Array.isArray(list) ? list : []).forEach((card, index) => {
+      if (isRecord(card) && isRecord(card['related']))
+        found.push({ at: `${at}cards.${index}.related`, related: card['related'] });
+    });
+  cards(file['cards'], '');
+  (Array.isArray(file['tabs']) ? file['tabs'] : []).forEach((tab, index) => {
+    if (isRecord(tab)) cards(tab['cards'], `tabs.${index}.`);
+  });
+  return found;
 }
 
 /** A list for a line of text: the first few, and how many more. */
