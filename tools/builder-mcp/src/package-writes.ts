@@ -55,8 +55,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import type { GeneratedChange, GeneratorAnswer, GeneratorRequest } from './run-generator.ts';
+import type { GeneratedChange, GeneratorAnswer, GeneratorRequest } from './generator-process.ts';
+import { HOST } from './host.ts';
 import { schemaHeadingWarnings } from './schema-headings.ts';
 import {
   REPO_ROOT,
@@ -69,8 +69,10 @@ import {
   type PackageCheck,
 } from './validate-package.ts';
 
-export const DEFAULT_PACKAGE_ROOT = join(REPO_ROOT, 'business-apps', 'packages');
-export const GENERATORS_SOURCE = join(REPO_ROOT, 'tools', 'satori-generators', 'src');
+/** `business-apps/packages/` in this repository; bundled, a configuration repository's `config-packages/`. */
+export const DEFAULT_PACKAGE_ROOT = HOST.packageRoot;
+/** Where each generator's schema is: this repository's sources, or what the bundled tool carries. */
+export const GENERATORS_SOURCE = HOST.generators;
 /** The generators a package write may run: the app definition's, and nothing else. */
 export const APP_GENERATORS = [
   'app-package',
@@ -89,7 +91,7 @@ export const MAX_CHANGES = 32;
 export const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_PACKAGE_BYTES = 64 * 1024 * 1024;
 const GENERATOR_TIMEOUT_MS = 120_000;
-const RUNNER = fileURLToPath(new URL('./run-generator.ts', import.meta.url));
+const RUNNER = HOST.runner;
 /** What `formatFiles` reads to format a generator's files, copied to the tree's own root. */
 const FORMATTING = ['.prettierrc', '.editorconfig'] as const;
 /** `app-package`'s rule for a package's name, which is its folder's. */
@@ -343,13 +345,14 @@ export function packageFolder(path: string, roots: readonly string[]): Target {
       name: from,
       shown: repositoryPath ?? absolute,
       // A package outside the repository is shown to the generators where one would be inside it.
-      treePath: repositoryPath ?? `business-apps/packages/${from}`,
+      treePath:
+        repositoryPath ?? `${fromRepository(HOST.packageRoot) ?? 'business-apps/packages'}/${from}`,
       exists: entry !== undefined,
     };
   }
   throw new Error(
     `package: ${path} is not a package folder directly inside ${shownRoots}, the folders the` +
-      ' write tools are scoped to, such as business-apps/packages/acme-contracts. Nothing outside' +
+      ` write tools are scoped to, such as ${fromRepository(HOST.packageRoot) ?? HOST.packageRoot}/acme-contracts. Nothing outside` +
       ' them is written.',
   );
 }
@@ -465,7 +468,7 @@ function generatorOptions(
       );
     if (key === 'modelServer')
       throw new Error(
-        "options.modelServer: the write tools read no server: the generator would send NUXEO_USER and NUXEO_PASS to the address it is given. Give the model as a file, the package's own content-model.json or one `npm run app-package:model` exported into the repository (its tmp/ is ignored by git).",
+        `options.modelServer: the write tools read no server: the generator would send NUXEO_USER and NUXEO_PASS to the address it is given. Give the model as a file, the package's own content-model.json or one written by ${HOST.modelExport}.`,
       );
     const type = property.type;
     const fits =
@@ -762,9 +765,10 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       const answer = await (options.generate ?? runGenerator)({
         generator,
         request: {
+          generator,
           factory: join(GENERATORS_SOURCE, generator, 'generator.ts'),
           options: given,
-          root: REPO_ROOT,
+          root: HOST.generatorRoot,
           packagePath: target.treePath,
           staging,
         },

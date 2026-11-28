@@ -7,7 +7,9 @@ package's files, each write committed only when the package pipeline passes the 
 would be, and to run the pipeline's checks on the package as it is.
 
 It runs beside the developer's tools, against a development server, and never in production
-([architecture.md](../../docs/business-apps/architecture.md), section 8).
+([architecture.md](../../docs/business-apps/architecture.md), section 8): from this repository, as
+below, or in a customer's own configuration repository, bundled into `@nuxeo/satori-cli` as
+`satori mcp` ([Outside this repository](#outside-this-repository-satori-mcp)).
 
 ## Not here yet
 
@@ -16,10 +18,12 @@ The plan gives the server four jobs. Three are here:
 - **Here:** reading the server, validating a package, and previewing it in dev mode on the local
   development server. Writing a package goes with validating it: the write tools commit a change
   only when it validates ([Writing a package](#writing-a-package)).
-- **Not here:** publishing it to pre-production. It waits for signatures and promotion after a
-  person approves, which [package-pipeline.md](../../docs/business-apps/package-pipeline.md),
-  section 9, proposes and nobody has decided. Until then a package is published by a tag, in CI,
-  as that document says, and its version is held to what changed (section 8).
+- **Not here:** publishing it to pre-production. It waits for promotion after a person approves,
+  which [package-pipeline.md](../../docs/business-apps/package-pipeline.md), section 9, proposes
+  and nobody has decided. Until then a package is published by a tag, in CI, as that document
+  says, and its version is held to what changed (section 8). A package is signed in CI too, never
+  by this server: here by `app-packages.yml`, and in a customer's repository by the workflow
+  `satori create` writes, with `satori sign`.
 
 ## The tools
 
@@ -401,6 +405,46 @@ node tools/builder-mcp/src/call.ts --list
 node tools/builder-mcp/src/call.ts validate_package '{ "package": "business-apps/packages/facilities-demo" }'
 node tools/builder-mcp/src/call.ts apply_package_changes - < changes.json   # long arguments, from a file
 ```
+
+## Outside this repository: `satori mcp`
+
+The same server runs in a customer's own configuration repository, bundled into
+[`@nuxeo/satori-cli`](../satori-cli/README.md) as `satori mcp`, which the `.mcp.json` that
+`satori agents sync` writes starts from `node_modules/.bin`. `bundle.mjs`, which the tool's build
+calls, makes it: `mcp.mjs` from `src/main.ts`, and `mcp-generator.mjs`, the generators' process, from
+`src/bundle/run-generator.ts`. Its tools are these, by name, description and input schema. What
+differs is where things are, which `src/host.ts` decides when the server is built, from what esbuild
+defines, never from the environment:
+
+| What                                       | In this repository                                         | `satori mcp`                                                                                                                                                |
+| ------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The root, which a package's path is from   | this repository                                            | the folder it is started in, or `--root`'s                                                                                                                  |
+| `validate_package`, and each write's check | `scripts/app-package.mjs`                                  | the tool's own `satori build`: the steps `satori validate` takes, from the same modules, `scripts/package-pipeline/`, at the same version                   |
+| The platform's version                     | `libs/platform`'s                                          | the one the tool carries                                                                                                                                    |
+| Where the write tools write a package      | `business-apps/packages/`, or `BUILDER_PACKAGE_ROOTS`'s    | `config-packages/`, or `BUILDER_PACKAGE_ROOTS`'s                                                                                                            |
+| The generators                             | `tools/satori-generators`, loaded by `tsx`, with Nx's tree | the same sources, bundled, with a tree of their own, `src/bundle/tree.ts`, and `src/bundle/devkit.ts` for `@nx/devkit`: Prettier's standalone build and EJS |
+| What a generator reads outside a package   | this repository                                            | `generators/`, beside the tool: their schemas and templates, the platform's routes and version, and `formatting.json`                                       |
+| `preview_package`                          | serves to the development server                           | refuses, serving nothing: it needs this repository's development server and `config:dev`                                                                    |
+
+- **One generator.** A generator run by `satori mcp` writes what it writes here, byte for byte:
+  `formatFiles` formats with the same Prettier, with every plugin its Node build has, and this
+  repository's configuration as Prettier resolves it for each kind of file, written at build time;
+  `generateFiles` renders with the EJS Nx renders with. `tools/satori-cli/selftest.mjs` runs every
+  app generator through both runners on the same package, and holds them to the same answer.
+- **What it can reach is what it can here.** Nuxeo: `GET`s under `<NUXEO_URL>/nuxeo/api/v1/`, as
+  `NUXEO_USER`, from the environment the IDE gives it, which `.mcp.json` names and never holds.
+  Files: the packages inside its root, through no link and no hidden folder; the files the tool
+  carries; and, for a write, a staging copy in the system's temporary folder, then the package,
+  under its lock. Processes: Node, running the tool's own `satori.mjs build` and
+  `mcp-generator.mjs`, each given only `PATH`, the temporary folder and the locale, so no
+  credential, and `unzip`. Nothing else, and no other host.
+- **Nothing of this repository.** The tool's selftest starts it from a tarball, in a folder with no
+  `node_modules`, under Node's permission model, confined on its command line to that folder, and
+  calls `validate_package`, a write it refuses and a generator's write it keeps. Node passes a
+  permission given on the command line on to every Node process the server starts; one given in
+  `NODE_OPTIONS` it would not, since the server gives what it starts an environment of its own. To
+  confine the server, give the flags on its command line.
+- **Not in it:** `call.ts`, the recorder and the specs, which are this repository's.
 
 ## Running and testing it
 

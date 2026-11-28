@@ -3,7 +3,10 @@
  *
  * It runs `scripts/app-package.mjs` as a command, the way `npm run app-package` and the
  * `app-packages.yml` workflow do, rather than calling the validator's functions: so the answer is
- * the pipeline's own, steps 1 to 6 of docs/business-apps/package-pipeline.md.
+ * the pipeline's own, steps 1 to 6 of docs/business-apps/package-pipeline.md. Bundled into
+ * `@nuxeo/satori-cli`, it runs the tool's own `satori build` instead, the same steps through the
+ * same modules, `scripts/package-pipeline/`, as the customer's CI runs them (host.ts); the
+ * platform's version is then the tool's.
  *
  * - **As CI runs it, unless told otherwise.** Given the folder alone, it passes what the workflow
  *   passes: `--out` and `--platform`, the version of `libs/platform`, and the allow-list the package
@@ -32,22 +35,18 @@
  * the step that refused the package, and the zip's digest when it was built.
  */
 import { spawn } from 'node:child_process';
-import {
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { RUN_ENVIRONMENT } from './config.ts';
+import { HOST, REPO_ROOT, platformVersion } from './host.ts';
 
-export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-export const PIPELINE = join(REPO_ROOT, 'scripts', 'app-package.mjs');
+export { REPO_ROOT, platformVersion };
+/**
+ * The pipeline: `scripts/app-package.mjs` in this repository, and bundled, the tool's own
+ * `satori build` (host.ts).
+ */
+export const PIPELINE = HOST.pipeline[0];
 export const RUN_TIMEOUT_MS = 180_000;
 /** Where a package names the allow-list it is built against, which CI gives the pipeline. */
 export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'] as const;
@@ -181,16 +180,6 @@ export function pipelineEnvironment(env: NodeJS.ProcessEnv, temporary?: string):
     : { ...passed, TMPDIR: temporary, TEMP: temporary, TMP: temporary };
 }
 
-export function platformVersion(): string {
-  const manifest: unknown = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'libs', 'platform', 'package.json'), 'utf8'),
-  );
-  const version =
-    manifest && typeof manifest === 'object' && 'version' in manifest ? manifest.version : null;
-  if (typeof version !== 'string') throw new Error('libs/platform/package.json has no version');
-  return version;
-}
-
 export async function validatePackage(
   request: PackageRequest,
   options: PackageOptions = {},
@@ -247,7 +236,7 @@ export async function validatePackage(
   const out = join(work, 'out');
   const temporary = join(work, 'tmp');
   const args = [
-    PIPELINE,
+    ...HOST.pipeline,
     directory,
     '--out',
     out,
@@ -423,7 +412,7 @@ function interpret(
     findings,
     zip,
     command:
-      `node scripts/app-package.mjs <package> --out <temporary> --platform ${platform}` +
+      `${HOST.pipelineShown} <package> --out <temporary> --platform ${platform}` +
       (departsFromCi.includes('allowList')
         ? ' --allow-list <file>'
         : asBuilt

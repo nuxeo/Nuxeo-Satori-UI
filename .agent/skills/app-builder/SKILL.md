@@ -12,6 +12,12 @@ types, schemas, page providers and lifecycles come from Studio or a model packag
 on the server. The one exception is a demo kit the person asks to carry a stand-in model, as the
 Payers kit does: `app-model` writes it (step 2), fictional and kept in a component of its own.
 
+**Two editions.** This one is for this repository. `customer-edition.md`, beside it, is the same
+skill for a customer's own configuration repository, where the MCP server is `satori mcp` and the
+checks are `satori validate`'s: `satori agents sync` installs it there as `satori-app-builder`
+(`tools/satori-cli`). It is not for this repository. A change to a step both editions take is made
+in both.
+
 What a package may hold: `docs/business-apps/package-pipeline.md`, section 1, and
 `docs/business-apps/app-definition-v2.md`, section 1. What a record page may say:
 `docs/business-apps/layout-v2.md`. The Payers kit, `business-apps/packages/payers-claims-demo`,

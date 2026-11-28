@@ -13,13 +13,19 @@
  *   satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]
  *   satori model pull --server <address> --out <file>
  *   satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
+ *   satori agents sync [<directory>] [--check]       the skill, AGENTS.md's section, the MCP entry
+ *   satori mcp [--root <directory>]                  the Builder MCP server, over stdio
+ *   satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file> | --keyless ...)
+ *   satori verify <zip> --trusted-signers <file> [options]
  *
  * What it carries, beside this file, each from this repository when the tool is built:
  * `validator.mjs`, the app definition's validator; `builder/build.mjs`, the `config-package`
  * generator's builder, byte for byte, which it runs on a package instead of the package's own;
  * `config-package/`, that generator's scaffolder and templates, which `create` runs; `schemas/`, the
  * JSON Schemas of both layers and of the app definition; and `platform/`, the platform's English
- * catalogue and what the upgrade check reads of the platform (`platform.json`).
+ * catalogue and what the upgrade check reads of the platform (`platform.json`). And for `agents
+ * sync`, `agents/`, the skill and AGENTS.md's section; for `mcp`, `mcp.mjs`, the Builder MCP server
+ * bundled, `mcp-generator.mjs`, its generators' process, and `generators/`, what they read.
  *
  * Exit codes: 0, done; 1, refused; 2, the command was wrong, or could not be run.
  */
@@ -35,9 +41,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { modelExportCommand } from '../../../scripts/package-pipeline/model-export.mjs';
 import { pipelineCommand } from '../../../scripts/package-pipeline/pipeline.mjs';
+import { signatureCommand } from '../../../scripts/package-pipeline/signature-command.mjs';
 import {
   check,
   platformFromSnapshot,
@@ -47,6 +55,7 @@ import {
   Usage,
 } from '../../../scripts/package-pipeline/upgrade-check.mjs';
 import { unpack } from '../../../scripts/release-candidate-set.mjs';
+import { agentsCommand } from './agents.mjs';
 import { createCommand } from './create.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
@@ -80,12 +89,25 @@ const USAGE = `usage: satori <command> [arguments]
   satori model pull --server <address> --out <file>
       Write a server's content model to a file, reading only, as NUXEO_USER with NUXEO_PASS.
   satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
-      Scaffold a configuration repository, with a first package that builds.
+      Scaffold a configuration repository, with a first package that builds, its agent files
+      and a workflow that validates, builds and, once trusted-signers.json says who, signs.
+  satori agents sync [<directory>] [--check]
+      Install or refresh the app builder skill, AGENTS.md's section and the MCP server's entry
+      in .mcp.json and .cursor/mcp.json. --check writes nothing, and exits 1 when they differ.
+  satori mcp [--root <directory>]
+      The Builder MCP server, over stdio, for an AI IDE, in a configuration repository.
+  satori sign <zip> --key <file> | --ephemeral-key --signers-out <file> [--commit <sha>] [--out <file>]
+  satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
+      Sign a zip with a key you hold, outside the repository; or, in CI, decide whether the run
+      may sign keyless and write what actions/attest signs.
+  satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>]
+      [--version <version>] [--trusted-root <file>]
+      Verify a zip's signature against the signers you trust.
   satori --version | --help
 
 ${BUILD_OPTIONS}
 
-Not in this version: agents sync, signing, preview and the MCP server.`;
+Not in this version: preview, promotion, and who may sign for a deployment (decision M).`;
 
 const BUILD_USAGE = `usage: satori build <package> [--out <directory>] [options]
        satori validate <package> [options]
@@ -94,6 +116,13 @@ ${BUILD_OPTIONS}`;
 const UPGRADE_USAGE =
   'usage: satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]';
 const MODEL_USAGE = 'usage: satori model pull --server <address> --out <file>';
+const SIGN_USAGE = [
+  'usage: satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]',
+  '       satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>',
+  '       satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>]',
+  '         [--version <version>] [--trusted-root <file>]',
+].join('\n');
+const MCP_USAGE = 'usage: satori mcp [--root <directory>]';
 
 /** The pipeline's host: where everything outside the package is, for this tool. */
 const HOST = {
@@ -136,6 +165,13 @@ async function dispatch(name, args) {
       return 2;
     case 'create':
       return createCommand(args, { here: HERE, version: VERSION });
+    case 'agents':
+      return agentsCommand(args, { here: HERE, version: VERSION });
+    case 'mcp':
+      return mcp(args);
+    case 'sign':
+    case 'verify':
+      return signature(name, args);
     case '--version':
       process.stdout.write(`@nuxeo/satori-cli ${VERSION}, platform ${PLATFORM.version}\n`);
       return 0;
@@ -148,6 +184,57 @@ async function dispatch(name, args) {
       console.error(USAGE);
       return 2;
   }
+}
+
+/**
+ * `mcp`: the Builder MCP server, bundled, in the configuration repository it is started in, or
+ * `--root`'s. Its stdout is the protocol's, so nothing else is written to it.
+ */
+async function mcp(args) {
+  if (args.length === 2 && args[0] === '--root' && args[1] !== '') {
+    if (!isDirectory(args[1])) {
+      console.error(`--root ${args[1]} is not a folder.\n${MCP_USAGE}`);
+      return 2;
+    }
+    process.chdir(args[1]);
+  } else if (args.length > 0) {
+    console.error(MCP_USAGE);
+    return 2;
+  }
+  await import(pathToFileURL(join(HERE, 'mcp.mjs')).href);
+  return 0;
+}
+
+/**
+ * `sign` and `verify`: `scripts/package-pipeline/signature-command.mjs`, which
+ * `scripts/app-package-signature.mjs` runs too, given the customer's repository, where git says
+ * which commit a zip was built from and a key may not be, and no trusted signers of its own:
+ * `verify` and `--keyless` are given the file the customer keeps. `--keyless` is that command's
+ * `ci-plan`: the decision, and the predicate `actions/attest` signs.
+ */
+function signature(command, args) {
+  const [zip, ...options] = args;
+  let argv = [command, zip, ...options];
+  if (command === 'sign' && options.includes('--keyless')) {
+    const rest = options.filter((option) => option !== '--keyless');
+    const mixed = ['--key', '--ephemeral-key', '--signers-out', '--commit', '--out'].filter(
+      (flag) => rest.includes(flag),
+    );
+    if (mixed.length > 0 || !rest.includes('--predicate-out')) {
+      console.error(
+        `--keyless signs in CI, through actions/attest with the run's identity: it takes --trusted-signers and --predicate-out${mixed.length > 0 ? `, and not ${mixed.join(', ')}` : ''}.\n${SIGN_USAGE}`,
+      );
+      return 2;
+    }
+    argv = ['ci-plan', zip, ...rest];
+  }
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  return signatureCommand(argv, {
+    usage: SIGN_USAGE,
+    program: 'satori',
+    repository: top.status === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : process.cwd(),
+    trustedSigners: null,
+  });
 }
 
 /** `build`: the pipeline's steps, with a previous package given as a zip unpacked first. */

@@ -38,6 +38,7 @@ import {
   type PackageCheck,
   type PackageRequest,
 } from './validate-package.ts';
+import { HOST } from './host.ts';
 
 /** What `npm run config:dev` runs, and the folder it writes. */
 export const DEV_CONFIG_SCRIPT = join(REPO_ROOT, 'scripts', 'dev-config.mjs');
@@ -124,6 +125,15 @@ export function previewPackage(request: PackageRequest, options: PreviewOptions)
 }
 
 async function preview(request: PackageRequest, options: PreviewOptions): Promise<Preview> {
+  // Bundled into @nuxeo/satori-cli there is no development server of Nuxeo Satori UI's to serve
+  // to, and no config:dev: a preview against the customer's own development server is not built.
+  if (HOST.kind !== 'repository')
+    throw new Error(
+      "preview_package serves a package to Nuxeo Satori UI's development server, from a checkout of" +
+        ' its repository, and does not run from @nuxeo/satori-cli: nothing was served. Check the' +
+        ' package with validate_package; a preview against your own development server is not' +
+        ' built yet.',
+    );
   const roots = options.roots ?? [REPO_ROOT];
   const { script, folder } = options.devConfig ?? { script: DEV_CONFIG_SCRIPT, folder: DEV_FOLDER };
   // Refused before anything runs: a preview whose addresses cannot be checked or named is not one.

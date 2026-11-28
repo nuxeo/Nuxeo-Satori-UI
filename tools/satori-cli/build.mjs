@@ -21,6 +21,13 @@
  * - **What the upgrade check reads of the platform,** `platform/platform.json`: the platform as
  *   `readPlatform` reads this repository, its IDs, widgets, components, descriptors, menu prefix,
  *   version and catalogue keys, so that the tool's platform as it is is the one it was built from.
+ * - **For `agents sync`, `agents/`:** the customer edition of the app builder skill,
+ *   `.cursor/skills/app-builder/customer-edition.md`, as `agents/skills/satori-app-builder/SKILL.md`,
+ *   and AGENTS.md's section, `agents/AGENTS.section.md`.
+ * - **For `mcp`, the Builder MCP server, bundled** by `tools/builder-mcp/bundle.mjs`: `mcp.mjs`, the
+ *   server, `mcp-generator.mjs`, its generators' process, `generators/`, what they read outside a
+ *   package, and `licenses/`, the licence of each package those two bundle. They alone may bundle
+ *   what is installed, and only the packages `bundle.mjs` lists for each.
  * - **`package.json`**, this project's, with the files it ships, and `README.md`.
  *
  * Every module but the two entries is bundled with an `import.meta.url` of its own: esbuild gives
@@ -128,6 +135,24 @@ cpSync(
 cpSync(join(HERE, 'templates'), join(OUT, 'templates'), { recursive: true });
 cpSync(join(HERE, 'README.md'), join(OUT, 'README.md'));
 
+// For agents sync: the customer edition of the app builder skill, and AGENTS.md's section.
+mkdirSync(join(OUT, 'agents', 'skills', 'satori-app-builder'), { recursive: true });
+cpSync(
+  join(REPO, '.cursor', 'skills', 'app-builder', 'customer-edition.md'),
+  join(OUT, 'agents', 'skills', 'satori-app-builder', 'SKILL.md'),
+);
+cpSync(join(HERE, 'agents', 'AGENTS.section.md'), join(OUT, 'agents', 'AGENTS.section.md'));
+
+// For mcp: the Builder MCP server, bundled, with what its generators read.
+const { bundleServer } = await import(pathOf(REPO, 'tools', 'builder-mcp', 'bundle.mjs'));
+let server;
+try {
+  server = await bundleServer({ out: OUT, repo: REPO });
+} catch (error) {
+  console.error(`The MCP server was not bundled: ${error.message}`);
+  process.exit(1);
+}
+
 // The platform as it is, for the upgrade check.
 const platform = await readPlatform(REPO);
 if (platform.missing.length > 0) {
@@ -153,6 +178,11 @@ writeFileSync(
         'schemas/',
         'platform/',
         'templates/',
+        'agents/',
+        'mcp.mjs',
+        'mcp-generator.mjs',
+        'generators/',
+        'licenses/',
         'README.md',
       ],
     },
@@ -163,7 +193,8 @@ writeFileSync(
 
 console.log(
   `Built @nuxeo/satori-cli ${manifest.version} in ${relative(process.cwd(), OUT) || '.'}, for the platform ${platform.version}. ` +
-    `import.meta.url given its own module's place in: ${[...rewritten].sort().join(', ') || 'none'}.`,
+    `import.meta.url given its own module's place in: ${[...rewritten].sort().join(', ') || 'none'}. ` +
+    `The MCP server bundles ${server.bundled['mcp.mjs'].join(', ')}, and its generators' process ${server.bundled['mcp-generator.mjs'].join(', ')}, with ${server.generators.length} generators.`,
 );
 
 /**

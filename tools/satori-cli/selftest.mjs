@@ -24,11 +24,36 @@
  *    `validate` writing nothing, the upgrade check against a folder and a zip, and `model pull`
  *    against a stand-in server, which must receive the credentials in a header and nowhere else.
  * 4. **The names Satori uses** are the `config-package` generator's, in both its copies.
+ * 5. **`agents sync`** writes the skill, AGENTS.md's section and the MCP server's entries, with no
+ *    value of the environment in any of them, however the credentials are set; run again, it writes
+ *    nothing and touches no file; a customer's text outside AGENTS.md's section and their own
+ *    servers and keys are kept to the byte while what is the tool's is put back; `--check` sees
+ *    each; and a file it cannot read whole, a marker repeated, or a link, refuses it with nothing
+ *    written. The controls on it: a planted secret, and text planted outside the section, are seen.
+ * 6. **The MCP server outside the repository,** in the folder of 2, started from the tarball as
+ *    `satori mcp` under Node's permission model, given on its command line so that every process it
+ *    starts is confined too: its tools are the repository's server's, name for name and schema for
+ *    schema; `validate_package` passes the scaffold; a write with an unregistered widget is refused
+ *    with the package unchanged; a generator's write is kept; `preview_package` refuses. The
+ *    bundles hold no path of this repository. The control on the confinement: a process the
+ *    confined one starts, with no environment, cannot read this repository either.
+ * 7. **One generator.** Every app generator, in the order a kit is made, is run through the
+ *    repository's runner, with Nx's tree and Prettier, and through the bundled one, on the same
+ *    package, and their answers must be the same bytes. The control on it: the bundled runner
+ *    given another print width answers otherwise.
+ * 8. **`sign` and `verify`,** outside the repository on the scaffold's zip, with keys made at run
+ *    time: a key held outside the repository signs, and one inside it is refused; refused are a
+ *    changed byte, a signer not trusted, and another version three ways; and `verify` with no
+ *    trusted signers, and `--keyless` off a tag build.
+ * 9. **What `create` writes for agents and CI:** the skill a customer gets names every tool the
+ *    server has and nothing of this repository's (this repository's own skill is the control), and
+ *    the workflow checks the agent files and signs only in its one job with an identity, only once
+ *    configured; each of three breaks of the workflow is seen.
  *
  * Exit 0 when every control holds, 1 when one does not.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
   chmodSync,
@@ -40,11 +65,13 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnToolSync } from '../../scripts/beta-harness/package-command.mjs';
 import { SATORI_NAMES } from '../../scripts/package-pipeline/configuration.mjs';
@@ -61,6 +88,30 @@ const PAYERS = join(KITS, 'payers-claims-demo');
 const LAYOUT = 'bundle/agentic-ui-config/layouts/Claim/view.layout.json';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 
+/** The files `agents sync` manages, from a repository's root. */
+const AGENT_FILES = [
+  '.cursor/skills/satori-app-builder/SKILL.md',
+  '.claude/skills/satori-app-builder/SKILL.md',
+  '.agent/skills/satori-app-builder/SKILL.md',
+  'AGENTS.md',
+  '.mcp.json',
+  '.cursor/mcp.json',
+];
+const SECTION_BEGIN = '<!-- BEGIN satori agents';
+const SECTION_END = '<!-- END satori agents -->';
+/** An MCP entry's environment, as the tool writes it: a reference to a variable, in either form. */
+const REFERENCE = /^\$\{(?:env:)?(NUXEO_URL|NUXEO_USER|NUXEO_PASS)(?::-)?\}$/;
+
+/** What a customer's skill may not say: this repository's places and commands. */
+const REPOSITORY_ONLY = [
+  [/\bclone\b/i, 'tells them to clone'],
+  [/business-apps\/packages/, 'names business-apps/packages'],
+  [/tools\/builder-mcp|tools\/satori-generators/, 'names a tool of this repository by its path'],
+  [/npx nx\b|nx serve|npm run app-package/, "runs this repository's commands"],
+  [/nuxeo-builder/, "names this repository's server"],
+  [/\blibs\/|docs\/business-apps/, "names this repository's sources or documents"],
+];
+
 const failures = [];
 let held = 0;
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'satori-cli-selftest-')));
@@ -76,10 +127,15 @@ try {
 
   oneBuilder(satori, tool);
   const kitDigest = digestOf(buildWith(PIPELINE, PAYERS, join(scratch, 'pipeline-payers')));
-  outsideTheRepository(tool, kitDigest);
+  const tools = await repositoryTools();
+  await outsideTheRepository(tool, kitDigest, tools);
   refusals(satori);
   await modelPull(satori);
   reservedNames();
+  agentsSync(satori, tool);
+  oneGenerator(tool);
+  customerSkill(tool, tools);
+  workflowTemplate(tool);
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }
@@ -162,7 +218,7 @@ function oneBuilder(satori, tool) {
 
 // --- 2. Outside the repository -------------------------------------------------------------------
 
-function outsideTheRepository(tool, kitDigest) {
+async function outsideTheRepository(tool, kitDigest, tools) {
   const packed = join(scratch, 'packed');
   mkdirSync(packed);
   // From a folder of its own, so that no .npmrc of this repository is read.
@@ -250,6 +306,11 @@ function outsideTheRepository(tool, kitDigest) {
     '.gitignore',
     '.github/workflows/satori.yml',
     'config-packages/acme-config/package/package.xml',
+    '.cursor/skills/satori-app-builder/SKILL.md',
+    '.claude/skills/satori-app-builder/SKILL.md',
+    '.agent/skills/satori-app-builder/SKILL.md',
+    '.mcp.json',
+    '.cursor/mcp.json',
   ];
   const missing = expected.filter((file) => !existsSync(join(repository, ...file.split('/'))));
   if (created.status !== 0 || missing.length > 0)
@@ -292,6 +353,15 @@ function outsideTheRepository(tool, kitDigest) {
     fail('satori build of the scaffold', 'no zip in dist/');
   if (existsSync(join(repository, 'config-packages', 'acme-config', 'dist')))
     fail('satori validate of the scaffold', 'it wrote into the package');
+
+  // What create wrote for agents is what agents sync writes: --check finds it in step.
+  const checked = node([bin, 'agents', 'sync', '--check'], { cwd: repository, env });
+  if (checked.status !== 0 || !checked.output.includes('are those @nuxeo/satori-cli'))
+    fail('satori agents sync --check of the scaffold', `exit ${checked.status}`, checked.output);
+  else held++;
+
+  await mcpOutside(outside, bin, repository, tools);
+  signAndVerify(outside, bin, repository, env);
 }
 
 // --- 3. Refusals, each at its own step -----------------------------------------------------------
@@ -857,6 +927,941 @@ function reservedNames() {
         `the names Satori uses, against ${file}`,
         `${file} has ${JSON.stringify(names)}, and configuration.mjs ${JSON.stringify(ours)}`,
       );
+    else held++;
+  }
+}
+
+// --- 5. agents sync ------------------------------------------------------------------------------
+
+/** Why the agent files in `repository` hold a secret, or a value that is not a reference. */
+function secretProblems(repository, secrets) {
+  const problems = [];
+  for (const file of AGENT_FILES) {
+    const path = join(repository, ...file.split('/'));
+    if (!existsSync(path)) continue;
+    const text = readFileSync(path, 'utf8');
+    for (const secret of secrets)
+      if (text.includes(secret)) problems.push(`${file} holds a value of the environment`);
+    if (!file.endsWith('mcp.json')) continue;
+    const entry = JSON.parse(text).mcpServers?.['nuxeo-satori'];
+    for (const [key, value] of Object.entries(entry?.env ?? {}))
+      if (!REFERENCE.test(value) || !value.includes(key))
+        problems.push(`${file}: ${key} is ${JSON.stringify(value)}, not a reference to ${key}`);
+  }
+  return problems;
+}
+
+function agentsSync(satori, tool) {
+  const version = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version;
+  const repository = join(scratch, 'agents');
+  mkdirSync(repository);
+  // Credentials and an address in the environment, made for this run: none may be written.
+  const secrets = [
+    `selftest-user-${randomBytes(6).toString('hex')}`,
+    `selftest-${randomBytes(12).toString('hex')}`,
+    `https://nuxeo-${randomBytes(4).toString('hex')}.example`,
+  ];
+  const env = {
+    ...process.env,
+    NUXEO_USER: secrets[0],
+    NUXEO_PASS: secrets[1],
+    NUXEO_URL: secrets[2],
+  };
+  const sync = (...args) => node([satori, 'agents', 'sync', ...args], { cwd: repository, env });
+
+  const first = sync();
+  const missing = AGENT_FILES.filter((file) => !existsSync(join(repository, ...file.split('/'))));
+  if (first.status !== 0 || missing.length > 0)
+    fail(
+      'satori agents sync, in a repository with none of its files',
+      `exit ${first.status}, missing ${missing.join(', ') || 'nothing'}`,
+      first.output,
+    );
+  else held++;
+  const carried = readFileSync(
+    join(tool, 'agents', 'skills', 'satori-app-builder', 'SKILL.md'),
+    'utf8',
+  );
+  const skills = AGENT_FILES.slice(0, 3).map((file) =>
+    readFileSync(join(repository, ...file.split('/')), 'utf8'),
+  );
+  if (
+    new Set(skills).size !== 1 ||
+    !skills[0].startsWith(carried.slice(0, carried.indexOf('\n---\n') + 5)) ||
+    !skills[0].includes(carried.slice(carried.indexOf('\n---\n') + 5)) ||
+    !skills[0].includes(`@nuxeo/satori-cli ${version}`)
+  )
+    fail(
+      'the skill agents sync installs',
+      "the three copies are not the carried skill, with the version's line",
+    );
+  else held++;
+  const server = JSON.parse(readFileSync(join(repository, '.mcp.json'), 'utf8')).mcpServers?.[
+    'nuxeo-satori'
+  ];
+  if (server?.command !== 'node_modules/.bin/satori' || JSON.stringify(server.args) !== '["mcp"]')
+    fail(
+      '.mcp.json',
+      `the server is ${JSON.stringify(server)}, not satori mcp from node_modules/.bin`,
+    );
+  else held++;
+
+  // No value of the environment, and every one a reference; the control: a planted one is seen.
+  const leaked = secretProblems(repository, secrets);
+  if (leaked.length > 0) fail('agents sync and the environment', leaked.join('; '));
+  else held++;
+  const planted = join(scratch, 'agents-planted');
+  cpSync(repository, planted, { recursive: true });
+  const mcp = JSON.parse(readFileSync(join(planted, '.mcp.json'), 'utf8'));
+  mcp.mcpServers['nuxeo-satori'].env.NUXEO_PASS = secrets[1];
+  writeFileSync(join(planted, '.mcp.json'), `${JSON.stringify(mcp, null, 2)}\n`);
+  if (secretProblems(planted, secrets).length < 2)
+    fail('the control on the secrets', 'a password planted in .mcp.json was not seen');
+  else held++;
+
+  // Idempotent: run again, nothing is written, and no file is touched.
+  const past = new Date(Date.UTC(2020, 0, 1));
+  for (const file of AGENT_FILES) utimesSync(join(repository, ...file.split('/')), past, past);
+  const before = fingerprint(repository);
+  const again = sync();
+  const touched = AGENT_FILES.filter(
+    (file) => statSync(join(repository, ...file.split('/'))).mtimeMs !== past.getTime(),
+  );
+  if (
+    again.status !== 0 ||
+    !again.output.includes('nothing was written') ||
+    touched.length > 0 ||
+    JSON.stringify(fingerprint(repository)) !== JSON.stringify(before)
+  )
+    fail(
+      'satori agents sync, run again',
+      `exit ${again.status}, touched ${touched.join(', ') || 'nothing'}`,
+      again.output,
+    );
+  else held++;
+  const inStep = sync('--check');
+  if (inStep.status !== 0)
+    fail('satori agents sync --check, in step', `exit ${inStep.status}`, inStep.output);
+  else held++;
+
+  // A customer's own text and servers, kept; the tool's section and entry, put back.
+  const agents = join(repository, 'AGENTS.md');
+  const ours = readFileSync(agents, 'utf8');
+  const start = ours.indexOf(SECTION_BEGIN);
+  const end = ours.indexOf(SECTION_END) + SECTION_END.length;
+  const prefix = `# Acme's own rules\r\n\r\nNever name a customer.\n\n`;
+  const suffix = `\n## Acme's appendix\n\nKept as written.   \n`;
+  writeFileSync(
+    agents,
+    `${prefix}${ours.slice(start, end).replace('## Nuxeo Satori: rules', '## Rules, edited')}${suffix}`,
+  );
+  const servers = JSON.parse(readFileSync(join(repository, '.mcp.json'), 'utf8'));
+  servers.mcpServers['nuxeo-satori'].command = 'npx';
+  servers.mcpServers.acme = { command: 'acme-mcp', args: ['--stdio'] };
+  servers.acmeSetting = { kept: true };
+  writeFileSync(join(repository, '.mcp.json'), JSON.stringify(servers));
+  const drifted = sync('--check');
+  if (
+    drifted.status !== 1 ||
+    !drifted.output.includes('AGENTS.md') ||
+    !drifted.output.includes('.mcp.json') ||
+    drifted.output.includes('.cursor/mcp.json')
+  )
+    fail(
+      'satori agents sync --check, with the section and the entry edited',
+      `exit ${drifted.status}`,
+      drifted.output,
+    );
+  else held++;
+  const restored = sync();
+  const text = readFileSync(agents, 'utf8');
+  const kept = JSON.parse(readFileSync(join(repository, '.mcp.json'), 'utf8'));
+  if (
+    restored.status !== 0 ||
+    !text.startsWith(prefix) ||
+    !text.endsWith(suffix) ||
+    text.slice(prefix.length, text.length - suffix.length) !== ours.slice(start, end) ||
+    JSON.stringify(kept.mcpServers.acme) !== JSON.stringify(servers.mcpServers.acme) ||
+    kept.acmeSetting?.kept !== true ||
+    kept.mcpServers['nuxeo-satori'].command !== 'node_modules/.bin/satori'
+  )
+    fail(
+      "satori agents sync, with a customer's own text and servers",
+      "what is outside the section, or the other servers, was not kept, or what is the tool's was not put back",
+      `${restored.output}\n${text.slice(0, 300)}`,
+    );
+  else held++;
+  // The control on it: text planted inside the section is not kept.
+  if (text.includes('## Rules, edited'))
+    fail('the control on the section', 'an edit inside the section survived the sync');
+  else held++;
+
+  // Refused, with nothing written: a marker repeated, an MCP file that is not JSON, a link.
+  let refusedCount = 0;
+  const refusedWith = (what, change, says) => {
+    const folder = join(scratch, `agents-refused-${++refusedCount}`);
+    mkdirSync(folder);
+    change(folder);
+    const was = fingerprint(folder);
+    const run = node([satori, 'agents', 'sync'], { cwd: folder, env });
+    if (
+      run.status !== 1 ||
+      !run.output.includes(says) ||
+      JSON.stringify(fingerprint(folder)) !== JSON.stringify(was)
+    )
+      fail(
+        `satori agents sync, ${what}`,
+        `exit ${run.status}, or something was written`,
+        run.output,
+      );
+    else held++;
+  };
+  refusedWith(
+    'with its section begun twice',
+    (folder) =>
+      writeFileSync(
+        join(folder, 'AGENTS.md'),
+        `${SECTION_BEGIN} -->\n${SECTION_BEGIN} -->\n${SECTION_END}\n`,
+      ),
+    'its satori section is not one',
+  );
+  refusedWith(
+    'with a .mcp.json that is not JSON',
+    (folder) => writeFileSync(join(folder, '.mcp.json'), '{ "mcpServers": { // a comment\n'),
+    'it is not JSON',
+  );
+  refusedWith(
+    'with .claude a link to a folder elsewhere',
+    (folder) => {
+      const elsewhere = join(scratch, 'agents-elsewhere');
+      mkdirSync(elsewhere, { recursive: true });
+      symlinkSync(elsewhere, join(folder, '.claude'));
+    },
+    '.claude is a link, which is not followed',
+  );
+  if (existsSync(join(scratch, 'agents-elsewhere', 'skills')))
+    fail('satori agents sync, with .claude a link', 'it wrote through the link');
+}
+
+/** Every file under `directory`, by its path, with its SHA-256. */
+function fingerprint(directory) {
+  const found = {};
+  const walk = (folder) => {
+    for (const entry of readdirSync(folder, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile())
+        found[relative(directory, path).split(sep).join('/')] = createHash('sha256')
+          .update(readFileSync(path))
+          .digest('hex');
+      else found[relative(directory, path).split(sep).join('/')] = 'link';
+    }
+  };
+  walk(directory);
+  return found;
+}
+
+// --- 6. The MCP server outside the repository ------------------------------------------------------
+
+/** The tools the repository's own server lists, as `node tools/builder-mcp/src/main.ts` runs. */
+async function repositoryTools() {
+  const session = mcpSession([join(REPO, 'tools', 'builder-mcp', 'src', 'main.ts')], {
+    cwd: REPO,
+    env: { PATH: process.env.PATH ?? '', TMPDIR: tmpdir() },
+  });
+  try {
+    await session.open();
+    const listed = await session.request('tools/list');
+    return listed.result?.tools ?? [];
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * `satori mcp` from the tarball, in the scaffold, under Node's permission model given on its
+ * command line: Node gives it to every Node process the server starts, the pipeline's and the
+ * generators', which it would not from `NODE_OPTIONS`, a variable the server does not pass on.
+ */
+async function mcpOutside(outside, bin, repository, tools) {
+  const confinement = [
+    '--permission',
+    `--allow-fs-read=${outside}`,
+    `--allow-fs-write=${outside}`,
+    '--allow-child-process',
+  ];
+  const env = {
+    PATH: process.env.PATH ?? '',
+    TMPDIR: join(outside, 'tmp'),
+    TEMP: join(outside, 'tmp'),
+    TMP: join(outside, 'tmp'),
+  };
+  // The control on the confinement: what a confined process starts, with no environment, is confined.
+  const probe = node(
+    [
+      ...confinement,
+      '-e',
+      `const r = require('node:child_process').spawnSync(process.execPath, ['-e', ${JSON.stringify(`require('node:fs').readFileSync(${JSON.stringify(join(REPO, 'package.json'))})`)}], { encoding: 'utf8', env: { PATH: process.env.PATH } }); process.stdout.write(r.stderr); process.exit(r.status);`,
+    ],
+    { cwd: outside, env },
+  );
+  if (probe.status === 0 || !probe.output.includes('ERR_ACCESS_DENIED'))
+    fail(
+      "the control on the server's confinement",
+      'a process a confined one started, with no environment, read this repository',
+      probe.output,
+    );
+  else held++;
+  // The bundles name no place in this repository: what they read, they carry.
+  const tool = dirname(bin);
+  const named = ['mcp.mjs', 'mcp-generator.mjs', 'satori.mjs']
+    .filter((file) => readFileSync(join(tool, file), 'utf8').includes(REPO.replace(/[\\/]$/, '')))
+    .concat(
+      Object.keys(fingerprint(join(tool, 'generators'))).filter((file) =>
+        readFileSync(join(tool, 'generators', ...file.split('/')), 'utf8').includes(
+          REPO.replace(/[\\/]$/, ''),
+        ),
+      ),
+    );
+  if (named.length > 0) fail('the bundles', `name this repository's folder: ${named.join(', ')}`);
+  else held++;
+
+  const session = mcpSession([...confinement, bin, 'mcp'], { cwd: repository, env });
+  try {
+    await session.open();
+    const listed = (await session.request('tools/list')).result?.tools ?? [];
+    if (tools.length < 17 || JSON.stringify(listed) !== JSON.stringify(tools))
+      fail(
+        "satori mcp's tools",
+        `they are not the repository's server's: ${listed.map((each) => each.name).join(', ')}`,
+      );
+    else held++;
+    const valid = await session.call('validate_package', {
+      package: 'config-packages/acme-config',
+    });
+    if (
+      valid.isError ||
+      valid.json?.passed !== true ||
+      !String(valid.json?.command).startsWith('satori build')
+    )
+      fail('validate_package, outside the repository', 'the scaffold did not pass', valid.text);
+    else held++;
+    // A generator's write, kept: the bundled generators run confined, on the model in tmp/.
+    mkdirSync(join(repository, 'tmp'), { recursive: true });
+    cpSync(join(PAYERS, 'content-model.json'), join(repository, 'tmp', 'content-model.json'));
+    const generated = await session.call('apply_generator', {
+      package: 'config-packages/acme-claims',
+      generator: 'app-package',
+      options: {
+        owner: 'acme',
+        title: 'Acme Claims',
+        groups: 'members',
+        type: 'Claim',
+        model: 'tmp/content-model.json',
+      },
+    });
+    if (
+      generated.isError ||
+      generated.json?.written !== true ||
+      !existsSync(
+        join(
+          repository,
+          'config-packages',
+          'acme-claims',
+          'bundle',
+          'agentic-ui-config',
+          'layouts',
+          'Claim',
+          'view.layout.json',
+        ),
+      )
+    )
+      fail(
+        'apply_generator app-package, outside the repository',
+        'the package was not written',
+        generated.text,
+      );
+    else held++;
+    // A write with an unregistered widget, on the package just written: refused, nothing changed.
+    const pkg = join(repository, 'config-packages', 'acme-claims');
+    const was = existsSync(pkg) ? fingerprint(pkg) : {};
+    const refused = await session.call('write_package_file', {
+      package: 'config-packages/acme-claims',
+      path: 'bundle/agentic-ui-config/layouts/Claim/view.layout.json',
+      content: `${JSON.stringify({ version: 2, cards: [{ id: 'main', labelKey: 'acme.card.main', fields: [{ field: 'dc:title', widget: 'calendar' }] }] })}\n`,
+    });
+    if (
+      refused.isError ||
+      refused.json?.written !== false ||
+      refused.json?.validation?.refusedAt?.step !== 2 ||
+      !refused.text.includes('the widget \\"calendar\\" is not registered') ||
+      !existsSync(pkg) ||
+      JSON.stringify(fingerprint(pkg)) !== JSON.stringify(was)
+    )
+      fail(
+        'a write with an unregistered widget, outside the repository',
+        'not refused at step 2 with the package unchanged',
+        refused.text,
+      );
+    else held++;
+    const preview = await session.call('preview_package', {
+      package: 'config-packages/acme-config',
+    });
+    if (!preview.isError || !preview.text.includes('does not run from @nuxeo/satori-cli'))
+      fail('preview_package, outside the repository', 'it did not refuse', preview.text);
+    else held++;
+  } catch (error) {
+    fail('satori mcp, outside the repository', error.message, session.stderr());
+  } finally {
+    await session.close();
+  }
+  rmSync(join(repository, 'config-packages', 'acme-claims'), { recursive: true, force: true });
+}
+
+/** An MCP client over stdio, as small as it can be: JSON-RPC, one message a line. */
+function mcpSession(args, options) {
+  const child = spawn(process.execPath, args, { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
+  const pending = new Map();
+  let buffer = '';
+  let stderr = '';
+  let id = 0;
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    for (let at = buffer.indexOf('\n'); at >= 0; at = buffer.indexOf('\n')) {
+      const line = buffer.slice(0, at);
+      buffer = buffer.slice(at + 1);
+      if (line.trim() === '') continue;
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        stderr += `\n(stdout, not the protocol's) ${line}`;
+        continue;
+      }
+      if (typeof message.id === 'number') pending.get(message.id)?.(message);
+    }
+  });
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  const closed = new Promise((done) => child.on('close', done));
+  const request = (method, params = {}) =>
+    new Promise((answered, refused) => {
+      const next = ++id;
+      const timer = setTimeout(
+        () => refused(new Error(`${method}: no answer in 4 minutes`)),
+        240_000,
+      );
+      pending.set(next, (message) => {
+        clearTimeout(timer);
+        answered(message);
+      });
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: next, method, params })}\n`);
+    });
+  return {
+    request,
+    stderr: () => stderr,
+    async open() {
+      const opened = await request('initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'satori-cli-selftest', version: '0' },
+      });
+      if (opened.error) throw new Error(`initialize: ${opened.error.message}`);
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+      );
+    },
+    async call(name, args) {
+      const answer = await request('tools/call', { name, arguments: args });
+      const text = answer.error
+        ? answer.error.message
+        : (answer.result?.content ?? []).map((block) => block.text).join('');
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // An error's text is a sentence.
+      }
+      return { isError: answer.error !== undefined || answer.result?.isError === true, text, json };
+    },
+    async close() {
+      child.stdin.end();
+      // It ends with its input; stopped only if it does not.
+      const stop = setTimeout(() => child.kill(), 10_000);
+      await closed;
+      clearTimeout(stop);
+    },
+  };
+}
+
+// --- 7. One generator -----------------------------------------------------------------------------
+
+/**
+ * Every app generator, in the order a kit is made, run through the repository's runner and through
+ * the bundled one on the same package, each answer the same bytes; then applied, for the next.
+ */
+function oneGenerator(tool) {
+  const work = join(scratch, 'one-generator');
+  mkdirSync(work);
+  const packagePath = 'config-packages/acme-demo';
+  const staging = join(work, 'staging', 'acme-demo');
+  const model = join(staging, 'content-model.json');
+  const repositoryRunner = join(REPO, 'tools', 'builder-mcp', 'src', 'run-generator.ts');
+  const bundledRunner = join(tool, 'mcp-generator.mjs');
+  const carried = join(tool, 'generators');
+  // The control's root: the same, with another print width.
+  const narrow = join(work, 'narrow');
+  cpSync(carried, narrow, { recursive: true });
+  const formatting = JSON.parse(readFileSync(join(narrow, 'formatting.json'), 'utf8'));
+  for (const options of [...Object.values(formatting.byExtension), formatting.otherwise])
+    options.printWidth = 40;
+  writeFileSync(join(narrow, 'formatting.json'), JSON.stringify(formatting));
+  const pkg = { package: packagePath };
+  const steps = [
+    [
+      'app-package',
+      {
+        name: 'acme-demo',
+        directory: 'config-packages',
+        owner: 'acme',
+        title: 'Acme Demo',
+        groups: 'members',
+      },
+    ],
+    [
+      'app-model',
+      {
+        ...pkg,
+        type: 'AcmeCase',
+        schema: 'acmecase',
+        prefix: 'acmecase',
+        properties:
+          'number,status=Open|Closed,amount:double,opened:date,party:complex{name,role=Buyer|Seller}',
+      },
+    ],
+    [
+      'app-model',
+      {
+        ...pkg,
+        type: 'AcmeCase',
+        pageProvider: 'acme_open_cases',
+        where: "acmecase:status = 'Open'",
+        sort: 'acmecase:opened',
+        aggregates: 'acmecase:status',
+      },
+    ],
+    ['app-layout', { ...pkg, type: 'AcmeCase', model }],
+    [
+      'app-form',
+      { ...pkg, type: 'AcmeCase', mode: 'edit', required: 'dc:title,acmecase:number', model },
+    ],
+    [
+      'app-queue',
+      {
+        ...pkg,
+        id: 'open-cases',
+        pageProvider: 'acme_open_cases',
+        columns: 'acmecase:number,dc:title,acmecase:status',
+        sort: 'acmecase:opened',
+      },
+    ],
+    [
+      'app-action',
+      {
+        ...pkg,
+        id: 'acme-demo.close',
+        transition: 'close',
+        on: 'record,row',
+        type: 'AcmeCase',
+        confirm: 'Close this case?',
+        queue: 'open-cases',
+      },
+    ],
+    [
+      'app-connector',
+      {
+        ...pkg,
+        id: 'acme.caseSystem',
+        type: 'AcmeCase',
+        key: 'acmecase:number',
+        path: '/cases/{key}',
+        fields: 'state=/state,owner=/owner/name',
+      },
+    ],
+    ['app-dependency', { ...pkg, name: 'nuxeo-agentic-signature', version: '0.1.0' }],
+    ['app-registry', { ...pkg }],
+  ];
+  let count = 0;
+  const run = (runner, root, generator, options) => {
+    const folder = join(work, String(++count));
+    const treeRoot = join(folder, 'tree');
+    mkdirSync(treeRoot, { recursive: true });
+    // As the server makes the tree's root: the formatting configuration the root has, and nothing else.
+    for (const file of ['.prettierrc', '.editorconfig'])
+      if (existsSync(join(root, file))) cpSync(join(root, file), join(treeRoot, file));
+    const request = join(folder, 'request.json');
+    const answer = join(folder, 'answer.json');
+    writeFileSync(
+      request,
+      JSON.stringify({
+        generator,
+        factory: join(REPO, 'tools', 'satori-generators', 'src', generator, 'generator.ts'),
+        options,
+        root,
+        treeRoot,
+        packagePath,
+        staging,
+        answer,
+      }),
+    );
+    const ran = node([runner, request], {
+      cwd: REPO,
+      env: { PATH: process.env.PATH ?? '', TMPDIR: folder },
+    });
+    return existsSync(answer)
+      ? readFileSync(answer, 'utf8')
+      : `no answer, exit ${ran.status}: ${ran.output}`;
+  };
+  for (const [generator, given] of steps) {
+    const schema = JSON.parse(
+      readFileSync(
+        join(REPO, 'tools', 'satori-generators', 'src', generator, 'schema.json'),
+        'utf8',
+      ),
+    );
+    const options = { ...given };
+    for (const [key, property] of Object.entries(schema.properties))
+      if (options[key] === undefined && property.default !== undefined)
+        options[key] = property.default;
+    const ours = run(repositoryRunner, REPO, generator, options);
+    const theirs = run(bundledRunner, carried, generator, options);
+    let answer = null;
+    try {
+      answer = JSON.parse(ours);
+    } catch {
+      // Said below.
+    }
+    if (answer === null || 'error' in answer) {
+      fail(
+        `one generator, ${generator}`,
+        "the repository's runner did not run it",
+        ours.slice(0, 2000),
+      );
+      return;
+    }
+    if (ours !== theirs)
+      fail(
+        `one generator, ${generator}`,
+        "the bundled runner's answer is not the repository's",
+        `${ours.slice(0, 1500)}\n---\n${theirs.slice(0, 1500)}`,
+      );
+    else held++;
+    if (generator === 'app-queue') {
+      const other = run(bundledRunner, narrow, generator, options);
+      if (other === ours)
+        fail('the control on one generator', 'another print width answered the same');
+      else held++;
+    }
+    for (const change of answer.changes) {
+      if (!change.path.startsWith(`${packagePath}/`)) {
+        fail(`one generator, ${generator}`, `it wrote ${change.path}, outside the package`);
+        return;
+      }
+      const path = join(staging, ...change.path.slice(packagePath.length + 1).split('/'));
+      if (change.type === 'DELETE') rmSync(path, { force: true });
+      else {
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, Buffer.from(change.content, 'base64'));
+      }
+    }
+  }
+}
+
+// --- 8. sign and verify -----------------------------------------------------------------------------
+
+function signAndVerify(outside, bin, repository, env) {
+  const zip = join(repository, 'dist', 'acme-config-1.0.0.zip');
+  const commit = randomBytes(20).toString('hex');
+  const satori = (args, cwd = repository) => node([bin, ...args], { cwd, env });
+  const expect = (what, run, status, says) => {
+    if (run.status !== status || (says !== undefined && !run.output.includes(says)))
+      fail(
+        what,
+        `exit ${run.status}, not ${status}${says === undefined ? '' : `, with "${says}"`}`,
+        run.output,
+      );
+    else held++;
+  };
+  const signers = join(outside, 'signers.json');
+  const signed = satori([
+    'sign',
+    zip,
+    '--ephemeral-key',
+    '--signers-out',
+    signers,
+    '--commit',
+    commit,
+  ]);
+  expect('satori sign with a key made for the run', signed, 0, 'signed by sha256:');
+  expect(
+    'satori verify against the signers trusted',
+    satori([
+      'verify',
+      zip,
+      '--trusted-signers',
+      signers,
+      '--name',
+      'acme-config',
+      '--version',
+      '1.0.0',
+    ]),
+    0,
+    'Verified.',
+  );
+  // A key the customer holds, outside the repository, signs; inside it, it is refused.
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const keyFile = join(outside, 'keys', 'acme.pem');
+  mkdirSync(dirname(keyFile), { recursive: true });
+  writeFileSync(keyFile, pem, { mode: 0o600 });
+  writeFileSync(join(repository, 'acme.pem'), pem, { mode: 0o600 });
+  const own = join(outside, 'acme-signers.json');
+  writeFileSync(
+    own,
+    JSON.stringify({
+      signers: [
+        {
+          id: 'acme-release',
+          kind: 'ed25519',
+          publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+        },
+      ],
+    }),
+  );
+  const ownSignature = join(outside, 'own.sig.json');
+  expect(
+    'satori sign --key, a key held outside the repository',
+    satori(['sign', zip, '--key', keyFile, '--commit', commit, '--out', ownSignature]),
+    0,
+  );
+  expect(
+    'satori verify of the signature by the key the customer holds',
+    satori(['verify', zip, '--trusted-signers', own, '--signature', ownSignature]),
+    0,
+    'signed by acme-release',
+  );
+  expect(
+    'satori sign --key, a key inside the repository',
+    satori([
+      'sign',
+      zip,
+      '--key',
+      'acme.pem',
+      '--commit',
+      commit,
+      '--out',
+      join(outside, 'inside.sig.json'),
+    ]),
+    2,
+    'is inside the repository',
+  );
+  rmSync(join(repository, 'acme.pem'));
+  // A changed byte.
+  const changed = join(outside, 'changed', basename(zip));
+  mkdirSync(dirname(changed), { recursive: true });
+  const bytes = readFileSync(zip);
+  bytes[Math.floor(bytes.length / 2)] ^= 0x01;
+  writeFileSync(changed, bytes);
+  cpSync(`${zip}.sig.json`, `${changed}.sig.json`);
+  expect(
+    'satori verify, a changed byte',
+    satori(['verify', changed, '--trusted-signers', signers]),
+    1,
+    'the zip is not the one signed',
+  );
+  // A signer not trusted.
+  const stranger = join(outside, 'stranger', basename(zip));
+  mkdirSync(dirname(stranger), { recursive: true });
+  cpSync(zip, stranger);
+  satori([
+    'sign',
+    stranger,
+    '--ephemeral-key',
+    '--signers-out',
+    join(outside, 'stranger-signers.json'),
+    '--commit',
+    commit,
+  ]);
+  expect(
+    'satori verify, a signer not trusted',
+    satori(['verify', stranger, '--trusted-signers', signers]),
+    1,
+    "none of the trusted signers' keys",
+  );
+  // Another version: built at 1.0.1, renamed to it, and held to it.
+  const next = join(outside, 'next', 'acme-config');
+  cpSync(join(repository, 'config-packages', 'acme-config'), next, { recursive: true });
+  const xml = join(next, 'package', 'package.xml');
+  writeFileSync(xml, readFileSync(xml, 'utf8').replace('version="1.0.0"', 'version="1.0.1"'));
+  const built = satori(['build', next, '--out', join(outside, 'next-out')]);
+  const nextZip = join(outside, 'next-out', 'acme-config-1.0.1.zip');
+  if (built.status !== 0 || !existsSync(nextZip))
+    fail('the scaffold at 1.0.1', `exit ${built.status}`, built.output);
+  else {
+    expect(
+      "satori verify, 1.0.1's zip with 1.0.0's signature",
+      satori(['verify', nextZip, '--trusted-signers', signers, '--signature', `${zip}.sig.json`]),
+      1,
+      'the signature is for acme-config-1.0.0.zip',
+    );
+  }
+  const renamed = join(outside, 'renamed', 'acme-config-1.0.1.zip');
+  mkdirSync(dirname(renamed), { recursive: true });
+  cpSync(zip, renamed);
+  cpSync(`${zip}.sig.json`, `${renamed}.sig.json`);
+  expect(
+    'satori verify, 1.0.0 renamed to 1.0.1',
+    satori(['verify', renamed, '--trusted-signers', signers]),
+    1,
+    'and the zip is named acme-config-1.0.1.zip',
+  );
+  expect(
+    'satori verify, held to another version',
+    satori(['verify', zip, '--trusted-signers', signers, '--version', '1.0.1']),
+    1,
+    'not 1.0.1',
+  );
+  // The command's own: no trusted signers, and keyless off a tag build.
+  expect(
+    'satori verify with no trusted signers',
+    satori(['verify', zip]),
+    2,
+    '--trusted-signers is needed',
+  );
+  expect(
+    'satori sign --keyless, not on a tag build',
+    satori([
+      'sign',
+      zip,
+      '--keyless',
+      '--trusted-signers',
+      signers,
+      '--predicate-out',
+      join(outside, 'predicate.json'),
+    ]),
+    1,
+    'is not a tag app-package/<name>/<version>',
+  );
+  expect(
+    'satori sign --keyless with a key',
+    satori(['sign', zip, '--keyless', '--key', keyFile]),
+    2,
+    '--keyless signs in CI',
+  );
+}
+
+// --- 9. What create writes for agents and CI -----------------------------------------------------------
+
+function skillProblems(text, tools) {
+  const problems = [];
+  if (!/^---\nname: satori-app-builder\n/.test(text))
+    problems.push('its name is not satori-app-builder');
+  for (const [pattern, why] of REPOSITORY_ONLY) if (pattern.test(text)) problems.push(why);
+  for (const { name } of tools)
+    if (!text.includes(`\`${name}\``)) problems.push(`it does not name ${name}`);
+  return problems;
+}
+
+function customerSkill(tool, tools) {
+  const problems = skillProblems(
+    readFileSync(join(tool, 'agents', 'skills', 'satori-app-builder', 'SKILL.md'), 'utf8'),
+    tools,
+  );
+  if (tools.length === 0 || problems.length > 0)
+    fail("the customer's skill", problems.join('; ') || 'no tools listed');
+  else held++;
+  // The control: this repository's own edition is refused by the same check.
+  if (
+    skillProblems(
+      readFileSync(join(REPO, '.cursor', 'skills', 'app-builder', 'SKILL.md'), 'utf8'),
+      tools,
+    ).length < 3
+  )
+    fail("the control on the customer's skill", "this repository's own skill passed it");
+  else held++;
+}
+
+/** Why the workflow `create` writes does not check, sign and verify as it says it does. */
+function workflowProblems(text) {
+  const problems = [];
+  const jobs = text.slice(text.indexOf('\njobs:\n'));
+  const job = (name) => {
+    const at = jobs.indexOf(`\n  ${name}:\n`);
+    if (at < 0) return '';
+    const rest = jobs.slice(at + 1);
+    const next = rest.slice(1).search(/\n {2}[a-z][\w-]*:\n/);
+    return next < 0 ? rest : rest.slice(0, next + 1);
+  };
+  const steps = (body) => body.split(/\n {6}- /).slice(1);
+  const check = job('check');
+  const sign = job('sign');
+  if (!/satori agents sync --check/.test(check))
+    problems.push('check does not check the agent files');
+  if (!/satori validate/.test(check) || !/satori build/.test(check))
+    problems.push('check does not validate and build');
+  if ((text.match(/id-token: write/g) ?? []).length !== 1 || !sign.includes('id-token: write'))
+    problems.push('an identity is held by a job other than sign');
+  if (
+    !/if: github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/app-package\/'\)/.test(
+      sign,
+    )
+  )
+    problems.push('sign runs on more than a tag build');
+  const signSteps = steps(sign);
+  const plan = signSteps.findIndex((step) => /satori sign "\$ZIP" --keyless/.test(step));
+  const attest = signSteps.findIndex((step) => /uses: actions\/attest@/.test(step));
+  const verify = signSteps.findIndex((step) =>
+    /satori verify "\$ZIP" --trusted-signers/.test(step),
+  );
+  if (plan < 0 || !/if: steps\.zip\.outputs\.configured == 'true'/.test(signSteps[plan] ?? ''))
+    problems.push('sign decides whether to sign without trusted-signers.json');
+  if (attest < plan || !/if: steps\.plan\.outputs\.sign == 'true'/.test(signSteps[attest] ?? ''))
+    problems.push('the attestation is made whatever the decision');
+  if (verify < attest || !/if: steps\.plan\.outputs\.sign == 'true'/.test(signSteps[verify] ?? ''))
+    problems.push('the signature is not verified once made');
+  if (/secrets\./.test(text)) problems.push('it reads a secret');
+  return problems;
+}
+
+function workflowTemplate(tool) {
+  const text = readFileSync(join(tool, 'templates', 'satori.yml'), 'utf8');
+  const problems = workflowProblems(text);
+  if (problems.length > 0) fail('the workflow satori create writes', problems.join('; '));
+  else held++;
+  for (const [what, was, is] of [
+    [
+      'the attestation made whatever the decision',
+      "        if: steps.plan.outputs.sign == 'true'\n        with:\n          subject-path",
+      '        with:\n          subject-path',
+    ],
+    [
+      'check given an identity',
+      '  check:\n    name: Validate and build\n',
+      '  check:\n    name: Validate and build\n    permissions:\n      id-token: write\n',
+    ],
+    [
+      'signing without trusted-signers.json',
+      "        if: steps.zip.outputs.configured == 'true'\n",
+      '',
+    ],
+  ]) {
+    if (!text.includes(was)) {
+      fail(`the control on the workflow: ${what}`, 'its edit no longer applies');
+      continue;
+    }
+    if (workflowProblems(text.replace(was, is)).length === 0)
+      fail(`the control on the workflow: ${what}`, 'not seen');
     else held++;
   }
 }
