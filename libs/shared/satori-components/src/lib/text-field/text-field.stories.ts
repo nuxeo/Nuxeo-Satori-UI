@@ -119,13 +119,18 @@ export const WithSuggestions: Story = {
 /** A place across a picture, in percent: the platform's number input, from 0 to 100. */
 export const NumberField: Story = {
   args: { label: 'Across (%)', value: '50', type: 'number', min: 0, max: 100, step: 1 },
-  play: async ({ canvasElement }) => {
+  // A script's key press does not step a native number input, so the arrow keys, the browser's
+  // own, are not asserted: what typing does is.
+  play: async ({ args, canvasElement }) => {
     const field = within(canvasElement).getByRole('spinbutton', { name: 'Across (%)' });
     await expect(field).toHaveAttribute('min', '0');
     await expect(field).toHaveAttribute('max', '100');
-    field.focus();
-    await userEvent.keyboard('{ArrowUp}');
-    await expect(field).toHaveValue(51);
+    await expect(field).toHaveAttribute('step', '1');
+    await userEvent.clear(field);
+    await userEvent.type(field, '75');
+    await expect(field).toHaveValue(75);
+    await userEvent.tab();
+    await expect(args.valueCommit).toHaveBeenLastCalledWith('75');
   },
 };
 

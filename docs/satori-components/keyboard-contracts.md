@@ -52,7 +52,7 @@ belongs to this ticket.
 | Tag editor                     | `Editable`                                                                | ArrowDown changes the active option; Enter saves the selected suggestion instead of the prefix; new tags remain normalized             |
 | Tag input                      | `KeyboardContract`                                                        | ArrowDown activates distinct options; Enter adds the selected suggestion instead of the prefix and returns to an empty focused input   |
 | Text field                     | `KeyboardContract`                                                        | Typing changes `value`; leaving the field with Tab emits `valueCommit` once, with the text                                             |
-| Text field, number             | `NumberField`                                                             | It is a `spinbutton` held by `min` and `max`; ArrowUp steps its value by `step`                                                        |
+| Text field, number             | `NumberField`                                                             | It is a `spinbutton` held by `min`, `max` and `step`; typing changes its value, and Tab commits it once                                |
 | Tabs                           | `SelectedFromTheKeyboard`                                                 | Arrows move focus, Enter activates and emits the exact tab, Home/End jump, and `aria-controls` identifies its panel                    |
 | Tabs, lazy                     | `Lazy`                                                                    | Only the selected tab's body is drawn; choosing another draws its body and drops the one left                                          |
 | Toast                          | `WithAnAction`                                                            | Keyboard activation invokes Undo and dismisses the toast                                                                               |
@@ -67,7 +67,8 @@ The select (`nxs-select`) is a native `<select>`: its keys are the browser's, an
 synthetic key press does not move a native select, so no story can assert them. Its `Choosing` story
 asserts what choosing does — the value it emits — and the layout designer's keyboard contract
 (`libs/features/layout-designer/src/lib/control-contract.testing.ts`) asserts that each of its
-pickers is that native element, named and in order.
+pickers is that native element, named and in order. A number field's arrow keys are the browser's
+too, so its `NumberField` story asserts what typing does instead.
 
 The confirm dialog's `Asking` story asserts that keyboard confirmation closes with `true`. The
 dialog frame's (`nxs-dialog`) `Asking` story asserts that Tab goes from Cancel to the action and
