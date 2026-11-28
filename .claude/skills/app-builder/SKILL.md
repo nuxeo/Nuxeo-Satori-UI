@@ -244,11 +244,12 @@ What each writes, and what it leaves to you:
 - **`app-queue`:** the page provider, columns, sort and page size. The pipeline holds the columns
   and the sort, and a related list's, to the type a page provider of the package's own lists, as
   its NXQL says (`ecm:primaryType = '<Type>'`, as `app-model` writes it), given a content model,
-  as a demo kit's own always is; on the server's, or with no model, nothing checks them. Facets
-  are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
-"labelKey": "<key>" }]`, each an aggregate the page provider defines, which
-  `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
-  page provider in the package's own model does not define.
+  as a demo kit's own always is; on the server's, or with no model, nothing checks them.
+  `--facets` writes the facets, each an aggregate the page provider defines, by its id or by its
+  property (`claim:status` for `claim_status_agg`), with each name's text in `labels/en.json`. On
+  a page provider of the package's own it refuses an aggregate the page provider does not define,
+  as the pipeline does; on the server's, give the ids `describe_page_provider` lists, which nothing
+  checks. With `--force`, `--facets` replaces the queue's facets; without it, they are kept.
 - **`app-action`:** a transition or an operation (`--operation`, with `--parameters` as JSON), on
   `record`, `row` or `bulk`, and `--queue` to offer it there. An id starting `app.` or `core.` is
   the platform's, and refused.

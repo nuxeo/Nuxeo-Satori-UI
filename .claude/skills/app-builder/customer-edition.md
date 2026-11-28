@@ -199,9 +199,13 @@ What each writes, and what it leaves to you:
   names them, a widget only where the model says more than the type. Its "Left out" names what it
   did not write, and why.
 - **`app-form`:** the Edit or Create form, `"required": true` on the fields `required` names.
-- **`app-queue`:** the page provider, columns, sort and page size. Facets are the next edit, with
-  `write_package_file`: `"facets": [{ "aggregate": "<id>", "labelKey": "<key>" }]`, each an
-  aggregate the page provider defines.
+- **`app-queue`:** the page provider, columns, sort, page size and facets. `facets` is one string,
+  the aggregates the page provider defines separated by commas, each by its id or by its property,
+  such as `"facets": "claim:status,claim:priority"`; it writes each facet's text in
+  `labels/en.json`.
+  On a stand-in model's page provider it refuses an aggregate the page provider does not define;
+  on the server's, give the ids `describe_page_provider` lists. With `force`, `facets` replaces
+  the queue's facets. Never say a queue has facets until its file has them.
 - **`app-action`:** a transition or an operation (`operation`, with `parameters` as JSON), on
   `record`, `row` or `bulk`, and `queue` to offer it there. An id starting `app.` or `core.` is the
   platform's, and refused.

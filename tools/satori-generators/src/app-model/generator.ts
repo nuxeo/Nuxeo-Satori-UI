@@ -1529,7 +1529,7 @@ Wrote the stand-in model, for a demo:
 ${facets.length > 0 ? `  Facets:         ${facets.join(', ')}${versionable ? ', with the uid schema its versions are numbered in' : ''}\n` : ''}${subtypes.length > 0 ? `  Subtypes:       ${subtypes.join(', ')}, which its Create menu offers\n` : ''}
   Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
 ${properties.length > 0 ? `  Heading:        ${heading} in labels/en.json, the Properties panel's heading for the schema${keptHeading ? ', its text kept as labels/en.json had it' : `, "${headingText}"`}\n` : ''}
-${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}
+${search ? `\nA queue on ${pageProvider} filters by these aggregates: give app-queue --facets, each by its id\nor by its property, ${search.aggregates.map((aggregate) => aggregate.property).join(',')}, which writes each facet and its name. A home's\nfigure may count one's buckets.\n` : ''}
 Lay the type out against the content model beside it:
 
   npx nx g ./tools/satori-generators:app-layout --package=${pkg.root} --type=${type} --model=${modelJson}

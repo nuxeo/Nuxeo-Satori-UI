@@ -24,9 +24,9 @@ same kind, built by Nuxeo; read it, and never copy its ids, types or groups.
 5. **The forms**: `app-form` `edit` and `create` for `Claim`, with `claim:claimNumber`,
    `claim:member` and `claim:amount` required.
 6. **The queues**: `app-queue` for each page provider: "Claims to review", with the claim number,
-   the member, the amount, the status and the priority; "High-value claims"; "Open cases". Then
-   the facets of "Claims to review", `claim_status_agg` and `claim_priority_agg`, written into its
-   queue file, since `app-queue` writes none.
+   the member, the amount, the status and the priority, and `facets` `claim:status,claim:priority`;
+   "High-value claims"; "Open cases". Then read the queue file of "Claims to review": its facets
+   are `claim_status_agg` and `claim_priority_agg`. Never say it has them before the file does.
 7. **The home and the menu**: `home.json`, a figure for each queue and the claims changed last;
    `navigation.json`, the home and the three queues; their texts in `labels/en.json`;
    `app-registry`.

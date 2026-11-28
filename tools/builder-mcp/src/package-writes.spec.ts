@@ -299,6 +299,10 @@ describe('writePackage, refusing before anything runs', () => {
     expect(await run('app-queue', { id: 'x', pageProvider: 'p', pageSize: '50' })).toContain(
       'app-queue takes a number here',
     );
+    // An option of the schema's, held to its type there: facets is one string, comma-separated.
+    expect(
+      await run('app-queue', { id: 'x', pageProvider: 'p', facets: ['claim_status_agg'] }),
+    ).toContain('options.facets: app-queue takes a string here');
     expect(await run('app-form', { type: 'Contract', mode: 'delete', model: 'x.json' })).toContain(
       'one of edit, create',
     );
@@ -1098,6 +1102,45 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       // What the generator printed names the package, not the staging copy.
       expect(result.generatorOutput.join('\n')).toContain('active-contracts');
       expect(result.generatorOutput.join('\n')).not.toContain(work);
+    });
+
+    it("runs app-queue with facets, held to the kit's own page provider, and refuses one it does not define", async () => {
+      const root = kit('facilities-demo', 'queue-facets');
+      const queue = (options: Record<string, unknown>) =>
+        writePackage(
+          {
+            package: root,
+            changes: [
+              {
+                kind: 'generator',
+                generator: 'app-queue',
+                options: {
+                  id: 'by-priority',
+                  pageProvider: 'facilities_open_work_orders',
+                  columns: 'wo:number,dc:title,wo:priority',
+                  ...options,
+                },
+              },
+            ],
+          },
+          OPTIONS,
+        );
+      const before = fingerprint(root);
+      await expect(queue({ facets: 'wo:priority,wo_building_agg' })).rejects.toThrow(
+        /app-queue refused:[\s\S]*has no aggregate "wo_building_agg": it defines wo_priority_agg \(wo:priority\), wo_category_agg \(wo:category\)/,
+      );
+      expect(fingerprint(root)).toEqual(before);
+
+      const result = await queue({ facets: 'wo:priority,wo_category_agg' });
+      expect(result.written, JSON.stringify(result)).toBe(true);
+      expect(JSON.parse(read(root, `${CONFIG}/queues/by-priority.json`))['facets']).toEqual([
+        { aggregate: 'wo_priority_agg', labelKey: 'facilities.facet.wo_priority_agg' },
+        { aggregate: 'wo_category_agg', labelKey: 'facilities.facet.wo_category_agg' },
+      ]);
+      expect(JSON.parse(read(root, LABELS))['labels']).toMatchObject({
+        'facilities.facet.wo_priority_agg': 'Priority',
+        'facilities.facet.wo_category_agg': 'Category',
+      });
     });
 
     it.skipIf(process.platform === 'win32')(

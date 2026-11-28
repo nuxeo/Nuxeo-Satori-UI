@@ -424,6 +424,91 @@ function configurationExtensions(pkg: AppPackage, markup: string): Extension[] {
   return found;
 }
 
+/** A page provider the package's own components define, as the server would register it. */
+export interface PackagePageProvider {
+  /** The component that defines it, from the workspace root. */
+  readonly component: string;
+  /** A `coreQueryPageProvider`, which reads the repository and answers no aggregate. */
+  readonly repository: boolean;
+  /** Its aggregates in the order written: each id, and the property it groups by when it says. */
+  readonly aggregates: readonly { readonly id: string; readonly property?: string }[];
+}
+
+/**
+ * The page providers the package's own components define, by name, read as the package
+ * pipeline's `pageProvidersOf` reads them (`scripts/package-pipeline/pipeline.mjs`), whose step 2
+ * then holds a queue's facets to them, and as the Builder MCP server's `describe_page_provider`
+ * reads a demo kit's own: the components the manifest's `Nuxeo-Component` names inside `bundle/`,
+ * each read as `markupOnly` reads it, and in them each `coreQueryPageProvider` or
+ * `genericPageProvider` of an extension to `PageProviderService`'s `providers` point. Of two of
+ * one name, the later is the one the server keeps; a disabled one takes it away. A page provider
+ * the package does not define is the server's, which nothing here can read.
+ */
+export function pageProvidersOf(tree: Tree, root: string): Map<string, PackagePageProvider> {
+  const providers = new Map<string, PackagePageProvider>();
+  const manifest = tree.read(`${root}/bundle/META-INF/MANIFEST.MF`, 'utf-8');
+  if (manifest === null) return providers;
+  // The main section's headers, a continuation line joined to the one before it, as
+  // java.util.jar.Manifest reads them; a component list splits where the runtime splits it.
+  const lines = manifest
+    .replace(/^\uFEFF/, '')
+    .replace(/(?:\r\n|\r|\n) /g, '')
+    .split(/\r\n|\r|\n/);
+  const end = lines.indexOf('');
+  const paths = (end < 0 ? lines : lines.slice(0, end))
+    .filter((line) => /^nuxeo-component:/i.test(line))
+    .flatMap((line) => line.slice(line.indexOf(':') + 1).split(/[, \t\n\r\f]+/))
+    .filter((path) => path !== '');
+  for (const path of new Set(paths)) {
+    if (path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path)) continue;
+    const inside = posix.normalize(path);
+    if (inside === '.' || inside === '..' || inside.startsWith('../')) continue;
+    const component = `${root}/bundle/${inside}`;
+    const xml = tree.read(component, 'utf-8');
+    if (xml === null) continue;
+    const markup = markupOnly(xml);
+    for (const extension of markup.matchAll(startTag('extension'))) {
+      const [tag] = extension;
+      if (
+        tag.endsWith('/>') ||
+        attribute(tag, 'target') !== 'org.nuxeo.ecm.platform.query.api.PageProviderService' ||
+        attribute(tag, 'point') !== 'providers'
+      )
+        continue;
+      const start = (extension.index ?? 0) + tag.length;
+      const close = /<\/extension[ \t\r\n]*>/.exec(markup.slice(start));
+      const body = markup.slice(start, close === null ? markup.length : start + close.index);
+      for (const element of body.matchAll(
+        /<(coreQueryPageProvider|genericPageProvider)(?=[ \t\r\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+      )) {
+        const [opening, kind, attributes] = element;
+        const name = attribute(opening, 'name');
+        if (!name) continue;
+        const enabled = attribute(opening, 'enabled');
+        if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
+          providers.delete(name);
+          continue;
+        }
+        const from = (element.index ?? 0) + opening.length;
+        const to = attributes.trimEnd().endsWith('/') ? from : body.indexOf(`</${kind}`, from);
+        const definition = body.slice(from, to < 0 ? body.length : to);
+        const aggregates = [...definition.matchAll(startTag('aggregate'))]
+          .map(([aggregate]) => ({
+            id: attribute(aggregate, 'id') ?? '',
+            property: attribute(aggregate, 'parameter') || undefined,
+          }))
+          .filter((aggregate) => aggregate.id !== '');
+        providers.set(name, {
+          component,
+          repository: kind === 'coreQueryPageProvider',
+          aggregates,
+        });
+      }
+    }
+  }
+  return providers;
+}
+
 /**
  * The files of an app definition the app registry serves besides `app.json`, each at its place,
  * in the order the generators name them: app-definition-v2.md, section 10's example. They are the
