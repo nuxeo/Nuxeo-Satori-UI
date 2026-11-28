@@ -34,6 +34,48 @@
           }
         ]
       }
+    },
+    {
+      "id": "title-overdue",
+      "tone": "negative",
+      "labelKey": "vehicle-titles.banner.deal.titleOverdue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.dateAfter",
+            "parameters": [
+              "today",
+              { "field": "vdeal:title", "types": ["VehicleTitle"], "show": "vtitle:openedOn" },
+              30
+            ]
+          },
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [
+              { "field": "vdeal:title", "types": ["VehicleTitle"], "show": "vtitle:status" },
+              "Awaiting title",
+              "Awaiting lien release",
+              "In hand",
+              "Submitted to state"
+            ]
+          }
+        ]
+      },
+      "link": { "field": "vdeal:title" }
+    },
+    {
+      "id": "title-awaiting-lien-release",
+      "tone": "warning",
+      "labelKey": "vehicle-titles.banner.deal.titleAwaitingLienRelease",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [
+          { "field": "vdeal:title", "types": ["VehicleTitle"], "show": "vtitle:status" },
+          "Awaiting lien release"
+        ]
+      },
+      "link": { "field": "vdeal:title" }
     }
   ],
   "cards": [
@@ -92,7 +134,12 @@
     {
       "id": "vehicle",
       "labelKey": "vehicle-titles.card.vehicleDeal.vehicle",
-      "fields": ["vdeal:vin", "vdeal:year", "vdeal:make", "vdeal:model"]
+      "fields": [
+        "vdeal:vin",
+        { "field": "vdeal:year", "widget": "number", "parameters": { "grouping": false } },
+        "vdeal:make",
+        "vdeal:model"
+      ]
     },
     {
       "id": "price",
@@ -159,7 +206,22 @@
           "id": "tradeInTitleStatus",
           "field": "vdeal:tradeInTitle",
           "widget": "document-link",
-          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:status" }
+          "parameters": {
+            "types": ["VehicleTitle"],
+            "show": {
+              "field": "vtitle:status",
+              "widget": "status-badge",
+              "parameters": {
+                "tones": {
+                  "Awaiting title": "warning",
+                  "Awaiting lien release": "warning",
+                  "In hand": "info",
+                  "Submitted to state": "info",
+                  "Issued": "positive"
+                }
+              }
+            }
+          }
         },
         {
           "id": "tradeInLienHolder",
@@ -194,7 +256,22 @@
           "id": "titleStatus",
           "field": "vdeal:title",
           "widget": "document-link",
-          "parameters": { "types": ["VehicleTitle"], "show": "vtitle:status" }
+          "parameters": {
+            "types": ["VehicleTitle"],
+            "show": {
+              "field": "vtitle:status",
+              "widget": "status-badge",
+              "parameters": {
+                "tones": {
+                  "Awaiting title": "warning",
+                  "Awaiting lien release": "warning",
+                  "In hand": "info",
+                  "Submitted to state": "info",
+                  "Issued": "positive"
+                }
+              }
+            }
+          }
         },
         {
           "id": "titleLienHolder",

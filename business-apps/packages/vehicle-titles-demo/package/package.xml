@@ -1,4 +1,4 @@
-<package type="addon" name="vehicle-titles-demo" version="0.1.0">
+<package type="addon" name="vehicle-titles-demo" version="0.2.0">
   <title>Vehicle Deals and Titles</title>
   <description>
     <p>The Vehicle Deals and Titles app definition, a Nuxeo Satori business app.</p>

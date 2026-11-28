@@ -44,14 +44,14 @@
  * table inside a table's column is held to its subfield's subfields, though the page does not draw
  * one yet.
  */
-import { join, type Finding, type PropertyReference } from './checker';
+import { join, type Finding, type LinkedRead, type PropertyReference } from './checker';
 import {
   propertiesOf,
   propertyTypeOf,
   type ContentModel,
   type PropertyModel,
 } from './content-model';
-import { isRecord, XPATH, type Registries } from './registries';
+import { isRecord, linkedShowOf, XPATH, type Registries } from './registries';
 
 /** A task form's variables, `var:<name>`, are not the record's properties. */
 const VARIABLE = 'var:';
@@ -85,13 +85,54 @@ interface Scope {
  * and for one the model does not have. An entry with no `show`, or whose `show` or `types` is
  * malformed and has its finding already, has none here.
  */
-export function linkedShowFindings(entry: unknown, path: string, model: ContentModel): Finding[] {
+export function linkedShowFindings(
+  entry: unknown,
+  path: string,
+  model: ContentModel,
+  registries?: Registries,
+): Finding[] {
   if (!isRecord(entry) || entry['widget'] !== 'document-link') return [];
   const parameters = entry['parameters'];
   if (!isRecord(parameters)) return [];
-  const { show, types } = parameters;
-  if (typeof show !== 'string' || !XPATH.test(show) || !Array.isArray(types)) return [];
+  const shown = linkedShowOf(parameters['show']);
+  const { types } = parameters;
+  if (shown === null || !Array.isArray(types)) return [];
   const at = join(join(path, 'parameters'), 'show');
+  const findings = linkedPropertyFindings(shown.field, types, at, model, 'the field links to');
+  // The widget it is shown through, held to the property's type on each type that has it, as a
+  // field's widget is to its own property's.
+  const widget = shown.widget;
+  if (widget === null || !registries || !Object.hasOwn(registries.widgets, widget)) return findings;
+  const accepts = registries.widgets[widget].accepts as readonly string[];
+  for (const linked of types) {
+    const property =
+      typeof linked === 'string' ? propertiesOf(model, linked)?.get(shown.field) : undefined;
+    if (!property) continue;
+    const type = propertyTypeOf(property);
+    if (!accepts.includes(type))
+      findings.push({
+        path: join(at, 'widget'),
+        kind: 'parameter',
+        message: `the widget "${widget}" does not show "${shown.field}" of "${linked}", a ${type} property: it takes ${accepts.join(' or ')}`,
+      });
+  }
+  return findings;
+}
+
+/**
+ * A linked record's property held to the content model: one of every type `types` lists, on the
+ * type or a facet it declares, since the linked record may be of any of them. An `unknown` finding
+ * for each type that lacks it, and for one the model does not have. `what` names who links: the
+ * field, or a rule.
+ */
+function linkedPropertyFindings(
+  show: string,
+  types: readonly unknown[],
+  at: string,
+  model: ContentModel,
+  what: string,
+): Finding[] {
+  if (!XPATH.test(show)) return [];
   return types.flatMap((linked): Finding[] => {
     if (typeof linked !== 'string' || linked === '') return [];
     if (!propertiesOf(model, linked))
@@ -108,9 +149,46 @@ export function linkedShowFindings(entry: unknown, path: string, model: ContentM
           {
             path: at,
             kind: 'unknown',
-            message: `${whyMissing(model, linked, show)}, one of the types the field links to`,
+            message: `${whyMissing(model, linked, show)}, one of the types ${what}`,
           },
         ];
+  });
+}
+
+/**
+ * The linked records' properties a file's rules read (layout-v2.md, section 5), held to the model:
+ * the reference, where the type has it, one text holding one record's id, as a banner's link is;
+ * and the property `show` names, on every type `types` lists, as a `document-link`'s `show` is.
+ * Whether the type has the reference at all is the references' check, as for any property a rule
+ * reads.
+ */
+function linkedReadFindings(
+  reads: readonly LinkedRead[],
+  properties: ReadonlyMap<string, PropertyModel>,
+  model: ContentModel,
+): Finding[] {
+  return reads.flatMap(({ reference, path }): Finding[] => {
+    const findings: Finding[] = [];
+    const property = properties.get(reference.field);
+    if (property) {
+      const type = propertyTypeOf(property);
+      if (type !== 'string')
+        findings.push({
+          path: join(path, 'field'),
+          kind: 'parameter',
+          message: `a rule reads one linked record, by a string property holding its id, and "${reference.field}" is a ${type} property`,
+        });
+    }
+    findings.push(
+      ...linkedPropertyFindings(
+        reference.show,
+        reference.types,
+        join(path, 'show'),
+        model,
+        'the rule links to',
+      ),
+    );
+    return findings;
   });
 }
 
@@ -120,6 +198,7 @@ export function againstModel(
   model: ContentModel,
   registries: Registries,
   references: readonly PropertyReference[] = [],
+  linkedReads: readonly LinkedRead[] = [],
 ): Finding[] {
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
@@ -160,7 +239,7 @@ export function againstModel(
   };
 
   const field = (entry: unknown, path: string, scope: Scope): void => {
-    if (scope === ofType) findings.push(...linkedShowFindings(entry, path, model));
+    if (scope === ofType) findings.push(...linkedShowFindings(entry, path, model, registries));
     let name: unknown;
     let at = path;
     let widget: unknown;
@@ -294,7 +373,7 @@ export function againstModel(
       ) {
         const columns = join(join(join(path, index), 'related'), 'columns');
         card['related']['columns'].forEach((column, inner) =>
-          findings.push(...linkedShowFindings(column, join(columns, inner), model)),
+          findings.push(...linkedShowFindings(column, join(columns, inner), model, registries)),
         );
       }
       if (isRecord(card) && isRecord(card['related']) && isRecord(card['related']['create']))
@@ -431,6 +510,7 @@ export function againstModel(
     if (xpath.startsWith('ecm:') || properties.has(xpath) || facetProperties.has(xpath)) continue;
     add(path, 'unknown', `${whyMissing(model, type, xpath)}, so the ${by} naming it reads nothing`);
   }
+  findings.push(...linkedReadFindings(linkedReads, properties, model));
   return findings;
 }
 

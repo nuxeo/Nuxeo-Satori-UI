@@ -6,7 +6,7 @@
   "columns": [
     "vdeal:number",
     "vdeal:buyer",
-    "vdeal:year",
+    { "field": "vdeal:year", "widget": "number", "parameters": { "grouping": false } },
     "vdeal:make",
     "vdeal:model",
     {

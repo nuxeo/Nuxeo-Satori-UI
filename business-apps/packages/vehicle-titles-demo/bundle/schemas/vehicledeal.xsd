@@ -12,7 +12,7 @@
   <xs:element name="buyerEmail" type="xs:string" />
   <xs:element name="buyerPhone" type="xs:string" />
   <xs:element name="vin" type="xs:string" />
-  <xs:element name="year" type="xs:string" />
+  <xs:element name="year" type="xs:long" />
   <xs:element name="make" type="xs:string" />
   <xs:element name="model" type="xs:string" />
   <xs:element name="price" type="xs:double" />

@@ -35,7 +35,11 @@
   "facets": [
     { "aggregate": "pclaim_status_agg", "labelKey": "pc-claims.facet.status" },
     { "aggregate": "pclaim_cause_agg", "labelKey": "pc-claims.facet.cause" },
-    { "aggregate": "pclaim_adjuster_agg", "labelKey": "pc-claims.facet.adjuster" },
+    {
+      "aggregate": "pclaim_adjuster_agg",
+      "labelKey": "pc-claims.facet.adjuster",
+      "widget": "user"
+    },
     {
       "aggregate": "pclaim_policy_agg",
       "labelKey": "pc-claims.facet.policy",

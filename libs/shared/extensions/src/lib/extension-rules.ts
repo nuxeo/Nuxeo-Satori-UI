@@ -83,6 +83,15 @@ export interface ExtensionRuleContext {
    * passes neither date rule.
    */
   readonly timeZone?: string;
+  /**
+   * A property of a record the focused record links to, for a layout's rule that reads one,
+   * `{ "field", "types", "show" }` (layout-v2.md, section 5): the value the record page read for
+   * the record whose id is `id`, as the reader, through the same search a `document-link`'s `show`
+   * reads it with, so only what the server let the reader read. `undefined` where that record is
+   * not read, may not be read, no longer exists, or was read without the property. Absent
+   * everywhere but the record page, where such a rule reads no value and does not pass.
+   */
+  readonly linked?: (id: string, xpath: string) => unknown;
 }
 
 /** An empty context, so a caller with nothing in focus need not build one. */

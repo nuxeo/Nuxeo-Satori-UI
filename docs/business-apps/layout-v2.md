@@ -126,10 +126,15 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                | Required, unique in the file, as a card's: banners and cards share the file's ids                                                         |
 | `label`, `labelKey` | The message, as a literal or a translation key. One of them is required                                                                   |
-| `tone`              | `info`, `warning` or `negative`: the words a `status-badge` uses for its tones. Default `info`                                            |
+| `tone`              | `info`, `warning`, `negative` or `positive`: the words a `status-badge` uses for its tones, but `neutral`. Default `info`                 |
 | `visibleWhen`       | A rule (section 5). The banner shows only while it passes; without one, it always shows                                                   |
 | `link`              | Optional: `{ "field": "<prefix>:<name>" }`, a property of the record holding another record's id. The banner links to that record (below) |
 
+- **`positive` is for something that went right,** such as a request signed by everyone, drawn in
+  the colours of a `status-badge`'s `positive`, with a tick. **Added on 27 November 2026** for the
+  onboarding kit's signed banner ([its README](../../business-apps/packages/onboarding-demo/README.md),
+  "Where the tools fell short", item 7). Its colours are the design system's tertiary roles,
+  `--mat-sys-tertiary-container` and its text, as a success tag's are.
 - **The message is text,** as a card's heading is. It names no property, so a date the reader needs
   is shown by a field: the `rights` card above shows the day the rights end.
 - **Each banner is decided alone.** The two above never show together, because their rules never
@@ -412,7 +417,7 @@ or a stand-in package's own), and by the layout designer, which will not save th
 | `text`          | `string`                       |                                                                          | A text field                     |
 | `long-text`     | `string`                       | `rows`                                                                   | A text area                      |
 | `rich-text`     | `string`                       |                                                                          | A rich text editor               |
-| `number`        | `long`, `double`               | `decimals`                                                               | A number field                   |
+| `number`        | `long`, `double`               | `decimals`; `grouping`: `true` (2,024), the default, or `false` (2024)   | A number field                   |
 | `currency`      | `long`, `double`               | `currency`: an ISO 4217 code, or a field holding one                     | A number field with the currency |
 | `percent`       | `long`, `double`               | `scale`: `1` (0.12 is 12%) or `100` (12 is 12%)                          | A number field                   |
 | `date`          | `date`                         | `format`: `short` or `long`                                              | A date picker                    |
@@ -429,15 +434,36 @@ or a stand-in package's own), and by the layout designer, which will not save th
 | `status-badge`  | `string`                       | `tones`: value to `positive`, `warning`, `negative`, `info` or `neutral` | A select                         |
 | `table`         | `complex[]`                    | `columns`: field entries over the subfields                              | Rows to add, edit and remove     |
 | `image`         | `blob`                         |                                                                          | An image upload                  |
+| `file`          | `blob`                         |                                                                          | Read-only, by its name           |
 | `file-list`     | `blob[]`, `complex[]` of files |                                                                          | File uploads                     |
 
+- **A number is grouped as the reader's locale groups it,** `2,024` in English, `2 024` in French.
+  `"grouping": false` writes it with no group separator, `2024`, and keeps the locale's decimal
+  sign: for a model year, or a number that is a code rather than an amount. **Added on 27 November
+  2026** for the vehicle kit's model year (its
+  [README](../../business-apps/packages/vehicle-titles-demo/README.md), "Phase 8 feedback", item 5).
+  A number field in a form is unchanged: what is typed is what is stored.
+- **A `file` is one file, by its name, as a button that downloads it:** a property holding one
+  blob, such as a request's signed file. Pressed, the page asks for the file through the REST API
+  as the reader, `@blob/<property>`, as the Attachments panel and a list's Download do, and saves it
+  under its name; the server decides whether the reader may, and a refusal or a failure is said in a
+  toast. A property with no file, or one with no name, shows empty. The button's name is "Download"
+  and the file's name, which holds the text it shows. In a related list's or a queue's column, and
+  in a table's, it is the file's name as text, with no button: a cell offers the row, not its files. In a form it is read-only, by its name: files
+  are changed in Attachments. **Added on 27 November 2026** for the onboarding kit's signed file
+  and evidence (its README, item 8): until then only `image` took one file, to show it, and
+  `file-list` a list of them.
 - **Rich text** is shown through the platform's sanitiser, like every other HTML the app renders,
   and keeps formatting, lists, quotes, code and links only: no image, form, style or frame. It is
   the only widget that renders HTML.
 - **A widget's text is the property's display value.** For a vocabulary, that is its label; for a
   user, their name; for a `document-link`, the linked record's title.
 - **A `document-link` shows the record it names,** by its title, as a link that opens it, and a
-  list of them one after another. A record the reader may not read, or that no longer exists,
+  list of them one after another. A version shows its label after its title, "Account agreement,
+  version 1.0", so that two versions of one record read apart: the label the search returns with it,
+  `versionLabel`, for a record that is a version, `isVersion`. **Added on 27 November 2026** for the
+  onboarding kit's signed version ([its README](../../business-apps/packages/onboarding-demo/README.md),
+  "Where the tools fell short", item 10). A record the reader may not read, or that no longer exists,
   shows "Unavailable", never its id and never an error. `types` is the picker's: the record page
   shows whatever record the id names (section 11).
 
@@ -518,6 +544,60 @@ Version 2 adds six rules to the 29 or so that exist:
   above, never the hours between them. Only the literal `"today"` is today: a property holding that
   text names no date. **Added on 26 November 2026** for the moves kit's late-filing banner
   ([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8 feedback", item 2).
+- **A rule may read a linked record's property,** on a record page: the property a `document-link`
+  would show with `show` (section 12), written as its parameters are, `{ "field", "types", "show" }`,
+  in place of `{ "field" }` in `fieldIn`'s first parameter and in a date rule's dates. **Added on 27
+  November 2026** for the vehicle kit's deal page, which warns that its title is overdue or awaits a
+  lien release ([its README](../../business-apps/packages/vehicle-titles-demo/README.md), "Phase 8
+  feedback", item 10):
+
+  ```json
+  {
+    "version": 2,
+    "banners": [
+      {
+        "id": "title-awaiting-lien-release",
+        "tone": "warning",
+        "label": "Its title awaits its lien release",
+        "visibleWhen": {
+          "type": "app.rules.fieldIn",
+          "parameters": [
+            { "field": "vdeal:title", "types": ["VehicleTitle"], "show": "vtitle:status" },
+            "Awaiting lien release"
+          ]
+        },
+        "link": { "field": "vdeal:title" }
+      }
+    ],
+    "cards": [{ "id": "deal", "fields": ["vdeal:number"] }]
+  }
+  ```
+
+  - **`field`** is the open record's property holding the linked record's id, one text, as a
+    banner's `link` is: a list names several records, and a rule compares one value. **`types`**
+    are the types it links to, whose schemas hold the property, and **`show`** the property, never
+    an `ecm:` or `var:` name, as a `show`'s.
+  - **Read as `show` reads it, so with the reader's permissions.** The page reads the linked record
+    once, in the search its `document-link`s and `show`s share, through the REST API as the reader,
+    with the schemas every `show` and rule on the page needs (section 12, "What the reader may see").
+    A record the reader may not read, one that no longer exists, an empty reference or one that is no
+    document's id gives the rule no value, as an empty property does: `fieldIn` and the date rules do
+    not pass on it, and `core.not` of them does. Write the values out, as for a queue below, so that
+    a title the reader may not read shows no banner that says something about it.
+  - **Decided once the linked record is read.** Until the linked types and the record are read, a
+    rule that reads one does not pass, `core.not` and all, so a banner, a tab, a card or a field it
+    shows waits rather than showing for a moment. One whose property none of its types has, or that
+    is itself a reference, never passes, and the console says why, as such a `show` is left out.
+  - **On a record page only:** every rule of a `view` file, its banners', tabs', cards', fields' and
+    columns', and a `core.choose` in its computations. In a form, a task form, a queue, an action,
+    the menu and the home, a linked record's property is a `parameter` finding: none of them reads a
+    linked record, and the rule would never pass there. A rule is evaluated by every slot of every
+    manifest, so the rules' library reads a linked record only from what the record page gives it
+    (`ExtensionRuleContext.linked`), and nothing elsewhere.
+  - **What the validator checks:** the form, as above, and, given the content model, `field` on the
+    type as one text, and `show` on every type `types` lists, as a `show`'s.
+  - **One link away,** as `show` is: not the property of a record that the linked one links to.
+
 - **A rule reads no computation.** A platform rule's parameter is a property or a literal, never
   `{ "computed": … }`, and the validator refuses one. Considered on 26 November 2026, for the same
   banner, and left out, because it does not fit decision 4's shape
@@ -539,7 +619,13 @@ Version 2 adds six rules to the 29 or so that exist:
   shows, and for one ahead the banner shows first. A page provider has no reader's day. Say so
   to whoever reads both, and hold them together in the kit's own controls, as the vehicle kit's
   seed does (its [README](../../business-apps/packages/vehicle-titles-demo/README.md), "Titles
-  overdue: the queue and the banner say the same").
+  overdue: the queue and the banner say the same"). A banner that reads a linked record's property
+  is written the same way: the deal page's overdue title banner names the title's four open
+  statuses and `dateAfter` 30, as the overdue titles queue names them in NXQL. **Not built: a queue
+  that filters its page provider's records by a registered rule.** The page provider pages and
+  counts on the server, so a rule applied in the browser would show pages shorter than their size,
+  totals that count records the queue hides, and facets' counts of the same; and a rule reading a
+  record's date reads the reader's day, which the server, paging for everyone, has not.
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
 
@@ -852,6 +938,26 @@ let the page tick them, with `"tickable": true`:
   show the same day. An item with no entry gets one at the end. Unticking keeps the entry, with
   `done` `false`. Every other entry stays as it was, in its order, among them one for an item the
   file no longer lists.
+- **A tick also writes the missing entries,** not done. Every item the page shows over the same
+  property, on any card it draws, that has no entry on the record gets one at the end, `done`
+  `false`, with no one and no day. **Added on 27 November 2026** for the vehicle kit's deals
+  missing documents ([its README](../../business-apps/packages/vehicle-titles-demo/README.md),
+  "Phase 8 feedback", item 6). A page provider's NXQL sees the record's entries, never the file's
+  items, so it can find a record with an entry not done, `vdocs:checklist/*/done = 0`, and never one
+  with no entry for an item. Once a record is ticked, it has an entry for every item it is held
+  to, and such a query finds it for any of them.
+  - **The items of a card its rule hides are not written,** nor those of a tab not drawn: a cash
+    deal gets no entry for the finance documents its page does not show. A deal changed to a loan
+    gets them on its next tick.
+  - **A record never ticked has no entries,** and such a query still cannot find it: whatever writes
+    the record, a seed, an import or a workflow, writes its entries, as the vehicle kit's seed does.
+    A page only shows a record; it writes nothing until the person ticks.
+  - **Why not a count kept on the record:** the other candidate was the platform keeping a count of
+    the items done, for queries. A count does not say how many items are required: those are the
+    file's, and a card's rule decides which show for a record, as the finance documents show only for
+    a loan or a lease. So the query would have to write each total again, by case, in NXQL: the same
+    two places this section's item 9 note warns of (section 5). Writing the entries puts the file's
+    items on the record, where the query reads them, through the write the page already makes.
 - **One tick at a time, on the whole page.** While one is written, its item's box shows what was
   asked, beside a spinner named "Saving", its list is marked busy, and every tick box on the page,
   on any card, says it is unavailable and asks for nothing, while keeping the keyboard's focus. On
@@ -1004,7 +1110,7 @@ What counts as structural:
 - a checklist with no property, a property that is not one or is an `ecm:` or `var:` name, no
   item, a `tickable` that is not `true` or `false`, or an item that is not an object, has no
   `label` or `labelKey`, or whose `id` is missing, malformed or listed twice;
-- a banner with no `label` or `labelKey`, a `tone` other than its three, or a `link` that is not
+- a banner with no `label` or `labelKey`, a `tone` other than its four, or a `link` that is not
   `{ "field" }` naming a property, or names an `ecm:` or `var:` one;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
@@ -1572,11 +1678,30 @@ widget shows the linked record's title, through the lookup section 11 describes.
   property; a column with `show` is keyed by both, the reference and the shown property, so the two
   stand side by side. A card's fields may do the same.
 - **The value is shown by its schema type,** as a field with no widget shows its property, and
-  links to the linked record, as its title would. It has no widget of its own: an amount on the
-  linked record shows as a number, not in a currency, and a date as the `date` widget shows one. A
-  widget for the shown value is left for later, if a kit needs one. **A departure:** a shown value
-  bound to a vocabulary shows its stored id, not its label: the proposal had it looked up as one on
-  the record itself is, and no kit needs it yet.
+  links to the linked record, as its title would: an amount on the linked record shows as a
+  number, and a date as the `date` widget shows one. **A departure:** a shown value bound to a
+  vocabulary shows its stored id, not its label: the proposal had it looked up as one on the record
+  itself is, and no kit needs it yet.
+- **Or through a widget,** with `show` written as a field is, `{ "field", "widget", "parameters" }`:
+  `"show": { "field": "vtitle:status", "widget": "status-badge", "parameters": { "tones": { "Issued": "positive" } } }`.
+  **Added on 27 November 2026** for the vehicle kit's deal page, which shows its title's status as
+  a badge ([its README](../../business-apps/packages/vehicle-titles-demo/README.md), "Phase 8
+  feedback", item 10).
+  - **The widgets that show one value as text:** `text`, `long-text`, `number`, `currency`,
+    `percent`, `date`, `relative-date`, `boolean` and `status-badge`, the same as a card from
+    another system's (section 7, `SHOWN_WIDGETS`). The value is drawn inside the link to the linked
+    record, so not `phone` or `email`, whose own links cannot sit in one; not `document-link`, one
+    link away only; not `user`, `group` or `vocabulary`, whose names would be read only after the
+    record they come from; and none that shows a complex value, a list or a file. Another is a
+    `parameter` finding, and one nobody registered `unknown`.
+  - **Its parameters are literals.** A `currency` given `{ "field" }` would read the open record's
+    property, not the linked record's, so it is a `parameter` finding.
+  - **On a record page, a `status-badge` is a badge inside the link,** named by its words; in a
+    list's cell, as every `status-badge` column there, its words, as the link.
+  - **The validator holds the widget,** given the content model, to the property's type on every
+    type `types` lists that has it, as a field's widget is held to its own; the page holds it to the
+    linked type's schema too, and leaves out a field whose widget does not show it, and the console
+    says why.
 - **Its label** is the shown property's, `layout.field.provider:npi`, then its name, unless the
   entry has its own `label` or `labelKey`. Without that, both columns above would read "Provider".
 - **On a page only:** a record page's fields and a list's columns, a related card's or a queue's. In
@@ -1688,5 +1813,6 @@ A Web UI column that shows a property of a referenced document, in a list whose
 | A copy in the model                            | The model keeps `provider:npi` on each claim as well     | No platform change, and a kit may do it today. But the copy goes stale when the provider changes, unless a listener keeps it, which is server code in every kit                                    |
 | An enricher of our own in `nuxeo-agentic-core` | A server call that adds the linked records to each list  | Nuxeo's search already does it, in one request                                                                                                                                                     |
 
-A rule cannot read a linked record's property: rules read the open record (section 5). So a kit
-whose banner compares a date with the linked record's keeps a copy of it, as the moves kit does.
+**Since 27 November 2026, a rule can read a linked record's property,** on a record page, written
+as a `show` is (section 5). A kit whose banner compares a date with the linked record's no longer
+needs a copy of it on the record, though the moves kit, built before, keeps one.

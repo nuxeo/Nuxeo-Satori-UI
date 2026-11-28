@@ -867,6 +867,15 @@ text `"today"` names no date. No date on either side, a zone the browser cannot 
 days out of range, and it does not pass; the layout validator refuses the last, and in place of a
 date anything but a property, a literal date or `"today"`.
 
+**A linked record's property,** `{ "field", "types", "show" }`, in `fieldIn`'s first parameter or in
+a date rule's dates, is read only on a record page, which reads the linked record as the reader
+and gives the rules the context's `linked` ([layout-v2.md](business-apps/layout-v2.md), section 5).
+Everywhere else the context has no `linked`, so the parameter has no value: `fieldIn` and the date
+rules do not pass on it, and `core.not` of them does. The layout validator refuses it outside a
+record page's layout; a manifest's parameters are not validated, so do not write one there. A
+parameter naming a `show` that is not all three of `field`, `types` and `show` has no value either,
+never the open record's own `field`.
+
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
 when you navigate away, so all of them answer `false` everywhere else — with two

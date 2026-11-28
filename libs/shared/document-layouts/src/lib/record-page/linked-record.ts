@@ -24,6 +24,12 @@ export interface LinkedRecord {
    * search returned to the reader, for this record's own id. A search always gives it; absent, none.
    */
   readonly properties?: Readonly<Record<string, unknown>>;
+  /**
+   * For a version, its label as Nuxeo writes it, `1.0`: a `document-link` to a version shows it
+   * beside the title, so that two versions of one record read apart. Absent for a live record, a
+   * proxy, and a version the server returned no label for.
+   */
+  readonly versionLabel?: string;
 }
 
 /**
@@ -99,7 +105,7 @@ export function readLinkedRecords(
   const found = new Map<string, LinkedRecord>();
   for (const entry of entries) {
     if (!isRecord(entry)) continue;
-    const { uid, type, path, facets, properties } = entry;
+    const { uid, type, path, facets, properties, isVersion, versionLabel } = entry;
     if (!isDocumentId(uid) || !wanted.has(uid) || typeof type !== 'string') continue;
     const title =
       typeof entry['title'] === 'string' && entry['title'].trim() !== ''
@@ -117,6 +123,9 @@ export function readLinkedRecords(
           : [],
       }),
       properties: isRecord(properties) ? properties : {},
+      ...(isVersion === true && typeof versionLabel === 'string' && versionLabel.trim() !== ''
+        ? { versionLabel: versionLabel.trim() }
+        : {}),
     });
   }
   return found;

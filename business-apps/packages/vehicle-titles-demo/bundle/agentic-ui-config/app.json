@@ -4,7 +4,7 @@
   "id": "vehicle-titles",
   "label": "Vehicle Deals and Titles",
   "labelKey": "vehicle-titles.app",
-  "packageVersion": "0.1.0",
+  "packageVersion": "0.2.0",
   "platform": ">=0.2.0 <1.0.0",
   "address": "vehicle-titles",
   "groups": ["vehicle-deal-desk", "vehicle-title-clerks"],

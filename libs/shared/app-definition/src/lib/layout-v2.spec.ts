@@ -199,6 +199,21 @@ describe('the validator finds', () => {
     ]);
   });
 
+  it("number's grouping as true or false, and nothing else", () => {
+    for (const grouping of [true, false])
+      expect(
+        messages(
+          withFields({ field: 'vd:year', widget: 'number', parameters: { grouping, decimals: 0 } }),
+        ),
+      ).toEqual([]);
+    for (const grouping of ['false', 0, null])
+      expect(
+        messages(withFields({ field: 'vd:year', widget: 'number', parameters: { grouping } })),
+      ).toEqual([
+        'cards[0].fields[0].parameters.grouping: grouping must be true or false [parameter]',
+      ]);
+  });
+
   it("a table's columns, held to the rules of any field", () => {
     const table = {
       field: 'cl:lines',
@@ -483,15 +498,22 @@ describe('banners', () => {
     expect(messages(page())).toEqual([]);
   });
 
-  it('take the three tones only', () => {
+  it('take the four tones only: a status badge has neutral besides', () => {
     expect(
       messages(
-        page(...['info', 'warning', 'negative'].map((tone) => ({ ...ending, id: tone, tone }))),
+        page(
+          ...['info', 'warning', 'negative', 'positive'].map((tone) => ({
+            ...ending,
+            id: tone,
+            tone,
+          })),
+        ),
       ),
     ).toEqual([]);
-    expect(messages(page({ ...ending, tone: 'positive' }))).toEqual([
-      'banners[0].tone: tone is one of info, warning, negative [structure]',
-    ]);
+    for (const tone of ['neutral', 'success', 'error'])
+      expect(messages(page({ ...ending, tone }))).toEqual([
+        'banners[0].tone: tone is one of info, warning, negative, positive [structure]',
+      ]);
   });
 
   it('are refused outside view mode, as a timeline is', () => {
@@ -837,8 +859,86 @@ describe("a document-link's show", () => {
       ['provider:npi'],
     ])
       expect(messages(withFields(link({ types: ['Provider'], show })))).toEqual([
-        'cards[0].fields[0].parameters.show: show must be a property of the linked record, <prefix>:<name>, neither ecm: nor var: [parameter]',
+        'cards[0].fields[0].parameters.show: show must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:, or { "field": <that property>, "widget", "parameters" } [parameter]',
       ]);
+    // The object form names its property the same way.
+    expect(
+      messages(withFields(link({ types: ['Provider'], show: { field: 'ecm:uuid' } }))),
+    ).toEqual([
+      'cards[0].fields[0].parameters.show: show must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:, or { "field": <that property>, "widget", "parameters" } [parameter]',
+    ]);
+  });
+
+  describe('through a widget', () => {
+    const shown = (show: Record<string, unknown>) =>
+      withFields(link({ types: ['Title'], show: { field: 'title:status', ...show } }));
+    const at = 'cards[0].fields[0].parameters.show';
+
+    it('takes one of the widgets that show a value as text, with its parameters', () => {
+      expect(
+        messages(
+          shown({
+            widget: 'status-badge',
+            parameters: { tones: { Issued: 'positive', 'Awaiting lien release': 'warning' } },
+          }),
+        ),
+      ).toEqual([]);
+      expect(messages(shown({}))).toEqual([]);
+      expect(messages(shown({ widget: 'number', parameters: { grouping: false } }))).toEqual([]);
+      // A list column too, as a field is.
+      expect(
+        messages(
+          related([link({ types: ['Title'], show: { field: 'title:openedOn', widget: 'date' } })]),
+        ),
+      ).toEqual([]);
+    });
+
+    it('refuses a widget that does not draw inside a link, or nobody registered, or no name', () => {
+      expect(messages(shown({ widget: 'document-link' }))).toEqual([
+        `${at}.widget: the widget "document-link" does not show a linked record's property inside its link: one of text, long-text, number, currency, percent, date, relative-date, boolean, status-badge does [parameter]`,
+      ]);
+      expect(messages(shown({ widget: 'email' }))[0]).toMatch(/widget "email" does not show/);
+      expect(messages(shown({ widget: 'badge' }))).toEqual([
+        `${at}.widget: the widget "badge" is not registered [unknown]`,
+      ]);
+      expect(messages(shown({ widget: ['status-badge'] }))).toEqual([
+        `${at}.widget: a widget is named by its ID [structure]`,
+      ]);
+    });
+
+    it("holds the widget's parameters, each a literal, and a key it does not have", () => {
+      expect(messages(shown({ widget: 'status-badge' }))).toEqual([
+        `${at}.parameters: the widget "status-badge" needs "tones" [parameter]`,
+      ]);
+      expect(
+        messages(shown({ widget: 'number', parameters: { grouping: 'no', colour: 1 } })),
+      ).toEqual([
+        `${at}.parameters.grouping: grouping must be true or false [parameter]`,
+        `${at}.parameters.colour: the widget "number" has no parameter "colour" [parameter]`,
+      ]);
+      expect(
+        messages(
+          shown({ widget: 'currency', parameters: { currency: { field: 'claim:currency' } } }),
+        ),
+      ).toEqual([
+        `${at}.parameters.currency: a linked record's value is shown with literal parameters: currency would read the open record's claim:currency, not the linked one's [parameter]`,
+      ]);
+      expect(messages(shown({ parameters: { tones: {} } }))).toEqual([
+        `${at}.parameters: parameters need a widget to belong to [parameter]`,
+      ]);
+      expect(messages(shown({ widget: 'text', parameters: 'none' }))).toEqual([
+        `${at}.parameters: parameters must be an object [structure]`,
+      ]);
+      expect(messages(shown({ widget: 'text', colour: 'red' }))).toEqual([
+        `${at}.colour: "colour" is not a key version 2 has [unknown]`,
+      ]);
+    });
+
+    it('is still for a page only', () => {
+      expect(messages(shown({ widget: 'text' }), 'edit')).toEqual([
+        `${at}: "show" shows a property of the linked record on a page only: a form's picker chooses a record by its title [parameter]`,
+      ]);
+    });
   });
 
   it('needs the types it links to, whose schemas hold the property', () => {
@@ -875,6 +975,115 @@ describe("a document-link's show", () => {
     expect(messages(related(['claim:number', link({ types: ['Provider'] })], byProvider))).toEqual(
       [],
     );
+  });
+});
+
+describe("a rule over a linked record's property", () => {
+  const status = { field: 'deal:title', types: ['Title'], show: 'title:status' };
+  const openedOn = { field: 'deal:title', types: ['Title'], show: 'title:openedOn' };
+  const banner = (visibleWhen: unknown) => ({
+    version: 2,
+    banners: [{ id: 'overdue', label: 'Title overdue', visibleWhen }],
+    cards: [{ id: 'deal', fields: ['deal:number'] }],
+  });
+  const fieldIn = { type: 'app.rules.fieldIn', parameters: [status, 'Awaiting lien release'] };
+  const linkedOnly = (owner: string) =>
+    `the rule "${owner}" reads a linked record's property on a record page only, in a view layout`;
+  const malformed = (owner: string) =>
+    `the rule "${owner}" takes a linked record's property as { "field": "<prefix>:<name>", "types": [<type>, ...], "show": "<prefix>:<name>" }, neither ecm: nor var:`;
+
+  it('reads it as fieldIn compares and as the date rules read a date, on a record page', () => {
+    expect(messages(banner(fieldIn))).toEqual([]);
+    expect(
+      messages(
+        banner({
+          type: 'core.every',
+          parameters: [
+            fieldIn,
+            { type: 'app.rules.dateAfter', parameters: ['today', openedOn, 30] },
+            { type: 'app.rules.datePassed', parameters: [openedOn] },
+            { type: 'app.rules.dateWithin', parameters: [openedOn, 5] },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+    // On a tab, a card and a field too: every rule of a view layout.
+    expect(
+      messages({
+        version: 2,
+        tabs: [
+          {
+            id: 'main',
+            visibleWhen: fieldIn,
+            cards: [
+              {
+                id: 'deal',
+                visibleWhen: fieldIn,
+                fields: [{ field: 'deal:number', visibleWhen: fieldIn }],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it('is refused where the page reads no linked record: a form, a task form', () => {
+    const form = withFields({ field: 'deal:number', visibleWhen: fieldIn });
+    for (const mode of ['edit', 'create'] as const)
+      expect(messages(form, mode)).toEqual([
+        `cards[0].fields[0].visibleWhen.parameters[0]: ${linkedOnly('app.rules.fieldIn')} [parameter]`,
+      ]);
+    expect(validateTaskForm(form).map((finding) => finding.message)).toEqual([
+      linkedOnly('app.rules.fieldIn'),
+    ]);
+  });
+
+  it('is written as a document-link names one: field, types and show, and nothing else', () => {
+    const wrong = (reference: unknown) =>
+      messages(banner({ type: 'app.rules.fieldIn', parameters: [reference, 'Issued'] }));
+    const refusal = `banners[0].visibleWhen.parameters[0]: ${malformed('app.rules.fieldIn')} [parameter]`;
+    for (const reference of [
+      { field: 'deal:title', show: 'title:status' },
+      { field: 'deal:title', types: [], show: 'title:status' },
+      { field: 'deal:title', types: ['Title'], show: 'ecm:uuid' },
+      { field: 'ecm:parentId', types: ['Title'], show: 'title:status' },
+      { field: 'var:title', types: ['Title'], show: 'title:status' },
+      { field: 'deal:title', types: ['Title'], show: 'title:status', widget: 'text' },
+      { types: ['Title'], show: 'title:status' },
+    ])
+      expect(wrong(reference)).toEqual([refusal]);
+    // In a date rule, the same.
+    expect(
+      messages(
+        banner({
+          type: 'app.rules.datePassed',
+          parameters: [{ field: 'deal:title', show: 'title:openedOn' }],
+        }),
+      ),
+    ).toEqual([
+      `banners[0].visibleWhen.parameters[0]: ${malformed('app.rules.datePassed')} [parameter]`,
+    ]);
+  });
+
+  it("is not a value fieldIn matches, nor a computation's", () => {
+    expect(
+      messages(
+        banner({ type: 'app.rules.fieldIn', parameters: [{ field: 'deal:status' }, status] }),
+      ),
+    ).toEqual([
+      'banners[0].visibleWhen.parameters[1]: the rule "app.rules.fieldIn" takes a text, a number or a boolean here [parameter]',
+    ]);
+    expect(
+      messages(
+        withFields({
+          id: 'age',
+          computed: { type: 'core.dateDiff', parameters: [openedOn, 'today', 'days'] },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].computed.parameters[0]: a value is a text, a number, a boolean, { "field": "<prefix>:<name>" } or { "computed": {...} } [structure]',
+    ]);
   });
 });
 

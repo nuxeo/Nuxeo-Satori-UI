@@ -345,6 +345,69 @@ function brokenCases(root, layout, queue, add) {
         ];
       },
     );
+    broken("a number's grouping that is not true or false", (file) => {
+      file.cards = [
+        {
+          id: 'added',
+          fields: [{ field: 'dc:title', widget: 'number', parameters: { grouping: 'no' } }],
+        },
+      ];
+    });
+    broken(
+      'a show through a widget that cannot sit inside the link, and one of the wrong type',
+      (file) => {
+        file.cards = [
+          {
+            id: 'added',
+            fields: [
+              {
+                field: 'dc:source',
+                widget: 'document-link',
+                parameters: {
+                  types: [layout.split('/')[1]],
+                  show: { field: 'dc:title', widget: 'email' },
+                },
+              },
+              {
+                id: 'shownNumber',
+                field: 'dc:source',
+                widget: 'document-link',
+                parameters: {
+                  types: [layout.split('/')[1]],
+                  show: { field: 'dc:title', widget: 'number' },
+                },
+              },
+            ],
+          },
+        ];
+      },
+    );
+    broken(
+      "a rule over a linked record's property no linked type has, and one malformed",
+      (file) => {
+        file.banners = [
+          {
+            id: 'linked',
+            label: 'Linked',
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [
+                { field: 'dc:source', types: [layout.split('/')[1]], show: 'zz:nope' },
+                'x',
+              ],
+            },
+          },
+          {
+            id: 'linkedMalformed',
+            label: 'Malformed',
+            visibleWhen: {
+              type: 'app.rules.datePassed',
+              parameters: [{ field: 'dc:source', show: 'dc:expired' }],
+            },
+          },
+        ];
+      },
+    );
     add(`${layout}, not an object`, { path: layout, content: [] });
     add(`${layout}, null`, { path: layout, content: null });
     const minimal = {
@@ -364,6 +427,29 @@ function brokenCases(root, layout, queue, add) {
         cards: [{ id: 'main', fields: ['dc:title', { field: 'dc:description', required: true }] }],
       },
     });
+    add(`layouts/${type}/edit.layout.json, a rule over a linked record, which a form never reads`, {
+      path: `layouts/${type}/edit.layout.json`,
+      content: {
+        version: 2,
+        cards: [
+          {
+            id: 'main',
+            fields: [
+              {
+                field: 'dc:title',
+                visibleWhen: {
+                  type: 'app.rules.fieldIn',
+                  parameters: [
+                    { field: 'dc:source', types: [layout.split('/')[1]], show: 'dc:title' },
+                    'x',
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
     add(`layouts/${type}/metadata.layout.json, a mode no layer holds`, {
       path: `layouts/${type}/metadata.layout.json`,
       content,
@@ -378,6 +464,15 @@ function brokenCases(root, layout, queue, add) {
     const withoutProvider = structuredClone(content);
     delete withoutProvider.pageProvider;
     add(`${queue}, no page provider`, { path: queue, content: withoutProvider });
+    const facets = structuredClone(content);
+    facets.facets = [
+      { aggregate: 'added_people_agg', label: 'People', widget: 'user' },
+      { aggregate: 'added_amount_agg', label: 'Amount', widget: 'currency' },
+    ];
+    add(`${queue}, a facet by people, and one through a widget a facet does not take`, {
+      path: queue,
+      content: facets,
+    });
   }
 }
 

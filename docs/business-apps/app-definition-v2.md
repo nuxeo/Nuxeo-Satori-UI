@@ -184,8 +184,11 @@ demo/                                starter kits only; not checked
   section 2). A facet on a reference, an aggregate whose buckets are records' ids, may show each
   bucket by its record's title with `"widget": "document-link"`, as a `document-link` column shows
   one: `{ "aggregate": "dmg_move_agg", "labelKey": "moves.facet.move", "widget": "document-link" }`.
-  It is the only widget a facet takes: another is a `parameter` finding, and one nobody registered
-  `unknown`.
+  A facet on user or group names may show each bucket by the person's or the group's name with
+  `"widget": "user"` or `"widget": "group"`, as a `user` column shows one:
+  `{ "aggregate": "pclaim_adjuster_agg", "labelKey": "pc-claims.facet.adjuster", "widget": "user" }`.
+  Those three are the widgets a facet takes: another is a `parameter` finding, and one nobody
+  registered `unknown`.
 - **`rowActions` and `bulkActions`** are the platform's registered actions
   ([extension-reference.md](../extension-reference.md), sections 10a and 5), or the package's own,
   from `actions.json`, that show on rows or in bulk.
@@ -274,6 +277,13 @@ provider, for the development server.
   not an id, a search that failed, and a record still being read. Unlike a `document-link` cell,
   which says "Unavailable", a bucket needs a text that tells it from the others to be chosen, and
   the key is what the server's aggregate already returned to the reader.
+- **A facet with `"widget": "user"` or `"group"`** shows each bucket by the display name of the
+  person or the group its key names, read as a `user` or `group` column's is, through
+  `/api/v1/user/<name>` or `/api/v1/group/<name>`, once a session for each name, and still sends the
+  key back when it is chosen. **Added on 27 November 2026** for the P&C claims kit's Adjuster facet
+  ([its README](../../business-apps/packages/pc-claims-demo/README.md), "Phase 7 feedback", item
+  11). As for a record's title, the bucket shows its key while the name is read and where it cannot
+  be: a person the server does not know, or a read that failed.
 - **Selecting rows** offers the queue's bulk actions in the app's selection bar: those that the
   `bulk-actions` slot resolves and that have a handler on the page, as row actions are offered.
   Choosing a bucket clears the selection. Rows cannot be selected when no bulk action is offered.

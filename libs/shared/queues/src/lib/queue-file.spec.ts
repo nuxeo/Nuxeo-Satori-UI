@@ -199,7 +199,7 @@ describe('readQueue', () => {
       ]);
     });
 
-    it("a facet's buckets shown as records, and a facet whose widget is another, left out", () => {
+    it("a facet's buckets shown as records, people or groups, and one whose widget is another, left out", () => {
       const result = read(
         queue({
           facets: [
@@ -208,7 +208,9 @@ describe('readQueue', () => {
               labelKey: 'payers.facet.member',
               widget: 'document-link',
             },
+            { aggregate: 'claim_amount_agg', label: 'Amount', widget: 'currency' },
             { aggregate: 'claim_adjuster_agg', label: 'Adjuster', widget: 'user' },
+            { aggregate: 'claim_team_agg', label: 'Team', widget: 'group' },
           ],
         }),
       );
@@ -219,6 +221,8 @@ describe('readQueue', () => {
           labelKey: 'payers.facet.member',
           widget: 'document-link',
         },
+        { aggregate: 'claim_adjuster_agg', label: 'Adjuster', labelKey: null, widget: 'user' },
+        { aggregate: 'claim_team_agg', label: 'Team', labelKey: null, widget: 'group' },
       ]);
       expect(problems(result)).toEqual([
         expect.stringMatching(

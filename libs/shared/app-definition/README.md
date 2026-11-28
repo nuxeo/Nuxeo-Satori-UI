@@ -109,7 +109,7 @@ install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline
   - a queue the menu or the home names must be in `queues/`, when the caller knows the package's
     queues. The app reads `home.json` alone, so it does not know them, and does not check them.
 - **The registries** hold everything a file may name, by ID (decision 4: no expression language):
-  - 21 widgets, each with its parameters, which are checked, and the property types it takes,
+  - 22 widgets, each with its parameters, which are checked, and the property types it takes,
     which are checked when a content model is given;
   - the 6 computations and the 2 checks, with their signatures;
   - the rules, row actions and bulk actions the platform registers, version 2's five rules
@@ -144,7 +144,11 @@ install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline
   checklist's property is held to it too: on the type, a list of complex values, with the four
   subfields `CHECKLIST_SUBFIELDS` names, each of its type. A `document-link`'s `show`, in a card's
   field or a related list's column, is held to every type its `types` lists
-  (`linkedShowFindings`, which `page-providers.ts` runs on a queue's columns too). Not held to it:
+  (`linkedShowFindings`, which `page-providers.ts` runs on a queue's columns too), and so is the
+  widget a `show` names, to the shown property's type; a rule's linked record's property,
+  `{ "field", "types", "show" }`, is held to them the same way, and its `field` to one text
+  (`linkedReadFindings`). A rule may name one in a `view` layout only (`linked` in the checker's
+  options). Not held to it:
   a related list's columns, which are other records', but for their `show`; the properties a
   computation, a rule or another widget parameter names; a task form's fields; a vocabulary's
   `directory` against the property's own; whether a property is a document reference, since the

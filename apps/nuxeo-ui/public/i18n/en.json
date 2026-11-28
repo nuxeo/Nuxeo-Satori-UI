@@ -1676,8 +1676,13 @@
       "views": "Views of the picture",
       "watermarked": "Watermarked for you: this asset's rights require it."
     },
+    "file": {
+      "download": "Download {{name}}",
+      "download-failed": "The file could not be downloaded."
+    },
     "record": {
-      "unavailable": "Unavailable"
+      "unavailable": "Unavailable",
+      "version": "{{title}}, version {{label}}"
     },
     "related": {
       "empty": "No records"

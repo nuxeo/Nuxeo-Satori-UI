@@ -254,6 +254,41 @@ describe('tickedChecklist', () => {
       ]);
   });
 
+  it('adds an entry, not done, for each item shown with none, once, after the tick', () => {
+    const shown = ['reviewerAssigned', 'medicalRecords', 'decisionLetter', 'appealLetter'];
+    expect(tickedChecklist(RECORD, 'medicalRecords', true, 'sam.patel', ON, shown)).toEqual([
+      RECORD[0],
+      RECORD[1],
+      'not an entry',
+      { item: 'medicalRecords', done: true, doneBy: 'sam.patel', doneOn: ON, note: 'x' },
+      RECORD[4],
+      // The two with no entry, in their order, no one and no day.
+      { item: 'decisionLetter', done: false },
+      { item: 'appealLetter', done: false },
+    ]);
+    // The ticked item's own entry first, then the rest; an item named twice gets one entry.
+    expect(
+      tickedChecklist([], 'decisionLetter', true, 'sam.patel', ON, [
+        'appealLetter',
+        'decisionLetter',
+        'appealLetter',
+      ]),
+    ).toEqual([
+      { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: ON },
+      { item: 'appealLetter', done: false },
+    ]);
+    // An untick writes them too, and a record with every entry is written as before.
+    expect(tickedChecklist(RECORD, 'reviewerAssigned', false, 'sam.patel', ON, shown)).toEqual([
+      { item: 'reviewerAssigned', done: false, doneBy: 'morgan.chen', doneOn: '2026-11-04' },
+      ...RECORD.slice(1),
+      { item: 'decisionLetter', done: false },
+      { item: 'appealLetter', done: false },
+    ]);
+    expect(
+      tickedChecklist(RECORD, 'medicalRecords', true, 'sam.patel', ON, ['reviewerAssigned']),
+    ).toHaveLength(RECORD.length);
+  });
+
   it('reads an entry by its own item only, never an inherited one', () => {
     const inherited = Object.create({ item: 'decisionLetter' }) as object;
     expect(tickedChecklist([inherited], 'decisionLetter', true, 'sam.patel', ON)).toEqual([
