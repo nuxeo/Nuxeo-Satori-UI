@@ -6,11 +6,21 @@ name: Satori configuration
 #
 # The tool is run from node_modules/.bin, never through npx, which would fetch a package of that
 # name from the registry if the install had not put it there.
+#
+# Signing, once it is configured: for a tag app-package/<name>/<version>, pushed on purpose, the
+# `sign` job signs that package's zip keyless, through Sigstore, with this run's GitHub identity,
+# and verifies it. It is configured by a trusted-signers.json at the repository's root that names
+# this workflow, `{ "signers": [{ "id": "<id>", "kind": "github-workflow", "repository":
+# "<owner>/<repository>", "workflow": ".github/workflows/satori.yml" }] }`: with none, the job says
+# so and signs nothing. `satori sign --keyless` decides first: with no identity, on a runner that
+# is not GitHub's, or from a workflow the file does not name, such as a fork's, nothing is signed.
+# Nothing here publishes or promotes a package.
 
 on:
   pull_request:
   push:
     branches: [main]
+    tags: ['app-package/**']
 
 permissions:
   contents: read
@@ -32,6 +42,11 @@ jobs:
       - name: Install the tool, as package-lock.json pins it
         run: npm ci
 
+      # The skill, AGENTS.md's section and the MCP server's entry are the tool's: after an upgrade,
+      # run satori agents sync and commit what it writes.
+      - name: The agent files are this version's
+        run: ./node_modules/.bin/satori agents sync --check
+
       - name: Validate and build every package
         run: |
           set -euo pipefail
@@ -50,4 +65,83 @@ jobs:
         with:
           name: configuration-packages
           path: dist/
+          if-no-files-found: error
+
+  sign:
+    name: Sign
+    needs: check
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-package/')
+    runs-on: ubuntu-latest
+    # The one job with an identity: id-token for Sigstore's certificate, attestations to record the
+    # attestation with the repository. No secret.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install the tool, as package-lock.json pins it
+        run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: configuration-packages
+          path: dist
+
+      - name: Find the tag's zip, and whether signing is configured
+        id: zip
+        run: |
+          set -euo pipefail
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          zip="dist/${named%%/*}-${named#*/}.zip"
+          if [ ! -f "$zip" ]; then echo "::error::$zip was not built"; exit 1; fi
+          (cd dist && sha256sum -c "$(basename "$zip").sha256")
+          echo "path=$zip" >> "$GITHUB_OUTPUT"
+          if [ -f trusted-signers.json ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Not signed::there is no trusted-signers.json naming this workflow, so signing is not configured"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether this run can sign
+        id: plan
+        if: steps.zip.outputs.configured == 'true'
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+        run: ./node_modules/.bin/satori sign "$ZIP" --keyless --trusted-signers trusted-signers.json --predicate-out "$RUNNER_TEMP/satori-signature.json"
+
+      - name: Sign the zip
+        id: attest
+        uses: actions/attest@v2
+        if: steps.plan.outputs.sign == 'true'
+        with:
+          subject-path: ${{ steps.zip.outputs.path }}
+          predicate-type: ${{ steps.plan.outputs.predicate-type }}
+          predicate-path: ${{ steps.plan.outputs.predicate-path }}
+
+      - name: Keep the signature beside the zip, and verify it
+        if: steps.plan.outputs.sign == 'true'
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" "$ZIP.sig.json"
+          named="${GITHUB_REF#refs/tags/app-package/}"
+          ./node_modules/.bin/satori verify "$ZIP" --trusted-signers trusted-signers.json --name "${named%%/*}" --version "${named#*/}"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.sign == 'true'
+        with:
+          name: configuration-package-signature
+          path: dist/*.zip.sig.json
           if-no-files-found: error

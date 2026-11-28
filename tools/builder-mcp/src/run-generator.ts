@@ -1,6 +1,8 @@
 /**
  * One run of an app generator, in a process of its own, for `apply_generator` and
- * `apply_package_changes` (package-writes.ts). It writes nothing but its answer:
+ * `apply_package_changes` (package-writes.ts), in this repository. It writes nothing but its
+ * answer, and what it does but load the generator and make its tree is `generator-process.ts`'s,
+ * which the bundled runner, `bundle/run-generator.ts`, shares:
  *
  *   node tools/builder-mcp/src/run-generator.ts <request.json>
  *
@@ -25,119 +27,63 @@
  * The answer goes to the file `request.answer` names, so that stdout and stderr hold only what the
  * generator printed.
  */
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { format } from 'node:util';
 import { require as tsxRequire } from 'tsx/cjs/api';
+import {
+  runGeneratorProcess,
+  stagedPath,
+  type GeneratorFactory,
+  type GeneratorRequest,
+  type RunTree,
+} from './generator-process.ts';
 
-export interface GeneratorRequest {
-  /** The generator's factory module, an absolute path to its `.ts` file. */
-  readonly factory: string;
-  readonly options: Readonly<Record<string, unknown>>;
-  /** The repository's root, which the tree reads outside the package's path. */
-  readonly root: string;
-  /**
-   * The tree's own root: a folder holding only the repository's formatting configuration, so that
-   * nothing looks for a configuration in the package's folder.
-   */
-  readonly treeRoot: string;
-  /** The package's path in the tree, from the root, with `/`. */
-  readonly packagePath: string;
-  /** The folder the package's path is read from: the staging copy. */
-  readonly staging: string;
-  /** Where the answer goes. */
-  readonly answer: string;
-}
+export type { GeneratedChange, GeneratorAnswer, GeneratorRequest } from './generator-process.ts';
 
-export interface GeneratedChange {
-  readonly path: string;
-  readonly type: 'CREATE' | 'UPDATE' | 'DELETE';
-  /** The content, in base64; `null` for a deletion. */
-  readonly content: string | null;
-}
+type FsTreeClass = new (root: string, isVerbose: boolean) => RunTree;
 
-export type GeneratorAnswer =
-  | { readonly changes: readonly GeneratedChange[]; readonly said: readonly string[] }
-  | { readonly error: string; readonly said: readonly string[] };
-
-interface NxTree {
-  normalize(path: string): string;
-  listChanges(): { path: string; type: GeneratedChange['type']; content: Buffer | null }[];
-  lock(): void;
-}
-type FsTreeClass = new (root: string, isVerbose: boolean) => NxTree;
-
-const request = JSON.parse(readFileSync(process.argv[2] ?? '', 'utf8')) as GeneratorRequest;
-const said: string[] = [];
-// Whatever the generator and Nx print is kept for the answer, not written to a stream.
-const keep = (...args: unknown[]) => {
-  said.push(format(...args));
-};
-Object.assign(console, { log: keep, info: keep, warn: keep, error: keep, debug: keep });
-
-const answer = (value: GeneratorAnswer) => writeFileSync(request.answer, JSON.stringify(value));
-
-try {
-  const load = createRequire(join(request.root, 'package.json'));
-  const { FsTree } = load('nx/src/devkit-internals') as { FsTree: FsTreeClass };
-  const prefix = request.packagePath;
-  /**
-   * Nx's own tree, rooted at `treeRoot`, whose four reads of the file system go to the staging copy
-   * under the package's path and to the repository everywhere else. Everything else it does, what
-   * it records and how it lists the changes, is Nx's.
-   */
-  class StagedTree extends FsTree {
-    where(path: string): string {
-      const normal = this.normalize(path);
-      if (normal === prefix) return request.staging;
-      if (normal.startsWith(`${prefix}/`))
-        return join(request.staging, ...normal.slice(prefix.length + 1).split('/'));
-      return join(request.root, normal);
-    }
-    fsReadDir(path: string): string[] {
-      try {
-        return readdirSync(this.where(path));
-      } catch {
-        return [];
+await runGeneratorProcess({
+  tree(request) {
+    const load = createRequire(join(request.root, 'package.json'));
+    const { FsTree } = load('nx/src/devkit-internals') as { FsTree: FsTreeClass };
+    /**
+     * Nx's own tree, rooted at `treeRoot`, whose four reads of the file system go to the staging
+     * copy under the package's path and to the repository everywhere else. Everything else it
+     * does, what it records and how it lists the changes, is Nx's.
+     */
+    class StagedTree extends FsTree {
+      where(path: string): string {
+        return stagedPath(request, this.normalize(path));
+      }
+      fsReadDir(path: string): string[] {
+        try {
+          return readdirSync(this.where(path));
+        } catch {
+          return [];
+        }
+      }
+      fsIsFile(path: string): boolean {
+        return statSync(this.where(path)).isFile();
+      }
+      fsReadFile(path: string): Buffer {
+        return readFileSync(this.where(path));
+      }
+      fsExists(path: string): boolean {
+        try {
+          const entry = statSync(this.where(path));
+          return entry.isFile() || entry.isDirectory();
+        } catch {
+          return false;
+        }
       }
     }
-    fsIsFile(path: string): boolean {
-      return statSync(this.where(path)).isFile();
-    }
-    fsReadFile(path: string): Buffer {
-      return readFileSync(this.where(path));
-    }
-    fsExists(path: string): boolean {
-      try {
-        const entry = statSync(this.where(path));
-        return entry.isFile() || entry.isDirectory();
-      } catch {
-        return false;
-      }
-    }
-  }
-  const tree = new StagedTree(request.treeRoot, false);
-  const module = tsxRequire(request.factory, import.meta.url) as {
-    default?: (tree: NxTree, options: unknown) => unknown;
-  };
-  if (typeof module.default !== 'function')
-    throw new Error(`${request.factory} exports no generator.`);
-  const callback = await module.default(tree, { ...request.options });
-  const changes = tree.listChanges().map((change): GeneratedChange => ({
-    path: change.path,
-    type: change.type,
-    content: change.content === null ? null : Buffer.from(change.content).toString('base64'),
-  }));
-  tree.lock();
-  if (typeof callback === 'function') {
-    try {
-      await callback();
-    } catch (error) {
-      said.push(`The generator's closing message failed: ${(error as Error).message}`);
-    }
-  }
-  answer({ changes, said });
-} catch (error) {
-  answer({ error: error instanceof Error ? error.message : String(error), said });
-}
+    return new StagedTree(request.treeRoot, false);
+  },
+  factory(request: GeneratorRequest): GeneratorFactory {
+    const module = tsxRequire(request.factory, import.meta.url) as { default?: GeneratorFactory };
+    if (typeof module.default !== 'function')
+      throw new Error(`${request.factory} exports no generator.`);
+    return module.default;
+  },
+});
