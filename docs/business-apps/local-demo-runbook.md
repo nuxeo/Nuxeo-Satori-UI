@@ -215,20 +215,13 @@ Nuxeo's (2025.26.16), and every installed package with its state.
 A customer makes it once, by following Nuxeo's guide, and keeps it in their own GitHub. Everyone
 after that clones it. Here, make it, push it, and clone it, as a customer would.
 
-**Make it, once.** `@nuxeo/satori-cli` 0.4.0 is the version this runbook needs. Until it is
-published, build its tarball from PR #805's branch, in a clone of Nuxeo Satori UI:
-
-```bash
-git switch feat/satori-cli-0.4.0-claude-app && node tools/satori-cli/build.mjs && npm pack dist/tools/satori-cli --pack-destination "$DEMO"
-```
+**Make it, once,** with `@nuxeo/satori-cli` from Nuxeo's npm registry, 0.4.0 or later. It needs
+no token:
 
 ```bash
 cd "$DEMO"
-npx --package ./nuxeo-satori-cli-0.4.0.tgz satori create acme-satori --name acme-config --owner acme
+npx --@nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/ @nuxeo/satori-cli@alpha create acme-satori --name acme-config --owner acme
 ```
-
-Once 0.4.0 is published, use the registry instead:
-`npx --@nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/ @nuxeo/satori-cli@alpha create acme-satori --name acme-config --owner acme`.
 
 `create` writes the repository:
 
@@ -243,9 +236,14 @@ Once 0.4.0 is published, use the registry instead:
 ```bash
 cd "$DEMO/acme-satori"
 git init
+npm install
 git add . && git commit -m "A Nuxeo Satori configuration repository"
 gh repo create acme-satori --private --source . --push
 ```
+
+`npm install` fetches the tool through the `.npmrc` `create` wrote, and writes the
+`package-lock.json` that is committed with it. The repository's CI installs from that file with
+`npm ci`, and so does everyone who clones it.
 
 **Clone it, as everyone after that does:**
 
@@ -254,10 +252,8 @@ cd "$DEMO" && gh repo clone acme-satori acme-satori-clone && cd acme-satori-clon
 ```
 
 ```bash
-npm install --no-save "$DEMO/nuxeo-satori-cli-0.4.0.tgz"
+npm ci
 ```
-
-Once 0.4.0 is published, that is `npm install`, which writes the `package-lock.json` to commit.
 
 **Connect it to the server, once, in a terminal.** The Claude desktop app reads no shell profile,
 so the MCP server takes the server and the account from `.claude/settings.local.json`:
@@ -473,6 +469,8 @@ On macOS, Docker Desktop, Nuxeo 2025.26.16, Node 24 or later and Claude Code 2.1
   - the Marketplace package installed with 0 pending and 0 missing out of 572.
 - **Step 3:**
   - a repository from the 0.4.0 tarball of #805, with all seven agent files;
+  - once 0.4.0 was published, at 10:09 UTC, step 3's registry commands with no token: `create`,
+    `npm install` (0.4.0 in the lock), `agents sync --check`, `validate` and `satori tool --list`;
   - `satori connect` against the server;
   - `agents sync --check` in step.
 - **Step 4, headless,** through `claude -p` in the repository, under an organisation policy that
