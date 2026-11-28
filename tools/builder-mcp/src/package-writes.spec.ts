@@ -157,6 +157,13 @@ describe('fileKind', () => {
     expect(fileKind('connectors/deep/x-connectors-config.xml')).toHaveProperty('problem');
   });
 
+  it("lets write_package_file write a configuration's two layers, and nothing else of their names", () => {
+    expect(fileKind(`${CONFIG}/bootstrap.json`)).toBe('layer');
+    expect(fileKind(`${CONFIG}/manifest.json`)).toBe('layer');
+    expect(fileKind('bootstrap.json')).toHaveProperty('problem');
+    expect(fileKind(`${CONFIG}/layouts/bootstrap.json`)).toHaveProperty('problem');
+  });
+
   it('refuses every other path, naming why', () => {
     const refused: [string, string][] = [
       ['../outside.json', 'leaves the package'],
@@ -171,7 +178,8 @@ describe('fileKind', () => {
       [`${CONFIG}/assets/logo.svg`, 'is an asset'],
       [`${CONFIG}/layouts/notes.json`, 'is not a file of the app definition'],
       [`${CONFIG}/layouts/Contract/view.layout.js`, 'is not a file of the app definition'],
-      [`${CONFIG}/bootstrap.json`, 'is not a file of the app definition'],
+      [`${CONFIG}/presets/bootstrap.json`, 'is not a file of the app definition'],
+      [`${CONFIG}/bootstrap.json.bak`, 'is not a file of the app definition'],
       ['deployment/build-allow-list.json', "is the deployment's"],
       ['deployment/payers-claims-demo-operations-config.xml', "is the deployment's"],
       ['dist/x.zip', "the pipeline's output"],
@@ -391,6 +399,58 @@ describe('writePackage, refusing before anything runs', () => {
     await expect(remove('demo/seed.mjs')).rejects.toThrow('is code');
   });
 
+  it("refuses to remove a configuration's layer, and to write one no component names", async () => {
+    expect(
+      await refusal({ changes: [{ kind: 'remove', path: `${CONFIG}/bootstrap.json` }] }),
+    ).toContain("is a layer of the package's configuration");
+    // The kit's component names no bootstrap fragment, on purpose: nothing would check or serve one.
+    expect(
+      await refusal({
+        changes: writing(
+          `${CONFIG}/bootstrap.json`,
+          JSON.stringify({ branding: { applicationTitle: 'Acme' } }),
+        ),
+      }),
+    ).toContain('is named by no component of the package as its bootstrap fragment');
+  });
+
+  it('does not count a fragment inside a comment, however its halves are written', async () => {
+    const COMPONENT = 'bundle/OSGI-INF/contracts-demo-config.xml';
+    const fragment =
+      '<fragment name="contracts-demo" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />';
+    for (const commented of [
+      `<!-- ${fragment} -->`,
+      // Two comments back to back, the fragment in the second.
+      `<!-- first --><!-- ${fragment} -->`,
+      `<!-- unclosed ${fragment}`,
+    ]) {
+      const root = kit('contracts-demo', `commented-${commented.length}`, (at) =>
+        writeFileSync(
+          join(at, ...COMPONENT.split('/')),
+          edited(
+            at,
+            COMPONENT,
+            '<extension target="org.nuxeo.agentic.ui.config" point="configuration">',
+            `<extension target="org.nuxeo.agentic.ui.config" point="configuration">\n    ${commented}`,
+          ),
+        ),
+      );
+      let message = '';
+      try {
+        await writePackage(
+          {
+            package: root,
+            changes: [{ kind: 'write', path: `${CONFIG}/bootstrap.json`, content: '{}' }],
+          },
+          NEVER,
+        );
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message, commented).toContain('is named by no component of the package');
+    }
+  });
+
   it('refuses to remove a file the package does not hold, before the pipeline runs', async () => {
     const root = kit('contracts-demo', 'remove-missing');
     const before = fingerprint(root);
@@ -540,6 +600,49 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       const result = await writeFile(root, LABELS, read(root, LABELS));
       expect(result).toMatchObject({ written: false, changes: [], validation: null });
       expect(result.note).toContain('Nothing to write');
+    });
+
+    it("writes a configuration's bootstrap its component names, and refuses a theme that would change nothing", async () => {
+      const BOOTSTRAP = `${CONFIG}/bootstrap.json`;
+      const COMPONENT = 'bundle/OSGI-INF/contracts-demo-config.xml';
+      const root = kit('contracts-demo', 'layer-write', (at) =>
+        writeFileSync(
+          join(at, ...COMPONENT.split('/')),
+          edited(
+            at,
+            COMPONENT,
+            '<extension target="org.nuxeo.agentic.ui.config" point="configuration">',
+            '<extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+              '    <fragment name="contracts-demo" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />',
+          ),
+        ),
+      );
+      const theme = (primary: string) =>
+        `${JSON.stringify(
+          {
+            branding: { applicationTitle: 'Acme Claims' },
+            themes: [
+              {
+                id: 'acme',
+                base: 'nuxeo',
+                tokens: { '--mat-sys-primary': primary, '--mat-sys-on-primary': '#ffffff' },
+              },
+            ],
+            defaultThemeId: 'acme',
+          },
+          null,
+          2,
+        )}\n`;
+      const result = await writeFile(root, BOOTSTRAP, theme('#0B5FFF'));
+      expect(result.written, JSON.stringify(result.validation?.stdout)).toBe(true);
+      expect(result.changes).toEqual([{ path: BOOTSTRAP, change: 'created' }]);
+      expect(read(root, BOOTSTRAP)).toBe(theme('#0B5FFF'));
+
+      const before = fingerprint(root);
+      const refused = await writeFile(root, BOOTSTRAP, theme('brand blue'));
+      expectRefused(refused, root, before);
+      expect(refused.validation?.refusedAt?.step).toBe(2);
+      expect(JSON.stringify(refused.validation?.findings)).toContain('is not a CSS colour');
     });
 
     it('refuses a write that would leave a finding, and changes nothing', async () => {

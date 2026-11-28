@@ -14,6 +14,12 @@
  *   not values: a value of the wrong type is the application's to read, as before.
  *   Nuxeo-Satori-Config makes this check of its packages' top-level keys in `check-deployable.mjs`;
  *   this one goes down.
+ * - **A theme that would change nothing** (`themeFindings`), in a Layer 0 fragment or a preset's
+ *   `bootstrap`: a `base` the application has no palette for, which it starts from `nuxeo`
+ *   instead; a token whose name is not a CSS custom property, or whose value is not text, which it
+ *   does not apply; a colour token whose value is not a CSS colour, which the browser drops; and a
+ *   `defaultThemeId` that names neither a shipped theme nor one the package defines, which falls
+ *   back to the first theme. The themes and the colour tokens are `theme-tokens.mjs`'s.
  * - **A name Satori itself uses:** a fragment named `defaults`, which Satori's own fragments are
  *   named in both layers, so that one of that name replaces them on the server; and a package named
  *   `defaults` or `nuxeo-agentic-ui`, Satori's own package (`reservedName`, which step 3 asks). The
@@ -30,6 +36,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { attributesOf, TAG } from '../verify-package-zip.mjs';
+import { COLOUR_TOKENS, isColour, SHIPPED_THEMES } from './theme-tokens.mjs';
 
 /** A byte-order mark, which JSON.parse refuses and the builder's decoder drops. */
 const BOM = /^\uFEFF/;
@@ -72,6 +79,8 @@ export function configurationFindings(directory, components, schemas) {
   const bundle = resolve(directory, 'bundle');
   const root = {};
   for (const layer of LAYERS) root[layer] = JSON.parse(readFileSync(schemas[layer], 'utf8'));
+  // The package's bootstrap bodies, each with where it is, for its themes once all are read.
+  const bootstraps = [];
   for (const { component, xml, kept } of components) {
     const componentFile = join(bundle, ...component.split('/'));
     for (const [from, to] of configurationExtensions(xml)) {
@@ -112,10 +121,83 @@ export function configurationFindings(directory, components, schemas) {
             'unknown',
           ),
         );
+        if (layer === 'bootstrap') bootstraps.push({ value, where });
       }
     }
   }
+  themeFindings(bootstraps, (where, place, message) => say(where, place, message, 'unknown'));
   return findings;
+}
+
+/**
+ * What in a package's Layer 0 themes the application would take and then not show, said as
+ * `(where, place, message)`. Each body, and each preset's `bootstrap` in it, is read for its
+ * `themes` and `defaultThemeId`; a `defaultThemeId` may name a theme any of the package's bodies
+ * defines, since the server merges them.
+ *
+ * @param bodies `{ value, where }`, each bootstrap fragment's body and its file
+ */
+export function themeFindings(bodies, say) {
+  const parts = bodies.flatMap(({ value, where }) => [
+    { value, where, place: '' },
+    ...presetBootstraps(value).map(([name, overlay]) => ({
+      value: overlay,
+      where,
+      place: `presales.presets.${name}.bootstrap`,
+    })),
+  ]);
+  const defined = new Set(SHIPPED_THEMES);
+  for (const { value } of parts)
+    if (Array.isArray(value.themes))
+      for (const theme of value.themes)
+        if (isRecord(theme) && typeof theme.id === 'string') defined.add(theme.id);
+  const at = (place, key) => (place === '' ? key : `${place}.${key}`);
+  for (const { value, where, place } of parts) {
+    if (Array.isArray(value.themes))
+      value.themes.forEach((theme, index) => {
+        if (!isRecord(theme)) return;
+        const here = at(place, `themes[${index}]`);
+        if (theme.base !== undefined && !SHIPPED_THEMES.includes(theme.base))
+          say(
+            where,
+            `${here}.base`,
+            `${JSON.stringify(theme.base)} is not a theme the application has (${SHIPPED_THEMES.join(', ')}), so it would start this theme from "nuxeo" in silence`,
+          );
+        if (!isRecord(theme.tokens)) return;
+        for (const [token, colour] of Object.entries(theme.tokens)) {
+          const name = `${here}.tokens.${token}`;
+          if (!token.startsWith('--'))
+            say(
+              where,
+              name,
+              `"${token}" is not a CSS custom property, whose name begins with "--", so the application would not apply it`,
+            );
+          else if (typeof colour !== 'string')
+            say(where, name, 'is not text, so the application would drop it in silence');
+          else if (COLOUR_TOKENS.has(token) && !isColour(colour))
+            say(
+              where,
+              name,
+              `${JSON.stringify(colour)} is not a CSS colour (#rrggbb, rgb(), hsl() or var(--…)), so the browser would drop it and keep the palette's colour`,
+            );
+        }
+      });
+    if (typeof value.defaultThemeId === 'string' && !defined.has(value.defaultThemeId))
+      say(
+        where,
+        at(place, 'defaultThemeId'),
+        `"${value.defaultThemeId}" names no theme: not one the application has (${SHIPPED_THEMES.join(', ')}), and not one this package defines in themes, so the application would use the first theme in silence`,
+      );
+  }
+}
+
+/** A bootstrap body's presets' `bootstrap` overlays, each `[name, overlay]`. */
+function presetBootstraps(value) {
+  const presets = isRecord(value.presales) ? value.presales.presets : undefined;
+  if (!isRecord(presets)) return [];
+  return Object.entries(presets).flatMap(([name, preset]) =>
+    isRecord(preset) && isRecord(preset.bootstrap) ? [[name, preset.bootstrap]] : [],
+  );
 }
 
 /**

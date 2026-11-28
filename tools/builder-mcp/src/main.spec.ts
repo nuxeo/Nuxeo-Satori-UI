@@ -55,6 +55,7 @@ describe('the server over stdio', () => {
           ...NUXEO_TOOLS,
           ...WRITE_TOOLS,
           'preview_package',
+          'read_reference',
           'release_check',
           'validate_package',
         ].sort(),

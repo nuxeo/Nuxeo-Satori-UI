@@ -11,8 +11,9 @@ repository, with Node alone.
 with no token. [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes
 each version when a person dispatches it ([Publishing it](#publishing-it)). The tool has the `alpha`
 tag and no `latest`, so a command names `@alpha` or an exact version: `npm view @nuxeo/satori-cli`
-without either prints nothing. A version not published yet is built from this repository and run
-from the folder it is built into, or from a tarball `npm pack` makes of that folder. A customer's
+without either prints nothing. This folder is 0.4.0, published when a person next dispatches the
+workflow. A version not published yet is built from this repository and run from the folder it is
+built into, or from a tarball `npm pack` makes of that folder. A customer's
 guide, from nothing to a signed release with the published tool, is
 [customer-config-repository.md](../../docs/business-apps/customer-config-repository.md).
 
@@ -25,6 +26,9 @@ satori upgrade-check <package> --previous <directory or zip> [--deployment <file
 satori model pull --server <address> --out <file>
 satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
 satori agents sync [<directory>] [--check]
+satori connect [<directory>] [--server <origin>] [--user <name>] [--password-stdin] [--check]
+satori tool --list | satori tool <name> ['<arguments as JSON>']
+satori version <package> <x.y.z | patch | minor | major>
 satori mcp [--root <directory>] [--tmp <directory>]
 satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]
 satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
@@ -34,6 +38,24 @@ satori release-check <package> [--previous <directory or zip>] [--json] [options
 
 `validate`, `build` and `release-check` take `--tmp <directory>` among their options.
 
+- **`connect`** gives the MCP server the development server's address and an account, for an AI
+  IDE that does not start it from a shell, as the Claude desktop app does not.
+  - It asks for them: the password unshown, from a terminal, or from standard input with
+    `--password-stdin`. With neither, it refuses.
+  - It checks them against `GET /nuxeo/api/v1/me`, with the MCP server's own rule for the
+    address.
+  - It writes them into `.claude/settings.local.json`'s `env` at mode 0600. It refuses unless the
+    folder is a git repository that ignores the file and does not track it.
+  - It never prints the password. `--check` writes nothing and says whether the server answers.
+- **`tool`** calls one of the MCP server's tools from the command line. It starts `satori mcp`,
+  asks it once over stdio, and prints the answer, so a read is the server's and a write is its
+  validated write. It exits 1 when the tool or the pipeline refused. This is for an IDE that cannot
+  run the server, such as under an organisation's policy that allows only the MCP servers it
+  lists: the Claude Code trial on 28 November 2026 ran under such a policy, and built a whole app
+  through it.
+- **`version`** raises a package's version in `package/package.xml`, the bundle's
+  `Bundle-Version` and `app.json`'s `packageVersion` together. It refuses a version that is not
+  higher, and a package whose three disagree.
 - **`validate`** takes every step `build` takes and writes nothing: the zip is built and verified
   in a scratch folder, which is then removed.
 - **`build`** writes the package's Marketplace zip and its `.sha256` into `--out`, the package's
@@ -43,7 +65,12 @@ satori release-check <package> [--previous <directory or zip>] [--json] [options
   version rises as far as that needs ([package-pipeline.md](../../docs/business-apps/package-pipeline.md),
   section 10).
 - **`model pull`** writes a server's content model to a file, for `--model`. It only reads,
-  `GET`s of `/api/v1/config/`, as `NUXEO_USER` with `NUXEO_PASS`, from the environment.
+  `GET`s of `/api/v1/config/`, as `NUXEO_USER` with `NUXEO_PASS`, from the environment. It makes
+  the folder `--out` names when it is not there, as `build` makes its `--out`, so that
+  `--out tmp/content-model.json` works in a repository `create` wrote, which has no `tmp/`. Under
+  Node's permission model, an `--out` it may not write and read is refused before the server is
+  asked. A file that cannot be written once the server has answered exits 2, and says the model
+  was read.
 - **`create`** writes a configuration repository, below.
 - **`agents sync`** installs or refreshes the app builder skill, `AGENTS.md`'s section and the MCP
   server's entry, for any AI IDE ([The agent files](#the-agent-files-agents-sync)).
@@ -123,6 +150,12 @@ credentials go in an `Authorization` header and nowhere else: an address carryin
 With neither, a package that ships a stand-in model of its own is held to its own
 `content-model.json`, and any other package to no model, which the run says.
 
+The file `--model` names is read before any step, for every package: one that is not there, a
+folder, or one that cannot be read whole as a content model stops `validate`, `build` and
+`release-check` with exit 2, the command's error. Only an app definition's step 2 holds anything to
+the model, so without that read a package that is configuration alone, with no `app.json`, would
+pass, given a file that does not exist, and say nothing of it.
+
 ## A customer's repository
 
 ```bash
@@ -173,6 +206,19 @@ publishes or promotes a package.
 
 ## The agent files: `agents sync`
 
+**Since 0.4.0, for the Claude app as well:**
+
+- `CLAUDE.md`'s section imports `AGENTS.md` (`@AGENTS.md`), since Claude Code reads `AGENTS.md`
+  only while there is no `CLAUDE.md`.
+- `.claude/settings.json` gets the tool's entries, each an item of a list, everything else kept:
+  - `nuxeo-satori` in `enabledMcpjsonServers`;
+  - the MCP server's tools, `mcp__nuxeo-satori`, and the checks and builds in `permissions.allow`: `npm run validate` and `build`, and
+    `satori validate`, `build`, `upgrade-check`, `release-check`, `version`, `agents sync` and
+    `connect --check`;
+  - reading and editing `.claude/settings.local.json` in `permissions.deny`.
+- Not allowed without asking: `connect`, `sign`, `model pull` (how a package takes a stand-in
+  model), `npm` installs and `git push`. The selftest refuses a version that allows them.
+
 ```bash
 satori agents sync            # in the repository, or: satori agents sync <directory>
 satori agents sync --check    # writes nothing; exit 1 names what differs
@@ -207,6 +253,15 @@ satori agents sync --check    # writes nothing; exit 1 names what differs
   nothing of Nuxeo Satori UI's source.
 
 ## The MCP server: `satori mcp`
+
+**The reference, since 0.4.0.** The package carries a knowledge pack for the agent, and the
+server's `read_reference` lists and reads it in any AI IDE.
+
+- **`knowledge/`:** this folder's authored files, which are every file a package holds, the
+  recipes, a worked claims app and branding. Beside them, `theme-tokens.md` and `registered.md`,
+  which the build writes from the pipeline's token list and the platform snapshot, so they say what
+  this version checks.
+- **`examples/`:** the kits' app definitions, read-only, with no `$schema` naming this repository.
 
 ```bash
 satori mcp                    # started by the IDE, in the repository, from .mcp.json
@@ -317,8 +372,8 @@ map, a test or a fixture, a key or an archive, a hidden file of a working copy, 
 `node_modules`, text shaped like a private key or a token, or this repository's folder or the
 builder's home named in a file. The only code from `node_modules` is what `bundle.mjs` bundles into
 `mcp.mjs` and `mcp-generator.mjs`, with each package's licence in `licenses/`. `LICENSE` is the Apache
-License 2.0's text, byte for byte as the Apache Software Foundation gives it. At 0.3.0 the tarball
-is 65 files, 1.85 MB packed and 7.5 MB unpacked.
+License 2.0's text, byte for byte as the Apache Software Foundation gives it. At 0.4.0 the tarball
+is 197 files, 1.9 MB packed and 7.8 MB unpacked, 132 of them the knowledge pack and the examples.
 
 **How it is published.** [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml),
 which follows `publish-platform.yml`: dispatched by hand, a dry run unless `dryRun` is false, and
@@ -396,7 +451,7 @@ limited to `main` with required reviewers, is the repository's settings to make.
 - in the scaffold, by then a git repository, runs `release-check`, through the command and through
   the server's `release_check`: ready, with the tag and push, held to its own zip as `--previous`,
   and with no tag made; then not ready once that version is tagged, and for a package that does not
-  build; and refuses `--out`, and no package;
+  build; and refuses `--out`, no package, and a `--model` that names no file;
 - runs every app generator, in the order a kit is made, through the repository's runner, with Nx's
   tree and Prettier, and through the bundled one, on the same package, and requires the same bytes;
   the bundled one given another print width must answer otherwise;
@@ -415,9 +470,17 @@ limited to `main` with required reviewers, is the repository's settings to make.
 - refuses, each at its own step: a layout's unregistered widget, a Layer 1 key, a Layer 0 key and a
   preset's the application does not read, a property the model does not have, a name Satori uses in
   `create`, in a package and in a fragment, a home with no `app.json`, a key the builder refuses, a
-  symbolic link, and the command's own errors; and passes a scaffold, a package mixing every layer,
-  a package with an older `build.mjs`, the upgrade check against a folder and a zip, and
-  `model pull` against a stand-in server, which must get the credentials in a header only;
+  symbolic link, and the command's own errors, among them a `--model` that names no file, a folder
+  or a file that is not JSON, for a package with no `app.json`, through `validate`, `build` and
+  `app-package.mjs`, and for an app definition, each with exit 2, and the zip a build wrote before
+  removed; and
+  passes a scaffold, a package mixing every layer, a package with an older `build.mjs`, the upgrade
+  check against a folder and a zip, and `model pull` against a stand-in server, which must get the
+  credentials in a header only, and must make `--out`'s folder when it is not there: as
+  customer-config-repository.md gives it, `--out tmp/content-model.json`, in a repository `create`
+  has just written, under the permission model, after which `validate --model` takes the file. An
+  `--out` the permission model does not allow is refused with no request to the server, and an
+  `--out` that cannot be written is said as that, with exit 2, not as a model not read;
 - holds the names Satori uses to the generator's, in both its copies.
 
 ## Not in this slice

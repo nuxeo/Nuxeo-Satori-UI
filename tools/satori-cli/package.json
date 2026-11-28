@@ -1,6 +1,6 @@
 {
   "name": "@nuxeo/satori-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "The builder of a customer's Nuxeo Satori configuration: create a configuration repository, validate, build, sign and release-check its Marketplace packages of Layer 0, Layer 1, assets, version 1 layouts and version 2 app definitions, and give an AI IDE the app builder skill and an MCP server. Runs with Node alone, with no dependency.",

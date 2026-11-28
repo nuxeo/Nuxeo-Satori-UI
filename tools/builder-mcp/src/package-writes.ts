@@ -9,8 +9,10 @@
  *    roots `BUILDER_PACKAGE_ROOTS` names instead (config.ts). It is reached through no link,
  *    holds no link, symbolic or hard, and is named as a Marketplace package is, in kebab case.
  * 2. **Each file is one a writer may write** (`fileKind`): the app definition's files, for
- *    `write_package_file` and for a `remove`, which takes one out but `app.json`; those and the
- *    files the generators write, for a generator. Anything
+ *    `write_package_file` and for a `remove`, which takes one out but `app.json`; a configuration
+ *    package's two layers, `bootstrap.json` and `manifest.json`, for `write_package_file` only, and
+ *    only when the package's component names the file as that layer's fragment, so that step 2
+ *    checks it and the server serves it; those and the files the generators write, for a generator. Anything
  *    else is refused before anything runs: a path that leaves the package, a hidden file, code, an
  *    asset, the build allow-list, the pipeline's own output.
  * 3. **The changes are made to a staging copy,** a private temporary folder: each write, and each
@@ -185,8 +187,11 @@ export interface WriteResult {
 
 // ------------------------------------------------------------------------------- what is written
 
-/** Who may write a file: `write_package_file` and the generators, or the generators only. */
-export type FileKind = 'definition' | 'generated';
+/**
+ * Who may write a file: `write_package_file` and the generators (`definition`), `write_package_file`
+ * alone, a configuration's Layer 0 or Layer 1 (`layer`), or the generators only (`generated`).
+ */
+export type FileKind = 'definition' | 'layer' | 'generated';
 
 const PART = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const DEFINITION = [
@@ -197,6 +202,11 @@ const DEFINITION = [
   /^tasks\/[A-Za-z][A-Za-z0-9_-]{0,127}\.[A-Za-z][A-Za-z0-9_-]{0,127}\.layout\.json$/,
   /^layouts\/[A-Za-z][A-Za-z0-9_-]{0,127}\/[a-z][a-z0-9-]{0,31}\.layout\.json$/,
 ];
+/** A configuration package's two layers, each by the layer its component's fragment names. */
+const LAYER_FILES: Readonly<Record<string, 'bootstrap' | 'manifest'>> = {
+  'bootstrap.json': 'bootstrap',
+  'manifest.json': 'manifest',
+};
 const GENERATED = [
   /^\.gitignore$/,
   /^README\.md$/,
@@ -214,7 +224,8 @@ const DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
 
 const WRITABLE =
   'app.json, home.json, navigation.json, actions.json, queues/<id>.json, labels/<language>.json,' +
-  ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, under' +
+  ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, and a' +
+  " configuration package's bootstrap.json and manifest.json, which its component names, under" +
   ` ${CONFIG}/`;
 
 /**
@@ -246,6 +257,7 @@ export function fileKind(path: string): FileKind | { readonly problem: string } 
   if (path.startsWith(`${CONFIG}/`)) {
     const inside = path.slice(CONFIG.length + 1);
     if (DEFINITION.some((place) => place.test(inside))) return 'definition';
+    if (Object.hasOwn(LAYER_FILES, inside)) return 'layer';
     if (inside.startsWith('assets/'))
       return refuse(
         'is an asset. These tools write no asset: one is served without authentication, and its' +
@@ -663,6 +675,10 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
         throw new Error(
           `${at}.path: ${change.path} is written by the generators only, and taken out by them: ${writtenBy(change.path)}.`,
         );
+      if (kind === 'layer')
+        throw new Error(
+          `${at}.path: ${change.path} is a layer of the package's configuration, which its component names: write it whole instead, with what it should hold.`,
+        );
       if (change.path === `${CONFIG}/app.json`)
         throw new Error(
           `${at}.path: ${change.path} is the app itself: a package without it is no app definition, and is refused. Remove the package's folder by hand, if that is what the person asks.`,
@@ -823,6 +839,16 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
             `${prefix} and ${other} differ only in case, and are one where case is ignored. Nothing was written.`,
           );
       }
+    // A layer the component does not name as its fragment: step 2 would not check it, nor the
+    // server serve it, so a write to it would be kept unchecked and change nothing.
+    for (const { path, change } of changes) {
+      if (change === 'removed' || fileKind(path) !== 'layer') continue;
+      const layer = LAYER_FILES[path.slice(CONFIG.length + 1)];
+      if (!namesFragment(after, path.slice('bundle/'.length), layer))
+        throw new Error(
+          `${path} is named by no component of the package as its ${layer} fragment, <fragment layer="${layer}" src="${path.slice('bundle/'.length)}">, so no step would check it and the server would not serve it. Nothing was written.`,
+        );
+    }
     const versionOne = changes.filter(
       ({ path, change }) => change !== 'removed' && !isVersionTwo(after.get(path), path),
     );
@@ -960,6 +986,50 @@ function differences(before: Files, after: Files): FileChange[] {
   }
   for (const path of before.keys()) if (!after.has(path)) changes.push({ path, change: 'removed' });
   return changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * Whether a component of the package, a `bundle/OSGI-INF/*.xml` of `files`, names `src` as the
+ * body of a fragment of `layer`, enabled, as `configuration.mjs` reads one for step 2.
+ */
+function namesFragment(files: Files, src: string, layer: string): boolean {
+  for (const [path, data] of files) {
+    if (!/^bundle\/OSGI-INF\/[^/]+\.xml$/.test(path)) continue;
+    const xml = withoutComments(data.toString('utf8'));
+    for (const match of xml.matchAll(/<fragment\b([^>]*)>/g)) {
+      const attributes = new Map(
+        [...match[1].matchAll(/([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*("([^"]*)"|'([^']*)')/g)].map(
+          (pair) => [pair[1], pair[3] ?? pair[4] ?? ''],
+        ),
+      );
+      const enabled = attributes.get('enabled');
+      if (
+        attributes.get('layer') === layer &&
+        attributes.get('src') === src &&
+        (enabled === undefined || enabled.toLowerCase() === 'true')
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * `xml` without its comments, each skipped whole from its `<!--` to the first `-->` after it, and an
+ * unclosed one to the end: a scan rather than a replace, which could leave a `<!--` that two
+ * comments' halves make.
+ */
+function withoutComments(xml: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = xml.indexOf('<!--', at);
+    if (open < 0) return out + xml.slice(at);
+    out += xml.slice(at, open);
+    const close = xml.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    at = close + 3;
+  }
 }
 
 /** A file of the app definition is a JSON object of version 2; any other file is not held to it. */

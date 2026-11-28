@@ -42,6 +42,7 @@ import {
 } from './package-writes.ts';
 import { describeDefinition, describePageProvider, listPageProviders } from './page-providers.ts';
 import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
+import { listReference, readReference } from './reference.ts';
 import { HOST } from './host.ts';
 import {
   releaseCheck,
@@ -345,6 +346,33 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
 
   server.registerTool(
+    'read_reference',
+    {
+      title: 'Read the Nuxeo Satori reference',
+      description:
+        'The reference this version of the tools carries, for building Nuxeo Satori configuration:' +
+        ' every file a package holds and which tool writes it, recipes for each kind of request, a' +
+        ' worked example of a claims app, branding and the colour tokens the application reads, the' +
+        ' ids the platform registers, and read-only example apps. Given no path, lists every file' +
+        ' with its title; given one, such as knowledge/README.md, answers its text. Read' +
+        ' knowledge/README.md first.',
+      inputSchema: z.object({
+        path: z
+          .string()
+          .optional()
+          .describe('A file of the list, such as knowledge/recipes.md. Omit it for the list'),
+      }),
+      annotations: READS,
+    },
+    (args: { path?: string }) =>
+      answer(async () =>
+        args.path === undefined || args.path === ''
+          ? { files: listReference() }
+          : readReference(args.path),
+      ),
+  );
+
+  server.registerTool(
     'list_vocabularies',
     {
       title: 'Vocabularies',
@@ -626,7 +654,10 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "Writes one file of a package's app definition, whole: app.json, home.json," +
         ' navigation.json, actions.json, queues/<id>.json, labels/<language>.json,' +
         ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, under' +
-        ' bundle/agentic-ui-config/. Any other path is refused before anything runs: one that' +
+        " bundle/agentic-ui-config/; or a configuration package's Layer 0, bootstrap.json" +
+        ' (branding, themes and their colour tokens, defaultThemeId), or Layer 1, manifest.json' +
+        ' (what the app shows), when its component names the file as that fragment. Any other' +
+        ' path is refused before anything runs: one that' +
         ' leaves the package or goes through a link, a hidden file, code, an asset, the build' +
         ' allow-list, and the files the generators write (the component, the manifest, package/,' +
         ' build.mjs, content-model.json), for which use apply_generator. A new file the component' +
