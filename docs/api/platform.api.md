@@ -3147,6 +3147,7 @@ interface NxsTabsInputs {
     readonly label: InputSignal<string>;
     readonly selectedIndex: InputSignal<number>;
     readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+    readonly lazy?: InputSignalWithTransform<boolean, unknown>;
     readonly selectHandler: InputSignal<((tab: NxsTab, index: number) => void) | null>;
     }
 }
@@ -3368,10 +3369,10 @@ class NxsTextFieldComponent {
     readonly appearance: InputSignal<NxsFieldAppearance>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly type: InputSignal<NxsTextFieldType>;
-    readonly min: InputSignal<number | null>;
-    readonly max: InputSignal<number | null>;
-    readonly step: InputSignal<number | null>;
-    readonly maxLength: InputSignal<number | null>;
+    readonly min: import("@angular/core").InputSignalWithTransform<number | null, unknown>;
+    readonly max: import("@angular/core").InputSignalWithTransform<number | null, unknown>;
+    readonly step: import("@angular/core").InputSignalWithTransform<number | null, unknown>;
+    readonly maxLength: import("@angular/core").InputSignalWithTransform<number | null, unknown>;
     readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly hint: InputSignal<string>;
     readonly hintAlign: InputSignal<NxsTextFieldHintAlign>;
