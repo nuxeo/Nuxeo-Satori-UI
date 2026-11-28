@@ -82,6 +82,8 @@ const KITS = join(REPO, 'business-apps', 'packages');
 const PLATFORM = JSON.parse(
   readFileSync(join(REPO, 'libs', 'platform', 'package.json'), 'utf8'),
 ).version;
+/** The tool's version, as its project's package.json says, which the published one must carry. */
+const VERSION_OF_SOURCE = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8')).version;
 const PIPELINE = join(REPO, 'scripts', 'app-package.mjs');
 const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs');
 const PAYERS = join(KITS, 'payers-claims-demo');
@@ -141,6 +143,7 @@ try {
   oneBuilder(satori, tool);
   const kitDigest = digestOf(buildWith(PIPELINE, PAYERS, join(scratch, 'pipeline-payers')));
   const tools = await repositoryTools();
+  packContents(tool);
   await outsideTheRepository(tool, kitDigest, tools);
   refusals(satori);
   await modelPull(satori);
@@ -246,7 +249,7 @@ async function outsideTheRepository(tool, kitDigest, tools) {
     return;
   }
   const outside = join(scratch, 'outside');
-  mkdirSync(join(outside, 'tmp'), { recursive: true });
+  mkdirSync(outside, { recursive: true });
   const untar = spawnSync('tar', ['-xzf', join(packed, tarball), '-C', outside], {
     encoding: 'utf8',
   });
@@ -264,15 +267,14 @@ async function outsideTheRepository(tool, kitDigest, tools) {
     recursive: true,
     filter: (path) => basename(path) !== 'dist',
   });
-  // Every Node process of the run may read and write this folder, and nothing else.
+  // Every Node process of the run may read and write this folder, and nothing else: not even the
+  // system's temporary folder, which TMPDIR, TEMP and TMP still name, as a customer's do. What a
+  // run writes for itself goes in its --out, or in --tmp, inside the folder.
   const env = {
     ...process.env,
-    TMPDIR: join(outside, 'tmp'),
-    TEMP: join(outside, 'tmp'),
-    TMP: join(outside, 'tmp'),
     NODE_OPTIONS: `--permission --allow-fs-read=${outside} --allow-fs-write=${outside} --allow-child-process`,
   };
-  const confined = (args) => node(args, { cwd: outside, env });
+  const confined = (args, cwd = outside) => node(args, { cwd, env });
   const probe = confined([
     '-e',
     `require('node:fs').readFileSync(${JSON.stringify(join(REPO, 'package.json'))})`,
@@ -284,22 +286,122 @@ async function outsideTheRepository(tool, kitDigest, tools) {
       probe.output,
     );
   else held++;
+  // The control on the temporary folder: a confined process may not write the system's, so each
+  // run below that passes does so without it.
+  const system = confined([
+    '-e',
+    "const fs = require('node:fs'); fs.rmdirSync(fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'satori-probe-')))",
+  ]);
+  if (system.status === 0 || !system.output.includes('ERR_ACCESS_DENIED'))
+    fail(
+      'the control on the temporary folder',
+      `a confined process wrote the system's temporary folder, ${tmpdir()}, so the runs below prove nothing of --tmp`,
+      system.output,
+    );
+  else held++;
 
+  // A build under the permission model, with only the folder allowed: its step 5 folder goes in
+  // --out, which it writes anyway, and nothing of it is left there.
   const allowList = join(outside, 'payers-claims-demo', 'deployment', 'build-allow-list.json');
+  const allowed = existsSync(allowList) ? ['--allow-list', allowList] : [];
   const kit = confined([
     bin,
     'build',
     join(outside, 'payers-claims-demo'),
     '--out',
     join(outside, 'payers-out'),
-    ...(existsSync(allowList) ? ['--allow-list', allowList] : []),
+    ...allowed,
   ]);
   const digest = digestOf({ ...kit, out: join(outside, 'payers-out') });
   if (kit.status !== 0 || digest !== kitDigest)
     fail(
-      'a kit, outside the repository',
+      'a kit, outside the repository, under the permission model',
       `exit ${kit.status}, digest ${digest}, and app-package.mjs's is ${kitDigest}`,
       kit.output,
+    );
+  else held++;
+  onlyTheZip('satori build --out, under the permission model', join(outside, 'payers-out'));
+  // And with no --out: in the package's own dist/.
+  const inPackage = confined([bin, 'build', join(outside, 'payers-claims-demo'), ...allowed]);
+  if (inPackage.status !== 0)
+    fail(
+      'satori build into the package, under the permission model',
+      `exit ${inPackage.status}`,
+      inPackage.output,
+    );
+  else held++;
+  onlyTheZip(
+    'satori build into the package, under the permission model',
+    join(outside, 'payers-claims-demo', 'dist'),
+  );
+  // An --out the permission model does not allow is refused before anything runs, and said.
+  const forbidden = join(scratch, 'not-allowed');
+  const refusedOut = confined([
+    bin,
+    'build',
+    join(outside, 'payers-claims-demo'),
+    '--out',
+    forbidden,
+  ]);
+  if (
+    refusedOut.status !== 2 ||
+    !refusedOut.output.includes("Node's permission model does not let it write there") ||
+    existsSync(forbidden)
+  )
+    fail(
+      'satori build into a folder the permission model does not allow',
+      `exit ${refusedOut.status}, not 2 saying so`,
+      refusedOut.output,
+    );
+  else held++;
+  // A relative path given to the permission model: Node passes it, as written, to the builder,
+  // which reads it from the package's folder and stops at step 4. Refused before anything runs,
+  // on the command line and in NODE_OPTIONS.
+  const relativeFlags = ['--permission', '--allow-fs-read=.', '--allow-fs-write=.'];
+  for (const [how, args, environment] of [
+    [
+      'on the command line',
+      [...relativeFlags, '--allow-child-process', bin],
+      { ...process.env, NODE_OPTIONS: '' },
+    ],
+    [
+      'in NODE_OPTIONS',
+      [bin],
+      { ...process.env, NODE_OPTIONS: `${relativeFlags.join(' ')} --allow-child-process` },
+    ],
+  ]) {
+    const relativeOut = join(outside, 'relative-out');
+    const run = node([...args, 'build', 'payers-claims-demo', '--out', relativeOut, ...allowed], {
+      cwd: outside,
+      env: environment,
+    });
+    if (run.status !== 2 || !run.output.includes('not absolute') || existsSync(relativeOut))
+      fail(
+        `satori build with the permission model's paths relative, ${how}`,
+        `exit ${run.status}, not 2 saying to give absolute paths`,
+        run.output,
+      );
+    else held++;
+  }
+  // --tmp inside what the package packages is refused, and nothing is made there.
+  const inBundle = join(outside, 'payers-claims-demo', 'bundle', 'tmp');
+  const packaged = confined([
+    bin,
+    'validate',
+    join(outside, 'payers-claims-demo'),
+    '--tmp',
+    inBundle,
+    ...allowed,
+  ]);
+  if (
+    packaged.status !== 2 ||
+    !packaged.output.includes("inside the package's bundle/") ||
+    existsSync(inBundle)
+  )
+    fail(
+      "satori validate with --tmp inside the package's bundle/",
+      `exit ${packaged.status}, not 2 saying so`,
+      packaged.output,
     );
   else held++;
 
@@ -315,6 +417,7 @@ async function outsideTheRepository(tool, kitDigest, tools) {
   const repository = join(outside, 'acme-satori');
   const expected = [
     'package.json',
+    '.npmrc',
     'AGENTS.md',
     '.gitignore',
     '.github/workflows/satori.yml',
@@ -340,19 +443,47 @@ async function outsideTheRepository(tool, kitDigest, tools) {
   )
     fail('satori create', 'package.json does not pin the tool as a dev dependency');
   else held++;
+  // npm finds the tool on Nuxeo's registry by its scope alone, with no token in the file.
+  const npmrc = existsSync(join(repository, '.npmrc'))
+    ? readFileSync(join(repository, '.npmrc'), 'utf8')
+    : '';
+  const settings = npmrc.split('\n').filter((line) => line.trim() !== '' && !line.startsWith('#'));
+  if (
+    JSON.stringify(settings) !==
+    JSON.stringify(['@nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/'])
+  )
+    fail('satori create', `.npmrc is not the @nuxeo scope's registry alone: ${settings}`);
+  else held++;
   if (existsSync(join(repository, 'config-packages', 'acme-config', 'project.json')))
     fail('satori create', "the generator's project.json, which is Nx's, was kept");
+  // validate always makes a temporary folder, so under the permission model it needs --tmp, and
+  // says so before it runs rather than stopping halfway.
+  const unplaced = confined(
+    [bin, 'validate', 'config-packages/acme-config', '--kits', 'config-packages'],
+    repository,
+  );
+  if (
+    unplaced.status !== 2 ||
+    !unplaced.output.includes('Give --tmp <directory>') ||
+    existsSync(join(repository, 'tmp'))
+  )
+    fail(
+      'satori validate with no --tmp, under the permission model',
+      `exit ${unplaced.status}, not 2 naming --tmp`,
+      unplaced.output,
+    );
+  else held++;
   for (const step of ['validate', 'build']) {
-    const run = node(
+    const run = confined(
       [
         bin,
         step,
         'config-packages/acme-config',
-        ...(step === 'build' ? ['--out', 'dist'] : []),
+        ...(step === 'build' ? ['--out', 'dist'] : ['--tmp', 'tmp']),
         '--kits',
         'config-packages',
       ],
-      { cwd: repository, env },
+      repository,
     );
     if (run.status !== 0)
       fail(
@@ -364,8 +495,40 @@ async function outsideTheRepository(tool, kitDigest, tools) {
   }
   if (!existsSync(join(repository, 'dist', 'acme-config-1.0.0.zip')))
     fail('satori build of the scaffold', 'no zip in dist/');
+  onlyTheZip('satori build of the scaffold', join(repository, 'dist'));
   if (existsSync(join(repository, 'config-packages', 'acme-config', 'dist')))
     fail('satori validate of the scaffold', 'it wrote into the package');
+  if (existsSync(join(repository, 'tmp')))
+    fail('satori validate --tmp tmp', 'it left tmp/, which it made, behind');
+  // upgrade-check makes one only to unpack a zip: refused then without --tmp, and run with it.
+  const upgrade = (more) =>
+    confined(
+      [
+        bin,
+        'upgrade-check',
+        'config-packages/acme-config',
+        '--previous',
+        'dist/acme-config-1.0.0.zip',
+        ...more,
+      ],
+      repository,
+    );
+  const noPlace = upgrade([]);
+  if (noPlace.status !== 2 || !noPlace.output.includes('Give --tmp <directory>'))
+    fail(
+      'satori upgrade-check of a zip with no --tmp, under the permission model',
+      `exit ${noPlace.status}, not 2 naming --tmp`,
+      noPlace.output,
+    );
+  else held++;
+  const placed = upgrade(['--tmp', 'tmp']);
+  if (placed.status !== 0 || !placed.output.includes('every configuration is kept'))
+    fail(
+      'satori upgrade-check of a zip with --tmp, under the permission model',
+      `exit ${placed.status}`,
+      placed.output,
+    );
+  else held++;
 
   // What create wrote for agents is what agents sync writes: --check finds it in step.
   const checked = node([bin, 'agents', 'sync', '--check'], { cwd: repository, env });
@@ -376,6 +539,82 @@ async function outsideTheRepository(tool, kitDigest, tools) {
   await mcpOutside(outside, bin, repository, tools);
   signAndVerify(outside, bin, repository, env);
   releaseChecks(outside, bin, repository, env);
+}
+
+// --- 2a. What the tarball holds ------------------------------------------------------------------
+
+/**
+ * `pack-check.mjs`, which the publish workflow runs before anything is published, passes the tool
+ * as it is built, and refuses each thing a tarball of it may not hold, planted in a copy of it: the
+ * controls on the check. The key is made, and the token assembled, here at run time.
+ */
+function packContents(tool) {
+  const check = (folder) => node([join(HERE, 'pack-check.mjs'), folder]);
+  const built = check(tool);
+  if (built.status !== 0 || !built.output.includes('may be published'))
+    fail('pack-check.mjs on the tool as it is built', `exit ${built.status}`, built.output);
+  else held++;
+  const manifest = JSON.parse(readFileSync(join(tool, 'package.json'), 'utf8'));
+  if ('private' in manifest || manifest.version !== VERSION_OF_SOURCE)
+    fail('the published package.json', `private, or not version ${VERSION_OF_SOURCE}`);
+  else held++;
+  const { privateKey } = generateKeyPairSync('ed25519');
+  const token = ['gh', 'p_'].join('') + randomBytes(30).toString('hex').slice(0, 36);
+  const json = (file, change) => (folder) => {
+    const path = join(folder, file);
+    writeFileSync(path, `${JSON.stringify(change(JSON.parse(readFileSync(path, 'utf8'))))}\n`);
+  };
+  const plant = (file, text) => (folder) => {
+    mkdirSync(dirname(join(folder, ...file.split('/'))), { recursive: true });
+    writeFileSync(join(folder, ...file.split('/')), text);
+  };
+  let copy = 0;
+  for (const [what, change, says] of [
+    ['a private package.json', json('package.json', (m) => ({ ...m, private: true })), '"private"'],
+    [
+      'another registry',
+      json('package.json', (m) => ({
+        ...m,
+        publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' },
+      })),
+      'publishConfig',
+    ],
+    [
+      'an install script',
+      json('package.json', (m) => ({ ...m, scripts: { postinstall: 'node satori.mjs' } })),
+      'has scripts',
+    ],
+    ['a source map', plant('platform/en.json.map', '{}\n'), 'is a source map'],
+    ['a test fixture', plant('templates/__fixtures__/kit.json', '{}\n'), 'is a test or a fixture'],
+    [
+      'a private key',
+      plant('agents/signing.txt', privateKey.export({ type: 'pkcs8', format: 'pem' })),
+      'shaped like a private key',
+    ],
+    ['a token', plant('templates/notes.txt', `token: ${token}\n`), 'shaped like a GitHub token'],
+    [
+      "this repository's folder",
+      plant('agents/where.txt', `${REPO}\n`),
+      'a folder of the machine that built it',
+    ],
+    [
+      'a README that links by a path of this repository',
+      plant('README.md', '# x\n\nSee [the guide](../../docs/business-apps/README.md).\n'),
+      'lead nowhere on the registry',
+    ],
+  ]) {
+    const folder = join(scratch, 'pack-checks', String(++copy));
+    cpSync(tool, folder, { recursive: true });
+    change(folder);
+    const run = check(folder);
+    if (run.status !== 1 || !run.output.includes(says))
+      fail(
+        `the control on pack-check.mjs: ${what}`,
+        `exit ${run.status}, not 1 saying "${says}"`,
+        run.output,
+      );
+    else held++;
+  }
 }
 
 // --- 3. Refusals, each at its own step -----------------------------------------------------------
@@ -1255,12 +1494,8 @@ async function mcpOutside(outside, bin, repository, tools) {
     `--allow-fs-write=${outside}`,
     '--allow-child-process',
   ];
-  const env = {
-    PATH: process.env.PATH ?? '',
-    TMPDIR: join(outside, 'tmp'),
-    TEMP: join(outside, 'tmp'),
-    TMP: join(outside, 'tmp'),
-  };
+  // No TMPDIR of the folder's: the server is given --tmp, and passes it on to what it starts.
+  const env = { PATH: process.env.PATH ?? '' };
   // The control on the confinement: what a confined process starts, with no environment, is confined.
   const probe = node(
     [
@@ -1298,7 +1533,24 @@ async function mcpOutside(outside, bin, repository, tools) {
     if (ran.status !== 0) fail(`git ${args[0]} in the scaffold`, `exit ${ran.status}`, ran.stderr);
   }
 
-  const session = mcpSession([...confinement, bin, 'mcp'], { cwd: repository, env });
+  // Without --tmp, the server would have nowhere to work, and refuses to start, saying so.
+  const unplaced = node([...confinement, bin, 'mcp'], {
+    cwd: repository,
+    env,
+    input: '',
+    timeout: 60_000,
+  });
+  if (unplaced.status !== 2 || !unplaced.output.includes('Give --tmp <directory>'))
+    fail(
+      'satori mcp with no --tmp, under the permission model',
+      `exit ${unplaced.status}, not 2 naming --tmp`,
+      unplaced.output,
+    );
+  else held++;
+  const session = mcpSession([...confinement, bin, 'mcp', '--tmp', join(outside, 'mcp-tmp')], {
+    cwd: repository,
+    env,
+  });
   try {
     const opened = await session.open();
     const listed = (await session.request('tools/list')).result?.tools ?? [];
@@ -1961,7 +2213,21 @@ function signAndVerify(outside, bin, repository, env) {
  * build; and its own errors.
  */
 function releaseChecks(outside, bin, repository, env) {
-  const satori = (args, cwd = repository) => node([bin, 'release-check', ...args], { cwd, env });
+  // Under the permission model, as every run of the folder is: its temporary files in --tmp.
+  const place = join(outside, 'release-check-tmp');
+  const satori = (args, cwd = repository) =>
+    node([bin, 'release-check', ...args, '--tmp', place], { cwd, env });
+  const unplaced = node([bin, 'release-check', 'config-packages/acme-config'], {
+    cwd: repository,
+    env,
+  });
+  if (unplaced.status !== 2 || !unplaced.output.includes('Give --tmp <directory>'))
+    fail(
+      'satori release-check with no --tmp, under the permission model',
+      `exit ${unplaced.status}, not 2 naming --tmp`,
+      unplaced.output,
+    );
+  else held++;
   const tag = 'app-package/acme-config/1.0.0';
   // As AGENTS.md gives it: the packages beside it compared by default, as the workflow compares them.
   const ready = satori(['config-packages/acme-config', '--previous', 'dist/acme-config-1.0.0.zip']);
@@ -2173,6 +2439,18 @@ function buildWith(script, directory, out, prefix = []) {
     ...(existsSync(allowList) ? ['--allow-list', allowList] : []),
   ];
   return { ...node(args), out };
+}
+
+/**
+ * That a build's folder holds what it wrote, its zip, checksum and changelog, and nothing it worked
+ * in: `--tmp`'s folder, or `--out`'s by default, is removed when the build ends.
+ */
+function onlyTheZip(what, folder) {
+  const left = existsSync(folder)
+    ? readdirSync(folder).filter((name) => !/\.zip(?:\.sha256)?$|\.changes\.md$/.test(name))
+    : ['no folder at all'];
+  if (left.length > 0) fail(what, `${folder} holds ${left.join(', ')} beside the zip`);
+  else held++;
 }
 
 /** The SHA-256 of the one zip a build wrote, or `null`. */

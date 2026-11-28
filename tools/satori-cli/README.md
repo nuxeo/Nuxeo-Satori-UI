@@ -6,26 +6,32 @@ section 5). A customer keeps all of their configuration in one repository of the
 builds and signs it with this tool, and builds it with an agent through its MCP server, outside this
 repository, with Node alone.
 
-**Not published.** The package is `"private": true` at 0.2.0. Publishing it waits for decision K's
-owners ([decisions.md](../../docs/business-apps/decisions.md)), so nothing here can be installed
-from a registry yet: it is built from this repository and run from the folder it is built into, or
-from a tarball `npm pack` makes of that folder.
+**Ready to publish, and not published yet.** At 0.3.0 the package its build writes is public, for
+`https://packages.nuxeo.com/repository/npm-public/` with the `alpha` tag, and
+[`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes it when a person
+dispatches it ([Publishing it](#publishing-it)). Until that first run, nothing here can be installed
+from a registry: it is built from this repository and run from the folder it is built into, or from
+a tarball `npm pack` makes of that folder. A customer's guide, from nothing to a signed release
+with the published tool, is
+[customer-config-repository.md](../../docs/business-apps/customer-config-repository.md).
 
 ## The commands
 
 ```bash
 satori validate <package> [options]
 satori build <package> [--out <directory>] [options]
-satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]
+satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json] [--tmp <directory>]
 satori model pull --server <address> --out <file>
 satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
 satori agents sync [<directory>] [--check]
-satori mcp [--root <directory>]
+satori mcp [--root <directory>] [--tmp <directory>]
 satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]
 satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
-satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>] [--version <version>] [--trusted-root <file>]
+satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>] [--version <version>] [--trusted-root <file>] [--tmp <directory>]
 satori release-check <package> [--previous <directory or zip>] [--json] [options]
 ```
+
+`validate`, `build` and `release-check` take `--tmp <directory>` among their options.
 
 - **`validate`** takes every step `build` takes and writes nothing: the zip is built and verified
   in a scratch folder, which is then removed.
@@ -50,6 +56,31 @@ satori release-check <package> [--previous <directory or zip>] [--json] [options
 The options of `validate` and `build` are the pipeline's, `scripts/app-package.mjs`'s:
 `--allow-list`, `--registered`, `--platform`, `--model` or `--model-server`, `--previous`, `--kits`
 and `--tag`. `satori --help` says what each does.
+
+**Temporary files, and Node's permission model.** Every temporary file a run makes, and every
+process it starts, the validator, the builder, `unzip` and the tool again for `release-check`, is
+in one place, so that `--allow-fs-write` on the folders a run works in is enough:
+
+- **`--tmp <directory>`,** on `validate`, `build`, `upgrade-check`, `release-check`, `verify` and
+  `mcp`: a folder of the run's own is made in it and removed when the command ends, and the
+  directory is removed too if the run made it and left it empty;
+- **else `build` works in its `--out` folder,** the package's `dist/` by default, which it writes
+  anyway, and leaves only the zip, its checksum and its changelog there;
+- **else the system's temporary folder,** as before. Under the permission model, `validate`,
+  `release-check` and `mcp`, which always make one, and `upgrade-check` given a zip, are refused
+  before they start, with `--tmp` named, when they may not write it; `verify`, which makes one
+  only to check a keyless signature, is not, and needs `--tmp` for one. A `--tmp` inside the
+  package's `bundle/` or `package/`, which are packaged, is refused.
+
+Under the permission model, the tool also refuses an `--allow-fs-read` or `--allow-fs-write` path
+that is not absolute, before it starts: Node passes the flags as written to every Node process the
+tool starts, and each reads a relative path from its own working folder, the builder from the
+package's, so it would be allowed another folder than the one meant.
+
+The tool sets `TMPDIR`, `TEMP` and `TMP` of its own process to the run's folder, so the package
+pipeline's modules, which ask `os.tmpdir()`, and every process the run starts, write there and
+nowhere else. Without this, `satori build` made its step 5 folder in `os.tmpdir()`, and stopped
+with `ERR_ACCESS_DENIED` under `--allow-fs-write=<the work folder>`.
 
 ## One builder
 
@@ -100,6 +131,7 @@ satori create acme-satori --name acme-config --owner acme
 ```text
 acme-satori/
   package.json                   @nuxeo/satori-cli as a dev dependency, pinned
+  .npmrc                         @nuxeo's registry, Nuxeo's, which npm install and Renovate read
   AGENTS.md                      the repository's own part, then the tool's section
   .cursor/skills/  .claude/skills/  .agent/skills/
                                  satori-app-builder, the app builder skill
@@ -267,6 +299,46 @@ is installed, the server the MCP SDK and zod, the generators' process Prettier a
 The folder is what `npm pack` packs. Node 24 and the system's `unzip` run it, and `gh` verifies a
 keyless signature.
 
+## Publishing it
+
+**What is published.** The build writes the published `package.json` field by field from this
+project's, the fields [`published.mjs`](published.mjs) names: not `private`, which this project's
+keeps so that its folder of sources cannot be published by mistake; `publishConfig` with
+`access: public` and Nuxeo's registry; `bin`, `satori`; `engines`, Node 24 or later; the licence,
+Apache-2.0, as the Marketplace packages this repository ships declare; and `files`, the list
+above. No `scripts` and no dependency, so installing it runs nothing and fetches nothing else. Its
+`README.md` is [`README.npm.md`](README.npm.md), written for a reader of the registry: it links by
+`https://` alone, since a path of this repository leads nowhere there.
+
+**What may not be in it.** [`pack-check.mjs`](pack-check.mjs) asks npm what it would pack,
+`npm pack --dry-run --json`, and refuses a tarball that holds anything but those files: a source
+map, a test or a fixture, a key or an archive, a hidden file of a working copy, a file of
+`node_modules`, text shaped like a private key or a token, or this repository's folder or the
+builder's home named in a file. The only code from `node_modules` is what `bundle.mjs` bundles into
+`mcp.mjs` and `mcp-generator.mjs`, with each package's licence in `licenses/`. `LICENSE` is the Apache
+License 2.0's text, byte for byte as the Apache Software Foundation gives it. At 0.3.0 the tarball
+is 65 files, 1.85 MB packed and 7.5 MB unpacked.
+
+**How it is published.** [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml),
+which follows `publish-platform.yml`: dispatched by hand, a dry run unless `dryRun` is false, and
+`version_bump` `none` by default, which publishes the version this project's `package.json` has.
+Its `build` job, which holds no registry token, installs, builds, runs the selftest, packs the
+tarball once, holds that tarball, unpacked, to `pack-check.mjs`, and dry-runs the publish of that
+file; its `publish` job, which checks nothing out, publishes that same file alone, once its name is
+the tool's tarball's and it is in the artifact, with `NPM_PACKAGES_TOKEN`, `--tag alpha`,
+`--ignore-scripts` and Nuxeo's registry, and never `latest`. A workflow can be dispatched only once
+it is on the repository's default branch, `main`.
+
+`checkPublishWorkflows` in `scripts/review-guardrails.mjs` holds both publish workflows to that: a
+token, in any letter case or as `secrets['...']`, in a job that checks the repository out, runs
+`npm ci`, `node`, `git` or another's action, or in more than one job, or at the workflow's level; a
+publish job whose `if:` is more than `!inputs.dryRun`; a trigger other than a dispatch; `dryRun`
+false by default; a write permission; runs not serialised; a publish without one `--tag alpha`, to
+another registry, or, with the token, without `--ignore-scripts`; the `latest` tag; and any
+workflow handing every secret on at once, `toJSON(secrets)` or `secrets: inherit`. Who may
+dispatch, and from which branch, no workflow text shows: a protected environment holding the token,
+limited to `main` with required reviewers, is the repository's settings to make.
+
 ## Its controls
 
 `node tools/satori-cli/selftest.mjs`, the project's `test` target, builds the tool, then:
@@ -274,10 +346,20 @@ keyless signature.
 - builds every kit in `business-apps/packages/` through `app-package.mjs` and through the tool, and
   requires the same SHA-256, and the same report from the validator through `bin.mjs` and through
   the tool's `validator.mjs`; a tool whose builder differs by one byte must build another digest;
+- runs `pack-check.mjs` on the tool as it is built, which must pass, and on nine copies of it, each
+  with one thing planted, a `private` package.json, another registry, an install script, a source
+  map, a fixture, a private key made at run time, a token assembled at run time, this repository's
+  folder, and a README linking by a path of this repository: each must be refused;
 - packs it with `npm pack`, unpacks it into a folder with no `node_modules`, and builds a copy of a
   kit there, to the same digest, and a repository `create` writes, under Node's permission model,
-  so that no Node process of the run can read anything outside that folder: reading this
-  repository's `package.json` from it must fail;
+  so that no Node process of the run can read or write anything outside that folder: reading this
+  repository's `package.json` from it must fail, and so must making a folder in the system's
+  temporary folder, which `TMPDIR` still names. So the kit's build, with its `--out` and into the
+  package's `dist/`, passes only because it keeps its temporary files there, and leaves nothing
+  else; an `--out` outside the folder is refused before anything runs; `validate`,
+  `release-check`, `mcp`, and `upgrade-check` of a zip, are refused without `--tmp` and pass with
+  it; a `--tmp` inside the package's `bundle/` is refused; and so are the permission model's paths
+  given relative, on the command line and in `NODE_OPTIONS`;
 - builds the tool a second time from another folder, which must give the same bytes;
 - in that folder, starts `satori mcp` from the tarball in the scaffold, confined by flags on its
   command line, which Node passes on to every Node process it starts, as it would not pass
@@ -321,8 +403,9 @@ keyless signature.
 
 ## Not in this slice
 
-- **Publishing the tool,** and so the workflow's `npm ci`, which needs it on a registry: decision K's
-  owners. And publishing a package, which stays a person's tag: `release-check` says the tag.
+- **The first publish,** a person's dispatch of `publish-satori-cli.yml` with `dryRun` false. Until
+  it runs, the workflow `create` writes cannot `npm ci` the tool. And publishing a package, which
+  stays a person's tag: `release-check` says the tag.
 - **A preview against the customer's development server.** `preview_package` serves to this
   repository's development server only, and refuses outside it.
 - **Promotion** through development, test and production with a person's approval, and **who may

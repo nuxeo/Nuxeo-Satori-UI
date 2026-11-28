@@ -1496,7 +1496,8 @@ this repository. They are now one implementation, which two commands run:
   with, as sections 2 to 11 describe, with the same steps, messages and exit codes as before;
 - [`@nuxeo/satori-cli`](../../tools/satori-cli/README.md), `satori validate` and `satori build`,
   the builder a customer runs on their own configuration repository, outside this one, with Node
-  alone. It is not published: publishing waits for decision K.
+  alone. It is ready to publish, to Nuxeo's npm registry with the `alpha` tag, and is not
+  published until a person dispatches `publish-satori-cli.yml`.
 
 Both run the steps in [`scripts/package-pipeline/pipeline.mjs`](../../scripts/package-pipeline/pipeline.mjs).
 Each gives it where the validator, the upgrade check, the builder, the English catalogue and the

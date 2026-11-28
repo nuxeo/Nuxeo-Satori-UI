@@ -19,6 +19,11 @@
  *   satori verify <zip> --trusted-signers <file> [options]
  *   satori release-check <package> [--previous <directory or zip>] [--json] [options]
  *
+ * Every temporary file a run makes, and every process it starts, is in one place
+ * ({@link inTemporaryPlace}): `--tmp <directory>`; else, for `build`, its `--out` folder, which it
+ * writes anyway; else the system's. So under Node's permission model, `--allow-fs-write` on the
+ * folders a run works in is enough, and nothing needs `TMPDIR` set from outside.
+ *
  * What it carries, beside this file, each from this repository when the tool is built:
  * `validator.mjs`, the app definition's validator; `builder/build.mjs`, the `config-package`
  * generator's builder, byte for byte, which it runs on a package instead of the package's own;
@@ -38,13 +43,14 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmdirSync,
   rmSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative as relativeTo, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { modelExportCommand } from '../../../scripts/package-pipeline/model-export.mjs';
-import { pipelineCommand } from '../../../scripts/package-pipeline/pipeline.mjs';
+import { parse, pipelineCommand } from '../../../scripts/package-pipeline/pipeline.mjs';
 import { releaseCheckCommand } from '../../../scripts/package-pipeline/release-check.mjs';
 import {
   gitTopLevel,
@@ -80,7 +86,14 @@ const BUILD_OPTIONS = `options of validate and build:
   --previous <directory or zip>
                               the package as it was: its version and its upgrade are held to it
   --kits <folder>             compare the package's names with every other package in the folder
-  --tag <tag>                 app-package/<name>/<version>, when the build is a release`;
+  --tag <tag>                 app-package/<name>/<version>, when the build is a release
+  --tmp <directory>           where the run's temporary files go, in a folder of its own that is
+                              removed (default: build's --out folder; for validate, the system's)`;
+
+const TMP_OPTION = `--tmp <directory>: the run's temporary files, and those of every process it
+starts, go in a folder of its own inside <directory>, removed when it ends. Under Node's
+permission model, give one that --allow-fs-write allows. Without it, build works in its --out
+folder, and validate, release-check, upgrade-check, verify and mcp in the system's temporary folder.`;
 
 const USAGE = `usage: satori <command> [arguments]
 
@@ -89,6 +102,7 @@ const USAGE = `usage: satori <command> [arguments]
   satori build <package> [--out <directory>] [options]
       Check it and write its Marketplace zip and checksum, to <package>/dist by default.
   satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]
+      [--tmp <directory>]
       Hold it to the package it was: what a customer may override or name stays.
   satori model pull --server <address> --out <file>
       Write a server's content model to a file, reading only, as NUXEO_USER with NUXEO_PASS.
@@ -98,14 +112,14 @@ const USAGE = `usage: satori <command> [arguments]
   satori agents sync [<directory>] [--check]
       Install or refresh the app builder skill, AGENTS.md's section and the MCP server's entry
       in .mcp.json and .cursor/mcp.json. --check writes nothing, and exits 1 when they differ.
-  satori mcp [--root <directory>]
+  satori mcp [--root <directory>] [--tmp <directory>]
       The Builder MCP server, over stdio, for an AI IDE, in a configuration repository.
   satori sign <zip> --key <file> | --ephemeral-key --signers-out <file> [--commit <sha>] [--out <file>]
   satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
       Sign a zip with a key you hold, outside the repository; or, in CI, decide whether the run
       may sign keyless and write what actions/attest signs.
   satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>]
-      [--version <version>] [--trusted-root <file>]
+      [--version <version>] [--trusted-root <file>] [--tmp <directory>]
       Verify a zip's signature against the signers you trust.
   satori release-check <package> [--previous <directory or zip>] [--json] [options]
       Whether the package is ready for a person to release: it builds and passes every step,
@@ -115,6 +129,8 @@ const USAGE = `usage: satori <command> [arguments]
 
 ${BUILD_OPTIONS}
 
+${TMP_OPTION}
+
 Not in this version: preview, publishing and promotion, and who may sign for a deployment
 (decision M). Publishing is a person's step: release-check says the tag they push.`;
 
@@ -123,15 +139,15 @@ const BUILD_USAGE = `usage: satori build <package> [--out <directory>] [options]
 
 ${BUILD_OPTIONS}`;
 const UPGRADE_USAGE =
-  'usage: satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]';
+  'usage: satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json] [--tmp <directory>]';
 const MODEL_USAGE = 'usage: satori model pull --server <address> --out <file>';
 const SIGN_USAGE = [
   'usage: satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]',
   '       satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>',
   '       satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>]',
-  '         [--version <version>] [--trusted-root <file>]',
+  '         [--version <version>] [--trusted-root <file>] [--tmp <directory>]',
 ].join('\n');
-const MCP_USAGE = 'usage: satori mcp [--root <directory>]';
+const MCP_USAGE = 'usage: satori mcp [--root <directory>] [--tmp <directory>]';
 const RELEASE_USAGE = `usage: satori release-check <package> [--previous <directory or zip>] [--json] [options]
 
 ${BUILD_OPTIONS.replace('options of validate and build:', 'options, those of build but --out and --tag:')}`;
@@ -156,8 +172,30 @@ const HOST = {
   platformVersion: PLATFORM.version ?? undefined,
 };
 
+/** The commands that make temporary files, each with its usage, and so take `--tmp`. */
+const TEMPORARY_USAGE = new Map([
+  ['validate', BUILD_USAGE],
+  ['build', BUILD_USAGE],
+  ['upgrade-check', UPGRADE_USAGE],
+  ['release-check', RELEASE_USAGE],
+  ['verify', SIGN_USAGE],
+  ['mcp', MCP_USAGE],
+]);
+/**
+ * Those of them that make one whatever they are given, and so are refused before they run when they
+ * may not. `upgrade-check` makes one only to unpack a zip, and is refused then; `verify` only to
+ * check a keyless signature.
+ */
+const ALWAYS_TEMPORARY = new Set(['validate', 'release-check', 'mcp']);
+
 const [command, ...rest] = process.argv.slice(2);
-process.exitCode = await dispatch(command, rest);
+const relative = relativePermissions();
+if (relative.length > 0 && !['--version', '--help', '-h', 'help'].includes(command)) {
+  console.error(
+    `satori: Node's permission model was given ${relative.join(' ')}, a path that is not absolute. Node gives the flag, as it is written, to every Node process the tool starts, and each reads it from its own working folder: the builder, which runs in the package's folder, would be allowed another folder than the one meant, and stop with ERR_ACCESS_DENIED. Give absolute paths, such as --allow-fs-read="$PWD" --allow-fs-write="$PWD".`,
+  );
+  process.exitCode = 2;
+} else process.exitCode = await inTemporaryPlace(command, rest, dispatch);
 
 async function dispatch(name, args) {
   switch (name) {
@@ -205,6 +243,154 @@ async function dispatch(name, args) {
     default:
       console.error(USAGE);
       return 2;
+  }
+}
+
+/**
+ * `run(name, args)` with every temporary file in one place, so that under Node's permission model
+ * `--allow-fs-write` on the folders the run works in is enough. Without this, `satori build` made
+ * its step 5 folder in `os.tmpdir()`, which a customer's `--allow-fs-write=<work folder>` does not
+ * allow, and stopped with `ERR_ACCESS_DENIED`.
+ *
+ * - **`--tmp <directory>`** names the place, for each command of {@link TEMPORARY_USAGE}. It is made
+ *   if it is not there, and removed afterwards if this run made it and left it empty.
+ * - **Else `build` works in its `--out` folder,** `<package>/dist` by default, which it writes into
+ *   anyway: the pipeline's own command line, read by its own `parse`, says which.
+ * - **Else the system's temporary folder,** as before, and nothing is changed. Under the permission
+ *   model, a command of {@link ALWAYS_TEMPORARY} that may not write there is refused before it
+ *   runs, with `--tmp` named, rather than stopping halfway with `ERR_ACCESS_DENIED`.
+ *
+ * In a place it is given, a run works in a folder of its own, `.satori-tmp-<random>`, removed when
+ * the command ends, and the process's temporary folder, `TMPDIR`, `TEMP` and `TMP`, is that folder:
+ * so the package pipeline's modules, which ask `os.tmpdir()`, and every process the run starts, the
+ * validator, the builder, `unzip` and the tool again for `release-check`, write there and nowhere
+ * else. `mcp` runs until its client stops it, so it is given the place itself: each tool call makes
+ * a folder of its own there and removes it.
+ */
+async function inTemporaryPlace(name, args, run) {
+  const usage = TEMPORARY_USAGE.get(name);
+  if (usage === undefined) return run(name, args);
+  const at = args.indexOf('--tmp');
+  const value = at >= 0 ? args[at + 1] : undefined;
+  if (
+    at >= 0 &&
+    (value === undefined ||
+      value === '' ||
+      value.startsWith('-') ||
+      args.indexOf('--tmp', at + 1) >= 0)
+  ) {
+    console.error(`--tmp takes one folder, once.\n${usage}`);
+    return 2;
+  }
+  const given = at >= 0 ? [...args.slice(0, at), ...args.slice(at + 2)] : args;
+  let place;
+  let named;
+  if (value !== undefined) {
+    place = resolve(value);
+    named = `--tmp ${value}`;
+    const inside = insideThePackage(name, given, place);
+    if (inside !== null) {
+      console.error(`${inside}\n${usage}`);
+      return 2;
+    }
+  } else if (name === 'build') {
+    const options = parse(given);
+    // A command line the pipeline refuses, it refuses in its own words.
+    if (options === null || !existsSync(options.directory)) return run(name, given);
+    place = resolve(options.out ?? join(options.directory, 'dist'));
+    named = `its --out folder, ${place}`;
+  } else {
+    if (ALWAYS_TEMPORARY.has(name) && !mayWrite(tmpdir())) {
+      console.error(
+        `satori ${name} makes temporary files, and Node's permission model does not let it write the system's temporary folder, ${tmpdir()}. Give --tmp <directory>, a folder --allow-fs-write allows: --tmp tmp, say, which the .gitignore satori create writes ignores.\n${usage}`,
+      );
+      return 2;
+    }
+    return run(name, given);
+  }
+  if (!mayWrite(place)) {
+    console.error(
+      `satori ${name} works in ${named}, and Node's permission model does not let it write there: allow it with --allow-fs-write, or give --tmp <directory>, a folder it allows.\n${usage}`,
+    );
+    return 2;
+  }
+  let made;
+  let folder;
+  try {
+    made = mkdirSync(place, { recursive: true });
+    folder = name === 'mcp' ? place : mkdtempSync(join(place, '.satori-tmp-'));
+  } catch (error) {
+    console.error(`satori ${name} could not work in ${named}: ${error.message}\n${usage}`);
+    return 2;
+  }
+  for (const variable of ['TMPDIR', 'TEMP', 'TMP']) process.env[variable] = folder;
+  if (name === 'mcp') return run(name, given);
+  // A run stopped by a signal, as by Ctrl-C, leaves its folder, as it left one in the system's
+  // temporary folder before: no handler is installed, so the signal stops the command as it did,
+  // in the middle of a step, and `.satori-tmp-*` may be removed by hand.
+  try {
+    return await run(name, given);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+    if (made !== undefined) removeIfEmpty(place, made);
+  }
+}
+
+/**
+ * The paths of `--allow-fs-read` and `--allow-fs-write`, on Node's command line or in
+ * `NODE_OPTIONS`, that are not absolute, when the permission model is on. Node passes the flags as
+ * written to the Node processes the tool starts, and each reads a relative one from its own working
+ * folder.
+ */
+function relativePermissions() {
+  if (process.permission === undefined) return [];
+  const flags = [...process.execArgv, ...(process.env.NODE_OPTIONS ?? '').split(/\s+/)];
+  return flags.filter((flag) => {
+    const given = /^--allow-fs-(?:read|write)=(.+)$/.exec(flag);
+    if (given === null) return false;
+    const path = given[1].replace(/^(["'])(.*)\1$/, '$2');
+    return path !== '*' && !isAbsolute(path);
+  });
+}
+
+/**
+ * Why `--tmp`, `place`, is no place for the command's package's files, or `null`: inside the
+ * package's `bundle/` or `package/`, every file of which is checked and packaged.
+ */
+function insideThePackage(name, given, place) {
+  const directory =
+    name === 'validate' || name === 'build'
+      ? parse(given)?.directory
+      : name === 'release-check'
+        ? given.find((arg) => !arg.startsWith('-'))
+        : undefined;
+  if (directory === undefined) return null;
+  for (const part of ['bundle', 'package']) {
+    const from = relativeTo(resolve(directory, part), place);
+    if (from === '' || (!from.startsWith('..') && !isAbsolute(from)))
+      return `--tmp ${place} is inside the package's ${part}/, every file of which is checked and packaged: give a folder outside it.`;
+  }
+  return null;
+}
+
+/** Whether Node's permission model, when it is on, lets this process read and write `path`. */
+function mayWrite(path) {
+  const permission = process.permission;
+  return (
+    permission === undefined ||
+    (permission.has('fs.write', path) && permission.has('fs.read', path))
+  );
+}
+
+/** `place`, and each folder above it up to `made`, the first this run made, while each is empty. */
+function removeIfEmpty(place, made) {
+  for (let at = place; ; at = dirname(at)) {
+    try {
+      rmdirSync(at);
+    } catch {
+      return;
+    }
+    if (at === made || dirname(at) === at) return;
   }
 }
 
@@ -349,11 +535,17 @@ async function upgradeCheck(args) {
     console.error(UPGRADE_USAGE);
     return 2;
   }
-  const scratch = mkdtempSync(join(tmpdir(), 'satori-previous-'));
+  // A folder of its own only to unpack a zip into: a folder --previous needs none.
+  const zip = isFile(options.previous);
+  if (zip && !mayWrite(tmpdir())) {
+    console.error(
+      `satori upgrade-check unpacks --previous's zip into a temporary folder, and Node's permission model does not let it write the system's, ${tmpdir()}. Give --tmp <directory>, a folder --allow-fs-write allows.\n${UPGRADE_USAGE}`,
+    );
+    return 2;
+  }
+  const scratch = zip ? mkdtempSync(join(tmpdir(), 'satori-previous-')) : null;
   try {
-    const previous = isFile(options.previous)
-      ? packageOfZip(options.previous, scratch)
-      : options.previous;
+    const previous = scratch === null ? options.previous : packageOfZip(options.previous, scratch);
     if (typeof previous !== 'string')
       throw new Usage(`--previous ${options.previous}: ${previous.problem}`);
     for (const [what, path] of [
@@ -377,7 +569,7 @@ async function upgradeCheck(args) {
     );
     return 2;
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    if (scratch !== null) rmSync(scratch, { recursive: true, force: true });
   }
 }
 

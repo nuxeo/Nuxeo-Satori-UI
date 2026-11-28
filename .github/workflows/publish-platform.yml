@@ -121,11 +121,18 @@ jobs:
           TARBALL: ${{ needs.build.outputs.tarball }}
         run: |
           set -euo pipefail
+          # The build job's output names a file of the artifact, and nothing else npm would take
+          # for a package: not a URL, a folder or a git address, whose scripts npm would run with
+          # the token in their environment.
+          if [[ ! "$TARBALL" =~ ^nuxeo-satori-platform-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.tgz$ ]] || [ ! -f "$TARBALL" ]; then
+            echo "::error::the build job named $TARBALL, which is not the platform's tarball in the artifact"
+            exit 1
+          fi
           # npm expands ${NODE_AUTH_TOKEN} from the environment at run time, so the file
           # holds a reference to the token and never the token itself.
           printf '%s\n' '//packages.nuxeo.com/repository/npm-public/:_authToken=${NODE_AUTH_TOKEN}' \
             > "$RUNNER_TEMP/npmrc"
           trap 'rm -f "$RUNNER_TEMP/npmrc"' EXIT
-          npm publish "$TARBALL" --tag alpha \
+          npm publish "./$TARBALL" --tag alpha --ignore-scripts \
             --registry https://packages.nuxeo.com/repository/npm-public/ \
             --userconfig "$RUNNER_TEMP/npmrc"

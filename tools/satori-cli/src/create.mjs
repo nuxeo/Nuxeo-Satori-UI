@@ -4,6 +4,7 @@
  *
  *   <directory>/
  *     package.json                 the tool as a dev dependency, pinned, and its two commands
+ *     .npmrc                       the registry @nuxeo/satori-cli is installed from, Nuxeo's
  *     AGENTS.md                    the repository's own part, then the tool's section
  *     .cursor/ .claude/ .agent/    the app builder skill, satori-app-builder
  *     .mcp.json, .cursor/mcp.json  the MCP server, satori mcp, with nothing secret in it
@@ -46,6 +47,8 @@ const USAGE =
 /** The repository's files, from `templates/`, each with what is put into it. */
 const FILES = [
   ['package.json', 'package.json'],
+  // Named without its dot, as gitignore is: npm never packs a file named .npmrc.
+  ['npmrc', '.npmrc'],
   ['AGENTS.md', 'AGENTS.md'],
   ['gitignore', '.gitignore'],
   ['satori.yml', join('.github', 'workflows', 'satori.yml')],
@@ -141,15 +144,16 @@ export function createCommand(args, { here, version }) {
   .github/workflows/satori.yml validate and build on every pull request; sign a tag once
                                trusted-signers.json names the workflow
   package.json                 @nuxeo/satori-cli ${version}, as a dev dependency
+  .npmrc                       where npm finds it: Nuxeo's registry, which needs no token
 
-Check and build the package:
+Install the tool, and commit package-lock.json, which the workflow's npm ci installs from:
 
-  satori validate config-packages/${options.name}
-  satori build config-packages/${options.name} --out dist
+  npm install
 
-The workflow installs the tool with npm ci, from package-lock.json, which npm install writes once
-@nuxeo/satori-cli is published: commit it. Until then it is not on a registry, and the workflow
-cannot install it.
+Then check and build the package, with package.json's scripts, which run the tool npm installed:
+
+  npm run validate
+  npm run build
 
 After every upgrade of the tool, run satori agents sync, and commit what it writes: the workflow
 checks it with satori agents sync --check. Not written by this version: promotion, and who may sign
