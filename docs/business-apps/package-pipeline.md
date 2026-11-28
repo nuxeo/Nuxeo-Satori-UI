@@ -843,7 +843,7 @@ its own reason, and the sound package passes:
 - **The approval gate,** `app-package-approval.mjs`, with GitHub's review history of the run stood
   in for by a file, its shape read from a public run: an approval for `marketplace-preprod` by a
   person who did not start the run passes, alone and among others. Refused, with nothing published:
-  no approval, as an environment with no reviewer or an administrator's bypass leaves; an approval
+  no approval, as an environment with no reviewer leaves; an approval
   for another environment; a rejection; an approval by whoever pushed the tag, or re-ran the run; one
   by a bot, or by someone of no known kind; an answer that is not a list, or not JSON; and no run to
   ask about.
@@ -906,8 +906,11 @@ who pushed the tag (`GITHUB_ACTOR`) nor who re-ran the run (`GITHUB_TRIGGERING_A
 It reads the run, not the environment's settings, because settings can say a person must approve
 while none did: GitHub creates an environment a job names, if there is none, with no rule, and runs
 the job at once; an administrator may bypass the rules; and an environment that allows self-review
-lets the tag's pusher approve their own publish. None of those leaves an approval by someone else,
-so each is refused, whatever the settings are. The permissions did not move: `sign` keeps
+lets the tag's pusher approve their own publish. The first leaves no approval and the third only
+the pusher's, so both are refused, whatever the settings are. Whether GitHub records the second, a
+bypass, in the run's history is not established: if not, it is refused; if so, it counts as that
+administrator's approval. The history is the run's, so an approval of an earlier attempt, the same
+tag and the same bytes, holds for a re-run. The permissions did not move: `sign` keeps
 `contents: read`, `id-token: write` and `attestations: write` and names no environment, and
 `publish` keeps `contents: read`. The record is read without a token so that they stay so: GitHub
 answers for a public repository, 60 times an hour per address, and an answer that cannot be read, or

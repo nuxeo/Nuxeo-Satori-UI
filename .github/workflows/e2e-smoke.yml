@@ -26,11 +26,13 @@ name: E2E smoke
 # **No write permission and no `pull_request_target`.** The pull request's code runs in `smoke`, so
 # it gets `contents: read` alone, and the checkout keeps no token in .git/config.
 #
-# **No Playwright trace.** A trace holds the browser context's options, `httpCredentials` and so
-# NUXEO_PASS among them, in plain text, and the value of every field a test fills, as measured with
-# Playwright 1.63.0; and a public repository's artifacts can be downloaded by anyone signed in. So
-# the suite runs with `--trace off`, and the uploaded results are the report, screenshots and
-# videos, in which a password field shows only its dots.
+# **No Playwright trace, and no page snapshot.** A trace holds the browser context's options,
+# `httpCredentials` and so NUXEO_PASS among them, in plain text, and the value of every field a test
+# fills, as measured with Playwright 1.63.0; the page snapshot a failed test's `error-context.md`
+# carries holds a filled field's value too; and a public repository's artifacts can be downloaded by
+# anyone signed in. So the suite runs with `--trace off` and `PLAYWRIGHT_NO_COPY_PROMPT`, which stops
+# the snapshot, and the uploaded results are the report, `error-context.md` without the page,
+# screenshots and videos, in which a password field shows only its dots.
 #
 # Controlled by scripts/beta-harness/e2e-smoke.selftest.mjs, with the shapes above: a change to this
 # file that drops one of them is refused there.
@@ -149,6 +151,8 @@ jobs:
         timeout-minutes: 15
         env:
           CI: 'true'
+          # error-context.md without the page's snapshot, which would hold a filled field's value.
+          PLAYWRIGHT_NO_COPY_PROMPT: '1'
           NUXEO_USER: ${{ secrets.NUXEO_USER }}
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
         run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=chromium --grep @smoke --trace off

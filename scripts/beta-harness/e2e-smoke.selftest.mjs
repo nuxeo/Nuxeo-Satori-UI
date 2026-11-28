@@ -478,6 +478,10 @@ function workflowProblems(text) {
     if (/\n {8}if:/.test(suiteStep)) problems.push('the suite step is conditional');
     if (!/ --trace off(\s|$)/.test(suiteStep))
       problems.push('the suite may write a trace, which holds NUXEO_PASS, into a public artifact');
+    if (!/\n {10}PLAYWRIGHT_NO_COPY_PROMPT: '1'(\n|$)/.test(suiteStep))
+      problems.push(
+        "a failed test's error-context.md may carry the page, and a filled field's value",
+      );
     if (!/\n {8}timeout-minutes: \d+(\n|$)/.test(suiteStep))
       problems.push('the suite has no deadline of its own, so a hang can starve the sweep');
   }
@@ -532,6 +536,11 @@ function theWorkflow() {
       /not contents: read alone/,
     ],
     ['a trace', (t) => t.replace(' --trace off', ''), /may write a trace/],
+    [
+      "the page's snapshot in error-context.md",
+      (t) => t.replace(/\n {10}PLAYWRIGHT_NO_COPY_PROMPT: '1'/, ''),
+      /error-context\.md may carry the page/,
+    ],
     [
       'a trace kept on failure',
       (t) => t.replace(' --trace off', ' --trace retain-on-failure'),
@@ -645,7 +654,8 @@ function theWorkflow() {
   const dispatches = (t) =>
     /matching-refs\/heads\/integration\//.test(t) && /matching-refs\/heads\/staging\//.test(t);
   const nightlyTraced = (t) =>
-    /npx playwright test [^\n]*--project=\$\{\{ matrix\.project \}\} --trace off\n/.test(t);
+    /npx playwright test [^\n]*--project=\$\{\{ matrix\.project \}\} --trace off\n/.test(t) &&
+    /\n {10}PLAYWRIGHT_NO_COPY_PROMPT: '1'\n/.test(t);
   check(
     'e2e-nightly.yml writes no trace into its public artifacts',
     nightlyTraced(nightly),
@@ -655,6 +665,28 @@ function theWorkflow() {
   check(
     'refused: e2e-nightly.yml with traces',
     !nightlyTraced(nightly.replace(' --trace off', '')),
+  );
+  check(
+    "refused: e2e-nightly.yml with the page's snapshot",
+    !nightlyTraced(nightly.replace(/\n {10}PLAYWRIGHT_NO_COPY_PROMPT: '1'/, '')),
+  );
+
+  // The local command, `npm run beta:e2e-smoke`, holds the report as the workflow does.
+  const verdictArgs = (t) =>
+    /e2e-smoke-verdict\.mjs dist\/e2e\/results\.json (--project \S+ --min \d+)/.exec(t)?.[1] ??
+    null;
+  const script = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).scripts[
+    'beta:e2e-smoke'
+  ];
+  check(
+    'npm run beta:e2e-smoke gives the verdict what e2e-smoke.yml gives it',
+    verdictArgs(text) !== null && verdictArgs(script) === verdictArgs(text),
+    `workflow ${verdictArgs(text)}, package.json ${verdictArgs(script)}`,
+    false,
+  );
+  check(
+    'refused: a package script that gives the verdict another subset size',
+    verdictArgs(script.replace('--min 16', '--min 15')) !== verdictArgs(text),
   );
   check(
     'e2e-nightly.yml dispatches its integration and staging branches',

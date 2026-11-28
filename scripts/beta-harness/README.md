@@ -625,11 +625,14 @@ tagged `SMOKE` (`apps/nuxeo-ui-e2e/src/smoke.ts`, which lists them and why), sel
    fewer tests than `--min`, the subset's size, 16, a test not tagged `@smoke`, one on another
    project, and one that did not pass. A test that passed on a retry passes and is named in the
    summary.
-   **No trace:** a Playwright trace holds the browser context's options, `httpCredentials` and so
-   `NUXEO_PASS` among them, in plain text, and the value of every field a test fills, measured with
-   1.63.0 on 28 November 2026. This repository is public and its artifacts can be downloaded by
-   anyone signed in, so neither CI run writes one; the nightly's earlier failing runs uploaded
-   theirs.
+   **No trace, no page snapshot:** a Playwright trace holds the browser context's options,
+   `httpCredentials` and so `NUXEO_PASS` among them, in plain text, and the value of every field a
+   test fills, measured with 1.63.0 on 28 November 2026; and the page snapshot a failed test's
+   `error-context.md` carries holds a filled field's value. This repository is public and its
+   artifacts can be downloaded by anyone signed in, so both CI runs pass `--trace off` and set
+   `PLAYWRIGHT_NO_COPY_PROMPT`, which leaves `error-context.md` without the page. The nightly's
+   failing runs before 28 November uploaded traces: their artifacts, kept 14 days, and the password
+   are for an administrator to delete and rotate.
 4. **`e2e-sweep.mjs`,** on every outcome once the app was served, cancellation included. Every
    title the smoke specs make, through `uniqueTitle`, starts with the run's `E2E_RUN_PREFIX`,
    `e2e-pr<number>-<run>-<attempt>-`, and the sweep trashes whatever live document still carries

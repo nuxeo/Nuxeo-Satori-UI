@@ -18,8 +18,11 @@
  * - and that person is neither who started the run (`GITHUB_ACTOR`, who pushed the tag) nor who
  *   started this attempt (`GITHUB_TRIGGERING_ACTOR`, who re-ran it).
  *
- * An environment with no reviewer leaves no approval, and neither does an administrator's bypass,
- * so both are refused whatever the environment's settings say.
+ * An environment with no reviewer leaves no approval, so it is refused whatever its settings say.
+ * Whether GitHub records an administrator's bypass in this history is not established: if it does
+ * not, a bypass is refused; if it does, it counts as an approval by that administrator, refused
+ * when they are the run's own. The history is the run's, not the attempt's, so an approval of an
+ * earlier attempt of the same run, which is the same tag and the same bytes, holds for a re-run.
  *
  * The review history is read from the public REST API without a token, so the job's permissions
  * stay `contents: read`. It answers for a public repository, 60 times an hour per address. If it
@@ -82,7 +85,7 @@ function judge(reviews, { environment, actors }) {
     .filter((login) => !actors.some((actor) => actor.toLowerCase() === login.toLowerCase()));
   if (approvals.length === 0)
     problems.push(
-      `nobody approved this run for ${environment}: the environment requires no reviewer, or an administrator bypassed it`,
+      `nobody approved this run for ${environment}: the environment requires no reviewer, or the run went through without one`,
     );
   else if (approvers.length === 0)
     problems.push(

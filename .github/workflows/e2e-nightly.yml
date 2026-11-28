@@ -93,10 +93,13 @@ jobs:
       # `--trace off`: a trace holds the browser context's options, `httpCredentials` and so
       # NUXEO_PASS among them, in plain text (measured with Playwright 1.63.0 on 28 November 2026),
       # and this public repository's artifacts can be downloaded by anyone signed in. The suite and
-      # its projects are unchanged; only the artifact a failure leaves is.
+      # its projects are unchanged; only the artifact a failure leaves is. `PLAYWRIGHT_NO_COPY_PROMPT`
+      # likewise keeps the page's snapshot, which holds a filled field's value, out of a failed
+      # test's error-context.md.
       - name: Run the suite (${{ matrix.project }})
         env:
           CI: 'true'
+          PLAYWRIGHT_NO_COPY_PROMPT: '1'
           NUXEO_USER: ${{ secrets.NUXEO_USER }}
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
         run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }} --trace off

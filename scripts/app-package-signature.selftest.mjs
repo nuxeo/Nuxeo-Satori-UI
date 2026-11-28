@@ -37,7 +37,7 @@
  * - **The approval gate** (`app-package-approval.mjs`), run as the workflow runs it with a stand-in
  *   for GitHub's review history of the run: an approval for `marketplace-preprod` by a person who
  *   did not start the run passes, alone or among others. Refused are no approval, as an environment
- *   with no reviewer or an administrator's bypass leaves; an approval for another environment; a
+ *   with no reviewer leaves; an approval for another environment; a
  *   rejection; an approval by whoever pushed the tag, or re-ran the run; one by a bot, or by someone
  *   of no known kind; an answer that is not a list, or not JSON; and no run to ask about.
  *
@@ -1287,10 +1287,7 @@ function theWorkflow() {
     [
       'no approval check',
       (t) =>
-        t.replace(
-          /\n {6}- name: Check another person approved this run\n {8}run: [^\n]*\n/,
-          '\n',
-        ),
+        t.replace(/\n {6}- name: Check another person approved this run\n {8}run: [^\n]*\n/, '\n'),
       /does not check that a person had to approve/,
     ],
     [
@@ -1400,11 +1397,7 @@ function theApprovalGate() {
     false,
   );
   for (const [label, answer, reason, env] of [
-    [
-      'no approval, as an environment with no reviewer or an administrator bypass leaves',
-      [],
-      /nobody approved this run/,
-    ],
+    ['no approval, as an environment with no reviewer leaves', [], /nobody approved this run/],
     [
       'an approval for another environment only',
       [aReview({ environments: [{ name: 'github-pages' }] })],
