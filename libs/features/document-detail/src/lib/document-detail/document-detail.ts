@@ -127,6 +127,7 @@ import {
   Observable,
   of,
   switchMap,
+  timeout,
   throwError,
   timer,
 } from 'rxjs';
@@ -537,6 +538,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly iptcData = signal<IptcData | null>(null);
   readonly videoInfo = signal<VideoInfo | null>(null);
   readonly arenderUrl = signal<SafeResourceUrl | null>(null);
+  readonly arenderLoading = signal(false);
+  private arenderRequestId = 0;
   /** Bumped when the ARender previewer URL changes so the iframe is recreated (avoids stale session / wrong doc). */
   readonly arenderReloadId = signal(0);
   readonly propertiesPanelOpen = signal(true);
@@ -1123,6 +1126,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private resetState(): void {
+    this.arenderRequestId += 1;
+    this.arenderLoading.set(false);
     this.metadataRefreshAttempt = 0;
     this.blobLoadGeneration += 1;
     // `resetViewerState()` above now revokes and clears `rawBlobUrl`, so the block that used to
@@ -3246,13 +3251,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  retryARender(): void {
+    const doc = this.doc();
+    if (doc && !this.arenderLoading()) this.loadARenderUrl(doc);
+  }
+
   private loadARenderUrl(doc: NuxeoDocument): void {
+    const requestId = ++this.arenderRequestId;
+    this.arenderLoading.set(false);
     const xpath = this.blobXPathForARender(doc);
     if (!xpath) {
       this.arenderUrl.set(null);
       return;
     }
     const requestedDocUid = doc.uid;
+    this.arenderLoading.set(true);
     this.arenderUrl.set(null);
     this.arenderService
       .isAvailable()
@@ -3260,6 +3273,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         switchMap((available) =>
           available ? this.arenderService.getPreviewerUrl(doc.uid, xpath) : of(null),
         ),
+        // A stalled connection must still leave the user able to retry or use the standard preview.
+        timeout(15000),
         // The `requestedDocUid` guard below only prevents a *stale* document's result being
         // applied; it does not unsubscribe, so without this the subscription outlives the
         // component. Required by convention on every `.subscribe()` in this repo.
@@ -3267,7 +3282,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (url) => {
-          if (requestedDocUid !== this.docUid) return;
+          if (requestedDocUid !== this.docUid || requestId !== this.arenderRequestId) return;
+          this.arenderLoading.set(false);
           // Validate at the point of trust, not only where the URL was built. `ARenderService`
           // already refuses a `viewerOrigin` that is not an http(s) origin, so this is the second
           // of two independent checks — the value is about to be bypassed and navigated in an
@@ -3288,7 +3304,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
-          if (requestedDocUid !== this.docUid) return;
+          if (requestedDocUid !== this.docUid || requestId !== this.arenderRequestId) return;
+          this.arenderLoading.set(false);
           this.arenderUrl.set(null);
         },
       });

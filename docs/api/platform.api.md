@@ -3904,12 +3904,13 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-319 exported symbol(s).
+320 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
 const ADMIN_ACCESS_CHECKS: InjectionToken<AdminAccessChecks>;
 const ARENDER_CONFIG: InjectionToken<ARenderConfig | null>;
+const ARENDER_PREPARE_SESSION: InjectionToken<() => Observable<boolean>>;
 interface ARenderConfig {
     viewerOrigin: string;
     nuxeoInternalUrl: string;
@@ -5507,6 +5508,11 @@ class DocumentViewerComponent {
     readonly viewerDocUid: import("@angular/core").InputSignal<string>;
     readonly annotationsTab: import("@angular/core").InputSignal<boolean>;
     readonly preferARender: import("@angular/core").InputSignal<boolean>;
+    readonly arenderLoading: import("@angular/core").InputSignal<boolean>;
+    readonly retryARenderClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly standardPreview: import("@angular/core").WritableSignal<boolean>;
+    readonly enhancedViewerRequested: import("@angular/core").Signal<boolean>;
+    retryARender(): void;
     readonly showMainFileControls: import("@angular/core").InputSignal<boolean>;
     readonly mainFileActionInProgress: import("@angular/core").InputSignal<string | null>;
     readonly downloadClicked: import("@angular/core").OutputEmitterRef<void>;
@@ -5672,6 +5678,11 @@ class DocumentViewerComponent {
     "required": false;
     "isSignal": true;
     };
+    "arenderLoading": {
+    "alias": "arenderLoading";
+    "required": false;
+    "isSignal": true;
+    };
     "showMainFileControls": {
     "alias": "showMainFileControls";
     "required": false;
@@ -5683,6 +5694,7 @@ class DocumentViewerComponent {
     "isSignal": true;
     };
     }, {
+    "retryARenderClicked": "retryARenderClicked";
     "downloadClicked": "downloadClicked";
     "openWithDriveClicked": "openWithDriveClicked";
     "previewClicked": "previewClicked";

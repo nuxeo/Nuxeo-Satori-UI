@@ -666,7 +666,7 @@
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
-      "filtering": "Filtering\u2026",
+      "filtering": "Filtering…",
       "from": "From",
       "granted-by": "Granted by",
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
@@ -2953,7 +2953,13 @@
       "video-metadata-region": "Video metadata",
       "weight": "Weight",
       "zoom-in": "Zoom in",
-      "zoom-out": "Zoom out"
+      "zoom-out": "Zoom out",
+      "enhanced-viewer-unavailable": "We couldn’t open the enhanced viewer.",
+      "enhanced-viewer-recovery-help": "Try again, or use the standard preview if one is available for this document.",
+      "connecting-enhanced-viewer": "Connecting to the enhanced viewer…",
+      "standard-preview-notice": "Standard preview — annotation tools are unavailable here.",
+      "retry-enhanced-viewer": "Try again",
+      "open-standard-preview": "Open standard preview"
     },
     "edit-collection-dialog": {
       "cancel": "Cancel",

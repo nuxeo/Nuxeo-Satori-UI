@@ -50,6 +50,7 @@ describe('AuthService poweruser access', () => {
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
       .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });
@@ -63,6 +64,7 @@ describe('AuthService poweruser access', () => {
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
       .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });
@@ -76,6 +78,7 @@ describe('AuthService poweruser access', () => {
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
       .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });
@@ -86,12 +89,27 @@ describe('AuthService poweruser access', () => {
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
       .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });
 
     expect(service.isAuthenticated()).toBe(true);
   });
+
+  for (const response of [{ id: 'other-user' }, '<html>Login</html>']) {
+    it(`does not accept a password login with an unverified /me response: ${JSON.stringify(response)}`, () => {
+      const rejected = jasmine.createSpy('rejected');
+      service.login('member01', 'secret', false).subscribe({ error: rejected });
+      const logout = httpMock.expectOne('/nuxeo/logout');
+      expect(logout.request.headers.get('X-Requested-With')).toBe('XMLHttpRequest');
+      logout.flush('');
+      httpMock.expectOne('/nuxeo/api/v1/me').flush(response);
+      expect(rejected).toHaveBeenCalled();
+      expect(service.isAuthenticated()).toBeFalse();
+      httpMock.expectNone('/nuxeo/login.jsp');
+    });
+  }
 
   it('sets isPowerUser and hasAdministrationAccess after login', () => {
     service.login('poweruser01', 'secret', false).subscribe();
@@ -107,6 +125,7 @@ describe('AuthService poweruser access', () => {
         },
         isAdministrator: false,
       });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'poweruser01' });
@@ -130,6 +149,7 @@ describe('AuthService poweruser access', () => {
       },
       isAdministrator: false,
     });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });
@@ -193,6 +213,7 @@ describe('AuthService poweruser access', () => {
         },
         isAdministrator: true,
       });
+    mock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     mock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'test-user' });
@@ -231,7 +252,7 @@ describe('AuthService poweruser access', () => {
     mock.verify();
   });
 
-  it('preserves basic-auth username on hydration when /me principal differs from stale cookie', () => {
+  it('rejects hydration when a stale cookie returns a different principal', () => {
     sessionStorage.setItem(
       'agentic_ui_nuxeo_session',
       JSON.stringify({
@@ -260,12 +281,8 @@ describe('AuthService poweruser access', () => {
         properties: { username: 'test.user@gmail.com', groups: ['members'] },
         isAdministrator: false,
       });
-    mock
-      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
-      .flush({ id: 'test-user' });
-
-    expect(hydrated.isAuthenticated()).toBe(true);
-    expect(hydrated.username()).toBe('test-user');
+    mock.expectNone('/nuxeo/login.jsp');
+    expect(hydrated.isAuthenticated()).toBe(false);
     mock.verify();
   });
 
@@ -295,6 +312,7 @@ describe('AuthService poweruser access', () => {
         properties: { username: 'member01', groups: ['members'] },
         isAdministrator: false,
       });
+    httpMock.expectOne('/nuxeo/login.jsp').flush('<html></html>');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'member01' });

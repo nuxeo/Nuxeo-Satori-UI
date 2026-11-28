@@ -1,4 +1,14 @@
 import { InjectionToken } from '@angular/core';
+import { type Observable, of } from 'rxjs';
+
+/** App-owned authentication preparation before each NEV launch; standalone consumers keep their own auth. */
+export const ARENDER_PREPARE_SESSION = new InjectionToken<() => Observable<boolean>>(
+  'ARENDER_PREPARE_SESSION',
+  {
+    providedIn: 'root',
+    factory: () => () => of(true),
+  },
+);
 
 export interface ARenderConfig {
   /**

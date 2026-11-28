@@ -10,7 +10,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from './auth.service';
-import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
+import { NUXEO_COOKIE_SESSION_ONLY, NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
 import { nuxeoAuthInterceptor } from './nuxeo-auth.interceptor';
 import { SessionTimeoutService } from './session-timeout.service';
 import { AUTH_TOKEN_HEADER } from './share-token.util';
@@ -76,6 +76,53 @@ describe('nuxeoAuthInterceptor', () => {
     http.get('/nuxeo/api/v1/id/doc-1').subscribe({ error: () => undefined });
     const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1');
     req.flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+    expect(sessionTimeout.expireDueToServer).not.toHaveBeenCalled();
+  });
+
+  it('probes only cookies without expiring a valid Basic login on an expired cookie', () => {
+    auth.basicCredentials.and.returnValue(btoa('test-user:test-pass'));
+    http
+      .get('/nuxeo/api/v1/me', {
+        headers: { Authorization: 'Basic stale', [AUTH_TOKEN_HEADER]: 'stale-token' },
+        context: new HttpContext().set(NUXEO_COOKIE_SESSION_ONLY, true),
+      })
+      .subscribe({ error: () => undefined });
+    const request = httpMock.expectOne('/nuxeo/api/v1/me');
+    expect(request.request.headers.has('Authorization')).toBeFalse();
+    expect(request.request.headers.has(AUTH_TOKEN_HEADER)).toBeFalse();
+    expect(request.request.withCredentials).toBeTrue();
+    request.flush('', { status: 401, statusText: 'Unauthorized' });
+    expect(sessionTimeout.expireDueToServer).not.toHaveBeenCalled();
+  });
+
+  it('still expires authentication on a real API 401 even with cookie-only context', () => {
+    http
+      .get('/nuxeo/api/v1/id/doc-1', {
+        context: new HttpContext().set(NUXEO_COOKIE_SESSION_ONLY, true),
+      })
+      .subscribe({ error: () => undefined });
+    httpMock
+      .expectOne('/nuxeo/api/v1/id/doc-1')
+      .flush('', { status: 401, statusText: 'Unauthorized' });
+    expect(sessionTimeout.expireDueToServer).toHaveBeenCalled();
+  });
+
+  it('allows the intentional XHR logout 401 during password login or hydration', () => {
+    http.get('/nuxeo/logout').subscribe({ error: () => undefined });
+    httpMock.expectOne('/nuxeo/logout').flush('', { status: 401, statusText: 'Unauthorized' });
+    expect(sessionTimeout.expireDueToServer).not.toHaveBeenCalled();
+  });
+
+  it('does not expire Basic authentication if the optional login page refuses session creation', () => {
+    auth.basicCredentials.and.returnValue(btoa('test-user:test-pass'));
+    http
+      .get('/nuxeo/login.jsp', {
+        context: new HttpContext().set(NUXEO_COOKIE_SESSION_ONLY, true),
+      })
+      .subscribe({ error: () => undefined });
+    const request = httpMock.expectOne('/nuxeo/login.jsp');
+    expect(request.request.headers.has('Authorization')).toBeFalse();
+    request.flush('', { status: 401, statusText: 'Unauthorized' });
     expect(sessionTimeout.expireDueToServer).not.toHaveBeenCalled();
   });
 

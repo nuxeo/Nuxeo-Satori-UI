@@ -1,16 +1,50 @@
 <div class="viewer-panel">
+  @if (
+    enhancedViewerRequested() && (standardPreview() || arenderLoading() || !arenderAvailable())
+  ) {
+    <div class="viewer-recovery">
+      <span>
+        @if (standardPreview()) {
+          {{ 'shared-ui.document-viewer.standard-preview-notice' | translate }}
+        } @else if (arenderLoading()) {
+          {{ 'shared-ui.document-viewer.connecting-enhanced-viewer' | translate }}
+        } @else {
+          {{ 'shared-ui.document-viewer.enhanced-viewer-unavailable' | translate }}
+        }
+      </span>
+      <button
+        mat-button
+        type="button"
+        class="retry-enhanced-viewer"
+        [disabled]="arenderLoading()"
+        (click)="retryARender()"
+      >
+        {{ 'shared-ui.document-viewer.retry-enhanced-viewer' | translate }}
+      </button>
+      @if (!standardPreview() && contentType() !== 'none') {
+        <button
+          mat-button
+          type="button"
+          class="open-standard-preview"
+          (click)="standardPreview.set(true)"
+        >
+          {{ 'shared-ui.document-viewer.open-standard-preview' | translate }}
+        </button>
+      }
+    </div>
+  }
   <!-- Content area -->
   <div class="viewer-content" [class.fit-real]="fitMode() === 'real' && contentType() === 'image'">
-    @if (loading()) {
+    @if (loading() || (enhancedViewerRequested() && arenderLoading() && !standardPreview())) {
       <div class="viewer-loading">
         <nxs-spinner diameter="36" [label]="'shared-ui.document-viewer.loading' | translate" />
       </div>
-    } @else if (annotationsTab() && !arenderAvailable()) {
+    } @else if (annotationsTab() && !standardPreview() && !arenderAvailable()) {
       <div class="viewer-placeholder">
         <mat-icon class="placeholder-icon" svgIcon="note_edit" />
-        <p>{{ 'shared-ui.document-viewer.annotations-are-not-available-for-this' | translate }}</p>
+        <p>{{ 'shared-ui.document-viewer.enhanced-viewer-unavailable' | translate }}</p>
         <span class="mime-label">{{
-          'shared-ui.document-viewer.use-the-view-tab-for-the' | translate
+          'shared-ui.document-viewer.enhanced-viewer-recovery-help' | translate
         }}</span>
       </div>
     } @else if (showARenderViewer()) {

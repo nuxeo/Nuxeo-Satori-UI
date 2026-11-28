@@ -34,6 +34,107 @@ describe('DocumentViewerComponent', () => {
     fixture.detectChanges();
   }
 
+  describe('enhanced viewer recovery', () => {
+    beforeEach(() => {
+      const sanitizer = TestBed.inject(DomSanitizer);
+      fixture.componentRef.setInput('viewerDocUid', 'doc-1');
+      fixture.componentRef.setInput('rawBlobUrl', 'blob:pdf');
+      fixture.componentRef.setInput('blobType', 'application/pdf');
+      fixture.componentRef.setInput('mimeType', 'application/pdf');
+      fixture.componentRef.setInput(
+        'blobUrl',
+        sanitizer.bypassSecurityTrustResourceUrl('blob:pdf'),
+      );
+      fixture.componentRef.setInput('annotationsTab', true);
+    });
+
+    it('opens the native preview from an unavailable annotations viewer and retries the same document', () => {
+      const retry = vi.fn();
+      component.retryARenderClicked.subscribe(retry);
+      render();
+      expect(fixture.nativeElement.querySelector('.viewer-placeholder')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
+      fixture.nativeElement.querySelector('.open-standard-preview').click();
+      render();
+      expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
+      expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
+      fixture.nativeElement.querySelector('.retry-enhanced-viewer').click();
+      expect(retry).toHaveBeenCalledOnce();
+      expect(component.standardPreview()).toBe(false);
+    });
+
+    it.each([false, true])(
+      'shows NEV without recovery UI when a URL is available (Annotations=%s)',
+      (annotations) => {
+        fixture.componentRef.setInput('annotationsTab', annotations);
+        fixture.componentRef.setInput('preferARender', !annotations);
+        fixture.componentRef.setInput(
+          'arenderUrl',
+          TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
+            'https://nev.example/?documentId=doc-1',
+          ),
+        );
+        render();
+        expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
+        expect(fixture.nativeElement.querySelector('details, summary')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.open-standard-preview')).toBeNull();
+        fixture.componentRef.setInput('arenderUrl', null);
+        render();
+        fixture.nativeElement.querySelector('.open-standard-preview').click();
+        render();
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('.arender-frame')).toBeNull();
+        fixture.componentRef.setInput('viewerDocUid', 'doc-2');
+        fixture.componentRef.setInput(
+          'arenderUrl',
+          TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
+            'https://nev.example/?documentId=doc-2',
+          ),
+        );
+        render();
+        expect(component.standardPreview()).toBe(false);
+        expect(fixture.nativeElement.querySelector('.arender-frame')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
+      },
+    );
+
+    it('disables retry while connecting but still lets the user open the standard preview', () => {
+      fixture.componentRef.setInput('arenderLoading', true);
+      render();
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.retry-enhanced-viewer').disabled).toBe(true);
+      fixture.nativeElement.querySelector('.open-standard-preview').click();
+      render();
+      expect(fixture.nativeElement.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf');
+    });
+
+    it('removes connection guidance when a URL arrives and restores it if unavailable', () => {
+      fixture.componentRef.setInput('arenderLoading', true);
+      render();
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
+      fixture.componentRef.setInput('arenderLoading', false);
+      fixture.componentRef.setInput(
+        'arenderUrl',
+        TestBed.inject(DomSanitizer).bypassSecurityTrustResourceUrl(
+          'https://nev.example/?documentId=doc-1',
+        ),
+      );
+      render();
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).toBeNull();
+      fixture.componentRef.setInput('arenderUrl', null);
+      render();
+      expect(fixture.nativeElement.querySelector('.viewer-recovery')).not.toBeNull();
+    });
+
+    it('does not offer a standard preview when no native content is available', () => {
+      fixture.componentRef.setInput('blobUrl', null);
+      render();
+      expect(fixture.nativeElement.querySelector('.open-standard-preview')).toBeNull();
+    });
+  });
+
   it('uses video mode when transcoded sources exist without a blob URL (NXSAT-175)', async () => {
     const sources: VideoSource[] = [
       {

@@ -9,7 +9,7 @@ import { catchError, tap, throwError } from 'rxjs';
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from './auth.service';
-import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
+import { NUXEO_COOKIE_SESSION_ONLY, NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
 import { SessionTimeoutService } from './session-timeout.service';
 import { AUTH_TOKEN_HEADER } from './share-token.util';
 
@@ -86,8 +86,11 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   }
   const basic = auth.basicCredentials();
   const shareToken = auth.shareAuthToken();
+  const cookieOnly = req.context.get(NUXEO_COOKIE_SESSION_ONLY);
   let headers = req.headers;
-  if (basic) {
+  if (cookieOnly) {
+    headers = headers.delete('Authorization').delete(AUTH_TOKEN_HEADER);
+  } else if (basic) {
     headers = headers.set('Authorization', `Basic ${basic}`);
   } else if (shareToken && !auth.isAuthenticated()) {
     headers = headers.set(AUTH_TOKEN_HEADER, shareToken);
@@ -97,7 +100,14 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   const isLogout = isNuxeoLogoutRequest(req.url, allowedOrigins);
   const establishBrowserSession = req.context.get(NUXEO_ESTABLISH_BROWSER_SESSION);
   const usesBasicAuth = Boolean(basic) || hasBasicAuthorizationHeader(req.headers);
-  const withCredentials = isLogout || establishBrowserSession ? true : usesBasicAuth ? false : true;
+  const withCredentials =
+    cookieOnly || isLogout || establishBrowserSession ? true : usesBasicAuth ? false : true;
+  // An expired browser cookie does not invalidate Satori's independent Basic credentials.
+  const optionalCookieProbe =
+    cookieOnly &&
+    ['/nuxeo/api/v1/me', '/nuxeo/login.jsp'].includes(
+      nuxeoRequestPathname(req.url, allowedOrigins) ?? '',
+    );
   return next(req.clone({ headers, withCredentials })).pipe(
     tap((event) => {
       if (event instanceof HttpResponse && auth.isAuthenticated()) {
@@ -105,7 +115,13 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
       }
     }),
     catchError((err: unknown) => {
-      if (err instanceof HttpErrorResponse && err.status === 401 && auth.isAuthenticated()) {
+      if (
+        err instanceof HttpErrorResponse &&
+        err.status === 401 &&
+        auth.isAuthenticated() &&
+        !optionalCookieProbe &&
+        !isLogout
+      ) {
         sessionTimeout.expireDueToServer();
       }
       return throwError(() => err);

@@ -1,6 +1,6 @@
 import { inject, Injectable, isDevMode } from '@angular/core';
-import { catchError, map, Observable, of } from 'rxjs';
-import { ARENDER_CONFIG, type ARenderConfig } from '../arender.config';
+import { catchError, defer, map, Observable, of, switchMap, take } from 'rxjs';
+import { ARENDER_CONFIG, ARENDER_PREPARE_SESSION, type ARenderConfig } from '../arender.config';
 import {
   isNavigableBaseUrl,
   insecureAllowedForHost,
@@ -37,6 +37,7 @@ interface ARenderPreviewerUrlResponse {
 export class ARenderService {
   private readonly rawCfg = inject(ARENDER_CONFIG);
   private readonly api = inject(NuxeoApiBase);
+  private readonly prepareSession = inject(ARENDER_PREPARE_SESSION);
 
   /**
    * The configuration, or `null` if `viewerOrigin` is absent, blank, or **not safe to navigate**.
@@ -143,18 +144,26 @@ export class ARenderService {
     const cfg = this.cfg;
     if (!cfg) return of(null);
 
-    return this.api
-      .post<ARenderPreviewerUrlResponse>(
-        '/nuxeo/api/v1/automation/Document.ARenderGetPreviewerUrl',
-        { input: docUid, params: { blobXPath } },
-      )
-      .pipe(
-        map((response) => this.framableOrNull(response?.previewerUrl, cfg)),
-        // The addon is absent on any server without the `nuxeo-arender` package, which answers 404
-        // rather than an empty body. That is a deployment state, not a defect, and it must degrade
-        // to "Annotations are not available" exactly as an unconfigured integration does.
-        catchError(() => of(null)),
-      );
+    return defer(() => this.prepareSession()).pipe(
+      take(1),
+      switchMap((ready) =>
+        ready
+          ? this.api
+              .post<ARenderPreviewerUrlResponse>(
+                '/nuxeo/api/v1/automation/Document.ARenderGetPreviewerUrl',
+                { input: docUid, params: { blobXPath } },
+              )
+              .pipe(
+                map((response) => this.framableOrNull(response?.previewerUrl, cfg)),
+                // The addon is absent on any server without the `nuxeo-arender` package, which answers 404
+                // rather than an empty body. That is a deployment state, not a defect, and it must degrade
+                // to "Annotations are not available" exactly as an unconfigured integration does.
+                catchError(() => of(null)),
+              )
+          : of(null),
+      ),
+      catchError(() => of(null)),
+    );
   }
 
   /**
@@ -168,14 +177,25 @@ export class ARenderService {
     const cfg = this.cfg;
     if (!cfg) return of(null);
 
-    return this.api
-      .post<ARenderPreviewerUrlResponse>('/nuxeo/api/v1/automation/Document.ARenderGetDiffUrl', {
-        params: { leftDocId: leftDocUid, rightDocId: rightDocUid },
-      })
-      .pipe(
-        map((response) => this.framableOrNull(response?.previewerUrl, cfg)),
-        catchError(() => of(null)),
-      );
+    return defer(() => this.prepareSession()).pipe(
+      take(1),
+      switchMap((ready) =>
+        ready
+          ? this.api
+              .post<ARenderPreviewerUrlResponse>(
+                '/nuxeo/api/v1/automation/Document.ARenderGetDiffUrl',
+                {
+                  params: { leftDocId: leftDocUid, rightDocId: rightDocUid },
+                },
+              )
+              .pipe(
+                map((response) => this.framableOrNull(response?.previewerUrl, cfg)),
+                catchError(() => of(null)),
+              )
+          : of(null),
+      ),
+      catchError(() => of(null)),
+    );
   }
 
   /**

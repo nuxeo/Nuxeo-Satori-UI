@@ -565,6 +565,13 @@ allow-list. The client cannot build the URL itself: NEV requires a `documentId` 
 the blob digest. So `null` additionally covers a missing addon (404), a caller without `Read` on the
 document (403), and a returned URL that is not framable. See `docs/api-integrations.md`.
 
+**Browser authentication is prepared before each launch.** The optional
+`ARENDER_PREPARE_SESSION: InjectionToken<() => Observable<boolean>>` defaults to `true` for standalone
+consumers. Satori provides `AuthService.ensureBrowserSession(): Observable<boolean>`: it verifies a
+cookie-only `/me` response matches the signed-in user, and repairs an expired Basic user's browser
+session using `/login.jsp` followed by authenticated `/me` and a second cookie-only check. SSO sessions
+are only verified. A failed preparation returns `null` without requesting or launching a viewer URL.
+
 This block previously documented `getViewerUrl(blobUrl: string): string` and
 `isAvailable(): Promise<boolean>`, neither of which existed — a signature the code had never had.
 Consumers reading it would have built against a synchronous, non-nullable contract.
