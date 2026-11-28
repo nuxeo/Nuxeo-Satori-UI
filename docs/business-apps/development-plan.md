@@ -333,9 +333,10 @@ faxes wait for capture, in phase 7.
 
 - Claude seats approved under Hyland's AI use requirements;
 - a development server with the Satori package;
-- decision K, how customers and partners get the Builder kit without this repository. Today it
-  runs only from a clone of it, and only this repository's CI signs a package
-  ([decisions.md](decisions.md)).
+- decision K, how customers and partners get the Builder kit without this repository. Since
+  28 November 2026 its tools are published, `@nuxeo/satori-cli` 0.3.0 with the `alpha` tag, and
+  run outside it with no token; the reusable workflows, and who may sign a customer's package for a
+  deployment (decision M), still wait ([decisions.md](decisions.md)).
 
 ### Phase 4. Studio migration (6 weeks)
 

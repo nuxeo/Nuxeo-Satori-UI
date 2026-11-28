@@ -88,8 +88,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
 22. [customer-config-repository.md](customer-config-repository.md): for a customer, a
     configuration repository of their own from nothing, with the published `@nuxeo/satori-cli`:
     `create`, the agent files and a page asked of their AI IDE, `validate`, `build` and
-    `release-check`, installing the zip, CI, signing and upgrading. The tool is not published
-    until its first publish runs.
+    `release-check`, installing the zip, CI, signing and upgrading. The tool is published, 0.3.0
+    with the `alpha` tag since 28 November 2026.
 
 The server add-ons the domain modules have so far, each its own Marketplace package on decision B's
 recommendation, and waiting for its security review ([security-reviews.md](security-reviews.md)):

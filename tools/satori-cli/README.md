@@ -6,13 +6,14 @@ section 5). A customer keeps all of their configuration in one repository of the
 builds and signs it with this tool, and builds it with an agent through its MCP server, outside this
 repository, with Node alone.
 
-**Ready to publish, and not published yet.** At 0.3.0 the package its build writes is public, for
-`https://packages.nuxeo.com/repository/npm-public/` with the `alpha` tag, and
-[`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes it when a person
-dispatches it ([Publishing it](#publishing-it)). Until that first run, nothing here can be installed
-from a registry: it is built from this repository and run from the folder it is built into, or from
-a tarball `npm pack` makes of that folder. A customer's guide, from nothing to a signed release
-with the published tool, is
+**Published, with the `alpha` tag.** 0.3.0 has been on Nuxeo's npm registry,
+`https://packages.nuxeo.com/repository/npm-public/`, since 28 November 2026, and anyone can read it
+with no token. [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes
+each version when a person dispatches it ([Publishing it](#publishing-it)). The tool has the `alpha`
+tag and no `latest`, so a command names `@alpha` or an exact version: `npm view @nuxeo/satori-cli`
+without either prints nothing. A version not published yet is built from this repository and run
+from the folder it is built into, or from a tarball `npm pack` makes of that folder. A customer's
+guide, from nothing to a signed release with the published tool, is
 [customer-config-repository.md](../../docs/business-apps/customer-config-repository.md).
 
 ## The commands
@@ -329,6 +330,10 @@ the tool's tarball's and it is in the artifact, with `NPM_PACKAGES_TOKEN`, `--ta
 `--ignore-scripts` and Nuxeo's registry, and never `latest`. A workflow can be dispatched only once
 it is on the repository's default branch, `main`.
 
+The first publish, 0.3.0, ran on 28 November 2026, from `staging/enterprise-grade-app`, after a dry
+run of the same commit. Both packed the same tarball, 65 files with the shasum
+`b8b782ce6ffdf2e7c20696473c56e3d5a6a59c6c`, and the registry serves that shasum.
+
 `checkPublishWorkflows` in `scripts/review-guardrails.mjs` holds both publish workflows to that: a
 token, in any letter case or as `secrets['...']`, in a job that checks the repository out, runs
 `npm ci`, `node`, `git` or another's action, or in more than one job, or at the workflow's level; a
@@ -404,9 +409,7 @@ limited to `main` with required reviewers, is the repository's settings to make.
 
 ## Not in this slice
 
-- **The first publish,** a person's dispatch of `publish-satori-cli.yml` with `dryRun` false. Until
-  it runs, the workflow `create` writes cannot `npm ci` the tool. And publishing a package, which
-  stays a person's tag: `release-check` says the tag.
+- **Publishing a package,** which stays a person's tag: `release-check` says the tag.
 - **A preview against the customer's development server.** `preview_package` serves to this
   repository's development server only, and refuses outside it.
 - **Promotion** through development, test and production with a person's approval, and **who may

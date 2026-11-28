@@ -270,11 +270,11 @@ Renovate or Dependabot opens a pull request in the customer's repository, and th
 ### Where the tools stand
 
 `@nuxeo/satori-cli`, [`tools/satori-cli`](../../tools/satori-cli/README.md), is built from this
-repository, at 0.3.0, ready to publish and not published yet: its build writes a public package for
-`packages.nuxeo.com/repository/npm-public/`, and `publish-satori-cli.yml` publishes it, with the
-`alpha` tag, when a person dispatches it. It needs no token to install: it has no dependency, and
-nothing of Hyland's private packages is in it. It runs outside this repository with Node alone,
-under Node's permission model with only the customer's folder allowed, and
+repository, and 0.3.0 has been published since 28 November 2026, to
+`packages.nuxeo.com/repository/npm-public/` with the `alpha` tag: `publish-satori-cli.yml`
+publishes each version when a person dispatches it. It needs no token to install: it has no
+dependency, and nothing of Hyland's private packages is in it. It runs outside this repository with
+Node alone, under Node's permission model with only the customer's folder allowed, and
 [customer-config-repository.md](customer-config-repository.md) is the customer's guide:
 
 - **Built:** `validate`, `build`, `upgrade-check`, `model pull` and `create`, one builder over the
@@ -294,8 +294,7 @@ under Node's permission model with only the customer's folder allowed, and
 
 **Not in this slice:**
 
-- the tool's first publish, a person's dispatch of `publish-satori-cli.yml` with `dryRun` false;
-  and the reusable workflows, which wait for this decision's owners;
+- the reusable workflows, which wait for this decision's owners;
 - `preview` against the customer's development server: `preview_package` serves only to this
   repository's development server, and refuses in a customer's;
 - promotion through development, test and production, and who may sign, which decision M leaves
@@ -394,7 +393,9 @@ What a customer needs:
 1. **One builder,** the configuration package's checks and the app package pipeline made one
    command-line tool that runs outside this repository, so that one config repository holds all
    of a customer's configuration.
-2. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows,
+2. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows
+   (`@nuxeo/satori-cli` 0.3.0, with the MCP server in it, has had the `alpha` tag since
+   28 November 2026),
    with `satori create` and the documentation for a customer's own repository. This is what lets a
    customer's AI IDE build their configuration at all.
 3. **Decide M,** then customer signing and promotion in the workflows `satori create` writes.
