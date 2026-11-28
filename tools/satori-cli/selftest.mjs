@@ -144,9 +144,9 @@ try {
   const kitDigest = digestOf(buildWith(PIPELINE, PAYERS, join(scratch, 'pipeline-payers')));
   const tools = await repositoryTools();
   packContents(tool);
-  await outsideTheRepository(tool, kitDigest, tools);
+  const confined = await outsideTheRepository(tool, kitDigest, tools);
   refusals(satori);
-  await modelPull(satori);
+  await modelPull(satori, confined);
   reservedNames();
   agentsSync(satori, tool);
   oneGenerator(tool);
@@ -552,6 +552,8 @@ async function outsideTheRepository(tool, kitDigest, tools) {
   await mcpOutside(outside, bin, repository, tools);
   signAndVerify(outside, bin, repository, env);
   releaseChecks(outside, bin, repository, env);
+  // For `model pull`, run as a customer runs it, confined to the folder: section 3.
+  return { bin, outside, env };
 }
 
 // --- 2a. What the tarball holds ------------------------------------------------------------------
@@ -886,6 +888,72 @@ function refusals(satori) {
     else held++;
   }
 
+  // A --model that cannot be read is the command's error, exit 2, whether or not the package has
+  // an app.json: only an app definition's step 2 reads the model, so unless the pipeline reads it
+  // first, a package that is configuration alone passes, given a file that is not there, and says
+  // nothing.
+  const noModel = join(scratch, 'no-such-file.json');
+  const brokenModel = join(scratch, 'broken-model.json');
+  writeFileSync(brokenModel, '{ "doctypes": ');
+  const modelOut = join(scratch, 'model-out');
+  const builtFirst = node([satori, 'build', first, '--out', modelOut]);
+  const earlierZip = join(modelOut, 'acme-config-1.0.0.zip');
+  if (builtFirst.status !== 0 || !existsSync(earlierZip))
+    fail(
+      'satori build of the scaffold, before a --model',
+      `exit ${builtFirst.status}`,
+      builtFirst.output,
+    );
+  for (const [what, args, says] of [
+    [
+      'validate, a package with no app.json, --model naming no file',
+      [satori, 'validate', first, '--model', noModel],
+      `--model ${noModel} names no file`,
+    ],
+    [
+      'validate, a package with no app.json, --model a file that is not JSON',
+      [satori, 'validate', first, '--model', brokenModel],
+      `--model ${brokenModel} cannot be read as a content model`,
+    ],
+    [
+      'validate, a package with no app.json, --model a folder',
+      [satori, 'validate', first, '--model', scratch],
+      `--model ${scratch} is not a file`,
+    ],
+    [
+      'build, a package with no app.json, --model naming no file',
+      [satori, 'build', first, '--out', modelOut, '--model', noModel],
+      `--model ${noModel} names no file`,
+    ],
+    [
+      'validate, an app definition, --model naming no file',
+      [satori, 'validate', PAYERS, ...withAllowList(PAYERS), '--model', noModel],
+      `--model ${noModel} names no file`,
+    ],
+    // The pipeline's own command, which is the same module: there it stopped at step 2 instead,
+    // with exit 1, for the app.json app-package.mjs requires.
+    [
+      'app-package.mjs, a package with no app.json, --model naming no file',
+      [PIPELINE, first, '--out', join(scratch, 'model-pipeline-out'), '--model', noModel],
+      `--model ${noModel} names no file`,
+    ],
+  ]) {
+    const run = node(args);
+    if (run.status !== 2) fail(what, `exit ${run.status}, not 2`, run.output);
+    else if (!run.output.includes(says)) fail(what, `no "${says}"`, run.output);
+    else held++;
+  }
+  // As a model --model-server cannot read: an earlier run's zip is removed first, so a wrong
+  // command leaves nothing installable behind.
+  if (builtFirst.status === 0) {
+    if (existsSync(earlierZip))
+      fail(
+        'satori build with --model naming no file',
+        `it left ${earlierZip}, an earlier run's zip`,
+      );
+    else held++;
+  }
+
   // What passes: the scaffold, as it is and mixing every layer; an old build.mjs, not run.
   const sound = passes(
     'the scaffold',
@@ -1107,16 +1175,22 @@ function refusals(satori) {
 /**
  * `satori model pull` against a stand-in Nuxeo: the credentials arrive in the Authorization header
  * of every read, the file is the model the server answered, and an address carrying credentials is
- * refused before anything is read.
+ * refused before anything is read. `--out`'s folder is made when it is not there, as
+ * customer-config-repository.md's `--out tmp/content-model.json` needs in a repository `create`
+ * wrote, which has no `tmp/`: there, under Node's permission model, as `confined` runs it; and an
+ * `--out` the permission model does not allow is refused before the server is asked. A file that
+ * cannot be written once the model is read is said as that, not as a model not read.
  */
-async function modelPull(satori) {
+async function modelPull(satori, confined) {
   const user = 'selftest-user';
   const secret = `selftest-${createHash('sha256').update(String(Date.now())).digest('hex').slice(0, 12)}`;
   const expected = `Basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`;
   // What the stand-in answers: the Payers kit's model, as a server with the kit installed answers it.
   const model = JSON.parse(readFileSync(join(PAYERS, 'content-model.json'), 'utf8'));
   const unauthorised = [];
+  let requests = 0;
   const server = createServer((request, response) => {
+    requests++;
     if (request.headers.authorization !== expected) unauthorised.push(request.url);
     const path = new URL(request.url, 'http://localhost').pathname;
     const schema = /^\/nuxeo\/api\/v1\/config\/schemas\/([^/]+)$/.exec(path);
@@ -1177,6 +1251,122 @@ async function modelPull(satori) {
         carried.output.replaceAll(secret, '<secret>'),
       );
     else held++;
+    const address = `http://127.0.0.1:${port}/nuxeo`;
+    // --out in folders that are not there: they are made, as build makes its --out.
+    const deep = join(scratch, 'pulled', 'tmp', 'content-model.json');
+    const into = await nodeAsync([satori, 'model', 'pull', '--server', address, '--out', deep], {
+      env,
+    });
+    if (into.status !== 0 || !existsSync(deep))
+      fail(
+        'satori model pull, --out in a folder that is not there',
+        `exit ${into.status}`,
+        into.output,
+      );
+    else held++;
+    // A file that cannot be written once the model is read, its folder a file: said as that, and
+    // as the command's error, not as a model the server did not give.
+    const blocked = join(out, 'content-model.json');
+    const unwritten = await nodeAsync(
+      [satori, 'model', 'pull', '--server', address, '--out', blocked],
+      { env },
+    );
+    if (
+      unwritten.status !== 2 ||
+      !unwritten.output.includes(`was read, and could not be written to ${blocked}`) ||
+      unwritten.output.includes('was not read')
+    )
+      fail(
+        'satori model pull, an --out that cannot be written',
+        `exit ${unwritten.status}, not 2 saying the model was read and not written`,
+        unwritten.output,
+      );
+    else held++;
+    // In a repository create has just written, which has no tmp/: not the scaffold of section 2,
+    // to which the MCP server's run has given a tmp/ of its own.
+    const repository = confined && join(confined.outside, 'acme-model-pull');
+    const created =
+      confined &&
+      (await nodeAsync(
+        [confined.bin, 'create', repository, '--name', 'acme-config', '--owner', 'acme'],
+        { cwd: confined.outside, env: confined.env },
+      ));
+    if (confined !== undefined && (created.status !== 0 || existsSync(join(repository, 'tmp'))))
+      fail(
+        'satori create, for model pull as section 3 gives it',
+        `exit ${created.status}, or it wrote a tmp/, so the run below would not show model pull makes one`,
+        created.output,
+      );
+    else if (confined !== undefined) {
+      const { bin } = confined;
+      // Node 25's permission model allows no network without --allow-net, which Node 24 has not.
+      const net = process.allowedNodeEnvironmentFlags.has('--allow-net') ? ' --allow-net' : '';
+      const confinedEnv = {
+        ...confined.env,
+        NODE_OPTIONS: `${confined.env.NODE_OPTIONS}${net}`,
+        NUXEO_USER: user,
+        NUXEO_PASS: secret,
+      };
+      // Word for word as customer-config-repository.md, section 3, gives it.
+      const documented = await nodeAsync(
+        [bin, 'model', 'pull', '--server', address, '--out', 'tmp/content-model.json'],
+        { cwd: repository, env: confinedEnv },
+      );
+      const file = join(repository, 'tmp', 'content-model.json');
+      if (
+        documented.status !== 0 ||
+        !existsSync(file) ||
+        JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).doctypes) !==
+          JSON.stringify(model.doctypes)
+      )
+        fail(
+          'satori model pull --out tmp/content-model.json, in a repository create wrote, under the permission model',
+          `exit ${documented.status}`,
+          documented.output.replaceAll(secret, '<secret>'),
+        );
+      else held++;
+      // And what the file is for: validate takes it, as section 3 says.
+      const withModel = await nodeAsync(
+        [
+          bin,
+          'validate',
+          'config-packages/acme-config',
+          '--tmp',
+          'tmp',
+          '--model',
+          'tmp/content-model.json',
+        ],
+        { cwd: repository, env: confined.env },
+      );
+      if (withModel.status !== 0)
+        fail(
+          'satori validate --model tmp/content-model.json, under the permission model',
+          `exit ${withModel.status}`,
+          withModel.output,
+        );
+      else held++;
+      rmSync(join(repository, 'tmp'), { recursive: true, force: true });
+      // Outside the folder the permission model allows: refused before the server is asked, and
+      // its folder not made.
+      const forbidden = join(scratch, 'model-not-allowed', 'content-model.json');
+      const asked = requests;
+      const refused = await nodeAsync(
+        [bin, 'model', 'pull', '--server', address, '--out', forbidden],
+        { cwd: repository, env: confinedEnv },
+      );
+      if (
+        refused.status !== 2 ||
+        !refused.output.includes("Node's permission model does not let it write") ||
+        existsSync(dirname(forbidden)) ||
+        requests !== asked
+      )
+        fail(
+          'satori model pull into a folder the permission model does not allow',
+          `exit ${refused.status}, ${requests - asked} request(s) to the server, the folder ${existsSync(dirname(forbidden)) ? 'made' : 'not made'}`,
+          refused.output.replaceAll(secret, '<secret>'),
+        );
+      else held++;
+    }
   } finally {
     await new Promise((closed) => server.close(closed));
   }
@@ -2304,6 +2494,13 @@ function releaseChecks(outside, bin, repository, env) {
       'with --model-server',
       ['config-packages/acme-config', '--model-server', 'http://127.0.0.1:9/nuxeo'],
       'reads no credential',
+    ],
+    // A model file that is not there, for a package with no app.json, which nothing else reads it
+    // for: the command was wrong, and is not "ready" or "not ready".
+    [
+      'with --model naming no file',
+      ['config-packages/acme-config', '--model', 'tmp/no-such-file.json'],
+      '--model tmp/no-such-file.json names no file',
     ],
   ]) {
     const run = satori(args);
