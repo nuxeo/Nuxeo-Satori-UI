@@ -11,6 +11,7 @@ import {
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
 import { DirectoryService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { of, Subject } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -53,7 +54,7 @@ describe('AppActionDialogComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
   };
-  const runButton = () => host().querySelector<HTMLButtonElement>('[data-app-action-run]');
+  const runButton = () => host().querySelector<HTMLButtonElement>('[data-app-action-run] button');
 
   async function open(form: boolean): Promise<void> {
     const read = appActionForm(FORM, 'Claim', Object.keys(PACKAGED_REGISTRIES.rules));
@@ -163,5 +164,62 @@ describe('AppActionDialogComponent', () => {
     await settle();
     expect(runs).toHaveLength(1);
     expect(close).not.toHaveBeenCalled();
+  });
+
+  describe('drawn with the nxs- components', () => {
+    const cancelButton = () =>
+      host().querySelector<HTMLButtonElement>('[data-app-action-cancel] button');
+
+    it('is framed as a dialog: its title a level-two heading, then the question, then the buttons', async () => {
+      await open(false);
+      const title = host().querySelector('nxs-dialog .nxs-dialog__title');
+      expect(title?.tagName).toBe('H2');
+      expect(title?.textContent?.trim()).toBe('Request medical records');
+      expect(
+        host().querySelector('.nxs-dialog__content .lib-app-action__question')?.textContent?.trim(),
+      ).toBe("Ask the provider for this claim's medical records?");
+      expect(
+        [...host().querySelectorAll('.nxs-dialog__actions button')].map((button) =>
+          button.textContent?.trim(),
+        ),
+      ).toEqual(['document-layouts.action.cancel', 'Request medical records']);
+    });
+
+    it('closes with nothing on Cancel, and runs nothing', async () => {
+      await open(true);
+      cancelButton()?.click();
+      await settle();
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(close).toHaveBeenCalledWith();
+      expect(runs).toEqual([]);
+    });
+
+    it('describes the run button by the question, and disables Cancel while it runs', async () => {
+      await open(false);
+      const question = host().querySelector('.lib-app-action__question');
+      expect(runButton()?.getAttribute('aria-describedby')).toBe(question?.id);
+      expect(question?.id).toBeTruthy();
+      runButton()?.click();
+      await settle();
+      expect(cancelButton()?.disabled).toBe(true);
+      cancelButton()?.click();
+      expect(close).not.toHaveBeenCalled();
+    });
+
+    it('passes axe at WCAG 2.2 AA, with its form and without', async () => {
+      for (const form of [true, false]) {
+        await open(form);
+        const results = await axe.run(host(), {
+          runOnly: {
+            type: 'tag',
+            values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
+          },
+          // jsdom lays nothing out, so contrast cannot be measured here.
+          rules: { 'color-contrast': { enabled: false } },
+        });
+        expect(results.violations.map((violation) => violation.id)).toEqual([]);
+        TestBed.resetTestingModule();
+      }
+    });
   });
 });

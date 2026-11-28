@@ -206,7 +206,7 @@ describe('QueuePageComponent — the platform row actions', () => {
 
   it('renames a row, then asks for the queue again with the bucket chosen', async () => {
     const box = fixture.nativeElement.querySelector(
-      '.queue-facet[data-aggregate="claim_type_agg"] mat-checkbox input',
+      '.queue-facet[data-aggregate="claim_type_agg"] nxs-checkbox input',
     ) as HTMLInputElement;
     box.click();
     await settle();

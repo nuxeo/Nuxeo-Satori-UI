@@ -60,10 +60,15 @@ const cssSize = (value: string | number | undefined): string | null =>
  *
  * Given to the meta as `render: dialogPreview(…)`, not spread into it: the review guardrails read
  * the meta to count a file's stories, and cannot read through a spread.
+ *
+ * `element` is for a component that is not itself the dialog but the frame one draws, as
+ * `nxs-dialog` is: its attributes, bound to the story's args, and the markup it is given, which
+ * the preview projects into it.
  */
 export function dialogPreview(
   selector: string,
   size: DialogPreviewSize = {},
+  element: { readonly attributes?: string; readonly content?: string } = {},
 ): NonNullable<Meta['render']> {
   const pane = [
     // What the overlay's global position strategy sets on the pane.
@@ -76,7 +81,13 @@ export function dialogPreview(
       .filter(([, value]) => value)
       .map(([property, value]) => `${property}: ${value}`),
   ].join('; ');
-  return () => ({
+  const attributes = element.attributes ? ` ${element.attributes}` : '';
+  const host =
+    element.content === undefined
+      ? `<${selector} class="mat-mdc-dialog-component-host"${attributes} />`
+      : `<${selector} class="mat-mdc-dialog-component-host"${attributes}>${element.content}</${selector}>`;
+  return (args) => ({
+    props: args,
     moduleMetadata: { imports: [NxsDialogPreviewDirective] },
     template: `
       <div style="display: flex; justify-content: center; padding: 16px 0">
@@ -84,7 +95,7 @@ export function dialogPreview(
           <div nxsDialogPreview>
             <div class="mat-mdc-dialog-inner-container mdc-dialog__container">
               <div class="mat-mdc-dialog-surface mdc-dialog__surface">
-                <${selector} class="mat-mdc-dialog-component-host" />
+                ${host}
               </div>
             </div>
           </div>

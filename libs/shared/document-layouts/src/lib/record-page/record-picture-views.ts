@@ -10,10 +10,10 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsEmptyStateComponent,
   NxsErrorStateComponent,
   NxsSpinnerComponent,
@@ -244,8 +244,8 @@ type Shown =
   selector: 'lib-record-picture-views',
   standalone: true,
   imports: [
-    MatButtonModule,
     NxsBannerComponent,
+    NxsButtonComponent,
     NxsEmptyStateComponent,
     NxsErrorStateComponent,
     NxsSpinnerComponent,

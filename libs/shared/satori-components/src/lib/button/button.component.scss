@@ -4,3 +4,12 @@
   display: inline-flex;
   vertical-align: middle;
 }
+
+// A toggle that is pressed says so in colour and weight, not colour alone. Its own class with the
+// attribute outranks Material's appearance rules, which set the colours at two classes.
+.nxs-button__button[aria-pressed='true'] {
+  font-weight: 600;
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}

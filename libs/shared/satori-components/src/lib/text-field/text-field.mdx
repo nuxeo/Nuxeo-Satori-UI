@@ -22,6 +22,12 @@ ID, a label key or a rule written out.
   `<datalist>`. `autocomplete="off"` stops the browser offering what it remembers as well.
 - **Outline or fill.** `appearance` is `outline`, as the library's own forms draw their fields, or
   `fill`.
+- **Numbers.** `type="number"` makes a one-line field the platform's number input, held by `min`,
+  `max` and `step`.
+- **Required, capped and helped.** `required` marks the field required, `maxLength` caps its
+  characters, and `hint` is help under it — at its end with `hintAlign="end"`, as a count of
+  characters is — which describes the control.
+- **An id of its own.** `controlId` gives the control an id a page can move the focus to.
 - **A font for code.** Set `--nxs-text-field-font-family` on the element or an ancestor —
   `monospace` for a field holding JSON, say. The label keeps the theme's font.
 
@@ -64,6 +70,14 @@ A textarea of three rows, with a placeholder, in the code font its host sets.
 
 <Canvas of={TextFieldStories.WithSuggestions} />
 
+### A number
+
+<Canvas of={TextFieldStories.NumberField} />
+
+### Required, with a count of characters
+
+<Canvas of={TextFieldStories.RequiredWithCount} />
+
 ### Fill
 
 <Canvas of={TextFieldStories.Fill} />
@@ -83,7 +97,12 @@ A textarea of three rows, with a placeholder, in the code font its host sets.
 - **Keyboard.** Tab reaches the native control, and typing, the arrow keys and the browser's own
   editing keys work as in any field. Leaving it, or Enter in a one-line field, commits the edit.
   Disabled, it is a native disabled control that Tab skips.
+- **Number.** A `number` field is a native `spinbutton`: the up and down arrow keys step it, held by
+  `min` and `max`.
+- **Required and hint.** A required field's control is `required`, and its label shows the marker,
+  hidden from assistive technology, which reads the control's own state. The hint describes the
+  control through `aria-describedby`.
 - **Suggestions.** The browser draws the suggestions and announces them as a list; the arrow keys
   move through them.
 - **Focus.** A host that moves the focus to the field finds the native `input` or `textarea` inside
-  the element and focuses that.
+  the element and focuses that, or gives it a `controlId` and focuses it by id.

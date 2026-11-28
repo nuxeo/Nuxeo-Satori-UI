@@ -22,6 +22,10 @@ one does.
   `selectedTabChange` names the tab selected by ID, which stays right when a manifest hides or
   reorders tabs.
 - **Addressable tabs.** Each label carries its ID as `data-tab-id`.
+- **Bodies drawn when needed.** By default every body is drawn at once and one left is kept, with
+  what the user left in it. `lazy` draws a body only while its tab is selected, so a body that reads
+  from the server reads nothing until its tab is chosen; one left is dropped and drawn afresh on
+  return. `lazy` is this component's own: the `nxs.primitives.tabs` contract does not carry it.
 
 ## Demo showcase
 
@@ -89,6 +93,13 @@ Your component sets `selectedIndex`, as the Properties panel's Publications coun
 Publishing.
 
 <Canvas of={TabsStories.SelectedByTheHost} />
+
+### Drawn only while selected
+
+With `lazy`, each body is drawn when its tab is chosen and dropped when it is left, as a record
+page's tabs of cards are.
+
+<Canvas of={TabsStories.Lazy} />
 
 ### Selected from the keyboard
 

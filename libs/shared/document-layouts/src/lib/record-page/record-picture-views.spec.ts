@@ -5,6 +5,7 @@ import {
   type AssetRightsExplanation,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import {
@@ -291,7 +292,7 @@ describe('RecordPictureViewsComponent', () => {
 
   const image = (root: HTMLElement) => root.querySelector<HTMLImageElement>('img');
   const button = (root: HTMLElement, title: string) =>
-    root.querySelector<HTMLButtonElement>(`.record-picture__view[data-view="${title}"]`);
+    root.querySelector<HTMLButtonElement>(`.record-picture__view[data-view="${title}"] button`);
 
   it('fetches the view shown first through the service, by its place, and shows it from a blob URL', async () => {
     const root = await render(picture(VIEWS));
@@ -320,7 +321,7 @@ describe('RecordPictureViewsComponent', () => {
     const root = await render(picture(VIEWS));
     await answer(0);
     expect(
-      Array.from(root.querySelectorAll('.record-picture__view')).map((each) =>
+      Array.from(root.querySelectorAll('.record-picture__view button')).map((each) =>
         each.getAttribute('aria-pressed'),
       ),
     ).toEqual(['false', 'false', 'true', 'false']);
@@ -333,6 +334,40 @@ describe('RecordPictureViewsComponent', () => {
     expect(image(root)).toBeNull();
     await answer(1);
     expect(image(root)?.getAttribute('src')).toBe('blob:view-2');
+  });
+
+  it('draws each view as an nxs- toggle button in one group, Tab reaching each in order', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    const group = root.querySelector('.record-picture__views');
+    expect(group?.getAttribute('role')).toBe('group');
+    const toggles = Array.from(group?.querySelectorAll('nxs-button') ?? []);
+    expect(toggles).toHaveLength(4);
+    const natives = toggles.map((toggle) => toggle.querySelector('button'));
+    expect(natives.every((native) => native?.type === 'button' && native.tabIndex === 0)).toBe(
+      true,
+    );
+    // Each is named by its view's title, then its size.
+    expect(
+      toggles.every((toggle) =>
+        toggle
+          .querySelector('button')
+          ?.textContent?.trim()
+          .startsWith(toggle.getAttribute('data-view') ?? '?'),
+      ),
+    ).toBe(true);
+    expect(group?.querySelector('[mat-stroked-button]')).toBeNull();
+  });
+
+  it('passes axe at WCAG 2.2 AA, with its views to choose from', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    const results = await axe.run(root, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      // jsdom lays nothing out, so contrast cannot be measured here.
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
   it('shows a view fetched before from its blob URL, without asking again', async () => {

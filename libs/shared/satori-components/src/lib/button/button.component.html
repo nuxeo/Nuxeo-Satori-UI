@@ -3,7 +3,11 @@
   [matButton]="appearance()"
   [type]="type()"
   [disabled]="disabled()"
+  [disabledInteractive]="disabledInteractive()"
+  [attr.id]="controlId() || null"
   [attr.aria-label]="name() || null"
+  [attr.aria-pressed]="ariaPressed()"
+  [attr.aria-describedby]="describedBy()"
   (click)="pressed()"
 >
   @if (icon()) {

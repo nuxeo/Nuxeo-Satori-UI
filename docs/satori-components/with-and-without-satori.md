@@ -1014,6 +1014,34 @@ The same Material form field round a native input in both, holding a card's ID; 
 
 The same Material form field round a native select in both, its choices grouped by type; the list itself is the platform's under either theme. Satori has no select of its own.
 
+### Table
+
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsTableComponent`        |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `tables-table--default`    |
+
+![Table: without Satori on the left, with Satori on the right](table-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A shared link's downloads: the same Material table on a native `<table>` in both, with its caption, column headers and rows. The theme sets the type, the colours and the row dividers through Material's `--mat-table-*` tokens.
+
+Satori's table layers (row states, expandable rows) sit on this same Material table, for rows that are chosen or opened; a table of text has none, so none is adopted.
+
+### Dialog
+
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsDialogComponent`       |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `dialogs-dialog--asking`   |
+
+![Dialog: without Satori on the left, with Satori on the right](dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The frame of a dialog MatDialog opens: the same Material title, content and actions in both, holding a question and its two buttons. The theme sets the surface, the type and the spacing. Satori has no dialog of its own.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -1133,6 +1161,8 @@ The components in the library today:
 | Icon button                     | —                                                                                                                            | Same component; theme only   |
 | Text field                      | —                                                                                                                            | Same component; theme only   |
 | Select                          | —                                                                                                                            | Same component; theme only   |
+| Table                           | —                                                                                                                            | Same component; theme only   |
+| Dialog                          | —                                                                                                                            | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

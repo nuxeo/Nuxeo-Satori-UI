@@ -14,7 +14,7 @@ const FILE_TABS: readonly NxsTab[] = [
 ];
 
 const BODY = `
-  <nxs-tabs [tabs]="tabs" [label]="label" [selectedIndex]="selectedIndex" [selectHandler]="selectHandler" (selectedTabChange)="selectedTabChange($event)" style="height: 220px">
+  <nxs-tabs [tabs]="tabs" [label]="label" [lazy]="lazy" [selectedIndex]="selectedIndex" [selectHandler]="selectHandler" (selectedTabChange)="selectedTabChange($event)" style="height: 220px">
     <ng-template nxsTabBody let-tab>
       <p style="padding: 16px">The {{ tab.label }} tab body, rendered for <code>{{ tab.id }}</code>.</p>
     </ng-template>
@@ -35,6 +35,7 @@ const meta: Meta<NxsTabsComponent> = {
     tabs: FILE_TABS,
     label: 'Document views',
     selectedIndex: 0,
+    lazy: false,
     selectHandler: fn(),
     selectedTabChange: fn(),
   },
@@ -67,6 +68,36 @@ export const FileTabs: Story = {};
 
 /** The host selects Publishing itself, as the Properties panel's Publications count does. */
 export const SelectedByTheHost: Story = { args: { selectedIndex: 3 } };
+
+/**
+ * Each body is drawn only while its tab is selected, as a record page's tabs of cards are, so a
+ * card that reads from the server reads nothing until its tab is chosen.
+ */
+export const Lazy: Story = {
+  args: { label: 'Record sections' },
+  render: (args) => ({
+    props: args,
+    template: `
+  <nxs-tabs lazy [tabs]="tabs" [label]="label" [selectHandler]="selectHandler" (selectedTabChange)="selectedTabChange($event)" style="height: 220px">
+    <ng-template nxsTabBody let-tab>
+      <p style="padding: 16px" [attr.data-body]="tab.id">The {{ tab.label }} tab body, drawn now.</p>
+    </ng-template>
+  </nxs-tabs>
+`,
+  }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('tab', { name: /View/ });
+    await expect(canvasElement.querySelectorAll('[data-body]')).toHaveLength(1);
+    (await canvas.findByRole('tab', { name: /History/ })).click();
+    await waitFor(() =>
+      expect(canvasElement.querySelector('[data-body="app.tabs.history"]')).not.toBeNull(),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector('[data-body="app.tabs.view"]')).toBeNull(),
+    );
+  },
+};
 
 /** The arrow keys move between tabs and Enter selects one. */
 export const SelectedFromTheKeyboard: Story = {

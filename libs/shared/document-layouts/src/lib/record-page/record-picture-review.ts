@@ -16,13 +16,12 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { MatButton } from '@angular/material/button';
-import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
-import { MatInput } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NxsButtonComponent,
   NxsErrorStateComponent,
   NxsSpinnerComponent,
+  NxsTextFieldComponent,
   nxsErrorStatus,
   type NxsErrorStatus,
   type NxsHeadingLevel,
@@ -121,13 +120,10 @@ let nextId = 0;
   selector: 'lib-record-picture-review',
   standalone: true,
   imports: [
-    MatButton,
-    MatFormField,
-    MatHint,
-    MatInput,
-    MatLabel,
+    NxsButtonComponent,
     NxsErrorStateComponent,
     NxsSpinnerComponent,
+    NxsTextFieldComponent,
     RecordPictureViewsComponent,
     TranslatePipe,
   ],
@@ -371,22 +367,21 @@ export class RecordPictureReviewComponent {
    * The form's across or down field, in percent, moves the pin being placed as it is typed in. A
    * value it cannot read moves nothing, and one past an edge puts the pin on the edge.
    */
-  protected moveDraft(axis: 'x' | 'y', event: Event): void {
-    const field = event.target as HTMLInputElement;
-    const value = Number(field.value);
+  protected moveDraft(axis: 'x' | 'y', text: string): void {
+    const value = Number(text);
     const draft = this.draft();
-    if (!draft || field.value.trim() === '' || !Number.isFinite(value)) return;
+    if (!draft || text.trim() === '' || !Number.isFinite(value)) return;
     this.draft.set({ ...draft, [axis]: toFraction(value / 100) });
   }
 
-  /** Once the field is left, or its value committed, it says the place the pin will have. */
-  protected settleDraft(axis: 'x' | 'y', event: Event): void {
+  /**
+   * Once the field is left, or its value committed, it says the place the pin will have. Written
+   * into the field itself, as what was typed is: the place may not have changed, and a binding
+   * that has not changed writes nothing.
+   */
+  protected settleDraft(axis: 'x' | 'y', field: NxsTextFieldComponent): void {
     const draft = this.draft();
-    if (draft) (event.target as HTMLInputElement).value = String(percent(draft[axis]));
-  }
-
-  protected setNote(event: Event): void {
-    this.note.set((event.target as HTMLTextAreaElement).value);
+    if (draft) field.value.set(String(percent(draft[axis])));
   }
 
   protected cancelDraft(): void {

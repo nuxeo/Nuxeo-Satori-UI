@@ -12,7 +12,6 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -26,6 +25,9 @@ import {
   NxsCommentsComponent,
   NxsIconComponent,
   NxsSpinnerComponent,
+  NxsTabBodyDirective,
+  NxsTableComponent,
+  NxsTabsComponent,
   NxsToastService,
   provideNxsToast,
   type NxsBannerAction,
@@ -446,7 +448,6 @@ function usableShow(linked: LinkedProperty | null | undefined): linked is Linked
   standalone: true,
   imports: [
     ExtensionOutletComponent,
-    MatTabsModule,
     NgTemplateOutlet,
     NxsBannerComponent,
     NxsButtonComponent,
@@ -454,6 +455,9 @@ function usableShow(linked: LinkedProperty | null | undefined): linked is Linked
     NxsCommentsComponent,
     NxsIconComponent,
     NxsSpinnerComponent,
+    NxsTabBodyDirective,
+    NxsTableComponent,
+    NxsTabsComponent,
     RecordCreateComponent,
     RecordExternalComponent,
     RecordHoldsComponent,
@@ -833,6 +837,11 @@ export class RecordPageComponent {
       cards: cards(layout.cards),
     };
   });
+
+  /** What each tab's body draws: its cards, by the tab's id, for a page of tabs. */
+  protected readonly tabCards = computed(
+    () => new Map((this.shown().tabs ?? []).map((tab) => [tab.id, tab.cards])),
+  );
 
   /**
    * A tick on a checklist's item, `done` the state the person asks for (layout-v2.md, section 7):

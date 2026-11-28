@@ -2,10 +2,14 @@
   <mat-label>{{ label() }}</mat-label>
   @if (multiline()) {
     <textarea
+      #control
       matInput
       class="nxs-text-field__control"
+      [id]="controlId()"
       [rows]="rows()"
       [placeholder]="placeholder()"
+      [required]="required()"
+      [attr.maxlength]="maxLength()"
       [value]="value()"
       [disabled]="disabled()"
       (input)="typed($event)"
@@ -13,11 +17,19 @@
     ></textarea>
   } @else {
     <input
+      #control
       matInput
       class="nxs-text-field__control"
+      [id]="controlId()"
+      [type]="type()"
+      [attr.min]="type() === 'number' ? min() : null"
+      [attr.max]="type() === 'number' ? max() : null"
+      [attr.step]="type() === 'number' ? step() : null"
       [attr.list]="suggestions().length > 0 ? listId : null"
       [attr.autocomplete]="autocomplete() || null"
       [placeholder]="placeholder()"
+      [required]="required()"
+      [attr.maxlength]="maxLength()"
       [value]="value()"
       [disabled]="disabled()"
       (input)="typed($event)"
@@ -30,5 +42,8 @@
         }
       </datalist>
     }
+  }
+  @if (hint()) {
+    <mat-hint [align]="hintAlign()">{{ hint() }}</mat-hint>
   }
 </mat-form-field>

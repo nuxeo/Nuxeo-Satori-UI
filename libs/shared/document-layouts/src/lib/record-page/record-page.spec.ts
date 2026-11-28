@@ -19,6 +19,7 @@ import {
   PageProviderService,
   ShareLinkService,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -393,6 +394,90 @@ describe('RecordPageComponent', () => {
       .querySelector(`[data-field="${field}"] .record-page__value`)
       ?.textContent?.replace(/\s+/g, ' ')
       .trim();
+
+  describe('drawn with the nxs- components', () => {
+    async function wcag22(root: HTMLElement): Promise<string[]> {
+      const results = await axe.run(root, {
+        runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+        // jsdom lays nothing out, so contrast cannot be measured here.
+        rules: { 'color-contrast': { enabled: false } },
+      });
+      return results.violations.map((violation) => violation.id);
+    }
+
+    const TABBED = {
+      version: 2,
+      tabs: [
+        { id: 'summary', label: 'Summary', cards: [{ id: 'a', fields: ['member:phone'] }] },
+        { id: 'service', label: 'Service', cards: [{ id: 'b', fields: ['member:status'] }] },
+      ],
+    };
+
+    const TABLE = {
+      version: 2,
+      cards: [
+        {
+          id: 'visits',
+          label: 'Visits',
+          fields: [
+            {
+              field: 'member:visits',
+              widget: 'table',
+              parameters: { columns: ['visit:adjuster', 'visit:note'] },
+            },
+          ],
+        },
+      ],
+    };
+
+    it('draws its tabs as one nxs-tabs strip, named, drawing a tab’s cards only while it is selected', async () => {
+      const root = await render(member(), TABBED);
+      const strip = root.querySelector('nxs-tabs.record-page__tabs');
+      expect(strip?.querySelector('[role="tablist"]')?.getAttribute('aria-label')).toBe(
+        'Property sections',
+      );
+      const tabs = [...root.querySelectorAll<HTMLElement>('[role="tab"]')];
+      expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Summary', 'Service']);
+      expect(root.querySelector('.record-page__grid[data-tab-id="summary"]')).not.toBeNull();
+      expect(root.querySelector('.record-page__grid[data-tab-id="service"]')).toBeNull();
+
+      tabs[1].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(root.querySelector('.record-page__grid[data-tab-id="service"]')).not.toBeNull();
+      expect(root.querySelector('.record-page__grid[data-tab-id="summary"]')).toBeNull();
+      expect(valueOf(root, 'member:status')).toBeDefined();
+    });
+
+    it('passes axe at WCAG 2.2 AA with its tabs', async () => {
+      expect(await wcag22(await render(member(), TABBED))).toEqual([]);
+    });
+
+    it('draws a field shown as a table as an nxs-table, named by the field’s label', async () => {
+      const root = await render(member(), TABLE);
+      const table = root.querySelector<HTMLTableElement>(
+        '[data-field="member:visits"] nxs-table.record-page__table table',
+      );
+      expect(table).not.toBeNull();
+      expect(table?.caption?.classList).toContain('cdk-visually-hidden');
+      expect(table?.caption?.textContent?.trim()).toBe(
+        root.querySelector('[data-field="member:visits"] .record-page__label')?.textContent?.trim(),
+      );
+      const headers = [...(table?.tHead?.querySelectorAll('th') ?? [])];
+      expect(headers.map((header) => header.textContent?.trim())).toEqual(['Adjuster', 'Note']);
+      expect(headers.every((header) => header.getAttribute('scope') === 'col')).toBe(true);
+      expect(
+        [...(table?.tBodies[0].rows ?? [])].map((row) =>
+          [...row.cells].map((cell) => cell.textContent?.trim()),
+        ),
+      ).toEqual([['jdoe', 'Called back']]);
+    });
+
+    it('passes axe at WCAG 2.2 AA with a field shown as a table', async () => {
+      expect(await wcag22(await render(member(), TABLE))).toEqual([]);
+    });
+  });
 
   it('draws the cards, in order, with their headings and the columns each spans', async () => {
     const root = await render();
@@ -2234,9 +2319,7 @@ describe('RecordPageComponent', () => {
       });
       expect(bannersOf(root).map((banner) => banner.id)).toEqual(['rights-ending']);
       expect(
-        root.querySelector(
-          '.record-page__banners + .record-page__tabs, .record-page__banners ~ mat-tab-group',
-        ),
+        root.querySelector('.record-page__banners ~ nxs-tabs.record-page__tabs'),
       ).not.toBeNull();
     });
 

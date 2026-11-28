@@ -9,6 +9,7 @@ import {
   type NuxeoAnnotationDraft,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Subject, of, type Observable } from 'rxjs';
 
 import {
@@ -792,6 +793,52 @@ describe('RecordPictureReviewComponent', () => {
     across.dispatchEvent(new Event('change'));
     await settle();
     expect(across.value).toBe('100');
+  });
+
+  it('draws the form with nxs- fields: named, the place in percent from 0 to 100, the note required', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    const across = root.querySelector<HTMLInputElement>('nxs-text-field input[id$="-across"]');
+    const down = root.querySelector<HTMLInputElement>('nxs-text-field input[id$="-down"]');
+    const note = root.querySelector<HTMLTextAreaElement>('nxs-text-field textarea[id$="-note"]');
+    for (const [control, name] of [
+      [across, 'Across (%)'],
+      [down, 'Down (%)'],
+    ] as const) {
+      expect(control?.type).toBe('number');
+      expect([control?.min, control?.max, control?.step]).toEqual(['0', '100', '1']);
+      expect(control?.labels?.[0]?.textContent?.trim()).toContain(name.split(' ')[0]);
+    }
+    expect(note?.required).toBe(true);
+    expect(note?.getAttribute('maxlength')).toBe('2000');
+    type(note, 'Logo');
+    await settle();
+    const hint = root.querySelector('.record-review__note mat-hint');
+    expect(hint?.textContent?.trim()).toBe('4 / 2000');
+    expect(note?.getAttribute('aria-describedby')?.split(' ')).toContain(hint?.id);
+    // The tab order: across, down, the note, then Place pin and Cancel.
+    expect(
+      [
+        ...root.querySelectorAll<HTMLElement>(
+          '.record-review__form input, .record-review__form textarea, .record-review__form button',
+        ),
+      ].map((control) => control.id || control.textContent?.trim()),
+    ).toEqual([across?.id, down?.id, note?.id, 'Place pin', 'Cancel']);
+  });
+
+  it('passes axe at WCAG 2.2 AA, its pins listed and its form open', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([stored(pinPayload(1, 0.2, 0.2))]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    const results = await axe.run(root, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      // jsdom lays nothing out, so contrast cannot be measured here.
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
   it('asks nothing again when the same record is reloaded, as after an edit', async () => {

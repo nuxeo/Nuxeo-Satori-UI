@@ -95,49 +95,45 @@
         }
         <div class="record-review__actions">
           @if (may.pin && pictureShown() && !shownDraft) {
-            <button
-              mat-flat-button
-              type="button"
+            <nxs-button
               class="record-review__add"
-              [id]="id + '-add'"
-              (click)="startPin()"
+              appearance="filled"
+              [controlId]="id + '-add'"
+              (press)="startPin()"
             >
               {{ 'document-layouts.review.add-pin' | translate }}
-            </button>
+            </nxs-button>
           }
           @if (closable() && !shownDraft) {
-            <button
-              mat-stroked-button
-              type="button"
+            <nxs-button
               class="record-review__close"
+              appearance="outlined"
               disabledInteractive
               [disabled]="saving()"
-              (click)="closeRound()"
+              (press)="closeRound()"
             >
               {{ 'document-layouts.review.send-back' | translate: { round: round() } }}
-            </button>
+            </nxs-button>
           }
           @if (decidable() && !shownDraft) {
-            <button
-              mat-stroked-button
-              type="button"
+            <nxs-button
               class="record-review__approve"
+              appearance="outlined"
               disabledInteractive
               [disabled]="saving()"
-              (click)="decide('approved')"
+              (press)="decide('approved')"
             >
               {{ 'document-layouts.review.approve' | translate }}
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
+            </nxs-button>
+            <nxs-button
               class="record-review__reject"
+              appearance="outlined"
               disabledInteractive
               [disabled]="saving()"
-              (click)="decide('rejected')"
+              (press)="decide('rejected')"
             >
               {{ 'document-layouts.review.reject' | translate }}
-            </button>
+            </nxs-button>
           }
         </div>
         @if (!may.pin) {
@@ -159,61 +155,56 @@
             </h4>
             <p class="record-review__hint">{{ 'document-layouts.review.hint' | translate }}</p>
             <div class="record-review__where">
-              <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                <mat-label>{{ 'document-layouts.review.across' | translate }}</mat-label>
-                <input
-                  matInput
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  [id]="id + '-across'"
-                  [value]="(shownDraft.x * 100).toFixed(0)"
-                  (input)="moveDraft('x', $event)"
-                  (change)="settleDraft('x', $event)"
-                />
-              </mat-form-field>
-              <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                <mat-label>{{ 'document-layouts.review.down' | translate }}</mat-label>
-                <input
-                  matInput
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  [id]="id + '-down'"
-                  [value]="(shownDraft.y * 100).toFixed(0)"
-                  (input)="moveDraft('y', $event)"
-                  (change)="settleDraft('y', $event)"
-                />
-              </mat-form-field>
+              <nxs-text-field
+                #across
+                type="number"
+                [min]="0"
+                [max]="100"
+                [step]="1"
+                [label]="'document-layouts.review.across' | translate"
+                [controlId]="id + '-across'"
+                [value]="(shownDraft.x * 100).toFixed(0)"
+                (valueChange)="moveDraft('x', $event)"
+                (valueCommit)="settleDraft('x', across)"
+              />
+              <nxs-text-field
+                #down
+                type="number"
+                [min]="0"
+                [max]="100"
+                [step]="1"
+                [label]="'document-layouts.review.down' | translate"
+                [controlId]="id + '-down'"
+                [value]="(shownDraft.y * 100).toFixed(0)"
+                (valueChange)="moveDraft('y', $event)"
+                (valueCommit)="settleDraft('y', down)"
+              />
             </div>
-            <mat-form-field appearance="outline" class="record-review__note">
-              <mat-label>{{ 'document-layouts.review.note' | translate }}</mat-label>
-              <textarea
-                matInput
-                rows="3"
-                required
-                [id]="id + '-note'"
-                [attr.maxlength]="maxNote"
-                [value]="note()"
-                (input)="setNote($event)"
-              ></textarea>
-              <mat-hint align="end">{{ note().length }} / {{ maxNote }}</mat-hint>
-            </mat-form-field>
+            <nxs-text-field
+              class="record-review__note"
+              multiline
+              required
+              [rows]="3"
+              [maxLength]="maxNote"
+              [label]="'document-layouts.review.note' | translate"
+              [hint]="note().length + ' / ' + maxNote"
+              hintAlign="end"
+              [controlId]="id + '-note'"
+              [(value)]="note"
+            />
             <div class="record-review__form-actions">
-              <button
-                mat-flat-button
-                type="submit"
+              <nxs-button
                 class="record-review__place"
+                type="submit"
+                appearance="filled"
                 disabledInteractive
                 [disabled]="!placeable()"
               >
                 {{ 'document-layouts.review.place' | translate }}
-              </button>
-              <button mat-button type="button" (click)="cancelDraft()">
+              </nxs-button>
+              <nxs-button (press)="cancelDraft()">
                 {{ 'document-layouts.review.cancel' | translate }}
-              </button>
+              </nxs-button>
             </div>
           </form>
         }

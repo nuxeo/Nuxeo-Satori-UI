@@ -1,0 +1,36 @@
+// As wide as its container, so a table in a card or a panel lines up with what is around it; its
+// cells wrap rather than scroll it sideways.
+:host {
+  display: block;
+  min-inline-size: 0;
+}
+
+// The `--mat-table-*` tokens are Material's own, so a theme that sets them, Satori's included,
+// still decides the table's colours and type; `dense` sets only the two heights.
+:host(.nxs-table--dense) {
+  --mat-table-header-container-height: 36px;
+  --mat-table-row-item-container-height: 32px;
+}
+
+.nxs-table__table {
+  inline-size: 100%;
+}
+
+.nxs-table__caption {
+  caption-side: top;
+  padding-block-end: 8px;
+  text-align: start;
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-table__header,
+.nxs-table__cell,
+.nxs-table__empty-cell {
+  text-align: start;
+}
+
+.nxs-table__empty-cell {
+  padding: 12px 16px;
+  color: var(--mat-sys-on-surface-variant);
+}

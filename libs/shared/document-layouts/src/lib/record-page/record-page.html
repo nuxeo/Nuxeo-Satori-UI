@@ -79,25 +79,22 @@
     </section>
   }
   @if (page.tabs) {
-    <mat-tab-group
+    <!-- Lazy: a tab draws its cards, and their lists read, only while it is selected. -->
+    <nxs-tabs
       class="record-page__tabs"
-      mat-stretch-tabs="false"
-      animationDuration="0ms"
-      [aria-label]="'document-layouts.sections' | translate"
+      lazy
+      [tabs]="page.tabs"
+      [label]="'document-layouts.sections' | translate"
     >
-      @for (tab of page.tabs; track tab.id) {
-        <mat-tab [label]="tab.label">
-          <ng-template matTabContent>
-            <div class="record-page__grid" [attr.data-tab-id]="tab.id">
-              <ng-container
-                [ngTemplateOutlet]="cardList"
-                [ngTemplateOutletContext]="{ $implicit: tab.cards }"
-              />
-            </div>
-          </ng-template>
-        </mat-tab>
-      }
-    </mat-tab-group>
+      <ng-template nxsTabBody let-tab>
+        <div class="record-page__grid" [attr.data-tab-id]="tab.id">
+          <ng-container
+            [ngTemplateOutlet]="cardList"
+            [ngTemplateOutletContext]="{ $implicit: tabCards().get(tab.id) ?? [] }"
+          />
+        </div>
+      </ng-template>
+    </nxs-tabs>
   } @else {
     <div class="record-page__grid">
       <ng-container
@@ -365,29 +362,15 @@
       </span>
     }
     @case ('table') {
-      <table class="record-page__table">
-        <caption class="cdk-visually-hidden">
-          {{
-            field.label
-          }}
-        </caption>
-        <thead>
-          <tr>
-            @for (heading of field.value.headings; track $index) {
-              <th scope="col">{{ heading }}</th>
-            }
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of field.value.rows; track $index) {
-            <tr>
-              @for (cell of row; track $index) {
-                <td>{{ cell }}</td>
-              }
-            </tr>
-          }
-        </tbody>
-      </table>
+      <!-- Named by the field's label, which the label beside it already shows. -->
+      <nxs-table
+        class="record-page__table"
+        hideCaption
+        dense
+        [caption]="field.label"
+        [columns]="field.value.headings"
+        [rows]="field.value.rows"
+      />
     }
     @case ('html') {
       <div class="record-page__rich-text" [innerHTML]="field.html"></div>

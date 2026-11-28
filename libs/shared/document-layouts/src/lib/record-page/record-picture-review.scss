@@ -167,12 +167,12 @@
   gap: 8px;
 }
 
-.record-review__where mat-form-field {
+.record-review__where nxs-text-field {
   flex: 1 1 8rem;
 }
 
 .record-review__note {
-  display: block;
+  display: flex;
   margin-top: 8px;
 }
 

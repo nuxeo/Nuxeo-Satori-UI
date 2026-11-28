@@ -73,20 +73,19 @@
                   </span>
                 }
                 @if (!readOnly() && link.state === 'active') {
-                  <button
-                    mat-stroked-button
-                    type="button"
+                  <nxs-button
                     class="record-share-links__revoke"
+                    appearance="outlined"
                     disabledInteractive
                     [disabled]="saving()"
-                    [attr.aria-label]="
+                    [label]="
                       'document-layouts.share-links.revoke.label'
                         | translate: { label: label(link.id) }
                     "
-                    (click)="revoke(link)"
+                    (press)="revoke(link)"
                   >
                     {{ 'document-layouts.share-links.revoke.button' | translate }}
-                  </button>
+                  </nxs-button>
                 }
               </li>
             }
@@ -113,12 +112,12 @@
                 <code class="record-share-links__url">{{ shown.url }}</code>
               </p>
               <div class="record-share-links__created-actions">
-                <button mat-flat-button type="button" (click)="copy()">
+                <nxs-button appearance="filled" (press)="copy()">
                   {{ 'document-layouts.share-links.created.copy' | translate }}
-                </button>
-                <button mat-stroked-button type="button" (click)="dismiss()">
+                </nxs-button>
+                <nxs-button appearance="outlined" (press)="dismiss()">
                   {{ 'document-layouts.share-links.created.done' | translate }}
-                </button>
+                </nxs-button>
               </div>
             </div>
           }
@@ -164,14 +163,14 @@
                   {{ 'document-layouts.share-links.create.items' | translate: { max: maxItems } }}
                 </legend>
                 @for (each of offered(); track each.item) {
-                  <mat-checkbox
+                  <nxs-checkbox
                     class="record-share-links__item"
                     [attr.data-item]="each.item"
                     [checked]="isChosen(each.item)"
-                    (change)="toggle(each.item, $event.checked)"
+                    (checkedChange)="toggle(each.item, $event)"
                   >
                     {{ each.title ?? ('document-layouts.share-links.original' | translate) }}
-                  </mat-checkbox>
+                  </nxs-checkbox>
                 }
               </fieldset>
               <nxs-date-input
@@ -184,15 +183,15 @@
                 [value]="endDate()"
                 (valueChange)="setEnd($event)"
               />
-              <button
-                mat-flat-button
-                type="submit"
+              <nxs-button
                 class="record-share-links__create"
+                type="submit"
+                appearance="filled"
                 disabledInteractive
                 [disabled]="!creatable()"
               >
                 {{ 'document-layouts.share-links.create.button' | translate }}
-              </button>
+              </nxs-button>
             }
           </form>
         }
@@ -223,35 +222,15 @@
                   {{ 'document-layouts.share-links.downloads.none' | translate }}
                 </p>
               } @else {
-                <table class="record-share-links__table">
-                  <caption class="cdk-visually-hidden">
-                    {{
-                      'document-layouts.share-links.downloads.heading' | translate
-                    }}
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">
-                        {{ 'document-layouts.share-links.downloads.time' | translate }}
-                      </th>
-                      <th scope="col">
-                        {{ 'document-layouts.share-links.downloads.link' | translate }}
-                      </th>
-                      <th scope="col">
-                        {{ 'document-layouts.share-links.downloads.item' | translate }}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (entry of log.log.downloads; track $index) {
-                      <tr [attr.data-link]="label(entry.link)">
-                        <td>{{ when(entry.time) }}</td>
-                        <td>{{ label(entry.link) }}</td>
-                        <td>{{ itemName(entry.rendition) }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
+                <!-- Named by the heading above it, which it repeats to assistive technology. -->
+                <nxs-table
+                  class="record-share-links__table"
+                  hideCaption
+                  dense
+                  [caption]="'document-layouts.share-links.downloads.heading' | translate"
+                  [columns]="downloadColumns()"
+                  [rows]="downloadRows()"
+                />
                 @if (log.log.truncated) {
                   <p class="record-share-links__truncated">
                     {{ 'document-layouts.share-links.downloads.truncated' | translate }}

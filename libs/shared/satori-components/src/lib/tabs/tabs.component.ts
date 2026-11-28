@@ -4,6 +4,7 @@ import {
   Component,
   ElementRef,
   afterRenderEffect,
+  booleanAttribute,
   computed,
   contentChild,
   inject,
@@ -34,7 +35,7 @@ const TABLIST_INERT_ONKEYDOWN = 'void(0)';
  * through the same template as a packaged one. Selection is by index, two-way
  * (`[(selectedIndex)]`), so the host can switch tabs itself, as the Publications count does;
  * `selectedTabChange` also names the tab by ID, which stays right when a manifest hides or reorders
- * tabs.
+ * tabs. `lazy` draws a body only while its tab is selected, for bodies that read from the server.
  *
  * The Material implementation of `nxs.primitives.tabs`. A host rendering that ID through
  * `lib-extension-outlet` passes `body` and `selectHandler`, since the outlet projects no content
@@ -66,6 +67,13 @@ export class NxsTabsComponent implements NxsTabsInputs {
    * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
    */
   readonly selectHandler = input<((tab: NxsTab, index: number) => void) | null>(null);
+  /**
+   * Draws a tab's body only while its tab is selected: none before its tab is first chosen, so a
+   * body that reads from the server reads nothing until then, and one left is dropped, to be drawn
+   * afresh on return. Off by default, when every body is drawn at once and one left is kept,
+   * hidden, with what the user left in it.
+   */
+  readonly lazy = input(false, { transform: booleanAttribute });
 
   /** The tab the user (or the host) selected, by ID. */
   readonly selectedTabChange = output<NxsTab>();

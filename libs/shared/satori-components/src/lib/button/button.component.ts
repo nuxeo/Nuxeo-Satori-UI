@@ -31,7 +31,9 @@ export type NxsButtonType = 'button' | 'submit' | 'reset';
  *
  * `press` fires when the button is pressed: clicked, or Enter or Space while it has the focus,
  * never while it is disabled. It is a `type="button"` unless `type` says otherwise, so inside a
- * form it submits nothing by accident.
+ * form it submits nothing by accident. `disabledInteractive` keeps a disabled button focusable,
+ * `ariaPressed` makes it a toggle, and `describedBy` and `controlId` reach the native button for a
+ * page that describes it or focuses it.
  */
 @Component({
   selector: 'nxs-button',
@@ -57,6 +59,27 @@ export class NxsButtonComponent {
   readonly type: InputSignal<NxsButtonType> = input<NxsButtonType>('button');
   /** Shown but not pressable, and skipped by Tab, as a disabled native button is. */
   readonly disabled = input(false, { transform: booleanAttribute });
+  /**
+   * While `disabled`, keeps the button in the tab order, announced as unavailable
+   * (`aria-disabled`) rather than natively disabled, so a button disabled while its action is saved
+   * keeps the keyboard's focus. It still does not press. A `submit` button so disabled still
+   * submits its form, as a native one with `aria-disabled` does: the form's handler decides.
+   */
+  readonly disabledInteractive = input(false, { transform: booleanAttribute });
+  /**
+   * Whether a toggle button is pressed, said as `aria-pressed` and drawn in colour and weight, not
+   * colour alone. `null`, the default, for a button that is not a toggle.
+   */
+  readonly ariaPressed = input<boolean | null>(null);
+  /**
+   * The id of an element on the page whose text describes the button further, such as the
+   * question it answers, read after its name. `null` for none.
+   */
+  readonly describedBy = input<string | null>(null);
+  /**
+   * The native button's id, for a page that moves the focus to it by id. Blank for none.
+   */
+  readonly controlId = input('');
   /** The button was pressed. Never emitted while it is disabled. */
   readonly press = output<void>();
 

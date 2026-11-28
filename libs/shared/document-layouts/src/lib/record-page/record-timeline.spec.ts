@@ -9,6 +9,7 @@ import {
   DocumentDetailService,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -214,6 +215,30 @@ describe('RecordTimelineComponent', () => {
       expect(button(root, 'Show more')).toBeUndefined();
     });
 
+    it('stays focusable while the next page loads, says it is unavailable, and asks once', async () => {
+      getAuditLog.mockReturnValueOnce(of(page(transitioned().slice(0, 1), true)));
+      const root = await render({ ...TIMELINE, pageSize: 1 });
+      const next = new Subject<ReturnType<typeof page>>();
+      getAuditLog.mockReturnValueOnce(next);
+      const more = button(root, 'Show more') as HTMLButtonElement;
+      expect(more.closest('nxs-button')?.classList).toContain('record-timeline__more');
+      more.focus();
+      more.click();
+      await settle();
+      const loading = button(root, 'Show more') as HTMLButtonElement;
+      expect(loading.disabled).toBe(false);
+      expect(loading.getAttribute('aria-disabled')).toBe('true');
+      expect(document.activeElement).toBe(loading);
+      const calls = getAuditLog.mock.calls.length;
+      loading.click();
+      await settle();
+      expect(getAuditLog.mock.calls.length).toBe(calls);
+      next.next(page(transitioned().slice(1), false));
+      next.complete();
+      await settle();
+      expect(lines(root)).toHaveLength(3);
+    });
+
     it('keeps the entries when a later page fails, says so, and asks for it again', async () => {
       getAuditLog.mockReturnValueOnce(of(page(transitioned().slice(0, 1), true)));
       const root = await render({ ...TIMELINE, pageSize: 1 });
@@ -235,36 +260,45 @@ describe('RecordTimelineComponent', () => {
   });
 
   describe('the filter by kind of event', () => {
-    const options = (): HTMLElement[] => [
-      ...document.querySelectorAll<HTMLElement>('.cdk-overlay-container mat-option'),
-    ];
+    const select = (root: HTMLElement) =>
+      root.querySelector<HTMLSelectElement>('nxs-select.record-timeline__filter select');
+    const options = (root: HTMLElement): string[] =>
+      Array.from(select(root)?.options ?? []).map((option) => option.textContent?.trim() ?? '');
+    /** The reader chooses, as the platform's select reports it: its value, then `change`. */
+    const choose = (root: HTMLElement, index: number) => {
+      const control = select(root);
+      if (!control) throw new Error('no filter');
+      control.selectedIndex = index;
+      control.dispatchEvent(new Event('change'));
+      return settle();
+    };
 
     it('is offered only when the file asks for it and names more than one kind', async () => {
-      expect((await render()).querySelector('mat-select')).toBeNull();
+      expect(select(await render())).toBeNull();
       expect(
-        (await render({ ...TIMELINE, filter: true, events: ['documentModified'] })).querySelector(
-          'mat-select',
-        ),
+        select(await render({ ...TIMELINE, filter: true, events: ['documentModified'] })),
       ).toBeNull();
-      expect(
-        (await render({ ...TIMELINE, filter: true })).querySelector('mat-select'),
-      ).not.toBeNull();
+      expect(select(await render({ ...TIMELINE, filter: true }))).not.toBeNull();
+    });
+
+    it('is named by its label, and offers every kind first, as the choice whose value is empty', async () => {
+      const root = await render({ ...TIMELINE, filter: true });
+      const control = select(root);
+      expect(control?.labels?.[0]?.textContent?.trim()).toBe('Show');
+      expect(options(root)).toEqual(['All events', 'Created', 'Modified', 'State changed']);
+      expect(control?.value).toBe('');
+      expect(Array.from(control?.options ?? []).map((option) => option.value)).toEqual([
+        '',
+        ...TIMELINE.events,
+      ]);
     });
 
     it('asks the server for the chosen kind only, from the first page, and for all of them again', async () => {
       const root = await render({ ...TIMELINE, filter: true });
-      root.querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
-      await settle();
-      expect(options().map((option) => option.textContent?.trim())).toEqual([
-        'All events',
-        'Created',
-        'Modified',
-        'State changed',
-      ]);
+      expect(options(root)).toEqual(['All events', 'Created', 'Modified', 'State changed']);
 
       getAuditLog.mockReturnValueOnce(of(page([])));
-      options()[3].click();
-      await settle();
+      await choose(root, 3);
       expect(getAuditLog).toHaveBeenLastCalledWith('c1', 20, 0, {
         eventIds: ['lifecycle_transition_event'],
         sortBy: 'eventDate',
@@ -273,11 +307,9 @@ describe('RecordTimelineComponent', () => {
       expect(root.querySelector('nxs-empty-state')?.textContent).toContain(
         'Nothing of this kind recorded',
       );
+      expect(select(root)?.value).toBe('lifecycle_transition_event');
 
-      root.querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
-      await settle();
-      options()[0].click();
-      await settle();
+      await choose(root, 0);
       expect(getAuditLog).toHaveBeenLastCalledWith('c1', 20, 0, {
         eventIds: TIMELINE.events,
         sortBy: 'eventDate',
@@ -285,6 +317,18 @@ describe('RecordTimelineComponent', () => {
       });
       expect(lines(root)).toHaveLength(3);
     });
+  });
+
+  it('passes axe at WCAG 2.2 AA, with its filter and Show more', async () => {
+    getAuditLog.mockReturnValueOnce(of(page(transitioned().slice(0, 1), true)));
+    const root = await render({ ...TIMELINE, filter: true, pageSize: 1 });
+    expect(button(root, 'Show more')).toBeDefined();
+    const results = await axe.run(root, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      // jsdom lays nothing out, so contrast cannot be measured here.
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
   it('shows the empty state when nothing of its kinds is recorded', async () => {
@@ -378,9 +422,10 @@ describe('RecordTimelineComponent', () => {
     it('does not ask twice for another kind chosen in the filter: the record is the same', async () => {
       const root = await render({ ...TIMELINE, filter: true });
       const calls = getAuditLog.mock.calls.length;
-      root.querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
-      await settle();
-      document.querySelectorAll<HTMLElement>('.cdk-overlay-container mat-option')[2].click();
+      const control = root.querySelector<HTMLSelectElement>('nxs-select select');
+      if (!control) throw new Error('no filter');
+      control.selectedIndex = 2;
+      control.dispatchEvent(new Event('change'));
       await settle();
       expect(getAuditLog.mock.calls.length).toBe(calls + 1);
       expect(getAuditLog).toHaveBeenLastCalledWith('c1', 20, 0, {

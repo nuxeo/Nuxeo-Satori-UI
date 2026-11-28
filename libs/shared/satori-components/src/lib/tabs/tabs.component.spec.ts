@@ -221,4 +221,82 @@ describe('NxsTabsComponent', () => {
       'Permissions given',
     );
   });
+
+  describe('lazy', () => {
+    @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
+      standalone: true,
+      imports: [NxsTabsComponent, NxsTabBodyDirective],
+      template: `
+        <nxs-tabs lazy [tabs]="tabs" label="Record sections">
+          <ng-template nxsTabBody let-tab>
+            <p class="body" [attr.data-for]="tab.id">{{ drawn(tab.id) }}</p>
+          </ng-template>
+        </nxs-tabs>
+      `,
+    })
+    class LazyHost {
+      readonly tabs = TABS;
+      readonly draws: string[] = [];
+      drawn(id: string): string {
+        if (!this.draws.includes(id)) this.draws.push(id);
+        return id;
+      }
+    }
+
+    async function lazy(): Promise<ComponentFixture<LazyHost>> {
+      const made = TestBed.createComponent(LazyHost);
+      made.detectChanges();
+      await made.whenStable();
+      made.detectChanges();
+      return made;
+    }
+
+    async function choose(made: ComponentFixture<LazyHost>, index: number): Promise<void> {
+      (made.nativeElement as HTMLElement)
+        .querySelectorAll<HTMLElement>('[role="tab"]')
+        [index].click();
+      made.detectChanges();
+      await made.whenStable();
+      made.detectChanges();
+    }
+
+    it('draws only the selected tab’s body, and another only once it is chosen', async () => {
+      const made = await lazy();
+      const root = made.nativeElement as HTMLElement;
+      expect(made.componentInstance.draws).toEqual(['app.tabs.view']);
+      expect(
+        [...root.querySelectorAll('.body')].map((body) => body.getAttribute('data-for')),
+      ).toEqual(['app.tabs.view']);
+
+      await choose(made, 2);
+      expect(made.componentInstance.draws).toEqual(['app.tabs.view', 'acme.tabs.claims']);
+      expect(root.querySelector('.mat-mdc-tab-body-active .body')?.getAttribute('data-for')).toBe(
+        'acme.tabs.claims',
+      );
+    });
+
+    it('drops a body that is left, and draws it afresh on return', async () => {
+      const made = await lazy();
+      const root = made.nativeElement as HTMLElement;
+      const first = root.querySelector('.mat-mdc-tab-body-active .body');
+      await choose(made, 1);
+      expect(root.querySelector('[data-for="app.tabs.view"]')).toBeNull();
+      await choose(made, 0);
+      const again = root.querySelector('.mat-mdc-tab-body-active .body');
+      expect(again?.getAttribute('data-for')).toBe('app.tabs.view');
+      expect(again).not.toBe(first);
+    });
+
+    it('keeps the tabs, their names and the tab list’s name as an eager strip has them', async () => {
+      const root = (await lazy()).nativeElement as HTMLElement;
+      expect(
+        [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
+      ).toEqual(['View', 'Permissions', 'Claims']);
+      expect(root.querySelector('[role="tablist"]')?.getAttribute('aria-label')).toBe(
+        'Record sections',
+      );
+      expect(root.querySelector('.nxs-tabs__icon')?.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
 });

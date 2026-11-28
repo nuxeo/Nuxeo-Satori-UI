@@ -211,14 +211,14 @@ describe('QueuePageComponent', () => {
   const facets = (): string[][] =>
     [...page().querySelectorAll('.queue-facet')].map((facet) => [
       (facet.querySelector('legend')?.textContent ?? '').trim(),
-      ...[...facet.querySelectorAll('mat-checkbox')].map((box) => {
+      ...[...facet.querySelectorAll('nxs-checkbox')].map((box) => {
         const input = box.querySelector('input') as HTMLInputElement;
         return `${input.checked ? '[x]' : '[ ]'} ${(box.textContent ?? '').replace(/\s+/g, ' ').trim()}`;
       }),
     ]);
   const tick = async (aggregate: string, key: string): Promise<void> => {
     const facet = page().querySelector(`.queue-facet[data-aggregate="${aggregate}"]`);
-    const box = [...(facet?.querySelectorAll('mat-checkbox') ?? [])].find((candidate) =>
+    const box = [...(facet?.querySelectorAll('nxs-checkbox') ?? [])].find((candidate) =>
       (candidate.textContent ?? '').trim().startsWith(key),
     );
     (box?.querySelector('input') as HTMLInputElement).click();

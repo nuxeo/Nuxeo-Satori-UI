@@ -1,0 +1,86 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TableStories from './table.stories';
+
+<Meta of={TableStories} name="Overview" />
+
+# Table
+
+The table is a table of text: Angular Material's table, the design system's, drawn on a native
+`<table>`, in your theme's colours. Use it for values a reader compares across rows — the downloads
+of a shared link, a field whose value is a list of entries — where each row is read, not chosen or
+opened. For a list of documents a reader selects and opens, use `nxs-document-list`.
+
+## Key features
+
+- **Named by its caption.** `caption` is required, and is a native `<caption>`, the table's
+  accessible name. `hideCaption` says it only to assistive technology, where a heading or a label
+  beside the table already shows it.
+- **Real column headers.** Each of `columns` is a `<th scope="col">`, so a reader moving through a
+  column hears its header.
+- **Rows as text.** Each of `rows` is its cells' text, in the columns' order. A row shorter than the
+  columns leaves the rest of its cells empty rather than shifting them, and two headers may say the
+  same.
+- **An optional empty state.** `emptyText` is said in one row across the columns while there are no
+  rows. Blank, an empty table shows its headers alone.
+- **Dense.** `dense` draws the rows at a compact height, for a table inside a card or a panel.
+- **The design system's table.** It draws Angular Material's table, so a theme that sets
+  Material's `--mat-table-*` tokens — Satori's included — decides its colours and type.
+
+## Demo showcase
+
+<Canvas of={TableStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTableComponent, type NxsTableRow } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-table
+  [caption]="'acme.downloads.heading' | translate"
+  hideCaption
+  dense
+  [columns]="columns()"
+  [rows]="downloads()"
+  [emptyText]="'acme.downloads.none' | translate"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`caption` and `columns` are required. Every text arrives already translated: the library ships no
+translations for the text you give it, so a page computes `columns()` and `downloads()` with its
+`TranslateService`. It needs no providers, and has no registered ID: place it in a
+template by its selector.
+
+## Examples
+
+### Dense, in a card
+
+Compact rows under the card's own heading, which shows what the caption says.
+
+<Canvas of={TableStories.DenseInACard} />
+
+### Empty
+
+<Canvas of={TableStories.Empty} />
+
+### A field shown as a table
+
+A row to each entry of a field, a column to each of its subfields. The second entry has no date of
+birth, so its last cell is empty.
+
+<Canvas of={TableStories.FieldAsTable} />
+
+## Accessibility
+
+- **Name.** The table is named by its `<caption>`, hidden or not.
+- **Headers.** Each column header is a `th` of `scope="col"`, so a screen reader reads a cell with
+  its column's header. Cells are `td`.
+- **Empty.** The empty text is a row of one cell spanning every column, read as the table's only
+  row. With no empty text, the table has its header row and no other.
+- **Keyboard.** It takes no focus, and has nothing to operate: a screen reader's table commands move
+  through it. Its cells wrap rather than scroll the table sideways, so it holds no scrolling region
+  a keyboard would have to reach.

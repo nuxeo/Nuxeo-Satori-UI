@@ -1,0 +1,18 @@
+<table mat-table class="nxs-table__table" [dataSource]="rows()">
+  <caption class="nxs-table__caption" [class.cdk-visually-hidden]="hideCaption()">
+    {{
+      caption()
+    }}
+  </caption>
+  @for (column of columns(); track $index; let index = $index) {
+    <ng-container [matColumnDef]="columnIds()[index]">
+      <th mat-header-cell *matHeaderCellDef scope="col" class="nxs-table__header">{{ column }}</th>
+      <td mat-cell *matCellDef="let row" class="nxs-table__cell">{{ row[index] ?? '' }}</td>
+    </ng-container>
+  }
+  <tr mat-header-row *matHeaderRowDef="columnIds()"></tr>
+  <tr mat-row *matRowDef="let row; columns: columnIds()" class="nxs-table__row"></tr>
+  <tr *matNoDataRow class="nxs-table__empty" [hidden]="!emptyText()">
+    <td class="nxs-table__empty-cell" [attr.colspan]="columns().length">{{ emptyText() }}</td>
+  </tr>
+</table>

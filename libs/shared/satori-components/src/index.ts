@@ -279,12 +279,18 @@ export {
 } from './lib/button/button.component';
 export { NxsIconButtonComponent } from './lib/icon-button/icon-button.component';
 export type { NxsFieldAppearance } from './lib/field-appearance';
-export { NxsTextFieldComponent } from './lib/text-field/text-field.component';
+export {
+  NxsTextFieldComponent,
+  type NxsTextFieldHintAlign,
+  type NxsTextFieldType,
+} from './lib/text-field/text-field.component';
 export {
   NxsSelectComponent,
   type NxsSelectGroup,
   type NxsSelectOption,
 } from './lib/select/select.component';
+export { NxsTableComponent, type NxsTableRow } from './lib/table/table.component';
+export { NxsDialogComponent } from './lib/dialog/dialog.component';
 // satori:export:components — `satori-component` inserts above this line
 
 export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

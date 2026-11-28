@@ -1,13 +1,13 @@
 @if (kinds().length > 0) {
-  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="record-timeline__filter">
-    <mat-label>{{ 'document-layouts.timeline.filter' | translate }}</mat-label>
-    <mat-select [value]="kind()" (valueChange)="kind.set($event)">
-      <mat-option value="">{{ 'document-layouts.timeline.all' | translate }}</mat-option>
-      @for (option of kinds(); track option.id) {
-        <mat-option [value]="option.id">{{ option.label }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
+  <!-- Every kind first, as the choice whose value is '': the filter's placeholder choice. -->
+  <nxs-select
+    class="record-timeline__filter"
+    [label]="'document-layouts.timeline.filter' | translate"
+    [placeholder]="'document-layouts.timeline.all' | translate"
+    [options]="kindOptions()"
+    [value]="kind()"
+    (valueChange)="kind.set($event)"
+  />
 }
 
 @let current = state();
@@ -56,16 +56,15 @@
         </ol>
         @if (current.next !== null) {
           <!-- Disabled but focusable while it loads, so that the reader's focus is not dropped. -->
-          <button
-            mat-stroked-button
-            type="button"
+          <nxs-button
             class="record-timeline__more"
+            appearance="outlined"
             disabledInteractive
             [disabled]="current.loadingMore"
-            (click)="showMore()"
+            (press)="showMore()"
           >
             {{ 'document-layouts.timeline.more' | translate }}
-          </button>
+          </nxs-button>
         }
         <!-- Always there, so that a failure written into it is announced. -->
         <p class="record-timeline__more-failed" role="status">

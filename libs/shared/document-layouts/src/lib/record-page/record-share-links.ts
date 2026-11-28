@@ -13,19 +13,21 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { MatButton } from '@angular/material/button';
-import { MatCheckbox } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NxsButtonComponent,
+  NxsCheckboxComponent,
   NxsConfirmDialogComponent,
   NxsDateInputComponent,
   NxsErrorStateComponent,
   NxsSpinnerComponent,
+  NxsTableComponent,
   nxsErrorStatus,
   type NxsConfirmDialogData,
   type NxsErrorStatus,
   type NxsHeadingLevel,
+  type NxsTableRow,
 } from '@nuxeo/satori-platform/components';
 import {
   ShareLinkService,
@@ -42,6 +44,7 @@ import {
   distinctUntilChanged,
   filter,
   map,
+  merge,
   of,
   startWith,
   switchMap,
@@ -114,11 +117,12 @@ let nextId = 0;
   selector: 'lib-record-share-links',
   standalone: true,
   imports: [
-    MatButton,
-    MatCheckbox,
+    NxsButtonComponent,
+    NxsCheckboxComponent,
     NxsDateInputComponent,
     NxsErrorStateComponent,
     NxsSpinnerComponent,
+    NxsTableComponent,
     TranslatePipe,
   ],
   templateUrl: './record-share-links.html',
@@ -163,6 +167,32 @@ export class RecordShareLinksComponent {
     return loaded && loaded.uid === this.uid() ? loaded : { uid: this.uid(), status: 'loading' };
   });
 
+  /** Bumped when the language or a catalogue changes, so words read with `instant` follow. */
+  private readonly translations = signal(0);
+
+  /** The downloads table's headers: when, through which link, and which item. */
+  protected readonly downloadColumns = computed<readonly string[]>(() => {
+    this.translations();
+    return [
+      this.translate.instant('document-layouts.share-links.downloads.time'),
+      this.translate.instant('document-layouts.share-links.downloads.link'),
+      this.translate.instant('document-layouts.share-links.downloads.item'),
+    ];
+  });
+
+  /** Each download the log holds, newest first as the server lists them, as the table's row. */
+  protected readonly downloadRows = computed<readonly NxsTableRow[]>(() => {
+    this.translations();
+    const log = this.downloads();
+    return log.status === 'loaded'
+      ? log.log.downloads.map((entry) => [
+          this.when(entry.time),
+          this.label(entry.link),
+          this.itemName(entry.rendition),
+        ])
+      : [];
+  });
+
   protected readonly subLevel = computed(
     () => Math.min(this.headingLevel() + 1, 6) as NxsHeadingLevel,
   );
@@ -203,6 +233,9 @@ export class RecordShareLinksComponent {
   });
 
   constructor() {
+    merge(this.translate.onLangChange, this.translate.onTranslationChange)
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.translations.update((n) => n + 1));
     toObservable(this.uid)
       .pipe(
         switchMap((uid) => {

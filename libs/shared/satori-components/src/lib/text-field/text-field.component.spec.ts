@@ -5,10 +5,15 @@ import {
   signal,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 import type { NxsFieldAppearance } from '../field-appearance';
-import { NxsTextFieldComponent } from './text-field.component';
+import {
+  NxsTextFieldComponent,
+  type NxsTextFieldHintAlign,
+  type NxsTextFieldType,
+} from './text-field.component';
 
 /** Hosted, so the two-way `value` and the commits are both observable. */
 @Component({
@@ -25,6 +30,15 @@ import { NxsTextFieldComponent } from './text-field.component';
       [autocomplete]="autocomplete()"
       [appearance]="appearance()"
       [disabled]="disabled()"
+      [type]="type()"
+      [min]="min()"
+      [max]="max()"
+      [step]="step()"
+      [maxLength]="maxLength()"
+      [required]="required()"
+      [hint]="hint()"
+      [hintAlign]="hintAlign()"
+      [controlId]="controlId()"
       (valueCommit)="commits.push($event)"
     />
     <nxs-text-field label="Second" [suggestions]="['b']" />`,
@@ -39,6 +53,15 @@ class HostComponent {
   readonly autocomplete = signal('');
   readonly appearance = signal<NxsFieldAppearance>('outline');
   readonly disabled = signal(false);
+  readonly type = signal<NxsTextFieldType>('text');
+  readonly min = signal<number | null>(null);
+  readonly max = signal<number | null>(null);
+  readonly step = signal<number | null>(null);
+  readonly maxLength = signal<number | null>(null);
+  readonly required = signal(false);
+  readonly hint = signal('');
+  readonly hintAlign = signal<NxsTextFieldHintAlign>('start');
+  readonly controlId = signal('');
   readonly commits: string[] = [];
 }
 
@@ -155,5 +178,101 @@ describe('NxsTextFieldComponent', () => {
   it('is a disabled native control while disabled', async () => {
     host.disabled.set(true);
     expect((await render()).disabled).toBe(true);
+  });
+
+  it('shows a value written into it again, even one it showed before the page redraws', async () => {
+    const control = await render();
+    const field = fixture.debugElement.query(By.directive(NxsTextFieldComponent))
+      .componentInstance as NxsTextFieldComponent;
+    expect(control.value).toBe('member');
+    // A key empties the field and, in the same turn, the host writes back the value it showed:
+    // its binding has not changed, so only the field itself can put it back.
+    type(control, '');
+    field.value.set('member');
+    await render();
+    expect(control.value).toBe('member');
+    // What is typed is left as typed.
+    type(control, 'members');
+    await render();
+    expect(control.value).toBe('members');
+    expect(host.value()).toBe('members');
+  });
+
+  describe('a number field', () => {
+    it('is the platform’s number input, held by min, max and step', async () => {
+      host.type.set('number');
+      host.min.set(0);
+      host.max.set(100);
+      host.step.set(1);
+      host.value.set('50');
+      const control = (await render()) as HTMLInputElement;
+      expect(control.type).toBe('number');
+      expect(control.min).toBe('0');
+      expect(control.max).toBe('100');
+      expect(control.step).toBe('1');
+      expect(control.value).toBe('50');
+      type(control, '75');
+      expect(host.value()).toBe('75');
+    });
+
+    it('sets no bound on a text field, nor on a number field given none', async () => {
+      host.min.set(0);
+      host.max.set(100);
+      let control = (await render()) as HTMLInputElement;
+      expect(control.type).toBe('text');
+      expect(control.hasAttribute('min')).toBe(false);
+      expect(control.hasAttribute('max')).toBe(false);
+      host.type.set('number');
+      host.min.set(null);
+      host.max.set(null);
+      control = (await render()) as HTMLInputElement;
+      expect(control.hasAttribute('min')).toBe(false);
+      expect(control.hasAttribute('max')).toBe(false);
+      expect(control.hasAttribute('step')).toBe(false);
+    });
+  });
+
+  it('caps the characters of either kind of field at maxLength, and none by default', async () => {
+    let control = await render();
+    expect(control.hasAttribute('maxlength')).toBe(false);
+    host.maxLength.set(2000);
+    control = await render();
+    expect(control.getAttribute('maxlength')).toBe('2000');
+    host.multiline.set(true);
+    control = await render();
+    expect(control).toBeInstanceOf(HTMLTextAreaElement);
+    expect(control.getAttribute('maxlength')).toBe('2000');
+  });
+
+  it('marks a required field required, and says so in its label', async () => {
+    let control = await render();
+    expect(control.required).toBe(false);
+    host.required.set(true);
+    host.multiline.set(true);
+    control = await render();
+    expect(control.required).toBe(true);
+    expect(root().querySelector('.mat-mdc-form-field-required-marker')).not.toBeNull();
+  });
+
+  it('describes the control with its hint, at the start or the end, and has none when blank', async () => {
+    let control = await render();
+    expect(root().querySelector('nxs-text-field:first-of-type mat-hint')).toBeNull();
+    host.hint.set('12 / 2000');
+    host.hintAlign.set('end');
+    control = await render();
+    const hint = root().querySelector('nxs-text-field:first-of-type mat-hint');
+    expect(hint?.textContent?.trim()).toBe('12 / 2000');
+    expect(hint?.classList).toContain('mat-mdc-form-field-hint-end');
+    expect(control.getAttribute('aria-describedby')?.split(' ')).toContain(hint?.id);
+  });
+
+  it('gives the control the id controlId names, and Material’s own when blank', async () => {
+    let control = await render();
+    expect(control.id).toMatch(/^mat-input-/);
+    host.controlId.set('review-note');
+    control = await render();
+    expect(control.id).toBe('review-note');
+    expect(document.getElementById('review-note')).toBe(control);
+    expect([...((control as HTMLInputElement).labels ?? [])]).toHaveLength(1);
   });
 });

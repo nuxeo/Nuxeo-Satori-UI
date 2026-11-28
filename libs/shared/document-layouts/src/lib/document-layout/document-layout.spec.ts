@@ -10,6 +10,7 @@ import {
   type ExtensionRuleContext,
 } from '@nuxeo/satori-platform/extensions';
 import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -327,6 +328,54 @@ describe('DocumentLayoutComponent', () => {
       [...host().querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
     ).toEqual(['Claim', 'Claim amounts']);
     expect(host().querySelector('.document-layout__heading')).toBeNull();
+  });
+
+  describe('as tabs, drawn with nxs-tabs', () => {
+    const amounts: LayoutSection = {
+      id: 'claim_amounts',
+      label: { keys: [], fallback: 'Amounts' },
+      fields: [field('claim:amount', 'string')],
+    };
+    const tabs = () => [...host().querySelectorAll<HTMLElement>('[role="tab"]')];
+
+    async function choose(index: number): Promise<void> {
+      tabs()[index].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    it('is one nxs-tabs strip, each tab addressed by its section id', async () => {
+      await render(claimDocument(), layout({ display: 'tabs', sections: [claimSection, amounts] }));
+      const strip = host().querySelector('nxs-tabs.document-layout__tabs');
+      expect(strip).not.toBeNull();
+      expect(
+        [...(strip?.querySelectorAll('[data-tab-id]') ?? [])].map((tab) =>
+          tab.getAttribute('data-tab-id'),
+        ),
+      ).toEqual(['claim', 'claim_amounts']);
+      expect(tabs()[0].getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('draws only the selected section, and another once its tab is chosen', async () => {
+      await render(claimDocument(), layout({ display: 'tabs', sections: [claimSection, amounts] }));
+      expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
+      expect(host().querySelector('[data-section-id="claim_amounts"]')).toBeNull();
+      await choose(1);
+      expect(host().querySelector('[data-section-id="claim_amounts"]')).not.toBeNull();
+      expect(host().querySelector('[data-section-id="claim"]')).toBeNull();
+      expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('passes axe at WCAG 2.2 AA', async () => {
+      await render(claimDocument(), layout({ display: 'tabs', sections: [claimSection, amounts] }));
+      const results = await axe.run(host(), {
+        runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+        // jsdom lays nothing out, so contrast cannot be measured here.
+        rules: { 'color-contrast': { enabled: false } },
+      });
+      expect(results.violations.map((violation) => violation.id)).toEqual([]);
+    });
   });
 
   it('renders nothing for a layout with no sections, as a stock File has', async () => {

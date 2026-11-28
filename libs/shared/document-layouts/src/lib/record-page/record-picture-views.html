@@ -57,19 +57,18 @@
       [attr.aria-label]="'document-layouts.picture.views' | translate"
     >
       @for (each of views(); track each.key) {
-        <button
-          mat-stroked-button
-          type="button"
+        <nxs-button
           class="record-picture__view"
+          appearance="outlined"
           [attr.data-view]="each.title"
-          [attr.aria-pressed]="each.key === view.key"
-          (click)="choose(each)"
+          [ariaPressed]="each.key === view.key"
+          (press)="choose(each)"
         >
           {{ each.title }}
           @if (size(each); as dimensions) {
             <span class="record-picture__view-size">{{ dimensions }}</span>
           }
-        </button>
+        </nxs-button>
       }
     </div>
   }
