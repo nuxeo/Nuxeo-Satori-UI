@@ -1,0 +1,9 @@
+# Code owners, phase 0 of the business apps plan (docs/business-apps/development-plan.md): the
+# owners of nuxeo-agentic-core and of each library. Both repository admins own everything for now,
+# decided on 28 November 2026; a team with write access, mapped area by area, can replace this line
+# later. An owner must have write access to the repository for their review to count.
+#
+# The main_branch ruleset requires a code owner's review on main and integration/enterprise-grade-app;
+# the staging ruleset requires none, since every staging pull request is opened from an owner's
+# account and GitHub does not let an author approve their own.
+* @narasimhahyland @shwetagupta247
