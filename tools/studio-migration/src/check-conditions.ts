@@ -382,24 +382,24 @@ function guardFor(
           ? tableGuard(inventory, owner.search)
           : null;
     // A column's: columns.<j>.visibleWhen, by the property it shows.
-    if (parts.length === 3 && parts[0] === 'columns' && parts[2] === 'visibleWhen') {
-      const column = listColumns(file)[Number(parts[1])];
+    if (parts.length === 3 && parts[0] === 'columns' && parts[2] === 'visibleWhen')
       return owner.kind === 'card'
         ? columnGuard(
             inventory,
             inventory.dashboard?.path ?? '',
             owner.card.columns,
-            column?.field ?? null,
+            file,
+            Number(parts[1]),
             false,
           )
         : columnGuard(
             inventory,
             owner.search.path,
             owner.search.columnDetails,
-            column?.field ?? null,
+            file,
+            Number(parts[1]),
             false,
           );
-    }
   }
   return null;
 }
@@ -455,7 +455,8 @@ function formGuard(
         inventory,
         listing.source,
         listing.columns,
-        listColumns(card['related'])[Number(rest[4])]?.field ?? null,
+        card['related'],
+        Number(rest[4]),
         true,
       );
     return null;
@@ -501,34 +502,53 @@ function columnsWidened(
   const always = new Set(
     columns.filter((column) => !column.conditional).map((column) => column.field),
   );
-  columns.forEach((column, index) => {
-    if (!column.conditional || column.field === null || always.has(column.field)) return;
-    const plan = plans[index];
-    const ruled = plan.kind === 'write' && plan.guard !== undefined;
-    if (plan.kind === 'write' && !ruled) return;
-    for (const shown of listColumns(list).filter((candidate) => candidate.field === column.field))
-      if (!ruled || !(isRecord(shown.entry) && 'visibleWhen' in shown.entry))
-        findings.push(
-          `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
-        );
-  });
+  // Property by property: the list's columns of it, each paired with the column the converter
+  // writes at that place among them. One more than it writes, or one without the rule its own
+  // has, shows to others than Web UI shows it to.
+  const fields = new Set(
+    columns
+      .filter((column) => column.conditional && column.field !== null && !always.has(column.field))
+      .map((column) => column.field),
+  );
+  for (const field of fields) {
+    const written = plans.filter((plan) => plan.kind === 'write' && plan.field === field);
+    listColumns(list)
+      .filter((candidate) => candidate.field === field)
+      .forEach((shown, occurrence) => {
+        const plan = written[occurrence];
+        const ruled = plan?.kind === 'write' && plan.guard !== undefined;
+        if (
+          plan === undefined ||
+          (ruled && !(isRecord(shown.entry) && 'visibleWhen' in shown.entry))
+        )
+          findings.push(
+            `${path}: it shows the column ${field} to everyone, though Web UI shows it only while a condition passes`,
+          );
+      });
+  }
   return findings;
 }
 
 /**
- * The guard of the rule of a list's column, by the property it shows: the conditions of the column
- * the converter writes with that rule (`columnPlans`), or `null` when it writes none.
+ * The guard of the rule of the column at `at` of a written list, by the property it shows and its
+ * place among the list's columns of that property: the conditions of the column the converter
+ * writes there (`columnPlans`), or `null` when it writes none with a rule. Two columns of one
+ * property under different conditions are each held to their own.
  */
 function columnGuard(
   inventory: HarnessInput['inventory'],
   source: string,
   columns: readonly ResultColumn[],
-  field: string | null,
+  list: unknown,
+  at: number,
   record: boolean,
 ): Guard | null {
-  const plan = columnPlans(inventory, source, columns, record).find(
-    (candidate) => candidate.kind === 'write' && candidate.field === field && candidate.guard,
-  );
+  const written = listColumns(list);
+  const field = written[at]?.field ?? null;
+  const occurrence = written.slice(0, at).filter((column) => column.field === field).length;
+  const plan = columnPlans(inventory, source, columns, record).filter(
+    (candidate) => candidate.kind === 'write' && candidate.field === field,
+  )[occurrence];
   return plan?.kind === 'write' ? (plan.guard ?? null) : null;
 }
 

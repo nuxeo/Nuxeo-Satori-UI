@@ -258,7 +258,8 @@ the dashboard's tasks and recently viewed cards:
 - **6:** the labels of a listing's columns.
 - **7:** each listing asks the same page provider, with the same parameters, the open record among
   them where the page passes it, the same sort and the same page size, and no card of related
-  records is written that no tab gives; the home holds the person's tasks, of every workflow, where
+  records is written that no tab gives, nor a list that offers actions, a new record or a search
+  Web UI's does not; the home holds the person's tasks, of every workflow, where
   Web UI's dashboard does, and their recent records only where a person accepted the card proposed
   for the recently viewed one.
 - **10:** the forms, cards of related records and home cards, through the validator.
@@ -724,12 +725,24 @@ These sit inside the [development plan](development-plan.md):
   task, edit or create form.
 - **Reported, of what M2 left over:** a listing whose page provider takes a named parameter, or a
   query parameter bound to the page otherwise than whole to the open record, which a card of
-  related records cannot send; a page with two page providers, no table, or something besides its
-  list, such as a button; a sort it cannot read; a column or a table whose condition reads a
-  document where no record is open, or reads each row, `document="[[item]]"`; a field or a block
-  under a condition in the `metadata` layout. A listing written without part of what Web UI's page
-  shows, a grid view, a column, a page size, and a dashboard card written without a column, are
-  written and reported, each saying what was left out.
+  related records cannot send; a page with two page providers, no table or two, something besides
+  its list, such as a button, or a custom element of its own; a table that does not name its page
+  provider as the one it lists; a page provider given anything that could list other records, a
+  `query` or `quick-filters` say; a sort it cannot read; a property of the open record sent on a
+  type without it; a column or a table whose condition reads a document where no record is open,
+  or reads each row, `document="[[item]]"`; a search screen of several tables not in one
+  condition; a dashboard card that shows two of a list, the person's tasks and recently viewed
+  documents; a field or a block under a condition in the `metadata` layout. A listing written
+  without part of what Web UI's page shows, a grid view, a column, a page size, and a dashboard
+  card written without a column, are written and reported, each saying what was left out, or
+  follow the proposal a column waits on.
+- **Reviewed twice, independently,** for correctness and adversarially, asking whether a condition
+  Web UI enforces could be lost, or a listing pointed at the wrong records, and still pass. The
+  adversarial review found five ways, among them a search screen's second table under a condition
+  shown to everyone, a condition inside a tasks card lost, and a page provider's quick filters
+  ignored; the correctness review found a rejected card's condition left pending for good, and a
+  listing whose table lists other records than its page provider's. Each is fixed with a test
+  that failed before it; the tool's README lists them, and what was left.
 - **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
   decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
   one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
@@ -751,7 +764,11 @@ These sit inside the [development plan](development-plan.md):
   - how Studio writes a tab whose page is a list, and how a page passes the open record to its page
     provider: no package in hand shows either, so the corpus's form,
     `params='{"queryParams": "[[document.uid]]"}'`, read as a dashboard card's `params` are, is an
-    assumption a real package will confirm or correct;
+    assumption a real package will confirm or correct. Polymer makes such an attribute a compound
+    binding, whose value is text: whether `nuxeo-page-provider` reads it so is lab mode's to
+    confirm;
+  - a dashboard card's page provider, read for its provider, `params` and page size alone, as M1
+    reads it: its sort and what could narrow it are not held;
   - a condition inside a column's template hides that column's cells in Web UI, its heading
     staying; the app shows the column, heading and cells, only to those its rule passes for;
   - a card of related records offering **New**, its `create` key: a list as the converter reads it

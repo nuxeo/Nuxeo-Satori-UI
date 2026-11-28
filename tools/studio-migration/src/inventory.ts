@@ -318,10 +318,24 @@ export interface PageListing {
    * which a card of related records has no place for.
    */
   readonly others: readonly string[];
+  /**
+   * True when the element the page is is a custom element of its own, not a `nuxeo-card` or a
+   * native element holding the list: what it shows besides what it holds is not in the package.
+   */
+  readonly opaque: boolean;
+  /**
+   * Each `nuxeo-data-table` it holds, with where its records come from: the `nx-provider` it, or
+   * the `nuxeo-results` it sits in, names, as written, and whether it is given `items` instead.
+   */
+  readonly tables: readonly { readonly provider: string | null; readonly items: boolean }[];
 }
 
 /** A `nuxeo-page-provider` of a tab's list, with what it asks as written. */
 export interface ListingProvider {
+  /** Its `id`, which a table names to read it. */
+  readonly id: string | null;
+  /** The names of every attribute it is given, which say what it asks. */
+  readonly attributes: readonly string[];
   readonly provider: string | null;
   /** Its `params`, as written: `{"queryParams": …}` gives the page provider's parameters. */
   readonly params: string | null;
@@ -716,7 +730,7 @@ export function inventory(pkg: StudioPackage): Inventory {
         part,
         fields: fieldsOf(document, placesIn(path)),
         columns: columns.length,
-        columnDetails: columns.map((column) => columnOf(column, within)),
+        columnDetails: columns.map((column) => columnOf(column, within, conditionAt)),
         views: all
           .filter((element) => RESULT_VIEWS.includes(element.localName))
           .map((element) => element.localName),
@@ -801,7 +815,7 @@ export function inventory(pkg: StudioPackage): Inventory {
           pageNames: namedRoots(element).map((root) => root.getAttribute('name')?.trim() ?? ''),
           listing:
             element.getAttribute('slot') === 'DOCUMENT_VIEWS_PAGES'
-              ? listingOf(namedRoots(element), within, useAt)
+              ? listingOf(namedRoots(element), within, conditionAt, useAt)
               : null,
         };
       }),
@@ -855,15 +869,22 @@ export function inventory(pkg: StudioPackage): Inventory {
           params: provider?.getAttribute('params') ?? null,
           columns: elementsOf(card)
             .filter((element) => element.localName === 'nuxeo-data-table-column')
-            .map((column) => columnOf(column, within)),
+            .map((column) => columnOf(column, within, conditionAt)),
           operation:
             inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
             null,
           conditional: [card, ...elementsOf(card)].some((element) => within.has(element)),
-          // Its list shows where its page provider and its table both do.
+          // Its list shows where its page provider and its table both do; the person's tasks where
+          // its tasks list does, and its recently viewed documents where its storage and its table
+          // do.
           conditions: conditionsAround(
             [card, ...elementsOf(card)],
-            ['nuxeo-page-provider', 'nuxeo-data-table'],
+            [
+              'nuxeo-page-provider',
+              'nuxeo-data-table',
+              'nuxeo-tasks-list',
+              'nuxeo-document-storage',
+            ],
             within,
           ),
         };
@@ -1258,6 +1279,7 @@ const LIST_PARTS: ReadonlySet<string> = new Set([
 function listingOf(
   roots: readonly Element[],
   within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
   blocks: ReadonlyMap<Element, BlockUse>,
 ): PageListing | null {
   if (roots.length !== 1) return null;
@@ -1269,8 +1291,11 @@ function listingOf(
   const columns = all.filter((element) => element.localName === 'nuxeo-data-table-column');
   // What a view holds, its columns and what each shows its value with, is part of the list.
   const inViews = new Set(views.flatMap((view) => elementsOf(view)));
+  // The element the page is holds the list: a native one, or a card, shows nothing of its own.
+  const opaque = isCustomElement(root) && root.localName !== 'nuxeo-card';
   const others = all.filter(
     (element) =>
+      element !== root &&
       !inViews.has(element) &&
       (element.getAttribute('role') === 'widget' ||
         blocks.has(element) ||
@@ -1278,14 +1303,26 @@ function listingOf(
   );
   return {
     element: root.localName,
+    opaque,
+    tables: views
+      .filter((view) => view.localName === 'nuxeo-data-table')
+      .map((table) => ({
+        provider:
+          table.getAttribute('nx-provider') ??
+          table.closest('nuxeo-results')?.getAttribute('nx-provider') ??
+          null,
+        items: table.hasAttribute('items'),
+      })),
     providers: providers.map((provider) => ({
+      id: provider.getAttribute('id')?.trim() || null,
+      attributes: Array.from(provider.attributes, (attribute) => attribute.name),
       provider: provider.getAttribute('provider')?.trim() || null,
       params: provider.getAttribute('params'),
       pageSize: provider.getAttribute('page-size'),
       sort: provider.getAttribute('sort'),
     })),
     views: views.map((view) => view.localName),
-    columns: columns.map((column) => columnOf(column, within)),
+    columns: columns.map((column) => columnOf(column, within, conditionAt)),
     conditions: conditionsAround(all, ['nuxeo-page-provider', 'nuxeo-data-table'], within),
     others: [...new Set(others.map((element) => element.localName))],
   };
@@ -1351,10 +1388,15 @@ function conditionsOf(
  * A column of a list: its heading, the property it shows, and how. The property is its `field`,
  * or else the one its template binds: `item.properties.dc:modified`, or `item.title` for the title.
  */
-function columnOf(column: Element, within: ReadonlyMap<Element, number>): ResultColumn {
+function columnOf(
+  column: Element,
+  within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
+): ResultColumn {
   const inside = elementsOf(column);
   const table = column.closest('nuxeo-data-table');
   const base = table ? within.get(table) : undefined;
+  const conditions = columnConditions(column, base, within, conditionAt);
   const texts = [column, ...inside].flatMap((element) => [
     ...Array.from(element.attributes, (attribute) => attribute.value),
     element.localName === 'template'
@@ -1374,16 +1416,32 @@ function columnOf(column: Element, within: ReadonlyMap<Element, number>): Result
       inside.find((element) => element.localName === 'nuxeo-date')?.getAttribute('format') ?? null,
     formatsDate: /\bformatDate\s*\(/.test(all),
     // Relative to its table: a column of a list shown only under a condition is not hidden on its
-    // own, and the list's own guard covers it.
-    conditional: [column, ...inside].some((element) => within.get(element) !== base),
-    conditions: [
-      ...new Set(
-        [column, ...inside]
-          .map((element) => within.get(element))
-          .filter((index): index is number => index !== undefined && index !== base),
-      ),
-    ],
+    // own, and the list's own guard covers it. A condition it holds counts though nothing inside it
+    // is an element, as a `dom-if` around its value's text alone.
+    conditional: conditions.length > 0,
+    conditions,
   };
+}
+
+/**
+ * The conditions a column shows under, relative to its table: the innermost around it, or around
+ * what it holds, that its table is not in, and each condition it holds.
+ */
+function columnConditions(
+  column: Element,
+  base: number | undefined,
+  within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
+): number[] {
+  const elements = [column, ...elementsOf(column)];
+  return [
+    ...new Set(
+      [
+        ...elements.map((element) => within.get(element)),
+        ...elements.map((element) => conditionAt.get(element)),
+      ].filter((index): index is number => index !== undefined && index !== base),
+    ),
+  ];
 }
 
 /**

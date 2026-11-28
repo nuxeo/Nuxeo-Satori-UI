@@ -29,6 +29,7 @@ import { own } from './catalogue';
 import type { ConvertContext, Decision } from './convert';
 import { columnPlans, type ColumnPlan } from './convert-lists';
 import { guardOfSet, menuGuard, type Guard } from './guards';
+import { packageModel, schemasOfType, type PackageModel } from './model';
 import type { BlockUse, Inventory, PageListing, ResultColumn, SlotContribution } from './inventory';
 import { blockFieldId, blockOf, blockUseId } from './blocks';
 import { slotRegistry } from './slot-registry';
@@ -84,12 +85,31 @@ export interface ListingPlan {
    * page's own: the card's `visibleWhen`. Absent for none.
    */
   readonly guard?: Extract<Guard, { kind: 'rule' }>;
-  /** What of Web UI's list the card does not show, each with why: its tab is then reported. */
-  readonly left: readonly string[];
+  /**
+   * What of Web UI's list the card does not show, each with why: its tab is then reported, or, when
+   * each waits on a proposal, proposed with it.
+   */
+  readonly left: readonly { readonly text: string; readonly proposed: boolean }[];
 }
 
 /** The largest page a list of related records may ask for, and so the largest it keeps. */
 const RELATED_PAGE_LIMIT = 100;
+
+/**
+ * What a list's `nuxeo-page-provider` may be given, as read: its id, which its table names; what
+ * the card asks the same way, its provider, parameters, page size and sort; and what changes how
+ * each record is read, not which records are listed, its schemas and enrichers. Anything else, a
+ * query, quick filters, aggregations or headers, may list other records, and is refused.
+ */
+const PROVIDER_ATTRIBUTES: ReadonlySet<string> = new Set([
+  'id',
+  'provider',
+  'params',
+  'page-size',
+  'sort',
+  'schemas',
+  'enrichers',
+]);
 
 /**
  * The open record's own fields a page binds a parameter to, `[[document.<name>]]`, as the property
@@ -141,6 +161,12 @@ export function listingParameters(
     if (typeof value !== 'string')
       return { problem: `its query parameter ${JSON.stringify(value)} is not text` };
     const bound = RECORD_BINDING.exec(value);
+    // Polymer reads a binding in the attribute as written: one that only JSON's escapes make is
+    // no binding, and Web UI sends its text.
+    if (bound && !params.includes(value))
+      return {
+        problem: `its query parameter ${value} reads as a binding only once its JSON escapes are read, so Polymer binds nothing there, and Web UI sends the text`,
+      };
     if (bound) {
       parameters.push({ field: bound[2] ?? RECORD_FIELDS[bound[1]] });
       continue;
@@ -199,6 +225,10 @@ export function listingPlan(
   | { readonly plan: ListingPlan }
   | { readonly outcome: 'reported' | 'proposed'; readonly problem: string } {
   const problem = (text: string) => ({ outcome: 'reported' as const, problem: text });
+  if (listing.opaque)
+    return problem(
+      `Its page is ${listing.element}, an element of its own whose content the package does not show, holding a list: a person maps the page`,
+    );
   if (listing.others.length > 0)
     return problem(
       `Its page holds ${listing.others.join(', ')} besides its list, which a card of related records has no place for: a person maps the page`,
@@ -209,39 +239,58 @@ export function listingPlan(
         ? 'Its page holds a table and no page provider, so what it lists cannot be read from the package'
         : `Its page holds ${listing.providers.length} page providers, and which one its table lists is a person's call`,
     );
-  const tables = listing.views.filter((view) => view === 'nuxeo-data-table').length;
-  if (tables !== 1)
+  if (listing.tables.length !== 1)
     return problem(
-      tables === 0
+      listing.tables.length === 0
         ? `Its list is shown as ${listing.views.join(' and ')}, and a card of related records is a table (layout-v2.md, section 7)`
-        : `Its page holds ${tables} tables of one page provider, and a card of related records is one`,
+        : `Its page holds ${listing.tables.length} tables of one page provider, and a card of related records is one`,
     );
   const [provider] = listing.providers;
   if (provider.provider === null) return problem('Its nuxeo-page-provider names no provider');
+  // The table lists its page provider's records only when it names that provider, by its id.
+  const [table] = listing.tables;
+  const source = /^(?:(?:\[\[|\{\{)\s*\$\.\s*([\w-]+)\s*(?:\]\]|\}\})|([\w-]+))$/.exec(
+    table.provider?.trim() ?? '',
+  );
+  if (table.items || provider.id === null || (source?.[1] ?? source?.[2]) !== provider.id)
+    return problem(
+      `Its table does not name its page provider${provider.id ? `, ${provider.id},` : ''} as the one it lists, by nx-provider${table.items ? ', and is given items of its own' : ''}: what it lists cannot be told from the package`,
+    );
+  // What else the page provider is given may change which records it lists.
+  const asks = provider.attributes.filter((name) => !PROVIDER_ATTRIBUTES.has(name));
+  if (asks.length > 0)
+    return problem(
+      `Its page provider is given ${asks.join(', ')}, which a card of related records does not send, so it could list other records than Web UI's page: a person checks it`,
+    );
   const parameters = listingParameters(provider.params);
   if ('problem' in parameters)
     return problem(`Its list cannot be a card of related records: ${parameters.problem}`);
   const sorted = listingSort(provider.sort);
   if ('problem' in sorted)
     return problem(`Its list cannot be a card of related records: ${sorted.problem}`);
-  const left: string[] = listing.views
+  const left: { text: string; proposed: boolean }[] = listing.views
     .filter((view) => view !== 'nuxeo-data-table')
-    .map((view) => `its ${view} view: a card of related records is a table`);
+    .map((view) => ({
+      text: `its ${view} view: a card of related records is a table`,
+      proposed: false,
+    }));
   const size = provider.pageSize?.trim() ?? null;
   const pageSize =
     size !== null && /^\d+$/.test(size) && Number(size) >= 1 && Number(size) <= RELATED_PAGE_LIMIT
       ? Number(size)
       : null;
   if (size !== null && pageSize === null)
-    left.push(
-      `its page size, ${size}, is not one a list of related records takes (1 to ${RELATED_PAGE_LIMIT}), so the card asks for its own`,
-    );
+    left.push({
+      text: `its page size, ${size}, is not one a list of related records takes (1 to ${RELATED_PAGE_LIMIT}), so the card asks for its own`,
+      proposed: false,
+    });
   const plans = columnPlans(inventory, page.path, listing.columns, true);
   plans.forEach((plan, index) => {
     if (plan.kind === 'skip')
-      left.push(
-        `its column ${index + 1}${listing.columns[index].field ? `, ${listing.columns[index].field},` : ''}: ${plan.note}`,
-      );
+      left.push({
+        text: `its column ${index + 1}${listing.columns[index].field ? `, ${listing.columns[index].field},` : ''} is left out: ${plan.note}`,
+        proposed: plan.outcome === 'proposed',
+      });
   });
   const columns = plans.flatMap((plan) => (plan.kind === 'write' ? [plan.entry] : []));
   if (columns.length === 0)
@@ -249,7 +298,7 @@ export function listingPlan(
       outcome: plans.some((plan) => plan.kind === 'skip' && plan.outcome === 'proposed')
         ? 'proposed'
         : 'reported',
-      problem: `None of its list's columns can be written, and a card of related records needs one: ${left.join('; ')}`,
+      problem: `None of its list's columns can be written, and a card of related records needs one: ${left.map((item) => item.text).join('; ')}`,
     };
   // Conditions inside the page around its list, beyond the page's own, are the card's.
   const own = new Set(page.conditions);
@@ -297,7 +346,7 @@ const PAGES = 'DOCUMENT_VIEWS_PAGES';
  * Every tab of the package that becomes one, and what each other contribution to Web UI's tabs,
  * an item or a page, and the block uses its page holds, are decided as.
  */
-export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
+export function tabDecisions(context: Pick<ConvertContext, 'inventory' | 'pkg'>): {
   readonly tabs: TabPlan[];
   readonly skipped: Map<string, Decision>;
 } {
@@ -456,6 +505,17 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
       });
       continue;
     }
+    // A list that sends a property of the open record lists nothing of a type that has none.
+    const lacking = listing
+      ? typesLacking(packageModel(context.pkg, inventory), types, listing)
+      : [];
+    if (lacking.length > 0) {
+      both(item, page, {
+        outcome: 'reported',
+        note: `Its list sends the open record's ${lacking.map(([type, field]) => `${field}, which ${type} has not`).join('; ')}, by the package's own model: which records it lists there is a person's call`,
+      });
+      continue;
+    }
     const id = slug(name);
     const taken = tabs.find(
       (other) => other.id === id && other.types.some((type) => types.includes(type)),
@@ -501,8 +561,37 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
 }
 
 /** The tabs of the package that become tabs of a type's view file. */
-export function tabPlans(context: Pick<ConvertContext, 'inventory'>): TabPlan[] {
+export function tabPlans(context: Pick<ConvertContext, 'inventory' | 'pkg'>): TabPlan[] {
   return tabDecisions(context).tabs;
+}
+
+/**
+ * The types a listing shows on that lack a property of the open record it sends, each with the
+ * property, as the package's own model says: a property of a schema the package defines, on a type
+ * the package defines without it. One the package does not define rests on the platform's model,
+ * which check 3 lists.
+ */
+function typesLacking(
+  model: PackageModel,
+  types: readonly string[],
+  listing: ListingPlan,
+): [string, string][] {
+  const fields = listing.parameters.flatMap((parameter) => {
+    const field =
+      typeof parameter === 'object' && parameter !== null
+        ? (parameter as { field?: unknown }).field
+        : undefined;
+    return typeof field === 'string' && !field.startsWith('ecm:') ? [field] : [];
+  });
+  return types.flatMap((type) => {
+    const schemas = schemasOfType(model, type);
+    return fields.flatMap((field): [string, string][] => {
+      const schema = model.schemas.get(field.slice(0, field.indexOf(':')));
+      return schemas !== null && schema !== undefined && !schemas.has(schema.name)
+        ? [[type, field]]
+        : [];
+    });
+  });
 }
 
 /**

@@ -639,8 +639,10 @@ function decideTabs(
     // What of its page's list the card of related records does not show, each with why.
     const left =
       tab.listing && tab.listing.left.length > 0
-        ? `. Written without what Web UI's page shows of its list: ${tab.listing.left.join('; ')}`
+        ? `. Written without what Web UI's page shows of its list: ${tab.listing.left.map((item) => item.text).join('; ')}`
         : '';
+    // What it leaves out only waits for a proposal: it follows that proposal, as a field does.
+    const waiting = tab.listing?.left.every((item) => item.proposed) === true;
     // Shown on fewer types than Web UI shows it on, or without part of its list: written where it
     // can be, and reported.
     const decision: Decision =
@@ -656,7 +658,7 @@ function decideTabs(
               note: `Written for ${tab.types.filter((type) => !missing.includes(type)).join(', ')} only: Web UI shows it on ${missing.join(', ')} too, where ${why(missing)}${before}${left}`,
             }
           : left
-            ? { outcome: 'reported', to, note: `${left.slice(2)}${before}` }
+            ? { outcome: waiting ? 'proposed' : 'reported', to, note: `${left.slice(2)}${before}` }
             : { outcome: 'converted', to, ...(before ? { note: before.slice(2) } : {}) };
     context.decide(tab.itemId, decision);
     context.decide(tab.pageId, decision);

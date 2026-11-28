@@ -401,14 +401,7 @@ export function convert(
     label: construct.label,
     ...(construct.property ? { property: construct.property } : {}),
     ...(decided.get(construct.id) ??
-      decide(
-        construct,
-        inventory,
-        catalogue,
-        context.carried,
-        guards,
-        (id) => decided.get(id)?.outcome,
-      )),
+      decide(construct, inventory, catalogue, context.carried, guards, (id) => decided.get(id))),
   }));
 
   return {
@@ -608,7 +601,7 @@ function decide(
   catalogue: Catalogue,
   carried: ReadonlyMap<string, readonly string[]>,
   guards: ReadonlyMap<string, readonly string[]>,
-  outcomeOf: (id: string) => Outcome | undefined,
+  decisionOf: (id: string) => Decision | undefined,
 ): Decision {
   const key = Number(construct.id.slice(construct.id.lastIndexOf('#') + 1));
   switch (construct.kind) {
@@ -673,9 +666,14 @@ function decide(
       // waits while something it guards waits, for a later phase or a person's acceptance; where
       // each is reported, nothing will carry it, and it is reported too.
       const guarded = guards.get(`${condition.path}#${condition.index}`) ?? [];
+      // A proposal a person decided, accepted or rejected, waits for no one: one undecided does, and
+      // so does what follows a proposed condition.
       const waits = guarded.some((id) => {
-        const outcome = outcomeOf(id);
-        return outcome === 'pending' || outcome === 'proposed';
+        const decision = decisionOf(id);
+        return (
+          decision?.outcome === 'pending' ||
+          (decision?.outcome === 'proposed' && decision.applied === undefined)
+        );
       });
       return waits
         ? {
@@ -687,7 +685,7 @@ function decide(
             outcome: 'reported',
             note:
               guarded.length > 0
-                ? 'Its rule is decided, but nothing it guards carries it, and nothing will: each is reported, and says why'
+                ? 'Its rule is decided, but nothing it guards carries it, and nothing will: each is reported, or a proposal a person decided, and says why'
                 : 'Its rule is decided, but it guards nothing the conversion writes, such as a field, a card, a column or a button',
             rule: proposal.rule,
           };

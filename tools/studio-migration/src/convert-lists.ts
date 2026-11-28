@@ -106,10 +106,24 @@ export function columnPlans(
   });
 }
 
-/** The guard of a search screen's table: the condition it sits in, and those that one sits in. */
+/**
+ * The guard of a search screen's table: the condition it sits in, and those that one sits in. A
+ * queue is one list, so a screen of several tables, one of them under a condition, is reported:
+ * which of its columns shows to whom is a person's call.
+ */
 export function tableGuard(inventory: Inventory, search: SearchLayout): Guard {
-  const index = search.views.findIndex((view) => view === 'nuxeo-data-table');
-  return guardOfSet(inventory, search.path, index === -1 ? [] : search.viewConditions[index]);
+  const tables = search.views.flatMap((view, index) =>
+    view === 'nuxeo-data-table' ? [search.viewConditions[index] ?? []] : [],
+  );
+  const same = (a: readonly number[], b: readonly number[]): boolean =>
+    a.length === b.length && a.every((index, at) => index === b[at]);
+  if (tables.some((conditions) => !same(conditions, tables[0])))
+    return {
+      kind: 'reported',
+      note: `Its results show ${tables.length} tables, not all of them in the same condition, and a queue is one list: which of their columns shows to whom is a person's call, and the list is not shown to everyone meanwhile`,
+      conditions: [],
+    };
+  return guardOfSet(inventory, search.path, tables[0] ?? []);
 }
 
 /** The sort Web UI's results open with: the option marked selected, if any. */
@@ -445,6 +459,19 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
+    const shows = cardShows(card);
+    if (shows.length > 1) {
+      const words = {
+        list: 'a list of a page provider',
+        tasks: "the person's tasks",
+        recent: 'recently viewed documents',
+      };
+      context.decide(id, {
+        outcome: 'reported',
+        note: `It shows ${shows.map((kind) => words[kind]).join(' and ')}, and a card of home.json shows one thing: a person decides which, and nothing of it is written meanwhile`,
+      });
+      return;
+    }
     if (isTasksCard(card)) {
       context.decide(id, {
         outcome: 'converted',
@@ -537,7 +564,11 @@ export function convertDashboard(context: ConvertContext): void {
       id,
       left.length > 0
         ? {
-            outcome: 'reported',
+            // What it leaves out only waits for a proposal: it follows that proposal, as a field does.
+            outcome:
+              !sized && plans.every((plan) => plan.kind === 'write' || plan.outcome === 'proposed')
+                ? 'proposed'
+                : 'reported',
             to,
             note: [`Written without what Web UI shows of it: ${left.join('; ')}`, sized]
               .filter(Boolean)
@@ -565,19 +596,24 @@ export function homeCardId(index: number): string {
 
 /** True for a card of the person's tasks, `nuxeo-tasks-list`, which `home.json`'s `tasks` lists. */
 export function isTasksCard(card: DashboardCard): boolean {
-  return (
-    card.repeatOf === null && card.operation === null && card.elements.includes('nuxeo-tasks-list')
-  );
+  return card.repeatOf === null && card.operation === null && cardShows(card).join() === 'tasks';
 }
 
 /** True for Web UI's recently viewed card, read from the browser by `nuxeo-document-storage`. */
 export function isRecentCard(card: DashboardCard): boolean {
-  return (
-    card.repeatOf === null &&
-    card.operation === null &&
-    !card.elements.includes('nuxeo-tasks-list') &&
-    card.elements.includes('nuxeo-document-storage')
-  );
+  return card.repeatOf === null && card.operation === null && cardShows(card).join() === 'recent';
+}
+
+/**
+ * What a dashboard card shows: a list of a page provider, the person's tasks, their recently viewed
+ * documents. A card of `home.json` shows one thing, so a card that shows several is reported.
+ */
+export function cardShows(card: DashboardCard): ('list' | 'tasks' | 'recent')[] {
+  return [
+    ...(card.provider !== null ? (['list'] as const) : []),
+    ...(card.elements.includes('nuxeo-tasks-list') ? (['tasks'] as const) : []),
+    ...(card.elements.includes('nuxeo-document-storage') ? (['recent'] as const) : []),
+  ];
 }
 
 export const TASKS_NOTE =

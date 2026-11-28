@@ -447,10 +447,12 @@ write it, with the `decisions` command, and no conversion does (below, **The rep
   [`convert-lists.ts`](src/convert-lists.ts)): a column carries its condition's rule as its
   `visibleWhen`, and a table its own as the queue's, where the rule reads the user only, since no
   record is open in a queue. A condition inside a column's template, around its value, is read as
-  the column's. A column or a table whose condition reads a document, `document="[[item]]"` for
-  each row among them, or does not convert, is reported, and the queue leaves it out, or is not
-  written; a column whose property another column shows to everyone is that one's. None is shown
-  to everyone.
+  the column's, a `dom-if` around its text alone among them. A column or a table whose condition
+  reads a document, `document="[[item]]"` for each row among them, or does not convert, is
+  reported, and the queue leaves it out, or is not written; a column whose property another column
+  shows to everyone is that one's. Results of several tables not all in one condition get no
+  queue, and are reported: a queue is one list. None is shown to everyone. Two columns of one
+  property are each held to their own, by their place among the list's columns of it.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
 size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns.
@@ -470,7 +472,11 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
   page provider for.
 - **Reported:** a card that repeats another.
 - **A column under a condition** carries its rule, as a search screen's does. One that cannot is
-  left out, and the card, written without it, is reported, its note naming the column and why.
+  left out, and the card, written without it, is reported, its note naming the column and why; or,
+  where the column only waits on a proposed condition, follows that proposal.
+- **A card's condition** is read around what it shows: its page provider and its table, its tasks
+  list, or its storage and its table. A card that shows two of a list, the person's tasks and
+  their recently viewed documents is reported: a card of `home.json` shows one thing.
 
 **Slot contributions:**
 
@@ -683,11 +689,20 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
     record, as a listing is on the record page;
   - **reported, never pointed at other records:** a named parameter, which a list of related records
     cannot send; a query parameter bound to the page otherwise, or with anything around the
-    binding; a sort it cannot read; two page providers, or none; no table; anything in the page
-    besides its list, such as a button or a field; a condition inside the page that does not
-    convert;
+    binding, or one that reads as a binding only once its JSON's escapes are read, which Polymer
+    does not bind; a sort it cannot read; two page providers, or none; no table, or more than
+    one; a table that does not name its page provider, by its `id`, as `nx-provider="p"` or
+    `[[$.p]]` does, or that is given `items` of its own; a page provider given anything but its
+    `id`, `provider`, `params`, `page-size`, `sort`, `schemas` and `enrichers`, such as a `query`,
+    `quick-filters`, `aggregations` or `headers`, which could list other records; anything in the
+    page besides its list, such as a button or a field; a page that is a custom element of its
+    own, whose content the package does not show, rather than a native element or a `nuxeo-card`
+    holding the list; a property of the open record sent on a type the package's own model gives
+    no such property; a condition inside the page that does not convert;
   - **written and reported,** each part said in its note: a grid view, as a card of related records
-    is a table; a column that cannot be written; a page size a list does not take;
+    is a table; a column that cannot be written; a page size a list does not take. Where what is
+    left out only waits on a proposed condition, a column's, the tab follows that proposal, as a
+    field does, and takes no decision of its own;
   - **never `create`:** a list as the converter reads it creates nothing, and a page holding a
     button is reported.
 
@@ -1739,6 +1754,48 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     table's, changes nothing anything reads, since a column's rule takes its table's condition in
     either way.
 
+- **Two independent reviews of what M2 left over**, by reviewers given the diff and what it is
+  for, one for correctness and one adversarial, asking whether a condition Web UI enforces could
+  be lost, or a listing pointed at the wrong records, and still pass. Each finding below was
+  reproduced with the commands, and is fixed with a test in
+  [`m2-leftovers-reviews.spec.ts`](src/m2-leftovers-reviews.spec.ts) or `m2-leftovers.spec.ts`
+  that failed before its fix:
+  - **The adversarial review** found five ways past the harness: a search screen of two tables,
+    the second under a condition, whose queue took the first's and showed the second's columns to
+    everyone, now reported; a card of tasks, or the recently viewed card, whose condition sat
+    inside it, around its tasks list or its storage, read around a page provider and a table it did
+    not have, so its rule was lost, and a card showing both tasks and a list made a tasks card of
+    it, now read around what each shows, and a card of two reported; a page provider's
+    `quick-filters` or `query`, which a listing ignored, so it listed more records than Web UI's,
+    now refused, with every attribute but those read; row actions or **New** added to a card of
+    related records, and actions or a search to a queue, which check 7 now says Web UI's list does
+    not offer; and a binding that only JSON's escapes make, which Polymer does not bind, now
+    refused. It also found two columns of one property under different conditions failing checks
+    5 and 6 though written as Web UI shows them: each is now held to its own.
+  - **The correctness review** found, besides that one: a condition guarding the recently viewed
+    card left pending for good once a person rejected the card, as a decided proposal counted as
+    waiting, now reported; a listing whose table lists `items` of its own, or names another page
+    provider, written over the page provider it does not show, now reported; a listing column, or
+    a dashboard card's, waiting only on a proposed condition reported for a decision a person could
+    not then keep, now following the proposal; a listing sending a property of the open record on
+    a type of the package without it, which check 3 then failed, now reported; a page that is a
+    `nuxeo-card` reported as holding itself, now read as a listing, and one that is a custom element
+    of its own said to be so; the note "its column 2, …,:", now "is left out"; a test whose name
+    claimed a case it did not run, now running it; and check 7 not holding a tasks card's `limit`,
+    now holding each card's list whole.
+  - **Found while testing a fix:** a `dom-if` in a column's template around its value's text alone
+    left the column in no condition, so it showed to everyone. It predates this slice, for a search
+    screen's columns too, and is fixed: a column holds the conditions inside it.
+  - **Left as they are:** a dashboard card's page provider is read for its provider, its `params`
+    and its `page-size` alone, as M1 reads it, so its `sort`, `quick-filters` or `query` are not
+    held: older than this slice, and under **Not done yet**; and the shared planning the checks
+    take from the converter, `columnPlans`, `tableGuard`, `listingPlan`, which the review asked a
+    cheap independent check of: what it suggested, that a condition said to guard nothing holds no
+    converted construct, needs the place of every construct among the conditions, which the
+    inventory does not keep, so it is under **Not done yet** too.
+  - **20 more guards,** each a fix of a finding, broken one at a time by the same script, each seen
+    turning the specs red.
+
 - **The two counts were seen disagreeing for real.** On the sample, a viewer element writes
   `role="widget"` twice. The parser keeps one attribute; the first second count counted two
   fields. A field is an element, so the second count now counts tags marked as widgets, and a
@@ -2040,8 +2097,17 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **A tab whose page is a list, as Studio writes one.** No package in hand shows it, nor how a page
   passes the open record to its page provider: the converter reads the made-up corpus's form,
   `params='{"queryParams": "[[document.uid]]"}'`, as a dashboard card's `params` are read, and
-  refuses every other binding. Whether Polymer hands Web UI's `nuxeo-page-provider` the record's id
-  so is not checked. A card of related records is never given **New**, `create`.
+  refuses every other binding. Polymer reads a binding with text around it in an attribute as a
+  compound binding, whose value is a string, so `nuxeo-page-provider` is given its `params` as text
+  there: whether it reads them so, and asks for the record's id, is not checked, and is lab mode's
+  to confirm on a server. A card of related records is never given **New**, `create`.
+- **A dashboard card's page provider** is read, as M1 reads it, for its provider, `params` and
+  `page-size` alone: its `sort`, and anything that could narrow it, `quick-filters` or a `query`,
+  are not read, nor held by check 7. Older than M2's leftovers; a listing tab's page provider is
+  held to every attribute it is given.
+- **A cheap independent check of the shared planning.** A condition the report says guards nothing
+  would be held to hold no converted construct, which needs where every construct sits among the
+  conditions, beside the parts the planning reads: the inventory does not keep it yet.
 - **What a column's template holds** beyond the value it shows, such as a button, is read for its
   widget only, as a queue's column is.
 - **The converted forms in the app.** The `edit` and `create` files of version 2 were held to the

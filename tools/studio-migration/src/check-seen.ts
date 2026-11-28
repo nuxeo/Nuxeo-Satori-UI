@@ -140,8 +140,8 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         : undefined;
       if (listing && isRecord(card)) {
         const sources = listing.columns.filter((_, index) => listing.plans[index].kind === 'write');
-        for (const column of listColumns(card['related'])) {
-          const source = sources.find((candidate) => candidate.field === column.field);
+        for (const [at, column] of listColumns(card['related']).entries()) {
+          const source = sameColumn(sources, listColumns(card['related']), at);
           if (source)
             compare(
               `${place.path}: the tab ${tab.id}'s column ${column.field}`,
@@ -168,8 +168,8 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     const name =
       owner.kind === 'search' ? menuLabel({ inventory }, owner.search) : owner.card.heading;
     if (name !== null) compare(`${path}: its name`, web(name), shown(queue, null, null));
-    for (const column of listColumns(queue)) {
-      const source = sources.find((candidate) => candidate.field === column.field);
+    for (const [at, column] of listColumns(queue).entries()) {
+      const source = sameColumn(sources, listColumns(queue), at);
       if (source)
         compare(
           `${path}: the column ${column.field}`,
@@ -299,6 +299,21 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
           )}`
         : values,
   };
+}
+
+/**
+ * Web UI's column a written list's column at `at` stands for: of its property, the one at its place
+ * among the list's columns of that property, so that two columns of one property are each named as
+ * their own.
+ */
+function sameColumn<T extends { readonly field: string | null }>(
+  sources: readonly T[],
+  written: readonly { readonly field: string | null }[],
+  at: number,
+): T | undefined {
+  const field = written[at]?.field ?? null;
+  const occurrence = written.slice(0, at).filter((column) => column.field === field).length;
+  return sources.filter((candidate) => candidate.field === field)[occurrence];
 }
 
 function normal(text: string): string {

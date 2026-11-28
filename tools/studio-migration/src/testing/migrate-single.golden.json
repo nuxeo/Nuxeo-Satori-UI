@@ -17,14 +17,14 @@
         "conversion/app/navigation.json": "b6efc0f7c0ce2bb8592aff514c5bc4bebd686c9a97d36aaa0d167872fda6dd9e",
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
-        "conversion/decisions.json": "c122a5f712ccaf30af19c8a39f13d2e580bb41285b5527c88efd8ece1453f24c",
-        "conversion/report.json": "e8aae70c481f8653115feb670cd09b689176c5f5a642cc46c28333e12f42db56",
+        "conversion/decisions.json": "fe662385a7b92587505a35cd7fe67aae14549f0ad8052c3292e0d779aa870a75",
+        "conversion/report.json": "c669e55bfbed9cab5c27f4363ec92076cdd48acf36a5e1ecda68f4c37df20ea5",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "1502134f8594b0b27a9aac7f0c3b35ed58c8517ceda33da7ee6b8c51f6f42c45",
         "decisions.txt": "e8846641a4aa4366a7c3238630dad692a7ce7c551778534be87fcbde43326638",
         "inventory.txt": "5a1d449573101fdef69d6cc34f2174c3721f98cfe8f02a652c8b26b74489632f",
-        "report.txt": "1fec581f91a2749cac6eb9bc42219332bacf9062e5c6cf3a079afdcd7a76b7fa"
+        "report.txt": "0c1ebf9d8f6930705192e028f199f249172f47e4272b3f82912c3dcf93558f8d"
       }
     },
     "synthetic, with an allow-list": {
@@ -44,14 +44,14 @@
         "conversion/app/navigation.json": "b6efc0f7c0ce2bb8592aff514c5bc4bebd686c9a97d36aaa0d167872fda6dd9e",
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
-        "conversion/decisions.json": "dcb0ab56c0b3607bae49eaad3e551870c66c89a8b26a4ab806d09a04e45d887a",
-        "conversion/report.json": "02e525b732403e1866972a30054fcd6e6d25baf549f474c5956677b942ef03f2",
+        "conversion/decisions.json": "69ae9b5b53882cfaaed7d0e0562383a5b839a3a3ba6390fac00fa284b9f52ded",
+        "conversion/report.json": "7f13aaabf8d3b09a8aed5fe14e8077e59aa6b64aed406a1e5184f95609031fc2",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "b91f691bdaee948de620c436af6d37723f9803275bf1608efcd2d413b7ecfb1d",
         "decisions.txt": "c3b23392e8c0e0c2888eee9c3c2c0ad3f6d62f77d4caa7c2e776216a73415797",
         "inventory.txt": "5a1d449573101fdef69d6cc34f2174c3721f98cfe8f02a652c8b26b74489632f",
-        "report.txt": "d91102df1c6a07788ecf1b2773eb30ed925298929734c05a9bcab62472aeba09"
+        "report.txt": "99cdb7686721409d3f46462fff1deb9f14d1d8247f3b153c01b496c757d77108"
       }
     },
     "m2": {
@@ -74,14 +74,14 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "751d29bc9163904d2ca23c39a2b14d06ba35dbde96e468bd5a34db24b6d9e3ed",
-        "conversion/report.json": "e7ad69213bf5a776be94474c6363e03773fe0103625ae1dfe532aa1137236280",
+        "conversion/decisions.json": "2e1a02cd99c6932237f62afdd55385dd9cdd03b6b8bfe6979aca706fd054e709",
+        "conversion/report.json": "aa0bd2bdfc07d0a983029519c3b949d2c72123935652f4494ef0966f88e8814b",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "c093c97e53101f4c3a43eeb993357fac1af216d4b1ca0c32165b00c39392b27e",
         "decisions.txt": "d25da4101f44067f9247963ae711af0a0087c27d30050cc1bc8b2e3caac97d4f",
         "inventory.txt": "b9cfb09b3017fb4427227c01d0eb422af7e71bd8c0af1451ff2a1afa3026fa62",
-        "report.txt": "43a4e69a5c71de8390a04fdd75de88443a9705c32cf4da4e2e23d3aa72d2d540"
+        "report.txt": "c85a18b3ec5f5f60da63f0f7d55bd1226c430a5ee0b3d65a08d5e86b123cec4f"
       }
     },
     "m2, with an allow-list": {
@@ -105,14 +105,14 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "db6e52608844d8dd261058a7d3179e1532337a1dafeda4a7feba8ef4f82ba445",
-        "conversion/report.json": "efdd4ded4c0ba18afa924dd36f568e64dc6a59522ebeb8a995a1ae71eeabaab7",
+        "conversion/decisions.json": "f5fdc7f025a66b6f0591aa83e858dd17a4cb1d3b6086ea90cab174563744dc19",
+        "conversion/report.json": "161c7af9023612d687182511510700745a738b5a0897b1499f6b49272da081c6",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "ebaf914878c34607d7f40a138e9950794ad2345d9b61d90eaffd364c82f3ca4e",
         "decisions.txt": "1e3f84e7685ebf714218543d86e78b6c4ddfdb943463bf0a44fe704ab802407d",
         "inventory.txt": "b9cfb09b3017fb4427227c01d0eb422af7e71bd8c0af1451ff2a1afa3026fa62",
-        "report.txt": "89be81eec76d9228807329d8c61de9bc21545e3ab25f7ba1cb5d4844f2947d8c"
+        "report.txt": "b1450f08c67323c6d4dc7ca3ef35b3ef2f3032a8cfe51bb03c7058ad6b283abc"
       }
     },
     "synthetic, carrying the decisions of an earlier run": {
@@ -131,14 +131,14 @@
         "conversion/app/navigation.json": "b6efc0f7c0ce2bb8592aff514c5bc4bebd686c9a97d36aaa0d167872fda6dd9e",
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
-        "conversion/decisions.json": "0ee47d9a392b91d44248b5e94a4fde0b3551e2818dc039030c4cf7a58ec65e48",
-        "conversion/report.json": "bf2b884517fc65b2daf3a082c8e96fc981b87586c16284fdc10e1d038cfd9f59",
+        "conversion/decisions.json": "c85739cec25fb1fcdba44661ad8caf11f7791e2f23f8a0d7c1b048f40fb046f7",
+        "conversion/report.json": "6e64271563e3a951066a1110536ae67cc1a1750dfab89f1e973dd0f35117c2ba",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "0ea3a5d1c408c4c585b742ee08d9762da682b02db51d12009e07f8915346f5e5",
         "decisions.txt": "dab63b2a2a35f8d1222157a5fab2e227f16cddfaf4cd711e4283cefb0b86f7ee",
         "inventory.txt": "5a1d449573101fdef69d6cc34f2174c3721f98cfe8f02a652c8b26b74489632f",
-        "report.txt": "c9e02f6e9f2ab0468742e8c721086ceaf06c5b9808c4affdfa92787f93d4c24d"
+        "report.txt": "b5a96a73bf28adab2bb88344f84c5c59195098de5a8d8e3f50bc995471431690"
       }
     },
     "m2, carrying the decisions of an earlier run": {
@@ -161,14 +161,14 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "11d9b640bb834c0412c546871ac87addf2cd558e61729f5d6eb9e5ece9ab6fa3",
-        "conversion/decisions.json": "a45223e8a7acd8d5d081ff34eaf59acec3d83636cf506c958836f571f7570feb",
-        "conversion/report.json": "52cb4fb9ce518d50eb6dd12b152c039d34d1752ca9fbda085e64397133118027",
+        "conversion/decisions.json": "4a12c4ffa9c41fc10ea1ddefccf6c6ccbc2d7bbffc1ba984829820a465273c20",
+        "conversion/report.json": "76b1b63f91843535fa1658f276d4cd67b0ea3aa9d8ac749295e3ac903563ad69",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "9c1efe8bef6e409ab14739bcf49ef657e455eee99cdd63dc8a217233bbad766b",
         "decisions.txt": "990a8dcab936c737ca388ae8b5bfbe4fd932b972d4df14a6c4e3033897bb304f",
         "inventory.txt": "b9cfb09b3017fb4427227c01d0eb422af7e71bd8c0af1451ff2a1afa3026fa62",
-        "report.txt": "f2a60fb8d61952f23bf1c91398449d82f771961d669f823969438fef06e5bd01"
+        "report.txt": "73d90309b5740325be46a27b2d150090ca39920e5020934420dc094c8d2bff89"
       }
     },
     "refused: --out holds an earlier run": {
@@ -223,14 +223,14 @@
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
         "conversion/app/tasks/ClaimReview.AssessClaim.layout.json": "a113bd5a82a016582c6c0df97d3076f31eb37f2f70e13ea733edf45a0888a520",
-        "conversion/decisions.json": "1789e58bd757188adb69274a43488c93a7cf04bf0569f4369f0bd1a39f6d8a23",
-        "conversion/report.json": "a40ba95c04f2debaebcb0d8efa29a8d8668e8bcdc7356f5a6b508b7d6c76a3d3",
+        "conversion/decisions.json": "71bdddc83a3ca7af28e2373669a9c0420d6e2f42a09556fe5d31f2b36d88e214",
+        "conversion/report.json": "021bd4c03c916e50e61b2ab255b63559cbc581be56b60f4c13068f4cb6177f45",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "0ea7547759c8583eadd7434e15f322773c39743cfcd80e0dec38d291d7b519f0",
         "decisions.txt": "db316c1a0ac6ea2f0716284f0d3a4e3bd5d516a470a80e39ab7b783acc995408",
         "inventory.txt": "b9cfb09b3017fb4427227c01d0eb422af7e71bd8c0af1451ff2a1afa3026fa62",
-        "report.txt": "a472af390a7e5b26611f0aa03da46053ae0c8f4cdadd6e650ab5d5f25849f0e0"
+        "report.txt": "13e1e91e78159ab2d7d08cd68a2c9cafa10e23871dd19e5d157dbb5736dde6dd"
       }
     },
     "refused: --from another package": {
@@ -267,14 +267,14 @@
         "conversion/app/navigation.json": "b6efc0f7c0ce2bb8592aff514c5bc4bebd686c9a97d36aaa0d167872fda6dd9e",
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
-        "conversion/decisions.json": "c122a5f712ccaf30af19c8a39f13d2e580bb41285b5527c88efd8ece1453f24c",
-        "conversion/report.json": "e8aae70c481f8653115feb670cd09b689176c5f5a642cc46c28333e12f42db56",
+        "conversion/decisions.json": "fe662385a7b92587505a35cd7fe67aae14549f0ad8052c3292e0d779aa870a75",
+        "conversion/report.json": "c669e55bfbed9cab5c27f4363ec92076cdd48acf36a5e1ecda68f4c37df20ea5",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "ded2c0bda5641c6a13a4ceaf4b1d98a30b256bb82d75c2359ded0237fce2aca1",
         "conversion.txt": "1502134f8594b0b27a9aac7f0c3b35ed58c8517ceda33da7ee6b8c51f6f42c45",
         "decisions.txt": "e8846641a4aa4366a7c3238630dad692a7ce7c551778534be87fcbde43326638",
         "inventory.txt": "5a1d449573101fdef69d6cc34f2174c3721f98cfe8f02a652c8b26b74489632f",
-        "report.txt": "1fec581f91a2749cac6eb9bc42219332bacf9062e5c6cf3a079afdcd7a76b7fa"
+        "report.txt": "0c1ebf9d8f6930705192e028f199f249172f47e4272b3f82912c3dcf93558f8d"
       }
     },
     "a check fails": {
@@ -293,14 +293,14 @@
         "conversion/app/navigation.json": "b6efc0f7c0ce2bb8592aff514c5bc4bebd686c9a97d36aaa0d167872fda6dd9e",
         "conversion/app/queues/claims.json": "f69cf36b94dee2c877c1edcb6e522aa24dc61ac5492fb0a93eac69cd06553742",
         "conversion/app/queues/home-1-claims.json": "61818c73e8dfd1bca8846698702596e1bfb5ade0fb1a00c489df521ba5b8db53",
-        "conversion/decisions.json": "c70c4957e26ae21cd092aacd71ef719a03d4963abaa7ab3ba33e6489846c4fbd",
-        "conversion/report.json": "fda38a197096d311b92c1a4032272cb22c34419c666112dd5f5dfce994c8e1a9",
+        "conversion/decisions.json": "891b4049f884544dd68e39748e8951dc5b0fae0cd443b184cc691458227e2374",
+        "conversion/report.json": "9bbe57807ca3216c014125d09123e0f2ae29a0296a5d11ce6c81a64ca017162c",
         "conversion/themes/acme/logo.png": "9d243875ccf8e0cf70d797323c36fd79dc5d0e4a369fa3d29940f598636f3fb5",
         "conversion/themes/acme.json": "53bbf8b834421d17aa8cc053d03f403a58ca0cd8473cfb2c4994bcb51a56af0f",
         "conversion.txt": "2af026595ca0f94c68ee70ac821d263994c29cbdfeecba0d3c322c147fddde98",
         "decisions.txt": "693f3e9835679ac407965addd10cb5a53ab365fdf34814948afd823080ca2c68",
         "inventory.txt": "a47db38551a9c23e8a27b3c81b6f66ed0cb1d08f56930a3f35a843752f1c67f8",
-        "report.txt": "d1d6a1d780dc7f91424ba8129b0fa9fedeb85dff6b813f5fd9edfc42244264ab"
+        "report.txt": "b201797a4e335c9145b5a8e3bf7d78f62b39a6e0c594b201a773b315437bff28"
       }
     }
   }

@@ -34,7 +34,7 @@ export interface FormPlace {
 
 export function formPlaces(pkg: StudioPackage, inventory: Inventory): FormPlace[] {
   const places: FormPlace[] = [];
-  const tabs = tabPlans({ inventory });
+  const tabs = tabPlans({ inventory, pkg });
   for (const [path, layout] of writtenLayouts(inventory)) {
     const type = layout.docType as string;
     const typeTabs = layout.mode === 'view' ? tabs.filter((tab) => tab.types.includes(type)) : [];

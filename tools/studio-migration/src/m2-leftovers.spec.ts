@@ -167,7 +167,7 @@ describe('a tab whose page is a list', () => {
       outcome: 'reported',
       to: 'layouts/Vehicle/view.layout.json tabs.documents',
       note: expect.stringMatching(
-        /^Written without what Web UI's page shows of its list: its nuxeo-data-grid view: a card of related records is a table; its column 2, dc:description,: .*document \[\[item\]\]/,
+        /^Written without what Web UI's page shows of its list: its nuxeo-data-grid view: a card of related records is a table; its column 2, dc:description, is left out: .*document \[\[item\]\]/,
       ),
     });
   });
@@ -238,8 +238,9 @@ describe('a tab whose page is a list', () => {
     });
     const provider =
       '<nuxeo-page-provider id="p" provider="vehicle_claims" params=\'{"queryParams": "[[document.uid]]"}\'></nuxeo-page-provider>';
-    const table =
-      '<nuxeo-data-table><nuxeo-data-table-column name="Title" field="dc:title"></nuxeo-data-table-column></nuxeo-data-table>';
+    const column =
+      '<nuxeo-data-table-column name="Title" field="dc:title"></nuxeo-data-table-column>';
+    const table = `<nuxeo-data-table nx-provider="p">${column}</nuxeo-data-table>`;
     const cases: [string, RegExp][] = [
       [
         `${provider}${table}<nuxeo-operation-button operation="Claim.Approve"></nuxeo-operation-button>`,
@@ -251,22 +252,49 @@ describe('a tab whose page is a list', () => {
         `${provider}<nuxeo-data-grid></nuxeo-data-grid>`,
         /shown as nuxeo-data-grid, and a card of related records is a table/,
       ],
+      [`${provider}${table}${table}`, /holds 2 tables of one page provider/],
       [
-        `${provider}<nuxeo-data-table><nuxeo-data-table-column name="Nothing"></nuxeo-data-table-column></nuxeo-data-table>`,
+        `${provider}<nuxeo-data-table nx-provider="p"><nuxeo-data-table-column name="Nothing"></nuxeo-data-table-column></nuxeo-data-table>`,
         /None of its list's columns can be written/,
       ],
       [
-        `<nuxeo-page-provider provider="vehicle_claims" params='{"queryParams": "[[document.title]]"}'></nuxeo-page-provider>${table}`,
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" params='{"queryParams": "[[document.title]]"}'></nuxeo-page-provider>${table}`,
         /cannot send/,
       ],
       [
-        `<nuxeo-page-provider provider="vehicle_claims" sort="[[sort]]"></nuxeo-page-provider>${table}`,
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" params='{"queryParams": "\\u005b\\u005bdocument.uid\\u005d\\u005d"}'></nuxeo-page-provider>${table}`,
+        /reads as a binding only once its JSON escapes are read/,
+      ],
+      [
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" sort="[[sort]]"></nuxeo-page-provider>${table}`,
         /its page provider's sort, \[\[sort\]\], is not JSON/,
       ],
-      [`<nuxeo-page-provider></nuxeo-page-provider>${table}`, /names no provider/],
+      [`<nuxeo-page-provider id="p"></nuxeo-page-provider>${table}`, /names no provider/],
       [
         `${provider}<nuxeo-filter document="[[document]]" path="/x"><template>${table}</template></nuxeo-filter>`,
         /no rule reads a path/,
+      ],
+      // Its table must list its page provider's records, named by its id.
+      [
+        `${provider}<nuxeo-data-table nx-provider="other">${column}</nuxeo-data-table>`,
+        /does not name its page provider, p, as the one it lists/,
+      ],
+      [
+        `${provider}<nuxeo-data-table items="[[document.properties.ve:history]]">${column}</nuxeo-data-table>`,
+        /does not name its page provider, p, as the one it lists, by nx-provider, and is given items/,
+      ],
+      [
+        `<nuxeo-page-provider provider="vehicle_claims"></nuxeo-page-provider>${table}`,
+        /does not name its page provider as the one it lists/,
+      ],
+      // What else its page provider is given may list other records.
+      [
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" quick-filters='[{"name":"openOnly","active":true}]'></nuxeo-page-provider>${table}`,
+        /is given quick-filters, which a card of related records does not send/,
+      ],
+      [
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" query="SELECT * FROM Claim"></nuxeo-page-provider>${table}`,
+        /is given query/,
       ],
     ];
     for (const [inner, note] of cases) {
@@ -540,15 +568,22 @@ describe("the dashboard's tasks and recently viewed cards", () => {
     for (const number of [5, 6, 7, 10]) expect(run(corpus, number)?.findings).toEqual([]);
   });
 
-  it('fails a card of tasks narrowed to one workflow, shown another way, or under no rule', () => {
+  it('fails a card of tasks narrowed to one workflow or a number, shown another way, or under no rule', () => {
     const narrowed = edit(corpus, 'home.json', (file) => {
       file.cards[1].tasks = { workflow: 'ClaimReview' };
       file.cards[3] = { id: 'card-6', label: 'Team tasks', queue: 'home-1-claims' };
       return file;
     });
     expect(run(narrowed, 7)?.findings).toEqual([
-      'home.json: card-3 lists only the tasks of "ClaimReview", where Web UI\'s dashboard card 3 lists every workflow\'s',
+      'home.json: card-3 lists them as {"workflow":"ClaimReview"}, where Web UI\'s dashboard card 3 lists the person\'s tasks, as {}',
       'home.json: card-6 shows a link to "home-1-claims", where Web UI\'s dashboard card 6 lists the person\'s tasks',
+    ]);
+    const limited = edit(corpus, 'home.json', (file) => {
+      file.cards[1].tasks = { limit: 1 };
+      return file;
+    });
+    expect(run(limited, 7)?.findings).toEqual([
+      'home.json: card-3 lists them as {"limit":1}, where Web UI\'s dashboard card 3 lists the person\'s tasks, as {}',
     ]);
     const widened = edit(corpus, 'home.json', (file) => {
       delete file.cards[3].visibleWhen;
@@ -629,6 +664,35 @@ describe("the dashboard's tasks and recently viewed cards", () => {
     );
     expect(held.findings).toEqual([]);
     expect(held.verdicts.get(RECENT)).toMatchObject({ accepted: true });
+    // The favourites card, which an operation feeds, proposes nothing written: refused accepted.
+    const files = m2AllFiles();
+    const favourites = prepare({
+      ...files,
+      [HOME]: files[HOME].replace(
+        '<!-- <nuxeo-card heading="Retired">',
+        '<nuxeo-card heading="Favourites"><nuxeo-operation op="Favorite.Fetch"></nuxeo-operation></nuxeo-card>\n      <!-- <nuxeo-card heading="Retired">',
+      ),
+    });
+    const file = decided(favourites, 'accept');
+    const card = `dashboard-card:${HOME}#7`;
+    const both = {
+      ...file,
+      decisions: file.decisions.map((item) =>
+        item.id === card
+          ? { ...item, owner: 'Dana Reviewer', decision: 'accept', reason: 'Checked' }
+          : item,
+      ),
+    };
+    const refused = holdDecisions(
+      favourites.conversion.report,
+      both,
+      packageBuildOf(favourites.pkg),
+      identitiesOf(favourites.inventory),
+    );
+    expect(refused.findings).toEqual([
+      `decisions.json: ${card} proposes nothing the converter can write yet, so it cannot be accepted: reject it, with your reason, or leave it for the mapping agent`,
+    ]);
+    expect(refused.verdicts.get(RECENT)).toMatchObject({ accepted: true });
   });
 
   it('writes it once a person accepts it, and holds the conversion to that decision', () => {

@@ -70,6 +70,7 @@ export function checkRequests({
       findings.push(
         `${path}: it asks for pages of ${JSON.stringify(queue['pageSize'] ?? 10)}, where Web UI asks for ${pageSize ?? "the page provider's own size"}`,
       );
+    findings.push(...offered(path, queue, "Web UI's list"));
   };
 
   // Each queue against the one list that owns its path, as the converter decides it, and no
@@ -136,6 +137,7 @@ export function checkRequests({
       findings.push(
         `${where}: it asks for pages of ${JSON.stringify(asked['pageSize'] ?? 10)}, where ${source} asks for ${listing.pageSize ?? "the page provider's own size"}`,
       );
+    findings.push(...offered(where, asked, source));
   }
   // Nothing else asks for related records: each such card is a tab's whose page is a list.
   for (const [path, file] of Object.entries(app)) {
@@ -266,13 +268,12 @@ function homeOpened(
       );
       continue;
     }
-    if (want.kind === 'tasks' && 'workflow' in list)
+    // Every workflow's tasks, or every type's records, as many as home.json's own number: the
+    // package names no workflow, type or number, and a person accepted the card as proposed.
+    const expected = want.entry[want.kind];
+    if (!sameJson(list, expected))
       findings.push(
-        `${file}: ${want.id} lists only the tasks of ${JSON.stringify(list['workflow'])}, where ${source} lists every workflow's`,
-      );
-    if (want.kind === 'recent' && 'types' in list)
-      findings.push(
-        `${file}: ${want.id} lists only the recent records of ${JSON.stringify(list['types'])}, where the card a person accepted for ${source} lists every type's`,
+        `${file}: ${want.id} lists them as ${JSON.stringify(list)}, where ${source} ${shows(want)}, as ${JSON.stringify(expected)}`,
       );
   }
   const dashboard = inventory.dashboard;
@@ -287,6 +288,30 @@ function homeOpened(
         : `${file}: ${JSON.stringify(id)} opens a list no dashboard card of the package shows`,
     );
   }
+  return findings;
+}
+
+/**
+ * What a list offers that Web UI's list, as the package writes it, does not: actions on its rows or
+ * a selection, a record to create, or a search before it lists anything. The converter writes none
+ * of them, so each asks the server for something the package does not.
+ */
+function offered(where: string, list: Record<string, unknown>, source: string): string[] {
+  const findings: string[] = [];
+  for (const [key, what] of [
+    ['rowActions', 'actions on its rows'],
+    ['bulkActions', 'actions on a selection'],
+  ] as const)
+    if (Array.isArray(list[key]) && list[key].length > 0)
+      findings.push(
+        `${where}: it offers ${what}, ${JSON.stringify(list[key])}, which ${source} does not`,
+      );
+  if ('create' in list)
+    findings.push(`${where}: it offers to create a record, which ${source} does not`);
+  if ('search' in list)
+    findings.push(
+      `${where}: it waits for a search before it lists anything, where ${source} does not`,
+    );
   return findings;
 }
 
