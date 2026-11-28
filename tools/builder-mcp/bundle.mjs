@@ -200,6 +200,22 @@ export async function bundleServer({ out, repo }) {
  * resolved for a file of each kind, and for any other.
  */
 async function formatting(prettier, repo) {
+  // Every override and every section by kind of file alone, which formatting.json can carry: a
+  // glob with a folder in it would format a file by where it is.
+  const byKind = /^\*\.(?:[\w-]+|\{[\w,-]+\})$/;
+  const { overrides = [] } = JSON.parse(readFileSync(join(repo, '.prettierrc'), 'utf8'));
+  for (const { files, excludeFiles } of overrides)
+    if (excludeFiles !== undefined || ![files].flat().every((glob) => byKind.test(glob)))
+      throw new Error(
+        `.prettierrc has an override for ${JSON.stringify(files)}, which is not a kind of file, and formatting.json cannot carry it.`,
+      );
+  for (const [, section] of readFileSync(join(repo, '.editorconfig'), 'utf8').matchAll(
+    /^\s*\[([^\]]*)\]/gm,
+  ))
+    if (section !== '*' && !byKind.test(section))
+      throw new Error(
+        `.editorconfig has a section [${section}], which is not a kind of file, and formatting.json cannot carry it.`,
+      );
   const root = mkdtempSync(join(tmpdir(), 'satori-mcp-formatting-'));
   try {
     for (const file of ['.prettierrc', '.editorconfig']) cpSync(join(repo, file), join(root, file));

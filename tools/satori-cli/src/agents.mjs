@@ -120,7 +120,9 @@ export function agentsCommand(args, context) {
   try {
     writeAll(differing);
   } catch (error) {
-    console.error(`satori agents sync: nothing was written: ${error.message}`);
+    console.error(
+      `satori agents sync: ${/ files were written before /.test(error.message) ? '' : 'nothing was written: '}${error.message}`,
+    );
     return 1;
   }
   process.stdout.write(
@@ -304,7 +306,18 @@ function writeAll(files) {
     for (const { temporary } of written) rmSync(temporary, { force: true });
     throw error;
   }
-  for (const { temporary, target } of written) renameSync(temporary, target);
+  let renamed = 0;
+  try {
+    for (const { temporary, target } of written) {
+      renameSync(temporary, target);
+      renamed++;
+    }
+  } catch (error) {
+    for (const { temporary } of written.slice(renamed)) rmSync(temporary, { force: true });
+    throw new Error(
+      `${renamed} of ${written.length} files were written before a rename failed (${error.message}): run it again`,
+    );
+  }
 }
 
 /**

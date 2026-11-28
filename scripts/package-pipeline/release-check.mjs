@@ -23,9 +23,13 @@
  * 4. **It prints the commands a person runs,** the tag and its push, and says that publishing is
  *    theirs.
  *
- * It never makes or pushes a tag, never calls the Marketplace, and reads no credential: git is
- * asked only for its top folder and for one ref. `--json` prints one JSON object instead of the
- * text, the pipeline's own output inside it.
+ * It never makes or pushes a tag, never calls the Marketplace, and reads no credential:
+ * `--model-server`, which would have the pipeline send `NUXEO_USER` and `NUXEO_PASS` to a server,
+ * is refused, `--model <file>` taken instead, and what it runs is given only what finds programs,
+ * a temporary folder, the locale and `NODE_OPTIONS`, never the rest of the environment. git is
+ * asked only for its top folder and for one ref. The package's names are compared with the other
+ * packages in its folder, as the repository's CI compares them, unless `--kits` names another.
+ * `--json` prints one JSON object instead of the text, the pipeline's own output inside it.
  *
  * Exit codes: 0, ready; 1, not ready; 2, the command was wrong, or could not be run.
  */
@@ -59,6 +63,12 @@ export function releaseCheckCommand(argv, host) {
       );
       return 2;
     }
+  if (given.includes('--model-server')) {
+    console.error(
+      `--model-server is not taken: the check reads no credential. Write the model to a file with model pull, and give --model <file>.\n${host.usage}`,
+    );
+    return 2;
+  }
   const [directory, ...rest] = given;
   const at = rest.indexOf('--previous');
   if (
@@ -72,7 +82,11 @@ export function releaseCheckCommand(argv, host) {
   }
   const previous = at >= 0 ? rest[at + 1] : null;
   // The build is given every option but --previous, which the upgrade check is given instead.
-  const options = at >= 0 ? [...rest.slice(0, at), ...rest.slice(at + 2)] : rest;
+  const withoutPrevious = at >= 0 ? [...rest.slice(0, at), ...rest.slice(at + 2)] : rest;
+  // Its names compared with the packages beside it, as CI compares them, unless told otherwise.
+  const options = withoutPrevious.includes('--kits')
+    ? withoutPrevious
+    : [...withoutPrevious, '--kits', join(resolve(directory), '..')];
   const reasons = [];
   const unchecked = [
     'a tag pushed by someone else that this clone has not fetched: run git fetch --tags first',
@@ -97,6 +111,7 @@ export function releaseCheckCommand(argv, host) {
   try {
     const [program, ...prefix] = host.pipeline;
     const built = spawnSync(program, [...prefix, directory, ...options, '--out', scratch], {
+      env: runEnvironment(),
       encoding: 'utf8',
       maxBuffer: OUTPUT_LIMIT,
       stdio: json ? ['ignore', 'pipe', 'pipe'] : 'inherit',
@@ -132,6 +147,7 @@ export function releaseCheckCommand(argv, host) {
     else {
       const [checker, ...checking] = host.upgradeCheck;
       const held = spawnSync(checker, [...checking, directory, '--previous', previous], {
+        env: runEnvironment(),
         encoding: 'utf8',
         maxBuffer: OUTPUT_LIMIT,
         stdio: json ? ['ignore', 'pipe', 'pipe'] : 'inherit',
@@ -159,8 +175,10 @@ export function releaseCheckCommand(argv, host) {
       );
       return finish(json, answer, 1, host);
     }
-    const ref = spawnSync('git', ['rev-parse', '--quiet', '--verify', `refs/tags/${answer.tag}`], {
+    // That ref exactly, and no branch whose name only looks like it.
+    const ref = spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/tags/${answer.tag}`], {
       cwd: repository,
+      env: runEnvironment(),
       encoding: 'utf8',
     });
     if (ref.error) {
@@ -202,7 +220,8 @@ function finish(json, answer, code, host, shown) {
           : ` It keeps what ${answer.previous} had, as far as its version says.`
       }
 
-Publishing is a person's step. Once the change is merged, on the merged commit:
+Publishing is a person's step. Once the change is merged, on the merged commit, with origin the
+remote the repository pushes to:
 
 ${answer.commands.map((command) => `  ${command}`).join('\n')}
 
@@ -216,6 +235,28 @@ Not checked: ${answer.unchecked.join('; ')}.
     console.error("Publishing is a person's step; nothing was tagged, pushed or published.");
   }
   return code;
+}
+
+/** What the check's processes may see of the environment: no credential, no token. */
+const PASSED = [
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SystemRoot',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  // Kept, so that a check run under Node's permission model stays under it.
+  'NODE_OPTIONS',
+];
+
+function runEnvironment() {
+  return Object.fromEntries(
+    PASSED.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]]),
+  );
 }
 
 function lines(text) {

@@ -40,7 +40,7 @@ import {
   readFileSync,
   rmSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { modelExportCommand } from '../../../scripts/package-pipeline/model-export.mjs';
@@ -423,6 +423,8 @@ function packageOfZip(zip, scratch) {
  */
 function packageRoot(folder) {
   for (let at = resolve(folder); ; at = dirname(at)) {
+    // A home folder is not a repository, even with a package.json in it.
+    if (at === resolve(homedir())) return null;
     try {
       if (isFile(join(at, 'package.json'))) return at;
     } catch {

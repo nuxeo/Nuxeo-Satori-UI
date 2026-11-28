@@ -235,8 +235,11 @@ before the tag, and says the tag:
    a package in no git repository is not ready, since a person tags it with git;
 4. ready, it prints the two commands a person runs on the merged commit, the tag and its push.
 
-It never makes or pushes a tag, never calls the Marketplace, and reads no credential: git is asked
-for its top folder and one ref. `--json` prints one JSON object, which the MCP server's
+It never makes or pushes a tag, never calls the Marketplace, and reads no credential: it refuses
+`--model-server`, which would send `NUXEO_USER` and `NUXEO_PASS` to a server, and takes `--model
+<file>`; what it runs gets only `PATH`, the temporary folder, the locale and `NODE_OPTIONS`; and git
+is asked for its top folder and one ref, exactly. The package's names are compared with the other
+packages in its folder, as the workflow compares them, unless `--kits` names another. `--json` prints one JSON object, which the MCP server's
 `release_check` reads. The check is `scripts/package-pipeline/release-check.mjs`, which this
 repository's `scripts/app-release-check.mjs` runs too, over `app-package.mjs`. Exit codes: 0,
 ready; 1, not ready; 2, the command was wrong or could not be run.

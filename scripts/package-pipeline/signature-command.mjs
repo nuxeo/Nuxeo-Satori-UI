@@ -170,7 +170,7 @@ function sign(zip, options, { usage, program, repository: given }) {
           'published. Keep it outside, or use --ephemeral-key.',
       );
     // Nor in another repository: wherever git keeps files, a key is one commit from being published.
-    const kept = gitTopLevel(dirname(real));
+    const kept = gitTopLevel(dirname(real)) ?? (gitRefuses(dirname(real)) ? dirname(real) : null);
     if (kept !== null)
       throw new Usage(
         `--key ${options.key} is inside ${kept}, which git keeps, where a private key is one commit from ` +
@@ -230,6 +230,15 @@ function sign(zip, options, { usage, program, repository: given }) {
 export function gitTopLevel(folder) {
   const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: folder, encoding: 'utf8' });
   return top.status === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : null;
+}
+
+/**
+ * Whether git refuses to say whether `folder` is in a repository, as it does for one another user
+ * owns: a key there may still be one commit from being published, so it is held to be kept.
+ */
+function gitRefuses(folder) {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: folder, encoding: 'utf8' });
+  return top.status !== 0 && /safe\.directory|dubious ownership/i.test(top.stderr ?? '');
 }
 
 /** A CI job's decision, written where the workflow reads it. */

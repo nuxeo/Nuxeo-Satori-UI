@@ -1963,13 +1963,8 @@ function signAndVerify(outside, bin, repository, env) {
 function releaseChecks(outside, bin, repository, env) {
   const satori = (args, cwd = repository) => node([bin, 'release-check', ...args], { cwd, env });
   const tag = 'app-package/acme-config/1.0.0';
-  const ready = satori([
-    'config-packages/acme-config',
-    '--kits',
-    'config-packages',
-    '--previous',
-    'dist/acme-config-1.0.0.zip',
-  ]);
+  // As AGENTS.md gives it: the packages beside it compared by default, as the workflow compares them.
+  const ready = satori(['config-packages/acme-config', '--previous', 'dist/acme-config-1.0.0.zip']);
   if (
     ready.status !== 0 ||
     !ready.output.includes(`  git tag ${tag}\n  git push origin ${tag}`) ||
@@ -2016,13 +2011,19 @@ function releaseChecks(outside, bin, repository, env) {
       failed.output,
     );
   else held++;
-  // Its own errors: an --out, which it would not write, and no package.
-  for (const [what, args] of [
+  // Its own errors: an --out, which it would not write, no package, and a server to read.
+  for (const [what, args, says] of [
     ['with --out', ['config-packages/acme-config', '--out', 'dist']],
     ['with no package', []],
+    // It would have the pipeline send NUXEO_USER and NUXEO_PASS to the address.
+    [
+      'with --model-server',
+      ['config-packages/acme-config', '--model-server', 'http://127.0.0.1:9/nuxeo'],
+      'reads no credential',
+    ],
   ]) {
     const run = satori(args);
-    if (run.status !== 2)
+    if (run.status !== 2 || (says !== undefined && !run.output.includes(says)))
       fail(`satori release-check ${what}`, `exit ${run.status}, not 2`, run.output);
     else held++;
   }

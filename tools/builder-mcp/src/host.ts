@@ -77,6 +77,8 @@ export interface Words {
   readonly taskForms: string;
   /** Whether preview_package serves here. */
   readonly preview: boolean;
+  /** What release_check takes as the package as it was installed. */
+  readonly previous: string;
 }
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
@@ -108,6 +110,7 @@ function repositoryHost(): Host {
       generators: 'as npx nx g ./tools/satori-generators:<generator> would',
       taskForms: ' (docs/business-apps/app-definition-v2.md, section 6)',
       preview: true,
+      previous: 'a package folder, as app-upgrade-check.mjs takes one',
     },
   };
 }
@@ -145,6 +148,7 @@ function bundledHost(): Host {
       generators: "with each generator's options named as its schema names them",
       taskForms: '',
       preview: false,
+      previous: 'a package folder, or the zip it was built into',
     },
   };
 }

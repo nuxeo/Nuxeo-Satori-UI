@@ -91,7 +91,8 @@ const INSTRUCTIONS =
   ' be, its names compared with the other kits beside it, writes it only when the' +
   ' pipeline passes with no finding, and otherwise returns the findings and changes nothing. A' +
   ' refused write is the answer: fix what it names, and never rename an id to get a pass.' +
-  ' validate_package checks a package as it is.' +
+  ' validate_package checks a package as it is. release_check says whether a package is ready for' +
+  " a person to release, and the tag they push; it never tags, and its commands are the person's." +
   (WORDS.preview
     ? ' preview_package validates a package and serves it to the local development server,' +
       ' replacing what it served, and returns the addresses to open.'
@@ -502,7 +503,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           .min(1)
           .optional()
           .describe(
-            'The package as it is installed, a folder or the zip it was built into: what a customer' +
+            `The package as it is installed, ${WORDS.previous}: what a customer` +
               ' may override or name is held to it, and the version to what changed. Without it,' +
               ' the upgrade is not checked',
           ),
