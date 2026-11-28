@@ -7,10 +7,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NxsBannerComponent } from '@nuxeo/satori-platform/components';
+import {
+  NxsBannerComponent,
+  NxsButtonComponent,
+  NxsDialogComponent,
+} from '@nuxeo/satori-platform/components';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import type { Observable } from 'rxjs';
 
@@ -58,9 +61,9 @@ export interface AppActionDialogData {
   standalone: true,
   imports: [
     DocumentLayoutFormComponent,
-    MatButtonModule,
-    MatDialogModule,
     NxsBannerComponent,
+    NxsButtonComponent,
+    NxsDialogComponent,
     TranslatePipe,
   ],
   templateUrl: './app-action-dialog.html',
@@ -76,13 +79,15 @@ export class AppActionDialogComponent {
   /** The question's id, which the run button is described by. */
   protected readonly questionId = `lib-app-action-question-${nextQuestionId++}`;
 
-  /** What Cancel closes with: nothing. A bare `mat-dialog-close` would close with `''`. */
-  protected readonly cancelResult = undefined;
-
   protected readonly running = signal(false);
   protected readonly failure = signal<string | null>(null);
   /** No answer came: it may have run, so it is not offered again. */
   protected readonly unanswered = signal(false);
+
+  /** Cancel closes with nothing, and runs nothing. */
+  protected cancel(): void {
+    this.dialogRef.close();
+  }
 
   protected confirm(): void {
     if (this.running() || this.unanswered()) return;

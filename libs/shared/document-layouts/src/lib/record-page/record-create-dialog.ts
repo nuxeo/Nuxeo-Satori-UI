@@ -7,9 +7,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsBannerComponent, NxsButtonComponent } from '@nuxeo/satori-platform/components';
+import {
+  NxsBannerComponent,
+  NxsButtonComponent,
+  NxsDialogComponent,
+} from '@nuxeo/satori-platform/components';
 import {
   DocumentImportService,
   type NuxeoDocument,
@@ -56,9 +60,9 @@ export interface RecordCreateDialogData {
   standalone: true,
   imports: [
     DocumentLayoutFormComponent,
-    MatDialogModule,
     NxsBannerComponent,
     NxsButtonComponent,
+    NxsDialogComponent,
     TranslatePipe,
   ],
   templateUrl: './record-create-dialog.html',

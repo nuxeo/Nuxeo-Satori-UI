@@ -8,7 +8,7 @@
       class="nxs-satori-tabs__tab"
       [id]="tabId(index)"
       [active]="index === shown()"
-      [attr.aria-controls]="shownBefore().has(tab.id) ? panelId(index) : null"
+      [attr.aria-controls]="hasPanel(tab.id, index) ? panelId(index) : null"
       [attr.data-tab-id]="tab.id"
       (click)="select(index)"
       (keydown.enter)="select(index)"
@@ -25,7 +25,7 @@
 <!-- A panel for each tab whose body has been shown, hidden while another is selected, so a body
      keeps its state when the user switches away and back, as Material's tab group does. -->
 @for (tab of tabs(); track tab.id; let index = $index) {
-  @if (shownBefore().has(tab.id)) {
+  @if (hasPanel(tab.id, index)) {
     <div
       class="nxs-satori-tabs__panel"
       role="tabpanel"

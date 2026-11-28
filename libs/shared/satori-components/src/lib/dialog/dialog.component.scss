@@ -1,0 +1,6 @@
+// No box of its own: the title, the content and the actions are the dialog surface's own rows, as
+// they are when a dialog component draws them itself, so Material's dialog lays them out — the
+// content scrolling between a fixed title and a fixed row of actions.
+:host {
+  display: contents;
+}

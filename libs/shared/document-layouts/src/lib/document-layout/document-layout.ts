@@ -11,9 +11,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatTabsModule } from '@angular/material/tabs';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
   ExtensionComponentRegistry,
@@ -128,7 +132,14 @@ const NO_VOCABULARIES: Vocabularies = new Map();
 @Component({
   selector: 'lib-document-layout',
   standalone: true,
-  imports: [ExtensionOutletComponent, MatTabsModule, NgTemplateOutlet, RouterLink, TranslatePipe],
+  imports: [
+    ExtensionOutletComponent,
+    NgTemplateOutlet,
+    NxsTabBodyDirective,
+    NxsTabsComponent,
+    RouterLink,
+    TranslatePipe,
+  ],
   // The records the panel's references name, read for as long as the panel is drawn.
   providers: [LinkedRecordLookup],
   templateUrl: './document-layout.html',
@@ -311,6 +322,18 @@ export class DocumentLayoutComponent {
   tabLabel(section: SectionView): string {
     return section.heading ?? humanize(section.id);
   }
+
+  /** The sections as tabs, for a layout shown as tabs: each by its id, named by `tabLabel`. */
+  protected readonly sectionTabs = computed<readonly NxsTab[]>(
+    () =>
+      this.view()?.sections.map((section) => ({ id: section.id, label: this.tabLabel(section) })) ??
+      [],
+  );
+
+  /** What each tab's body draws: its section, by the tab's id. */
+  protected readonly sectionsById = computed(
+    () => new Map((this.view()?.sections ?? []).map((section) => [section.id, section])),
+  );
 
   private text(label: LayoutLabel): string | null {
     return layoutLabelText(this.translate, label);

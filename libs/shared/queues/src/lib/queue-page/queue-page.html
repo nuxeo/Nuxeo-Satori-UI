@@ -27,15 +27,15 @@
                 <fieldset class="queue-facet" [attr.data-aggregate]="facet.aggregate">
                   <legend class="queue-facet__label">{{ facet.label }}</legend>
                   @for (bucket of facet.buckets; track bucket.key) {
-                    <mat-checkbox
+                    <nxs-checkbox
                       class="queue-facet__bucket"
                       [checked]="bucket.chosen"
-                      (change)="toggle(facet.aggregate, bucket.key)"
+                      (checkedChange)="toggle(facet.aggregate, bucket.key)"
                       >{{ bucket.text }}
                       @if (bucket.count !== null) {
                         <span class="queue-facet__count"> ({{ bucket.count }})</span>
                       }
-                    </mat-checkbox>
+                    </nxs-checkbox>
                   } @empty {
                     <p class="queue-facet__note">{{ 'queues.no-buckets' | translate }}</p>
                   }

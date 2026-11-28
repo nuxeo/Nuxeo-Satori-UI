@@ -2,8 +2,9 @@
   display: block;
 }
 
+/* A block, so the select's field takes the width up to the cap, as it did on its own. */
 .record-timeline__filter {
-  display: block;
+  display: flex;
   max-width: 280px;
   margin-bottom: 12px;
 }

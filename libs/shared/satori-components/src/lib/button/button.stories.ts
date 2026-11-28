@@ -24,6 +24,10 @@ const meta: Meta<NxsButtonComponent> = {
     label: '',
     type: 'button',
     disabled: false,
+    disabledInteractive: false,
+    ariaPressed: null,
+    describedBy: null,
+    controlId: '',
     press: fn(),
   },
   argTypes: {
@@ -34,6 +38,7 @@ const meta: Meta<NxsButtonComponent> = {
       control: 'text',
       description: 'The accessible name, where the text alone does not say enough.',
     },
+    ariaPressed: { control: 'select', options: [null, true, false] },
   },
   render: (args) => ({
     props: args,
@@ -43,6 +48,10 @@ const meta: Meta<NxsButtonComponent> = {
   [label]="label"
   [type]="type"
   [disabled]="disabled"
+  [disabledInteractive]="disabledInteractive"
+  [ariaPressed]="ariaPressed"
+  [describedBy]="describedBy"
+  [controlId]="controlId"
   (press)="press()"
 >Open</nxs-button>`,
   }),
@@ -76,6 +85,34 @@ export const NamedApart: Story = {
 };
 
 export const Disabled: Story = { args: { disabled: true } };
+
+/**
+ * Disabled while its action is saved, and still in the tab order: announced as unavailable, so
+ * the keyboard's focus stays on it, and it does not press.
+ */
+export const DisabledInteractive: Story = {
+  args: { disabled: true, disabledInteractive: true },
+  play: async ({ args, canvasElement }) => {
+    const button = within(canvasElement).getByRole('button', { name: 'Open' });
+    await userEvent.tab();
+    await expect(button).toHaveFocus();
+    await expect(button).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.press).not.toHaveBeenCalled();
+  },
+};
+
+/** A row of toggles, one pressed: the view a picture shows, say. */
+export const Toggles: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => ({
+    template: `<div role="group" aria-label="Views" style="display: flex; gap: 8px">
+  <nxs-button appearance="outlined" [ariaPressed]="true">Original</nxs-button>
+  <nxs-button appearance="outlined" [ariaPressed]="false">Medium</nxs-button>
+  <nxs-button appearance="outlined" [ariaPressed]="false">FullHD</nxs-button>
+</div>`,
+  }),
+};
 
 /**
  * Enter and Space press it, and it keeps the focus; disabled, it is skipped by Tab and does not

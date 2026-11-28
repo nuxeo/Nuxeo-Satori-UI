@@ -20,6 +20,12 @@ for one that is only an icon.
 - **A name of its own where the text is not enough.** `label` replaces the text as the accessible
   name: a "Show" beside each of several fields reads as "Show member:phone again".
 - **An optional icon** before the text, decorative because the text names the button.
+- **Disabled but reachable.** `disabledInteractive` keeps a disabled button in the tab order,
+  announced as unavailable, so a button disabled while its action is saved keeps the focus.
+- **A toggle.** `ariaPressed` says whether it is pressed, and draws the pressed one in colour and
+  weight.
+- **The native button, reachable.** `describedBy` names an element that describes it, and
+  `controlId` gives the native button an id a page can focus it by.
 
 ## Demo showcase
 
@@ -57,6 +63,14 @@ template by its selector.
 
 <Canvas of={ButtonStories.Disabled} />
 
+### Disabled, and still reachable
+
+<Canvas of={ButtonStories.DisabledInteractive} />
+
+### Toggles
+
+<Canvas of={ButtonStories.Toggles} />
+
 ### The keyboard
 
 <Canvas of={ButtonStories.KeyboardContract} />
@@ -68,7 +82,12 @@ template by its selector.
   inside the `label`, as "Show member:phone again" keeps "Show", so that a user who says what they
   see to speech recognition reaches it.
 - **Keyboard.** Tab reaches it, and Enter and Space press it, as any native button. Disabled, it is
-  a native disabled button: Tab skips it and nothing presses it.
+  a native disabled button: Tab skips it and nothing presses it. With `disabledInteractive`, Tab
+  still reaches it and it says `aria-disabled="true"`, and nothing presses it.
+- **Toggle.** With `ariaPressed` it says `aria-pressed`, and the pressed state is drawn in weight as
+  well as colour.
+- **Description.** `describedBy` sets the native button's `aria-describedby`, read after its name.
 - **Focus.** It keeps the focus when pressed. A host that moves the focus afterwards — to the field
-  it moved, say — finds the native `button` inside the element and focuses that.
+  it moved, say — finds the native `button` inside the element and focuses that, or gives it a
+  `controlId` and focuses it by id.
 - **Icon.** The icon is hidden from assistive technology; the text says what the button does.

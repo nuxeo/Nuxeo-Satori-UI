@@ -89,6 +89,12 @@
   color: var(--document-layout-label-color, var(--mat-sys-on-surface-variant));
 }
 
+/* The tab bodies grow with their fields, so one wider than the panel scrolls rather than being cut
+   off. */
+.document-layout__tabs {
+  --nxs-tabs-body-overflow: auto;
+}
+
 .document-layout__tabs .document-layout__section {
   padding-top: 12px;
 }

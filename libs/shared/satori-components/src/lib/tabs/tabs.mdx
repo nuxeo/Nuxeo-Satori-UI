@@ -22,6 +22,15 @@ one does.
   `selectedTabChange` names the tab selected by ID, which stays right when a manifest hides or
   reorders tabs.
 - **Addressable tabs.** Each label carries its ID as `data-tab-id`.
+- **Bodies drawn when needed.** By default every body is drawn at once and one left is kept, with
+  what the user left in it. `lazy` draws a body only while its tab is selected, so a body that reads
+  from the server reads nothing until its tab is chosen; one left is dropped and drawn afresh on
+  return.
+- **Bodies that scroll themselves, or grow.** Each body fills the space under the strip and clips,
+  so a body scrolls itself, as a document page's do. Where the strip sits in a page that grows with
+  its content instead, set `--nxs-tabs-body-overflow: auto` on it, so what is wider than a body
+  scrolls rather than being cut off. Like every custom property it is inherited: a strip nested in
+  one sets it back to `hidden` if its own bodies scroll themselves.
 
 ## Demo showcase
 
@@ -89,6 +98,13 @@ Your component sets `selectedIndex`, as the Properties panel's Publications coun
 Publishing.
 
 <Canvas of={TabsStories.SelectedByTheHost} />
+
+### Drawn only while selected
+
+With `lazy`, each body is drawn when its tab is chosen and dropped when it is left, as a record
+page's tabs of cards are.
+
+<Canvas of={TabsStories.Lazy} />
 
 ### Selected from the keyboard
 

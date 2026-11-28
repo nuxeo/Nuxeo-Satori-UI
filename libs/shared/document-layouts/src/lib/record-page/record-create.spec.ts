@@ -292,6 +292,27 @@ describe('RecordCreateDialogComponent', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('is framed by nxs-dialog: its title, then what it asks for, then Cancel and Save', () => {
+    const title = host().querySelector('nxs-dialog .nxs-dialog__title');
+    expect(title?.tagName).toBe('H2');
+    expect(title?.textContent?.trim()).toBe('New dispute');
+    expect(host().querySelector('.nxs-dialog__content .lib-record-create__form')).not.toBeNull();
+    const actions = [...host().querySelectorAll<HTMLButtonElement>('.nxs-dialog__actions button')];
+    expect(actions).toHaveLength(2);
+    expect(actions[1]).toBe(save());
+    expect(actions.every((button) => button.type === 'button')).toBe(true);
+  });
+
+  it('closes with nothing on Cancel', async () => {
+    host()
+      .querySelector<HTMLButtonElement>('.nxs-dialog__actions nxs-button:first-child button')
+      ?.click();
+    await settle();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledWith();
+    expect(createChildDocument).not.toHaveBeenCalled();
+  });
+
   it('says what it is for and where it is filed, and shows the reference read-only by its title', () => {
     expect(host().querySelector('h2')?.textContent?.trim()).toBe('New dispute');
     expect(host().querySelector('.lib-record-create__context')?.textContent?.trim()).toBe(

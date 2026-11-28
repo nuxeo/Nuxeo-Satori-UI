@@ -11,7 +11,6 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -28,6 +27,7 @@ import {
 import {
   NxsBannerComponent,
   NxsButtonComponent,
+  NxsCheckboxComponent,
   NxsConfirmDialogComponent,
   NxsTextFieldComponent,
   type NxsBannerAction,
@@ -185,9 +185,9 @@ function warn(message: string): void {
   selector: 'lib-queue-page',
   standalone: true,
   imports: [
-    MatCheckboxModule,
     NxsBannerComponent,
     NxsButtonComponent,
+    NxsCheckboxComponent,
     NxsTextFieldComponent,
     RecordListComponent,
     TranslatePipe,

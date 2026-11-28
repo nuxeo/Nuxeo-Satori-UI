@@ -13,15 +13,15 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { MatButton } from '@angular/material/button';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
-import { MatOption, MatSelect } from '@angular/material/select';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NxsButtonComponent,
   NxsEmptyStateComponent,
   NxsErrorStateComponent,
   type NxsErrorStatus,
   type NxsHeadingLevel,
+  NxsSelectComponent,
+  type NxsSelectOption,
   NxsSpinnerComponent,
   nxsErrorStatus,
 } from '@nuxeo/satori-platform/components';
@@ -151,13 +151,10 @@ const sameList = (a: TimelineQuery, b: TimelineQuery): boolean =>
   selector: 'lib-record-timeline',
   standalone: true,
   imports: [
-    MatButton,
-    MatFormField,
-    MatLabel,
-    MatOption,
-    MatSelect,
+    NxsButtonComponent,
     NxsEmptyStateComponent,
     NxsErrorStateComponent,
+    NxsSelectComponent,
     NxsSpinnerComponent,
     TranslatePipe,
   ],
@@ -199,6 +196,11 @@ export class RecordTimelineComponent {
       ? events.map((id) => ({ id, label: this.eventLabel(id) }))
       : [];
   });
+
+  /** The filter's choices after "All events": each kind, by its event id. */
+  protected readonly kindOptions = computed<readonly NxsSelectOption[]>(() =>
+    this.kinds().map((option) => ({ value: option.id, label: option.label })),
+  );
 
   private readonly query = computed<TimelineQuery>(
     () => {
@@ -456,7 +458,8 @@ export class RecordTimelineComponent {
         const stayed =
           active === null ||
           active === host.ownerDocument.body ||
-          (host.contains(active) && active.classList.contains('record-timeline__more'));
+          // The focus is on the native button inside the `nxs-button` marked `record-timeline__more`.
+          (host.contains(active) && active.closest('.record-timeline__more') !== null);
         if (stayed) host.querySelector<HTMLElement>(`[data-entry-id="${id}"]`)?.focus();
       },
       { injector: this.injector },

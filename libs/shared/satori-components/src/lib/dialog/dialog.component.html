@@ -1,0 +1,7 @@
+<h2 mat-dialog-title class="nxs-dialog__title">{{ heading() }}</h2>
+<mat-dialog-content class="nxs-dialog__content">
+  <ng-content />
+</mat-dialog-content>
+<mat-dialog-actions class="nxs-dialog__actions" align="end">
+  <ng-content select="[nxsDialogActions]" />
+</mat-dialog-actions>

@@ -11,6 +11,7 @@ import {
   type ShareLink,
   type ShareLinkDownloads,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import axe from 'axe-core';
 import { Subject, of, type Observable } from 'rxjs';
 
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
@@ -166,16 +167,16 @@ describe('RecordShareLinksComponent', () => {
     Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
       (each) => each.textContent?.trim() === text,
     ) ?? null;
-  /** A Material button with `disabledInteractive` stays focusable, and says it is disabled. */
+  /** A button with `disabledInteractive` stays focusable, and says it is disabled. */
   const disabled = (element: HTMLButtonElement) =>
     element.disabled || element.getAttribute('aria-disabled') === 'true';
   const items = (root: HTMLElement) =>
-    Array.from(root.querySelectorAll<HTMLElement>('mat-checkbox')).map((each) =>
+    Array.from(root.querySelectorAll<HTMLElement>('nxs-checkbox')).map((each) =>
       each.getAttribute('data-item'),
     );
   async function choose(root: HTMLElement, item: string) {
     const box = root.querySelector<HTMLInputElement>(
-      `mat-checkbox[data-item="${item}"] input[type="checkbox"]`,
+      `nxs-checkbox[data-item="${item}"] input[type="checkbox"]`,
     );
     if (!box) throw new Error(`no checkbox for ${item}`);
     box.click();
@@ -253,6 +254,56 @@ describe('RecordShareLinksComponent', () => {
     // In the page's zone: 11:00 UTC is 16:30 at +0530.
     expect(rows[0][0]).toContain('4:30');
     expect(root.textContent).toContain('The latest 200 downloads are shown.');
+  });
+
+  it('draws the downloads as an nxs- table, named by its hidden caption, a header to each column', async () => {
+    const root = await render();
+    await answer(lists, [link()]);
+    await answer(downloads, {
+      downloads: [{ time: '2026-11-25T11:00:00Z', link: ID, rendition: 'view:FullHD' }],
+      truncated: false,
+    });
+    const table = root.querySelector<HTMLTableElement>('nxs-table.record-share-links__table table');
+    expect(table?.caption?.textContent?.trim()).toBe('Downloads');
+    expect(table?.caption?.classList).toContain('cdk-visually-hidden');
+    const headers = Array.from(table?.tHead?.querySelectorAll('th') ?? []);
+    expect(
+      headers.map((header) => [header.textContent?.trim(), header.getAttribute('scope')]),
+    ).toEqual([
+      ['Time', 'col'],
+      ['Link', 'col'],
+      ['Item', 'col'],
+    ]);
+  });
+
+  it('ticks an item through its nxs- checkbox, as a click on its words or Space on its box asks', async () => {
+    const root = await loaded([]);
+    const box = root.querySelector<HTMLInputElement>(
+      'nxs-checkbox[data-item="original"] input[type="checkbox"]',
+    );
+    expect(box?.checked).toBe(false);
+    await choose(root, 'original');
+    expect(box?.checked).toBe(true);
+    // Its words are its name.
+    expect(box?.labels?.[0]?.textContent?.trim()).toBe('Original file');
+    await choose(root, 'original');
+    expect(box?.checked).toBe(false);
+  });
+
+  it('passes axe at WCAG 2.2 AA, with its links, its form and its downloads', async () => {
+    const root = await render();
+    await answer(lists, [link()]);
+    await answer(downloads, {
+      downloads: [{ time: '2026-11-25T11:00:00Z', link: ID, rendition: 'original' }],
+      truncated: false,
+    });
+    await choose(root, 'original');
+    const results = await axe.run(root, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      // jsdom lays nothing out, so contrast cannot be measured here.
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
   it('offers the original, then each view with a file and a title of its own, each once', async () => {

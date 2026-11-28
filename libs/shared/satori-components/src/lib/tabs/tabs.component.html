@@ -7,21 +7,49 @@
   (selectedTabChange)="select($event.index)"
 >
   @for (tab of tabs(); track tab.id) {
-    <mat-tab>
-      <ng-template mat-tab-label>
-        <span class="nxs-tabs__label" [attr.data-tab-id]="tab.id">
-          @if (tab.icon) {
-            <mat-icon class="nxs-tabs__icon" aria-hidden="true" [svgIcon]="tab.icon" />
+    <!-- Two branches round the whole tab, not round its body: Material reads a tab's lazy body
+         once, when the tab is created, so one cannot be given to a tab afterwards. -->
+    @if (lazy()) {
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <ng-container
+            [ngTemplateOutlet]="tabLabel"
+            [ngTemplateOutletContext]="{ $implicit: tab }"
+          />
+        </ng-template>
+        <ng-template matTabContent>
+          @if (bodyTemplate(); as template) {
+            <ng-container
+              [ngTemplateOutlet]="template"
+              [ngTemplateOutletContext]="{ $implicit: tab }"
+            />
           }
-          {{ tab.label }}
-        </span>
-      </ng-template>
-      @if (bodyTemplate(); as template) {
-        <ng-container
-          [ngTemplateOutlet]="template"
-          [ngTemplateOutletContext]="{ $implicit: tab }"
-        />
-      }
-    </mat-tab>
+        </ng-template>
+      </mat-tab>
+    } @else {
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <ng-container
+            [ngTemplateOutlet]="tabLabel"
+            [ngTemplateOutletContext]="{ $implicit: tab }"
+          />
+        </ng-template>
+        @if (bodyTemplate(); as template) {
+          <ng-container
+            [ngTemplateOutlet]="template"
+            [ngTemplateOutletContext]="{ $implicit: tab }"
+          />
+        }
+      </mat-tab>
+    }
   }
 </mat-tab-group>
+
+<ng-template #tabLabel let-tab>
+  <span class="nxs-tabs__label" [attr.data-tab-id]="tab.id">
+    @if (tab.icon) {
+      <mat-icon class="nxs-tabs__icon" aria-hidden="true" [svgIcon]="tab.icon" />
+    }
+    {{ tab.label }}
+  </span>
+</ng-template>

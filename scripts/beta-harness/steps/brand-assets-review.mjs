@@ -563,7 +563,8 @@ export default async function run(page, h) {
     await page.locator('.record-review__heading').focus().catch(deferred);
     await page.keyboard.press('Tab');
     const onAdd = await page
-      .evaluate(() => document.activeElement?.classList.contains('record-review__add'))
+      // The focus is on the native button inside the `nxs-button` the class is on.
+      .evaluate(() => document.activeElement?.closest('.record-review__add') != null)
       .catch(unread);
     await page.keyboard.press('Enter');
     await page
@@ -580,7 +581,7 @@ export default async function run(page, h) {
     await page.keyboard.type(TYPED.note);
     await page.keyboard.press('Tab');
     const onPlace = await page
-      .evaluate(() => document.activeElement?.classList.contains('record-review__place'))
+      .evaluate(() => document.activeElement?.closest('.record-review__place') != null)
       .catch(unread);
     await page.keyboard.press('Enter');
     await reviewSettled(page, { pins: 3 });
@@ -603,7 +604,7 @@ export default async function run(page, h) {
     );
     // The pins on the picture are one Tab stop, the chosen pin, the new one: Shift+Tab from the
     // first view button reaches it, and a second Shift+Tab leaves the picture.
-    await page.locator('.record-picture__view').first().focus().catch(deferred);
+    await page.locator('.record-picture__view button').first().focus().catch(deferred);
     await page.keyboard.press('Shift+Tab');
     const stop = await page
       .evaluate(() => document.activeElement?.getAttribute('data-pin') ?? null)

@@ -24,9 +24,14 @@ import {
       [label]="label()"
       [type]="type()"
       [disabled]="disabled()"
+      [disabledInteractive]="disabledInteractive()"
+      [ariaPressed]="ariaPressed()"
+      [describedBy]="describedBy()"
+      [controlId]="controlId()"
       (press)="presses = presses + 1"
       >{{ text() }}</nxs-button
     >
+    <p id="question">Run it on 3 records?</p>
   </form>`,
 })
 class HostComponent {
@@ -35,6 +40,10 @@ class HostComponent {
   readonly label = signal('');
   readonly type = signal<NxsButtonType>('button');
   readonly disabled = signal(false);
+  readonly disabledInteractive = signal(false);
+  readonly ariaPressed = signal<boolean | null>(null);
+  readonly describedBy = signal<string | null>(null);
+  readonly controlId = signal('');
   readonly text = signal('Open');
   presses = 0;
   submitted = 0;
@@ -139,5 +148,66 @@ describe('NxsButtonComponent', () => {
     const icon = button.querySelector('nxs-icon mat-icon');
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
     expect(button.textContent?.trim()).toBe('Open');
+  });
+
+  describe('disabled but interactive', () => {
+    it('stays in the tab order, says it is unavailable, and does not press', async () => {
+      host.disabled.set(true);
+      host.disabledInteractive.set(true);
+      const button = await render();
+      expect(button.disabled).toBe(false);
+      expect(button.tabIndex).toBe(0);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      button.focus();
+      expect(document.activeElement).toBe(button);
+      button.click();
+      expect(host.presses).toBe(0);
+    });
+
+    it('is an ordinary button while it is not disabled', async () => {
+      host.disabledInteractive.set(true);
+      const button = await render();
+      expect(button.getAttribute('aria-disabled')).toBeNull();
+      button.click();
+      expect(host.presses).toBe(1);
+    });
+
+    it('as a submit button, still submits its form, whose handler decides', async () => {
+      host.type.set('submit');
+      host.disabled.set(true);
+      host.disabledInteractive.set(true);
+      const button = await render();
+      button.click();
+      expect(host.presses).toBe(0);
+      expect(host.submitted).toBe(1);
+    });
+  });
+
+  it('says whether a toggle is pressed, and nothing for a button that is not one', async () => {
+    let button = await render();
+    expect(button.hasAttribute('aria-pressed')).toBe(false);
+    host.ariaPressed.set(true);
+    button = await render();
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    host.ariaPressed.set(false);
+    button = await render();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('is described by the element describedBy names, and by nothing otherwise', async () => {
+    let button = await render();
+    expect(button.hasAttribute('aria-describedby')).toBe(false);
+    host.describedBy.set('question');
+    button = await render();
+    expect(button.getAttribute('aria-describedby')).toBe('question');
+  });
+
+  it('gives the native button the id controlId names, so a page can focus it by id', async () => {
+    let button = await render();
+    expect(button.hasAttribute('id')).toBe(false);
+    host.controlId.set('review-add');
+    button = await render();
+    expect(document.getElementById('review-add')).toBe(button);
+    expect((fixture.nativeElement as HTMLElement).querySelector('nxs-button')?.id).toBe('');
   });
 });

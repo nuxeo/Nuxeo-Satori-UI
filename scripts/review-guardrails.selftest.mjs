@@ -10699,6 +10699,250 @@ expectGreen(
   }),
 );
 
+/* ---------------- checkEnginesDrawNoMaterial ---------------- */
+
+/** The two listed engines, as the guardrail reads them: one component and its template each. */
+const LAYOUT_ENGINE = 'libs/shared/document-layouts/src/lib/record-page';
+const QUEUE_ENGINE = 'libs/shared/queues/src/lib/queue-page';
+
+/** A record page on the `nxs-` components, opening a dialog and announcing through what draws nothing. */
+const LAYOUT_ENGINE_TS =
+  "import { LiveAnnouncer } from '@angular/cdk/a11y';\n" +
+  "import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';\n" +
+  "import type { MatDialogConfig } from '@angular/material/dialog';\n" +
+  "import { NxsTableComponent, NxsTabsComponent } from '@nuxeo/satori-platform/components';\n" +
+  'export class RecordPageComponent {}\n';
+
+/** Its template, on the components, naming Material only in a comment, a class and a key. */
+const LAYOUT_ENGINE_HTML = `<!-- Was a <mat-tab-group>, a <mat-tab> per tab and matTabContent. -->
+<nxs-tabs class="mat-tab-group" [label]="'document-layouts.mat-select' | translate" [tabs]="tabs()">
+  <ng-template nxsTabBody let-tab>{{ tab.label }}</ng-template>
+</nxs-tabs>
+<nxs-table [caption]="caption" [columns]="headings" [rows]="rows" />
+`;
+
+const QUEUE_ENGINE_TS =
+  "import { MatDialog } from '@angular/material/dialog';\n" +
+  "import { NxsCheckboxComponent } from '@nuxeo/satori-platform/components';\n" +
+  'export class QueuePageComponent {}\n';
+const QUEUE_ENGINE_HTML =
+  '<nxs-checkbox [checked]="bucket.chosen" (checkedChange)="toggle(bucket.key)">{{ bucket.text }}</nxs-checkbox>\n';
+
+const enginesTree = (extra = {}) => ({
+  [`${LAYOUT_ENGINE}/record-page.ts`]: LAYOUT_ENGINE_TS,
+  [`${LAYOUT_ENGINE}/record-page.html`]: LAYOUT_ENGINE_HTML,
+  [`${QUEUE_ENGINE}/queue-page.ts`]: QUEUE_ENGINE_TS,
+  [`${QUEUE_ENGINE}/queue-page.html`]: QUEUE_ENGINE_HTML,
+  ...extra,
+});
+
+expectRed(
+  "an engine's template draws Material's tab group, whatever its attributes",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-page.html`]:
+      LAYOUT_ENGINE_HTML +
+      '<mat-tab-group mat-stretch-tabs="false">\n  <mat-tab [label]="tab.label">x</mat-tab>\n</mat-tab-group>\n',
+  }),
+  null,
+  /record-page\.html:6 draws `<mat-tab-group>`, `mat-stretch-tabs`, Angular Material's own[\s\S]*record-page\.html:7 draws `<mat-tab>`[\s\S]*libs\/shared\/document-layouts draws only with the `nxs-` components/,
+);
+
+expectRed(
+  'every listed engine is held: a Material checkbox in the queue engine',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${QUEUE_ENGINE}/queue-page.html`]:
+      QUEUE_ENGINE_HTML + '<mat-checkbox [checked]="all" (change)="toggle()">All</mat-checkbox>\n',
+  }),
+  null,
+  /queue-page\.html:2 draws `<mat-checkbox>`[\s\S]*libs\/shared\/queues draws only with the `nxs-` components[\s\S]*`nxs-checkbox`/,
+);
+
+expectRed(
+  "a dialog's Material frame: the title and close attributes as well as its elements",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-create-dialog.html`]:
+      '<h2 mat-dialog-title>{{ data.title }}</h2>\n' +
+      '<mat-dialog-content>x</mat-dialog-content>\n' +
+      '<mat-dialog-actions align="end">\n' +
+      '  <button type="button" [mat-dialog-close]="undefined">Cancel</button>\n' +
+      '</mat-dialog-actions>\n',
+  }),
+  null,
+  /html:1 draws `mat-dialog-title`[\s\S]*html:2 draws `<mat-dialog-content>`[\s\S]*html:3 draws `<mat-dialog-actions>`[\s\S]*html:4 draws `mat-dialog-close`/,
+);
+
+expectRed(
+  "a matX attribute is Material's: matTabContent, a structural *matCellDef and a bound [matButton]",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-page.html`]:
+      LAYOUT_ENGINE_HTML +
+      '<ng-template matTabContent>x</ng-template>\n' +
+      '<td *matCellDef="let row">{{ row }}</td>\n' +
+      '<button type="button" [matButton]="appearance()" (click)="go()">Go</button>\n',
+  }),
+  null,
+  /html:6 draws `matTabContent`[\s\S]*html:7 draws `matCellDef`[\s\S]*html:8 draws `matButton`/,
+);
+
+expectRed(
+  'an engine imports a Material entry point that draws: tabs, the root package, a subpath',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-page.ts`]:
+      "import { MatTabsModule } from '@angular/material/tabs';\n" +
+      "import type { ThemePalette } from '@angular/material/core';\n" +
+      "import * as material from '@angular/material';\n" +
+      LAYOUT_ENGINE_TS,
+  }),
+  null,
+  /record-page\.ts:1 takes the entry point from `@angular\/material\/tabs`[\s\S]*record-page\.ts:2 takes the entry point from `@angular\/material\/core`[\s\S]*record-page\.ts:3 takes the entry point from `@angular\/material`\./,
+);
+
+expectRed(
+  "the dialog's drawing symbols are refused, beside the ones that draw nothing",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-create-dialog.ts`]:
+      "import {\n  MAT_DIALOG_DATA,\n  MatDialogModule,\n  MatDialogRef,\n  MatDialogClose as Close,\n} from '@angular/material/dialog';\n" +
+      "import type { MatDialogContent } from '@angular/material/dialog';\n" +
+      'export class RecordCreateDialogComponent {}\n',
+  }),
+  null,
+  /record-create-dialog\.ts:1 takes `MatDialogModule`, `MatDialogClose` from `@angular\/material\/dialog`[\s\S]*record-create-dialog\.ts:7 takes `MatDialogContent` from `@angular\/material\/dialog`/,
+);
+
+expectRed(
+  'the whole dialog entry point is refused: a namespace, a default, a side effect, a require',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/dialogs.ts`]:
+      "import * as dialog from '@angular/material/dialog';\n" +
+      "import dialogDefault from '@angular/material/dialog';\n" +
+      "import '@angular/material/dialog';\n" +
+      "import required = require('@angular/material/dialog');\n" +
+      'export const ALL = [dialog, dialogDefault, required];\n',
+  }),
+  null,
+  /dialogs\.ts:1 takes the whole entry point, as a namespace[\s\S]*dialogs\.ts:2 takes a default import[\s\S]*dialogs\.ts:3 takes the whole entry point, as a side-effect import[\s\S]*dialogs\.ts:4 takes the whole entry point, through `require`/,
+);
+
+expectRed(
+  'a re-export, an export *, a dynamic import and an import() type are imports too',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/barrel.ts`]:
+      "export { MatTabsModule } from '@angular/material/tabs';\n" +
+      "export * from '@angular/material/dialog';\n" +
+      "export const lazy = () => import('@angular/material/dialog');\n" +
+      "export type Box = typeof import('@angular/material/checkbox');\n" +
+      "export { MatDialogTitle } from '@angular/material/dialog';\n",
+  }),
+  null,
+  /barrel\.ts:1 takes the entry point from `@angular\/material\/tabs`[\s\S]*barrel\.ts:2 takes the whole entry point, re-exported[\s\S]*barrel\.ts:3 takes the whole entry point, as a dynamic import[\s\S]*barrel\.ts:4 takes a type through `import\(\)` from `@angular\/material\/checkbox`[\s\S]*barrel\.ts:5 takes `MatDialogTitle`/,
+);
+
+expectRed(
+  "an inline template is a template the engine ships, read on the file's own lines",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/inline.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      '@Component({\n' +
+      "  selector: 'lib-inline',\n" +
+      '  template: `<p>x</p>\n' +
+      '    <mat-icon svgIcon="close" />`,\n' +
+      '})\n' +
+      'export class InlineComponent {}\n',
+  }),
+  null,
+  /inline\.ts:5 draws `<mat-icon>`, Angular Material's own/,
+);
+
+expectRed(
+  'a listed engine that is gone checked nothing, which is a failure, not a pass',
+  'checkEnginesDrawNoMaterial',
+  {
+    [`${LAYOUT_ENGINE}/record-page.ts`]: LAYOUT_ENGINE_TS,
+    [`${LAYOUT_ENGINE}/record-page.html`]: LAYOUT_ENGINE_HTML,
+  },
+  null,
+  /libs\/shared\/queues is listed in NXS_ONLY_ENGINES and has no source/,
+);
+
+expectGreen(
+  "both engines on the nxs- components, opening Material's dialog and reading its data and ref",
+  'checkEnginesDrawNoMaterial',
+  enginesTree(),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'Material named in a template comment, a class, a translation key or a .ts string is not a use',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/notes.html`]:
+      '<!-- Was <mat-tab> with matTabContent and a mat-stroked-button. -->\n' +
+      '<p class="mat-select mat-mdc-tab" [title]="\'queues.mat-checkbox\' | translate">x</p>\n',
+    [`${LAYOUT_ENGINE}/notes.ts`]:
+      "// Was MatTabsModule from '@angular/material/tabs'.\n" +
+      "export const NOTE = 'import from @angular/material/select';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a name that only begins with "mat" is not Material: <math>, matches, material, a matrix ref',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${QUEUE_ENGINE}/formula.html`]:
+      '<math><mi>x</mi></math>\n<p matches="a" material="b" #matrix [attr.data-mat]="c">x</p>\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "the CDK is not Material's look: LiveAnnouncer, Clipboard and the table's data source stay allowed",
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${QUEUE_ENGINE}/announce.ts`]:
+      "import { LiveAnnouncer } from '@angular/cdk/a11y';\n" +
+      "import { Clipboard } from '@angular/cdk/clipboard';\n" +
+      "import { DataSource } from '@angular/cdk/collections';\n" +
+      'export const USED = [LiveAnnouncer, Clipboard, DataSource];\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spec, its host template or a spec-only helper of an engine ships nothing, so Material is fine there',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    [`${LAYOUT_ENGINE}/record-page.spec.ts`]:
+      "import { MatTabsModule } from '@angular/material/tabs';\n" +
+      "import { MatTabGroupHarness } from '@angular/material/tabs/testing';\n",
+    [`${LAYOUT_ENGINE}/record-page.spec.html`]:
+      '<mat-tab-group><mat-tab>x</mat-tab></mat-tab-group>\n',
+    'libs/shared/queues/src/lib/wcag22.testing.ts':
+      "import { MatCheckboxHarness } from '@angular/material/checkbox/testing';\n",
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a library that is not listed keeps its Material tabs and checkboxes',
+  'checkEnginesDrawNoMaterial',
+  enginesTree({
+    'libs/shared/ui/src/lib/panel/panel.ts':
+      "import { MatTabsModule } from '@angular/material/tabs';\n",
+    'libs/shared/ui/src/lib/panel/panel.html':
+      '<mat-tab-group><mat-tab>x</mat-tab></mat-tab-group>\n',
+  }),
+);
+
 /* ---------------- checkWorkflowRefGates ---------------- */
 
 /**

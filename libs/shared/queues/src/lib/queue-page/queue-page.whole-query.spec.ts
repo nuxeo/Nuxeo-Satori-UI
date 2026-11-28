@@ -568,7 +568,7 @@ describe('QueuePageComponent, over the whole query', () => {
     create();
     await open();
     await answer(120);
-    const box = page().querySelector('.queue-facet mat-checkbox input') as HTMLInputElement;
+    const box = page().querySelector('.queue-facet nxs-checkbox input') as HTMLInputElement;
     box.click();
     await settle();
     await answer(40);
@@ -584,7 +584,7 @@ describe('QueuePageComponent, over the whole query', () => {
     await open();
     await answer(120);
     const box = (): HTMLInputElement =>
-      page().querySelector('.queue-facet mat-checkbox input') as HTMLInputElement;
+      page().querySelector('.queue-facet nxs-checkbox input') as HTMLInputElement;
     box().click();
     await settle();
     await answer(40);
