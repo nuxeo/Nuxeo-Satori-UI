@@ -307,6 +307,22 @@ describe('recordLookups', () => {
     expect(record(B)).toBeNull();
   });
 
+  it("gives a version's title with its label, as the page's words put them", () => {
+    const versions = new Map<string, LinkedRecord | null>([
+      [A, { title: 'Agreement', url: `/doc/${A}`, versionLabel: '1.0' }],
+    ]);
+    expect(
+      recordLookups(versions, 'Unavailable', (title, label) => `${title}, version ${label}`).record(
+        A,
+      ),
+    ).toEqual({ text: 'Agreement, version 1.0', url: `/doc/${A}` });
+    // Without words, the label beside the title.
+    expect(recordLookups(versions, 'Unavailable').record(A)).toEqual({
+      text: 'Agreement 1.0',
+      url: `/doc/${A}`,
+    });
+  });
+
   it("gives a read record's property for a show, and nothing of a record not returned", () => {
     const { linkedValue } = recordLookups(
       new Map<string, LinkedRecord | null>([

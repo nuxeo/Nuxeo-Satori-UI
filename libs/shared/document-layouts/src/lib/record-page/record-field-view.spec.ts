@@ -1,3 +1,5 @@
+import { registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
 import { describe, expect, it } from 'vitest';
 
 import { describeField } from '../document-layout/field-view';
@@ -91,6 +93,43 @@ describe('showValue', () => {
         kind: 'text',
         text: '1,234.50',
       });
+    });
+
+    it('grouped by default, and without the group separator for grouping: false', () => {
+      // A model year stored as a number: "2,024" with grouping, "2024" without (layout-v2.md,
+      // section 3). Grouping true, or left out, is the locale's own.
+      expect(show('number', 2024, {}, { type: 'long' })).toEqual({ kind: 'text', text: '2,024' });
+      expect(show('number', 2024, { grouping: true }, { type: 'long' })).toEqual({
+        kind: 'text',
+        text: '2,024',
+      });
+      expect(show('number', 2024, { grouping: false }, { type: 'long' })).toEqual({
+        kind: 'text',
+        text: '2024',
+      });
+      // With decimals, only the group separator goes: the decimal sign stays.
+      expect(
+        show('number', 1234567.5, { decimals: 2, grouping: false }, { type: 'double' }),
+      ).toEqual({ kind: 'text', text: '1234567.50' });
+      // Exactly as stored, never rounded, still.
+      expect(show('number', 12345.678901, { grouping: false }, { type: 'double' })).toEqual({
+        kind: 'text',
+        text: '12345.678901',
+      });
+    });
+
+    it("without grouping, in a locale whose separator is not a comma, keeps the locale's decimal sign", () => {
+      registerLocaleData(localeFr);
+      const french = { ...context, locale: 'fr' };
+      const shown = (parameters: Record<string, unknown>) =>
+        showValue(
+          { key: 'k', label: 'L', value: 1234567.5, parameters, definition: { type: 'double' } },
+          'number',
+          french,
+        );
+      // French groups with a narrow no-break space and writes a decimal comma.
+      expect(shown({ decimals: 1 })).toEqual({ kind: 'text', text: '1\u202f234\u202f567,5' });
+      expect(shown({ decimals: 1, grouping: false })).toEqual({ kind: 'text', text: '1234567,5' });
     });
 
     it('otherwise exactly as stored, never rounded, as version 1 shows them', () => {

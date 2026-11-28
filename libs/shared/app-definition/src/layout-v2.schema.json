@@ -130,7 +130,7 @@
           "type": "string"
         },
         "tone": {
-          "enum": ["info", "warning", "negative"],
+          "enum": ["info", "warning", "negative", "positive"],
           "description": "Default info."
         },
         "visibleWhen": {
@@ -311,6 +311,7 @@
             "status-badge",
             "table",
             "image",
+            "file",
             "file-list"
           ]
         },

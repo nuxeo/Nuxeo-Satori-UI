@@ -13,6 +13,7 @@ const ICONS: Readonly<Record<NxsBannerTone, string>> = {
   info: 'info',
   warning: 'warning',
   error: 'error_outline',
+  success: 'check_circle',
 };
 
 const ROLES: Readonly<Record<NxsBannerAnnounce, string | null>> = {

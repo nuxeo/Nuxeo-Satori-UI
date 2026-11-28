@@ -6,8 +6,12 @@
  */
 import {
   isFieldReference,
+  isLinkedReference,
+  isLinkedReferenceShape,
   isRecord,
+  SHOWN_WIDGETS,
   XPATH,
+  type LinkedReference,
   type ParameterKind,
   type Registries,
   type Signature,
@@ -128,6 +132,20 @@ export interface CheckerOptions {
    * a value it is given is a literal. True when left out.
    */
   readonly record?: boolean;
+  /**
+   * Whether a rule may read a linked record's property (layout-v2.md, section 5): on a record page
+   * only, a `view` layout, where the page reads the linked records as the reader before it decides
+   * the rule. False when left out: a form, a task form, a queue, an action, the menu and the home
+   * read no linked record, and a rule there that names one would never pass.
+   */
+  readonly linked?: boolean;
+}
+
+/** A linked record's property a rule reads, where the checker read it, for the model's checks. */
+export interface LinkedRead {
+  readonly reference: LinkedReference;
+  /** Where, as `banners[0].visibleWhen.parameters[0]`. */
+  readonly path: string;
 }
 
 /**
@@ -172,6 +190,9 @@ export type Checker = ReturnType<typeof createChecker>;
 export function createChecker(registries: Registries, options: CheckerOptions = {}) {
   const task = options.task === true;
   const record = options.record !== false;
+  const linkedAllowed = options.linked === true;
+  /** The linked records' properties the file's rules read, which the model holds to its types. */
+  const linkedReads: LinkedRead[] = [];
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
@@ -373,7 +394,41 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     );
   };
 
+  /**
+   * A linked record's property, in place of a property of the open record, for what a rule
+   * compares or reads as a date (layout-v2.md, section 5): written as a `document-link`'s
+   * parameters are, and read by the record page as `show` is, so on a record page only.
+   */
+  const linkedRead = (item: Record<string, unknown>, path: string, owner: string): void => {
+    if (!linkedAllowed) {
+      add(
+        path,
+        'parameter',
+        `${owner} reads a linked record's property on a record page only, in a view layout`,
+      );
+      return;
+    }
+    if (!isLinkedReference(item)) {
+      add(
+        path,
+        'parameter',
+        `${owner} takes a linked record's property as { "field": "<prefix>:<name>", "types": [<type>, ...], "show": "<prefix>:<name>" }, neither ecm: nor var:`,
+      );
+      return;
+    }
+    linkedReads.push({ reference: item, path });
+    // The reference is the open record's own property, held to the type as any a rule reads.
+    variable(item.field, join(path, 'field'));
+  };
+
   const parameter = (kind: ParameterKind, item: unknown, path: string, owner: string): void => {
+    if (
+      (kind === 'subject' || kind === 'date' || kind === 'dateOrToday') &&
+      isLinkedReferenceShape(item)
+    ) {
+      linkedRead(item, path, owner);
+      return;
+    }
     switch (kind) {
       case 'value':
         value(item, path);
@@ -572,6 +627,65 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
         'parameter',
         '"show" needs "types", the types of the records it links to, whose schemas hold the property it shows',
       );
+    else if (isRecord(given['show'])) shownWidget(given['show'], at);
+  };
+
+  /**
+   * A `show` written `{ "field", "widget", "parameters" }`: the linked record's property through a
+   * widget, drawn inside the link to that record (layout-v2.md, section 12). One of
+   * {@link SHOWN_WIDGETS}, with the parameters it takes, each a literal: a property named there
+   * would be the open record's, not the linked one's.
+   */
+  const shownWidget = (show: Record<string, unknown>, at: string): void => {
+    unknownKeys(show, ['field', 'widget', 'parameters'], at);
+    const id = show['widget'];
+    const parameters = show['parameters'];
+    if (parameters !== undefined && !isRecord(parameters)) {
+      add(join(at, 'parameters'), 'structure', 'parameters must be an object');
+      return;
+    }
+    if (id === undefined) {
+      if (parameters !== undefined)
+        add(join(at, 'parameters'), 'parameter', 'parameters need a widget to belong to');
+      return;
+    }
+    if (typeof id !== 'string') {
+      add(join(at, 'widget'), 'structure', 'a widget is named by its ID');
+      return;
+    }
+    if (!Object.hasOwn(registries.widgets, id)) {
+      add(join(at, 'widget'), 'unknown', `the widget "${id}" is not registered`);
+      return;
+    }
+    if (!SHOWN_WIDGETS.has(id)) {
+      add(
+        join(at, 'widget'),
+        'parameter',
+        `the widget "${id}" does not show a linked record's property inside its link: one of ${[...SHOWN_WIDGETS].join(', ')} does`,
+      );
+      return;
+    }
+    const definition = registries.widgets[id];
+    const given = parameters ?? {};
+    for (const [name, setting] of Object.entries(given)) {
+      const where = join(join(at, 'parameters'), name);
+      if (!Object.hasOwn(definition.parameters, name)) {
+        add(where, 'parameter', `the widget "${id}" has no parameter "${name}"`);
+        continue;
+      }
+      const problem = definition.parameters[name](setting);
+      if (problem) add(where, 'parameter', `${name} ${problem}`);
+      else if (isFieldReference(setting))
+        add(
+          where,
+          'parameter',
+          `a linked record's value is shown with literal parameters: ${name} would read the open record's ${setting.field}, not the linked one's`,
+        );
+    }
+    for (const name of definition.required ?? []) {
+      if (!Object.hasOwn(given, name))
+        add(join(at, 'parameters'), 'parameter', `the widget "${id}" needs "${name}"`);
+    }
   };
 
   const widget = (
@@ -612,11 +726,12 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       }
       const problem = definition.parameters[name](setting);
       if (problem) add(join(join(path, 'parameters'), name), 'parameter', `${name} ${problem}`);
+      // Before the open record's properties: `{ "field" }` in a `show` names the linked record's.
+      else if (id === 'document-link' && name === 'show') linkedShow(given, path, form, inTable);
       else if (isFieldReference(setting))
         readBy("widget's parameter", () =>
           variable(setting.field, join(join(join(path, 'parameters'), name), 'field')),
         );
-      else if (id === 'document-link' && name === 'show') linkedShow(given, path, form, inTable);
     }
     for (const name of definition.required ?? []) {
       if (!Object.hasOwn(given, name))
@@ -849,6 +964,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     registries,
     findings,
     references,
+    linkedReads,
     add,
     claim,
     unknownKeys,

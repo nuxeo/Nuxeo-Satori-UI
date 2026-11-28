@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: onboarding-demo
 Bundle-SymbolicName: nuxeo.config.onboarding-demo;singleton:=true
-Bundle-Version: 0.2.0
+Bundle-Version: 0.3.0
 Nuxeo-Component: OSGI-INF/onboarding-demo-model.xml,OSGI-INF/onboarding-demo-signature.xml,OSGI-INF/onboarding-demo-config.xml

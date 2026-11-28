@@ -284,7 +284,12 @@ export class DocumentLayoutComponent {
       locale: this.locale,
       vocabulary: (directory: string, id: string) => vocabularies.get(directory)?.get(id) ?? id,
       timeZone: this.timeZone,
-      ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),
+      ...recordLookups(
+        records,
+        this.translate.instant('document-layouts.record.unavailable'),
+        (title, label) =>
+          this.translate.instant('document-layouts.record.version', { title, label }),
+      ),
     };
     const sections = layout.sections.map((section) => ({
       id: section.id,

@@ -17,6 +17,12 @@
  *    not answered then is named, with a restart as the fix.
  * 4. **The addresses to open:** the home, each queue, the tasks page. A record page opens on a
  *    record of its type, which the tool does not look up: it reads no record.
+ * 5. **A demo kit's stand-in:** a package with a stand-in model (`content-model.json`) has types no
+ *    server holds, so the dev server alone shows its shell. `scripts/kit-stand-in.mjs --check`, the
+ *    script `npm run kit:stand-in` runs,
+ *    is run with Node as `config:dev` is, and says whether it reads the kit's data and what it
+ *    answers; the answer gives the commands that show the kit's pages with no server holding it.
+ *    The check reads the kit's files only: it starts no server and sends nothing.
  *
  * What it writes, and nothing else: the dev folder, through the script; and, inside the package's
  * `dist/`, a folder of its own for the pipeline's zip and what it unpacks, removed afterwards with
@@ -42,6 +48,10 @@ import {
 /** What `npm run config:dev` runs, and the folder it writes. */
 export const DEV_CONFIG_SCRIPT = join(REPO_ROOT, 'scripts', 'dev-config.mjs');
 export const DEV_FOLDER = join(REPO_ROOT, 'apps', 'nuxeo-ui', 'public', 'agentic-ui-config');
+/** What `npm run kit:stand-in` runs, and the port it listens on by default. */
+export const STAND_IN_SCRIPT = join(REPO_ROOT, 'scripts', 'kit-stand-in.mjs');
+const STAND_IN_ORIGIN = 'http://localhost:8091';
+const STAND_IN_TIMEOUT_MS = 30_000;
 const DEV_CONFIG_TIMEOUT_MS = 60_000;
 const DEV_SERVER_TIMEOUT_MS = 5_000;
 /** How long the dev server's watcher is given to see what the script wrote, and how often it is asked. */
@@ -60,6 +70,27 @@ export interface PreviewOptions {
   readonly devServer: string | { readonly problem: string };
   /** How long the dev server is given to answer what was written. Default: 5 seconds. */
   readonly devServerWaitMs?: number;
+  /** The stand-in script asked what it reads of a demo kit. Default: `npm run kit:stand-in`'s. */
+  readonly standInScript?: string;
+}
+
+/**
+ * How to see a demo kit's pages with no server holding it: `npm run kit:stand-in`, a local
+ * stand-in in front of the Nuxeo the dev server proxies, answering the kit's types, its records,
+ * read-only, and its page providers from its own files.
+ */
+export interface StandIn {
+  /** Whether the stand-in reads this kit's demo data: it knows the shape of some kits' only. */
+  readonly reads: boolean;
+  /** What to run, in order, when it does: the stand-in, then the dev server pointed at it. */
+  readonly commands: readonly string[];
+  /** The kit's page providers it answers from its demo data's `EXPECTED`. */
+  readonly answers: readonly string[];
+  /** Those it answers HTTP 501, saying so, since `EXPECTED` does not list them. */
+  readonly notAnswered: readonly string[];
+  /** A record page to open for each of the kit's types with records, on the dev server. */
+  readonly records: readonly Page[];
+  readonly note: string;
 }
 
 export interface ServedFile {
@@ -109,6 +140,11 @@ export interface Preview {
    */
   readonly open: string | null;
   readonly pages: readonly Page[];
+  /**
+   * For a demo kit, a package with a `content-model.json`: how to see its pages with the stand-in,
+   * or why it cannot. `null` for another package, whose types a server holds, and when not served.
+   */
+  readonly standIn: StandIn | null;
   readonly note: string;
 }
 
@@ -164,6 +200,7 @@ async function preview(request: PackageRequest, options: PreviewOptions): Promis
       devServer: null,
       open: null,
       pages: [],
+      standIn: null,
       note:
         'Not served: the package pipeline refused it, so the dev folder is as it was. Fix what' +
         ' validation names, then preview again.',
@@ -200,6 +237,7 @@ async function preview(request: PackageRequest, options: PreviewOptions): Promis
     options.devServerWaitMs ?? DEV_SERVER_WAIT_MS,
   );
   const pages = pagesOf(origin, files);
+  const standIn = await standInFor(directory, origin, options.standInScript ?? STAND_IN_SCRIPT);
   return {
     package: shown,
     served: true,
@@ -212,6 +250,7 @@ async function preview(request: PackageRequest, options: PreviewOptions): Promis
     devServer,
     open: pages.find((page) => page.url !== null)?.url ?? `${origin}/`,
     pages,
+    standIn,
     note:
       `Served to the dev server from ${devFolder}, replacing what it served before.` +
       ` ${devServer.note} The app asks you to sign in to the Nuxeo server the dev server proxies` +
@@ -554,6 +593,109 @@ function layoutPage(type: string, mode: string, doc: string): Page {
     default:
       return { what: `the ${type} layout in ${mode} mode`, url: null, how: `Open ${open}.` };
   }
+}
+
+/** What `kit-stand-in.mjs --check` prints, as far as the answer reads it. */
+interface StandInCheck {
+  readonly records: Readonly<Record<string, readonly { key: string; id: string }[]>>;
+  readonly answered: readonly string[];
+  readonly notAnswered: readonly string[];
+}
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((each) => typeof each === 'string');
+
+function readStandInCheck(stdout: string): StandInCheck | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { records, pageProviders } = parsed as { records?: unknown; pageProviders?: unknown };
+  if (typeof records !== 'object' || records === null || Array.isArray(records)) return null;
+  if (typeof pageProviders !== 'object' || pageProviders === null) return null;
+  const { answered, notAnswered } = pageProviders as { answered?: unknown; notAnswered?: unknown };
+  if (!isStrings(answered) || !isStrings(notAnswered)) return null;
+  const read: Record<string, { key: string; id: string }[]> = {};
+  for (const [type, list] of Object.entries(records)) {
+    if (!Array.isArray(list)) return null;
+    read[type] = [];
+    for (const entry of list as unknown[]) {
+      const { key, id } = (entry ?? {}) as { key?: unknown; id?: unknown };
+      if (typeof key !== 'string' || typeof id !== 'string' || !/^[0-9a-f-]{36}$/.test(id))
+        return null;
+      read[type].push({ key, id });
+    }
+  }
+  return { records: read, answered, notAnswered };
+}
+
+/**
+ * How to see a demo kit's pages with the stand-in, from `kit-stand-in.mjs --check`, which reads the
+ * kit's files and nothing else: it starts no server and sends nothing, and is given no credential.
+ * `null` for a package with no `content-model.json`, whose types are a server's. A kit with a model
+ * and no demo data the stand-in reads, such as the tutorial's, is told why it is not read.
+ */
+export async function standInFor(
+  directory: string,
+  origin: string,
+  script: string = STAND_IN_SCRIPT,
+): Promise<StandIn | null> {
+  if (!existsSync(join(directory, 'content-model.json'))) return null;
+  const run = await runNode(
+    [script, directory, '--check'],
+    STAND_IN_TIMEOUT_MS,
+    pipelineEnvironment(process.env),
+  );
+  const checked = run.failure === null && run.exitCode === 0 ? readStandInCheck(run.stdout) : null;
+  if (checked === null) {
+    const why = lines(run.stderr)[0] ?? run.failure ?? `exit ${String(run.exitCode)}`;
+    return {
+      reads: false,
+      commands: [],
+      answers: [],
+      notAnswered: [],
+      records: [],
+      note:
+        `npm run kit:stand-in does not read this kit's demo data: ${why} So its record pages,` +
+        ' queues and home show what the server the dev server proxies holds.',
+    };
+  }
+  const port = new URL(origin).port;
+  const commands = [
+    `npm run kit:stand-in -- ${shownFromRepository(directory)}`,
+    `NUXEO_PROXY_TARGET=${STAND_IN_ORIGIN} npx ng serve nuxeo-ui --configuration=development,remote` +
+      (port !== '' && port !== '4200' ? ` --port ${port}` : ''),
+  ];
+  const records: Page[] = Object.entries(checked.records)
+    .filter(([, list]) => list.length > 0)
+    .map(([type, list]) => ({
+      what: `the ${type} record page, on ${list[0].key}`,
+      url: `${origin}/#/doc/${list[0].id}`,
+      how: 'A stand-in record, read-only: it opens once the stand-in runs and the dev server is pointed at it.',
+    }));
+  const unanswered =
+    checked.notAnswered.length > 0
+      ? ` It answers ${checked.notAnswered.join(', ')} HTTP 501, saying so, since the kit's` +
+        ' EXPECTED does not list them: their pages show their error.'
+      : '';
+  return {
+    reads: true,
+    commands,
+    answers: checked.answered,
+    notAnswered: checked.notAnswered,
+    records,
+    note:
+      "No server holds this kit's model or records, so the dev server alone shows its shell: the" +
+      " home's figures Unavailable, each queue's error, no record page. The stand-in answers them" +
+      ' from content-model.json and demo/data.mjs, read-only, and forwards everything else, sign-in' +
+      ' included, to the Nuxeo behind it (--upstream, default http://localhost:8080). Run the first' +
+      ' command, then start the dev server with the second in place of npx nx serve nuxeo-ui: what' +
+      ' this preview served is served as before. Sign in with your own account.' +
+      `${unanswered} A write to a stand-in record is refused, so nothing a write changes is seen.`,
+  };
 }
 
 function shownFromRepository(path: string): string {

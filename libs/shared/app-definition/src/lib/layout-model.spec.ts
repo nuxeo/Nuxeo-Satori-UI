@@ -317,6 +317,73 @@ describe('validateLayoutV2, given the content model', () => {
     it('checks nothing against the model when none is given', () => {
       expect(messages(withFields(shown(['Clinic'], 'provider:npi')), { given: null })).toEqual([]);
     });
+
+    it("holds a show's widget to the property's type on each type it links to", () => {
+      const through = (types: unknown, field: string, widget: string, more = {}) => ({
+        field: 'claim:provider',
+        widget: 'document-link',
+        parameters: { types, show: { field, widget, ...more } },
+      });
+      expect(onClaim(withFields(through(['Provider'], 'aud:auditedOn', 'date')))).toEqual([]);
+      expect(onClaim(withFields(through(['Provider'], 'provider:npi', 'text')))).toEqual([]);
+      expect(onClaim(withFields(through(['Provider'], 'aud:auditedOn', 'number')))).toEqual([
+        'cards[0].fields[0].parameters.show.widget: the widget "number" does not show "aud:auditedOn" of "Provider", a date property: it takes long or double [parameter]',
+      ]);
+      // The property is held to every type as before, by its field.
+      expect(onClaim(withFields(through(['Provider', 'Clinic'], 'provider:npi', 'text')))).toEqual([
+        'cards[0].fields[0].parameters.show: "provider:npi" is not a property of the type "Clinic" or of its facets, one of the types the field links to [unknown]',
+      ]);
+    });
+
+    describe("a rule over a linked record's property", () => {
+      const banner = (reference: unknown) => ({
+        version: 2,
+        banners: [
+          {
+            id: 'flagged',
+            label: 'Provider flagged',
+            visibleWhen: { type: 'app.rules.fieldIn', parameters: [reference, 'flagged'] },
+          },
+        ],
+        cards: [{ id: 'c', fields: ['claim:number'] }],
+      });
+      const reference = (types: unknown, show: string, field = 'claim:provider') => ({
+        field,
+        types,
+        show,
+      });
+
+      it('passes a property every linked type has, read by a string reference', () => {
+        expect(onClaim(banner(reference(['Provider'], 'provider:npi')))).toEqual([]);
+        expect(onClaim(banner(reference(['Provider', 'Clinic'], 'dc:title')))).toEqual([]);
+      });
+
+      it('refuses one a linked type lacks, and a type the model does not have, as show does', () => {
+        expect(onClaim(banner(reference(['Provider', 'Clinic'], 'provider:npi')))).toEqual([
+          'banners[0].visibleWhen.parameters[0].show: "provider:npi" is not a property of the type "Clinic" or of its facets, one of the types the rule links to [unknown]',
+        ]);
+        expect(onClaim(banner(reference(['Surgeon'], 'provider:npi')))).toEqual([
+          'banners[0].visibleWhen.parameters[0].show: the type "Surgeon" that "types" lists is not in the content model, so "provider:npi" cannot be found on it [unknown]',
+        ]);
+      });
+
+      it('refuses a reference that is not one text, and with references on, one the type lacks', () => {
+        const onMember = (reference: unknown) => ({
+          ...banner(reference),
+          cards: [{ id: 'c', fields: ['member:firstName'] }],
+        });
+        expect(messages(onMember(reference(['Member'], 'dc:title', 'member:plans')))).toEqual([
+          'banners[0].visibleWhen.parameters[0].field: a rule reads one linked record, by a string property holding its id, and "member:plans" is a string[] property [parameter]',
+        ]);
+        expect(
+          messages(onMember(reference(['Member'], 'dc:title', 'member:nobody')), {
+            references: true,
+          }),
+        ).toEqual([
+          'banners[0].visibleWhen.parameters[0].field: "member:nobody" is not a property of the type "Member" or of its facets, so the rule naming it reads nothing [unknown]',
+        ]);
+      });
+    });
   });
 
   describe("a checklist's property", () => {

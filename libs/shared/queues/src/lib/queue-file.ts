@@ -35,6 +35,14 @@ import { refusedRule } from '@agentic-ui/shared/home';
 import type { ExtensionRule } from '@nuxeo/satori-platform/extensions';
 import { isAggregateParameter } from '@nuxeo/satori-platform/nuxeo-client';
 
+/** The widgets a facet's buckets are shown through: the validator's `FACET_WIDGETS`. */
+export type QueueFacetWidget = 'document-link' | 'user' | 'group';
+
+/** A facet's widget, read from the file: one of {@link QueueFacetWidget}, else none. */
+function facetWidget(widget: unknown): QueueFacetWidget | null {
+  return widget === 'document-link' || widget === 'user' || widget === 'group' ? widget : null;
+}
+
 /** A filter from one of the page provider's aggregates. */
 export interface QueueFacet {
   /** The aggregate's id, as the page provider defines it on the server. */
@@ -43,9 +51,11 @@ export interface QueueFacet {
   readonly labelKey: string | null;
   /**
    * `document-link` for an aggregate on a reference: each bucket, a record's id, shown by that
-   * record's title (app-definition-v2.md, section 4). `null`, a bucket shows its key.
+   * record's title; `user` or `group` for an aggregate on user or group names: each bucket shown by
+   * the display name, as a `user` column shows it (app-definition-v2.md, section 4). `null`, a
+   * bucket shows its key.
    */
-  readonly widget: 'document-link' | null;
+  readonly widget: QueueFacetWidget | null;
 }
 
 /**
@@ -187,7 +197,7 @@ export function readQueue(content: unknown, registered: QueueRegistered): ReadQu
       aggregate,
       label: text(facet['label']),
       labelKey: text(facet['labelKey']),
-      widget: facet['widget'] === 'document-link' ? 'document-link' : null,
+      widget: facetWidget(facet['widget']),
     });
   });
 

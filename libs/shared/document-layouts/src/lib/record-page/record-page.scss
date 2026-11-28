@@ -144,6 +144,20 @@
   color: var(--mat-sys-primary);
 }
 
+/*
+ * A linked record's value drawn as a badge, inside the link that opens that record (layout-v2.md,
+ * section 12). The badge's own box would hide the link's underline, so the link draws one under it,
+ * in the link's colour, and so is told from a badge that links nowhere by more than colour
+ * (WCAG 1.4.1). The focus ring is the page's own.
+ */
+.record-page__record--badge {
+  display: inline-flex;
+  align-items: center;
+  padding-bottom: 2px;
+  border-bottom: 1px solid currentColor;
+  text-decoration: none;
+}
+
 /* The link to the capture page, above the cards: its icon and its words on one line. */
 .record-page__capture {
   margin: 0 0 16px;

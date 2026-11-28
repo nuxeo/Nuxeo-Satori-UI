@@ -14,7 +14,7 @@
     },
     {
       "id": "signed",
-      "tone": "info",
+      "tone": "positive",
       "labelKey": "onboarding.banner.request.signed",
       "visibleWhen": {
         "type": "app.rules.fieldIn",
@@ -125,6 +125,8 @@
           "widget": "document-link",
           "parameters": { "types": ["OnboardingCase"] }
         },
+        { "field": "sigreq:signedFile", "widget": "file" },
+        { "field": "sigreq:evidence", "widget": "file" },
         "sigreq:provider",
         "sigreq:envelope",
         "sigreq:sentDigest",

@@ -2,5 +2,5 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 1
 Bundle-Name: vehicle-titles-demo
 Bundle-SymbolicName: nuxeo.config.vehicle-titles-demo;singleton:=true
-Bundle-Version: 0.1.0
+Bundle-Version: 0.2.0
 Nuxeo-Component: OSGI-INF/vehicle-titles-demo-model.xml,OSGI-INF/vehicle-titles-demo-checklist.xml,OSGI-INF/vehicle-titles-demo-config.xml

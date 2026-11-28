@@ -185,6 +185,13 @@ jobs:
           node business-apps/packages/payers-claims-demo/workflow/route-model.selftest.mjs
           node scripts/beta-harness/steps/payers-claims-demo.selftest.mjs
 
+      # A demo kit's stand-in for dev mode sits between the dev server and a Nuxeo, with the
+      # person's credentials passing through it: its controls hold that it forwards them untouched,
+      # logs none, refuses every write to a stand-in record, and answers only from the kit's own
+      # files. An in-process fake upstream; no server, no credential.
+      - name: Run the demo kits' stand-in controls
+        run: npm run kit:stand-in-selftest
+
       # The brand assets library's performance check needs Chromium and a production build, so it
       # does not run here: phase 10 puts performance budgets in CI. Its offline half does: the
       # synthetic library against Nuxeo's paging and aggregates, the stand-in's routes and

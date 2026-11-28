@@ -280,9 +280,9 @@ describe('a queue', () => {
     },
     {
       what: "a facet's buckets through a widget that does not show them",
-      input: queue({ facets: [{ aggregate: 'claim_adjuster_agg', widget: 'user' }] }),
+      input: queue({ facets: [{ aggregate: 'claim_amount_agg', widget: 'currency' }] }),
       found: [
-        'facets[0].widget: a facet shows its buckets as the server returns them, or through "document-link", not "user" [parameter]',
+        'facets[0].widget: a facet shows its buckets as the server returns them, or through "document-link", "user", "group", not "currency" [parameter]',
       ],
     },
     {

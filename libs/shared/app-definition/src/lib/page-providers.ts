@@ -774,7 +774,7 @@ export function listedColumnFindings(
     // whatever page provider lists the rows.
     if (Array.isArray(content['columns']))
       content['columns'].forEach((column, index) =>
-        findings.push(...linkedShowFindings(column, join('columns', index), model)),
+        findings.push(...linkedShowFindings(column, join('columns', index), model, registries)),
       );
     list(content, '');
   } else if (path.startsWith('layouts/')) {

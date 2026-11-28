@@ -432,6 +432,73 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   against a local Nuxeo server, the export read 60 types, 65 facets and 98 schemas, with the
   directories bound to `dc:coverage` and to each item of `dc:subjects`.
 
+### A demo kit's pages in dev mode
+
+A demo kit's model is a stand-in, and no server has its types, its page providers or its records
+until the package is installed and seeded. So `config:dev` alone serves the kit's shell: the home's
+figures say "Unavailable", each queue says "Something went wrong", and no record page opens.
+
+`npm run kit:stand-in` fills in the rest from the kit's own files. It is a local server between the
+dev server and the Nuxeo the dev server proxies to:
+
+```bash
+npm run kit:stand-in -- business-apps/packages/vehicle-titles-demo
+NUXEO_PROXY_TARGET=http://localhost:8091 npx ng serve nuxeo-ui --configuration=development,remote
+```
+
+Serve the kit's files as before, with `preview_package` or `config:dev`: the stand-in prints the
+`config:dev` command, and `preview_package` gives both commands above in its `standIn`. Then sign
+in with your own account, on the Nuxeo behind the stand-in. `--port` moves the stand-in, default
+8091, and `--upstream` names the Nuxeo, default `http://localhost:8080`.
+
+- **What it answers itself,** from the kit's files and nothing else:
+  - the kit's types and schemas, from `content-model.json`. They are merged into the server's
+    `/config/types`, `/config/schemas` and `/config/facets`, and served at `/config/types/<Type>`;
+  - the kit's fictional records, from `demo/data.mjs`, as the kit's seed writes them, in the seed's
+    workspace and folders. Their ids are made up and stable: the same kit and record give the same
+    id on every run and every machine. By id, by path, and by the NXQL search a record page reads
+    its linked records with, `SELECT * FROM Document WHERE ecm:uuid IN (?, ...)`. Dates count from
+    the day it starts, as the seed counts them from the day it runs;
+  - the kit's page providers, those its bundle defines, from `data.mjs`'s `EXPECTED`: which records
+    each returns, as the seed checks them on a server. It runs no NXQL. It sorts and pages them as
+    asked, and counts the facets each terms aggregate defines.
+- **Read-only.** Each record's permissions are Read's, so no Edit, tick or capture is offered. A
+  write naming a stand-in record, in its address or its body, is refused with HTTP 403, and nothing
+  is sent on. A file sent to the batch upload, `/api/v1/upload/<batch>`, is passed on unread, as a
+  file's bytes name no record; an operation run on a batch, `.../execute/<operation>`, is read as
+  any write is. An operation that reads one, such as `Connector.Read`, is not run: HTTP 501. A
+  record's history, comments, tasks and workflows are empty lists, and it has no file.
+- **What it forwards:** everything else, to the Nuxeo behind it: sign-in, `/me`, and the platform's
+  own documents, searches and configuration. It changes what the dev server's own proxy changes,
+  the `Host`, an `Origin` naming the stand-in and a redirect's `Location`, and nothing more.
+  Credentials and cookies pass as they came: never read, logged, stored or changed.
+- **What it does not show:**
+  - a page provider of the kit's that `EXPECTED` does not list. It is answered HTTP 501, saying so,
+    and its page shows its error. The P&C claims kit's mail capture providers, `pc_capture_review`
+    and `pc_claim_mail`, are two: its "Mail to confirm" figure and queue, and a claim's "Mail filed"
+    list;
+  - an `external` card, whose connector is the server's;
+  - the people the records name: user names only, as the seed creates no user either;
+  - anything a write would change, a file, a history;
+  - who may read what. Whoever reaches the stand-in, on this machine, may read every stand-in
+    record: the server's permissions are not in play. A group rule still applies to the account
+    signed in, so the vehicle kit's lien release queue shows to title clerks only;
+  - the package's registry files: `app.json`, its groups, its actions.
+- **The kits it reads:** vehicle titles, P&C claims, contracts and moves, the kits whose `data.mjs`
+  exports `EXPECTED`. A kit's records are in its own words, so `scripts/kit-stand-in/kits.mjs` says
+  how the kit's seed writes each one. Another kit is refused, naming those it reads.
+- **Its controls,** `npm run kit:stand-in-selftest`, put it in front of a fake Nuxeo in the same
+  process. They hold what it answers, what it refuses and sends nowhere, what it forwards, and the
+  credentials, byte for byte. They also hold each kit's mapping to its seed's properties and its
+  model. Eleven guards were each broken once, and each turned the controls red.
+- `--check` prints what it would answer, as JSON, and starts no server.
+- **Seen in a browser,** on 27 November 2026, against the local Nuxeo, as its guest: the vehicle
+  kit's home, figures 3 and 2, its missing-documents queue with three deals, a title's page with
+  its banner and two related lists, and a deal's with its banner, its linked titles and its
+  checklist, and no Edit or tick. And the P&C kit's home, its open claims queue with four facets, a
+  claim's page with its late-report banner and its policy, and a policy's page with its claims. Not
+  seen: anything with an account in the kits' groups.
+
 ## 5. Publishing a package
 
 1. Raise the version in `package/package.xml`, `app.json`'s `packageVersion` and the manifest's
