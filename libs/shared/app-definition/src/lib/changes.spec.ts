@@ -135,6 +135,11 @@ describe('changesBetween', () => {
     expect(packagedText('bundle/META-INF/MANIFEST.MF', '\uFEFFA: b\r\n c\r\nD: e\n\n')).toBe(
       'A: bc\nD: e',
     );
+    // A body a src names is packaged compact whatever the file is called; other files as they are.
+    expect(
+      packagedText('bundle/fragments/acme.manifest', '{\n  "$schema": "x",\n  "a": 1\n}\n'),
+    ).toBe('{"a":1}');
+    expect(packagedText('bundle/OSGI-INF/acme.xml', '<component />\n')).toBe('<component />\n');
   });
 
   it('reads labels and actions by key: removed, added or changed', () => {
