@@ -2012,7 +2012,7 @@ function releaseChecks(outside, bin, repository, env) {
   )
     fail(
       'satori release-check, a package that does not build',
-      `exit ${failed.status}, not 1`,
+      `exit ${failed.status}, not 1 saying it does not build, at step 4`,
       failed.output,
     );
   else held++;
