@@ -928,8 +928,9 @@ by this change:
 - a tag ruleset, "App Packages", active, targets `refs/tags/app-package/*`, restricts creating,
   moving and deleting those tags, and lets the repository's administrators bypass it.
 
-So a run today waits for one of the two, and the gate refuses an approval by whichever of them
-pushed the tag, or an administrator's bypass. Not tried: no tag has been pushed.
+So a run today, if the tag rule lets it reach `publish` at all (below, it likely does not), waits
+for one of the two, and the gate refuses an approval by whichever of them pushed the tag, or an
+administrator's bypass. Not tried: no tag has been pushed.
 
 **What an administrator still sets.** None of it is in a file, and this change set none of it:
 
