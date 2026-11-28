@@ -13,8 +13,8 @@
  * It runs unconditionally, as `app-package.mjs` does: a "was I started directly?" guard is how
  * another gate here once exited 0 having checked nothing.
  *
- * Exit codes: 0, written; 1, the server's answer could not be read; 2, the command was wrong, or
- * the credentials are not set.
+ * Exit codes: 0, written; 1, the server's answer could not be read; 2, the command was wrong, the
+ * credentials are not set, or the answer could not be written to `--out`.
  */
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

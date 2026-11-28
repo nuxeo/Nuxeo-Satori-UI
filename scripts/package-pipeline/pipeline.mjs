@@ -76,8 +76,9 @@
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
  * The content model is the one input that may need a server, and it is opt in: `--model` names a
  * file `model-export.mjs` exported, and `--model-server` reads the model live, with
- * `NUXEO_USER` and `NUXEO_PASS` from the environment. Given neither, a package that ships a
- * stand-in model, a component of its own registering document types, is held to the
+ * `NUXEO_USER` and `NUXEO_PASS` from the environment. Either is read before step 1, for every
+ * package, and one that cannot be read stops the run with exit 2. Given neither, a package that
+ * ships a stand-in model, a component of its own registering document types, is held to the
  * `content-model.json` beside its `bundle/`, which `app-model` writes to describe it; a package on
  * a server's model is held to none, and the run says so.
  * The XML is read by `verify-package-zip.mjs`'s own helpers, the builder's grammar ported, so that
@@ -97,6 +98,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -306,12 +308,18 @@ export async function pipelineCommand(argv, host) {
 }
 
 /**
- * `run`, with the server's content model read first when `--model-server` names it, into a file
- * the validator reads as it reads `--model`'s, and which is removed afterwards. A model that cannot
- * be read stops the run with exit 2, as a wrong `--model` file does, once an earlier run's zip is
- * removed: the package is neither refused nor built on a model nobody saw.
+ * `run`, with the content model read first: the file `--model` names, or the server's when
+ * `--model-server` names it, into a file the validator reads as it reads `--model`'s, and which is
+ * removed afterwards. A model that cannot be read stops the run with exit 2, once an earlier run's
+ * zip is removed: the package is neither refused nor built on a model nobody saw. The file is read
+ * here for every package, since only an app definition's step 2 holds anything to it: a package
+ * that is configuration alone would otherwise pass with a `--model` that names nothing.
  */
 async function withModel(options, host) {
+  if (options.model !== undefined) {
+    const unread = unreadModel(options.model, host);
+    return run(unread === null ? options : { ...options, unread }, host);
+  }
   if (options['model-server'] === undefined) return run(options, host);
   const read = await serverModel(options['model-server'], host);
   if (typeof read === 'string') return run({ ...options, unread: read }, host);
@@ -324,6 +332,31 @@ async function withModel(options, host) {
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+/**
+ * Why the file `--model` names cannot be held to, or `null`: it is not there, it is not a file, or
+ * the validator's `model` command, which reads it as `validate --model` does, cannot read the whole
+ * of it as a content model.
+ */
+function unreadModel(file, host) {
+  let entry;
+  try {
+    entry = statSync(file, { throwIfNoEntry: false });
+  } catch (error) {
+    return `--model ${file} cannot be read (${error.code ?? error.message}).\n${host.usage}`;
+  }
+  if (entry === undefined)
+    return `--model ${file} names no file: write a server's content model to it first, or give the file it was written to.\n${host.usage}`;
+  if (!entry.isFile())
+    return `--model ${file} is not a file: give the file a server's content model was written to.\n${host.usage}`;
+  const read = validator(host, ['model', file]);
+  if (read.status === 0) return null;
+  const said =
+    `${read.stdout ?? ''}${read.stderr ?? ''}`.trim().replace(`${file}: `, '') ||
+    read.error?.message ||
+    `the validator exited ${read.status}`;
+  return `--model ${file} cannot be read as a content model: ${said}\n${host.usage}`;
 }
 
 /** The content model `server` answers, with `NUXEO_USER` and `NUXEO_PASS`, or why it was not read. */

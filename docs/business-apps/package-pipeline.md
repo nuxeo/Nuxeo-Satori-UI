@@ -397,7 +397,16 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   It reads each schema on its own, `/api/v1/config/schemas/<name>` with `fetch-schema: fields`,
   because the list leaves out every field's constraints, and with them the directory a property is
   bound to. It then reads the file back as `--model` does, and removes it, exiting 1, when it
-  cannot be read whole.
+  cannot be read whole. It makes the folder `--out` names when it is not there, as the pipeline
+  makes its `--out`; under Node's permission model, an `--out` the process may not write and read
+  is refused with exit 2 before the server is asked. A file that cannot be written once the
+  server has answered exits 2 too, and says the model was read and not written.
+
+- **The file `--model` names is read before any step,** for every package, once the zip an earlier
+  run left is removed: a file that is not there, a folder, or one the validator cannot read whole as
+  a content model stops the run with exit 2, the command's error, not the package's. Only an app
+  definition's step 2 holds anything to the model, so without this read a package that is
+  configuration alone would pass with a `--model` that names nothing, and say nothing of it.
 
 - **Read live instead:** `--model-server https://<host>/nuxeo`, with `NUXEO_USER` and `NUXEO_PASS`
   in the environment, reads the same model before step 1. A model that cannot be read stops the

@@ -119,7 +119,11 @@ To check a package against your server's content model offline, write the model 
 ```
 
 and give it to `validate` and `build` with `--model tmp/content-model.json`. `tmp/` is ignored by
-git: the model is your server's, and is not committed.
+git: the model is your server's, and is not committed. `create` writes no `tmp/`, and `model pull`
+makes the folder `--out` names when it is not there; 0.3.0 did not, and stopped with `ENOENT`, so
+with that version run `mkdir -p tmp` first. A `--model` file that is not there, or cannot be read
+as a content model, stops `validate`, `build` and `release-check` with exit 2 before any step,
+whether or not the package has an app definition.
 
 ## 4. Validate, build and release-check
 
@@ -245,12 +249,12 @@ until the agent files are this version's.
 
 Until the tool is on the registry, someone at Nuxeo builds its tarball from Nuxeo Satori UI's
 repository, `node tools/satori-cli/build.mjs`, then `npm pack dist/tools/satori-cli`, and gives you
-`nuxeo-satori-cli-0.3.0.tgz`. The same commands then work with the tarball in place of the registry:
+`nuxeo-satori-cli-0.3.1.tgz`. The same commands then work with the tarball in place of the registry:
 
 ```bash
-npx --package ./nuxeo-satori-cli-0.3.0.tgz satori create acme-satori --name acme-config --owner acme
+npx --package ./nuxeo-satori-cli-0.3.1.tgz satori create acme-satori --name acme-config --owner acme
 cd acme-satori
-npm install --no-save ../nuxeo-satori-cli-0.3.0.tgz
+npm install --no-save ../nuxeo-satori-cli-0.3.1.tgz
 ```
 
 `--no-save` keeps the registry's version in `package.json`, so the repository is the one the
