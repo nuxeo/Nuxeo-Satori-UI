@@ -458,7 +458,7 @@ export class RecordTimelineComponent {
         const stayed =
           active === null ||
           active === host.ownerDocument.body ||
-          // The native button inside the `nxs-button` the class is on.
+          // The focus is on the native button inside the `nxs-button` marked `record-timeline__more`.
           (host.contains(active) && active.closest('.record-timeline__more') !== null);
         if (stayed) host.querySelector<HTMLElement>(`[data-entry-id="${id}"]`)?.focus();
       },
