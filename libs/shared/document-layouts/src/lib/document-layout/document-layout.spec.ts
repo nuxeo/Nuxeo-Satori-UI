@@ -361,10 +361,16 @@ describe('DocumentLayoutComponent', () => {
       await render(claimDocument(), layout({ display: 'tabs', sections: [claimSection, amounts] }));
       expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
       expect(host().querySelector('[data-section-id="claim_amounts"]')).toBeNull();
+      const first = host().querySelector('[data-section-id="claim"]');
       await choose(1);
       expect(host().querySelector('[data-section-id="claim_amounts"]')).not.toBeNull();
       expect(host().querySelector('[data-section-id="claim"]')).toBeNull();
       expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+      // A section left is dropped, as Material's lazy tab body is, and drawn afresh on return.
+      await choose(0);
+      const again = host().querySelector('[data-section-id="claim"]');
+      expect(again).not.toBeNull();
+      expect(again).not.toBe(first);
     });
 
     it('passes axe at WCAG 2.2 AA', async () => {
