@@ -626,7 +626,10 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         "Writes one file of a package's app definition, whole: app.json, home.json," +
         ' navigation.json, actions.json, queues/<id>.json, labels/<language>.json,' +
         ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, under' +
-        ' bundle/agentic-ui-config/. Any other path is refused before anything runs: one that' +
+        " bundle/agentic-ui-config/; or a configuration package's Layer 0, bootstrap.json" +
+        ' (branding, themes and their colour tokens, defaultThemeId), or Layer 1, manifest.json' +
+        ' (what the app shows), when its component names the file as that fragment. Any other' +
+        ' path is refused before anything runs: one that' +
         ' leaves the package or goes through a link, a hidden file, code, an asset, the build' +
         ' allow-list, and the files the generators write (the component, the manifest, package/,' +
         ' build.mjs, content-model.json), for which use apply_generator. A new file the component' +

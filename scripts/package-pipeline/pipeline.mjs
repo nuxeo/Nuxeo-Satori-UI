@@ -494,7 +494,7 @@ function run(
     for (const finding of configured) process.stdout.write(`${finding}\n`);
     return refuse(
       2,
-      'a Layer 0 or Layer 1 fragment names a key the application does not read, which it would ignore in silence, or takes a name Satori itself uses, listed above.',
+      'a Layer 0 or Layer 1 fragment names a key the application does not read, or holds a theme it would not show, which it would ignore in silence, or takes a name Satori itself uses, listed above.',
     );
   }
   const appFile = join(root, 'app.json');

@@ -728,6 +728,74 @@ function refusals(satori) {
     'branding.applicationTitel: "applicationTitel" is not a key a bootstrap fragment has there',
     none,
   );
+  // A theme that would change nothing: each the application takes, and then does not show.
+  const theme = (change) =>
+    json(BOOTSTRAP, (value) => {
+      value.themes = [
+        { id: 'acme', label: 'Acme', base: 'nuxeo', tokens: { '--mat-sys-primary': '#0b5fff' } },
+      ];
+      value.defaultThemeId = 'acme';
+      change(value);
+    });
+  refused(
+    'a theme key the application does not read',
+    first,
+    theme((value) => (value.themes[0].colour = '#0b5fff')),
+    2,
+    'themes[0].colour: "colour" is not a key a bootstrap fragment has there',
+    none,
+  );
+  refused(
+    'a theme whose base the application has no palette for',
+    first,
+    theme((value) => (value.themes[0].base = 'midnight')),
+    2,
+    'themes[0].base: "midnight" is not a theme the application has (nuxeo, dark, kawaii, light)',
+    none,
+  );
+  refused(
+    'a token that is not a CSS custom property',
+    first,
+    theme((value) => (value.themes[0].tokens = { primary: '#0b5fff' })),
+    2,
+    'themes[0].tokens.primary: "primary" is not a CSS custom property',
+    none,
+  );
+  refused(
+    'a colour token whose value is not a colour',
+    first,
+    theme((value) => (value.themes[0].tokens['--mat-sys-primary'] = 'brand blue')),
+    2,
+    'themes[0].tokens.--mat-sys-primary: "brand blue" is not a CSS colour',
+    none,
+  );
+  refused(
+    'a defaultThemeId that names no theme',
+    first,
+    theme((value) => (value.defaultThemeId = 'acme-dark')),
+    2,
+    'defaultThemeId: "acme-dark" names no theme',
+    none,
+  );
+  passes(
+    'a theme of its own, its colours in pairs, chosen by defaultThemeId and by a preset',
+    first,
+    theme((value) => {
+      value.themes[0].tokens = {
+        '--mat-sys-primary': '#0B5FFF',
+        '--mat-sys-on-primary': '#ffffff',
+        '--mat-sys-tertiary': 'rgb(255 107 0)',
+        '--sat-platform-nav-background': 'var(--mat-sys-surface-container)',
+        '--nxs-button-radius': '4px',
+      };
+      value.presales = {
+        presetSwitching: true,
+        presets: { night: { label: 'Night', bootstrap: { defaultThemeId: 'dark' } } },
+      };
+    }),
+    'satori validate: the package passes every step',
+    none,
+  );
   refused(
     "a preset's Layer 1 key the application does not read",
     first,
