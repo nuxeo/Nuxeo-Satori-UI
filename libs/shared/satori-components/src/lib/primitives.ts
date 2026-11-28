@@ -210,7 +210,8 @@ export interface NxsTabsInputs {
    * Draws a tab's body only while its tab is selected: none before its tab is first chosen, and
    * one left is dropped, to be drawn afresh on return. Off by default.
    */
-  readonly lazy: InputSignalWithTransform<boolean, unknown>;
+  // Optional, so that a component written against this contract before `lazy` still implements it.
+  readonly lazy?: InputSignalWithTransform<boolean, unknown>;
   /**
    * Called with the selected tab and its position whenever the selection changes — the user
    * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.

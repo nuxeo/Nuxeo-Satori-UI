@@ -215,6 +215,33 @@ describe('NxsTextFieldComponent', () => {
       expect(host.value()).toBe('75');
     });
 
+    it('takes its bounds as static attributes, and writes none for one that is not a number', async () => {
+      @Component({
+        standalone: true,
+        imports: [NxsTextFieldComponent],
+        changeDetection: ChangeDetectionStrategy.Eager,
+        template: `<nxs-text-field
+          label="Across"
+          type="number"
+          min="0"
+          max="abc"
+          step="5"
+          maxLength="3"
+        />`,
+      })
+      class StaticHost {}
+      const made = TestBed.createComponent(StaticHost);
+      made.detectChanges();
+      await made.whenStable();
+      const control = (made.nativeElement as HTMLElement).querySelector(
+        'input',
+      ) as HTMLInputElement;
+      expect(control.getAttribute('min')).toBe('0');
+      expect(control.hasAttribute('max')).toBe(false);
+      expect(control.getAttribute('step')).toBe('5');
+      expect(control.getAttribute('maxlength')).toBe('3');
+    });
+
     it('sets no bound on a text field, nor on a number field given none', async () => {
       host.min.set(0);
       host.max.set(100);

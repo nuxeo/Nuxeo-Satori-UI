@@ -29,7 +29,8 @@ one does.
 - **Bodies that scroll themselves, or grow.** Each body fills the space under the strip and clips,
   so a body scrolls itself, as a document page's do. Where the strip sits in a page that grows with
   its content instead, set `--nxs-tabs-body-overflow: auto` on it, so what is wider than a body
-  scrolls rather than being cut off.
+  scrolls rather than being cut off. Like every custom property it is inherited: a strip nested in
+  one sets it back to `hidden` if its own bodies scroll themselves.
 
 ## Demo showcase
 

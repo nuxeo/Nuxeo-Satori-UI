@@ -18,9 +18,14 @@ import type { NxsFieldAppearance } from '../field-appearance';
 
 let nextId = 0;
 
-/** A number a template may give as a static attribute (`min="0"`), or `null` for none. */
+/**
+ * A number a template may give as a static attribute (`min="0"`), or `null` for none — and for
+ * anything that is not a number, so no `min="NaN"` is written.
+ */
 function numberOrNull(value: unknown): number | null {
-  return value === null || value === undefined || value === '' ? null : numberAttribute(value);
+  if (value === null || value === undefined || value === '') return null;
+  const number = numberAttribute(value);
+  return Number.isNaN(number) ? null : number;
 }
 
 /** What a one-line field holds: `text`, or a `number`, which the platform's number input takes. */
