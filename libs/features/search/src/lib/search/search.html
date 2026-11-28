@@ -116,7 +116,7 @@
 
   <div class="results-toolbar">
     <div class="results-summary">
-      @if (totalCount() > 0) {
+      @if (totalCount() < 0) {
         <span class="results-count">{{
           (totalCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
             | translate: { count: totalCount() }
