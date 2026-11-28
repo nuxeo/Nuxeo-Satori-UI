@@ -355,6 +355,7 @@ export function linkedRecordLookup(): LinkedRecordLookup {
 export function recordLookups(
   records: LinkedRecords,
   unavailable: string,
+  version: (title: string, label: string) => string = (title, label) => `${title} ${label}`,
 ): Pick<RecordValueContext, 'record' | 'linkedValue'> {
   return {
     linkedValue: (id, xpath) => {
@@ -367,7 +368,13 @@ export function recordLookups(
       if (record === undefined) return null;
       return record === null
         ? { text: unavailable, url: null }
-        : { text: record.title, url: record.url };
+        : {
+            text:
+              record.versionLabel === undefined
+                ? record.title
+                : version(record.title, record.versionLabel),
+            url: record.url,
+          };
     },
   };
 }

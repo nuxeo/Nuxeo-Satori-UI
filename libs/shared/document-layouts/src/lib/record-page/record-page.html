@@ -347,6 +347,17 @@
         }
       }
     }
+    @case ('file') {
+      <!-- One file, by its name, downloaded as the reader when pressed (layout-v2.md, section 3). -->
+      <nxs-button
+        class="record-page__file"
+        icon="download"
+        [label]="'document-layouts.file.download' | translate: { name: field.value.name }"
+        [disabled]="downloading() === field.place"
+        (press)="download(field)"
+        >{{ field.value.name }}</nxs-button
+      >
+    }
     @case ('lines') {
       <span class="record-page__lines">
         @for (line of field.value.lines; track $index) {

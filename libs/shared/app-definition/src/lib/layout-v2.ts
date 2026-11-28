@@ -76,8 +76,8 @@ const FILE_KEYS = [
 const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen', 'link'];
 /** A banner's link: the record one of the open record's properties names, as a `document-link`. */
 const BANNER_LINK_KEYS = ['field'];
-/** A banner's tones, in layout version 2's words for them: a status badge's, less two. */
-export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
+/** A banner's tones, in layout version 2's words for them: a status badge's, less `neutral`. */
+export const BANNER_TONES = ['info', 'warning', 'negative', 'positive'] as const;
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
 /** What a card shows: exactly one of these. Every one but `fields` is for `view` mode only. */
 const CARD_CONTENTS = [

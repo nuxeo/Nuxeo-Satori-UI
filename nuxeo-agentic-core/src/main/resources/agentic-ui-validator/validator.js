@@ -236,6 +236,7 @@ var agenticUiValidator = (function () {
         }
         return function (value) { return allowed.includes(value) ? null : "must be one of ".concat(allowed.map(function (a) { return JSON.stringify(a); }).join(", ")); };
     };
+    var flag = function (value) { return typeof value === "boolean" ? null : "must be true or false"; };
     var textList = function (value) { return Array.isArray(value) && value.length > 0 && value.every(function (item) { return typeof item === "string" && item !== ""; }) ? null : "must be a list of texts"; };
     var currency = function (value) { return typeof value === "string" && /^[A-Z]{3}$/.test(value) || isFieldReference(value) ? null : 'must be an ISO 4217 code such as "USD", or { "field": "<prefix>:<name>" }'; };
     var ADDRESS_PARTS = ["street", "city", "postcode", "country"];
@@ -260,13 +261,31 @@ var agenticUiValidator = (function () {
             return key;
         }).join(", "), " a tone that is not one of ").concat(TONES.join(", "));
     };
-    var linkedProperty = function (value) { return typeof value === "string" && XPATH.test(value) && !value.startsWith("ecm:") && !value.startsWith("var:") ? null : "must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:"; };
+    function isLinkedXpath(value) {
+        return typeof value === "string" && XPATH.test(value) && !value.startsWith("ecm:") && !value.startsWith("var:");
+    }
+    var linkedProperty = function (value) { return isLinkedXpath(value) || isRecord(value) && isLinkedXpath(value["field"]) ? null : 'must be a property of the linked record, <prefix>:<name>, neither ecm: nor var:, or { "field": <that property>, "widget", "parameters" }'; };
+    function linkedShowOf(show) {
+        if (isLinkedXpath(show))
+            return { field: show, widget: null, parameters: {} };
+        if (!isRecord(show) || !isLinkedXpath(show["field"]))
+            return null;
+        return {
+            field: show["field"],
+            widget: typeof show["widget"] === "string" ? show["widget"] : null,
+            parameters: isRecord(show["parameters"]) ? show["parameters"] : {}
+        };
+    }
     var columns = function (value) { return Array.isArray(value) && value.length > 0 ? null : "must be a list of field entries"; };
     var PACKAGED_WIDGETS = {
         text: { accepts: ["string"], parameters: {} },
         "long-text": { accepts: ["string"], parameters: { rows: integer(2, 20) } },
         "rich-text": { accepts: ["string"], parameters: {} },
-        number: { accepts: ["long", "double"], parameters: { decimals: integer(0, 10) } },
+        /**
+         * `grouping`, default `true`: whether the number is written with the locale's group separators,
+         * `2,024`; `false` writes `2024`, for a year or a number that is a code (layout-v2.md, section 3).
+         */
+        number: { accepts: ["long", "double"], parameters: { decimals: integer(0, 10), grouping: flag } },
         currency: { accepts: ["long", "double"], parameters: { currency: currency }, required: ["currency"] },
         percent: { accepts: ["long", "double"], parameters: { scale: oneOf(1, 100) } },
         date: { accepts: ["date"], parameters: { format: oneOf("short", "long") } },
@@ -290,6 +309,11 @@ var agenticUiValidator = (function () {
         "status-badge": { accepts: ["string"], parameters: { tones: tones }, required: ["tones"] },
         table: { accepts: ["complex[]"], parameters: { columns: columns }, required: ["columns"] },
         image: { accepts: ["blob"], parameters: {} },
+        /**
+         * One file, by its name, which a record page downloads on a press: a property holding one blob,
+         * such as a signed agreement (layout-v2.md, section 3). In a form, read-only, as `image` is.
+         */
+        file: { accepts: ["blob"], parameters: {} },
         "file-list": { accepts: ["blob[]", "complex[]"], parameters: {} }
     };
     var PACKAGED_COMPUTATIONS = {
@@ -396,6 +420,23 @@ var agenticUiValidator = (function () {
         "app.navbar.administration"
     ]);
     var PACKAGED_MODULES = /* @__PURE__ */ new Set();
+    var SHOWN_WIDGETS = /* @__PURE__ */ new Set([
+        "text",
+        "long-text",
+        "number",
+        "currency",
+        "percent",
+        "date",
+        "relative-date",
+        "boolean",
+        "status-badge"
+    ]);
+    function isLinkedReferenceShape(value) {
+        return isRecord(value) && "show" in value;
+    }
+    function isLinkedReference(value) {
+        return isRecord(value) && Object.keys(value).length === 3 && typeof value["field"] === "string" && XPATH.test(value["field"]) && !value["field"].startsWith("ecm:") && !value["field"].startsWith("var:") && textList(value["types"]) === null && isLinkedXpath(value["show"]);
+    }
     var EXTERNAL_WIDGETS = /* @__PURE__ */ new Set([
         "text",
         "long-text",
@@ -872,6 +913,8 @@ var agenticUiValidator = (function () {
         if (options === void 0) { options = {}; }
         var task = options.task === true;
         var record = options.record !== false;
+        var linkedAllowed = options.linked === true;
+        var linkedReads = [];
         var findings = [];
         var add = function (path, kind, message2) {
             findings.push({ path: path, kind: kind, message: message2 });
@@ -1051,8 +1094,24 @@ var agenticUiValidator = (function () {
             }
             add(path, "structure", 'a value is a text, a number, a boolean, { "field": "<prefix>:<name>" } or { "computed": {...} }');
         };
+        var linkedRead = function (item, path, owner) {
+            if (!linkedAllowed) {
+                add(path, "parameter", "".concat(owner, " reads a linked record's property on a record page only, in a view layout"));
+                return;
+            }
+            if (!isLinkedReference(item)) {
+                add(path, "parameter", "".concat(owner, " takes a linked record's property as { \"field\": \"<prefix>:<name>\", \"types\": [<type>, ...], \"show\": \"<prefix>:<name>\" }, neither ecm: nor var:"));
+                return;
+            }
+            linkedReads.push({ reference: item, path: path });
+            variable(item.field, join(path, "field"));
+        };
         var parameter = function (kind, item, path, owner) {
             var e_19, _h;
+            if ((kind === "subject" || kind === "date" || kind === "dateOrToday") && isLinkedReferenceShape(item)) {
+                linkedRead(item, path, owner);
+                return;
+            }
             switch (kind) {
                 case "value":
                     value(item, path);
@@ -1191,9 +1250,77 @@ var agenticUiValidator = (function () {
                 add(at2, "parameter", "\"show\" is not for a table's column: a reference inside a complex value");
             else if (!Object.hasOwn(given, "types"))
                 add(at2, "parameter", '"show" needs "types", the types of the records it links to, whose schemas hold the property it shows');
+            else if (isRecord(given["show"]))
+                shownWidget(given["show"], at2);
+        };
+        var shownWidget = function (show, at2) {
+            var e_20, _h, e_21, _j;
+            var _a;
+            unknownKeys(show, ["field", "widget", "parameters"], at2);
+            var id = show["widget"];
+            var parameters2 = show["parameters"];
+            if (parameters2 !== void 0 && !isRecord(parameters2)) {
+                add(join(at2, "parameters"), "structure", "parameters must be an object");
+                return;
+            }
+            if (id === void 0) {
+                if (parameters2 !== void 0)
+                    add(join(at2, "parameters"), "parameter", "parameters need a widget to belong to");
+                return;
+            }
+            if (typeof id !== "string") {
+                add(join(at2, "widget"), "structure", "a widget is named by its ID");
+                return;
+            }
+            if (!Object.hasOwn(registries.widgets, id)) {
+                add(join(at2, "widget"), "unknown", "the widget \"".concat(id, "\" is not registered"));
+                return;
+            }
+            if (!SHOWN_WIDGETS.has(id)) {
+                add(join(at2, "widget"), "parameter", "the widget \"".concat(id, "\" does not show a linked record's property inside its link: one of ").concat(__spreadArray([], __read(SHOWN_WIDGETS), false).join(", "), " does"));
+                return;
+            }
+            var definition = registries.widgets[id];
+            var given = parameters2 != null ? parameters2 : {};
+            try {
+                for (var _k = __values(Object.entries(given)), _l = _k.next(); !_l.done; _l = _k.next()) {
+                    var _m = __read(_l.value, 2), name = _m[0], setting = _m[1];
+                    var where = join(join(at2, "parameters"), name);
+                    if (!Object.hasOwn(definition.parameters, name)) {
+                        add(where, "parameter", "the widget \"".concat(id, "\" has no parameter \"").concat(name, "\""));
+                        continue;
+                    }
+                    var problem = definition.parameters[name](setting);
+                    if (problem)
+                        add(where, "parameter", "".concat(name, " ").concat(problem));
+                    else if (isFieldReference(setting))
+                        add(where, "parameter", "a linked record's value is shown with literal parameters: ".concat(name, " would read the open record's ").concat(setting.field, ", not the linked one's"));
+                }
+            }
+            catch (e_20_1) { e_20 = { error: e_20_1 }; }
+            finally {
+                try {
+                    if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
+                }
+                finally { if (e_20) throw e_20.error; }
+            }
+            try {
+                for (var _o = __values((_a = definition.required) != null ? _a : []), _p = _o.next(); !_p.done; _p = _o.next()) {
+                    var name = _p.value;
+                    if (!Object.hasOwn(given, name))
+                        add(join(at2, "parameters"), "parameter", "the widget \"".concat(id, "\" needs \"").concat(name, "\""));
+                }
+            }
+            catch (e_21_1) { e_21 = { error: e_21_1 }; }
+            finally {
+                try {
+                    if (_p && !_p.done && (_j = _o.return)) _j.call(_o);
+                }
+                finally { if (e_21) throw e_21.error; }
+            }
         };
         var widget = function (entry2, path, form2, inTable) {
-            var e_20, _h, e_21, _j;
+            var e_22, _h, e_23, _j;
             if (inTable === void 0) { inTable = false; }
             var _a;
             var id = entry2["widget"];
@@ -1225,10 +1352,10 @@ var agenticUiValidator = (function () {
                 var problem = definition.parameters[name](setting);
                 if (problem)
                     add(join(join(path, "parameters"), name), "parameter", "".concat(name, " ").concat(problem));
-                else if (isFieldReference(setting))
-                    readBy("widget's parameter", function () { return variable(setting.field, join(join(join(path, "parameters"), name), "field")); });
                 else if (id === "document-link" && name === "show")
                     linkedShow(given, path, form2, inTable);
+                else if (isFieldReference(setting))
+                    readBy("widget's parameter", function () { return variable(setting.field, join(join(join(path, "parameters"), name), "field")); });
             };
             try {
                 for (var _k = __values(Object.entries(given)), _l = _k.next(); !_l.done; _l = _k.next()) {
@@ -1236,12 +1363,12 @@ var agenticUiValidator = (function () {
                     _loop_2(name, setting);
                 }
             }
-            catch (e_20_1) { e_20 = { error: e_20_1 }; }
+            catch (e_22_1) { e_22 = { error: e_22_1 }; }
             finally {
                 try {
                     if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
                 }
-                finally { if (e_20) throw e_20.error; }
+                finally { if (e_22) throw e_22.error; }
             }
             try {
                 for (var _o = __values((_a = definition.required) != null ? _a : []), _p = _o.next(); !_p.done; _p = _o.next()) {
@@ -1250,12 +1377,12 @@ var agenticUiValidator = (function () {
                         add(join(path, "parameters"), "parameter", "the widget \"".concat(id, "\" needs \"").concat(name, "\""));
                 }
             }
-            catch (e_21_1) { e_21 = { error: e_21_1 }; }
+            catch (e_23_1) { e_23 = { error: e_23_1 }; }
             finally {
                 try {
                     if (_p && !_p.done && (_j = _o.return)) _j.call(_o);
                 }
-                finally { if (e_21) throw e_21.error; }
+                finally { if (e_23) throw e_23.error; }
             }
             if (id === "table" && Array.isArray(given["columns"])) {
                 var columnsAt_1 = join(join(path, "parameters"), "columns");
@@ -1268,7 +1395,7 @@ var agenticUiValidator = (function () {
             return nested(path, function () { return fieldAt(entry2, path, form2, inForm, inTable); });
         };
         var fieldAt = function (entry2, path, form2, inForm, inTable) {
-            var e_22, _h;
+            var e_24, _h;
             if (typeof entry2 === "string") {
                 if (!XPATH.test(entry2))
                     add(path, "structure", "\"".concat(entry2, "\" is not a property, <prefix>:<name>"));
@@ -1320,12 +1447,12 @@ var agenticUiValidator = (function () {
                         add(join(path, key), "structure", "\"".concat(key, "\" belongs on a var: field: a task form shows the record's own properties read-only"));
                 }
             }
-            catch (e_22_1) { e_22 = { error: e_22_1 }; }
+            catch (e_24_1) { e_24 = { error: e_24_1 }; }
             finally {
                 try {
                     if (FORM_KEYS_1_1 && !FORM_KEYS_1_1.done && (_h = FORM_KEYS_1.return)) _h.call(FORM_KEYS_1);
                 }
-                finally { if (e_22) throw e_22.error; }
+                finally { if (e_24) throw e_24.error; }
             }
             if (!inForm)
                 return;
@@ -1412,6 +1539,7 @@ var agenticUiValidator = (function () {
             registries: registries,
             findings: findings,
             references: references,
+            linkedReads: linkedReads,
             add: add,
             claim: claim,
             unknownKeys: unknownKeys,
@@ -1435,16 +1563,51 @@ var agenticUiValidator = (function () {
         doneBy: "string",
         doneOn: "date"
     };
-    function linkedShowFindings(entry2, path, model) {
+    function linkedShowFindings(entry2, path, model, registries) {
+        var e_25, _h;
+        var _a;
         if (!isRecord(entry2) || entry2["widget"] !== "document-link")
             return [];
         var parameters2 = entry2["parameters"];
         if (!isRecord(parameters2))
             return [];
-        var show = parameters2.show, types2 = parameters2.types;
-        if (typeof show !== "string" || !XPATH.test(show) || !Array.isArray(types2))
+        var shown2 = linkedShowOf(parameters2["show"]);
+        var types2 = parameters2.types;
+        if (shown2 === null || !Array.isArray(types2))
             return [];
         var at2 = join(join(path, "parameters"), "show");
+        var findings = linkedPropertyFindings(shown2.field, types2, at2, model, "the field links to");
+        var widget = shown2.widget;
+        if (widget === null || !registries || !Object.hasOwn(registries.widgets, widget))
+            return findings;
+        var accepts = registries.widgets[widget].accepts;
+        try {
+            for (var types2_1 = __values(types2), types2_1_1 = types2_1.next(); !types2_1_1.done; types2_1_1 = types2_1.next()) {
+                var linked = types2_1_1.value;
+                var property = typeof linked === "string" ? (_a = propertiesOf(model, linked)) == null ? void 0 : _a.get(shown2.field) : void 0;
+                if (!property)
+                    continue;
+                var type = propertyTypeOf(property);
+                if (!accepts.includes(type))
+                    findings.push({
+                        path: join(at2, "widget"),
+                        kind: "parameter",
+                        message: "the widget \"".concat(widget, "\" does not show \"").concat(shown2.field, "\" of \"").concat(linked, "\", a ").concat(type, " property: it takes ").concat(accepts.join(" or "))
+                    });
+            }
+        }
+        catch (e_25_1) { e_25 = { error: e_25_1 }; }
+        finally {
+            try {
+                if (types2_1_1 && !types2_1_1.done && (_h = types2_1.return)) _h.call(types2_1);
+            }
+            finally { if (e_25) throw e_25.error; }
+        }
+        return findings;
+    }
+    function linkedPropertyFindings(show, types2, at2, model, what) {
+        if (!XPATH.test(show))
+            return [];
         return types2.flatMap(function (linked) {
             var _a;
             if (typeof linked !== "string" || linked === "")
@@ -1461,14 +1624,33 @@ var agenticUiValidator = (function () {
                 {
                     path: at2,
                     kind: "unknown",
-                    message: "".concat(whyMissing(model, linked, show), ", one of the types the field links to")
+                    message: "".concat(whyMissing(model, linked, show), ", one of the types ").concat(what)
                 }
             ];
         });
     }
-    function againstModel(file, type, model, registries, references) {
-        var e_23, _h, e_24, _j, e_25, _k, e_26, _l;
+    function linkedReadFindings(reads, properties, model) {
+        return reads.flatMap(function (_h) {
+            var reference = _h.reference, path = _h.path;
+            var findings = [];
+            var property = properties.get(reference.field);
+            if (property) {
+                var type = propertyTypeOf(property);
+                if (type !== "string")
+                    findings.push({
+                        path: join(path, "field"),
+                        kind: "parameter",
+                        message: "a rule reads one linked record, by a string property holding its id, and \"".concat(reference.field, "\" is a ").concat(type, " property")
+                    });
+            }
+            findings.push.apply(findings, __spreadArray([], __read(linkedPropertyFindings(reference.show, reference.types, join(path, "show"), model, "the rule links to")), false));
+            return findings;
+        });
+    }
+    function againstModel(file, type, model, registries, references, linkedReads) {
+        var e_26, _h, e_27, _j, e_28, _k, e_29, _l;
         if (references === void 0) { references = []; }
+        if (linkedReads === void 0) { linkedReads = []; }
         var _a;
         var findings = [];
         var add = function (path, kind, message2) {
@@ -1500,9 +1682,9 @@ var agenticUiValidator = (function () {
             };
         };
         var field = function (entry2, path, scope) {
-            var e_27, _h;
+            var e_30, _h;
             if (scope === ofType)
-                findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(entry2, path, model)), false));
+                findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(entry2, path, model, registries)), false));
             var name;
             var at2 = path;
             var widget;
@@ -1550,17 +1732,17 @@ var agenticUiValidator = (function () {
                             add(join(parameter("parts"), part), "unknown", subfields.missing(written));
                     }
                 }
-                catch (e_27_1) { e_27 = { error: e_27_1 }; }
+                catch (e_30_1) { e_30 = { error: e_30_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_27) throw e_27.error; }
+                    finally { if (e_30) throw e_30.error; }
                 }
             }
         };
         var checklist2 = function (entry2, path) {
-            var e_28, _h;
+            var e_31, _h;
             var name = entry2["field"];
             if (typeof name !== "string" || !XPATH.test(name))
                 return;
@@ -1587,12 +1769,12 @@ var agenticUiValidator = (function () {
                         add(at2, "parameter", "\"".concat(subfield, "\" of \"").concat(name, "\" is a ").concat(propertyTypeOf(read), " value, and a checklist reads it as a ").concat(wanted));
                 }
             }
-            catch (e_28_1) { e_28 = { error: e_28_1 }; }
+            catch (e_31_1) { e_31 = { error: e_31_1 }; }
             finally {
                 try {
                     if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                 }
-                finally { if (e_28) throw e_28.error; }
+                finally { if (e_31) throw e_31.error; }
             }
         };
         var created = function (entry2, path) {
@@ -1624,7 +1806,7 @@ var agenticUiValidator = (function () {
                     checklist2(card2["checklist"], join(join(path, index), "checklist"));
                 if (isRecord(card2) && isRecord(card2["related"]) && Array.isArray(card2["related"]["columns"])) {
                     var columns2_1 = join(join(join(path, index), "related"), "columns");
-                    card2["related"]["columns"].forEach(function (column, inner) { return findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(column, join(columns2_1, inner), model)), false)); });
+                    card2["related"]["columns"].forEach(function (column, inner) { return findings.push.apply(findings, __spreadArray([], __read(linkedShowFindings(column, join(columns2_1, inner), model, registries)), false)); });
                 }
                 if (isRecord(card2) && isRecord(card2["related"]) && isRecord(card2["related"]["create"]))
                     created(card2["related"]["create"], join(join(join(path, index), "related"), "create"));
@@ -1712,39 +1894,39 @@ var agenticUiValidator = (function () {
             for (var _m = __values(model.facets.values()), _o = _m.next(); !_o.done; _o = _m.next()) {
                 var facet = _o.value;
                 try {
-                    for (var _p = (e_24 = void 0, __values(facet.schemas)), _q = _p.next(); !_q.done; _q = _p.next()) {
+                    for (var _p = (e_27 = void 0, __values(facet.schemas)), _q = _p.next(); !_q.done; _q = _p.next()) {
                         var schema = _q.value;
                         var read = model.schemas.get(schema);
                         try {
-                            for (var _r = (e_25 = void 0, __values((_a = read == null ? void 0 : read.properties.keys()) != null ? _a : [])), _s = _r.next(); !_s.done; _s = _r.next()) {
+                            for (var _r = (e_28 = void 0, __values((_a = read == null ? void 0 : read.properties.keys()) != null ? _a : [])), _s = _r.next(); !_s.done; _s = _r.next()) {
                                 var name = _s.value;
                                 facetProperties.add("".concat(read == null ? void 0 : read.prefix, ":").concat(name));
                             }
                         }
-                        catch (e_25_1) { e_25 = { error: e_25_1 }; }
+                        catch (e_28_1) { e_28 = { error: e_28_1 }; }
                         finally {
                             try {
                                 if (_s && !_s.done && (_k = _r.return)) _k.call(_r);
                             }
-                            finally { if (e_25) throw e_25.error; }
+                            finally { if (e_28) throw e_28.error; }
                         }
                     }
                 }
-                catch (e_24_1) { e_24 = { error: e_24_1 }; }
+                catch (e_27_1) { e_27 = { error: e_27_1 }; }
                 finally {
                     try {
                         if (_q && !_q.done && (_j = _p.return)) _j.call(_p);
                     }
-                    finally { if (e_24) throw e_24.error; }
+                    finally { if (e_27) throw e_27.error; }
                 }
             }
         }
-        catch (e_23_1) { e_23 = { error: e_23_1 }; }
+        catch (e_26_1) { e_26 = { error: e_26_1 }; }
         finally {
             try {
                 if (_o && !_o.done && (_h = _m.return)) _h.call(_m);
             }
-            finally { if (e_23) throw e_23.error; }
+            finally { if (e_26) throw e_26.error; }
         }
         try {
             for (var references_1 = __values(references), references_1_1 = references_1.next(); !references_1_1.done; references_1_1 = references_1.next()) {
@@ -1754,43 +1936,44 @@ var agenticUiValidator = (function () {
                 add(path, "unknown", "".concat(whyMissing(model, type, xpath), ", so the ").concat(by, " naming it reads nothing"));
             }
         }
-        catch (e_26_1) { e_26 = { error: e_26_1 }; }
+        catch (e_29_1) { e_29 = { error: e_29_1 }; }
         finally {
             try {
                 if (references_1_1 && !references_1_1.done && (_l = references_1.return)) _l.call(references_1);
             }
-            finally { if (e_26) throw e_26.error; }
+            finally { if (e_29) throw e_29.error; }
         }
+        findings.push.apply(findings, __spreadArray([], __read(linkedReadFindings(linkedReads, properties, model)), false));
         return findings;
     }
     function schemasOf(model, type) {
-        var e_29, _h, e_30, _j;
+        var e_32, _h, e_33, _j;
         var _a, _b, _c, _d, _e, _f;
         var names = new Set((_b = (_a = model.types.get(type)) == null ? void 0 : _a.schemas) != null ? _b : []);
         try {
             for (var _k = __values((_d = (_c = model.types.get(type)) == null ? void 0 : _c.facets) != null ? _d : []), _l = _k.next(); !_l.done; _l = _k.next()) {
                 var facet = _l.value;
                 try {
-                    for (var _m = (e_30 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
+                    for (var _m = (e_33 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
                         var schema = _o.value;
                         names.add(schema);
                     }
                 }
-                catch (e_30_1) { e_30 = { error: e_30_1 }; }
+                catch (e_33_1) { e_33 = { error: e_33_1 }; }
                 finally {
                     try {
                         if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
                     }
-                    finally { if (e_30) throw e_30.error; }
+                    finally { if (e_33) throw e_33.error; }
                 }
             }
         }
-        catch (e_29_1) { e_29 = { error: e_29_1 }; }
+        catch (e_32_1) { e_32 = { error: e_32_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_29) throw e_29.error; }
+            finally { if (e_32) throw e_32.error; }
         }
         return names;
     }
@@ -1829,7 +2012,7 @@ var agenticUiValidator = (function () {
     ];
     var BANNER_KEYS = ["id", "label", "labelKey", "tone", "visibleWhen", "link"];
     var BANNER_LINK_KEYS = ["field"];
-    var BANNER_TONES = ["info", "warning", "negative"];
+    var BANNER_TONES = ["info", "warning", "negative", "positive"];
     var TAB_KEYS = ["id", "label", "labelKey", "visibleWhen", "cards"];
     var CARD_CONTENTS = [
         "fields",
@@ -1893,7 +2076,7 @@ var agenticUiValidator = (function () {
                 }
             ];
         }
-        var c = createChecker(registries, { task: task });
+        var c = createChecker(registries, { task: task, linked: mode === "view" && !task });
         var view = mode === "view";
         var form2 = mode === "edit" || mode === "create";
         var card2 = function (item, path, columns3) {
@@ -2028,7 +2211,7 @@ var agenticUiValidator = (function () {
                 });
         }
         if (model)
-            (_h = c.findings).push.apply(_h, __spreadArray([], __read(againstModel(file, model.type, model.model, registries, model.references ? c.references : [])), false));
+            (_h = c.findings).push.apply(_h, __spreadArray([], __read(againstModel(file, model.type, model.model, registries, model.references ? c.references : [], c.linkedReads)), false));
         return c.findings;
     }
     function banners(c, list) {
@@ -2146,7 +2329,7 @@ var agenticUiValidator = (function () {
         }
     }
     function holds(c, item, path) {
-        var e_31, _h;
+        var e_34, _h;
         if (!isRecord(item)) {
             c.add(path, "structure", "holds is an object");
             return;
@@ -2166,12 +2349,12 @@ var agenticUiValidator = (function () {
                     c.add(at2, "unknown", "the action \"".concat(id, "\" is not one of the package's actions.json that shows on a card (\"on\": [\"card\"])"));
             }
         }
-        catch (e_31_1) { e_31 = { error: e_31_1 }; }
+        catch (e_34_1) { e_34 = { error: e_34_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_31) throw e_31.error; }
+            finally { if (e_34) throw e_34.error; }
         }
         if (typeof item["place"] === "string" && item["place"] === item["release"])
             c.add(join(path, "release"), "structure", "place and release name two different actions");
@@ -2261,7 +2444,7 @@ var agenticUiValidator = (function () {
         var found = function (at2) { return c.add(at2, "structure", "an address is never written in a layout: a connector's address is the server's configuration"); };
         var queue2 = [[item, path, 0]];
         var _loop_3 = function (next) {
-            var e_32, _h;
+            var e_35, _h;
             var _j = __read(queue2[next], 3), value = _j[0], at2 = _j[1], depth = _j[2];
             if (typeof value === "string") {
                 if (ADDRESS.test(value) && !XPATH.test(value))
@@ -2274,19 +2457,19 @@ var agenticUiValidator = (function () {
                 value.forEach(function (inner, index) { return queue2.push([inner, join(at2, index), depth + 1]); });
             else if (isRecord(value))
                 try {
-                    for (var _k = (e_32 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
+                    for (var _k = (e_35 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
                         var _m = __read(_l.value, 2), key = _m[0], inner = _m[1];
                         if (ADDRESS.test(key))
                             found(join(at2, key));
                         queue2.push([inner, join(at2, key), depth + 1]);
                     }
                 }
-                catch (e_32_1) { e_32 = { error: e_32_1 }; }
+                catch (e_35_1) { e_35 = { error: e_35_1 }; }
                 finally {
                     try {
                         if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
                     }
-                    finally { if (e_32) throw e_32.error; }
+                    finally { if (e_35) throw e_35.error; }
                 }
         };
         for (var next = 0; next < queue2.length; next++) {
@@ -2382,7 +2565,7 @@ var agenticUiValidator = (function () {
         return Array.isArray(action2["on"]) ? action2["on"] : ["record"];
     }
     function action(c, item, path, operations) {
-        var e_33, _h;
+        var e_36, _h;
         if (!isRecord(item)) {
             c.add(path, "structure", "an action is an object");
             return;
@@ -2438,12 +2621,12 @@ var agenticUiValidator = (function () {
                     message(c, item[key], join(path, key));
             }
         }
-        catch (e_33_1) { e_33 = { error: e_33_1 }; }
+        catch (e_36_1) { e_36 = { error: e_36_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_33) throw e_33.error; }
+            finally { if (e_36) throw e_36.error; }
         }
         if ("refresh" in item && typeof item["refresh"] !== "boolean")
             c.add(join(path, "refresh"), "structure", "refresh is true or false");
@@ -2469,7 +2652,7 @@ var agenticUiValidator = (function () {
         return seen;
     }
     function parameters(c, value, path, on, fields, sent) {
-        var e_34, _h;
+        var e_37, _h;
         if (!isRecord(value)) {
             c.add(path, "structure", "parameters must be an object");
             return;
@@ -2494,16 +2677,16 @@ var agenticUiValidator = (function () {
                     c.value(item, at2);
             }
         }
-        catch (e_34_1) { e_34 = { error: e_34_1 }; }
+        catch (e_37_1) { e_37 = { error: e_37_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_34) throw e_34.error; }
+            finally { if (e_37) throw e_37.error; }
         }
     }
     function form(c, value, path, hasOperation, on) {
-        var e_35, _h;
+        var e_38, _h;
         if (!Array.isArray(value) || value.length === 0) {
             c.add(path, "structure", "a form is a list of the fields it asks for");
             return [];
@@ -2519,12 +2702,12 @@ var agenticUiValidator = (function () {
                 c.add(finding.path.startsWith(card2) ? "".concat(path).concat(finding.path.slice(card2.length)) : path, finding.kind, finding.message);
             }
         }
-        catch (e_35_1) { e_35 = { error: e_35_1 }; }
+        catch (e_38_1) { e_38 = { error: e_38_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_35) throw e_35.error; }
+            finally { if (e_38) throw e_38.error; }
         }
         return value.map(function (entry2, index) {
             var field = isRecord(entry2) ? entry2["field"] : entry2;
@@ -2623,7 +2806,7 @@ var agenticUiValidator = (function () {
         return { major: major, minor: minor, patch: patch, prerelease: match[4] ? match[4].split(".") : [] };
     }
     function compareVersions(a, b) {
-        var e_36, _h;
+        var e_39, _h;
         try {
             for (var _j = __values(["major", "minor", "patch"]), _k = _j.next(); !_k.done; _k = _j.next()) {
                 var part = _k.value;
@@ -2631,12 +2814,12 @@ var agenticUiValidator = (function () {
                     return a[part] < b[part] ? -1 : 1;
             }
         }
-        catch (e_36_1) { e_36 = { error: e_36_1 }; }
+        catch (e_39_1) { e_39 = { error: e_39_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_36) throw e_36.error; }
+            finally { if (e_39) throw e_39.error; }
         }
         if (a.prerelease.length === 0 || b.prerelease.length === 0)
             return b.prerelease.length - a.prerelease.length;
@@ -2658,7 +2841,7 @@ var agenticUiValidator = (function () {
         return 0;
     }
     function parseRange(text2) {
-        var e_37, _h;
+        var e_40, _h;
         var _a;
         var parts2 = text2.trim().split(/\s+/);
         var comparators = [];
@@ -2678,12 +2861,12 @@ var agenticUiValidator = (function () {
                     comparators.push({ operator: operator, version: version });
             }
         }
-        catch (e_37_1) { e_37 = { error: e_37_1 }; }
+        catch (e_40_1) { e_40 = { error: e_40_1 }; }
         finally {
             try {
                 if (parts2_1_1 && !parts2_1_1.done && (_h = parts2_1.return)) _h.call(parts2_1);
             }
-            finally { if (e_37) throw e_37.error; }
+            finally { if (e_40) throw e_40.error; }
         }
         return text2.trim() === "" ? null : comparators;
     }
@@ -2811,7 +2994,7 @@ var agenticUiValidator = (function () {
         });
     }
     function branding(c, value) {
-        var e_38, _h, e_39, _j;
+        var e_41, _h, e_42, _j;
         if (!isRecord(value)) {
             c.add("branding", "structure", "branding is an object");
             return;
@@ -2824,12 +3007,12 @@ var agenticUiValidator = (function () {
                     c.add(join("branding", key), "structure", "must be a text");
             }
         }
-        catch (e_38_1) { e_38 = { error: e_38_1 }; }
+        catch (e_41_1) { e_41 = { error: e_41_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_38) throw e_38.error; }
+            finally { if (e_41) throw e_41.error; }
         }
         if ("theme" in value && (typeof value["theme"] !== "string" || !ID.test(value["theme"])))
             c.add("branding.theme", "structure", "theme is the id of one of the server's themes");
@@ -2840,12 +3023,12 @@ var agenticUiValidator = (function () {
                     image(c, value[key], join("branding", key));
             }
         }
-        catch (e_39_1) { e_39 = { error: e_39_1 }; }
+        catch (e_42_1) { e_42 = { error: e_42_1 }; }
         finally {
             try {
                 if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
             }
-            finally { if (e_39) throw e_39.error; }
+            finally { if (e_42) throw e_42.error; }
         }
     }
     function image(c, value, path) {
@@ -3088,7 +3271,7 @@ var agenticUiValidator = (function () {
     var LABELS_KEYS = ["$schema", "version", "labels"];
     var MODULE_KEYS = ["$schema", "version", "settings"];
     function validateLabels(content) {
-        var e_40, _h;
+        var e_43, _h;
         var stop = unreadable(content, "a labels file");
         if (stop)
             return stop;
@@ -3111,12 +3294,12 @@ var agenticUiValidator = (function () {
                     c.add(at2, "structure", "must be a text");
             }
         }
-        catch (e_40_1) { e_40 = { error: e_40_1 }; }
+        catch (e_43_1) { e_43 = { error: e_43_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_40) throw e_40.error; }
+            finally { if (e_43) throw e_43.error; }
         }
         return c.findings;
     }
@@ -3155,7 +3338,7 @@ var agenticUiValidator = (function () {
     var FACET_KEYS = ["aggregate", "label", "labelKey", "widget"];
     var SEARCH_KEYS = ["label", "labelKey", "open"];
     var SEARCH_OPEN = ["single"];
-    var FACET_WIDGETS = ["document-link"];
+    var FACET_WIDGETS = ["document-link", "user", "group"];
     function validateQueue(content, options) {
         if (options === void 0) { options = {}; }
         var _a;
@@ -3208,7 +3391,7 @@ var agenticUiValidator = (function () {
                 else if (!Object.hasOwn(c.registries.widgets, widget))
                     c.add(join(at2, "widget"), "unknown", "the widget \"".concat(widget, "\" is not registered"));
                 else if (!FACET_WIDGETS.includes(widget))
-                    c.add(join(at2, "widget"), "parameter", "a facet shows its buckets as the server returns them, or through ".concat(FACET_WIDGETS.map(function (each) { return "\"".concat(each, "\""); }).join(" or "), ", not \"").concat(widget, "\""));
+                    c.add(join(at2, "widget"), "parameter", "a facet shows its buckets as the server returns them, or through ".concat(FACET_WIDGETS.map(function (each) { return "\"".concat(each, "\""); }).join(", "), ", not \"").concat(widget, "\""));
             }
             if (typeof facet["aggregate"] !== "string" || !NAME.test(facet["aggregate"]))
                 c.add(join(at2, "aggregate"), "structure", "needs the name of one of the page provider's aggregates");
@@ -3233,7 +3416,7 @@ var agenticUiValidator = (function () {
         [at(String.raw(__makeTemplateObject(["home.json"], ["home\\.json"]))), function () { return ({ kind: "home" }); }]
     ];
     function placeFile(path, hasApp) {
-        var e_41, _h;
+        var e_44, _h;
         if (hasApp === void 0) { hasApp = function () { return false; }; }
         var _a, _b, _c;
         var candidates = [];
@@ -3246,12 +3429,12 @@ var agenticUiValidator = (function () {
                     candidates.push({ file: placed, root: (_a = match[1]) != null ? _a : "" });
             }
         }
-        catch (e_41_1) { e_41 = { error: e_41_1 }; }
+        catch (e_44_1) { e_44 = { error: e_44_1 }; }
         finally {
             try {
                 if (PLACES_1_1 && !PLACES_1_1.done && (_h = PLACES_1.return)) _h.call(PLACES_1);
             }
-            finally { if (e_41) throw e_41.error; }
+            finally { if (e_44) throw e_44.error; }
         }
         return (_c = (_b = candidates.find(function (candidate) { return hasApp(candidate.root); })) != null ? _b : candidates[0]) != null ? _c : null;
     }
@@ -3267,7 +3450,7 @@ var agenticUiValidator = (function () {
     function untranslated(content, labels, catalogue) {
         var findings = [];
         var visit = function (value, path) {
-            var e_42, _h;
+            var e_45, _h;
             if (Array.isArray(value))
                 value.forEach(function (item, index) { return visit(item, join(path, index)); });
             else if (isRecord(value))
@@ -3288,12 +3471,12 @@ var agenticUiValidator = (function () {
                             visit(item, at2);
                     }
                 }
-                catch (e_42_1) { e_42 = { error: e_42_1 }; }
+                catch (e_45_1) { e_45 = { error: e_45_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_42) throw e_42.error; }
+                    finally { if (e_45) throw e_45.error; }
                 }
         };
         visit(content, "");
@@ -3345,7 +3528,7 @@ var agenticUiValidator = (function () {
         }); });
     }
     function withPackageActions(registries, actions) {
-        var e_43, _h;
+        var e_46, _h;
         if (!isRecord(actions) || !Array.isArray(actions["actions"]))
             return registries;
         var row = [];
@@ -3362,12 +3545,12 @@ var agenticUiValidator = (function () {
                     bulk.push(action2["id"]);
             }
         }
-        catch (e_43_1) { e_43 = { error: e_43_1 }; }
+        catch (e_46_1) { e_46 = { error: e_46_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_43) throw e_43.error; }
+            finally { if (e_46) throw e_46.error; }
         }
         return withRegistered(registries, { rowActions: row, bulkActions: bulk });
     }
@@ -3377,7 +3560,7 @@ var agenticUiValidator = (function () {
         return __spreadProps(__spreadValues({}, registries), { cardActions: new Set(card2) });
     }
     function missingAssets(content, context) {
-        var e_44, _h;
+        var e_47, _h;
         if (!isRecord(content) || !isRecord(content["branding"]))
             return [];
         var branding2 = content["branding"];
@@ -3396,12 +3579,12 @@ var agenticUiValidator = (function () {
                     });
             }
         }
-        catch (e_44_1) { e_44 = { error: e_44_1 }; }
+        catch (e_47_1) { e_47 = { error: e_47_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_44) throw e_44.error; }
+            finally { if (e_47) throw e_47.error; }
         }
         return findings;
     }

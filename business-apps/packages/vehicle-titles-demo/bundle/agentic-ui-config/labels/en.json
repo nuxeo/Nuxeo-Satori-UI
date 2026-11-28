@@ -15,6 +15,8 @@
     "vehicle-titles.facet.issuingState": "State of issue",
     "vehicle-titles.banner.deal.cancelled": "This deal was cancelled.",
     "vehicle-titles.banner.deal.notFunded": "This financed deal is contracted and not yet funded, more than 10 days after the sale.",
+    "vehicle-titles.banner.deal.titleOverdue": "This deal's title is overdue: its title work opened more than 30 days ago and it is not issued.",
+    "vehicle-titles.banner.deal.titleAwaitingLienRelease": "This deal's title is waiting for its lien release.",
     "vehicle-titles.banner.title.overdue": "This title has been open more than 30 days and is not yet issued.",
     "vehicle-titles.banner.title.awaitingLienRelease": "The payoff was sent: this title waits for its lien holder to release the lien.",
     "vehicle-titles.card.vehicleDeal.deal": "Deal",

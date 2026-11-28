@@ -5,7 +5,7 @@ import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { provideRouter } from '@angular/router';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NxsToastService, provideNxsComponents } from '@nuxeo/satori-platform/components';
-import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
+import { DOCUMENT_RULE_EVALUATORS, ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
 import {
   BrowseService,
   CURRENT_USERNAME,
@@ -44,6 +44,15 @@ const CASE_TYPE: DocumentTypeDefinition = {
       fields: {
         number: { type: 'string' },
         checklist: {
+          type: 'complex[]',
+          fields: {
+            item: { type: 'string' },
+            done: { type: 'boolean' },
+            doneBy: { type: 'string' },
+            doneOn: { type: 'date' },
+          },
+        },
+        otherChecklist: {
           type: 'complex[]',
           fields: {
             item: { type: 'string' },
@@ -288,6 +297,8 @@ describe('RecordPageComponent: ticking a checklist item', () => {
             doneOn: '2026-11-26T00:00:00.000Z',
           },
           HELD[2],
+          // The item the card shows with no entry gets one, not done, so a query finds it.
+          { item: 'decisionLetter', done: false },
         ],
       });
       // While it is written: the box shows what was asked, the item what the record holds.
@@ -331,6 +342,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
         },
         HELD[1],
         HELD[2],
+        { item: 'decisionLetter', done: false },
       ]);
       expect(box('appealLetter').checked).toBe(false);
 
@@ -418,6 +430,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
         HELD[0],
         expect.objectContaining({ item: 'medicalRecords', done: false }),
         HELD[2],
+        { item: 'decisionLetter', done: false },
       ]);
       // That record arrives, read after the first tick and before the second, then the answer.
       fixture.componentRef.setInput(
@@ -441,6 +454,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
       // A third tick starts from the second's answer, not from the record read before it.
       box('decisionLetter').click();
       await settle();
+      // The entry the first tick wrote for it, not done, is the one ticked: in its place.
       expect(sentAt(2)).toEqual([
         HELD[0],
         expect.objectContaining({ item: 'medicalRecords', done: false }),
@@ -560,7 +574,15 @@ describe('RecordPageComponent: ticking a checklist item', () => {
       writes[0].next(appeal({ properties: { 'case:checklist': first } }, null));
       writes[0].complete();
       await settle();
-      // The second card's starts from the first's answer: its entry added, every other kept.
+      // The first tick wrote an entry, not done, for every item either card shows without one.
+      expect(first).toEqual([
+        HELD[0],
+        expect.objectContaining({ item: 'medicalRecords', done: true }),
+        HELD[2],
+        { item: 'decisionLetter', done: false },
+        { item: 'creditApplication', done: false },
+      ]);
+      // The second card's starts from the first's answer: its entry ticked, every other kept.
       finance().click();
       await settle();
       const second = (updateDocument.mock.calls[1][1] as Record<string, unknown>)['case:checklist'];
@@ -568,6 +590,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
         HELD[0],
         expect.objectContaining({ item: 'medicalRecords', done: true }),
         HELD[2],
+        { item: 'decisionLetter', done: false },
         {
           item: 'creditApplication',
           done: true,
@@ -595,7 +618,52 @@ describe('RecordPageComponent: ticking a checklist item', () => {
         expect.objectContaining({ item: 'appealLetter', done: false }),
         expect.objectContaining({ item: 'medicalRecords', done: true }),
         HELD[2],
+        { item: 'decisionLetter', done: false },
         expect.objectContaining({ item: 'creditApplication', done: true }),
+      ]);
+    });
+
+    it("writes no entry for the items of a card its rule hides: a cash deal's finance documents", async () => {
+      TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+      await render(appeal(), {
+        version: 2,
+        cards: [
+          ...page(true).cards,
+          {
+            id: 'finance',
+            label: 'Finance documents',
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'case:number' }, 'CASE-0000'],
+            },
+            checklist: {
+              field: 'case:checklist',
+              tickable: true,
+              items: [{ id: 'creditApplication', label: 'Credit application' }],
+            },
+          },
+          {
+            id: 'other',
+            label: 'Another checklist',
+            checklist: {
+              field: 'case:otherChecklist',
+              tickable: true,
+              items: [{ id: 'elsewhere', label: 'On another property' }],
+            },
+          },
+        ],
+      });
+      // The other property's card is drawn, so its item is shown: it is not this property's.
+      expect(root().querySelector('[data-card-id="other"]')).not.toBeNull();
+      expect(root().querySelector('[data-card-id="finance"]')).toBeNull();
+      box('medicalRecords').click();
+      await settle();
+      // Neither the hidden card's item nor another property's: only those shown over this one.
+      expect(sentAt(0)).toEqual([
+        HELD[0],
+        expect.objectContaining({ item: 'medicalRecords', done: true }),
+        HELD[2],
+        { item: 'decisionLetter', done: false },
       ]);
     });
   });

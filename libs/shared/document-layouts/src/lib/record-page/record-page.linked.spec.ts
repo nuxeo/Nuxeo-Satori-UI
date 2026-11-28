@@ -336,6 +336,33 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
     });
   });
 
+  describe('a positive banner', () => {
+    it('draws in the success tone, its icon decorative, and passes axe at WCAG 2.2 AA', async () => {
+      const page = {
+        version: 2,
+        banners: [
+          {
+            id: 'issued',
+            tone: 'positive',
+            label: 'Its title is issued',
+            visibleWhen: { type: 'app.rules.fieldIn', parameters: [status, 'Issued'] },
+            link: { field: 'vdeal:title' },
+          },
+        ],
+        cards: [{ id: 'deal', fields: ['vdeal:number'] }],
+      };
+      const root = await render(deal({ 'vdeal:title': OTHER }), page);
+      const banner = root.querySelector('[data-banner-id="issued"] .nxs-banner');
+      expect(banner?.getAttribute('data-tone')).toBe('success');
+      expect(banner?.querySelector('.nxs-banner__icon')?.textContent?.trim()).toBe('check_circle');
+      expect(banner?.querySelector('.nxs-banner__icon')?.getAttribute('aria-hidden')).toBe('true');
+      expect(banner?.querySelector('.nxs-banner__message')?.textContent?.trim()).toBe(
+        'Its title is issued',
+      );
+      expect(await wcag22(root)).toEqual([]);
+    });
+  });
+
   describe("a rule over a linked record's property", () => {
     it("shows a banner, a card and a field by the linked record's property", async () => {
       const root = await render(deal({ 'vdeal:title': TITLE }));
@@ -417,9 +444,32 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
     it('decides nothing until the linked types are read', async () => {
       const types = new Subject<{ schema: string; definition: LayoutFieldType } | null>();
       linkedProperty = vi.fn(() => types);
-      const root = await render(deal({ 'vdeal:title': TITLE }));
+      const page = {
+        ...DEAL_PAGE,
+        banners: [
+          {
+            id: 'not-awaiting',
+            label: 'Not awaiting a lien release',
+            visibleWhen: { type: 'core.not', parameters: [awaitingLien] },
+          },
+          ...DEAL_PAGE.banners,
+        ],
+      };
+      const root = await render(deal({ 'vdeal:title': TITLE }), page);
       expect(linkedRecords).not.toHaveBeenCalled();
+      // Not even the `core.not` of a rule whose linked types are still read.
       expect(banners(root)).toEqual([]);
+    });
+
+    it('reads the record a rule names when no field on the page names it', async () => {
+      const page = {
+        version: 2,
+        banners: DEAL_PAGE.banners,
+        cards: [{ id: 'deal', fields: ['vdeal:number'] }],
+      };
+      const root = await render(deal({ 'vdeal:title': TITLE }), page);
+      expect(linkedRecords.mock.calls).toEqual([[[TITLE], ['vehicletitle']]]);
+      expect(banners(root)).toEqual(['lien', 'overdue']);
     });
 
     it('passes no rule, and says why, over a property none of its types has', async () => {

@@ -126,6 +126,11 @@ export type RecordValueView =
    * listed yet, so the field shows nothing, rather than the id, until it is.
    */
   | { readonly kind: 'records'; readonly records: readonly RecordLink[] }
+  /**
+   * `file`: one file, by its name, which the record page downloads when it is pressed, fetched
+   * through the blob service as the reader. `xpath` is the property, which the download names.
+   */
+  | { readonly kind: 'file'; readonly name: string; readonly xpath: string }
   /** `address`: one line per part. */
   | { readonly kind: 'lines'; readonly lines: readonly string[] }
   | {
@@ -330,6 +335,8 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
       return view.chips.join(', ');
     case 'records':
       return view.records.map((record) => record.text).join(', ');
+    case 'file':
+      return view.name;
     case 'lines':
       return view.lines.join(', ');
     case 'table':
@@ -473,6 +480,12 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     };
   },
   chips: ({ value }) => listOrOne(Array.isArray(value) ? value : [value], (item) => item),
+  file: ({ key, value }) => {
+    // A blob as Nuxeo writes one: `{ name, mime-type, length, data, ... }`. A file with no name is
+    // shown by none, and offered as no download.
+    const name = isRecord(value) && typeof value['name'] === 'string' ? value['name'].trim() : '';
+    return name === '' ? EMPTY : { kind: 'file', name, xpath: key };
+  },
   'status-badge': ({ value, parameters, definition }, context) => {
     const stored = textOf(value);
     const tones = isRecord(parameters['tones']) ? parameters['tones'] : {};

@@ -242,6 +242,11 @@ export const PACKAGED_WIDGETS: Readonly<Record<string, WidgetDefinition>> = {
   'status-badge': { accepts: ['string'], parameters: { tones }, required: ['tones'] },
   table: { accepts: ['complex[]'], parameters: { columns }, required: ['columns'] },
   image: { accepts: ['blob'], parameters: {} },
+  /**
+   * One file, by its name, which a record page downloads on a press: a property holding one blob,
+   * such as a signed agreement (layout-v2.md, section 3). In a form, read-only, as `image` is.
+   */
+  file: { accepts: ['blob'], parameters: {} },
   'file-list': { accepts: ['blob[]', 'complex[]'], parameters: {} },
 };
 

@@ -848,6 +848,26 @@ describe('DocumentLayoutService', () => {
       expect(found?.has(GONE)).toBe(false);
     });
 
+    it("keeps a version's label, and none for a live record or a version with no label", async () => {
+      const VERSION = 'f027e437-0795-4ec7-8e6c-4bb1dd4c75cc';
+      const BLANK = 'a72723a2-73cf-4d88-8804-5b58a360ab3e';
+      const answer = read([MEMBER, VERSION, BLANK]);
+      http
+        .expectOne((r) => r.url === SEARCH)
+        .flush({
+          entries: [
+            // A live record's label is its next version's, and is not shown.
+            { ...record(MEMBER, 'Agreement'), isVersion: false, versionLabel: '1.1' },
+            { ...record(VERSION, 'Agreement'), isVersion: true, versionLabel: ' 1.0 ' },
+            { ...record(BLANK, 'Agreement'), isVersion: true, versionLabel: '' },
+          ],
+        });
+      const found = await answer;
+      expect(found?.get(MEMBER)).not.toHaveProperty('versionLabel');
+      expect(found?.get(VERSION)?.versionLabel).toBe('1.0');
+      expect(found?.get(BLANK)).not.toHaveProperty('versionLabel');
+    });
+
     it('never sends a schema name that is not one in the header', async () => {
       const answer = firstValueFrom(
         service.linkedRecords([MEMBER], ['member', 'dc, *', '*', '', 'x\nproperties: *']),

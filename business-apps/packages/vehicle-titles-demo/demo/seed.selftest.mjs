@@ -505,9 +505,9 @@ await against({}, async ({ server, run }) => {
     deal?.properties['vdeal:tradeIn'] === true &&
       dealAt(server, 'VD-5001')?.properties['vdeal:tradeIn'] === false &&
       deal?.properties['vdeal:price'] === 24900 &&
-      deal?.properties['vdeal:year'] === '2022' &&
+      deal?.properties['vdeal:year'] === 2022 &&
       dealAt(server, 'VD-5002')?.properties['vdeal:lender'] === null,
-    'a trade-in is a boolean, a price a number, a year a text, and a cash deal has no lender',
+    'a trade-in is a boolean, a price a number, a year a number, and a cash deal has no lender',
   );
   expect(
     Object.keys(deal?.properties ?? {}).every((key) => !key.startsWith('files:')),

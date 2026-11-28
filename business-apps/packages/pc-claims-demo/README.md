@@ -489,7 +489,7 @@ was written to any Nuxeo, and nothing was read from one.
 npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/pc-claims-demo-0.2.0.zip`, held to the package's own `content-model.json`, since it
+It writes `dist/pc-claims-demo-0.3.0.zip`, held to the package's own `content-model.json`, since it
 ships a stand-in model. Held to the version before it, as CI holds a pull request to its base:
 
 ```bash
@@ -501,8 +501,10 @@ npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0 \
 
 On 27 November 2026, against 0.1.0: 4 layouts held to the model, 11 files passed, 41 changes, which
 need a patch, and 0.2.0 raises the minor, since the package now needs a domain module's add-on,
-`nuxeo-agentic-capture`, which a server without it cannot install. To hold the core system's card
-to its connector too:
+`nuxeo-agentic-capture`, which a server without it cannot install. On 28 November 2026, 0.3.0
+against 0.2.0, with `--previous-platform` as CI runs it: 4 layouts held to the model, 11 files
+passed, "1 change, which needs a patch version. 0.3.0 raises the minor": the Adjuster facet through
+`user`, which a platform before it leaves out. To hold the core system's card to its connector too:
 
 ```bash
 npm run app-package -- business-apps/packages/pc-claims-demo --platform 0.2.0 --registered business-apps/packages/pc-claims-demo/demo/registered.json
@@ -521,11 +523,11 @@ it when the container next starts, and removes itself: `nuxeoctl mp-install` ref
 server runs, and the server is the container's main process.
 
 ```bash
-docker cp business-apps/packages/pc-claims-demo/dist/pc-claims-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/pc-claims-demo/dist/pc-claims-demo-0.3.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/pc-claims-demo-0.2.0.zip --accept=true > /var/log/nuxeo/pc-claims-kit-install.log 2>&1 || echo "pc-claims kit: install failed, see /var/log/nuxeo/pc-claims-kit-install.log"' 'rm -f "$0"' > /tmp/zz-pc-claims-kit-install.sh && chmod 755 /tmp/zz-pc-claims-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/pc-claims-demo-0.3.0.zip --accept=true > /var/log/nuxeo/pc-claims-kit-install.log 2>&1 || echo "pc-claims kit: install failed, see /var/log/nuxeo/pc-claims-kit-install.log"' 'rm -f "$0"' > /tmp/zz-pc-claims-kit-install.sh && chmod 755 /tmp/zz-pc-claims-kit-install.sh
 ```
 
 ```bash
@@ -704,9 +706,11 @@ candidate. Items the moves kit raised that are fixed now are at the end.
 10. **`app-layout` cannot pick `document-link` for a stand-in reference,** since `app-model` binds no
     property to a type (the moves kit's item 5, still): the policy link and its three `show`
     fields were given their widget by hand, and the form edits the link as an id.
-11. **A facet takes no widget but `document-link`,** so the Adjuster facet shows user names as
-    stored, `noor.halvorsen`, where the column beside it shows the person through `user`.
-    Candidate: `user` on a facet.
+11. ~~**A facet takes no widget but `document-link`,** so the Adjuster facet shows user names as
+    stored, `noor.halvorsen`, where the column beside it shows the person through `user`.~~
+    **Fixed:** a facet takes `user` and `group` (app-definition-v2.md, section 4), each bucket shown
+    by the person's or the group's name, its key still what is sent back. 0.3.0's open claims queue
+    shows the Adjuster facet through `user`.
 12. **`app-model` gives each aggregate ten buckets,** with no option: an adjuster facet on a larger
     team would leave adjusters out with no word.
 13. **The skill says nothing of the `external` card or connectors:** what a kit writes, where the

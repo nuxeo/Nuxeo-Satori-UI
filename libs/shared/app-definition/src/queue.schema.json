@@ -199,6 +199,7 @@
             "status-badge",
             "table",
             "image",
+            "file",
             "file-list"
           ]
         },

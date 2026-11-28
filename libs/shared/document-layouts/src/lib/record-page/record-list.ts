@@ -724,6 +724,8 @@ export class RecordListComponent {
       ...recordLookups(
         this.records(),
         this.translate.instant('document-layouts.record.unavailable'),
+        (title, label) =>
+          this.translate.instant('document-layouts.record.version', { title, label }),
       ),
       // Set for each cell to the row's own: `currency`'s code may name a property.
       property: () => undefined,

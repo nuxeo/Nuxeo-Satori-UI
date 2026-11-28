@@ -81,7 +81,7 @@ function fieldEditing(
  * The widgets a form shows and never edits: a file is changed in Attachments. A `file-list` over a
  * `complex[]` property would otherwise be a list of entries anyone could add to or remove from.
  */
-const SHOWN_ONLY: ReadonlySet<string> = new Set(['image', 'file-list']);
+const SHOWN_ONLY: ReadonlySet<string> = new Set(['image', 'file', 'file-list']);
 
 const isRule = (value: unknown): value is RecordRule =>
   typeof value === 'string' || (typeof value === 'object' && value !== null);

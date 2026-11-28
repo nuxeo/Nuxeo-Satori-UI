@@ -61,6 +61,7 @@ describe('NxsBannerComponent', () => {
     ['info', 'info'],
     ['warning', 'warning'],
     ['error', 'error_outline'],
+    ['success', 'check_circle'],
   ])('shows the %s icon for its tone, decorative to a reader', async (tone, name) => {
     host.tone.set(tone);
     await render();

@@ -108,12 +108,17 @@ package carries a fictional one, as the moves and P&C claims kits do.
   `Contracted`, `Funded`, `Delivered` or `Cancelled`; `vdeal:financeType` `Cash`, `Loan` or `Lease`;
   `vtitle:status` `Awaiting title`, `Awaiting lien release`, `In hand`, `Submitted to state` or
   `Issued`. The types have the platform's default lifecycle, which nothing here reads.
-- **The model year is text,** `vdeal:year`, not a number: a `long` shows grouped, as "2,024", on a
-  record page and in a list (feedback, item 5).
+- **The model year is a whole number,** `vdeal:year`, a `long`, shown with `number` and
+  `"grouping": false`, so as "2024", not "2,024", on the deal page and in the missing documents
+  queue. **Since 0.2.0:** until then it was text, as no widget showed a number without grouping
+  (feedback, item 5).
 - **A deal links its titles; a title lists its deals.** A deal holds two ids, its vehicle's title
   and its trade-in's; the title page lists the deals that name it in either, in two related lists.
   A vehicle sold twice, the first sale unwound, lists both deals. The deal page reads the title's
-  number, state, status and lien holder from the title, with `show`, so nothing goes stale.
+  number, state, status and lien holder from the title, with `show`, so nothing goes stale; the
+  status as a badge, `show` through `status-badge`, in the title's own tones. **Since 0.2.0,** two
+  banners on the deal page read the title too, with a rule over the linked record: its title is
+  overdue, and its title waits for its lien release, each linking to the title (feedback, item 10).
 - **Not folders,** so each opens as a record page. No folder lists the types among its subtypes, so
   the Create menu does not offer them: the seed writes the records.
 - **The names say what they are,** and clash with no other kit's (the release candidate's stage 3,
@@ -134,8 +139,11 @@ package carries a fictional one, as the moves and P&C claims kits do.
   cannot say that not every item a layout lists is done, since the items are the layout's, not the
   model's. So a deal is listed when its checklist has an entry not done, and **a deal must have an
   entry for each of its documents** to be listed for the one it lacks. The seed writes them all, done
-  or not; a tick sets one done, and an untick keeps it, not done. A deal written some other way with
-  no entry for a document is not listed for it (feedback, item 6).
+  or not; a tick sets one done, and an untick keeps it, not done. **Since 0.2.0's platform, a tick
+  also writes every missing entry, not done,** for each document the page shows over the checklist,
+  on both cards: so a deal anyone has ticked once is listed for any document it lacks. A deal never
+  ticked and written some other way with no entry for a document is still not listed for it
+  (feedback, item 6).
 - **And the other way:** a loan changed to cash keeps its finance documents' entries, so one not done
   keeps the deal in the queue, though its page no longer shows the finance card, where it could be
   ticked. The next seed run writes the checklist again; on a real server, whoever changes the
@@ -422,8 +430,12 @@ above passed again (the gate).
 npm run app-package -- business-apps/packages/vehicle-titles-demo --platform 0.2.0
 ```
 
-It writes `dist/vehicle-titles-demo-0.1.0.zip`, held to the package's own `content-model.json`,
-since it ships a stand-in model: sha256 `c451afe3…0e168` for 0.1.0, on 27 November 2026.
+It writes `dist/vehicle-titles-demo-0.2.0.zip`, held to the package's own `content-model.json`,
+since it ships a stand-in model: sha256 `993752dc…a90ea57c` for 0.2.0, on 28 November 2026 (0.1.0's
+was `c451afe3…0e168`). Held to 0.1.0 with `--previous` and `--previous-platform`, as CI holds a pull
+request to its base: "5 changes, which need a patch version. 0.2.0 raises the minor". The minor
+because the year's stored type changed, from text to a number, which deals a server already holds
+would need written again; the pipeline compares the app definition's files, not the schema's.
 
 ## Installing it on a local Nuxeo
 
@@ -436,11 +448,11 @@ it when the container next starts, and removes itself: `nuxeoctl mp-install` ref
 server runs, and the server is the container's main process.
 
 ```bash
-docker cp business-apps/packages/vehicle-titles-demo/dist/vehicle-titles-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/vehicle-titles-demo/dist/vehicle-titles-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/vehicle-titles-demo-0.1.0.zip --accept=true > /var/log/nuxeo/vehicle-titles-kit-install.log 2>&1 || echo "vehicle titles kit: install failed, see /var/log/nuxeo/vehicle-titles-kit-install.log"' 'rm -f "$0"' > /tmp/zz-vehicle-titles-kit-install.sh && chmod 755 /tmp/zz-vehicle-titles-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/vehicle-titles-demo-0.2.0.zip --accept=true > /var/log/nuxeo/vehicle-titles-kit-install.log 2>&1 || echo "vehicle titles kit: install failed, see /var/log/nuxeo/vehicle-titles-kit-install.log"' 'rm -f "$0"' > /tmp/zz-vehicle-titles-kit-install.sh && chmod 755 /tmp/zz-vehicle-titles-kit-install.sh
 ```
 
 ```bash
@@ -576,14 +588,19 @@ candidate for the tools' owners.
 4. **`app-model --properties --force` writes a type's `content-model.json` entry from scratch,**
    dropping a schema added to it (the onboarding kit's item 4, still): seen here, and put back by
    hand.
-5. **A number shows grouped, and no widget says otherwise:** a model year stored as a `long` shows
-   as "2,024", with or without `number`, whose only parameter is `decimals`. The year is text.
-   Candidate: `number` with a `grouping` parameter.
+5. ~~**A number shows grouped, and no widget says otherwise:** a model year stored as a `long`
+   shows as "2,024", with or without `number`, whose only parameter is `decimals`. The year is
+   text.~~ **Fixed:** `number` takes `"grouping": false` (layout-v2.md, section 3), and 0.2.0 stores
+   the year as a `long` shown that way, as "2024".
 6. **No query says "not every item done", and nothing writes a checklist's entries but a tick:** the
    items are the layout's, so a page provider can find a deal with an entry not done, never one
    lacking an entry. The queue depends on every deal carrying an entry per document, which only the
    seed writes. Candidates: the checklist card writing the record's missing entries, not done, on
    its first tick; or a count of items done that the platform keeps on the record for queries.
+   **Fixed, by the first:** a tick writes an entry, not done, for every item the page shows over
+   the property, on every card it draws (layout-v2.md, section 7, which says why not the count: a
+   count cannot say how many items a record's cards require). A deal never ticked still has none
+   but the seed's.
 7. **Nothing runs a package's NXQL before a server does.** `vdocs:checklist/*/done = 0`, a boolean
    in a list's subfield, and `NOW('-P31D')` passed the token check and are run nowhere yet; the
    moves kit's run found `BETWEEN NOW(...)` refused only by a query (its item 12). Candidate: a
@@ -597,10 +614,19 @@ candidate for the tools' owners.
    together. Even written alike they part for some hours a day, the rule on the reader's calendar
    and the query on the server's clock ([above](#titles-overdue-the-queue-and-the-banner-say-the-same)).
    Candidate: a queue that filters a page provider's records by a registered rule, or a note in
-   layout-v2.md on writing the two to agree.
-10. **A rule reads the open record only,** so the deal page cannot warn that its title is overdue
+   layout-v2.md on writing the two to agree. **Fixed, by the note:** layout-v2.md's section 5 says
+   how to write the two to agree, a banner over a linked record included, and why a queue filtered
+   by a rule in the browser is not built: its pages, totals and facets are counted on the server.
+   The kit's own control still holds the title page's banner and the queue together.
+10. ~~**A rule reads the open record only,** so the deal page cannot warn that its title is overdue
     or awaiting a lien release (layout-v2.md, section 5); it shows the title's status as text
-    through `show`, which gives the shown value no widget (section 12), so not as a badge.
+    through `show`, which gives the shown value no widget (section 12), so not as a badge.~~
+    **Fixed:** a rule on a record page reads a linked record's property,
+    `{ "field", "types", "show" }`, through the same search `show` reads with, so as the reader
+    (layout-v2.md, section 5); and `show` takes a widget, `status-badge` among them (section 12).
+    0.2.0's deal page has both: the title overdue and awaiting lien release banners, and the title's
+    status as a badge. The overdue banner names the four open statuses and `dateAfter` 30, as the
+    title page and the overdue titles queue do.
 11. **Two checklist cards over one property are covered by the text, not by an example:**
     layout-v2.md's section 7 says a tick writes the whole list from the page's copy, keeping every
     other entry, one tick at a time on any card, which holds for two cards over one property; its
@@ -642,7 +668,10 @@ Each reversible, each the agent's recommendation:
   for everyone. Hiding a queue is not a security control.
 - **No Edit form, no `actions.json`, no `external` card:** none was asked for, and no other system's
   data was. The title's lien is the record's.
-- **The model year as text,** for the grouping above.
+- **The model year as a whole number** since 0.2.0, shown without grouping. It was text in 0.1.0.
+- **The deal page's title banners** since 0.2.0: overdue, in the title page's words for it, and
+  awaiting its lien release, each linking to the title; and the title's status as a badge, in the
+  title page's tones.
 - **The seed puts a deal's checklist back every run,** undoing a demo's ticks.
 - **Banners not asked for:** a cancelled deal, a financed deal not funded 10 days after the sale,
   and a title awaiting its lien release.

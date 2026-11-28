@@ -498,15 +498,22 @@ describe('banners', () => {
     expect(messages(page())).toEqual([]);
   });
 
-  it('take the three tones only', () => {
+  it('take the four tones only: a status badge has neutral besides', () => {
     expect(
       messages(
-        page(...['info', 'warning', 'negative'].map((tone) => ({ ...ending, id: tone, tone }))),
+        page(
+          ...['info', 'warning', 'negative', 'positive'].map((tone) => ({
+            ...ending,
+            id: tone,
+            tone,
+          })),
+        ),
       ),
     ).toEqual([]);
-    expect(messages(page({ ...ending, tone: 'positive' }))).toEqual([
-      'banners[0].tone: tone is one of info, warning, negative [structure]',
-    ]);
+    for (const tone of ['neutral', 'success', 'error'])
+      expect(messages(page({ ...ending, tone }))).toEqual([
+        'banners[0].tone: tone is one of info, warning, negative, positive [structure]',
+      ]);
   });
 
   it('are refused outside view mode, as a timeline is', () => {

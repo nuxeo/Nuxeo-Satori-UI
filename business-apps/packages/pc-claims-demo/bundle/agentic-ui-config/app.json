@@ -4,7 +4,7 @@
   "id": "pc-claims",
   "label": "Property Claims",
   "labelKey": "pc-claims.app",
-  "packageVersion": "0.2.0",
+  "packageVersion": "0.3.0",
   "platform": ">=0.2.0 <1.0.0",
   "address": "property-claims",
   "groups": ["property-claims-adjusters", "property-claims-managers"],

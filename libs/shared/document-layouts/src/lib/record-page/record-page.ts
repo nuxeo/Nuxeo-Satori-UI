@@ -1,4 +1,4 @@
-import { NgTemplateOutlet, formatDate } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet, formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -21,6 +21,7 @@ import { compute, type ComputationContext } from '@agentic-ui/shared/computation
 import {
   NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
+  NxsButtonComponent,
   NxsCheckboxComponent,
   NxsCommentsComponent,
   NxsIconComponent,
@@ -41,9 +42,12 @@ import {
   BrowseService,
   CURRENT_USERNAME,
   DocumentChangesService,
+  DocumentDetailService,
   NuxeoDocument,
+  PERMISSION_DENIED_KEY,
   canWriteDocument,
   docTypeLabel,
+  isPermissionDeniedError,
   renderTrustedHtml,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, filter, forkJoin, map, merge, of, switchMap } from 'rxjs';
@@ -133,6 +137,7 @@ const BANNER_TONE: Readonly<Record<RecordBannerTone, NxsBannerTone>> = {
   info: 'info',
   warning: 'warning',
   negative: 'error',
+  positive: 'success',
 };
 
 /** A banner as the page shows it: what `nxs.primitives.banner` is given. */
@@ -444,6 +449,7 @@ function usableShow(linked: LinkedProperty | null | undefined): linked is Linked
     MatTabsModule,
     NgTemplateOutlet,
     NxsBannerComponent,
+    NxsButtonComponent,
     NxsCheckboxComponent,
     NxsCommentsComponent,
     NxsIconComponent,
@@ -868,6 +874,7 @@ export class RecordPageComponent {
       done,
       username,
       `${day}T00:00:00.000Z`,
+      this.shownItems(checklist.field),
     );
     this.ticking.set({ card: card.id, item: item.id, done });
     this.injector
@@ -899,6 +906,64 @@ export class RecordPageComponent {
         error: (failure: unknown) => {
           this.ticking.set(null);
           this.toast.error(this.tickFailure(failure));
+        },
+      });
+  }
+
+  /**
+   * The items the page shows now over the checklist property `field`, on every card it draws, in
+   * the page's order: those a tick writes an entry for where the record has none (layout-v2.md,
+   * section 7). A card its rule hides, or a tab's, is not drawn, so its items are not written: a
+   * cash deal is not given the finance documents' entries.
+   */
+  private shownItems(field: string): string[] {
+    const page = this.shown();
+    const cards = page.tabs ? page.tabs.flatMap((tab) => tab.cards) : page.cards;
+    return cards.flatMap((card) =>
+      card.checklist !== null && this.cardChecklist(card.id)?.field === field
+        ? card.checklist.items.map((shown) => shown.id)
+        : [],
+    );
+  }
+
+  /** The file being downloaded, by its field's place, while it is: its button waits meanwhile. */
+  protected readonly downloading = signal<string | null>(null);
+
+  /**
+   * A `file` field's download (layout-v2.md, section 3): the property's blob, fetched through the
+   * blob service as the reader, `clientReason` `download` as the row action's is, saved under its
+   * name through a blob URL revoked at once. The server decides whether the reader may read it; a
+   * refusal, or any failure, is said in a toast, and the page stays as it was. One at a time per
+   * field. A read, so offered on a read-only page too.
+   */
+  protected download(field: RecordFieldShown): void {
+    const value = field.value;
+    if (value.kind !== 'file' || this.downloading() === field.place) return;
+    const uid = this.current().uid;
+    this.downloading.set(field.place);
+    this.injector
+      .get(DocumentDetailService)
+      .fetchBlobByXpath(uid, value.xpath, { clientReason: 'download' })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          this.downloading.set(null);
+          const url = URL.createObjectURL(blob);
+          const link = this.injector.get(DOCUMENT).createElement('a');
+          link.href = url;
+          link.download = value.name;
+          link.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (failure: unknown) => {
+          this.downloading.set(null);
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(failure)
+                ? PERMISSION_DENIED_KEY
+                : 'document-layouts.file.download-failed',
+            ),
+          );
         },
       });
   }
@@ -1012,6 +1077,7 @@ export class RecordPageComponent {
     const lookups = recordLookups(
       records,
       this.translate.instant('document-layouts.record.unavailable'),
+      (title, label) => this.translate.instant('document-layouts.record.version', { title, label }),
     );
     const ruleContext = {
       ...this.ruleContext.context(),
