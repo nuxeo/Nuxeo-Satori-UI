@@ -1,5 +1,6 @@
 import { expect, newNuxeoApiContext, nuxeoCredentials, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
+import { SMOKE } from './smoke';
 
 /**
  * Administration — gated by `adminGuard`. The spec reads who the test account is from `/me` and
@@ -25,18 +26,20 @@ test.afterAll(async () => {
 });
 
 test.describe('administration', () => {
-  test('is reachable exactly when the account has administration access', async ({
-    signedIn: page,
-  }) => {
-    await page.goto('/#/administration/users-groups', { waitUntil: 'networkidle' });
-    if (isAdmin) {
-      await expect(page.locator('lib-administration-shell')).toBeVisible();
-      await expect(page.locator('lib-admin-users-groups-page')).toBeVisible();
-    } else {
-      await expect(page).toHaveURL(/#\/dashboard/);
-      await expect(page.locator('lib-administration-shell')).toHaveCount(0);
-    }
-  });
+  test(
+    'is reachable exactly when the account has administration access',
+    SMOKE,
+    async ({ signedIn: page }) => {
+      await page.goto('/#/administration/users-groups', { waitUntil: 'networkidle' });
+      if (isAdmin) {
+        await expect(page.locator('lib-administration-shell')).toBeVisible();
+        await expect(page.locator('lib-admin-users-groups-page')).toBeVisible();
+      } else {
+        await expect(page).toHaveURL(/#\/dashboard/);
+        await expect(page.locator('lib-administration-shell')).toHaveCount(0);
+      }
+    },
+  );
 
   for (const [route, host] of [
     ['analytics', 'lib-admin-analytics-page'],

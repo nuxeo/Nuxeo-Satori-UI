@@ -22,10 +22,15 @@ name: App definition packages
 #   GitHub's, or from a workflow business-apps/trusted-signers.json does not name, such as a fork's,
 #   nothing is signed, and the run says so in a warning and its summary. Once signed, the signature
 #   is verified as every later reader verifies it, and kept beside the zip in its own artifact.
-# - `publish`, only when `sign` signed: the signature verified again, against the trusted signers
-#   and the tag's package and version, then Nuxeo Marketplace preprod, the way
-#   build-marketplace.yml publishes the platform's own package. Nothing publishes on a merge,
-#   because a build nobody asked for does not belong in the shared preprod list.
+# - `publish`, only when `sign` signed, and only once another person has approved it: the job
+#   names the GitHub environment `marketplace-preprod`, so GitHub holds it until a reviewer that
+#   environment requires approves, and its first step, scripts/app-package-approval.mjs, refuses to
+#   go on unless GitHub's record of this run shows an approval by a person who did not start it. An
+#   environment nobody has set up, an administrator's bypass and a self-review leave none. Then
+#   the signature verified again, against the trusted signers and the tag's package and version,
+#   then Nuxeo Marketplace preprod, the way build-marketplace.yml publishes the platform's own
+#   package. Nothing publishes on a merge, because a build nobody asked for does not belong in the
+#   shared preprod list. What an administrator sets: docs/business-apps/package-pipeline.md, 9.2.
 #
 # **Permissions.** Only `sign` has `id-token: write`, for Sigstore's certificate, and
 # `attestations: write`, to record its attestations with the repository; it reads no secret.
@@ -63,6 +68,7 @@ on:
       - 'scripts/package-signature.mjs'
       - 'scripts/app-package-signature.mjs'
       - 'scripts/app-package-signature.selftest.mjs'
+      - 'scripts/app-package-approval.mjs'
       - 'business-apps/trusted-signers.json'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
@@ -102,6 +108,7 @@ on:
       - 'scripts/package-signature.mjs'
       - 'scripts/app-package-signature.mjs'
       - 'scripts/app-package-signature.selftest.mjs'
+      - 'scripts/app-package-approval.mjs'
       - 'business-apps/trusted-signers.json'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
@@ -341,6 +348,9 @@ jobs:
     needs: [check, sign]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-package/') && needs.sign.outputs.signed == 'true'
     runs-on: ubuntu-latest
+    # Held here until a reviewer the environment requires approves this run. Its name is fixed,
+    # never an expression, so no input can pick an environment nobody guards.
+    environment: marketplace-preprod
     permissions:
       contents: read
     steps:
@@ -352,6 +362,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+
+      # The environment holds a job only while it requires a reviewer, and lets an administrator,
+      # or a self-review, through. So this reads GitHub's record of this run, from its public API
+      # with no token, and refuses unless a person other than whoever started it approved it.
+      - name: Check another person approved this run
+        run: node scripts/app-package-approval.mjs --environment marketplace-preprod
 
       - uses: actions/download-artifact@v4
         with:

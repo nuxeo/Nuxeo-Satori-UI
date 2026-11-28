@@ -164,6 +164,13 @@ jobs:
       - name: Run CodeQL trigger and Windows wait controls
         run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
 
+      # The pull request smoke run's controls: its run prefix, its verdict on Playwright's report,
+      # and e2e-smoke.yml's own shape (read-only, skipped only without secrets, serialised, held to
+      # the verdict, swept). Here rather than in that workflow, so they run on a fork's pull request
+      # too, where the smoke run itself is skipped. Node alone, no server, under a second.
+      - name: Run the E2E smoke run's controls
+        run: npm run beta:e2e-smoke-selftest
+
       # Tooling that runs outside CI — the review-loop harvest and the Confluence publisher both
       # need credentials CI does not have — so these offline controls are the only part of either
       # that CI can exercise. The harvest silently dropped every "Previously missed" finding, and

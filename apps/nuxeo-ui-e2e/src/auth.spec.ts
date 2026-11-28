@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
 
+import {
+  assertIdentity,
+  checkPageIdentity,
+} from '../../../scripts/beta-harness/identity-guard.mjs';
+import { nuxeoCredentials } from './nuxeo-credentials';
+import { SMOKE } from './smoke';
+
 /**
  * The route guards, tested **without** the `signedIn` fixture.
  *
@@ -42,7 +49,7 @@ const SIGNED_OUT_KEY = 'agentic_ui_signed_out';
 test.use({ httpCredentials: undefined });
 
 test.describe('authentication and authorisation', () => {
-  test('an explicitly signed-out visitor is redirected to sign-in', async ({ page }) => {
+  test('an explicitly signed-out visitor is redirected to sign-in', SMOKE, async ({ page }) => {
     // The flag `AuthService.markSignedOut()` writes. `runHydration()` checks it before
     // anything else, sets state to null and clears storage — so the guard must redirect.
     await page.addInitScript((key) => sessionStorage.setItem(key, '1'), SIGNED_OUT_KEY);
@@ -54,7 +61,7 @@ test.describe('authentication and authorisation', () => {
     await expect(page.locator('lib-browse')).toHaveCount(0);
   });
 
-  test('the sign-in surface renders', async ({ page }) => {
+  test('the sign-in surface renders', SMOKE, async ({ page }) => {
     await page.addInitScript((key) => sessionStorage.setItem(key, '1'), SIGNED_OUT_KEY);
     await page.goto('/#/login', { waitUntil: 'networkidle' });
 
@@ -223,34 +230,84 @@ test.describe('authentication and authorisation', () => {
      * browser, not from this project's `use` block, so a relative `goto` would otherwise
      * have no origin to resolve against.
      */
-    test('an anonymous visitor is not granted administration access', async ({ browser }) => {
+    test(
+      'an anonymous visitor is not granted administration access',
+      SMOKE,
+      async ({ browser }) => {
+        /**
+         * The privilege boundary. `adminGuard` admits only `hasAdministrationAccess()` and sends
+         * everyone else to `/dashboard`. With anonymous auth enabled server-side, an unauthenticated
+         * visitor reaches the app as `Anonymous` — so this is the assertion that keeps that from
+         * meaning "reaches administration".
+         *
+         * The config sends Basic auth to the app origin on **every** request (`send: 'always'`,
+         * NXSAT-643) because a guest-enabled Nuxeo never issues a 401 challenge. Correct for the
+         * rest of the suite, and fatal here: it authenticates this "anonymous visitor" as the
+         * administrator and grants exactly the access this test exists to deny. The test then
+         * failed reporting that `Anonymous` reached administration, when what reached it was a
+         * fully privileged session. The paragraph above this one predicted that in prose —
+         * "`httpCredentials` off … would grant exactly the access this test exists to deny" —
+         * while nothing enforced it. Now the context does.
+         */
+        const context = await browser.newContext({
+          httpCredentials: undefined,
+          baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:4200',
+          viewport: { width: 1440, height: 900 },
+        });
+        const page = await context.newPage();
+        try {
+          await page.goto('/#/administration', { waitUntil: 'networkidle' });
+          await page.waitForTimeout(1500);
+
+          expect(page.url(), 'Anonymous should be redirected off /administration').not.toMatch(
+            /#\/administration/,
+          );
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    test('signs in through the form as the account typed into it', SMOKE, async ({ browser }) => {
       /**
-       * The privilege boundary. `adminGuard` admits only `hasAdministrationAccess()` and sends
-       * everyone else to `/dashboard`. With anonymous auth enabled server-side, an unauthenticated
-       * visitor reaches the app as `Anonymous` — so this is the assertion that keeps that from
-       * meaning "reaches administration".
+       * The one test that drives the sign-in form. Every other test is signed in by the
+       * `signedIn` fixture, which injects the session the form would have made, so until this
+       * test the form itself was never submitted by the suite.
        *
-       * The config sends Basic auth to the app origin on **every** request (`send: 'always'`,
-       * NXSAT-643) because a guest-enabled Nuxeo never issues a 401 challenge. Correct for the
-       * rest of the suite, and fatal here: it authenticates this "anonymous visitor" as the
-       * administrator and grants exactly the access this test exists to deny. The test then
-       * failed reporting that `Anonymous` reached administration, when what reached it was a
-       * fully privileged session. The paragraph above this one predicted that in prose —
-       * "`httpCredentials` off … would grant exactly the access this test exists to deny" —
-       * while nothing enforced it. Now the context does.
+       * Built without the suite's credentials, as the test above is: with them, every request
+       * carries the account's Basic header whatever the form does, and a form that ignored what
+       * was typed would still land on a working dashboard. Here the only credential the page
+       * has is the one the app made from the two fields.
+       *
+       * The signed-out flag is set before the page loads, so the guest path cannot sign the page
+       * in as `Anonymous` first and the form is reached. It is set on every new document, which a
+       * hash navigation is not, and the app clears it once signed in.
+       *
+       * The proof is Nuxeo's, not the URL's: the identity guard reads the session the app stored
+       * and asks `/me` who it is, from the page as the app asks and replayed from Node, so a
+       * dashboard reached as anyone but the typed account fails.
        */
+      const { username, password } = nuxeoCredentials();
+      const baseURL = process.env['E2E_BASE_URL'] ?? 'http://localhost:4200';
       const context = await browser.newContext({
         httpCredentials: undefined,
-        baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:4200',
+        baseURL,
         viewport: { width: 1440, height: 900 },
       });
       const page = await context.newPage();
       try {
-        await page.goto('/#/administration', { waitUntil: 'networkidle' });
-        await page.waitForTimeout(1500);
+        await page.addInitScript((key) => sessionStorage.setItem(key, '1'), SIGNED_OUT_KEY);
+        await page.goto('/#/login', { waitUntil: 'networkidle' });
 
-        expect(page.url(), 'Anonymous should be redirected off /administration').not.toMatch(
-          /#\/administration/,
+        const form = page.locator('form.login-form');
+        await form.locator('input[formcontrolname="username"]').fill(username);
+        await form.locator('input[formcontrolname="password"]').fill(password);
+        await form.locator('button[type="submit"]').click();
+
+        await expect(page, 'signing in should land on the dashboard').toHaveURL(/#\/dashboard/);
+        assertIdentity(
+          [await checkPageIdentity(page, username, new URL(baseURL).origin)],
+          'after signing in through the form',
         );
       } finally {
         await context.close();

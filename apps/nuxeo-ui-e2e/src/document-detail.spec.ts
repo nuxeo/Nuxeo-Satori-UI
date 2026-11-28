@@ -1,6 +1,7 @@
 import { expect, expectSurfaceWithData, newNuxeoApiContext, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { SMOKE } from './smoke';
 
 /**
  * Document detail — metadata, permissions and the tab surfaces.
@@ -61,7 +62,7 @@ function domainOf(path: string): string {
 }
 
 test.describe('document detail', () => {
-  test('opens a document and shows its metadata', async ({ signedIn: page }) => {
+  test('opens a document and shows its metadata', SMOKE, async ({ signedIn: page }) => {
     const doc = await aDocument();
     await page.goto(`/#/doc/${doc.uid}`, { waitUntil: 'networkidle' });
 
@@ -73,7 +74,7 @@ test.describe('document detail', () => {
     await expect(page.locator('lib-document-detail')).toContainText(domainOf(doc.path));
   });
 
-  test('exposes the tab surfaces the Beta scope covers', async ({ signedIn: page }) => {
+  test('exposes the tab surfaces the Beta scope covers', SMOKE, async ({ signedIn: page }) => {
     const doc = await aDocument();
     await page.goto(`/#/doc/${doc.uid}`, { waitUntil: 'networkidle' });
 

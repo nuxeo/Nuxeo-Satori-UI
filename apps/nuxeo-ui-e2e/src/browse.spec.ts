@@ -1,5 +1,6 @@
 import { aRootChild, expect, expectRowWithData, newNuxeoApiContext, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
+import { SMOKE } from './smoke';
 
 /**
  * Browse — the primary authenticated surface, and the one every other path starts from.
@@ -28,7 +29,7 @@ test.afterAll(async () => {
 });
 
 test.describe('browse', () => {
-  test('lists repository content at the root', async ({ signedIn: page }) => {
+  test('lists repository content at the root', SMOKE, async ({ signedIn: page }) => {
     await page.goto('/#/browse', { waitUntil: 'networkidle' });
 
     const rootChild = await aRootChild(api);
@@ -51,7 +52,7 @@ test.describe('browse', () => {
     await expect(page.locator('lib-browse')).toContainText('Create / Import');
   });
 
-  test('offers navigation into the repository tree', async ({ signedIn: page }) => {
+  test('offers navigation into the repository tree', SMOKE, async ({ signedIn: page }) => {
     await page.goto('/#/browse', { waitUntil: 'networkidle' });
 
     const rootChild = await aRootChild(api);

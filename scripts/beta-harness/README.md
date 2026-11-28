@@ -598,6 +598,64 @@ Both mistakes above were made on [#522](https://github.com/nuxeo/Nuxeo-Satori-UI
 stopped twice mid-selftest, then `git add -A`, and the perturbation reached a commit and a pushed
 branch. It was caught by the gate rather than by the author.
 
+## The end-to-end suite
+
+`apps/nuxeo-ui-e2e` is Playwright against a live Nuxeo, through the served app. It is not one of
+`beta:gate`'s gates, which have no "precondition not met" path; it runs in three places:
+
+| Where                                                                        | What                                         | Against                              |
+| ---------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------ |
+| `npm run beta:e2e`, `npm run beta:e2e-smoke`                                 | the whole suite, or the `@smoke` tests alone | the local stack, `E2E_BASE_URL`      |
+| [`e2e-smoke.yml`](../../.github/workflows/e2e-smoke.yml), every pull request | the `@smoke` tests, Chromium                 | the hosted Nuxeo, `NUXEO_E2E_TARGET` |
+| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml), 03:00 UTC      | the whole suite, Chromium and WebKit         | the hosted Nuxeo                     |
+
+**The smoke run on pull requests** into `main`, `integration/**` and `staging/**` runs the tests
+tagged `SMOKE` (`apps/nuxeo-ui-e2e/src/smoke.ts`, which lists them and why), selected with
+`--grep @smoke` on the `chromium` project. Its steps, in order:
+
+1. **The secrets,** `NUXEO_E2E_TARGET`, `NUXEO_USER`, `NUXEO_PASS` and `SATORI_GH_READONLY_TOKEN`. A
+   pull request from a fork, or Dependabot's, has none of them: its `E2E smoke (chromium)` job is
+   skipped, which shows grey and never green, and the `E2E smoke not run (no secrets)` job says why
+   in a notice and the run's summary. A Dependabot update is smoke-tested only once someone pushes to
+   its branch. On this repository's own branches a missing secret fails.
+2. `e2e-preflight.mjs`, with `E2E_BROWSERS=chromium`, so it launches only the engine the run uses.
+3. Playwright, with `--trace off` and a deadline of its own, then **`e2e-smoke-verdict.mjs`** on its
+   report. Playwright 1.63.0 exits 0 when a test skips itself (measured), and 1 when a `--grep`
+   matches nothing, which a `--pass-with-no-tests` would turn to 0. The verdict refuses a report with
+   fewer tests than `--min`, the subset's size, 16, a test not tagged `@smoke`, one on another
+   project, and one that did not pass. A test that passed on a retry passes and is named in the
+   summary.
+   **No trace, no page snapshot:** a Playwright trace holds the browser context's options,
+   `httpCredentials` and so `NUXEO_PASS` among them, in plain text, and the value of every field a
+   test fills, measured with 1.63.0 on 28 November 2026; and the page snapshot a failed test's
+   `error-context.md` carries holds a filled field's value. This repository is public and its
+   artifacts can be downloaded by anyone signed in, so both CI runs pass `--trace off` and set
+   `PLAYWRIGHT_NO_COPY_PROMPT`, which leaves `error-context.md` without the page.
+4. **`e2e-sweep.mjs`,** on every outcome once the app was served, cancellation included. Every
+   title the smoke specs make, through `uniqueTitle`, starts with the run's `E2E_RUN_PREFIX`,
+   `e2e-pr<number>-<run>-<attempt>-`, and the sweep trashes whatever live document still carries
+   it. The specs delete their own; this is for a run stopped before they could. The prefix's shape
+   is checked before anything is written, since the sweep's `LIKE '<prefix>%'` is all that keeps it
+   off every other document.
+
+**Serialised:** a new push cancels the pull request's run in progress, and across pull requests
+the smoke job runs in one concurrency group, `e2e-hosted-nuxeo-smoke`, one at a time. GitHub keeps
+one run waiting per group, so a third pull request's run cancels the waiting one, which shows as
+cancelled until it is re-run. The nightly keeps its own groups, and its dispatched branches run at
+the same time as each other: a smoke run may overlap them, which is accepted. The prefix and the
+specs' random suffixes keep their documents apart; the server's load and the account are shared.
+
+**Required, or not:** a check is required when a branch protection rule or a ruleset on the target
+branch names it, `E2E smoke (chromium)` here. That is an administrator's setting, not a file, and
+none names it yet. A required check that is skipped counts as passed, which is what lets a fork's
+pull request merge without the secrets.
+
+Its controls, `npm run beta:e2e-smoke-selftest`, run in `ci.yml`'s guardrails job on every pull
+request, forks' included, with Node alone: the prefix's shape, the verdict run on reports written
+for the purpose, the sweep against a stand-in Nuxeo on a local port, and `e2e-smoke.yml`'s own text,
+each part broken in a copy and refused. Locally, `E2E_BROWSERS=chromium npm run beta:e2e-smoke`
+runs the subset against the local stack.
+
 ## Environment
 
 | Variable                      | Default                         | Purpose                                              |

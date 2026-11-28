@@ -17,12 +17,14 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-# One run at a time. Each integration branch queues in a group of its own instead: the scheduled
-# run dispatches all of them at the same moment (job `integration-branches`), and a group keeps only
-# one pending run, so a shared group would cancel all but the last. They are dispatched after
-# `main`'s suite has finished, so they do not overlap it.
+# One run at a time. Each integration and staging branch queues in a group of its own instead: the
+# scheduled run dispatches all of them at the same moment (job `integration-branches`), and a group
+# keeps only one pending run, so a shared group would cancel all but the last. They are dispatched
+# after `main`'s suite has finished, so they do not overlap it, though they run at the same time as
+# each other, and as any pull request's smoke run (e2e-smoke.yml). Each spec titles what it makes
+# with a random suffix, which keeps their documents apart; the server and the account are shared.
 concurrency:
-  group: ${{ startsWith(github.ref, 'refs/heads/integration/') && format('e2e-nightly-{0}', github.ref) || 'e2e-nightly' }}
+  group: ${{ (startsWith(github.ref, 'refs/heads/integration/') || startsWith(github.ref, 'refs/heads/staging/')) && format('e2e-nightly-{0}', github.ref) || 'e2e-nightly' }}
   cancel-in-progress: false
 
 permissions:
@@ -88,14 +90,21 @@ jobs:
           E2E_ALLOWED_HOSTS: localhost:4200
         run: npx tsx scripts/beta-harness/e2e-preflight.mjs
 
+      # `--trace off`: a trace holds the browser context's options, `httpCredentials` and so
+      # NUXEO_PASS among them, in plain text (measured with Playwright 1.63.0 on 28 November 2026),
+      # and this public repository's artifacts can be downloaded by anyone signed in. The suite and
+      # its projects are unchanged; only the artifact a failure leaves is. `PLAYWRIGHT_NO_COPY_PROMPT`
+      # likewise keeps the page's snapshot, which holds a filled field's value, out of a failed
+      # test's error-context.md.
       - name: Run the suite (${{ matrix.project }})
         env:
           CI: 'true'
+          PLAYWRIGHT_NO_COPY_PROMPT: '1'
           NUXEO_USER: ${{ secrets.NUXEO_USER }}
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
-        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }}
+        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }} --trace off
 
-      # Traces, screenshots and video are retained on failure only (playwright.config.ts).
+      # Screenshots and video are retained on failure only (playwright.config.ts); no trace, above.
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,16 +121,17 @@ jobs:
   # A schedule only ever runs the default branch's copy of this workflow, so on its own an
   # integration branch (AGENTS/06-git-workflow.md) would get no nightly run, and its code would
   # reach `main`, in one final pull request, untested end to end. So the scheduled run dispatches
-  # this workflow on every `integration/**` branch once `main`'s suite has finished, whatever its
-  # result. A dispatched run tests that branch's code with that branch's copy of this file, and
-  # dispatches nothing itself: this job runs on the schedule only. It lists the branches when it
-  # runs, so a new integration branch needs no edit here.
+  # this workflow on every `integration/**` branch, and on every `staging/**` branch, which reaches
+  # an integration branch the same way, once `main`'s suite has finished, whatever its result. A
+  # dispatched run tests that branch's code with that branch's copy of this file, and dispatches
+  # nothing itself: this job runs on the schedule only. It lists the branches when it runs, so a new
+  # integration or staging branch needs no edit here.
   #
   # Every branch is tried even when one fails, so one branch that cannot be dispatched does not
   # leave the others untested. The dispatch step records the failures and stays green; the step
   # after it fails the job with their names, which the report job puts in the tracking issue.
   integration-branches:
-    name: Dispatch on integration branches
+    name: Dispatch on integration and staging branches
     needs: e2e
     if: ${{ !cancelled() && github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
@@ -131,15 +141,18 @@ jobs:
     outputs:
       failed: ${{ steps.dispatch.outputs.failed }}
     steps:
-      - name: Dispatch this workflow on each integration branch
+      - name: Dispatch this workflow on each integration and staging branch
         id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          branches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/integration/" --jq '.[].ref | sub("^refs/heads/"; "")')
+          # Two calls, each its own assignment, so either one failing fails the step under `set -e`.
+          integration=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/integration/" --jq '.[].ref | sub("^refs/heads/"; "")')
+          staging=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/heads/staging/" --jq '.[].ref | sub("^refs/heads/"; "")')
+          branches=$(printf '%s\n%s\n' "$integration" "$staging")
           if [ -z "$branches" ]; then
-            echo "No integration branches."
+            echo "No integration or staging branches."
           fi
           failed=""
           while IFS= read -r branch; do
@@ -163,7 +176,8 @@ jobs:
 
   # A red nightly nobody sees is worth about as much as no job. This opens one tracking issue
   # and comments on it for each further failure, rather than a new issue every night. An
-  # integration branch gets an issue of its own, so that its failures do not read as `main`'s. A
+  # integration or staging branch gets an issue of its own, so that its failures do not read as
+  # `main`'s. A
   # failed dispatch is reported too, because it leaves those branches with no run at all.
   report:
     name: Report failure
@@ -184,7 +198,7 @@ jobs:
           set -euo pipefail
           title="E2E nightly is failing"
           case "$GITHUB_REF" in
-            refs/heads/integration/*) title="$title on $GITHUB_REF_NAME" ;;
+            refs/heads/integration/* | refs/heads/staging/*) title="$title on $GITHUB_REF_NAME" ;;
           esac
           body=""
           if [ "$E2E_RESULT" = failure ]; then

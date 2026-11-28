@@ -10,6 +10,7 @@ import {
   uniqueTitle,
   type MadeDoc,
 } from './e2e-data';
+import { SMOKE } from './smoke';
 
 /**
  * Trash — a document trashed through the API appears in the app's trash, and restoring it in the
@@ -34,7 +35,7 @@ test.afterAll(async () => {
 });
 
 test.describe('trash', () => {
-  test('lists a trashed document as a row and restores it', async ({ signedIn: page }) => {
+  test('lists a trashed document as a row and restores it', SMOKE, async ({ signedIn: page }) => {
     const title = uniqueTitle('e2e-trash');
     made = await createFile(api, await aWorkspacePath(api), title);
     expect(made, 'the fixture document should be created').not.toBeNull();
