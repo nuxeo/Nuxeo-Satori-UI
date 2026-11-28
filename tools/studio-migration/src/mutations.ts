@@ -227,6 +227,18 @@ export function ruleHolders(conversion: Conversion): RuleHolder[] {
         if (isRecord(entry))
           found.push({ path, file, holder: entry, at: `${shown.at}.visibleWhen` });
       }
+      // A column of a card of related records: `tabs.1.cards.0.related.columns.3`.
+      for (const at of relatedColumnRules(content)) {
+        const file = clone(content) as Json;
+        const holder = at
+          .split('.')
+          .reduce<unknown>(
+            (value, key) =>
+              isRecord(value) || Array.isArray(value) ? (value as Json)[key] : undefined,
+            file,
+          );
+        if (isRecord(holder)) found.push({ path, file, holder, at: `${at}.visibleWhen` });
+      }
     }
     if (path === 'actions.json') listed(path, 'actions');
     if (path === 'home.json') listed(path, 'cards');
@@ -234,8 +246,30 @@ export function ruleHolders(conversion: Conversion): RuleHolder[] {
     if (path.startsWith('queues/') && isRecord(conversion.app[path])) {
       const file = clone(conversion.app[path]) as Json;
       if ('visibleWhen' in file) found.push({ path, file, holder: file, at: 'visibleWhen' });
+      listed(path, 'columns');
     }
   }
+  return found;
+}
+
+/** Where a layout file's cards of related records hold a column with a rule: `cards.0.related.columns.2`. */
+function relatedColumnRules(content: unknown): string[] {
+  const found: string[] = [];
+  const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const cards = (list: unknown, at: string): void =>
+    listOf(list).forEach((card, index) => {
+      const related = isRecord(card) ? card['related'] : undefined;
+      if (!isRecord(related)) return;
+      listOf(related['columns']).forEach((column, position) => {
+        if (isRecord(column) && 'visibleWhen' in column)
+          found.push(`${at}cards.${index}.related.columns.${position}`);
+      });
+    });
+  if (!isRecord(content)) return found;
+  cards(content['cards'], '');
+  listOf(content['tabs']).forEach((tab, index) => {
+    if (isRecord(tab)) cards(tab['cards'], `tabs.${index}.`);
+  });
   return found;
 }
 
@@ -521,12 +555,14 @@ const M1_MUTATIONS: readonly Mutation[] = [
     caughtBy: 5,
     apply: (conversion) => {
       const entries = conversion.report.constructs;
+      // One left out under its condition, which no file of the conversion shows.
       const field = entries.find(
         (entry) =>
           entry.kind === 'layout-field' &&
-          entry.outcome === 'pending' &&
+          (entry.outcome === 'pending' || entry.outcome === 'reported') &&
+          entry.to === undefined &&
           entry.property &&
-          /condition/.test(entry.note ?? ''),
+          /condition/i.test(entry.note ?? ''),
       );
       const layout = field && entries.find((entry) => entry.id === `layout:${field.file}#layout`);
       const path = layout?.to?.startsWith('layouts/') ? layout.to : undefined;
@@ -583,7 +619,7 @@ const M1_MUTATIONS: readonly Mutation[] = [
           entry.kind === 'search-column' &&
           entry.outcome !== 'converted' &&
           entry.property &&
-          /condition/.test(entry.note ?? ''),
+          /condition/i.test(entry.note ?? ''),
       );
       const list = column && entries.find((entry) => entry.id === `search:${column.file}#search`);
       const path = list?.to?.startsWith('queues/') ? list.to : undefined;
@@ -977,6 +1013,181 @@ const M2_MUTATIONS: readonly Mutation[] = [
   },
 ];
 
+/**
+ * The first card of related records of a view file's tabs, in path order, in a copy of its file:
+ * what a tab whose page is a list becomes.
+ */
+function findListing(
+  conversion: Conversion,
+  pick: (related: Json) => boolean = () => true,
+): { path: string; file: Json; tab: Json; cards: Json[]; index: number; related: Json } | null {
+  for (const path of layouts(conversion)) {
+    const file = clone(conversion.app[path]) as Json;
+    for (const tab of Array.isArray(file['tabs']) ? (file['tabs'] as Json[]) : []) {
+      const cards = isRecord(tab) && Array.isArray(tab['cards']) ? (tab['cards'] as Json[]) : [];
+      const index = cards.findIndex(
+        (card) => isRecord(card) && isRecord(card['related']) && pick(card['related'] as Json),
+      );
+      if (index !== -1)
+        return { path, file, tab, cards, index, related: cards[index]['related'] as Json };
+    }
+  }
+  return null;
+}
+
+/** The cards of the home, in a copy of `home.json`, which it makes when the conversion has none. */
+function homeOf(conversion: Conversion): { file: Json; cards: Json[] } {
+  const home = conversion.app['home.json'];
+  const file = (isRecord(home) ? clone(home) : { version: 2, cards: [] }) as Json;
+  if (!Array.isArray(file['cards'])) file['cards'] = [];
+  return { file, cards: file['cards'] as Json[] };
+}
+
+/**
+ * The controls of what M2 left over (studio-migration.md, section 7): a tab whose page is a list,
+ * version 2 in the edit and create forms, conditions on list columns, and the dashboard's tasks and
+ * recently viewed cards. Each must fail the check it names on the made-up package with M2's corpus
+ * and its leftovers (`testing/m2-leftovers-corpus.ts`).
+ */
+const LEFTOVER_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'drop-listing-card',
+    description: 'Drop the card of related records a tab whose page is a list becomes',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findListing(conversion);
+      if (!found) throw new MutationError('no converted tab holds a card of related records');
+      const [dropped] = found.cards.splice(found.index, 1);
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the card ${String(dropped['id'])} from the tab ${String(found.tab['id'])} of app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'wrong-listing-provider',
+    description: 'Point the card of related records of a tab at another page provider',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const found = findListing(
+        conversion,
+        (related) => typeof related['pageProvider'] === 'string',
+      );
+      if (!found) throw new MutationError('no converted tab holds a card of related records');
+      const before = found.related['pageProvider'] as string;
+      found.related['pageProvider'] = `${before}_other`;
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `pointed the card of the tab ${String(found.tab['id'])} in app/${found.path} at ${before}_other, not ${before}`,
+      };
+    },
+  },
+  {
+    name: 'drop-listing-parameter',
+    description: 'Drop the open record from the parameters of a card of related records',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const found = findListing(
+        conversion,
+        (related) =>
+          Array.isArray(related['parameters']) &&
+          related['parameters'].some((parameter) => isRecord(parameter) && 'field' in parameter),
+      );
+      if (!found)
+        throw new MutationError('no converted card of related records sends the open record');
+      const parameters = found.related['parameters'] as unknown[];
+      const index = parameters.findIndex(
+        (parameter) => isRecord(parameter) && 'field' in parameter,
+      );
+      const [dropped] = parameters.splice(index, 1);
+      if (parameters.length === 0) delete found.related['parameters'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the parameter ${JSON.stringify(dropped)}, the open record, from the card of the tab ${String(found.tab['id'])} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-form-field-rule',
+    description: 'Drop the rule of a field of an edit or create form, showing it to everyone',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const forms = layouts(conversion).filter((path) =>
+        /\/(?:edit|create)\.layout\.json$/.test(path),
+      );
+      const found = findField(
+        conversion,
+        (entry) => isRecord(entry) && 'visibleWhen' in entry,
+        forms,
+      );
+      if (!found)
+        throw new MutationError('no converted edit or create form has a field under a rule');
+      const entry = found.holder[found.index] as Json;
+      delete entry['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule of ${fieldOf(entry)} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
+    name: 'drop-column-rule',
+    description:
+      'Show a list column Web UI shows only under a condition to every user, dropping its rule',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = ruleHolders(conversion).find((holder) =>
+        /(?:^|\.)columns\.\d+\.visibleWhen$/.test(holder.at),
+      );
+      if (!found) throw new MutationError('no converted list has a column under a rule');
+      delete found.holder['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule of the column ${String(found.holder['field'])} at ${found.at} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
+    name: 'convert-recent-undecided',
+    description:
+      "Write the card proposed for Web UI's recently viewed card into the home, though no one accepted it",
+    caughtBy: 7,
+    apply: (conversion) => {
+      const proposal = conversion.report.constructs.find(
+        (entry) =>
+          entry.kind === 'dashboard-card' &&
+          entry.outcome === 'proposed' &&
+          entry.applied !== 'accept' &&
+          isRecord(entry.proposes) &&
+          'recent' in entry.proposes,
+      );
+      if (!proposal || !isRecord(proposal.proposes))
+        throw new MutationError('no recently viewed card of the conversion waits for a person');
+      const { file, cards } = homeOf(conversion);
+      cards.push(clone(proposal.proposes) as Json);
+      return {
+        conversion: withFile(conversion, 'home.json', file),
+        changed: `wrote ${String(proposal.proposes['id'])}, the recent records proposed for ${proposal.id}, into app/home.json, which no one accepted`,
+      };
+    },
+  },
+  {
+    name: 'drop-tasks-card',
+    description: "Drop the card of the person's tasks from the home",
+    caughtBy: 7,
+    apply: (conversion) => {
+      const { file, cards } = homeOf(conversion);
+      const index = cards.findIndex((card) => isRecord(card) && 'tasks' in card);
+      if (index === -1) throw new MutationError("the home has no card of the person's tasks");
+      const [dropped] = cards.splice(index, 1);
+      return {
+        conversion: withFile(conversion, 'home.json', file),
+        changed: `dropped ${String(dropped['id'])}, the person's tasks, from app/home.json`,
+      };
+    },
+  },
+];
+
 /** The source a control reads, or a refusal saying how to give it. */
 function needSource(source: MutationSource | undefined): MutationSource {
   if (!source)
@@ -1146,7 +1357,12 @@ const SLOT_MUTATIONS: readonly Mutation[] = [
 ];
 
 /** Every control of the checks, M1's and M2's. */
-export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS, ...SLOT_MUTATIONS];
+export const MUTATIONS: readonly Mutation[] = [
+  ...M1_MUTATIONS,
+  ...M2_MUTATIONS,
+  ...SLOT_MUTATIONS,
+  ...LEFTOVER_MUTATIONS,
+];
 
 /**
  * A control of the decisions: readiness, which holds the conversion's `decisions.json` to its

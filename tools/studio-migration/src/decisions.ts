@@ -45,13 +45,20 @@ export const DECISIONS_FORMAT_1 = 'studio-migration-decisions/1';
 export const DECISIONS_FILE = 'decisions.json';
 
 /** What a decision copies from the report entry it was made on, in the order it is written. */
-export const PINNED = ['label', 'property', 'outcome', 'to', 'note', 'rule'] as const;
+export const PINNED = ['label', 'property', 'outcome', 'to', 'note', 'rule', 'proposes'] as const;
 type PinnedKey = (typeof PINNED)[number];
 /**
  * What a proposal's decision copies: all but where it was written, which is what accepting it
- * did, and so not what it was made on.
+ * did, and so not what it was made on. What it proposes, a rule or a card, is.
  */
-const PROPOSAL_PINNED: readonly PinnedKey[] = ['label', 'property', 'outcome', 'note', 'rule'];
+const PROPOSAL_PINNED: readonly PinnedKey[] = [
+  'label',
+  'property',
+  'outcome',
+  'note',
+  'rule',
+  'proposes',
+];
 
 /** How a finding names each copied field. */
 const PINNED_WORDS: Readonly<Record<PinnedKey, string>> = {
@@ -61,6 +68,7 @@ const PINNED_WORDS: Readonly<Record<PinnedKey, string>> = {
   to: 'place it was written to',
   note: 'reason',
   rule: 'rule',
+  proposes: 'proposal',
 };
 
 /** The keys a decision of a reported item takes, and those a proposal's takes. */
@@ -908,8 +916,14 @@ function readDecisions(
       }
       // Accepting writes what is proposed: a proposal of nothing the converter can write cannot be.
       // A custom element's plugin is the one proposal the converter writes nothing of: an agent
-      // writes it, check 9 holds it, and accepting it is what readiness and the approval need.
-      if (verdict === ACCEPT && entry.rule === undefined && entry.kind !== 'custom-element') {
+      // writes it, check 9 holds it, and accepting it is what readiness and the approval need. A
+      // card proposed as a card of home.json is written, as it `proposes`.
+      if (
+        verdict === ACCEPT &&
+        entry.rule === undefined &&
+        entry.proposes === undefined &&
+        entry.kind !== 'custom-element'
+      ) {
         findings.push(
           `${file}: ${id} proposes nothing the converter can write yet, so it cannot be accepted: reject it, with your reason, or leave it for the mapping agent`,
         );

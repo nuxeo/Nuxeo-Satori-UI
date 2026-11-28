@@ -73,48 +73,83 @@ describe('M1 converts document layouts', () => {
     );
   });
 
-  it('writes edit and metadata in version 1, which the app renders in those modes', () => {
+  it('writes edit in version 2, which the app draws, and metadata in version 1, which it reads alone', () => {
+    // Each widget as its element gives it, as the view's are: a form of version 2 names them.
     expect(conversion.app['layouts/Claim/edit.layout.json']).toEqual({
+      version: 2,
+      cards: [
+        {
+          id: 'fields',
+          fields: [
+            { field: 'cl:number', label: 'Claim number', required: true },
+            { field: 'cl:incidentDate', label: 'Incident date', widget: 'date' },
+            { field: 'cl:adjuster', label: 'Adjuster', widget: 'user' },
+          ],
+        },
+      ],
+    });
+    // The Properties panel shows Title itself; the field under a condition is reported.
+    expect(conversion.app['layouts/Claim/metadata.layout.json']).toEqual({
       version: 1,
       sections: [
         {
           id: 'fields',
           fields: [
-            { field: 'cl:number', label: 'Claim number', required: true },
-            { field: 'cl:incidentDate', label: 'Incident date' },
+            { field: 'cl:number', label: 'Claim number' },
             { field: 'cl:adjuster', label: 'Adjuster' },
           ],
         },
       ],
     });
-    // The Properties panel shows Title itself; the field under a condition waits for M2.
-    expect(conversion.app['layouts/Claim/metadata.layout.json']).toEqual({
-      version: 1,
-      sections: [{ id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number' }] }],
-    });
   });
 
   it('writes a field version 1 cannot show as Web UI does, and reports it', () => {
+    // An edit form is version 2 now, and names the user widget: converted.
     expect(
       outcome(conversion, `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3`),
+    ).toMatchObject({ outcome: 'converted', to: 'layouts/Claim/edit.layout.json' });
+    // The metadata layout is still version 1: a user tag there shows as its schema type picks.
+    expect(
+      outcome(conversion, `layout-field:${UI}/document/claim/nuxeo-claim-metadata-layout.html#4`),
     ).toMatchObject({
       outcome: 'reported',
-      to: 'layouts/Claim/edit.layout.json',
+      property: 'cl:adjuster',
+      to: 'layouts/Claim/metadata.layout.json',
       note: expect.stringMatching(/version 1 cannot name the user widget/),
-    });
-    expect(
-      outcome(conversion, `layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#2`),
-    ).toMatchObject({
-      outcome: 'converted',
     });
   });
 
-  it('leaves a version 1 field under a condition pending, as version 1 has no rules', () => {
+  it('reports a version 1 field under a condition, as version 1 has no rules, and leaves it out', () => {
     const path = `${UI}/document/claim/nuxeo-claim-metadata-layout.html`;
+    // Its own condition does not convert, and its report says so first.
     expect(outcome(conversion, `layout-field:${path}#3`)).toMatchObject({
-      outcome: 'pending',
+      outcome: 'reported',
       property: 'cl:reserve',
-      note: expect.stringMatching(/condition 1 of its file passes, and version 1 has no rules/),
+      note: expect.stringMatching(/given \[\[user\]\], which its file does not hold/),
+    });
+    // One whose condition converts is reported too, for version 1's reason.
+    const connected = converted({
+      bundle: {
+        [path]: syntheticBundleFiles()[path].replace(
+          '<template>\n    <div role="widget"><label>Title</label>',
+          '<template>\n    <nuxeo-connection user="{{user}}"></nuxeo-connection>\n    <div role="widget"><label>Title</label>',
+        ),
+      },
+    });
+    expect(outcome(connected, `layout-field:${path}#3`)).toMatchObject({
+      outcome: 'reported',
+      property: 'cl:reserve',
+      note: expect.stringMatching(
+        /condition 1 of its file passes, and version 1 has no rules: the app reads its metadata layout in version 1 alone/,
+      ),
+    });
+    expect(connected.app['layouts/Claim/metadata.layout.json']).toEqual(
+      conversion.app['layouts/Claim/metadata.layout.json'],
+    );
+    // Its condition guards nothing that will carry it: it is reported, not left pending.
+    expect(outcome(connected, `condition:${path}#1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/nothing it guards carries it, and nothing will/),
     });
     // Its group test is given [[user]], which a document layout does not hold: it never passes.
     expect(outcome(conversion, `condition:${path}#1`)).toMatchObject({
@@ -127,7 +162,7 @@ describe('M1 converts document layouts', () => {
     });
   });
 
-  it('converts a condition only where its rule is written, and leaves one nothing carries pending', () => {
+  it('converts a condition only where its rule is written, and leaves one nothing carries pending or reported', () => {
     const edit = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
     const typed = converted({
       bundle: {
@@ -142,15 +177,32 @@ describe('M1 converts document layouts', () => {
           ),
       },
     });
-    // Its one field is in version 1, which has no rules: the rule is decided, and written nowhere.
+    // Its one field is in an edit form, of version 2: the rule is written on it.
     expect(outcome(typed, `condition:${edit}#1`)).toMatchObject({
-      outcome: 'pending',
-      note: expect.stringMatching(/nothing it guards carries one yet/),
+      outcome: 'converted',
+      to: 'the visibleWhen of layouts/Claim/edit.layout.json cl:adjuster',
     });
     const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
     expect(outcome(typed, `condition:${view}#1`)).toMatchObject({
       outcome: 'converted',
       to: 'the visibleWhen of layouts/Claim/view.layout.json cl:reserve',
+    });
+    // A menu entry that opens no queue waits for the mapping agent, and its condition with it.
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const menu = converted({
+      bundle: {
+        [bundle]: syntheticBundleFiles()[bundle].replace(
+          '<!-- <nuxeo-slot-content name="retired"',
+          `<nuxeo-slot-content name="reports" slot="DRAWER_ITEMS" order="3">
+  <template><nuxeo-filter user="[[user]]" group="managers"><template><nuxeo-menu-icon name="reports" label="Reports" icon="icons:assessment"></nuxeo-menu-icon></template></nuxeo-filter></template>
+</nuxeo-slot-content>
+<!-- <nuxeo-slot-content name="retired"`,
+        ),
+      },
+    });
+    expect(outcome(menu, `condition:${bundle}#2`)).toMatchObject({
+      outcome: 'pending',
+      note: expect.stringMatching(/nothing it guards carries one yet/),
     });
   });
 
@@ -212,8 +264,8 @@ describe('M1 converts document layouts', () => {
       },
     });
     expect(twice.app['layouts/Claim/edit.layout.json']).toEqual({
-      version: 1,
-      sections: [{ id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number' }] }],
+      version: 2,
+      cards: [{ id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number' }] }],
     });
     expect(outcome(twice, `layout-field:${path}#2`)).toMatchObject({
       outcome: 'reported',
@@ -326,14 +378,19 @@ describe('M1 converts search screens and the dashboard into queues', () => {
       outcome: 'converted',
       to: 'home.json card-1, its list in queues/home-1-claims.json',
     });
+    // The tasks card is a card of the person's tasks, of every workflow.
     expect(conversion.app['home.json']).toEqual({
       version: 2,
-      cards: [{ id: 'card-1', label: 'Open claims', queue: 'home-1-claims' }],
+      cards: [
+        { id: 'card-1', label: 'Open claims', queue: 'home-1-claims' },
+        { id: 'card-3', label: 'My tasks', tasks: {} },
+      ],
     });
     expect(conversion.app['queues/home-2-claims.json']).toBeUndefined();
     expect(outcome(conversion, `dashboard-card:${UI}/nuxeo-home.html#3`)).toMatchObject({
-      outcome: 'pending',
-      note: expect.stringMatching(/user's tasks/),
+      outcome: 'converted',
+      to: 'home.json card-3',
+      note: expect.stringMatching(/open tasks of every workflow/),
     });
   });
 

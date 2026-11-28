@@ -64,6 +64,8 @@ export interface ProposalItem {
   readonly note: string;
   /** The rule it proposes, for a condition's. */
   readonly rule?: unknown;
+  /** What accepting it writes, for a proposal of another kind: the recently viewed card's card. */
+  readonly proposes?: unknown;
   /**
    * `accepted` or `rejected` by someone named, for a reason; `waiting` for a person; `follows`
    * for what a condition's proposal guards, which is decided with the condition's.
@@ -274,6 +276,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
         file: entry.file,
         note: entry.note ?? '',
         ...(entry.rule !== undefined ? { rule: entry.rule } : {}),
+        ...(entry.proposes !== undefined ? { proposes: entry.proposes } : {}),
         status,
         owner: taken && legible(taken.owner) ? taken.owner : null,
         reason: taken?.reason !== undefined && legible(taken.reason) ? taken.reason : null,

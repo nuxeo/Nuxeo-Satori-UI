@@ -14,8 +14,8 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import { listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
 import { layoutCards } from './blocks';
 import { PANEL_ROWS } from './convert-layouts';
-import { queueOwners } from './convert-lists';
-import { formPlaces, shownIn } from './forms';
+import { columnPlans, queueOwners, type ColumnPlan } from './convert-lists';
+import { formPlaces, shownIn, tabOf } from './forms';
 import type { CheckOutcome, HarnessInput } from './harness';
 import type { ResultColumn } from './inventory';
 import { ALWAYS, VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
@@ -114,13 +114,11 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
       // not. A task form shows the record's own properties read-only whatever its file says.
       const readOnly = isRecord(match.entry) && match.entry['readOnlyWhen'] === ALWAYS;
       const record = options.task === true && !binding.startsWith('var:');
+      // Every form is version 2 (`LAYOUT_VERSION`), which can say read-only: version 1 is the
+      // Properties panel's alone, which edits nothing.
       if (options.form && version === 2 && !record && readOnly === field.edits)
         findings.push(
           `${path}${where}: ${binding} is ${readOnly ? 'read-only' : 'editable'}, but Web UI's ${field.element} ${readOnly ? 'edits' : 'only shows'} it`,
-        );
-      if (options.form && version === 1 && !field.edits && !excused(id))
-        findings.push(
-          `${path}: ${binding} is editable, though Web UI's ${field.element} only shows it, and the report does not say so`,
         );
       const required = isRecord(match.entry) && match.entry['required'] === true;
       // A task form can require only its variables; the report says when Web UI required more.
@@ -140,6 +138,39 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
         findings.push(`${path}${where}: it shows ${field.field}, which ${place.what} does not`);
       }
     }
+  }
+  // A tab whose page is a list: its one card of related records, with the list's columns.
+  for (const place of places) {
+    const listing = place.tabPlan?.listing;
+    const file = app[place.path];
+    if (!listing || !place.tabPlan || file === undefined) continue;
+    const tab = tabOf(file, place.tabPlan.id);
+    const what = `Web UI's tab ${place.tabPlan.name}, which lists ${listing.provider}`;
+    if (!tab) {
+      findings.push(`${place.path}: its tab ${place.tabPlan.id} is missing, though ${what}`);
+      continue;
+    }
+    const cards = Array.isArray(tab.tab['cards']) ? tab.tab['cards'] : [];
+    const card = cards.find((item) => isRecord(item) && item['id'] === listing.cardId);
+    for (const other of cards)
+      if (other !== card)
+        findings.push(
+          `${place.path} tab ${place.tabPlan.id}: it shows the card ${String(isRecord(other) ? other['id'] : other)}, which ${what} does not`,
+        );
+    if (!isRecord(card) || !isRecord(card['related'])) {
+      findings.push(
+        `${place.path} tab ${place.tabPlan.id}: its card of related records ${listing.cardId} is missing, though ${what}`,
+      );
+      continue;
+    }
+    findings.push(
+      ...compareColumns(
+        `${place.path} tab ${place.tabPlan.id}`,
+        listing.columns.filter((_, index) => listing.plans[index].kind === 'write'),
+        card['related'],
+        leftOut(listing.columns, listing.plans),
+      ),
+    );
   }
   // A tab no tab of the package gives.
   for (const path of versioned) {
@@ -163,14 +194,18 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
   // check 5's. A card's missing queue is check 7's.
   for (const [path, owner] of queueOwners(inventory)) {
     if (owner.kind === 'card') {
-      if (app[path] !== undefined)
+      if (app[path] !== undefined) {
+        const columns = owner.card.columns;
+        const plans = columnPlans(inventory, inventory.dashboard?.path ?? '', columns, false);
         findings.push(
           ...compareColumns(
             path,
-            owner.card.columns.filter((column) => column.field !== null && !column.conditional),
+            columns.filter((_, index) => plans[index].kind === 'write'),
             app[path],
+            leftOut(columns, plans),
           ),
         );
+      }
       continue;
     }
     const { search } = owner;
@@ -181,23 +216,39 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
         );
       continue;
     }
-    // A column under a condition is check 5's, whether the queue shows it or not.
+    // Each column written, a column under a condition with its rule among them, in Web UI's
+    // order; one left out under a condition is check 5's, whether the queue shows it or not.
+    const plans = columnPlans(inventory, search.path, search.columnDetails, false);
     const columns = search.columnDetails.filter(
-      (column, index) =>
-        column.field !== null &&
-        !column.conditional &&
-        !excused(`search-column:${search.path}#${index + 1}`),
+      (_, index) =>
+        plans[index].kind === 'write' && !excused(`search-column:${search.path}#${index + 1}`),
     );
-    // A property a column in no condition also shows is that column's, and held to it here.
-    const always = new Set(columns.map((column) => column.field));
-    const conditional = new Set(
-      search.columnDetails
-        .filter((column) => column.conditional && !always.has(column.field))
-        .map((column) => column.field),
+    findings.push(
+      ...compareColumns(path, columns, app[path], leftOut(search.columnDetails, plans)),
     );
-    findings.push(...compareColumns(path, columns, app[path], conditional));
   }
   return { findings };
+}
+
+/**
+ * The properties of a list's columns under a condition that are not written, and that no column
+ * written shows: what the list must not show, which check 5 holds, and check 2 leaves to it.
+ */
+export function leftOut(
+  columns: readonly ResultColumn[],
+  plans: readonly ColumnPlan[],
+): Set<string | null> {
+  const written = new Set(
+    columns.filter((_, index) => plans[index].kind === 'write').map((column) => column.field),
+  );
+  return new Set(
+    columns
+      .filter(
+        (column, index) =>
+          column.conditional && plans[index].kind === 'skip' && !written.has(column.field),
+      )
+      .map((column) => column.field),
+  );
 }
 
 /** A list's columns against Web UI's, in order, each with its widget. */

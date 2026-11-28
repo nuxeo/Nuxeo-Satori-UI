@@ -9,7 +9,9 @@
  *
  * For M1's conversion it also holds what the sample lacks (section 7's synthetic corpus): a field
  * a button and a list column that show only under a condition, a date in a view layout, a user picker in an edit
- * form, an operation button with parameters, and a dashboard list with a query parameter.
+ * form, an operation button with parameters, and a dashboard list with a query parameter. Since the
+ * edit form is written in version 2, which names its widget, the metadata layout holds a user tag,
+ * which version 1 cannot show as one: written, and reported.
  */
 import { writeZip } from './zip-writer';
 
@@ -104,6 +106,7 @@ export function syntheticBundleFiles(): Record<string, string> {
         <div role="widget"><label>Reserve</label><div name="reserve">[[document.properties.cl:reserve]]</div></div>
       </template>
     </nuxeo-filter>
+    <nuxeo-user-tag role="widget" user="[[document.properties.cl:adjuster]]" label="Adjuster"></nuxeo-user-tag>
   </template>
   <script>
     Polymer({ is: 'nuxeo-claim-metadata-layout', behaviors: [Nuxeo.LayoutBehavior],

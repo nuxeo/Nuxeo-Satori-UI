@@ -1106,9 +1106,11 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   viewed documents and favourites, and lists a page provider's records in place. The menu opens
   the first three as platform pages (`app.navbar.tasks`, `app.navbar.recentlyViewed`,
   `app.navbar.favorites`). The home has a list of tasks and a list of recent records since
-  27 November 2026 (section 10), which the Studio migration does not write yet; it has no card for
-  favourites, and a list in place is a link to a queue for now. The Studio migration writes such a
-  list as a queue.
+  27 November 2026 (section 10). The Studio migration writes a Web UI home's tasks card as a list of
+  tasks, and proposes a list of recent records for its recently viewed card, for a person to accept
+  or reject, since it lists what the person created or edited, not what they opened. The home has
+  no card for favourites, and a list in place is a link to a queue for now. The Studio migration
+  writes such a list as a queue.
 - **Recently viewed, as viewed.** The app's recent records are those the person created or edited
   last (section 10). A list of what they opened needs the app to keep one, or the server to record
   reads; neither does yet.

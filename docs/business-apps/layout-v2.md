@@ -1209,12 +1209,13 @@ convenience. Masking it for real, so that the API does not return it either, is 
 
 ## 10. What the Studio migration writes
 
-The converter of M1 writes version 2 for `view`. For `metadata`, `edit` and `create` it writes
-version 1, which the app renders in those modes: a field whose widget version 1 cannot name is
-written as its schema type shows it, and reported. The app draws `edit` and `create` files of
-version 2 too, and still refuses `metadata` ones (section 11); the converter does not write them
-yet. The [migration document](studio-migration.md), section 3, lists what each Web UI element
-becomes. In version 2's terms:
+The converter writes version 2 for `view`, and, since 27 November 2026, for `edit` and `create`,
+which the app draws in version 2 (section 11), so that a field or a layout block's card under a
+condition there carries its rule. For `metadata` it writes version 1, which the app still reads
+alone there: a field whose widget version 1 cannot name is written as its schema type shows it, and
+reported, and a field under a condition is left out, and reported. The
+[migration document](studio-migration.md), section 3, lists what each Web UI element becomes. In
+version 2's terms:
 
 | Web UI element                            | Becomes                                                          |
 | ----------------------------------------- | ---------------------------------------------------------------- |
@@ -1231,6 +1232,8 @@ becomes. In version 2's terms:
 | A condition in a known pattern            | A rule, proven with truth tables (check 5)                       |
 | A layout block a layout uses              | A card of its fields where it sits, with its condition's rule    |
 | A tab of the document page                | A tab of each type's view file it shows on, holding its block    |
+| A tab whose page is a list                | That tab, holding a card of related records over its provider    |
+| A condition on a list's column            | The column's `visibleWhen`                                       |
 | A workflow task layout                    | A task form, `tasks/<workflow>.<step>.layout.json`               |
 
 ## 11. Not settled here

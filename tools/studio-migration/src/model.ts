@@ -74,7 +74,28 @@ const XS_TYPES: Readonly<Record<string, PropertyType>> = {
   boolean: 'boolean',
 };
 
+/**
+ * Each package's model, by the list of files of the inventory it was read with. A package and its
+ * inventory's files are never changed once read, so the model is read once for them: the checks
+ * ask for it once for each rule they hold to a form (`formPlaces`), and each reading parses the
+ * package's XML again, in jsdom documents the worker kept until it ran out of memory.
+ */
+const models = new WeakMap<StudioPackage, WeakMap<Inventory['files'], PackageModel>>();
+
 export function packageModel(pkg: StudioPackage, inventory: Inventory): PackageModel {
+  let byFiles = models.get(pkg);
+  if (!byFiles) {
+    byFiles = new WeakMap();
+    models.set(pkg, byFiles);
+  }
+  const known = byFiles.get(inventory.files);
+  if (known) return known;
+  const model = readPackageModel(pkg, inventory);
+  byFiles.set(inventory.files, model);
+  return model;
+}
+
+function readPackageModel(pkg: StudioPackage, inventory: Inventory): PackageModel {
   const schemas = new Map<string, ModelSchema>();
   const types = new Map<string, ModelType>();
   const facets = new Map<string, readonly string[]>();

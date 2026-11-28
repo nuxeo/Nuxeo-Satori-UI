@@ -220,35 +220,100 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
         return "cycle." + cycleId;
     }
 
+    /** A write in the cycle holds its fence with its token: {@code writing:<uuid>}. */
+    static final String FENCE_WRITING = "writing:";
+
+    /**
+     * The configuration property for how long a write in a review cycle waits for another one to end
+     * before it is refused, 409, in milliseconds: 5 seconds by default, 0 to refuse at once.
+     */
+    public static final String CYCLE_WAIT_PROPERTY = "nuxeo.agentic.documents.cycle.wait";
+
+    static final long CYCLE_WAIT_MILLIS = 5_000;
+
+    /** The longest pause between two tries at a cycle's fence, in milliseconds. */
+    static final long CYCLE_PAUSE_MILLIS = 50;
+
+    /**
+     * One write in a cycle at a time: its comments, a change to one, a deletion, each in a
+     * transaction of its own, write the same rows of the repository, the cycle's among them, as
+     * Nuxeo's comment manager saves the cycle with each comment's text; two at once can deadlock in
+     * the database at commit, which no listener sees, and the client would get a failed commit, not
+     * a conflict. So a write takes the fence from nothing, waits while another holds it, for
+     * {@value #CYCLE_WAIT_PROPERTY}, and is refused, 409, "try again", when that one has not ended
+     * by then. A transaction that holds it already, writing a second comment, enters again at once.
+     */
     @Override
     public boolean enterCycle(String cycleId) {
-        KeyValueStore store = claims();
         String key = fenceKey(cycleId);
+        String held = held(key);
+        if (held != null) {
+            // This transaction closes the cycle: it writes no comment in it.
+            return !held.startsWith(FENCE_CLOSING);
+        }
+        Object transaction = TransactionSynchronizations.current();
+        KeyValueStore store = claims();
         long ttl = claimTtl();
+        String writing = FENCE_WRITING + UUID.randomUUID();
         AtomicBoolean entered = new AtomicBoolean();
         // As for a claim: the way out is registered before the way in.
-        if (!TransactionSynchronizations.whenEnded(committed -> {
-            if (entered.get()) {
-                leave(store, key, ttl);
+        if (transaction == null || !TransactionSynchronizations.whenEnded(committed -> {
+            if (entered.get() && forget(key, transaction, writing)) {
+                store.compareAndSet(key, writing, null);
             }
         })) {
             throw noTransaction();
         }
-        for (int attempt = 1; attempt <= FENCE_ATTEMPTS; attempt++) {
+        long deadline = System.nanoTime() + cycleWait() * 1_000_000L;
+        for (int attempt = 1;; attempt++) {
             String value = store.getString(key);
-            Long writers = writers(value);
-            if (writers == null) {
+            if (value == null) {
+                if (store.compareAndSet(key, null, writing, ttl)) {
+                    entered.set(true);
+                    hold(transaction, key, writing);
+                    return true;
+                }
+                // Another took it between the read and the write: read it again.
+                continue;
+            }
+            if (FENCE_CLOSED.equals(value) || value.startsWith(FENCE_CLOSING)) {
                 // Being closed, or closed: no comment is written in it any more.
                 return false;
             }
-            if (store.compareAndSet(key, value, Long.toString(writers + 1), ttl)) {
-                entered.set(true);
-                return true;
+            // Another write holds it: its token, or the count of writers an earlier version kept.
+            if (System.nanoTime() >= deadline) {
+                throw Refusal.conflict("Another comment is being written in this review cycle at this moment; "
+                        + "try again");
             }
-            pause(attempt);
+            waitBriefly(attempt);
         }
-        throw new NuxeoException("Controlled documents: too many comments are being written in this review cycle "
-                + "at once; try again", 409);
+    }
+
+    private static long cycleWait() {
+        String set = Framework.getProperty(CYCLE_WAIT_PROPERTY);
+        if (set == null) {
+            ConfigurationService configuration = Framework.getService(ConfigurationService.class);
+            set = configuration == null ? null : configuration.getString(CYCLE_WAIT_PROPERTY).orElse(null);
+        }
+        if (set == null || set.isBlank()) {
+            return CYCLE_WAIT_MILLIS;
+        }
+        try {
+            long wait = Long.parseLong(set.trim());
+            return wait >= 0 ? wait : CYCLE_WAIT_MILLIS;
+        } catch (NumberFormatException e) {
+            return CYCLE_WAIT_MILLIS;
+        }
+    }
+
+    /** A pause growing with the tries, a few milliseconds at first, {@value #CYCLE_PAUSE_MILLIS} at most. */
+    private static void waitBriefly(int attempt) {
+        try {
+            Thread.sleep(Math.min(CYCLE_PAUSE_MILLIS, 1 + ThreadLocalRandom.current().nextInt(2 * attempt)));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new NuxeoException("Controlled documents: interrupted while waiting to write in a review cycle", e);
+        }
     }
 
     @Override
@@ -258,8 +323,12 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
         long ttl = claimTtl();
         String closing = FENCE_CLOSING + UUID.randomUUID();
         AtomicBoolean taken = new AtomicBoolean();
+        Object closer = TransactionSynchronizations.current();
         if (!TransactionSynchronizations.whenEnded(committed -> {
             if (taken.get()) {
+                if (closer != null) {
+                    forget(key, closer, closing);
+                }
                 // Committed, it stays closed for as long as a transaction that read the cycle open
                 // before the close committed could still be running; after that, the cycle's own
                 // status refuses. Not committed, it is open again at once.
@@ -268,11 +337,15 @@ public class ControlledDocumentComponent extends DefaultComponent implements Con
         })) {
             throw noTransaction();
         }
-        // Only from nothing: a comment being written holds a count, and a close its token.
+        // Only from nothing: a comment being written holds its token, and another close its own.
         if (!store.compareAndSet(key, null, closing, ttl)) {
             return false;
         }
         taken.set(true);
+        Object transaction = TransactionSynchronizations.current();
+        if (transaction != null) {
+            hold(transaction, key, closing);
+        }
         return true;
     }
 

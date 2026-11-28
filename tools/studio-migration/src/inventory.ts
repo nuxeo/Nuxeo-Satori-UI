@@ -145,6 +145,12 @@ export interface ResultColumn {
    * only to some of those who see the list.
    */
   readonly conditional: boolean;
+  /**
+   * For a conditional column: the conditions it shows under, by their place among its file's
+   * conditions: the innermost around it that its table is not in, and each its template holds.
+   * Empty for a column in no condition of its own.
+   */
+  readonly conditions: readonly number[];
 }
 
 /** A sort a results layout offers, from the options Studio's script writes. */
@@ -234,6 +240,11 @@ export interface SearchLayout {
   readonly views: readonly string[];
   /** For each of `views`, whether it sits in a condition, or holds one. */
   readonly conditionalViews: readonly boolean[];
+  /**
+   * For each of `views`, the innermost condition it sits in, by its place among its file's
+   * conditions, as a list of one; an empty list for a view in no condition.
+   */
+  readonly viewConditions: readonly (readonly number[])[];
   /** For results: the sorts its script offers. */
   readonly sortOptions: readonly SortOption[];
 }
@@ -271,6 +282,67 @@ export interface SlotContribution {
   readonly orderValue: number | null;
   /** False when it holds no template: it then only changes another of its name, as `disabled` does. */
   readonly hasTemplate: boolean;
+  /**
+   * The names of the elements its template stamps where its slot is, conditions passed through:
+   * what Web UI's document page selects a tab's page by (`iron-pages`, `attr-for-selected="name"`),
+   * among the elements a slot stamps, not among what they hold.
+   */
+  readonly pageNames: readonly string[];
+  /**
+   * For a contribution to `DOCUMENT_VIEWS_PAGES` whose one named element holds a list, a page
+   * provider and its table, rather than being a layout block: that list, as read from the markup.
+   */
+  readonly listing: PageListing | null;
+}
+
+/**
+ * A list a tab's page holds: a `nuxeo-page-provider` and the `nuxeo-data-table` that shows its
+ * records, inside the element the page is, as a dashboard card holds one. Read, never run.
+ */
+export interface PageListing {
+  /** The element the page is, named as its tab. */
+  readonly element: string;
+  /** Each `nuxeo-page-provider` it holds, in order, with its attributes as written. */
+  readonly providers: readonly ListingProvider[];
+  /** The result views it holds, in order: `nuxeo-data-table`, `nuxeo-data-grid`, `nuxeo-justified-grid`. */
+  readonly views: readonly string[];
+  /** The columns of its tables, in order. */
+  readonly columns: readonly ResultColumn[];
+  /**
+   * The conditions around its page provider and its table, both of which its list needs, by their
+   * place among the file's conditions; with neither, every condition the page sits in or holds.
+   */
+  readonly conditions: readonly number[];
+  /**
+   * The custom elements it holds besides its list, such as a button, a field or a layout block,
+   * which a card of related records has no place for.
+   */
+  readonly others: readonly string[];
+  /**
+   * True when the element the page is is a custom element of its own, not a `nuxeo-card` or a
+   * native element holding the list: what it shows besides what it holds is not in the package.
+   */
+  readonly opaque: boolean;
+  /**
+   * Each `nuxeo-data-table` it holds, with where its records come from: the `nx-provider` it, or
+   * the `nuxeo-results` it sits in, names, as written, and whether it is given `items` instead.
+   */
+  readonly tables: readonly { readonly provider: string | null; readonly items: boolean }[];
+}
+
+/** A `nuxeo-page-provider` of a tab's list, with what it asks as written. */
+export interface ListingProvider {
+  /** Its `id`, which a table names to read it. */
+  readonly id: string | null;
+  /** The names of every attribute it is given, which say what it asks. */
+  readonly attributes: readonly string[];
+  readonly provider: string | null;
+  /** Its `params`, as written: `{"queryParams": …}` gives the page provider's parameters. */
+  readonly params: string | null;
+  /** Its `page-size`, as written. */
+  readonly pageSize: string | null;
+  /** Its `sort`, as written: `{"dc:modified": "desc"}`. */
+  readonly sort: string | null;
 }
 
 export interface DashboardCard {
@@ -293,6 +365,12 @@ export interface DashboardCard {
    * place among the dashboard's conditions; with neither, every condition it sits in or holds.
    */
   readonly conditions: readonly number[];
+  /**
+   * What a person decided of the card proposed for it, for the recently viewed card, taken from
+   * `decisions.json`. Never set by reading a package: `withVerdicts` sets it, on a copy, for the
+   * converter and the checks alike, as it sets a condition's.
+   */
+  readonly verdict?: { readonly accepted: boolean };
 }
 
 export interface Dashboard {
@@ -652,13 +730,19 @@ export function inventory(pkg: StudioPackage): Inventory {
         part,
         fields: fieldsOf(document, placesIn(path)),
         columns: columns.length,
-        columnDetails: columns.map((column) => columnOf(column, within)),
+        columnDetails: columns.map((column) => columnOf(column, within, conditionAt)),
         views: all
           .filter((element) => RESULT_VIEWS.includes(element.localName))
           .map((element) => element.localName),
         conditionalViews: all
           .filter((element) => RESULT_VIEWS.includes(element.localName))
           .map((view) => within.has(view)),
+        viewConditions: all
+          .filter((element) => RESULT_VIEWS.includes(element.localName))
+          .map((view) => {
+            const around = within.get(view);
+            return around === undefined ? [] : [around];
+          }),
         sortOptions:
           part === 'results'
             ? all
@@ -709,19 +793,18 @@ export function inventory(pkg: StudioPackage): Inventory {
           // What it becomes is its operation button or its menu icon, for a left-menu page the
           // search form it opens, for a tab its page item, and for a tab's page the element that
           // page is, named as the item: the conditions around that, not around some other part
-          // of it, such as a tooltip.
-          conditions: conditionsAround(
-            [element, ...inner],
+          // of it, such as a tooltip, or a column of the list it holds.
+          conditions:
             element.getAttribute('slot') === 'DOCUMENT_VIEWS_PAGES'
-              ? inner
-                  .filter((part) => isCustomElement(part) && part.hasAttribute('name'))
-                  .map((part) => part.localName)
-              : (KEY_PARTS.get(element.getAttribute('slot') ?? '') ?? [
-                  'nuxeo-operation-button',
-                  'nuxeo-menu-icon',
-                ]),
-            within,
-          ),
+              ? conditionsAroundElements([element, ...inner], namedRoots(element), within)
+              : conditionsAround(
+                  [element, ...inner],
+                  KEY_PARTS.get(element.getAttribute('slot') ?? '') ?? [
+                    'nuxeo-operation-button',
+                    'nuxeo-menu-icon',
+                  ],
+                  within,
+                ),
           uses: [element, ...inner]
             .map((part) => useAt.get(part)?.index)
             .filter((index): index is number => index !== undefined),
@@ -729,6 +812,11 @@ export function inventory(pkg: StudioPackage): Inventory {
           priority: polymerNumber(element.getAttribute('priority')) ?? 0,
           orderValue: polymerNumber(element.getAttribute('order')),
           hasTemplate: Array.from(element.children).some((child) => child.localName === 'template'),
+          pageNames: namedRoots(element).map((root) => root.getAttribute('name')?.trim() ?? ''),
+          listing:
+            element.getAttribute('slot') === 'DOCUMENT_VIEWS_PAGES'
+              ? listingOf(namedRoots(element), within, conditionAt, useAt)
+              : null,
         };
       }),
   );
@@ -781,15 +869,22 @@ export function inventory(pkg: StudioPackage): Inventory {
           params: provider?.getAttribute('params') ?? null,
           columns: elementsOf(card)
             .filter((element) => element.localName === 'nuxeo-data-table-column')
-            .map((column) => columnOf(column, within)),
+            .map((column) => columnOf(column, within, conditionAt)),
           operation:
             inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
             null,
           conditional: [card, ...elementsOf(card)].some((element) => within.has(element)),
-          // Its list shows where its page provider and its table both do.
+          // Its list shows where its page provider and its table both do; the person's tasks where
+          // its tasks list does, and its recently viewed documents where its storage and its table
+          // do.
           conditions: conditionsAround(
             [card, ...elementsOf(card)],
-            ['nuxeo-page-provider', 'nuxeo-data-table'],
+            [
+              'nuxeo-page-provider',
+              'nuxeo-data-table',
+              'nuxeo-tasks-list',
+              'nuxeo-document-storage',
+            ],
             within,
           ),
         };
@@ -1128,6 +1223,111 @@ function conditionsAround(
   ];
 }
 
+/** The conditions around each of `keys`; with none, every condition `elements` sit in or hold. */
+function conditionsAroundElements(
+  elements: readonly Element[],
+  keys: readonly Element[],
+  within: ReadonlyMap<Element, number>,
+): number[] {
+  return [
+    ...new Set(
+      (keys.length > 0 ? keys : elements)
+        .map((element) => within.get(element))
+        .filter((index): index is number => index !== undefined),
+    ),
+  ];
+}
+
+/**
+ * The elements a slot contribution's template stamps where its slot is, that have a `name`: what
+ * Web UI's document page selects a tab's page among (`nuxeo-browser.js`, `iron-pages`,
+ * `attr-for-selected="name"`). A condition stamps what it holds in its own place, so its content
+ * counts as the template's; an element inside another element is that one's, not the slot's.
+ */
+function namedRoots(contribution: Element): Element[] {
+  const roots: Element[] = [];
+  const visit = (node: ParentNode): void => {
+    for (const child of Array.from(node.children)) {
+      if (child.localName === 'template' || isCondition(child)) {
+        const content = (child as Partial<HTMLTemplateElement>).content;
+        if (child.localName === 'template' && content) visit(content);
+        visit(child);
+        continue;
+      }
+      roots.push(child);
+    }
+  };
+  visit(contribution);
+  return roots.filter((root) => (root.getAttribute('name')?.trim() ?? '') !== '');
+}
+
+/** What a page's list is made of, which a card of related records shows: no other part of a page. */
+const LIST_PARTS: ReadonlySet<string> = new Set([
+  'nuxeo-page-provider',
+  'nuxeo-results',
+  'nuxeo-data-table-column',
+  'nuxeo-connection',
+  ...RESULT_VIEWS,
+]);
+
+/**
+ * The list a tab's page holds, when its one named element holds a page provider or a table: read
+ * as a dashboard card's is, its page providers, views and columns, the conditions around its page
+ * provider and its table, and what else it holds. `null` for a page of another make. A page that is
+ * a layout block is its block's: the tab reads the block first (`convert-tabs.ts`).
+ */
+function listingOf(
+  roots: readonly Element[],
+  within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
+  blocks: ReadonlyMap<Element, BlockUse>,
+): PageListing | null {
+  if (roots.length !== 1) return null;
+  const [root] = roots;
+  const all = [root, ...elementsOf(root)];
+  const providers = all.filter((element) => element.localName === 'nuxeo-page-provider');
+  const views = all.filter((element) => RESULT_VIEWS.includes(element.localName));
+  if (providers.length === 0 && views.length === 0) return null;
+  const columns = all.filter((element) => element.localName === 'nuxeo-data-table-column');
+  // What a view holds, its columns and what each shows its value with, is part of the list.
+  const inViews = new Set(views.flatMap((view) => elementsOf(view)));
+  // The element the page is holds the list: a native one, or a card, shows nothing of its own.
+  const opaque = isCustomElement(root) && root.localName !== 'nuxeo-card';
+  const others = all.filter(
+    (element) =>
+      element !== root &&
+      !inViews.has(element) &&
+      (element.getAttribute('role') === 'widget' ||
+        blocks.has(element) ||
+        (isCustomElement(element) && !LIST_PARTS.has(element.localName) && !isCondition(element))),
+  );
+  return {
+    element: root.localName,
+    opaque,
+    tables: views
+      .filter((view) => view.localName === 'nuxeo-data-table')
+      .map((table) => ({
+        provider:
+          table.getAttribute('nx-provider') ??
+          table.closest('nuxeo-results')?.getAttribute('nx-provider') ??
+          null,
+        items: table.hasAttribute('items'),
+      })),
+    providers: providers.map((provider) => ({
+      id: provider.getAttribute('id')?.trim() || null,
+      attributes: Array.from(provider.attributes, (attribute) => attribute.name),
+      provider: provider.getAttribute('provider')?.trim() || null,
+      params: provider.getAttribute('params'),
+      pageSize: provider.getAttribute('page-size'),
+      sort: provider.getAttribute('sort'),
+    })),
+    views: views.map((view) => view.localName),
+    columns: columns.map((column) => columnOf(column, within, conditionAt)),
+    conditions: conditionsAround(all, ['nuxeo-page-provider', 'nuxeo-data-table'], within),
+    others: [...new Set(others.map((element) => element.localName))],
+  };
+}
+
 /** True when the file writes the host's `user`: a `<nuxeo-connection user="{{user}}">`. */
 function writesUser(document: Document): boolean {
   return elementsOf(document).some(
@@ -1188,10 +1388,15 @@ function conditionsOf(
  * A column of a list: its heading, the property it shows, and how. The property is its `field`,
  * or else the one its template binds: `item.properties.dc:modified`, or `item.title` for the title.
  */
-function columnOf(column: Element, within: ReadonlyMap<Element, number>): ResultColumn {
+function columnOf(
+  column: Element,
+  within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
+): ResultColumn {
   const inside = elementsOf(column);
   const table = column.closest('nuxeo-data-table');
   const base = table ? within.get(table) : undefined;
+  const conditions = columnConditions(column, base, within, conditionAt);
   const texts = [column, ...inside].flatMap((element) => [
     ...Array.from(element.attributes, (attribute) => attribute.value),
     element.localName === 'template'
@@ -1211,9 +1416,32 @@ function columnOf(column: Element, within: ReadonlyMap<Element, number>): Result
       inside.find((element) => element.localName === 'nuxeo-date')?.getAttribute('format') ?? null,
     formatsDate: /\bformatDate\s*\(/.test(all),
     // Relative to its table: a column of a list shown only under a condition is not hidden on its
-    // own, and the list's own guard covers it.
-    conditional: [column, ...inside].some((element) => within.get(element) !== base),
+    // own, and the list's own guard covers it. A condition it holds counts though nothing inside it
+    // is an element, as a `dom-if` around its value's text alone.
+    conditional: conditions.length > 0,
+    conditions,
   };
+}
+
+/**
+ * The conditions a column shows under, relative to its table: the innermost around it, or around
+ * what it holds, that its table is not in, and each condition it holds.
+ */
+function columnConditions(
+  column: Element,
+  base: number | undefined,
+  within: ReadonlyMap<Element, number>,
+  conditionAt: ReadonlyMap<Element, number>,
+): number[] {
+  const elements = [column, ...elementsOf(column)];
+  return [
+    ...new Set(
+      [
+        ...elements.map((element) => within.get(element)),
+        ...elements.map((element) => conditionAt.get(element)),
+      ].filter((index): index is number => index !== undefined && index !== base),
+    ),
+  ];
 }
 
 /**

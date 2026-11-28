@@ -21,7 +21,7 @@ import { labelsOf, readCatalogue, recordedAllowList } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
 import { own } from './catalogue';
 import { homeCards, menuEntries } from './convert-home';
-import { menuLabel, queueOwners } from './convert-lists';
+import { columnPlans, menuLabel, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import { formPlaces, shownIn, tabOf } from './forms';
 import { slotRegistry } from './slot-registry';
@@ -132,6 +132,24 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         translated(label),
         shown(written.tab, null, tab.id),
       );
+      // A list's columns, named as Web UI's headings name them.
+      const listing = tab.listing;
+      const cards = Array.isArray(written.tab['cards']) ? written.tab['cards'] : [];
+      const card = listing
+        ? cards.find((item) => isRecord(item) && item['id'] === listing.cardId)
+        : undefined;
+      if (listing && isRecord(card)) {
+        const sources = listing.columns.filter((_, index) => listing.plans[index].kind === 'write');
+        for (const [at, column] of listColumns(card['related']).entries()) {
+          const source = sameColumn(sources, listColumns(card['related']), at);
+          if (source)
+            compare(
+              `${place.path}: the tab ${tab.id}'s column ${column.field}`,
+              web(source.name),
+              shown(column.entry, null, null),
+            );
+        }
+      }
     }
   }
 
@@ -139,16 +157,19 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
   for (const [path, owner] of queueOwners(inventory)) {
     const queue = conversion.app[path];
     if (queue === undefined) continue;
-    // A column under a condition is left out: the heading the queue shows is a column's in none.
-    const sources =
+    // The columns written, as the converter plans them: a column under a condition with its rule,
+    // and none left out, whose heading the queue does not show.
+    const [source, columns] =
       owner.kind === 'search'
-        ? owner.search.columnDetails.filter((column) => !column.conditional)
-        : owner.card.columns.filter((column) => !column.conditional);
+        ? [owner.search.path, owner.search.columnDetails]
+        : [inventory.dashboard?.path ?? '', owner.card.columns];
+    const plans = columnPlans(inventory, source, columns, false);
+    const sources = columns.filter((_, index) => plans[index].kind === 'write');
     const name =
       owner.kind === 'search' ? menuLabel({ inventory }, owner.search) : owner.card.heading;
     if (name !== null) compare(`${path}: its name`, web(name), shown(queue, null, null));
-    for (const column of listColumns(queue)) {
-      const source = sources.find((candidate) => candidate.field === column.field);
+    for (const [at, column] of listColumns(queue).entries()) {
+      const source = sameColumn(sources, listColumns(queue), at);
       if (source)
         compare(
           `${path}: the column ${column.field}`,
@@ -278,6 +299,21 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
           )}`
         : values,
   };
+}
+
+/**
+ * Web UI's column a written list's column at `at` stands for: of its property, the one at its place
+ * among the list's columns of that property, so that two columns of one property are each named as
+ * their own.
+ */
+function sameColumn<T extends { readonly field: string | null }>(
+  sources: readonly T[],
+  written: readonly { readonly field: string | null }[],
+  at: number,
+): T | undefined {
+  const field = written[at]?.field ?? null;
+  const occurrence = written.slice(0, at).filter((column) => column.field === field).length;
+  return sources.filter((candidate) => candidate.field === field)[occurrence];
 }
 
 function normal(text: string): string {
