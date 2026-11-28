@@ -14503,7 +14503,10 @@ const PUBLISH_TOKEN = 'secrets.NPM_PACKAGES_TOKEN';
 const PUBLISH_TOKEN_NAMED =
   /\bsecrets\s*(?:\.\s*NPM_PACKAGES_TOKEN\b|\[\s*['"]NPM_PACKAGES_TOKEN['"]\s*\])/i;
 /** What hands every secret on at once, the token with them, to whatever it runs. */
-const EVERY_SECRET = /\btoJSON\s*\(\s*secrets\s*\)|^\s*secrets\s*:\s*inherit\b/im;
+const EVERY_SECRET =
+  /\btoJSON\s*\(\s*secrets\s*\)|^\s*secrets\s*:\s*inherit\b|\bsecrets\s*\[\s*(?!['"][\w-]+['"]\s*\])/im;
+/** A dry run, as npm reads the flag: `--dry-run`, or `--dry-run=true`, and not `--dry-run=false`. */
+const DRY_RUN = /--dry-run(?:=true)?(?=\s|$|['"\\])/;
 /** The actions the token's job may use: the build job's artifact, and nothing else of anyone's. */
 const TOKEN_JOB_ACTIONS = /^actions\/download-artifact@/;
 
@@ -14522,8 +14525,9 @@ const TOKEN_JOB_ACTIONS = /^actions\/download-artifact@/;
  *
  * ## The rules, each decided from the workflow's text
  *
- * No workflow at all hands every secret on at once, `toJSON(secrets)` or `secrets: inherit`: it
- * would give the token to whatever it runs. A publish workflow is one that names the token, in any
+ * No workflow at all hands every secret on at once, `toJSON(secrets)` or `secrets: inherit`, or
+ * names one by an expression, `secrets[format(...)]`: it would give the token to whatever it runs,
+ * or name it where no check can read it. A publish workflow is one that names the token, in any
  * letter case or as `secrets['...']`, or runs an `npm publish` that is not a dry run; each of
  * {@link PUBLISH_WORKFLOWS} must be one, or the check asserted nothing.
  *
@@ -14535,7 +14539,7 @@ const TOKEN_JOB_ACTIONS = /^actions\/download-artifact@/;
  * 5. **The token in one job,** never at the workflow's level, where every job would have it. That
  *    job checks nothing out, uses no action but `actions/download-artifact`, runs nothing that
  *    installs, fetches or runs code (`npm ci`, `npm install`, `npm run`, `npx`, `node`, `git`,
- *    `curl`, `wget`), needs the build job, and runs when `!inputs.dryRun` and only then: its `if:`
+ *    `curl`, `wget`, `tar`, a shell or another interpreter), needs the build job, and runs when `!inputs.dryRun` and only then: its `if:`
  *    is that and nothing more.
  * 6. **Every `npm publish`** passes one `--tag`, `alpha`, and `--registry` Nuxeo's; one that is not
  *    a dry run is in the token's job and passes `--ignore-scripts`, so that nothing the package
@@ -14561,7 +14565,7 @@ function checkPublishWorkflows() {
       fail(
         `${file} hands every secret on at once (${EVERY_SECRET.exec(text)[0].trim()}), and with them ${PUBLISH_TOKEN}: name each secret a step needs.`,
       );
-    const publishes = publishCommands(code).some((command) => !/--dry-run\b/.test(command));
+    const publishes = publishCommands(code).some((command) => !DRY_RUN.test(command));
     if (PUBLISH_TOKEN_NAMED.test(text) || publishes) publishers.push({ file, code, text });
   }
   for (const expected of PUBLISH_WORKFLOWS)
@@ -14658,7 +14662,7 @@ function checkPublishWorkflows() {
             `job ${job.id} has ${PUBLISH_TOKEN} and uses ${action}, which would run with it: the job with the token downloads the tarball and publishes it, and nothing else.`,
           );
       const runs =
-        /\bnpm\s+(?:ci|install|i|add|run|run-script|exec|x|rebuild|link)\b|\bnpx\b|\b(?:pnpm|yarn|git|curl|wget)\b|(?:^|[\s;&|(])node\s/m.exec(
+        /\bnpm\s+(?:ci|install|i|add|run|run-script|exec|x|rebuild|link)\b|\bnpx\b|\b(?:pnpm|yarn|git|curl|wget|tar|unzip|bash|sh|zsh|python3?|perl|ruby|deno|bun|eval|source)\b|(?:^|[\s;&|(])node\s/m.exec(
           jobText,
         );
       if (runs)
@@ -14694,7 +14698,7 @@ function checkPublishWorkflows() {
           problem(`job ${job.id} runs \`${shown}\`, whose one --tag is not alpha.`);
         if (!registry.test(command))
           problem(`job ${job.id} runs \`${shown}\`, without --registry ${PUBLISH_REGISTRY}.`);
-        if (/--dry-run\b/.test(command)) continue;
+        if (DRY_RUN.test(command)) continue;
         if (!holders.includes(job))
           problem(
             `job ${job.id} runs \`${shown}\`, which is not a dry run, and is not the job given ${PUBLISH_TOKEN}.`,

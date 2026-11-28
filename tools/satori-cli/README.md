@@ -346,10 +346,11 @@ limited to `main` with required reviewers, is the repository's settings to make.
 - builds every kit in `business-apps/packages/` through `app-package.mjs` and through the tool, and
   requires the same SHA-256, and the same report from the validator through `bin.mjs` and through
   the tool's `validator.mjs`; a tool whose builder differs by one byte must build another digest;
-- runs `pack-check.mjs` on the tool as it is built, which must pass, and on nine copies of it, each
+- runs `pack-check.mjs` on the tool as it is built, which must pass, and on ten copies of it, each
   with one thing planted, a `private` package.json, another registry, an install script, a source
-  map, a fixture, a private key made at run time, a token assembled at run time, this repository's
-  folder, and a README linking by a path of this repository: each must be refused;
+  map, an `.npmrc` npm would leave out of the tarball, a fixture, a private key made at run time, a
+  token assembled at run time, this repository's folder, and a README linking by a path of this
+  repository: each must be refused;
 - packs it with `npm pack`, unpacks it into a folder with no `node_modules`, and builds a copy of a
   kit there, to the same digest, and a repository `create` writes, under Node's permission model,
   so that no Node process of the run can read or write anything outside that folder: reading this

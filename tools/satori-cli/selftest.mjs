@@ -365,6 +365,19 @@ async function outsideTheRepository(tool, kitDigest, tools) {
       { ...process.env, NODE_OPTIONS: '' },
     ],
     [
+      'each given as a flag and a value apart',
+      [
+        '--permission',
+        '--allow-fs-read',
+        '.',
+        '--allow-fs-write',
+        '.',
+        '--allow-child-process',
+        bin,
+      ],
+      { ...process.env, NODE_OPTIONS: '' },
+    ],
+    [
       'in NODE_OPTIONS',
       [bin],
       { ...process.env, NODE_OPTIONS: `${relativeFlags.join(' ')} --allow-child-process` },
@@ -585,6 +598,11 @@ function packContents(tool) {
       'has scripts',
     ],
     ['a source map', plant('platform/en.json.map', '{}\n'), 'is a source map'],
+    [
+      'a file npm would leave out of the tarball',
+      plant('agents/.npmrc', 'registry=https://example.invalid/\n'),
+      'npm would not pack it',
+    ],
     ['a test fixture', plant('templates/__fixtures__/kit.json', '{}\n'), 'is a test or a fixture'],
     [
       'a private key',

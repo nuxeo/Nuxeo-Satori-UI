@@ -76,11 +76,18 @@ const SECRET_SHAPES = [
  * What is wrong with a packed tarball, `[]` when nothing is. `pack` is one entry of
  * `npm pack --dry-run --json`, `{ files: [{ path, size, mode }] }`; `manifest` the `package.json` it
  * packs; `read(path)` the text of a packed file; `places` the folders of the machine that built it,
- * which no file may name.
+ * which no file may name; and `present`, every file of the folder packed, by its path, which must be
+ * what npm packs: a file npm leaves out, such as an `.npmrc` or a `node_modules/`, would be in a
+ * tarball that was changed after it was packed, and would not be seen otherwise.
  */
-export function packProblems(pack, manifest, read, places = []) {
+export function packProblems(pack, manifest, read, places = [], present = null) {
   const problems = [];
   const paths = pack.files.map((file) => file.path);
+  for (const path of present ?? [])
+    if (!paths.includes(path))
+      problems.push(
+        `${path} is in the folder, and npm would not pack it: the folder is not a tarball npm made.`,
+      );
 
   // The published package.json.
   if ('private' in manifest) problems.push('package.json is "private", so it cannot be published.');

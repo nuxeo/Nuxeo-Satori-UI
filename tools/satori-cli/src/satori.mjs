@@ -345,12 +345,17 @@ async function inTemporaryPlace(name, args, run) {
 function relativePermissions() {
   if (process.permission === undefined) return [];
   const flags = [...process.execArgv, ...(process.env.NODE_OPTIONS ?? '').split(/\s+/)];
-  return flags.filter((flag) => {
-    const given = /^--allow-fs-(?:read|write)=(.+)$/.exec(flag);
-    if (given === null) return false;
-    const path = given[1].replace(/^(["'])(.*)\1$/, '$2');
-    return path !== '*' && !isAbsolute(path);
-  });
+  const relative = [];
+  for (let index = 0; index < flags.length; index++) {
+    // `--allow-fs-read=<path>`, or `--allow-fs-read <path>`, which Node takes too.
+    const given = /^(--allow-fs-(?:read|write))(?:=(.*))?$/.exec(flags[index]);
+    if (given === null) continue;
+    const value = given[2] ?? flags[++index] ?? '';
+    const path = value.replace(/^(["'])(.*)\1$/, '$2');
+    if (path !== '*' && !isAbsolute(path))
+      relative.push(given[2] === undefined ? `${given[1]} ${value}` : flags[index]);
+  }
+  return relative;
 }
 
 /**
@@ -362,7 +367,8 @@ function insideThePackage(name, given, place) {
     name === 'validate' || name === 'build'
       ? parse(given)?.directory
       : name === 'release-check'
-        ? given.find((arg) => !arg.startsWith('-'))
+        ? // Its options are the pipeline's, with --json, wherever they are on the line.
+          parse(given.filter((arg) => arg !== '--json'))?.directory
         : undefined;
   if (directory === undefined) return null;
   for (const part of ['bundle', 'package']) {

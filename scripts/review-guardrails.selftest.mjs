@@ -14973,6 +14973,39 @@ expectRed(
 );
 
 expectRed(
+  'a publish job that runs a script out of the tarball',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '      - name: Publish (alpha)\n',
+    '      - run: tar -xzf "$TARBALL" && bash package/x.sh\n      - name: Publish (alpha)\n',
+  ),
+  /job publish has secrets\.NPM_PACKAGES_TOKEN and runs `tar`/,
+);
+
+expectRed(
+  'the token named by an expression, where no check can read it',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n',
+    "          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}\n          NODE_AUTH_TOKEN: ${{ secrets[format('NPM_{0}_TOKEN', 'PACKAGES')] }}\n",
+  ),
+  /publish-satori-cli\.yml hands every secret on at once \(secrets\[/,
+);
+
+expectRed(
+  'a dry run that is not one, --dry-run=false, in the build job',
+  'checkPublishWorkflows',
+  PUBLISH_OK,
+  publishBroken(
+    '          npm publish --dry-run --tag alpha',
+    '          npm publish --dry-run=false --tag alpha',
+  ),
+  /job build runs `npm publish --dry-run=false --tag alpha[^`]*`, which is not a dry run, and is not the job given/,
+);
+
+expectRed(
   'a push trigger on a publish workflow',
   'checkPublishWorkflows',
   PUBLISH_OK,

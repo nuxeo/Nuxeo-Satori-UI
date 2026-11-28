@@ -15,7 +15,7 @@
  * Run by the selftest, which sees each of its refusals, and by `publish-satori-cli.yml`'s build job.
  * Exit codes: 0, it may be published; 1, it may not; 2, it could not be checked.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +63,7 @@ const problems = packProblems(
   manifest,
   (path) => readFileSync(join(built, ...path.split('/')), 'utf8'),
   [REPO.replace(/[\\/]$/, ''), homedir()],
+  filesOf(built),
 );
 if (problems.length > 0) {
   console.error(`\n${manifest.name}@${manifest.version} may not be published:`);
@@ -72,3 +73,10 @@ if (problems.length > 0) {
 console.log(
   `${manifest.name}@${manifest.version} may be published: its tarball holds what the tool ships, and nothing else.`,
 );
+
+/** Every file under `folder`, by its path from it with `/` between its parts, links included. */
+function filesOf(folder, prefix = '') {
+  return readdirSync(join(folder, prefix), { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? filesOf(folder, `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`],
+  );
+}
