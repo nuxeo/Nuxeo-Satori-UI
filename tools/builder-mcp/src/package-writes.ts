@@ -5,7 +5,8 @@
  * agent asked to use an unregistered ID is refused".
  *
  * 1. **The package is one folder directly inside a package root:** `business-apps/packages/`, or
- *    the roots `BUILDER_PACKAGE_ROOTS` names instead (config.ts). It is reached through no link,
+ *    bundled into `satori mcp` a configuration repository's `config-packages/` (host.ts), or the
+ *    roots `BUILDER_PACKAGE_ROOTS` names instead (config.ts). It is reached through no link,
  *    holds no link, symbolic or hard, and is named as a Marketplace package is, in kebab case.
  * 2. **Each file is one a writer may write** (`fileKind`): the app definition's files, for
  *    `write_package_file` and for a `remove`, which takes one out but `app.json`; those and the

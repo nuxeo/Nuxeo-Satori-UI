@@ -17,6 +17,7 @@
  *   satori mcp [--root <directory>]                  the Builder MCP server, over stdio
  *   satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file> | --keyless ...)
  *   satori verify <zip> --trusted-signers <file> [options]
+ *   satori release-check <package> [--previous <directory or zip>] [--json] [options]
  *
  * What it carries, beside this file, each from this repository when the tool is built:
  * `validator.mjs`, the app definition's validator; `builder/build.mjs`, the `config-package`
@@ -41,11 +42,14 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { modelExportCommand } from '../../../scripts/package-pipeline/model-export.mjs';
 import { pipelineCommand } from '../../../scripts/package-pipeline/pipeline.mjs';
-import { signatureCommand } from '../../../scripts/package-pipeline/signature-command.mjs';
+import { releaseCheckCommand } from '../../../scripts/package-pipeline/release-check.mjs';
+import {
+  gitTopLevel,
+  signatureCommand,
+} from '../../../scripts/package-pipeline/signature-command.mjs';
 import {
   check,
   platformFromSnapshot,
@@ -103,11 +107,16 @@ const USAGE = `usage: satori <command> [arguments]
   satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>]
       [--version <version>] [--trusted-root <file>]
       Verify a zip's signature against the signers you trust.
+  satori release-check <package> [--previous <directory or zip>] [--json] [options]
+      Whether the package is ready for a person to release: it builds and passes every step,
+      keeps what --previous had, and its tag app-package/<name>/<version> is not one git has;
+      and the tag a person pushes. It never tags, pushes or publishes.
   satori --version | --help
 
 ${BUILD_OPTIONS}
 
-Not in this version: preview, promotion, and who may sign for a deployment (decision M).`;
+Not in this version: preview, publishing and promotion, and who may sign for a deployment
+(decision M). Publishing is a person's step: release-check says the tag they push.`;
 
 const BUILD_USAGE = `usage: satori build <package> [--out <directory>] [options]
        satori validate <package> [options]
@@ -123,6 +132,9 @@ const SIGN_USAGE = [
   '         [--version <version>] [--trusted-root <file>]',
 ].join('\n');
 const MCP_USAGE = 'usage: satori mcp [--root <directory>]';
+const RELEASE_USAGE = `usage: satori release-check <package> [--previous <directory or zip>] [--json] [options]
+
+${BUILD_OPTIONS.replace('options of validate and build:', 'options, those of build but --out and --tag:')}`;
 
 /** The pipeline's host: where everything outside the package is, for this tool. */
 const HOST = {
@@ -172,6 +184,16 @@ async function dispatch(name, args) {
     case 'sign':
     case 'verify':
       return signature(name, args);
+    case 'release-check':
+      // This tool's own build and upgrade check, as commands: a --previous zip is read as they read one.
+      return releaseCheckCommand(args, {
+        usage: RELEASE_USAGE,
+        pipeline: [process.execPath, SELF, 'build'],
+        upgradeCheck: [process.execPath, SELF, 'upgrade-check'],
+        program: 'satori release-check',
+        after:
+          "For the tag, the repository's workflow builds the package again and, once trusted-signers.json names it, signs it. Nothing promotes it to a server.",
+      });
     case '--version':
       process.stdout.write(`@nuxeo/satori-cli ${VERSION}, platform ${PLATFORM.version}\n`);
       return 0;
@@ -217,6 +239,10 @@ function signature(command, args) {
   let argv = [command, zip, ...options];
   if (command === 'sign' && options.includes('--keyless')) {
     const rest = options.filter((option) => option !== '--keyless');
+    if (options.length - rest.length > 1) {
+      console.error(`--keyless is given twice.\n${SIGN_USAGE}`);
+      return 2;
+    }
     const mixed = ['--key', '--ephemeral-key', '--signers-out', '--commit', '--out'].filter(
       (flag) => rest.includes(flag),
     );
@@ -228,11 +254,13 @@ function signature(command, args) {
     }
     argv = ['ci-plan', zip, ...rest];
   }
-  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   return signatureCommand(argv, {
     usage: SIGN_USAGE,
     program: 'satori',
-    repository: top.status === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : process.cwd(),
+    // The zip's own repository, wherever the command is run from: the working tree git keeps it
+    // in, or else the nearest folder above it with a package.json, as a configuration
+    // repository has, or else its own folder.
+    repository: (zip) => gitTopLevel(dirname(zip)) ?? packageRoot(dirname(zip)) ?? dirname(zip),
     trustedSigners: null,
   });
 }
@@ -387,6 +415,21 @@ function packageOfZip(zip, scratch) {
     if (isFile(join(unpacked, file)))
       copyFileSync(join(unpacked, file), join(directory, 'package', file));
   return directory;
+}
+
+/**
+ * The nearest folder from `folder` up that holds a package.json, or `null`: up to the first that
+ * cannot be read, as under Node's permission model, where a folder outside it is never the one.
+ */
+function packageRoot(folder) {
+  for (let at = resolve(folder); ; at = dirname(at)) {
+    try {
+      if (isFile(join(at, 'package.json'))) return at;
+    } catch {
+      return null;
+    }
+    if (dirname(at) === at) return null;
+  }
 }
 
 function isFile(path) {

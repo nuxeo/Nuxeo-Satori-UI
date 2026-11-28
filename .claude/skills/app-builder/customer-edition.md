@@ -23,7 +23,7 @@ need no other repository, and no source of Nuxeo Satori's.
 | 2. Write the files    | `apply_generator`, `write_package_file`, `remove_package_file` and `apply_package_changes` | Built: each keeps only what passes `satori validate`'s steps         |
 | 3. Check them         | Each write checks first; `satori validate` with the model as well                          | Built. The write tools take no model                                 |
 | 4. See it on a server | A person installs the built zip on the development server                                  | **`preview_package` does not run here**: it refuses, serving nothing |
-| 5. Release it         | A person raises the version, merges, and tags it; the workflow builds it and may sign it   | Signing once `trusted-signers.json` is configured. No promotion      |
+| 5. Release it         | `release_check` says it is ready and the tag; a person tags it; the workflow builds it     | Signing once `trusted-signers.json` is configured. No promotion      |
 
 Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
 step as done that this table says is not built.
@@ -190,7 +190,10 @@ file each time, starting from what the package holds now:
   read the record.
 
 The names a file may use, its widgets, rules, slots and actions, are the ones the platform
-registers: <https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/docs/extension-reference.md>. Each
+registers. This version of the tool lists them in
+`node_modules/@nuxeo/satori-cli/platform/platform.json`, under `surface`, as `widget <name>` and
+`id <name>`; the extension reference explains each:
+<https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/docs/extension-reference.md>. Each
 file's JSON Schema is in `node_modules/@nuxeo/satori-cli/schemas/`. A file a generator writes names
 its schema by the path Nuxeo Satori keeps it at, which this repository does not have; nothing reads
 `$schema`, so leave it.
@@ -231,15 +234,20 @@ pages show must be on the server, with the types the package names.
 
 1. The person raises the version in `package/package.xml`, `app.json`'s `packageVersion` and the
    manifest's `Bundle-Version`, together, as far as the changes need: a removed queue, layout or
-   label key needs a major. `satori upgrade-check config-packages/<package> --previous <zip>` holds
-   it to the version installed. The write tools do not raise a version.
-2. The pull request merges, once its workflow, `.github/workflows/satori.yml`, passes.
-3. The person tags the merged commit `app-package/<name>/<version>`. The workflow builds it again,
-   and, once `trusted-signers.json` at the root names the workflow, signs it keyless and verifies
-   it. Nothing promotes it to a server.
+   label key needs a major. The write tools do not raise a version.
+2. **Check it is ready with `release_check`,** `{ "package": "config-packages/acme-claims",
+"previous": "<the zip installed now>" }`, or `./node_modules/.bin/satori release-check
+config-packages/acme-claims --previous <zip>`. It builds and validates the package, holds it to
+   the version installed when `previous` is given, and checks that its tag,
+   `app-package/<name>/<version>`, is not one git has. `ready: false` says why; `ready: true` gives
+   the two commands a person runs. It never tags or pushes.
+3. The pull request merges, once its workflow, `.github/workflows/satori.yml`, passes.
+4. The person runs the two commands `release_check` gave, on the merged commit: the tag and its
+   push. The workflow builds it again, and, once `trusted-signers.json` at the root names the
+   workflow, signs it keyless and verifies it. Nothing promotes it to a server.
 
-**Never push an `app-package/*` tag yourself, never sign a package, and never present one as
-released:** say what is left for the person.
+**Never run the tag or push commands yourself, never sign a package, and never present one as
+released:** give the person the commands, and say what is left for them.
 
 ## Done means
 
@@ -258,5 +266,5 @@ released:** say what is left for the person.
   or its code.
 - Edit the files `satori agents sync` writes: this skill, `AGENTS.md`'s satori section, or the
   `nuxeo-satori` server in `.mcp.json`. The tool replaces them.
-- Install a package or a connector, set an address or a credential on a server, tag, or sign:
-  each is a person's.
+- Install a package or a connector, set an address or a credential on a server, tag, push a tag,
+  or sign: each is a person's.

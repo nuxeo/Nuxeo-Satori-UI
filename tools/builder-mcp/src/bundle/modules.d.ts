@@ -1,7 +1,7 @@
 /**
- * The two modules the bundled runner imports that TypeScript cannot see: EJS, which Nx's
- * `generateFiles` renders with and which ships no types, and the table of generators `bundle.mjs`
- * writes when it bundles them.
+ * The modules the bundled runner imports that TypeScript cannot see: EJS, which Nx's
+ * `generateFiles` renders with and which ships no types; Nx's list of binary extensions, which
+ * `bundle.mjs` resolves by its path; and the table of generators `bundle.mjs` writes.
  */
 declare module 'ejs' {
   export function render(
@@ -9,6 +9,11 @@ declare module 'ejs' {
     data: Record<string, unknown>,
     options: { readonly filename: string },
   ): string;
+}
+
+declare module 'satori:binary-extensions' {
+  /** Nx's own `isBinaryPath`, from @nx/devkit, which `bundle.mjs` bundles alone of @nx/devkit. */
+  export function isBinaryPath(path: string): boolean;
 }
 
 declare module 'satori:generators' {

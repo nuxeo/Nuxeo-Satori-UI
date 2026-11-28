@@ -279,9 +279,10 @@ repository, private and unpublished, at 0.2.0. It runs outside this repository w
   environment, never values; **`mcp`,** the Builder MCP server bundled into the tool, its tools
   unchanged, its checks `satori validate`'s; and **`sign` and `verify`,** section 7's mechanism,
   over the code `app-package-signature.mjs` runs, with a key the customer holds or keyless in their
-  CI, against a trusted-signers file they keep. `create` writes the agent files, and a workflow that
-  validates and builds every change and, once the repository's `trusted-signers.json` names it,
-  signs a tag's zip.
+  CI, against a trusted-signers file they keep; and **`release-check`,** with the server's
+  `release_check`, whether a package is ready for a person to release and the tag they push, which
+  never tags. `create` writes the agent files, and a workflow that validates and builds every change
+  and, once the repository's `trusted-signers.json` names it, signs a tag's zip.
 - **The MCP server is `satori mcp`, not a package of its own.** The table above names
   `@nuxeo/satori-mcp`; the server ships in `@nuxeo/satori-cli` instead, so that its checks and
   `satori validate`'s are one version of one implementation and cannot be installed apart.
@@ -336,7 +337,7 @@ Decision 5 stays open with this constraint added.
 
 ## 7. Signing, trust and promotion (decision M)
 
-Today only this repository's `app-packages.yml` signs a package (`business-apps/trusted-signers.json`).
+This repository's `app-packages.yml` signs our packages, as `business-apps/trusted-signers.json` says.
 The verifier already takes a deployment's own list, `--trusted-signers`, so the mechanism exists. A customer has it too, in `satori sign` and `satori verify` (section 5): the mechanism, not who may sign, which is this decision.
 What a customer needs:
 

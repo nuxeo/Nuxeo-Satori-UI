@@ -14,7 +14,8 @@
  *   `formatting.json` (`useFormatting`), since the standalone build cannot read a configuration
  *   file.
  * - **`generateFiles`** writes a folder of templates into the tree: each name's `__<key>__`
- *   replaced and its `.template` dropped, each text rendered with EJS, the engine Nx uses.
+ *   replaced and its `.template` dropped, each text rendered with EJS, the engine Nx uses, and a
+ *   file of a binary kind, by Nx's own list, copied as it is.
  *
  * The rest of `@nx/devkit` that a bundled module names but no app generator calls, the
  * `config-package` generator's, refuses: that generator is not bundled.
@@ -24,6 +25,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { render } from 'ejs';
+import { isBinaryPath } from 'satori:binary-extensions';
 import type { Options, Plugin } from 'prettier';
 import * as prettier from 'prettier/standalone';
 import * as acorn from 'prettier/plugins/acorn';
@@ -130,13 +132,6 @@ function changedPrettierConfig(tree: Tree): Options | null {
   }
 }
 
-/** The extensions Nx's `generateFiles` copies as bytes rather than render. */
-const BINARY = new Set(
-  '.png .jpg .jpeg .gif .ico .bmp .webp .tif .tiff .svgz .pdf .zip .gz .tgz .jar .class .woff .woff2 .ttf .otf .eot .mp3 .mp4 .wav .ogg .webm'.split(
-    ' ',
-  ),
-);
-
 export function generateFiles(
   tree: Tree,
   srcFolder: string,
@@ -153,8 +148,9 @@ export function generateFiles(
   for (const file of files) {
     let path = join(target, relative(srcFolder, file));
     if (path.endsWith('.template')) path = path.slice(0, -'.template'.length);
+    // Joined as Nx joins it, whatever the value: `join` makes a string of it its own way.
     for (const [key, value] of Object.entries(substitutions))
-      path = path.split(`__${key}__`).join(String(value));
+      path = path.split(`__${key}__`).join(value as string);
     if (tree.exists(path)) {
       if (strategy === 'keepExisting') continue;
       if (strategy === 'throwIfExisting')
@@ -162,7 +158,8 @@ export function generateFiles(
           `Generated file already exists, not allowed by overwrite strategy in generator (${path})`,
         );
     }
-    const content = BINARY.has(extname(file).toLowerCase())
+    // Copied as bytes when Nx's own list of binary extensions has it, rendered otherwise.
+    const content = isBinaryPath(file)
       ? readFileSync(file)
       : render(readFileSync(file, 'utf-8'), substitutions, { filename: file });
     tree.write(path, content);

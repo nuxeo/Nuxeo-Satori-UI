@@ -42,11 +42,6 @@ import { RUN_ENVIRONMENT } from './config.ts';
 import { HOST, REPO_ROOT, platformVersion } from './host.ts';
 
 export { REPO_ROOT, platformVersion };
-/**
- * The pipeline: `scripts/app-package.mjs` in this repository, and bundled, the tool's own
- * `satori build` (host.ts).
- */
-export const PIPELINE = HOST.pipeline[0];
 export const RUN_TIMEOUT_MS = 180_000;
 /** Where a package names the allow-list it is built against, which CI gives the pipeline. */
 export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'] as const;
@@ -254,6 +249,137 @@ export async function validatePackage(
       pipelineEnvironment(process.env, temporary),
     );
     return interpret(directory, run, platform, departsFromCi, asBuilt !== undefined);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+export interface ReleaseRequest {
+  /** The package folder. Relative to the repository. */
+  readonly directory: string;
+  /** The package as it was installed: a folder, or the zip it was built into. */
+  readonly previous?: string;
+}
+
+export interface ReleaseCheck {
+  readonly package: string;
+  /** Whether a person may tag it now: it builds, passes, keeps `previous`, and is not tagged. */
+  readonly ready: boolean;
+  readonly name: string | null;
+  readonly version: string | null;
+  /** `app-package/<name>/<version>`, once it is known. */
+  readonly tag: string | null;
+  readonly built: boolean;
+  readonly tagged: boolean | null;
+  /** Why it is not ready. */
+  readonly reasons: readonly string[];
+  /** What the check could not see. */
+  readonly unchecked: readonly string[];
+  /** What the person runs, when it is ready. */
+  readonly commands: readonly string[];
+  readonly exitCode: number | null;
+  readonly command: string;
+  /** The pipeline's output, and the check's. */
+  readonly output: readonly string[];
+  readonly note: string;
+}
+
+/**
+ * `release_check`: the release check, `HOST.releaseCheck`, on a package folder, given what
+ * `validatePackage` gives the pipeline, as CI does (the platform's version, the package's own
+ * allow-list), with its names compared with the packages beside it, and `previous` when given. It
+ * reads inside the roots only, and runs as the pipeline runs: no credential, stopped whole. It
+ * tags, pushes and publishes nothing; git is asked for the package's tag and nothing else.
+ */
+export async function releaseCheck(
+  request: ReleaseRequest,
+  options: PackageOptions = {},
+): Promise<ReleaseCheck> {
+  const roots = options.roots ?? [REPO_ROOT];
+  const resolved = (path: string, what: string): string => {
+    const found = within(path, roots);
+    if (typeof found !== 'string') throw new Error(`${what}: ${found.problem}`);
+    return found;
+  };
+  const directory = resolved(request.directory, 'package');
+  if (!statSync(directory).isDirectory())
+    throw new Error(`package: ${request.directory} is not a folder.`);
+  const link = linkInside(directory);
+  if (link)
+    throw new Error(
+      `package: ${request.directory} holds a link, ${relative(directory, link)}, which is not followed.`,
+    );
+  let previous: string | undefined;
+  if (request.previous !== undefined) {
+    previous = resolved(request.previous, 'previous');
+    const entry = statSync(previous);
+    if (entry.isDirectory()) {
+      const inside = linkInside(previous);
+      if (inside)
+        throw new Error(
+          `previous: ${request.previous} holds a link, ${relative(previous, inside)}, which is not followed.`,
+        );
+    } else if (!entry.isFile() || !previous.endsWith('.zip'))
+      throw new Error(`previous: ${request.previous} is neither a package folder nor a zip.`);
+  }
+  const builds = join(directory, ...BUILD_ALLOW_LIST);
+  const allowList = lstatSync(builds, { throwIfNoEntry: false })?.isFile() ? builds : undefined;
+  const work = mkdtempSync(join(options.workIn ?? tmpdir(), 'builder-mcp-release-'));
+  const temporary = join(work, 'tmp');
+  const args = [
+    ...HOST.releaseCheck,
+    directory,
+    '--json',
+    '--platform',
+    platformVersion(),
+    ...(allowList ? ['--allow-list', allowList] : []),
+    '--kits',
+    options.kits ?? join(directory, '..'),
+    ...(previous ? ['--previous', previous] : []),
+  ];
+  try {
+    mkdirSync(temporary);
+    const run = await runNode(
+      args,
+      options.timeoutMs ?? RUN_TIMEOUT_MS,
+      pipelineEnvironment(process.env, temporary),
+    );
+    const last = lines(run.stdout).at(-1) ?? '';
+    let said: Partial<ReleaseCheck> & { output?: string[] } = {};
+    try {
+      said = JSON.parse(last) as typeof said;
+    } catch {
+      // Said in the answer: it printed no answer.
+    }
+    const command =
+      `${HOST.releaseShown} <package> --json --platform ${platformVersion()}` +
+      (allowList ? ' --allow-list <package>/deployment/build-allow-list.json' : '') +
+      ' --kits <its folder>' +
+      (previous ? ' --previous <previous>' : '');
+    return {
+      package: shownFromRepository(directory),
+      ready: run.failure === null && run.exitCode === 0 && said.ready === true,
+      name: said.name ?? null,
+      version: said.version ?? null,
+      tag: said.tag ?? null,
+      built: said.built === true,
+      tagged: said.tagged ?? null,
+      reasons: [
+        ...(said.reasons ?? []),
+        ...(run.failure ? [run.failure] : []),
+        ...(said.ready === undefined ? ['the check printed no answer'] : []),
+      ],
+      unchecked: said.unchecked ?? [],
+      commands: said.commands ?? [],
+      exitCode: run.exitCode,
+      command,
+      output: [...(said.output ?? []), ...lines(run.stderr)].map((line) =>
+        line.split(work).join('<temporary>'),
+      ),
+      note:
+        said.note ??
+        "Publishing is a person's step. Nothing was tagged, pushed or published, and no credential was read.",
+    };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

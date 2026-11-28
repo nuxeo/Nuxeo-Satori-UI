@@ -17,9 +17,10 @@
  *   Sigstore's trusted root unless `--trusted-root` gives one, for a server offline.
  * - **`sign`** signs with an Ed25519 key. With `--ephemeral-key` the key is made for this run and
  *   never written: its public half is written to `--signers-out`, as a trusted-signers file to
- *   verify with. `--key` reads a private key from a file, which must be outside the repository,
- *   where a key is one commit from being published. `--commit` is the commit the zip was built
- *   from, `git rev-parse HEAD` in the repository by default, refused when anything is uncommitted.
+ *   verify with. `--key` reads a private key from a file, which must be outside the repository, and
+ *   outside any folder git keeps, where a key is one commit from being published. `--commit` is the
+ *   commit the zip was built from, `git rev-parse HEAD` in the repository by default, refused when
+ *   anything is uncommitted.
  * - **`ci-plan`** is a CI job's decision whether to sign keyless: for a tag build of this package,
  *   on GitHub's runners, with an OIDC identity, by a workflow the trusted signers name, it writes
  *   the predicate to `--predicate-out` and `sign=true` to `$GITHUB_OUTPUT`, for `actions/attest` to
@@ -32,7 +33,7 @@
 import { spawnSync } from 'node:child_process';
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { appendFileSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { basename, relative, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import {
   PREDICATE_TYPE,
@@ -57,7 +58,8 @@ const FLAGS = { verify: [], sign: ['--ephemeral-key'], 'ci-plan': [] };
  *
  * - `usage`, said with every command-line error;
  * - `program`, how the command is named in what it writes, such as the ephemeral key's comment;
- * - `repository`, the folder git runs in for the commit, and that a `--key` must be outside;
+ * - `repository`, the folder git runs in for the commit, and that a `--key` must be outside: a
+ *   path, or a function of the zip's path, for a command that may be run from anywhere;
  * - `trustedSigners`, the file read unless `--trusted-signers` names another, or `null`, when it
  *   must be given.
  */
@@ -143,7 +145,8 @@ function verify(zip, options, host) {
   return 0;
 }
 
-function sign(zip, options, { usage, program, repository }) {
+function sign(zip, options, { usage, program, repository: given }) {
+  const repository = typeof given === 'function' ? given(zip) : given;
   if (Boolean(options.key) === Boolean(options['ephemeral-key']))
     throw new Usage(`give --ephemeral-key or --key, one of them.\n${usage}`);
   if (options['ephemeral-key'] && !options['signers-out'])
@@ -165,6 +168,13 @@ function sign(zip, options, { usage, program, repository }) {
       throw new Usage(
         `--key ${options.key} is inside the repository, where a private key is one commit from being ` +
           'published. Keep it outside, or use --ephemeral-key.',
+      );
+    // Nor in another repository: wherever git keeps files, a key is one commit from being published.
+    const kept = gitTopLevel(dirname(real));
+    if (kept !== null)
+      throw new Usage(
+        `--key ${options.key} is inside ${kept}, which git keeps, where a private key is one commit from ` +
+          'being published. Keep it outside, or use --ephemeral-key.',
       );
     try {
       privateKey = createPrivateKey(readFileSync(path));
@@ -214,6 +224,12 @@ function sign(zip, options, { usage, program, repository }) {
   }
   process.stdout.write(`${basename(zip)} signed by ${keyId}, from ${commit}: ${shown(out)}.\n`);
   return 0;
+}
+
+/** The top of the git working tree `folder` is in, or `null` when it is in none. */
+export function gitTopLevel(folder) {
+  const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: folder, encoding: 'utf8' });
+  return top.status === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : null;
 }
 
 /** A CI job's decision, written where the workflow reads it. */

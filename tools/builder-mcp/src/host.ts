@@ -33,6 +33,10 @@ export interface Host {
   readonly pipeline: readonly string[];
   /** The pipeline as an answer names it. */
   readonly pipelineShown: string;
+  /** The release check, `package-pipeline/release-check.mjs`'s command, before the package folder. */
+  readonly releaseCheck: readonly string[];
+  /** The release check as an answer names it. */
+  readonly releaseShown: string;
   /** The folder the write tools write a package in unless `BUILDER_PACKAGE_ROOTS` names others. */
   readonly packageRoot: string;
   /** Where each generator's `<generator>/schema.json` is. */
@@ -48,6 +52,31 @@ export interface Host {
   readonly platform: { readonly file: string; readonly shown: string };
   /** How a customer's model is written to a file, for a refusal that names it. */
   readonly modelExport: string;
+  /** What the tools' descriptions say of this place, so that none names what is not there. */
+  readonly words: Words;
+}
+
+export interface Words {
+  /** A package folder, as an example. */
+  readonly packageExample: string;
+  /** A demo kit's package folder, as an example. */
+  readonly kitExample: string;
+  /** The folder the write tools write a package in, unless configured otherwise. */
+  readonly packageRoot: string;
+  /** What the pipeline is, in a description. */
+  readonly pipeline: string;
+  /** Where the pipeline's steps are described. */
+  readonly steps: string;
+  /** How a package is checked with a server's model. */
+  readonly withModel: string;
+  /** The platform version a package is checked against unless another is given. */
+  readonly platformDefault: string;
+  /** How the generators are run elsewhere, for a description of apply_generator. */
+  readonly generators: string;
+  /** Where a task form's file and fields are described. */
+  readonly taskForms: string;
+  /** Whether preview_package serves here. */
+  readonly preview: boolean;
 }
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
@@ -59,6 +88,8 @@ function repositoryHost(): Host {
     root,
     pipeline: [join(root, 'scripts', 'app-package.mjs')],
     pipelineShown: 'node scripts/app-package.mjs',
+    releaseCheck: [join(root, 'scripts', 'app-release-check.mjs')],
+    releaseShown: 'node scripts/app-release-check.mjs',
     packageRoot: join(root, 'business-apps', 'packages'),
     generators: join(root, 'tools', 'satori-generators', 'src'),
     generatorRoot: root,
@@ -66,6 +97,18 @@ function repositoryHost(): Host {
     platform: { file: join(root, 'libs', 'platform', 'package.json'), shown: 'libs/platform' },
     modelExport:
       '`npm run app-package:model -- --server <address> --out tmp/content-model.json`, into the checkout (its tmp/ is ignored by git)',
+    words: {
+      packageExample: 'business-apps/packages/acme-contracts',
+      kitExample: 'business-apps/packages/moves-demo',
+      packageRoot: 'business-apps/packages/',
+      pipeline: 'scripts/app-package.mjs',
+      steps: 'steps 1 to 6 of docs/business-apps/package-pipeline.md',
+      withModel: 'npm run app-package takes --model',
+      platformDefault: "libs/platform's",
+      generators: 'as npx nx g ./tools/satori-generators:<generator> would',
+      taskForms: ' (docs/business-apps/app-definition-v2.md, section 6)',
+      preview: true,
+    },
   };
 }
 
@@ -82,6 +125,8 @@ function bundledHost(): Host {
     root,
     pipeline: [join(tool, 'satori.mjs'), 'build'],
     pipelineShown: 'satori build',
+    releaseCheck: [join(tool, 'satori.mjs'), 'release-check'],
+    releaseShown: 'satori release-check',
     packageRoot: join(root, 'config-packages'),
     generators: join(carried, 'tools', 'satori-generators', 'src'),
     generatorRoot: carried,
@@ -89,6 +134,18 @@ function bundledHost(): Host {
     platform: { file: join(tool, 'platform', 'platform.json'), shown: "the tool's platform" },
     modelExport:
       "`satori model pull --server <address> --out content-model.json`, kept out of git if it is a customer's",
+    words: {
+      packageExample: 'config-packages/acme-contracts',
+      kitExample: 'config-packages/acme-demo',
+      packageRoot: 'config-packages/',
+      pipeline: 'satori build, the steps satori validate takes',
+      steps: "the package pipeline's steps 1 to 6",
+      withModel: 'satori validate takes --model',
+      platformDefault: 'the one @nuxeo/satori-cli carries',
+      generators: "with each generator's options named as its schema names them",
+      taskForms: '',
+      preview: false,
+    },
   };
 }
 

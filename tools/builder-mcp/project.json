@@ -9,12 +9,14 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its modules in scripts/package-pipeline/ and the release check over them, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
         { "env": "SATORI_TEST_TZ" },
         "{workspaceRoot}/scripts/app-package.mjs",
+        "{workspaceRoot}/scripts/app-release-check.mjs",
+        "{workspaceRoot}/scripts/package-pipeline/**/*",
         "{workspaceRoot}/scripts/verify-package-zip.mjs",
         "{workspaceRoot}/scripts/release-candidate-set.mjs",
         "{workspaceRoot}/scripts/package-signature.mjs",

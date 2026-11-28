@@ -24,6 +24,7 @@ satori mcp [--root <directory>]
 satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]
 satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
 satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <package>] [--version <version>] [--trusted-root <file>]
+satori release-check <package> [--previous <directory or zip>] [--json] [options]
 ```
 
 - **`validate`** takes every step `build` takes and writes nothing: the zip is built and verified
@@ -43,6 +44,8 @@ satori verify <zip> --trusted-signers <file> [--signature <file>] [--name <packa
   ([The MCP server](#the-mcp-server-satori-mcp)).
 - **`sign`** and **`verify`** sign a zip and verify one, decision M's mechanism
   ([Signing](#signing-and-verifying-sign-and-verify)).
+- **`release-check`** says whether a package is ready for a person to release, and the tag they
+  push to release it ([Releasing](#releasing-release-check)). It never tags.
 
 The options of `validate` and `build` are the pipeline's, `scripts/app-package.mjs`'s:
 `--allow-list`, `--registered`, `--platform`, `--model` or `--model-server`, `--previous`, `--kits`
@@ -153,7 +156,9 @@ satori agents sync --check    # writes nothing; exit 1 names what differs
   After an upgrade it refreshes them, and `--check`, which the workflow runs, fails until it has.
 - **The customer's own edits are kept:** everything in `AGENTS.md` outside the section, to the
   byte, and every other server and key of an MCP file. An edit inside the section, or to the
-  `nuxeo-satori` entry, is put back.
+  `nuxeo-satori` entry, is put back. An MCP file whose entry is this version's is in step however
+  it is laid out, and is not written; one written again is laid out as JSON with two spaces, and
+  one JSON would not give back as it is, with a key twice or a number it rounds, is refused.
 - **Nothing secret is written.** The server's entry starts `node_modules/.bin/satori mcp`, the copy
   the repository's lockfile installs, never one `npx` would fetch, and names `NUXEO_URL`,
   `NUXEO_USER` and `NUXEO_PASS` as references, `${NUXEO_PASS:-}` for Claude Code and
@@ -176,7 +181,8 @@ satori mcp --root <directory> # in another folder, as .cursor/mcp.json starts it
 ```
 
 The Builder MCP server, [`tools/builder-mcp`](../builder-mcp/README.md), bundled into this tool, with
-the same tools, by name, description and schema. It is a subcommand rather than a package of its
+the same tools, by name, title, annotations and arguments; what their descriptions name is the
+configuration repository's, `config-packages/` and `satori build`, not this repository's. It is a subcommand rather than a package of its
 own, `@nuxeo/satori-mcp`, so that a write the server keeps is one `satori validate` keeps: its
 `validate_package` and write tools run this tool's `satori build`, the same steps from the same
 modules, at the same version, and the two cannot be installed apart. What differs from the server
@@ -194,10 +200,11 @@ and what is refused are the same ([package-pipeline.md](../../docs/business-apps
 section 9):
 
 - **`sign --key <file>`,** a key the customer holds, Ed25519, kept outside the repository: one
-  inside the folder the version control names, or the working folder outside one, is refused. Its
-  public key goes in the trusted-signers file as `{ "id", "kind": "ed25519", "publicKey" }`.
-  `--commit` is the commit the zip was built from, `HEAD` by default, refused with anything
-  uncommitted. `--ephemeral-key --signers-out` makes a key for the run, never written, and writes
+  inside the zip's repository, wherever the command is run from, is refused, and so is one in any
+  folder git keeps. The zip's repository is the git working tree it is in, or else the nearest
+  folder above it with a `package.json`. Its public key goes in the trusted-signers file as
+  `{ "id", "kind": "ed25519", "publicKey" }`. `--commit` is the commit the zip was built from, the
+  `HEAD` of the zip's repository by default, refused with anything uncommitted. `--ephemeral-key --signers-out` makes a key for the run, never written, and writes
   its public half as a trusted-signers file.
 - **`sign --keyless`,** in the customer's CI: the decision whether the run may sign, for a tag build
   of the package, on GitHub's runners, with an OIDC identity, by a workflow the trusted signers
@@ -208,6 +215,31 @@ section 9):
   and to the trusted signers: a changed byte, a signer not among them, and another version, by the
   zip's name, its `package.xml` or `--version`, are each refused. A keyless signature is checked by
   `gh attestation verify`.
+
+## Releasing: `release-check`
+
+```bash
+satori release-check config-packages/acme-config --kits config-packages --previous <zip installed now>
+```
+
+Publishing is a person's step: a tag `app-package/<name>/<version>`, pushed on purpose, which the
+workflow builds again and signs once it is configured. `release-check` checks what can be checked
+before the tag, and says the tag:
+
+1. the package builds and passes every step, by this tool's own `build`, into a scratch folder it
+   removes; one that does not build is not ready;
+2. with `--previous`, the package as it is installed, a folder or its zip, it is held to that one,
+   as `upgrade-check` holds it; without it, the answer says its upgrade was not checked;
+3. its tag, from the `package.xml` of the zip just built, is not a ref of the git repository the
+   package is in. A tag someone pushed that this clone has not fetched is not seen, which it says;
+   a package in no git repository is not ready, since a person tags it with git;
+4. ready, it prints the two commands a person runs on the merged commit, the tag and its push.
+
+It never makes or pushes a tag, never calls the Marketplace, and reads no credential: git is asked
+for its top folder and one ref. `--json` prints one JSON object, which the MCP server's
+`release_check` reads. The check is `scripts/package-pipeline/release-check.mjs`, which this
+repository's `scripts/app-release-check.mjs` runs too, over `app-package.mjs`. Exit codes: 0,
+ready; 1, not ready; 2, the command was wrong or could not be run.
 
 ## Building it, and running it outside this repository
 
@@ -243,24 +275,35 @@ keyless signature.
   kit there, to the same digest, and a repository `create` writes, under Node's permission model,
   so that no Node process of the run can read anything outside that folder: reading this
   repository's `package.json` from it must fail;
+- builds the tool a second time from another folder, which must give the same bytes;
 - in that folder, starts `satori mcp` from the tarball in the scaffold, confined by flags on its
   command line, which Node passes on to every Node process it starts, as it would not pass
   `NODE_OPTIONS` on to the ones the server starts with an environment of its own; and requires its
-  tools to be the repository's server's, `validate_package` to pass the scaffold, a generator's
-  write to be kept, a write with an unregistered widget refused with the package unchanged, and
-  `preview_package` to refuse. A process a confined one starts with no environment must not read
-  this repository either, and no bundle may name its folder;
+  tools to be the repository's server's, by name, title, annotations and every argument, and what
+  they say to name nothing of this repository's, which the repository's own server's do;
+  `validate_package` to pass the scaffold; a generator's write to be kept; a write with an
+  unregistered widget refused with the package unchanged; and `preview_package` to refuse. A
+  process a confined one starts with no environment must not read this repository either, and no
+  file the tarball ships may name this repository's folder or the builder's home;
 - signs the scaffold's zip there with a key made at run time and with one held outside the
-  repository, and refuses a key inside it, a changed byte, a signer not trusted, and another version
-  three ways, `verify` with no trusted signers, and `--keyless` off a tag build;
+  repository, and refuses a key inside it, from the repository and from another folder, a key in
+  another repository git keeps, a changed byte, a signer not trusted, and another version three
+  ways, `verify` with no trusted signers, and `--keyless` off a tag build;
+- in the scaffold, by then a git repository, runs `release-check`, through the command and through
+  the server's `release_check`: ready, with the tag and push, held to its own zip as `--previous`,
+  and with no tag made; then not ready once that version is tagged, and for a package that does not
+  build; and refuses `--out`, and no package;
 - runs every app generator, in the order a kit is made, through the repository's runner, with Nx's
   tree and Prettier, and through the bundled one, on the same package, and requires the same bytes;
   the bundled one given another print width must answer otherwise;
 - runs `agents sync` with credentials and an address in the environment, none of which may be in a
-  file it writes; again, which must touch no file; with a customer's text around the section and
-  servers of their own, which must be kept to the byte while what is the tool's is put back; and
-  with a marker repeated, an MCP file that is not JSON and a link, each refused with nothing
-  written. A planted secret, and an edit planted inside the section, must be seen;
+  file it writes; again, which must touch no file; with a customer's text around the section, which
+  must be kept to the byte, and the entry alone edited, both of which `--check` must see and the
+  sync put back; with a customer's own servers in their own layout and this version's entry, which
+  `--check` must find in step and the sync leave as it is, and with a stale entry, put back with
+  their servers kept; and with a marker repeated, an MCP file that is not JSON, one JSON would not
+  give back, and a link, each refused with nothing written. A planted secret, and an edit planted
+  inside the section, must be seen;
 - holds the customer's skill to naming every tool the server has and nothing of this repository's,
   which this repository's own skill fails, and the workflow `create` writes to checking the agent
   files and signing only in its one job with an identity, and only once configured: each of three
@@ -276,7 +319,7 @@ keyless signature.
 ## Not in this slice
 
 - **Publishing the tool,** and so the workflow's `npm ci`, which needs it on a registry: decision K's
-  owners.
+  owners. And publishing a package, which stays a person's tag: `release-check` says the tag.
 - **A preview against the customer's development server.** `preview_package` serves to this
   repository's development server only, and refuses outside it.
 - **Promotion** through development, test and production with a person's approval, and **who may

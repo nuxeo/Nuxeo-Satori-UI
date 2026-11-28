@@ -70,7 +70,7 @@ import {
   utimesSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnToolSync } from '../../scripts/beta-harness/package-command.mjs';
@@ -124,6 +124,19 @@ try {
   const built = node([join(HERE, 'build.mjs'), '--out', tool]);
   if (built.status !== 0) throw new Error(`the tool did not build:\n${built.output}`);
   const satori = join(tool, 'satori.mjs');
+  // The same bytes when it is built from another folder: nothing of where the build ran is in it.
+  const elsewhere = join(scratch, 'tool-elsewhere');
+  const again = node([join(HERE, 'build.mjs'), '--out', elsewhere], { cwd: scratch });
+  if (
+    again.status !== 0 ||
+    JSON.stringify(fingerprint(elsewhere)) !== JSON.stringify(fingerprint(tool))
+  )
+    fail(
+      'the tool built from another folder',
+      `exit ${again.status}, or other bytes`,
+      again.output,
+    );
+  else held++;
 
   oneBuilder(satori, tool);
   const kitDigest = digestOf(buildWith(PIPELINE, PAYERS, join(scratch, 'pipeline-payers')));
@@ -362,6 +375,7 @@ async function outsideTheRepository(tool, kitDigest, tools) {
 
   await mcpOutside(outside, bin, repository, tools);
   signAndVerify(outside, bin, repository, env);
+  releaseChecks(outside, bin, repository, env);
 }
 
 // --- 3. Refusals, each at its own step -----------------------------------------------------------
@@ -1055,11 +1069,15 @@ function agentsSync(satori, tool) {
     agents,
     `${prefix}${ours.slice(start, end).replace('## Nuxeo Satori: rules', '## Rules, edited')}${suffix}`,
   );
-  const servers = JSON.parse(readFileSync(join(repository, '.mcp.json'), 'utf8'));
-  servers.mcpServers['nuxeo-satori'].command = 'npx';
-  servers.mcpServers.acme = { command: 'acme-mcp', args: ['--stdio'] };
-  servers.acmeSetting = { kept: true };
-  writeFileSync(join(repository, '.mcp.json'), JSON.stringify(servers));
+  // The entry edited, and nothing else, in the file as the tool laid it out.
+  const mcpFile = join(repository, '.mcp.json');
+  const laidOut = readFileSync(mcpFile, 'utf8');
+  if (!laidOut.includes('"command": "node_modules/.bin/satori"'))
+    fail('the control on the entry', "the tool's .mcp.json no longer has its command as expected");
+  writeFileSync(
+    mcpFile,
+    laidOut.replace('"command": "node_modules/.bin/satori"', '"command": "npx"'),
+  );
   const drifted = sync('--check');
   if (
     drifted.status !== 1 ||
@@ -1075,15 +1093,12 @@ function agentsSync(satori, tool) {
   else held++;
   const restored = sync();
   const text = readFileSync(agents, 'utf8');
-  const kept = JSON.parse(readFileSync(join(repository, '.mcp.json'), 'utf8'));
   if (
     restored.status !== 0 ||
     !text.startsWith(prefix) ||
     !text.endsWith(suffix) ||
     text.slice(prefix.length, text.length - suffix.length) !== ours.slice(start, end) ||
-    JSON.stringify(kept.mcpServers.acme) !== JSON.stringify(servers.mcpServers.acme) ||
-    kept.acmeSetting?.kept !== true ||
-    kept.mcpServers['nuxeo-satori'].command !== 'node_modules/.bin/satori'
+    readFileSync(mcpFile, 'utf8') !== laidOut
   )
     fail(
       "satori agents sync, with a customer's own text and servers",
@@ -1094,6 +1109,45 @@ function agentsSync(satori, tool) {
   // The control on it: text planted inside the section is not kept.
   if (text.includes('## Rules, edited'))
     fail('the control on the section', 'an edit inside the section survived the sync');
+  else held++;
+
+  // A customer's own servers and keys, in their own layout, with the entry as this version
+  // writes it: in step, and not written.
+  const entry = JSON.parse(laidOut).mcpServers['nuxeo-satori'];
+  const theirs = JSON.stringify({
+    acmeSetting: { kept: true },
+    mcpServers: { acme: { command: 'acme-mcp', args: ['--stdio'] }, 'nuxeo-satori': entry },
+  });
+  writeFileSync(mcpFile, theirs);
+  const theirsChecked = sync('--check');
+  const theirsSynced = sync();
+  if (
+    theirsChecked.status !== 0 ||
+    theirsSynced.status !== 0 ||
+    readFileSync(mcpFile, 'utf8') !== theirs
+  )
+    fail(
+      "satori agents sync, a customer's own layout with this version's entry",
+      `--check exit ${theirsChecked.status}, or the file was written again`,
+      theirsChecked.output + theirsSynced.output,
+    );
+  else held++;
+  // With a stale entry, the entry is put back, and their servers and keys kept.
+  writeFileSync(mcpFile, theirs.replace('"command":"node_modules/.bin/satori"', '"command":"npx"'));
+  const refreshed = sync();
+  const kept = JSON.parse(readFileSync(mcpFile, 'utf8'));
+  if (
+    refreshed.status !== 0 ||
+    kept.acmeSetting?.kept !== true ||
+    JSON.stringify(kept.mcpServers.acme) !==
+      JSON.stringify({ command: 'acme-mcp', args: ['--stdio'] }) ||
+    JSON.stringify(kept.mcpServers['nuxeo-satori']) !== JSON.stringify(entry)
+  )
+    fail(
+      "satori agents sync, a customer's file with a stale entry",
+      'their servers were not kept, or the entry not put back',
+      refreshed.output,
+    );
   else held++;
 
   // Refused, with nothing written: a marker repeated, an MCP file that is not JSON, a link.
@@ -1129,6 +1183,15 @@ function agentsSync(satori, tool) {
     'with a .mcp.json that is not JSON',
     (folder) => writeFileSync(join(folder, '.mcp.json'), '{ "mcpServers": { // a comment\n'),
     'it is not JSON',
+  );
+  refusedWith(
+    'with a .mcp.json that JSON would not give back, a key given twice',
+    (folder) =>
+      writeFileSync(
+        join(folder, '.mcp.json'),
+        '{ "mcpServers": { "acme": { "command": "acme" } }, "mcpServers": { "other": { "command": "other" } } }\n',
+      ),
+    'JSON would not give it back as it is',
   );
   refusedWith(
     'with .claude a link to a folder elsewhere',
@@ -1214,28 +1277,64 @@ async function mcpOutside(outside, bin, repository, tools) {
       probe.output,
     );
   else held++;
-  // The bundles name no place in this repository: what they read, they carry.
+  // No file the tarball ships names this repository's folder, or the home folder of whoever built
+  // it: what the tool reads, it carries.
   const tool = dirname(bin);
-  const named = ['mcp.mjs', 'mcp-generator.mjs', 'satori.mjs']
-    .filter((file) => readFileSync(join(tool, file), 'utf8').includes(REPO.replace(/[\\/]$/, '')))
-    .concat(
-      Object.keys(fingerprint(join(tool, 'generators'))).filter((file) =>
-        readFileSync(join(tool, 'generators', ...file.split('/')), 'utf8').includes(
-          REPO.replace(/[\\/]$/, ''),
-        ),
-      ),
-    );
-  if (named.length > 0) fail('the bundles', `name this repository's folder: ${named.join(', ')}`);
+  const places = [REPO.replace(/[\\/]$/, ''), homedir()].filter((place) => place.length > 1);
+  const named = Object.keys(fingerprint(tool)).filter((file) => {
+    const text = readFileSync(join(tool, ...file.split('/')), 'utf8');
+    return places.some((place) => text.includes(place));
+  });
+  if (named.length > 0) fail('the tarball', `names this machine's folders: ${named.join(', ')}`);
   else held++;
+
+  // The scaffold as a person keeps it, a git repository, for the release check.
+  for (const args of [
+    ['init', '--quiet'],
+    ['add', '.'],
+    ['commit', '--quiet', '-m', 'scaffold'],
+  ]) {
+    const ran = git(repository, ...args);
+    if (ran.status !== 0) fail(`git ${args[0]} in the scaffold`, `exit ${ran.status}`, ran.stderr);
+  }
 
   const session = mcpSession([...confinement, bin, 'mcp'], { cwd: repository, env });
   try {
-    await session.open();
+    const opened = await session.open();
     const listed = (await session.request('tools/list')).result?.tools ?? [];
-    if (tools.length < 17 || JSON.stringify(listed) !== JSON.stringify(tools))
+    // The same tools: names, titles, annotations and every argument, but for what their
+    // descriptions say of where they run.
+    if (tools.length < 18 || JSON.stringify(shapeOf(listed)) !== JSON.stringify(shapeOf(tools)))
       fail(
         "satori mcp's tools",
         `they are not the repository's server's: ${listed.map((each) => each.name).join(', ')}`,
+      );
+    else held++;
+    // And what they say names nothing of this repository's; the control: the repository's do.
+    const said = descriptionsOf({ instructions: opened?.instructions, tools: listed });
+    const ours = REPOSITORY_ONLY.filter(([pattern]) => pattern.test(said)).map(([, why]) => why);
+    if (ours.length > 0) fail("satori mcp's descriptions", ours.join('; '));
+    else held++;
+    if (!REPOSITORY_ONLY.some(([pattern]) => pattern.test(descriptionsOf({ tools }))))
+      fail("the control on satori mcp's descriptions", "the repository's server's passed it");
+    else held++;
+    // The release check, through the server: ready, with the tag a person pushes, and no tag made.
+    const release = await session.call('release_check', { package: 'config-packages/acme-config' });
+    if (
+      release.isError ||
+      release.json?.ready !== true ||
+      JSON.stringify(release.json?.commands) !==
+        JSON.stringify([
+          'git tag app-package/acme-config/1.0.0',
+          'git push origin app-package/acme-config/1.0.0',
+        ]) ||
+      !String(release.json?.note).includes("Publishing is a person's step") ||
+      git(repository, 'tag', '--list').stdout !== ''
+    )
+      fail(
+        'release_check, outside the repository',
+        'not ready with the tag, or a tag was made',
+        release.text,
       );
     else held++;
     const valid = await session.call('validate_package', {
@@ -1320,6 +1419,56 @@ async function mcpOutside(outside, bin, repository, tools) {
   rmSync(join(repository, 'config-packages', 'acme-claims'), { recursive: true, force: true });
 }
 
+/** Tools as their schemas shape them: every description taken out, the rest as it is. */
+function shapeOf(tools) {
+  const strip = (value) =>
+    Array.isArray(value)
+      ? value.map(strip)
+      : value !== null && typeof value === 'object'
+        ? Object.fromEntries(
+            Object.entries(value)
+              .filter(([key]) => key !== 'description')
+              .map(([key, inner]) => [key, strip(inner)]),
+          )
+        : value;
+  return strip(tools);
+}
+
+/** Every description a server gives, its instructions' and each tool's and argument's, as one text. */
+function descriptionsOf(value) {
+  if (Array.isArray(value)) return value.map(descriptionsOf).join('\n');
+  if (value === null || typeof value !== 'object') return '';
+  return Object.entries(value)
+    .map(([key, inner]) =>
+      typeof inner === 'string'
+        ? ['description', 'instructions', 'title'].includes(key)
+          ? inner
+          : ''
+        : descriptionsOf(inner),
+    )
+    .filter((text) => text !== '')
+    .join('\n');
+}
+
+/** git in `cwd`, as a person with no configuration of their own runs it, and nothing signed. */
+function git(cwd, ...args) {
+  return spawnSync(
+    'git',
+    [
+      '-c',
+      'user.name=Satori CLI Selftest',
+      '-c',
+      'user.email=selftest@example.invalid',
+      '-c',
+      'commit.gpgSign=false',
+      '-c',
+      'tag.gpgSign=false',
+      ...args,
+    ],
+    { cwd, encoding: 'utf8' },
+  );
+}
+
 /** An MCP client over stdio, as small as it can be: JSON-RPC, one message a line. */
 function mcpSession(args, options) {
   const child = spawn(process.execPath, args, { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -1371,6 +1520,7 @@ function mcpSession(args, options) {
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
       );
+      return opened.result;
     },
     async call(name, args) {
       const answer = await request('tools/call', { name, arguments: args });
@@ -1666,7 +1816,49 @@ function signAndVerify(outside, bin, repository, env) {
     2,
     'is inside the repository',
   );
+  // From another folder, the key inside the scaffold is still inside the zip's repository.
+  expect(
+    'satori sign --key, a key inside the repository, from another folder',
+    satori(
+      [
+        'sign',
+        zip,
+        '--key',
+        join(repository, 'acme.pem'),
+        '--commit',
+        commit,
+        '--out',
+        join(outside, 'inside-elsewhere.sig.json'),
+      ],
+      outside,
+    ),
+    2,
+    'is inside the repository',
+  );
   rmSync(join(repository, 'acme.pem'));
+  // A key in another repository git keeps: one commit from being published there.
+  const other = join(outside, 'other-repository');
+  mkdirSync(other);
+  git(other, 'init', '--quiet');
+  writeFileSync(join(other, 'release.pem'), pem, { mode: 0o600 });
+  expect(
+    'satori sign --key, a key in another repository git keeps',
+    satori(
+      [
+        'sign',
+        zip,
+        '--key',
+        join(other, 'release.pem'),
+        '--commit',
+        commit,
+        '--out',
+        join(outside, 'other.sig.json'),
+      ],
+      outside,
+    ),
+    2,
+    'which git keeps',
+  );
   // A changed byte.
   const changed = join(outside, 'changed', basename(zip));
   mkdirSync(dirname(changed), { recursive: true });
@@ -1759,6 +1951,81 @@ function signAndVerify(outside, bin, repository, env) {
     2,
     '--keyless signs in CI',
   );
+}
+
+// --- 8b. release-check --------------------------------------------------------------------------------
+
+/**
+ * `satori release-check`, on the scaffold, a git repository by now: ready, with the tag a person
+ * pushes and no tag made; refused once that version is tagged, and for a package that does not
+ * build; and its own errors.
+ */
+function releaseChecks(outside, bin, repository, env) {
+  const satori = (args, cwd = repository) => node([bin, 'release-check', ...args], { cwd, env });
+  const tag = 'app-package/acme-config/1.0.0';
+  const ready = satori([
+    'config-packages/acme-config',
+    '--kits',
+    'config-packages',
+    '--previous',
+    'dist/acme-config-1.0.0.zip',
+  ]);
+  if (
+    ready.status !== 0 ||
+    !ready.output.includes(`  git tag ${tag}\n  git push origin ${tag}`) ||
+    !ready.output.includes("Publishing is a person's step") ||
+    !ready.output.includes('It keeps what dist/acme-config-1.0.0.zip had') ||
+    git(repository, 'tag', '--list').stdout !== ''
+  )
+    fail(
+      'satori release-check, a package ready to release',
+      `exit ${ready.status}, or a tag was made`,
+      ready.output,
+    );
+  else held++;
+  // Tagged, it is released: not ready, for that reason.
+  git(repository, 'tag', tag);
+  const tagged = satori(['config-packages/acme-config']);
+  if (
+    tagged.status !== 1 ||
+    !tagged.output.includes(`${tag} is a tag already`) ||
+    tagged.output.includes('git push')
+  )
+    fail(
+      'satori release-check, a version already tagged',
+      `exit ${tagged.status}, not 1`,
+      tagged.output,
+    );
+  else held++;
+  // A package that does not build.
+  const broken = join(outside, 'broken', 'acme-config');
+  cpSync(join(repository, 'config-packages', 'acme-config'), broken, { recursive: true });
+  writeFileSync(
+    join(broken, 'bundle', 'agentic-ui-config', 'manifest.json'),
+    '{ "version": 1, "version": 1 }\n',
+  );
+  const failed = satori([broken], outside);
+  if (
+    failed.status !== 1 ||
+    !failed.output.includes('it does not build') ||
+    !failed.output.includes('step 4 refused it')
+  )
+    fail(
+      'satori release-check, a package that does not build',
+      `exit ${failed.status}, not 1`,
+      failed.output,
+    );
+  else held++;
+  // Its own errors: an --out, which it would not write, and no package.
+  for (const [what, args] of [
+    ['with --out', ['config-packages/acme-config', '--out', 'dist']],
+    ['with no package', []],
+  ]) {
+    const run = satori(args);
+    if (run.status !== 2)
+      fail(`satori release-check ${what}`, `exit ${run.status}, not 2`, run.output);
+    else held++;
+  }
 }
 
 // --- 9. What create writes for agents and CI -----------------------------------------------------------

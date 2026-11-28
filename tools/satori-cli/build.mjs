@@ -100,6 +100,8 @@ for (const [entry, file] of [
     legalComments: 'none',
     logLevel: 'warning',
     metafile: true,
+    // From the repository, wherever the build is run: the paths in the bundle's comments too.
+    absWorkingDir: REPO,
     plugins: [ownUrls(entry)],
   });
   for (const input of Object.keys(result.metafile.inputs))

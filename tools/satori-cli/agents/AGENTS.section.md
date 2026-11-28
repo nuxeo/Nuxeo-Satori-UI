@@ -13,6 +13,7 @@ install did not put it there.
 | Hold a new version to the one installed, before releasing  | `./node_modules/.bin/satori upgrade-check config-packages/<package> --previous <zip>`          |
 | Sign a zip with a key you hold, outside this repository    | `./node_modules/.bin/satori sign dist/<zip> --key <file>`                                      |
 | Verify a zip against the signers you trust                 | `./node_modules/.bin/satori verify dist/<zip> --trusted-signers trusted-signers.json`          |
+| Check a package is ready to release, and get its tag       | `./node_modules/.bin/satori release-check config-packages/<package> --previous <zip>`          |
 | Refresh this section, the skill and the MCP server's entry | `./node_modules/.bin/satori agents sync`, after every upgrade of the tool                      |
 
 `validate` and `build` take the same steps and refuse the same things; each refusal names the step,
@@ -65,4 +66,6 @@ registers: <https://github.com/nuxeo/Nuxeo-Satori-UI/blob/main/docs/extension-re
 ## Nuxeo Satori: not in this version
 
 A preview against your development server, promotion through development, test and production,
-and who may sign for a deployment (decision M), are later versions of the tool.
+and who may sign for a deployment (decision M), are later versions of the tool. Publishing a
+package is a person's step: they push the tag `release-check` gives, and the workflow builds it and,
+once `trusted-signers.json` names it, signs it. An agent never tags, pushes or signs.

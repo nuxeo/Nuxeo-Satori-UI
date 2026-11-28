@@ -23,8 +23,10 @@
  * - **`licenses/`,** the licence of each package bundled.
  *
  * Refused, and nothing is trusted: a bundled module from `node_modules` that is not one of the
- * packages listed for its bundle, so that neither carries Nx, `tsx` or anything else installed;
- * and a bundled package with no licence file.
+ * packages listed for its bundle, so that neither carries Nx, `tsx` or anything else installed
+ * but Nx's list of binary extensions; a bundled package with no licence file; and a formatting
+ * configuration that is not the same for a file at every package path, which `formatting.json`,
+ * resolved by kind of file, could not carry.
  */
 import {
   cpSync,
@@ -47,8 +49,15 @@ const GENERATOR_LIST = /export const APP_GENERATORS = \[([^\]]*)\] as const;/;
 /** What each bundle may take from `node_modules`, and nothing more. */
 const ALLOWED = {
   'mcp.mjs': ['@modelcontextprotocol/core', '@modelcontextprotocol/server', 'zod'],
-  'mcp-generator.mjs': ['ejs', 'prettier'],
+  'mcp-generator.mjs': ['@nx/devkit', 'ejs', 'prettier'],
 };
+
+/**
+ * A bundled package that ships no licence file of its own, and the package of the same repository
+ * and licence whose file is carried for it: @nx/devkit, whose one file bundled is Nx's list of
+ * binary extensions, and nx, both of github.com/nrwl/nx, MIT.
+ */
+const LICENCE_OF = { '@nx/devkit': 'nx' };
 
 /** What a generator reads outside a package, from the root it is given, by its place there. */
 const CARRIED = [
@@ -96,6 +105,9 @@ export async function bundleServer({ out, repo }) {
       legalComments: 'none',
       logLevel: 'warning',
       metafile: true,
+      // From the repository, wherever the build is run: the bytes, and the paths in their
+      // comments, are the same from any folder.
+      absWorkingDir: repo,
       define: { SATORI_MCP_BUNDLE: 'true' },
       // CommonJS bundled into an ES module calls `require` for Node's own modules.
       banner: {
@@ -146,21 +158,37 @@ export async function bundleServer({ out, repo }) {
   // The licence of each package bundled.
   const licenses = join(out, 'licenses');
   mkdirSync(licenses, { recursive: true });
+  const notices = (folder) =>
+    readdirSync(folder).filter((entry) => /^(licen[cs]e|notice|third-party-notices)/i.test(entry));
+  const manifestOf = (folder) => JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'));
   for (const name of [...new Set(Object.values(bundled).flat())].sort()) {
     const folder = join(repo, 'node_modules', ...name.split('/'));
-    const files = readdirSync(folder).filter((entry) =>
-      /^(licen[cs]e|notice|third-party-notices)/i.test(entry),
-    );
+    const { version, license, repository } = manifestOf(folder);
+    let from = folder;
+    let files = notices(folder);
+    if (!files.some((entry) => /^licen[cs]e/i.test(entry)) && Object.hasOwn(LICENCE_OF, name)) {
+      // Its repository's licence, as a package of the same repository and licence ships it.
+      from = join(repo, 'node_modules', ...LICENCE_OF[name].split('/'));
+      const other = manifestOf(from);
+      if (other.license !== license || other.repository?.url !== repository?.url)
+        throw new Error(
+          `${name} ships no licence file, and ${LICENCE_OF[name]}, whose licence it was to carry, is not of its repository and licence.`,
+        );
+      files = notices(from);
+    }
     if (!files.some((entry) => /^licen[cs]e/i.test(entry)))
       throw new Error(`${name} is bundled and has no licence file in ${relative(repo, folder)}.`);
-    const { version, license } = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'));
     const text = files
       .sort()
-      .map((entry) => `--- ${entry} ---\n\n${readFileSync(join(folder, entry), 'utf8').trim()}\n`)
+      .map((entry) => `--- ${entry} ---\n\n${readFileSync(join(from, entry), 'utf8').trim()}\n`)
       .join('\n');
+    const shipped =
+      from === folder
+        ? ''
+        : `It ships no licence file: this is its repository's, ${repository.url}, as ${LICENCE_OF[name]} ships it.\n\n`;
     writeFileSync(
       join(licenses, `${name.replace('/', '__')}.txt`),
-      `${name} ${version} (${license})\n\n${text}`,
+      `${name} ${version} (${license})\n\n${shipped}${text}`,
     );
   }
   return { generators, bundled };
@@ -175,11 +203,24 @@ async function formatting(prettier, repo) {
   const root = mkdtempSync(join(tmpdir(), 'satori-mcp-formatting-'));
   try {
     for (const file of ['.prettierrc', '.editorconfig']) cpSync(join(repo, file), join(root, file));
-    const resolve = (name) =>
-      prettier.resolveConfig(join(root, 'package', name), { editorconfig: true });
+    const resolve = (place, name) =>
+      prettier.resolveConfig(join(root, ...place.split('/'), name), { editorconfig: true });
     const byExtension = {};
-    for (const extension of EXTENSIONS) byExtension[extension] = await resolve(`file${extension}`);
-    return { prettier: prettier.version, byExtension, otherwise: await resolve('file') };
+    for (const extension of EXTENSIONS)
+      byExtension[extension] = await resolve('package', `file${extension}`);
+    const otherwise = await resolve('package', 'file');
+    // A configuration scoped to a folder would format a package's file by where the package is,
+    // which a configuration by kind of file cannot say: refused, rather than carried wrong.
+    for (const place of ['business-apps/packages/kit', 'config-packages/kit/bundle', 'x/y/z'])
+      for (const extension of [...EXTENSIONS, ''])
+        if (
+          JSON.stringify(await resolve(place, `file${extension}`)) !==
+          JSON.stringify(extension === '' ? otherwise : byExtension[extension])
+        )
+          throw new Error(
+            `the Prettier configuration formats a file${extension} under ${place} otherwise than elsewhere, which formatting.json, by kind of file, cannot carry.`,
+          );
+    return { prettier: prettier.version, byExtension, otherwise };
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -196,6 +237,19 @@ function devkitPlugin(devkit, repo) {
       build.onResolve({ filter: /^@nx\/devkit$/ }, () => ({ path: devkit }));
       build.onResolve({ filter: /^ejs$/ }, () => ({
         path: join(repo, 'node_modules', 'ejs', 'lib', 'cjs', 'ejs.js'),
+      }));
+      // Nx's list of binary extensions, its one file of @nx/devkit bundled, by its path.
+      build.onResolve({ filter: /^satori:binary-extensions$/ }, () => ({
+        path: join(
+          repo,
+          'node_modules',
+          '@nx',
+          'devkit',
+          'dist',
+          'src',
+          'utils',
+          'binary-extensions.js',
+        ),
       }));
     },
   };

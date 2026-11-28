@@ -496,6 +496,10 @@ The MCP server has no publish tool, and promotion after a person approves is a p
    section 8: a removed queue, layout or label key needs a major, from 1.0.0), and the pull
    request merges. Its check refuses a version that moved less. The write tools do not write
    `package.xml` or the manifest by hand, and do not compare with the version before.
+   **`release_check`** (`{ "package", "previous"? }`, or `npm run app-package:release-check --
+<package>`) says whether it is ready: it builds and validates it, holds it to `previous`, the
+   package as it is installed, and checks that its tag is not one git has; ready, it gives the
+   tag and push commands for the person. It never tags or pushes.
 2. The person tags the merged commit `app-package/<name>/<version>` and pushes the tag.
 3. The workflow `app-packages.yml` checks and builds it again, attests it and publishes it to
    Marketplace preprod. This path has not run yet.

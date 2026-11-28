@@ -42,7 +42,15 @@ import {
 } from './package-writes.ts';
 import { describeDefinition, describePageProvider, listPageProviders } from './page-providers.ts';
 import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
-import { validatePackage, type PackageCheck, type PackageRequest } from './validate-package.ts';
+import { HOST } from './host.ts';
+import {
+  releaseCheck,
+  validatePackage,
+  type PackageCheck,
+  type PackageRequest,
+  type ReleaseCheck,
+  type ReleaseRequest,
+} from './validate-package.ts';
 import { MAX_PAGE_SIZE, listVocabularies, readVocabulary } from './vocabularies.ts';
 import { describeWorkflow, listWorkflows } from './workflows.ts';
 
@@ -56,6 +64,8 @@ export interface ServerDependencies {
    */
   readonly nuxeo: (() => NuxeoReads) | { readonly problem: string };
   readonly validate?: (request: PackageRequest) => Promise<PackageCheck>;
+  /** The release check; replaced in some tests. */
+  readonly release?: (request: ReleaseRequest) => Promise<ReleaseCheck>;
   /** The dev server `preview_package` serves to, or why it cannot; config.ts reads it. */
   readonly devServer?: PreviewOptions['devServer'];
   readonly preview?: (request: PackageRequest) => Promise<Preview>;
@@ -66,6 +76,9 @@ export interface ServerDependencies {
   readonly packageRoots?: readonly string[] | { readonly problem: string };
   readonly write?: (request: WriteRequest) => Promise<WriteResult>;
 }
+
+/** What this server's descriptions say of where it runs (host.ts). */
+const WORDS = HOST.words;
 
 const INSTRUCTIONS =
   'Reads one Nuxeo server, the one NUXEO_URL names, validates app definition packages with the' +
@@ -78,8 +91,11 @@ const INSTRUCTIONS =
   ' be, its names compared with the other kits beside it, writes it only when the' +
   ' pipeline passes with no finding, and otherwise returns the findings and changes nothing. A' +
   ' refused write is the answer: fix what it names, and never rename an id to get a pass.' +
-  ' validate_package checks a package as it is. preview_package validates a package and serves it' +
-  ' to the local development server, replacing what it served, and returns the addresses to open.';
+  ' validate_package checks a package as it is.' +
+  (WORDS.preview
+    ? ' preview_package validates a package and serves it to the local development server,' +
+      ' replacing what it served, and returns the addresses to open.'
+    : ' preview_package does not run here: it refuses, and serves nothing.');
 
 /**
  * Every Nuxeo tool reads definitions and changes nothing. The only documents read are a workflow
@@ -99,6 +115,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
   const { nuxeo } = dependencies;
   const validate = dependencies.validate ?? validatePackage;
+  const release = dependencies.release ?? ((request: ReleaseRequest) => releaseCheck(request));
   const devServer = dependencies.devServer ?? { problem: 'No dev server is configured.' };
   const preview =
     dependencies.preview ?? ((request: PackageRequest) => previewPackage(request, { devServer }));
@@ -163,7 +180,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     .min(1)
     .optional()
     .describe(
-      "A demo kit's package folder, such as business-apps/packages/moves-demo: when it ships a" +
+      `A demo kit's package folder, such as ${WORDS.kitExample}: when it ships a` +
         ' stand-in model (a content-model.json beside bundle/, as app-model writes), the answer is' +
         " read from it, and its source is 'package'; what it does not have, the server answers." +
         " Leave it out for a package on a server's model.",
@@ -316,8 +333,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       description:
         "One workflow model: its variables with types and defaults, and each step's task (buttons," +
         ' directive, layout), variables, and transitions with their conditions and chains. A task' +
-        ' step also names the task form file it would have and the var: fields that form can edit' +
-        ' (docs/business-apps/app-definition-v2.md, section 6).',
+        ' step also names the task form file it would have and the var: fields that form' +
+        ` can edit${WORDS.taskForms}.`,
       inputSchema: z.object({
         name: z.string().min(1).describe('The workflow model name, such as SerialDocumentReview'),
       }),
@@ -408,9 +425,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     .string()
     .min(1)
     .optional()
-    .describe(
-      'The package folder, such as business-apps/packages/payers-claims-demo, as the write tools name it',
-    );
+    .describe(`The package folder, such as ${WORDS.packageExample}, as the write tools name it`);
   const directoryArgument = z
     .string()
     .min(1)
@@ -422,13 +437,13 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     {
       title: 'Validate a package',
       description:
-        "Runs the package pipeline's checks, steps 1 to 6 of docs/business-apps/package-pipeline.md," +
-        " on a package folder (scripts/app-package.mjs): the builder, the app definition's" +
+        `Runs the package pipeline's checks, ${WORDS.steps},` +
+        ` on a package folder (${WORDS.pipeline}): the builder, the app definition's` +
         ' validation, the version, the build, the zip and its checksum. Given the folder alone, it' +
         ' passes what CI passes, and asCi is true; an allow-list, a registered file or another' +
         ' platform version change what is checked, and are listed under departsFromCi. A package' +
         ' that ships a stand-in model is held to its own content-model.json, as in CI; one on a' +
-        " server's model is held to none, for which npm run app-package takes --model. Returns" +
+        ` server's model is held to none, for which ${WORDS.withModel}. Returns` +
         ' whether it passed, each finding with its file and place, and the step that refused it.' +
         ' The zip is built in a temporary folder and removed; nothing is published. Paths are' +
         ' relative to the repository, and must be inside it.',
@@ -451,7 +466,9 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           .string()
           .min(1)
           .optional()
-          .describe("The platform version to hold app.json's range to. Default: libs/platform's"),
+          .describe(
+            `The platform version to hold app.json's range to. Default: ${WORDS.platformDefault}`,
+          ),
       }),
       // Not read-only: it builds a zip, if only in a temporary folder it removes, and runs the
       // pipeline's processes. A client may ask before running it, and should be free to.
@@ -466,20 +483,64 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
 
   server.registerTool(
+    'release_check',
+    {
+      title: 'Check a package is ready for a person to release',
+      description:
+        'Whether a package is ready to release, and what a person runs to release it: it builds and' +
+        ' validates the package as validate_package does, holds it to previous when given, the' +
+        ' package as it is installed, and checks that its tag, app-package/<name>/<version>, is not' +
+        ' one git has. Returns ready, the reasons it is not, what was not checked, and, when ready,' +
+        " the tag and push commands. Publishing is a person's step: this never tags, pushes or" +
+        ' publishes, and reads no credential; never run the commands it returns yourself. Paths are' +
+        ' relative to the repository, and must be inside it.',
+      inputSchema: z.object({
+        package: folderArgument,
+        directory: directoryArgument,
+        previous: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'The package as it is installed, a folder or the zip it was built into: what a customer' +
+              ' may override or name is held to it, and the version to what changed. Without it,' +
+              ' the upgrade is not checked',
+          ),
+      }),
+      // Not read-only: it builds a zip, in a temporary folder it removes, as validate_package does.
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    ({ previous, ...folder }: { readonly previous?: string } & FolderArgs) =>
+      answer(() =>
+        release({
+          directory: folderRequest(folder).directory,
+          ...(previous === undefined ? {} : { previous }),
+        }),
+      ),
+  );
+
+  server.registerTool(
     'preview_package',
     {
       title: 'Preview a package in dev mode',
-      description:
-        'Validates a package folder as validate_package does, then serves it to the local' +
-        ' development server (npx nx serve nuxeo-ui) through npm run config:dev: its layouts,' +
-        ' home, menu, queues, labels and task forms, written into' +
-        ' apps/nuxeo-ui/public/agentic-ui-config/, replacing what was served before. A package' +
-        ' that does not pass is not served. Returns the address to open first and each page,' +
-        ' the files it could not serve and why (app.json, actions.json, modules, assets), and' +
-        ' whether the dev server answers every file as it was written, which it is given a few' +
-        ' seconds to do; one it still does not answer needs a restart. Writes nothing but that' +
-        " folder and, while it runs, a folder of its own in the package's dist/. Paths are" +
-        ' relative to the repository, and must be inside it.',
+      description: WORDS.preview
+        ? 'Validates a package folder as validate_package does, then serves it to the local' +
+          ' development server (npx nx serve nuxeo-ui) through npm run config:dev: its layouts,' +
+          ' home, menu, queues, labels and task forms, written into' +
+          ' apps/nuxeo-ui/public/agentic-ui-config/, replacing what was served before. A package' +
+          ' that does not pass is not served. Returns the address to open first and each page,' +
+          ' the files it could not serve and why (app.json, actions.json, modules, assets), and' +
+          ' whether the dev server answers every file as it was written, which it is given a few' +
+          ' seconds to do; one it still does not answer needs a restart. Writes nothing but that' +
+          " folder and, while it runs, a folder of its own in the package's dist/. Paths are" +
+          ' relative to the repository, and must be inside it.'
+        : "Does not run here: it serves to Nuxeo Satori UI's development server, from a checkout" +
+          ' of its repository, and refuses, serving nothing. Check a package with validate_package.',
       inputSchema: z.object({
         package: folderArgument,
         directory: directoryArgument,
@@ -495,7 +556,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           .string()
           .min(1)
           .optional()
-          .describe("As validate_package. Default: libs/platform's"),
+          .describe(`As validate_package. Default: ${WORDS.platformDefault}`),
       }),
       // It replaces what the dev folder served, so a client may ask before running it.
       annotations: {
@@ -512,8 +573,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     .string()
     .min(1)
     .describe(
-      'The package folder, directly inside business-apps/packages/ unless the server is configured' +
-        ' with other roots, such as business-apps/packages/acme-contracts',
+      `The package folder, directly inside ${WORDS.packageRoot} unless the server is configured` +
+        ` with other roots, such as ${WORDS.packageExample}`,
     );
   const pathArgument = z
     .string()
@@ -532,7 +593,7 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     .optional()
     .describe(
       "The generator's options, named as its schema names them, such as" +
-        ' { "type": "Contract", "model": "business-apps/packages/acme-contracts/content-model.json" }.' +
+        ` { "type": "Contract", "model": "${WORDS.packageExample}/content-model.json" }.` +
         ' Not package, name or directory, which the package argument gives, and not modelServer:' +
         ' a model is a JSON file inside the repository',
     );
@@ -614,8 +675,8 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     {
       title: 'Run an app generator, if the result validates',
       description:
-        "Runs one of the Builder kit's app generators on a package, as npx nx g" +
-        ' ./tools/satori-generators:<generator> would: app-package for a new package, app-layout,' +
+        `Runs one of the Builder kit's app generators on a package, ${WORDS.generators}:` +
+        ' app-package for a new package, app-layout,' +
         ' app-form, app-queue, app-action, app-registry, app-connector for a connector an external' +
         ' card reads, app-dependency for an add-on the kit needs, in package.xml, or app-model for' +
         ' a demo kit. It runs in a' +
@@ -696,9 +757,7 @@ function folderRequest({ package: named, directory, ...rest }: FolderArgs): Pack
     );
   const folder = named ?? directory;
   if (folder === undefined)
-    throw new Error(
-      'package: give the package folder, such as business-apps/packages/acme-contracts.',
-    );
+    throw new Error(`package: give the package folder, such as ${WORDS.packageExample}.`);
   return { ...rest, directory: folder };
 }
 

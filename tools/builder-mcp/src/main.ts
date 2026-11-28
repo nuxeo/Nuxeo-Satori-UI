@@ -4,7 +4,9 @@
  *
  *   node tools/builder-mcp/src/main.ts
  *
- * Node 24 runs this TypeScript as it is, stripping the types; there is no build step. The
+ * Node 24 runs this TypeScript as it is, stripping the types; there is no build step here.
+ * Bundled into @nuxeo/satori-cli by bundle.mjs, it is `satori mcp`, in a customer's
+ * configuration repository (host.ts says what differs there). The
  * environment is read once, here: NUXEO_URL, NUXEO_USER and NUXEO_PASS, DEV_SERVER_URL for
  * preview_package, and BUILDER_PACKAGE_ROOTS for the write tools (config.ts). Without the
  * credentials the server still starts, so that validate_package, preview_package and the write

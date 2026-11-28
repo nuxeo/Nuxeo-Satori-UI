@@ -23,29 +23,31 @@ The plan gives the server four jobs. Three are here:
   and nobody has decided. Until then a package is published by a tag, in CI, as that document
   says, and its version is held to what changed (section 8). A package is signed in CI too, never
   by this server: here by `app-packages.yml`, and in a customer's repository by the workflow
-  `satori create` writes, with `satori sign`.
+  `satori create` writes, with `satori sign`. What the server does is `release_check`: whether a
+  package is ready, and the tag a person pushes ([Releasing a package](#releasing-a-package)).
 
 ## The tools
 
-| Tool                     | What it answers                                                                                                                                             | Nuxeo reads                                                                        |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `get_content_model`      | Every document type (parent, facets, schemas), facet (schemas) and schema (prefix, field count)                                                             | `/config/types`, `/config/facets`, `/config/schemas`                               |
-| `describe_document_type` | One type's fields, as `<prefix>:<name>` with their types, by schema; the facets that bring a schema; ancestors and subtypes                                 | the same three                                                                     |
-| `describe_schema`        | One schema's fields, by name or prefix, and the types and facets that use it                                                                                | the same three                                                                     |
-| `list_page_providers`    | The names of the server's page providers, and which the search index answers                                                                                | `/management/page-providers`                                                       |
-| `describe_page_provider` | One page provider: its pattern or fixed part, how many parameters it takes in order, its predicates, sorts, page sizes, aggregates and quick filters        | `/search/pp/<name>`                                                                |
-| `list_workflows`         | The workflow models and their variables' names                                                                                                              | `/workflowModel`                                                                   |
-| `describe_workflow`      | One model's variables, and each step's task, buttons, variables and transitions; a task step's task form file and `var:` fields                             | `/workflowModel/<name>`, its graph, the model and step documents, `/config/facets` |
-| `list_vocabularies`      | The vocabularies; other directories are counted, not named                                                                                                  | `/directory`                                                                       |
-| `get_vocabulary`         | One vocabulary's entries, a page at a time                                                                                                                  | `/directory`, `/directory/<name>`                                                  |
-| `list_operations`        | Operations and chains, filtered by category or text, with every category's count                                                                            | `/automation`                                                                      |
-| `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                            | `/automation`                                                                      |
-| `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                        | none                                                                               |
-| `preview_package`        | A package validated, then served to the local dev server: the address to open, each page, what could not be served and why, and what the dev server answers | none                                                                               |
-| `write_package_file`     | One app definition file written whole, if the package then passes the pipeline; otherwise the findings, and nothing written                                 | none                                                                               |
-| `remove_package_file`    | One app definition file taken out, and the component's mention of it with `app-registry`, if the package then passes; otherwise the findings                | none                                                                               |
-| `apply_generator`        | One app generator run on the package, its files written if the package then passes; otherwise the findings, and nothing written                             | none                                                                               |
-| `apply_package_changes`  | Several writes, removals and generator runs, in order, checked once at the end: all written, or none                                                        | none                                                                               |
+| Tool                     | What it answers                                                                                                                                               | Nuxeo reads                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `get_content_model`      | Every document type (parent, facets, schemas), facet (schemas) and schema (prefix, field count)                                                               | `/config/types`, `/config/facets`, `/config/schemas`                               |
+| `describe_document_type` | One type's fields, as `<prefix>:<name>` with their types, by schema; the facets that bring a schema; ancestors and subtypes                                   | the same three                                                                     |
+| `describe_schema`        | One schema's fields, by name or prefix, and the types and facets that use it                                                                                  | the same three                                                                     |
+| `list_page_providers`    | The names of the server's page providers, and which the search index answers                                                                                  | `/management/page-providers`                                                       |
+| `describe_page_provider` | One page provider: its pattern or fixed part, how many parameters it takes in order, its predicates, sorts, page sizes, aggregates and quick filters          | `/search/pp/<name>`                                                                |
+| `list_workflows`         | The workflow models and their variables' names                                                                                                                | `/workflowModel`                                                                   |
+| `describe_workflow`      | One model's variables, and each step's task, buttons, variables and transitions; a task step's task form file and `var:` fields                               | `/workflowModel/<name>`, its graph, the model and step documents, `/config/facets` |
+| `list_vocabularies`      | The vocabularies; other directories are counted, not named                                                                                                    | `/directory`                                                                       |
+| `get_vocabulary`         | One vocabulary's entries, a page at a time                                                                                                                    | `/directory`, `/directory/<name>`                                                  |
+| `list_operations`        | Operations and chains, filtered by category or text, with every category's count                                                                              | `/automation`                                                                      |
+| `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                              | `/automation`                                                                      |
+| `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                          | none                                                                               |
+| `release_check`          | Whether a package is ready for a person to release: it builds, keeps `previous`, and its tag is not one git has; and the tag and push commands for the person | none                                                                               |
+| `preview_package`        | A package validated, then served to the local dev server: the address to open, each page, what could not be served and why, and what the dev server answers   | none                                                                               |
+| `write_package_file`     | One app definition file written whole, if the package then passes the pipeline; otherwise the findings, and nothing written                                   | none                                                                               |
+| `remove_package_file`    | One app definition file taken out, and the component's mention of it with `app-registry`, if the package then passes; otherwise the findings                  | none                                                                               |
+| `apply_generator`        | One app generator run on the package, its files written if the package then passes; otherwise the findings, and nothing written                               | none                                                                               |
+| `apply_package_changes`  | Several writes, removals and generator runs, in order, checked once at the end: all written, or none                                                          | none                                                                               |
 
 Some things about them are worth knowing before relying on them:
 
@@ -261,6 +263,29 @@ moving a live lock aside and putting it back. The skill keeps the agent's writes
   `npm run app-package -- <package> --model <file>` as well, as the skill says.
 - **Compare with the version before** (`--previous`): raising a version is a person's step.
 
+## Releasing a package
+
+`release_check`, `{ package, previous? }`, runs the release check, `scripts/app-release-check.mjs`
+here and `satori release-check` bundled, the one implementation in
+`scripts/package-pipeline/release-check.mjs`, with what `validate_package` gives the pipeline as CI
+does, the package's own allow-list and the platform's version, and `--kits` the folder the package
+is in. It answers `ready`, the `reasons` it is not, what was `unchecked`, the `tag`,
+`app-package/<name>/<version>`, and, ready, the `commands` a person runs: the tag and its push.
+
+- **It builds and validates the package,** and with `previous`, the package as it is installed,
+  inside the repository, holds it to that one by the upgrade check: here a package folder, as
+  `app-upgrade-check.mjs` takes one, and bundled a folder or its zip, as `satori upgrade-check`
+  does.
+- **Its tag must not be one git has** in the repository the package is in. A tag pushed elsewhere
+  and not fetched is not seen, which `unchecked` says.
+- **It never tags, pushes or publishes,** never calls the Marketplace, and gets no credential: the
+  check runs as the pipeline runs, with `PATH`, the temporary folder and the locale only. The skill
+  tells the agent to hand the commands to the person, never to run them.
+
+`src/release-check.spec.ts` runs it on copies of a kit in scratch git repositories of their own:
+ready, a version tagged already, a package that does not build, a package in no git repository, and
+a path outside its roots.
+
 ## Previewing a package
 
 `preview_package` shows a package in the app running from this checkout, `npx nx serve nuxeo-ui`,
@@ -412,7 +437,8 @@ The same server runs in a customer's own configuration repository, bundled into
 [`@nuxeo/satori-cli`](../satori-cli/README.md) as `satori mcp`, which the `.mcp.json` that
 `satori agents sync` writes starts from `node_modules/.bin`. `bundle.mjs`, which the tool's build
 calls, makes it: `mcp.mjs` from `src/main.ts`, and `mcp-generator.mjs`, the generators' process, from
-`src/bundle/run-generator.ts`. Its tools are these, by name, description and input schema. What
+`src/bundle/run-generator.ts`. Its tools are these, by name, title, annotations and arguments, and their descriptions name the
+configuration repository's places and commands, not this repository's. What
 differs is where things are, which `src/host.ts` decides when the server is built, from what esbuild
 defines, never from the environment:
 
@@ -425,6 +451,8 @@ defines, never from the environment:
 | The generators                             | `tools/satori-generators`, loaded by `tsx`, with Nx's tree | the same sources, bundled, with a tree of their own, `src/bundle/tree.ts`, and `src/bundle/devkit.ts` for `@nx/devkit`: Prettier's standalone build and EJS |
 | What a generator reads outside a package   | this repository                                            | `generators/`, beside the tool: their schemas and templates, the platform's routes and version, and `formatting.json`                                       |
 | `preview_package`                          | serves to the development server                           | refuses, serving nothing: it needs this repository's development server and `config:dev`                                                                    |
+| `release_check`                            | `scripts/app-release-check.mjs`                            | the tool's `satori release-check`, the same check                                                                                                           |
+| What the descriptions name                 | this repository's places and commands                      | the configuration repository's: `config-packages/`, `satori build`, `satori validate --model` (`HOST.words`)                                                |
 
 - **One generator.** A generator run by `satori mcp` writes what it writes here, byte for byte:
   `formatFiles` formats with the same Prettier, with every plugin its Node build has, and this

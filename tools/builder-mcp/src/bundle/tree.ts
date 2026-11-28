@@ -73,7 +73,11 @@ export class GeneratorTree {
       delete this.recorded[this.rp(path)];
       return;
     }
-    this.recorded[this.rp(path)] = { content: Buffer.from(content), isDeleted: false, options };
+    try {
+      this.recorded[this.rp(path)] = { content: Buffer.from(content), isDeleted: false, options };
+    } catch {
+      // Not a content Buffer.from takes: not recorded, as Nx's tree does not record it.
+    }
   }
 
   overwrite(
