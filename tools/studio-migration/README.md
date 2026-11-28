@@ -689,8 +689,8 @@ that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
     record, as a listing is on the record page;
   - **reported, never pointed at other records:** a named parameter, which a list of related records
     cannot send; a query parameter bound to the page otherwise, or with anything around the
-    binding, or one that reads as a binding only once its JSON's escapes are read, which Polymer
-    does not bind; a sort it cannot read; two page providers, or none; no table, or more than
+    binding; `params` that write an escape, or `queryParams` twice, where what Polymer binds and
+    what JSON reads could differ; a sort it cannot read; two page providers, or none; no table, or more than
     one; a table that does not name its page provider, by its `id`, as `nx-provider="p"` or
     `[[$.p]]` does, or that is given `items` of its own; a page provider given anything but its
     `id`, `provider`, `params`, `page-size`, `sort`, `schemas` and `enrichers`, such as a `query`,
@@ -1770,7 +1770,9 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     now refused, with every attribute but those read; row actions or **New** added to a card of
     related records, and actions or a search to a queue, which check 7 now says Web UI's list does
     not offer; and a binding that only JSON's escapes make, which Polymer does not bind, now
-    refused. It also found two columns of one property under different conditions failing checks
+    refused. Its second round, on the fixes, closed each, and found the last one sidestepped by
+    an unescaped copy beside the escaped value, in a list or under `queryParams` written twice:
+    `params` that write any escape, or the key twice, are refused now. It also found two columns of one property under different conditions failing checks
     5 and 6 though written as Web UI shows them: each is now held to its own.
   - **The correctness review** found, besides that one: a condition guarding the recently viewed
     card left pending for good once a person rejected the card, as a decided proposal counted as
@@ -1793,7 +1795,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     cheap independent check of: what it suggested, that a condition said to guard nothing holds no
     converted construct, needs the place of every construct among the conditions, which the
     inventory does not keep, so it is under **Not done yet** too.
-  - **20 more guards,** each a fix of a finding, broken one at a time by the same script, each seen
+  - **22 more guards,** each a fix of a finding, broken one at a time by the same script, each seen
     turning the specs red.
 
 - **The two counts were seen disagreeing for real.** On the sample, a viewer element writes

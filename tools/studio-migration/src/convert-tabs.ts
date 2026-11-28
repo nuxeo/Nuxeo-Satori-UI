@@ -141,6 +141,16 @@ export function listingParameters(
   params: string | null,
 ): { readonly parameters: unknown[] } | { readonly problem: string } {
   if (params === null || params.trim() === '') return { parameters: [] };
+  // Polymer reads a binding in the attribute as written, and JSON as parsed: an escape, or a key
+  // written twice, of which JSON keeps the last, could make the two read other values.
+  if (params.includes('\\'))
+    return {
+      problem: `its page provider's params, ${params}, write an escape, so what Polymer binds and what JSON reads could differ`,
+    };
+  if ((params.match(/"queryParams"\s*:/g) ?? []).length > 1)
+    return {
+      problem: `its page provider's params, ${params}, write queryParams more than once, and JSON keeps only the last`,
+    };
   let parsed: unknown;
   try {
     parsed = JSON.parse(params);
@@ -161,12 +171,6 @@ export function listingParameters(
     if (typeof value !== 'string')
       return { problem: `its query parameter ${JSON.stringify(value)} is not text` };
     const bound = RECORD_BINDING.exec(value);
-    // Polymer reads a binding in the attribute as written: one that only JSON's escapes make is
-    // no binding, and Web UI sends its text.
-    if (bound && !params.includes(value))
-      return {
-        problem: `its query parameter ${value} reads as a binding only once its JSON escapes are read, so Polymer binds nothing there, and Web UI sends the text`,
-      };
     if (bound) {
       parameters.push({ field: bound[2] ?? RECORD_FIELDS[bound[1]] });
       continue;

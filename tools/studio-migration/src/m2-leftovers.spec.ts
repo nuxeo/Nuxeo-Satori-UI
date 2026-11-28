@@ -263,7 +263,16 @@ describe('a tab whose page is a list', () => {
       ],
       [
         `<nuxeo-page-provider id="p" provider="vehicle_claims" params='{"queryParams": "\\u005b\\u005bdocument.uid\\u005d\\u005d"}'></nuxeo-page-provider>${table}`,
-        /reads as a binding only once its JSON escapes are read/,
+        /write an escape, so what Polymer binds and what JSON reads could differ/,
+      ],
+      // The round's re-check: an unescaped copy beside an escaped one, in a list or a key twice.
+      [
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" params='{"queryParams": ["[[document.uid]]", "\\u005b\\u005bdocument.uid\\u005d\\u005d"]}'></nuxeo-page-provider>${table}`,
+        /write an escape/,
+      ],
+      [
+        `<nuxeo-page-provider id="p" provider="vehicle_claims" params='{"queryParams": "open", "queryParams": "[[document.uid]]"}'></nuxeo-page-provider>${table}`,
+        /write queryParams more than once, and JSON keeps only the last/,
       ],
       [
         `<nuxeo-page-provider id="p" provider="vehicle_claims" sort="[[sort]]"></nuxeo-page-provider>${table}`,
