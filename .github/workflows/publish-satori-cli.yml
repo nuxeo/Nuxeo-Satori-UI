@@ -1,0 +1,167 @@
+name: Publish Satori CLI
+
+# Publishes @nuxeo/satori-cli, the builder of a customer's configuration (tools/satori-cli), to the
+# Nuxeo Nexus registry. Dispatch only, as publish-platform.yml, whose pattern this follows.
+#
+# Every run builds the tool, runs its controls, holds its tarball to what it may hold
+# (tools/satori-cli/pack-check.mjs) and dry-runs the publish. A real publish happens only when
+# `dryRun` is false, and only with `--tag alpha`. The workflow never passes `latest`, and promoting a
+# version to `latest` is a separate, deliberate step.
+#
+# The built package.json is public (tools/satori-cli/build.mjs writes it without `"private"`; the
+# project's own keeps it, so that its folder of sources cannot be published), so a dispatch with
+# `dryRun: false` publishes for real. Keep it dispatch-only and keep the `alpha` tag.
+# scripts/review-guardrails.mjs (`checkPublishWorkflows`) holds this file, and publish-platform.yml,
+# to that: a token in a job that checks out the repository is refused.
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry run only. Build and inspect the package, publish nothing.'
+        type: boolean
+        default: true
+      version_bump:
+        description: 'Semver bump applied to tools/satori-cli/package.json before the build; none publishes the version it has'
+        required: true
+        type: choice
+        default: none
+        options:
+          - none
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+# Runs are serialised because nothing is committed or tagged, so two runs from `main` bump
+# from the same version and would compute the same one. `queue: max` keeps every queued run:
+# the default (`single`) cancels an already-pending run when a newer one joins the group, so
+# a publish waiting behind another run could be dropped by a later dry run.
+concurrency:
+  group: publish-satori-cli
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  # Everything that runs repository code happens here, with no registry token in scope.
+  # The tarball it produces is the only thing handed to the publish job.
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # The read token is this repository's, for its own @hylandsoftware packages from GitHub
+      # Packages. The tool bundles none of them, and its customers need no token to install it.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Bumped in the runner's checkout only. Nothing is committed or tagged, so a real publish
+      # that bumped must be followed by a reviewed commit that records the version it shipped.
+      # `none` publishes the version tools/satori-cli/package.json has, as the first publish does.
+      - name: Bump version
+        if: ${{ inputs.version_bump != 'none' }}
+        working-directory: tools/satori-cli
+        env:
+          VERSION_BUMP: ${{ inputs.version_bump }}
+        run: npm version "$VERSION_BUMP" --no-git-tag-version --ignore-scripts
+
+      # The version is written into dist/ by build.mjs, and into the repositories `satori create`
+      # writes, so the bump must precede the build.
+      - name: Build the tool
+        run: node tools/satori-cli/build.mjs
+
+      # The tool's controls: among them, the tarball unpacked outside the repository runs create,
+      # validate, build, sign, release-check and the MCP server under Node's permission model.
+      - name: Run its controls
+        run: node tools/satori-cli/selftest.mjs
+
+      # Packed once, here: what is checked, what is dry-run and what the publish job publishes are
+      # this one file's bytes.
+      - name: Pack tarball
+        id: pack
+        working-directory: dist/tools/satori-cli
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tarball"
+          npm pack --pack-destination "$RUNNER_TEMP/tarball"
+          TARBALL=$(ls "$RUNNER_TEMP/tarball"/*.tgz)
+          echo "tarball=$(basename "$TARBALL")" >> "$GITHUB_OUTPUT"
+
+      # The tarball unpacked, and held to what it may hold: only the tool's files, nothing secret.
+      - name: Check what the tarball holds
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar -xzf "$RUNNER_TEMP/tarball/$TARBALL" -C "$RUNNER_TEMP/unpacked"
+          node tools/satori-cli/pack-check.mjs "$RUNNER_TEMP/unpacked/package"
+
+      - name: Dry-run publish
+        working-directory: ${{ runner.temp }}/tarball
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          npm publish "./$TARBALL" --dry-run --tag alpha --ignore-scripts \
+            --registry https://packages.nuxeo.com/repository/npm-public/
+          echo "Dry run of $TARBALL passed."
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: satori-cli-tarball
+          path: ${{ runner.temp }}/tarball/*.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+  # Split from `build` so the registry token never shares a runner with repository code, as
+  # publish-platform.yml splits it. This job checks nothing out and runs only the downloaded
+  # tarball through npm.
+  publish:
+    needs: build
+    if: ${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: satori-cli-tarball
+          path: tarball
+
+      # The token goes into a throwaway userconfig in the runner temp directory, never into a
+      # repository file. It is removed afterwards so it does not outlive the step.
+      - name: Publish to Nuxeo Nexus (alpha)
+        working-directory: tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PACKAGES_TOKEN }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          # The build job's output names a file of the artifact, and nothing else npm would take
+          # for a package: not a URL, a folder or a git address, whose scripts npm would run with
+          # the token in their environment.
+          if [[ ! "$TARBALL" =~ ^nuxeo-satori-cli-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.tgz$ ]] || [ ! -f "$TARBALL" ]; then
+            echo "::error::the build job named $TARBALL, which is not the tool's tarball in the artifact"
+            exit 1
+          fi
+          # npm expands ${NODE_AUTH_TOKEN} from the environment at run time, so the file
+          # holds a reference to the token and never the token itself.
+          printf '%s\n' '//packages.nuxeo.com/repository/npm-public/:_authToken=${NODE_AUTH_TOKEN}' \
+            > "$RUNNER_TEMP/npmrc"
+          trap 'rm -f "$RUNNER_TEMP/npmrc"' EXIT
+          npm publish "./$TARBALL" --tag alpha --ignore-scripts \
+            --registry https://packages.nuxeo.com/repository/npm-public/ \
+            --userconfig "$RUNNER_TEMP/npmrc"
