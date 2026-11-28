@@ -18,6 +18,11 @@ import type { NxsFieldAppearance } from '../field-appearance';
 
 let nextId = 0;
 
+/** A number a template may give as a static attribute (`min="0"`), or `null` for none. */
+function numberOrNull(value: unknown): number | null {
+  return value === null || value === undefined || value === '' ? null : numberAttribute(value);
+}
+
 /** What a one-line field holds: `text`, or a `number`, which the platform's number input takes. */
 export type NxsTextFieldType = 'text' | 'number';
 
@@ -83,13 +88,13 @@ export class NxsTextFieldComponent {
   // Annotated rather than inferred, so that the published API names the union, not its members.
   readonly type: InputSignal<NxsTextFieldType> = input<NxsTextFieldType>('text');
   /** The least value a `number` field takes, or `null` for none. */
-  readonly min = input<number | null>(null);
+  readonly min = input<number | null, unknown>(null, { transform: numberOrNull });
   /** The greatest value a `number` field takes, or `null` for none. */
-  readonly max = input<number | null>(null);
+  readonly max = input<number | null, unknown>(null, { transform: numberOrNull });
   /** The step a `number` field's arrows move by, or `null` for the platform's. */
-  readonly step = input<number | null>(null);
+  readonly step = input<number | null, unknown>(null, { transform: numberOrNull });
   /** The most characters the field takes, or `null` for no limit. */
-  readonly maxLength = input<number | null>(null);
+  readonly maxLength = input<number | null, unknown>(null, { transform: numberOrNull });
   /** Marks the field required: its label says so, and the control is `required`. */
   readonly required = input(false, { transform: booleanAttribute });
   /** Help under the field, already translated, which describes the control. Blank for none. */

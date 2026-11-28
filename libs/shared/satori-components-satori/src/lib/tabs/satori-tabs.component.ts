@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  booleanAttribute,
   computed,
   effect,
   input,
@@ -23,7 +24,8 @@ let nextId = 0;
  * Satori's tabs are a strip of links that show no panel of their own, so this renders the selected
  * tab's body under the strip, as the `tabpanel` its tab names. As Material's tab group does, it
  * keeps a body it has shown alive while another tab is selected, so what the user left there — an
- * unsaved edit — is still there when they come back. It also makes the strip work from the keyboard
+ * unsaved edit — is still there when they come back; with `lazy`, as Material's lazy tab group
+ * does, it draws only the selected tab's body. It also makes the strip work from the keyboard
  * as Material's does: Enter and Space select the focused tab, which an anchor with no `href` would
  * not do, and the selected tab is the strip's tab stop.
  */
@@ -49,6 +51,11 @@ export class NxsSatoriTabsComponent implements NxsTabsInputs {
    * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
    */
   readonly selectHandler = input<((tab: NxsTab, index: number) => void) | null>(null);
+  /**
+   * Draws a tab's body only while its tab is selected: none before its tab is first chosen, and
+   * one left is dropped, to be drawn afresh on return. Off by default.
+   */
+  readonly lazy = input(false, { transform: booleanAttribute });
 
   /** The selection, kept within the tabs there are, as Material's tab group keeps it. */
   protected readonly shown = computed(() =>
@@ -92,6 +99,11 @@ export class NxsSatoriTabsComponent implements NxsTabsInputs {
       previous = { index, id: tab?.id };
       if (changed && tab) untracked(() => this.selectHandler()?.(tab, index));
     });
+  }
+
+  /** Whether a tab has its panel: the selected one only when `lazy`, else every one shown before. */
+  protected hasPanel(id: string, index: number): boolean {
+    return this.lazy() ? index === this.shown() : this.shownBefore().has(id);
   }
 
   protected tabId(index: number): string {

@@ -219,6 +219,8 @@ export class RecordPictureReviewComponent {
 
   protected readonly draft = signal<Draft | null>(null);
   protected readonly note = signal('');
+  /** While a field settles: what it then says is the pin's own place, rounded, not a move. */
+  private settling = false;
   protected readonly saving = signal(false);
   /** Why the last write was refused or failed, said where it was asked; `null` once it is not. */
   protected readonly writeError = signal<string | null>(null);
@@ -368,6 +370,8 @@ export class RecordPictureReviewComponent {
    * value it cannot read moves nothing, and one past an edge puts the pin on the edge.
    */
   protected moveDraft(axis: 'x' | 'y', text: string): void {
+    // The field settling on the pin's place says that place back: it moves nothing.
+    if (this.settling) return;
     const value = Number(text);
     const draft = this.draft();
     if (!draft || text.trim() === '' || !Number.isFinite(value)) return;
@@ -381,7 +385,13 @@ export class RecordPictureReviewComponent {
    */
   protected settleDraft(axis: 'x' | 'y', field: NxsTextFieldComponent): void {
     const draft = this.draft();
-    if (draft) field.value.set(String(percent(draft[axis])));
+    if (!draft) return;
+    this.settling = true;
+    try {
+      field.value.set(String(percent(draft[axis])));
+    } finally {
+      this.settling = false;
+    }
   }
 
   protected cancelDraft(): void {

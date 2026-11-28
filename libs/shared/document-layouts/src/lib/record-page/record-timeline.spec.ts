@@ -548,6 +548,22 @@ describe('RecordTimelineComponent', () => {
     root.remove();
   });
 
+  it('moves the focus to the first entry "Show more" adds while more remain to load', async () => {
+    const [transition, modified] = transitioned();
+    getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+    const root = await render({ ...TIMELINE, pageSize: 1 });
+    document.body.appendChild(root);
+    const more = button(root, 'Show more');
+    more?.focus();
+    getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+    more?.click();
+    await settle();
+    // The button stays, with a page still to load, and the reader goes on from the entry added.
+    expect(button(root, 'Show more')).toBeDefined();
+    expect(document.activeElement?.getAttribute('data-entry-id')).toBe(String(modified.id));
+    root.remove();
+  });
+
   it('leaves the focus where the reader moved it while the next page loaded', async () => {
     const [transition, modified] = transitioned();
     getAuditLog.mockReturnValueOnce(of(page([transition], true)));

@@ -841,6 +841,26 @@ describe('RecordPictureReviewComponent', () => {
     expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 
+  it('leaves a clicked pin where it is when a field emptied is left: it only says the place again', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    box(surface(root));
+    // 42.56% across: the field says 43, and the pin is where it was clicked.
+    clickAt(surface(root), 270.24, 300);
+    await settle();
+    const across = root.querySelector<HTMLInputElement>('input[id$="-across"]') as HTMLInputElement;
+    expect(across.value).toBe('43');
+    type(across, '');
+    across.dispatchEvent(new Event('change'));
+    await settle();
+    expect(across.value).toBe('43');
+    type(root.querySelector('textarea'), 'Crooked seam');
+    await settle();
+    root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await settle();
+    expect(JSON.parse(writes[0].draft.entity as string).x).toBeCloseTo(0.4256, 4);
+  });
+
   it('asks nothing again when the same record is reloaded, as after an edit', async () => {
     await render(picture(REVIEWER));
     await answerRead([]);

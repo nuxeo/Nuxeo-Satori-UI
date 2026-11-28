@@ -30,6 +30,12 @@
   text-align: start;
 }
 
+// A value with no break in it — an ID, an address — wraps where it must, so the table stays as wide
+// as its container rather than running out of it.
+.nxs-table__cell {
+  overflow-wrap: anywhere;
+}
+
 .nxs-table__empty-cell {
   padding: 12px 16px;
   color: var(--mat-sys-on-surface-variant);

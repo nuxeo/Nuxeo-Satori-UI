@@ -202,9 +202,15 @@ export interface NxsTabsInputs {
   readonly selectedIndex: InputSignal<number>;
   /**
    * The template every tab's body renders from, given the tab as `let-tab`. A body once shown is
-   * kept, hidden, while another tab is selected, so what the user left in it is there on return.
+   * kept, hidden, while another tab is selected, so what the user left in it is there on return —
+   * unless `lazy`.
    */
   readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+  /**
+   * Draws a tab's body only while its tab is selected: none before its tab is first chosen, and
+   * one left is dropped, to be drawn afresh on return. Off by default.
+   */
+  readonly lazy: InputSignalWithTransform<boolean, unknown>;
   /**
    * Called with the selected tab and its position whenever the selection changes — the user
    * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.

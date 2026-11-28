@@ -30,6 +30,7 @@ const TABS: readonly NxsTab[] = [
       [selectedIndex]="index()"
       [body]="withBody() ? body : null"
       [selectHandler]="handler"
+      [lazy]="lazy()"
     />
   `,
 })
@@ -38,6 +39,7 @@ class HostComponent {
   readonly label = signal('Document views');
   readonly index = signal(0);
   readonly withBody = signal(true);
+  readonly lazy = signal(false);
   readonly calls: [string, number][] = [];
   readonly handler = (tab: NxsTab, index: number) => this.calls.push([tab.id, index]);
 }
@@ -194,6 +196,23 @@ describe('NxsSatoriTabsComponent', () => {
     tabs()[0].click();
     await render();
     expect(panel()?.querySelector('.body')).toBe(first);
+  });
+
+  it('draws only the selected body when lazy, dropping one left and drawing it afresh on return', async () => {
+    host.lazy.set(true);
+    await render();
+    const first = panel()?.querySelector('.body');
+    expect(first?.getAttribute('data-for')).toBe('app.tabs.view');
+    tabs()[1].click();
+    await render();
+    expect(first?.isConnected).toBe(false);
+    expect(el().querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+    expect(tabs()[0].hasAttribute('aria-controls')).toBe(false);
+    expect(tabs()[1].getAttribute('aria-controls')).toBe(panel()?.id);
+    tabs()[0].click();
+    await render();
+    expect(panel()?.querySelector('.body')?.getAttribute('data-for')).toBe('app.tabs.view');
+    expect(panel()?.querySelector('.body')).not.toBe(first);
   });
 
   it('renders no panel for a tab not yet shown', () => {

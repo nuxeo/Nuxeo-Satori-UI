@@ -60,10 +60,13 @@
     height: 100%;
   }
 
+  // Hidden by default, as a document page's bodies each scroll themselves; `--nxs-tabs-body-overflow`
+  // gives a strip whose bodies grow with their content Material's own `auto`, so what is wider than
+  // a body scrolls rather than being cut off.
   // stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
   ::ng-deep .mat-mdc-tab-body-content {
     height: 100%;
-    overflow: hidden;
+    overflow: var(--nxs-tabs-body-overflow, hidden);
     display: flex;
     flex-direction: column;
   }

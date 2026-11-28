@@ -25,7 +25,11 @@ one does.
 - **Bodies drawn when needed.** By default every body is drawn at once and one left is kept, with
   what the user left in it. `lazy` draws a body only while its tab is selected, so a body that reads
   from the server reads nothing until its tab is chosen; one left is dropped and drawn afresh on
-  return. `lazy` is this component's own: the `nxs.primitives.tabs` contract does not carry it.
+  return.
+- **Bodies that scroll themselves, or grow.** Each body fills the space under the strip and clips,
+  so a body scrolls itself, as a document page's do. Where the strip sits in a page that grows with
+  its content instead, set `--nxs-tabs-body-overflow: auto` on it, so what is wider than a body
+  scrolls rather than being cut off.
 
 ## Demo showcase
 

@@ -130,6 +130,7 @@ export const NumberField: Story = {
     await userEvent.type(field, '75');
     await expect(field).toHaveValue(75);
     await userEvent.tab();
+    await expect(args.valueCommit).toHaveBeenCalledTimes(1);
     await expect(args.valueCommit).toHaveBeenLastCalledWith('75');
   },
 };
