@@ -37,6 +37,7 @@ import {
   type NxsShareExternalDialogData,
   type NxsUpdatePermissionDialogData,
   NxsToastService,
+  nxsPropertyText,
   nxsVisibleText,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
@@ -87,6 +88,9 @@ import {
   NuxeoAce,
   AuditEntry,
   DirectoryEntry,
+  type L10nDirectoryEntry,
+  formatHierarchicalL10nLabel,
+  resolveNatureLabel,
   browseFolderFiltersActive,
   type BrowseFolderFilters,
   BrowseService,
@@ -229,6 +233,38 @@ const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
  */
 export const FILTER_DEBOUNCE_MS = 250;
 
+/**
+ * What the info panel shows of a folder beyond its title and type: the properties Web UI's folder
+ * metadata layout shows under its Details. Each is `''`, or empty, when the folder has no value,
+ * and its row is then left out.
+ */
+export interface BrowseFolderDetails {
+  readonly description: string;
+  /** The `nature` vocabulary's label. */
+  readonly nature: string;
+  /** Each subject's `l10nsubjects` label, `Parent/Child`. */
+  readonly subjects: readonly string[];
+  /** The `l10ncoverage` label, `Parent/Child`. */
+  readonly coverage: string;
+  /** The stored instant; the template formats it as a calendar day, in UTC. */
+  readonly expired: string;
+}
+
+/** The vocabularies the folder details label their values from. */
+type FolderDetailsVocabulary = 'nature' | 'l10ncoverage' | 'l10nsubjects';
+
+/**
+ * A vocabulary value as its label: a stored ID through `label`, which hands the ID back when the
+ * vocabulary has not answered or does not hold it, and an entry a resolver expanded by its own.
+ * The document page's Properties panel reads them the same way.
+ */
+function vocabularyText(value: unknown, label: (id: string) => string): string {
+  return typeof value === 'string' ? (value && label(value)) || value : nxsPropertyText(value);
+}
+
+/** A stored vocabulary ID: what makes reading its vocabulary worth a request. */
+const isStoredId = (value: unknown): boolean => typeof value === 'string' && value !== '';
+
 @Component({
   selector: 'lib-browse',
   standalone: true,
@@ -363,6 +399,64 @@ export class BrowseComponent {
   readonly activityLoading = signal(false);
 
   readonly canTag = computed(() => canTagDocument(this.currentDoc()));
+
+  /**
+   * The vocabularies the folder details are labelled from, read as the document page's Properties
+   * panel reads them. Empty until read, and after a failed read, which leaves the stored ID showing.
+   */
+  private readonly natureVocabulary = signal<DirectoryEntry[]>([]);
+  private readonly coverageVocabulary = signal<L10nDirectoryEntry[]>([]);
+  private readonly subjectVocabulary = signal<L10nDirectoryEntry[]>([]);
+  /** Each vocabulary is read once for the page: its entries do not change from folder to folder. */
+  private readonly vocabulariesRead = new Set<FolderDetailsVocabulary>();
+
+  /**
+   * The folder's description, nature, subjects, coverage and expiry date for the info panel: what
+   * Web UI's folder metadata layout shows under its Details, which the panel did not show (the
+   * migration tool's lab mode, `tools/studio-migration/README.md`). `null` for a document that is
+   * not folderish.
+   */
+  readonly folderDetails = computed<BrowseFolderDetails | null>(() => {
+    const doc = this.currentDoc();
+    if (!doc || !isFolderishDocument(doc)) return null;
+    const props = (doc.properties ?? {}) as Readonly<Record<string, unknown>>;
+    const nature = this.natureVocabulary();
+    const coverage = this.coverageVocabulary();
+    const subjects = this.subjectVocabulary();
+    const storedSubjects = props['dc:subjects'];
+    return {
+      description: nxsPropertyText(props['dc:description']),
+      nature: vocabularyText(props['dc:nature'], (id) => resolveNatureLabel(id, nature)),
+      subjects: (Array.isArray(storedSubjects) ? storedSubjects : [])
+        .map((value) => vocabularyText(value, (id) => formatHierarchicalL10nLabel(id, subjects)))
+        .filter(Boolean),
+      coverage: vocabularyText(props['dc:coverage'], (id) =>
+        formatHierarchicalL10nLabel(id, coverage),
+      ),
+      expired: nxsPropertyText(props['dc:expired']),
+    };
+  });
+
+  /**
+   * Reads each vocabulary the folder details need, once the info panel shows a value from it.
+   *
+   * Not on every visit: the panel is closed on most of them, `l10ncoverage` alone is several pages,
+   * and a folder with no nature, subjects or coverage has nothing to label.
+   */
+  private readonly readFolderDetailsVocabularies = effect(() => {
+    if (!this.panelOpen() || this.panelSubTab() !== 'info') return;
+    const doc = this.currentDoc();
+    if (!doc || !isFolderishDocument(doc)) return;
+    const props = (doc.properties ?? {}) as Readonly<Record<string, unknown>>;
+    const subjects = props['dc:subjects'];
+    untracked(() => {
+      if (isStoredId(props['dc:nature'])) this.readFolderDetailsVocabulary('nature');
+      if (isStoredId(props['dc:coverage'])) this.readFolderDetailsVocabulary('l10ncoverage');
+      if (Array.isArray(subjects) && subjects.some(isStoredId)) {
+        this.readFolderDetailsVocabulary('l10nsubjects');
+      }
+    });
+  });
 
   // Tabs
   readonly activeTabIndex = signal(0);
@@ -1537,6 +1631,30 @@ export class BrowseComponent {
 
   switchPanelSubTab(tab: 'info' | 'tags' | 'activity'): void {
     this.panelSubTab.set(tab);
+  }
+
+  /** One vocabulary for the folder details, once. A failed read leaves the stored IDs showing. */
+  private readFolderDetailsVocabulary(directory: FolderDetailsVocabulary): void {
+    if (this.vocabulariesRead.has(directory)) return;
+    this.vocabulariesRead.add(directory);
+    if (directory === 'nature') {
+      this.directoryService
+        .getEntries(directory)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (entries) => this.natureVocabulary.set(entries),
+          error: () => this.natureVocabulary.set([]),
+        });
+      return;
+    }
+    const target = directory === 'l10ncoverage' ? this.coverageVocabulary : this.subjectVocabulary;
+    this.directoryService
+      .getAllL10nEntries(directory)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (entries) => target.set(entries),
+        error: () => target.set([]),
+      });
   }
 
   private loadActivity(uid: string): void {

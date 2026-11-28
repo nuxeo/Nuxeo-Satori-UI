@@ -907,6 +907,51 @@
                 <span class="info-label">{{ 'browse.browse.type' | translate }}</span>
                 <span class="info-value">{{ doc.type | docTypeLabel }}</span>
               </div>
+              <!-- A folder's Details in Web UI's folder metadata layout, each row when it has a value. -->
+              @if (folderDetails(); as details) {
+                @if (details.description) {
+                  <div class="panel-info-row">
+                    <span class="info-label">{{ 'browse.browse.description' | translate }}</span>
+                    <span class="info-value info-text">{{ details.description }}</span>
+                  </div>
+                }
+                @if (details.nature) {
+                  <div class="panel-info-row">
+                    <span class="info-label">{{ 'browse.browse.nature' | translate }}</span>
+                    <span class="info-value">{{ details.nature }}</span>
+                  </div>
+                }
+                @if (details.subjects.length > 0) {
+                  <div class="panel-info-row">
+                    <span class="info-label">{{ 'browse.browse.subjects' | translate }}</span>
+                    <ul class="info-value info-list">
+                      @for (subject of details.subjects; track $index) {
+                        <li>{{ subject }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (details.coverage) {
+                  <div class="panel-info-row">
+                    <span class="info-label">{{ 'browse.browse.coverage' | translate }}</span>
+                    <span class="info-value">{{ details.coverage }}</span>
+                  </div>
+                }
+                @if (details.expired) {
+                  <div class="panel-info-row">
+                    <span class="info-label">{{ 'browse.browse.expires' | translate }}</span>
+                    <!--
+                      In UTC, unlike Last Modified and Created above, as the document page's
+                      Properties panel formats it: `dc:expired` is a calendar day a user picked,
+                      stored at its UTC midnight, where those two are instants the server stamped
+                      (NXSAT-727, AGENTS/08-bug-patterns.md pattern 29).
+                    -->
+                    <span class="info-value">{{
+                      details.expired | date: 'mediumDate' : 'UTC'
+                    }}</span>
+                  </div>
+                }
+              }
             </div>
           </div>
         }

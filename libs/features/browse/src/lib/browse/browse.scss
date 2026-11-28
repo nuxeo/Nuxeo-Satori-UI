@@ -238,6 +238,20 @@
   gap: 6px;
 }
 
+// A description is free text: keep the line breaks it was written with, and break a long word
+// rather than widen the panel.
+.info-text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+// The subjects, one per line, without the bullets and indent a list brings.
+.info-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 // Activity items
 .activity-item {
   display: flex;

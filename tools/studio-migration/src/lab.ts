@@ -116,8 +116,9 @@ export interface AppRecording {
  *   Properties panel (`nxs-properties-panel`, `properties-panel.component.ts` in
  *   libs/shared/satori-components), with the note's format the page hands it;
  * - **`browse`**, a folder's page (`lib-browse`): its info panel, `browse.html` and `browse.ts` in
- *   libs/features/browse. Its State row reads `dc:nature`, and is not counted as showing it: it
- *   shows the value under another name than Web UI's Nature.
+ *   libs/features/browse, with a folder's details (`folderDetails`), the five rows of Web UI's
+ *   folder metadata layout. Its State row also reads `dc:nature`, and is not what counts it: it
+ *   shows the value under another name than Web UI's Nature, which the details' Nature row uses.
  *
  * A copy of those files: `lab.spec.ts` holds it to them, so the two cannot drift apart unseen.
  */
@@ -137,7 +138,18 @@ export const DRAWN_BY_THE_PAGE: Readonly<Record<AppPage, ReadonlySet<string>>> =
     'file:content',
     'note:mime_type',
   ]),
-  browse: new Set(['dc:title', 'dc:created', 'dc:creator', 'dc:lastContributor', 'nxtag:tags']),
+  browse: new Set([
+    'dc:title',
+    'dc:created',
+    'dc:creator',
+    'dc:lastContributor',
+    'nxtag:tags',
+    'dc:description',
+    'dc:nature',
+    'dc:subjects',
+    'dc:coverage',
+    'dc:expired',
+  ]),
   other: new Set(),
 };
 

@@ -404,15 +404,30 @@ describe('lab mode: the request-log rule', () => {
   });
 
   it('takes the rows the page draws itself, on its own page only', () => {
-    // dc:title and dc:expired are the document page's Properties panel's own rows.
+    // dc:title and dc:expired are the document page's Properties panel's own rows, and Browse's
+    // info panel's: the title, and the expiry date among a folder's details.
     expect(findingsOf(webUi(), newApp(['member:email']))).toEqual([]);
-    // Browse's info panel shows the title but not the expiry date.
-    expect(findingsOf(webUi(), newApp(['member:email'], {}, 'browse'))).toEqual([
+    expect(findingsOf(webUi(), newApp(['member:email'], {}, 'browse'))).toEqual([]);
+    expect(findingsOf(webUi(), newApp(['member:email'], {}, 'other'))).toHaveLength(2);
+
+    // dc:contributors is the Properties panel's and not Browse's, whose info panel shows the last
+    // contributor alone.
+    const fetched = FETCHED.map((name) => (name === 'dc:expired' ? 'dc:contributors' : name));
+    const fetching = (recording: AppRecording): AppRecording => ({
+      ...recording,
+      requests: recording.requests.map((entry) =>
+        entry.documentProperties ? { ...entry, documentProperties: fetched } : entry,
+      ),
+    });
+    const web = fetching(
+      webUi({ layouts: webUiLayout(WEB_UI_LAYOUT.replaceAll('dc:expired', 'dc:contributors')) }),
+    );
+    expect(findingsOf(web, fetching(newApp(['member:email'])))).toEqual([]);
+    expect(findingsOf(web, fetching(newApp(['member:email'], {}, 'browse')))).toEqual([
       expect.stringContaining(
-        "Web UI shows dc:expired (nuxeo-member-metadata-layout.html); the new app fetches it, but its folder's page (Browse) does not show it",
+        "Web UI shows dc:contributors (nuxeo-member-metadata-layout.html); the new app fetches it, but its folder's page (Browse) does not show it",
       ),
     ]);
-    expect(findingsOf(webUi(), newApp(['member:email'], {}, 'other'))).toHaveLength(2);
   });
 
   it('lists a field under a condition without holding it, and holds nothing Web UI did not fetch', () => {
@@ -627,16 +642,30 @@ describe("lab mode: the rows the new app's pages draw themselves", () => {
     expect(page.indexOf('} @else if (doc()) {')).toBeGreaterThan(page.indexOf('@if (loading())'));
   });
 
-  it("is Browse's info panel, less its State row, which shows dc:nature under another name", () => {
+  it("is Browse's info panel with a folder's details, less its State row, which shows dc:nature under another name", () => {
     const html = read('libs/features/browse/src/lib/browse/browse.html');
     const ts = read('libs/features/browse/src/lib/browse/browse.ts');
     const body = (name: string): string =>
       ts.slice(ts.indexOf(`  ${name}(`), ts.indexOf('\n  }\n', ts.indexOf(`  ${name}(`)));
+    // A folder's details, Web UI's folder metadata layout: what the computed value reads.
+    const detailsAt = ts.indexOf('  readonly folderDetails = computed');
+    expect(detailsAt, 'browse.ts has folderDetails').toBeGreaterThan(-1);
+    const details = ts.slice(detailsAt, ts.indexOf('\n  });\n', detailsAt));
+    const detailRows = [...details.matchAll(/props\['([\w-]+:[\w-]+)'\]/g)].map(
+      (match) => match[1],
+    );
+    expect(detailRows.length).toBeGreaterThan(0);
+    // Each detail is drawn: the template reads the field the computed value sets.
+    expect(html).toContain('@if (folderDetails(); as details)');
+    for (const field of [...details.matchAll(/^ {6}(\w+):/gm)].map((match) => match[1])) {
+      expect(html, `details.${field} is drawn`).toContain(`details.${field}`);
+    }
     const rows = [
       ...[...html.matchAll(/doc\.properties\['([\w-]+:[\w-]+)'\]/g)].map((match) => match[1]),
       ...['docCreator', 'lastContributor'].flatMap((name) =>
         [...body(name).matchAll(/properties\?\.\['([\w-]+:[\w-]+)'\]/g)].map((match) => match[1]),
       ),
+      ...detailRows,
     ];
     expect(html).toContain('{{ doc.title }}');
     expect(html).toContain('[documentUid]="doc.uid"');
@@ -644,7 +673,9 @@ describe("lab mode: the rows the new app's pages draw themselves", () => {
     expect([...DRAWN_BY_THE_PAGE.browse].sort()).toEqual(
       [...new Set([...rows, 'dc:title', 'nxtag:tags'])].sort(),
     );
-    expect(DRAWN_BY_THE_PAGE.browse.has('dc:nature')).toBe(false);
+    // Counted for the Nature row of a folder's details, which names it as Web UI does; the State
+    // row is still not what counts it.
+    expect(detailRows).toContain('dc:nature');
     // Lab mode takes the page for Browse by its header naming the folder, which it does once it has it.
     expect(html).toContain('<nxs-folder-header');
     expect(html).toContain('[heading]="currentDoc()?.title ?? \'\'"');
