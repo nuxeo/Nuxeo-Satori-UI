@@ -4,9 +4,12 @@
  *
  *   <directory>/
  *     package.json                 the tool as a dev dependency, pinned, and its two commands
- *     AGENTS.md                    the commands and the rules, for any AI IDE's agent
+ *     AGENTS.md                    the repository's own part, then the tool's section
+ *     .cursor/ .claude/ .agent/    the app builder skill, satori-app-builder
+ *     .mcp.json, .cursor/mcp.json  the MCP server, satori mcp, with nothing secret in it
  *     .gitignore
- *     .github/workflows/satori.yml satori validate and satori build on every pull request
+ *     .github/workflows/satori.yml satori validate and satori build on every pull request, and a
+ *                                  keyless signature for a tag once trusted-signers.json says who
  *     config-packages/<name>/      the first package: Layer 0, Layer 1, its component, package.xml
  *
  * The package is the `config-package` generator's, written by the generator's own scaffolder, the
@@ -16,11 +19,12 @@
  * means nothing in a repository without Nx, is not kept.
  *
  * The repository's own files are this tool's templates, `templates/`, with the package's name, the
- * repository's and the tool's version put in. Nothing is written until the generator has accepted
- * the name and the owner, and nothing is written over: the directory must be new, or empty.
+ * repository's and the tool's version put in. The agent files are `satori agents sync`'s, run on
+ * the new repository, so that `create` and a later `sync` write the same bytes. Nothing is written
+ * until the generator has accepted the name and the owner, and nothing is written over: the
+ * directory must be new, or empty.
  *
- * Not written yet, and said: the app builder skill and `.mcp.json` (`agents sync` and the MCP
- * server are a later slice), and signing and promotion in the workflow (decision M).
+ * Not written, and said: promotion in the workflow, and who may sign, which decision M leaves open.
  */
 import { spawnSync } from 'node:child_process';
 import {
@@ -34,6 +38,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { agentsCommand } from './agents.mjs';
 
 const USAGE =
   'usage: satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]';
@@ -120,12 +125,21 @@ export function createCommand(args, { here, version }) {
     mkdirSync(dirname(join(directory, target)), { recursive: true });
     writeFileSync(join(directory, target), text);
   }
+  // The agent files, as satori agents sync writes them: the same bytes a later sync keeps.
+  const synced = agentsCommand(['sync', directory], { here, version });
+  if (synced !== 0) {
+    console.error('satori create: the agent files could not be written.');
+    return 1;
+  }
 
   process.stdout.write(`Created ${positionals[0]}, a configuration repository:
 
   config-packages/${options.name}/    the first package, from the config-package generator
-  AGENTS.md                    the commands and the rules, for any AI IDE's agent
-  .github/workflows/satori.yml satori validate and satori build on every pull request
+  AGENTS.md                    yours, then the tool's section: the commands and the rules
+  .cursor/ .claude/ .agent/    the app builder skill, satori-app-builder, for any AI IDE
+  .mcp.json, .cursor/mcp.json  the MCP server, satori mcp, reading the server from the environment
+  .github/workflows/satori.yml validate and build on every pull request; sign a tag once
+                               trusted-signers.json names the workflow
   package.json                 @nuxeo/satori-cli ${version}, as a dev dependency
 
 Check and build the package:
@@ -137,8 +151,9 @@ The workflow installs the tool with npm ci, from package-lock.json, which npm in
 @nuxeo/satori-cli is published: commit it. Until then it is not on a registry, and the workflow
 cannot install it.
 
-Not written by this version: the app builder skill, .mcp.json and the MCP server (agents sync),
-and signing and promotion in the workflow.
+After every upgrade of the tool, run satori agents sync, and commit what it writes: the workflow
+checks it with satori agents sync --check. Not written by this version: promotion, and who may sign
+for a deployment, which decision M leaves open.
 `);
   return 0;
 }

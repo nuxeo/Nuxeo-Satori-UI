@@ -13,7 +13,7 @@
  * serves to, and `BUILDER_PACKAGE_ROOTS` the folders the write tools may write a package in.
  */
 import { lstatSync, realpathSync } from 'node:fs';
-import { delimiter, isAbsolute, relative, resolve } from 'node:path';
+import { delimiter, isAbsolute, relative, resolve, sep } from 'node:path';
 
 export const DEFAULT_NUXEO_URL = 'http://localhost:8080';
 export const NUXEO_URL_ENV = 'NUXEO_URL';
@@ -204,7 +204,7 @@ export function readPackageRoots(
     // as outside it, and miss the checks a root inside it has (no link, no hidden folder).
     if (holds(realRepository, real) !== holds(repository, root))
       return refuse(
-        'is a folder of the repository by another spelling, or through a link. Name it from the repository, as business-apps/packages is',
+        `is a folder of the repository by another spelling, or through a link. Name it from the repository, as ${relative(repository, fallback).split(sep).join('/') || '.'} is`,
       );
     roots.push(root);
   }

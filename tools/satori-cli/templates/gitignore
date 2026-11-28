@@ -2,3 +2,6 @@
 node_modules/
 dist/
 config-packages/*/dist/
+# A server's content model, written by satori model pull for the checks and the agent to read:
+# the customer's, and never committed.
+tmp/

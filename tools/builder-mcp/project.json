@@ -4,17 +4,19 @@
   "sourceRoot": "tools/builder-mcp/src",
   "projectType": "library",
   "tags": [],
-  "$tagsComment": "No tags, and none needed: this tool imports no project of the workspace, only Node, the MCP SDK, zod and the identity guard in scripts/beta-harness (allowed by exact path in eslint.config.mjs). It runs the package pipeline as a command, scripts/app-package.mjs, as CI does, rather than importing libs/shared/app-definition; and the write tools run an app generator of tools/satori-generators by its path, in a process of its own (src/run-generator.ts, which loads it with tsx and gives it Nx's FsTree), rather than importing that project. Nothing may import it. A dependency on a workspace project would make the module-boundary rule report it, which is the intended alarm.",
+  "$tagsComment": "No tags, and none needed: this tool imports no project of the workspace, only Node, the MCP SDK, zod and the identity guard in scripts/beta-harness (allowed by exact path in eslint.config.mjs). It runs the package pipeline as a command, scripts/app-package.mjs, as CI does, rather than importing libs/shared/app-definition; and the write tools run an app generator of tools/satori-generators by its path, in a process of its own (src/run-generator.ts, which loads it with tsx and gives it Nx's FsTree), rather than importing that project. Nothing may import it. A dependency on a workspace project would make the module-boundary rule report it, which is the intended alarm. bundle.mjs bundles it, src/main.ts and src/bundle/run-generator.ts with the app generators, into @nuxeo/satori-cli as `satori mcp`: tools/satori-cli/build.mjs calls it, by its path, and src/host.ts is told it is bundled only by what esbuild defines.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, the kit stand-in's script with what it reads of each kit's demo data, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its modules in scripts/package-pipeline/ and the release check over them, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, the kit stand-in's script with what it reads of each kit's demo data, and the app generators the write tools run in a process of their own. And every kit's bundle, descriptor and connectors, which the pipeline compares a kit in business-apps/packages with, through release-candidate-set.mjs. And what schema-headings.spec.ts reads: every kit's model, app, English labels and metadata layouts, and document-layouts' list of the schemas the Properties panel presents. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
         { "env": "SATORI_TEST_TZ" },
         "{workspaceRoot}/scripts/app-package.mjs",
+        "{workspaceRoot}/scripts/app-release-check.mjs",
+        "{workspaceRoot}/scripts/package-pipeline/**/*",
         "{workspaceRoot}/scripts/verify-package-zip.mjs",
         "{workspaceRoot}/scripts/release-candidate-set.mjs",
         "{workspaceRoot}/scripts/package-signature.mjs",
