@@ -52,6 +52,8 @@ on:
       - 'scripts/app-package.mjs'
       - 'scripts/app-package.selftest.mjs'
       - 'scripts/app-package-model.mjs'
+      # The steps themselves, which app-package.mjs and @nuxeo/satori-cli both run.
+      - 'scripts/package-pipeline/**'
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
@@ -89,6 +91,8 @@ on:
       - 'scripts/app-package.mjs'
       - 'scripts/app-package.selftest.mjs'
       - 'scripts/app-package-model.mjs'
+      # The steps themselves, which app-package.mjs and @nuxeo/satori-cli both run.
+      - 'scripts/package-pipeline/**'
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'

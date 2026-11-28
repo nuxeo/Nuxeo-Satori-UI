@@ -28,10 +28,12 @@ git clone --depth 1 https://github.com/nuxeo/Nuxeo-Satori-UI.git
 cd Nuxeo-Satori-UI
 ```
 
-> Cloning our repository to reach the scaffolder is a rough edge we intend to remove — the
-> generator will be distributed on its own. Until it is, this is the route, and it is the only
-> thing you need the clone for: your package is a directory of JSON and XML that you move into your
-> own repository once it is created.
+> Cloning our repository to reach the scaffolder is a rough edge we intend to remove. The route
+> that will replace it is `@nuxeo/satori-cli`, one command-line tool that scaffolds a configuration
+> repository of your own and checks and builds every file in it, app definitions included
+> ([its README](tools/satori-cli/README.md)). It is not published yet. Until it is, this is the
+> route, and it is the only thing you need the clone for: your package is a directory of JSON and
+> XML that you move into your own repository once it is created.
 
 ## 2. Create your configuration package
 
