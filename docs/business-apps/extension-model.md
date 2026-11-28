@@ -267,6 +267,36 @@ Renovate or Dependabot opens a pull request in the customer's repository, and th
 - **The MCP server reads the customer's server with their own credentials,** from the environment,
   never from a file in the repository, as it does today.
 
+### Where the tools stand
+
+`@nuxeo/satori-cli`, [`tools/satori-cli`](../../tools/satori-cli/README.md), is built from this
+repository, private and unpublished, at 0.2.0. It runs outside this repository with Node alone:
+
+- **Built:** `validate`, `build`, `upgrade-check`, `model pull` and `create`, one builder over the
+  package pipeline's modules; **`agents sync`,** which installs or refreshes the app builder skill
+  for Cursor, Claude Code and any other agent, `AGENTS.md`'s section, and the MCP server's entry in
+  `.mcp.json` and `.cursor/mcp.json`, whose server address and credentials are references to the
+  environment, never values; **`mcp`,** the Builder MCP server bundled into the tool, its tools
+  unchanged, its checks `satori validate`'s; and **`sign` and `verify`,** section 7's mechanism,
+  over the code `app-package-signature.mjs` runs, with a key the customer holds or keyless in their
+  CI, against a trusted-signers file they keep; and **`release-check`,** with the server's
+  `release_check`, whether a package is ready for a person to release and the tag they push, which
+  never tags. `create` writes the agent files, and a workflow that validates and builds every change
+  and, once the repository's `trusted-signers.json` names it, signs a tag's zip.
+- **The MCP server is `satori mcp`, not a package of its own.** The table above names
+  `@nuxeo/satori-mcp`; the server ships in `@nuxeo/satori-cli` instead, so that its checks and
+  `satori validate`'s are one version of one implementation and cannot be installed apart.
+
+**Not in this slice:**
+
+- publishing the tool, and the reusable workflows, which wait for this decision's owners;
+- `preview` against the customer's development server: `preview_package` serves only to this
+  repository's development server, and refuses in a customer's;
+- promotion through development, test and production, and who may sign, which decision M leaves
+  open (section 7);
+- what the generators write of this repository: a file names its JSON Schema by this repository's
+  path, and a generator's closing message names `npm run app-package`.
+
 ## 6. Customer code without our source (decision 5)
 
 Decision 5 keeps a customer's code **built into their app from the template**
@@ -307,8 +337,8 @@ Decision 5 stays open with this constraint added.
 
 ## 7. Signing, trust and promotion (decision M)
 
-Today only this repository's `app-packages.yml` signs a package (`business-apps/trusted-signers.json`).
-The verifier already takes a deployment's own list, `--trusted-signers`, so the mechanism exists.
+This repository's `app-packages.yml` signs our packages, as `business-apps/trusted-signers.json` says.
+The verifier already takes a deployment's own list, `--trusted-signers`, so the mechanism exists. A customer has it too, in `satori sign` and `satori verify` (section 5): the mechanism, not who may sign, which is this decision.
 What a customer needs:
 
 - **Their own signer,** named in their deployment's trusted-signers list: their CI's identity, or a

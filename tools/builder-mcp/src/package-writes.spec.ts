@@ -1023,6 +1023,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
         const answer = await runGenerator({
           generator: 'app-queue',
           request: {
+            generator: 'app-queue',
             factory: join(GENERATORS_SOURCE, 'app-queue', 'generator.ts'),
             options: {
               package: packagePath,

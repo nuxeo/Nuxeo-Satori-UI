@@ -3,7 +3,10 @@
  *
  * It runs `scripts/app-package.mjs` as a command, the way `npm run app-package` and the
  * `app-packages.yml` workflow do, rather than calling the validator's functions: so the answer is
- * the pipeline's own, steps 1 to 6 of docs/business-apps/package-pipeline.md.
+ * the pipeline's own, steps 1 to 6 of docs/business-apps/package-pipeline.md. Bundled into
+ * `@nuxeo/satori-cli`, it runs the tool's own `satori build` instead, the same steps through the
+ * same modules, `scripts/package-pipeline/`, as the customer's CI runs them (host.ts); the
+ * platform's version is then the tool's.
  *
  * - **As CI runs it, unless told otherwise.** Given the folder alone, it passes what the workflow
  *   passes: `--out` and `--platform`, the version of `libs/platform`, and the allow-list the package
@@ -32,22 +35,13 @@
  * the step that refused the package, and the zip's digest when it was built.
  */
 import { spawn } from 'node:child_process';
-import {
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { RUN_ENVIRONMENT } from './config.ts';
+import { HOST, REPO_ROOT, platformVersion } from './host.ts';
 
-export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-export const PIPELINE = join(REPO_ROOT, 'scripts', 'app-package.mjs');
+export { REPO_ROOT, platformVersion };
 export const RUN_TIMEOUT_MS = 180_000;
 /** Where a package names the allow-list it is built against, which CI gives the pipeline. */
 export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'] as const;
@@ -181,16 +175,6 @@ export function pipelineEnvironment(env: NodeJS.ProcessEnv, temporary?: string):
     : { ...passed, TMPDIR: temporary, TEMP: temporary, TMP: temporary };
 }
 
-export function platformVersion(): string {
-  const manifest: unknown = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'libs', 'platform', 'package.json'), 'utf8'),
-  );
-  const version =
-    manifest && typeof manifest === 'object' && 'version' in manifest ? manifest.version : null;
-  if (typeof version !== 'string') throw new Error('libs/platform/package.json has no version');
-  return version;
-}
-
 export async function validatePackage(
   request: PackageRequest,
   options: PackageOptions = {},
@@ -247,7 +231,7 @@ export async function validatePackage(
   const out = join(work, 'out');
   const temporary = join(work, 'tmp');
   const args = [
-    PIPELINE,
+    ...HOST.pipeline,
     directory,
     '--out',
     out,
@@ -265,6 +249,137 @@ export async function validatePackage(
       pipelineEnvironment(process.env, temporary),
     );
     return interpret(directory, run, platform, departsFromCi, asBuilt !== undefined);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+export interface ReleaseRequest {
+  /** The package folder. Relative to the repository. */
+  readonly directory: string;
+  /** The package as it was installed: a folder, or the zip it was built into. */
+  readonly previous?: string;
+}
+
+export interface ReleaseCheck {
+  readonly package: string;
+  /** Whether a person may tag it now: it builds, passes, keeps `previous`, and is not tagged. */
+  readonly ready: boolean;
+  readonly name: string | null;
+  readonly version: string | null;
+  /** `app-package/<name>/<version>`, once it is known. */
+  readonly tag: string | null;
+  readonly built: boolean;
+  readonly tagged: boolean | null;
+  /** Why it is not ready. */
+  readonly reasons: readonly string[];
+  /** What the check could not see. */
+  readonly unchecked: readonly string[];
+  /** What the person runs, when it is ready. */
+  readonly commands: readonly string[];
+  readonly exitCode: number | null;
+  readonly command: string;
+  /** The pipeline's output, and the check's. */
+  readonly output: readonly string[];
+  readonly note: string;
+}
+
+/**
+ * `release_check`: the release check, `HOST.releaseCheck`, on a package folder, given what
+ * `validatePackage` gives the pipeline, as CI does (the platform's version, the package's own
+ * allow-list), with its names compared with the packages beside it, and `previous` when given. It
+ * reads inside the roots only, and runs as the pipeline runs: no credential, stopped whole. It
+ * tags, pushes and publishes nothing; git is asked for the package's tag and nothing else.
+ */
+export async function releaseCheck(
+  request: ReleaseRequest,
+  options: PackageOptions = {},
+): Promise<ReleaseCheck> {
+  const roots = options.roots ?? [REPO_ROOT];
+  const resolved = (path: string, what: string): string => {
+    const found = within(path, roots);
+    if (typeof found !== 'string') throw new Error(`${what}: ${found.problem}`);
+    return found;
+  };
+  const directory = resolved(request.directory, 'package');
+  if (!statSync(directory).isDirectory())
+    throw new Error(`package: ${request.directory} is not a folder.`);
+  const link = linkInside(directory);
+  if (link)
+    throw new Error(
+      `package: ${request.directory} holds a link, ${relative(directory, link)}, which is not followed.`,
+    );
+  let previous: string | undefined;
+  if (request.previous !== undefined) {
+    previous = resolved(request.previous, 'previous');
+    const entry = statSync(previous);
+    if (entry.isDirectory()) {
+      const inside = linkInside(previous);
+      if (inside)
+        throw new Error(
+          `previous: ${request.previous} holds a link, ${relative(previous, inside)}, which is not followed.`,
+        );
+    } else if (!entry.isFile() || !previous.endsWith('.zip'))
+      throw new Error(`previous: ${request.previous} is neither a package folder nor a zip.`);
+  }
+  const builds = join(directory, ...BUILD_ALLOW_LIST);
+  const allowList = lstatSync(builds, { throwIfNoEntry: false })?.isFile() ? builds : undefined;
+  const work = mkdtempSync(join(options.workIn ?? tmpdir(), 'builder-mcp-release-'));
+  const temporary = join(work, 'tmp');
+  const args = [
+    ...HOST.releaseCheck,
+    directory,
+    '--json',
+    '--platform',
+    platformVersion(),
+    ...(allowList ? ['--allow-list', allowList] : []),
+    '--kits',
+    options.kits ?? join(directory, '..'),
+    ...(previous ? ['--previous', previous] : []),
+  ];
+  try {
+    mkdirSync(temporary);
+    const run = await runNode(
+      args,
+      options.timeoutMs ?? RUN_TIMEOUT_MS,
+      pipelineEnvironment(process.env, temporary),
+    );
+    const last = lines(run.stdout).at(-1) ?? '';
+    let said: Partial<ReleaseCheck> & { output?: string[] } = {};
+    try {
+      said = JSON.parse(last) as typeof said;
+    } catch {
+      // Said in the answer: it printed no answer.
+    }
+    const command =
+      `${HOST.releaseShown} <package> --json --platform ${platformVersion()}` +
+      (allowList ? ' --allow-list <package>/deployment/build-allow-list.json' : '') +
+      ' --kits <its folder>' +
+      (previous ? ' --previous <previous>' : '');
+    return {
+      package: shownFromRepository(directory),
+      ready: run.failure === null && run.exitCode === 0 && said.ready === true,
+      name: said.name ?? null,
+      version: said.version ?? null,
+      tag: said.tag ?? null,
+      built: said.built === true,
+      tagged: said.tagged ?? null,
+      reasons: [
+        ...(said.reasons ?? []),
+        ...(run.failure ? [run.failure] : []),
+        ...(said.ready === undefined ? ['the check printed no answer'] : []),
+      ],
+      unchecked: said.unchecked ?? [],
+      commands: said.commands ?? [],
+      exitCode: run.exitCode,
+      command,
+      output: [...(said.output ?? []), ...lines(run.stderr)].map((line) =>
+        line.split(work).join('<temporary>'),
+      ),
+      note:
+        said.note ??
+        "Publishing is a person's step. Nothing was tagged, pushed or published, and no credential was read.",
+    };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -423,7 +538,7 @@ function interpret(
     findings,
     zip,
     command:
-      `node scripts/app-package.mjs <package> --out <temporary> --platform ${platform}` +
+      `${HOST.pipelineShown} <package> --out <temporary> --platform ${platform}` +
       (departsFromCi.includes('allowList')
         ? ' --allow-list <file>'
         : asBuilt

@@ -51,13 +51,19 @@ describe('the server over stdio', () => {
         listed.result as { tools: { name: string; annotations?: Record<string, boolean> }[] }
       ).tools;
       expect(tools.map((tool) => tool.name).sort()).toEqual(
-        [...NUXEO_TOOLS, ...WRITE_TOOLS, 'preview_package', 'validate_package'].sort(),
+        [
+          ...NUXEO_TOOLS,
+          ...WRITE_TOOLS,
+          'preview_package',
+          'release_check',
+          'validate_package',
+        ].sort(),
       );
-      const writers = ['preview_package', 'validate_package', ...WRITE_TOOLS];
+      const writers = ['preview_package', 'release_check', 'validate_package', ...WRITE_TOOLS];
       for (const tool of tools) {
-        // Every Nuxeo tool only reads; validate_package builds a zip, if only in a temporary
-        // folder; preview_package replaces what the dev folder served, and the write tools a
-        // package's files.
+        // Every Nuxeo tool only reads; validate_package and release_check build a zip, if only in
+        // a temporary folder; preview_package replaces what the dev folder served, and the write
+        // tools a package's files.
         expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(!writers.includes(tool.name));
         expect(tool.annotations?.['destructiveHint'], tool.name).toBe(
           tool.name === 'preview_package' || WRITE_TOOLS.includes(tool.name),
