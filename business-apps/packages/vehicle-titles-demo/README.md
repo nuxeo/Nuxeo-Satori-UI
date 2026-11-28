@@ -436,6 +436,9 @@ was `c451afe3…0e168`). Held to 0.1.0 with `--previous` and `--previous-platfor
 request to its base: "5 changes, which need a patch version. 0.2.0 raises the minor". The minor
 because the year's stored type changed, from text to a number, which deals a server already holds
 would need written again; the pipeline compares the app definition's files, not the schema's.
+**Upgrading a server that has 0.1.0's deals:** none has, since the kit is installed nowhere; one
+that had would remove the seeded workspace and run the seed again, which writes each year as a
+number, rather than upgrade in place.
 
 ## Installing it on a local Nuxeo
 

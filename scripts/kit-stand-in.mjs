@@ -736,9 +736,16 @@ function apiPathOf(pathname) {
   return match ? (match[1] ?? '/') : null;
 }
 
-/** Whether a write's body is read for a stand-in id: the REST API's and automation's only. */
-const inspectsBody = (pathname) =>
-  apiPathOf(pathname) !== null || /^\/nuxeo\/(?:site\/)?automation(?:\/|$)/.test(pathname);
+/**
+ * Whether a write's body is read for a stand-in id: the REST API's and automation's only, never a
+ * file sent to the batch upload, `/api/v1/upload/`, which is a file's bytes, names no record, and
+ * would otherwise be held whole in memory. The call that attaches it names its record, and is read.
+ */
+const inspectsBody = (pathname) => {
+  const api = apiPathOf(pathname);
+  if (api !== null) return !/^\/upload(?:\/|$)/.test(api);
+  return /^\/nuxeo\/(?:site\/)?automation(?:\/|$)/.test(pathname);
+};
 
 function decodeSafely(text) {
   try {

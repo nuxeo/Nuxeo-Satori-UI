@@ -188,22 +188,34 @@ describe('RecordPageComponent: a file field', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('waits while the file is fetched, then lets it be pressed again', async () => {
+  it('asks once while the file is fetched, keeps the focus on its button, then asks again', async () => {
     const answer = new Subject<Blob>();
     fetchBlobByXpath = vi.fn(() => answer);
-    const root = await render(request({ 'sigreq:signedFile': SIGNED }));
-    // Two presses before the page is drawn again, as a double click is: the second asks nothing.
-    button(root, 'sigreq:signedFile')?.click();
-    button(root, 'sigreq:signedFile')?.click();
+    const root = await render(
+      request({
+        'sigreq:signedFile': SIGNED,
+        'sigreq:evidence': { ...SIGNED, name: 'evidence.json' },
+      }),
+    );
+    const pressed = button(root, 'sigreq:signedFile') as HTMLButtonElement;
+    pressed.focus();
+    // A double click, and a press once the page is drawn again: the second and third ask nothing.
+    pressed.click();
+    pressed.click();
     await settle();
+    pressed.click();
     expect(fetchBlobByXpath).toHaveBeenCalledTimes(1);
-    expect(button(root, 'sigreq:signedFile')?.disabled).toBe(true);
-    button(root, 'sigreq:signedFile')?.click();
-    expect(fetchBlobByXpath).toHaveBeenCalledTimes(1);
+    // Never disabled, so the focus stays where the person pressed.
+    expect(pressed.disabled).toBe(false);
+    expect(document.activeElement).toBe(pressed);
+    // Another file of the record is downloaded beside it.
+    button(root, 'sigreq:evidence')?.click();
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(2);
     answer.next(new Blob(['%PDF']));
     answer.complete();
     await settle();
-    expect(button(root, 'sigreq:signedFile')?.disabled).toBe(false);
+    pressed.click();
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(3);
   });
 
   it('says why in a toast when the server refuses it, or it fails, and downloads nothing', async () => {
@@ -237,7 +249,9 @@ describe('RecordPageComponent: a file field', () => {
 
   it('offers the download on a read-only page too: it is a read', async () => {
     const root = await render(request({ 'sigreq:signedFile': SIGNED }), true);
-    expect(button(root, 'sigreq:signedFile')?.disabled).toBe(false);
+    button(root, 'sigreq:signedFile')?.click();
+    await settle();
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(1);
   });
 
   it('passes axe at WCAG 2.2 AA', async () => {

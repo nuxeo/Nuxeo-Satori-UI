@@ -376,6 +376,21 @@ console.log('Answered from the kit');
 
 console.log('Refused, and not answered');
 {
+  // A file's bytes to the batch upload are passed on as they come, not read for a record's id:
+  // the bytes here happen to hold one, which a body that was read would refuse.
+  const { result, requests } = await upstreamSaw(() =>
+    call(vehiclePort, 'POST', '/nuxeo/api/v1/upload/batch-1/0', {
+      headers: { 'content-type': 'application/octet-stream' },
+      body: `photo bytes ${deal.id}`,
+    }),
+  );
+  check(
+    'a file sent to the batch upload is passed on, its bytes not read for a stand-in id',
+    result.status !== 403 && requests.length === 1,
+    `${result.status} ${requests.length}`,
+  );
+}
+{
   const { result, requests } = await upstreamSaw(() =>
     call(vehiclePort, 'PUT', `/nuxeo/api/v1/id/${deal.id}`, {
       headers: { 'content-type': 'application/json' },

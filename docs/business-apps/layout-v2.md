@@ -448,7 +448,8 @@ or a stand-in package's own), and by the layout designer, which will not save th
   as the reader, `@blob/<property>`, as the Attachments panel and a list's Download do, and saves it
   under its name; the server decides whether the reader may, and a refusal or a failure is said in a
   toast. A property with no file, or one with no name, shows empty. The button's name is "Download"
-  and the file's name, which holds the text it shows. In a form it is read-only, by its name: files
+  and the file's name, which holds the text it shows. In a related list's or a queue's column, and
+  in a table's, it is the file's name as text, with no button: a cell offers the row, not its files. In a form it is read-only, by its name: files
   are changed in Attachments. **Added on 27 November 2026** for the onboarding kit's signed file
   and evidence (its README, item 8): until then only `image` took one file, to show it, and
   `file-list` a list of them.

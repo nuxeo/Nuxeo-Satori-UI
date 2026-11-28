@@ -41,13 +41,19 @@ function fieldOf(parameter: unknown): string | null {
 
 /**
  * A linked record's property, as a layout's rule names one (layout-v2.md, section 5): the open
- * record's `field` holding the linked record's id, and the linked record's `show`. `null` for any
- * other parameter. `types` is the page's, which reads the linked record with their schemas.
+ * record's `field` holding the linked record's id, the `types` it links to, whose schemas the page
+ * reads it with, and the linked record's `show`. `null` for a parameter that names no `show`, which
+ * is read as before; `'malformed'` for one that names a `show` but is not all three, which reads no
+ * value, as the validator refuses it, so that it never falls back to the open record's own `field`,
+ * the reference's stored id, in a manifest whose parameters nothing validates.
  */
-function linkedOf(parameter: unknown): { field: string; show: string } | null {
+function linkedOf(parameter: unknown): { field: string; show: string } | 'malformed' | null {
   if (typeof parameter !== 'object' || parameter === null || Array.isArray(parameter)) return null;
-  const { field, show } = parameter as Record<string, unknown>;
-  return typeof field === 'string' && typeof show === 'string' ? { field, show } : null;
+  if (!Object.hasOwn(parameter, 'show')) return null;
+  const { field, show, types } = parameter as Record<string, unknown>;
+  return typeof field === 'string' && typeof show === 'string' && Array.isArray(types)
+    ? { field, show }
+    : 'malformed';
 }
 
 /**
@@ -62,6 +68,7 @@ function linkedOf(parameter: unknown): { field: string; show: string } | null {
  */
 function subjectOf(context: ExtensionRuleContext, parameter: unknown): unknown {
   const linked = linkedOf(parameter);
+  if (linked === 'malformed') return undefined;
   if (linked !== null) {
     const id = context.document?.properties?.[linked.field];
     return typeof id === 'string' && id !== '' ? context.linked?.(id, linked.show) : undefined;

@@ -353,7 +353,6 @@
         class="record-page__file"
         icon="download"
         [label]="'document-layouts.file.download' | translate: { name: field.value.name }"
-        [disabled]="downloading() === field.place"
         (press)="download(field)"
         >{{ field.value.name }}</nxs-button
       >

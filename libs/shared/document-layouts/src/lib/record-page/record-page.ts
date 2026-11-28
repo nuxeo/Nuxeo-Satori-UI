@@ -926,8 +926,11 @@ export class RecordPageComponent {
     );
   }
 
-  /** The file being downloaded, by its field's place, while it is: its button waits meanwhile. */
-  protected readonly downloading = signal<string | null>(null);
+  /**
+   * The files being downloaded, by their fields' places: a press on one meanwhile asks for nothing.
+   * Its button is not disabled, so that the keyboard's focus stays on it.
+   */
+  private readonly downloading = new Set<string>();
 
   /**
    * A `file` field's download (layout-v2.md, section 3): the property's blob, fetched through the
@@ -938,16 +941,17 @@ export class RecordPageComponent {
    */
   protected download(field: RecordFieldShown): void {
     const value = field.value;
-    if (value.kind !== 'file' || this.downloading() === field.place) return;
+    if (value.kind !== 'file' || this.downloading.has(field.place)) return;
     const uid = this.current().uid;
-    this.downloading.set(field.place);
+    const place = field.place;
+    this.downloading.add(place);
     this.injector
       .get(DocumentDetailService)
       .fetchBlobByXpath(uid, value.xpath, { clientReason: 'download' })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (blob) => {
-          this.downloading.set(null);
+          this.downloading.delete(place);
           const url = URL.createObjectURL(blob);
           const link = this.injector.get(DOCUMENT).createElement('a');
           link.href = url;
@@ -956,7 +960,7 @@ export class RecordPageComponent {
           URL.revokeObjectURL(url);
         },
         error: (failure: unknown) => {
-          this.downloading.set(null);
+          this.downloading.delete(place);
           this.toast.error(
             this.translate.instant(
               isPermissionDeniedError(failure)
@@ -1114,22 +1118,40 @@ export class RecordPageComponent {
    * left out. A rule with no linked property is decided at once.
    */
   private linkedDecided(rule: unknown, document: NuxeoDocument, records: LinkedRecords): boolean {
-    const keys = ruleReadKeys(rule);
-    if (keys.length === 0) return true;
+    return this.linkedState(rule, document, records) === 'decided';
+  }
+
+  /**
+   * Where the linked records the rules in `value` read stand: `decided` once every one is read,
+   * known unreadable, or named by no id; `reading` while a linked type or a record is read; and
+   * `refused` where none of a rule's types has its property, or it is a reference, which the
+   * console is told. `value` is a rule, or a computation whose `core.choose` holds some.
+   */
+  private linkedState(
+    value: unknown,
+    document: NuxeoDocument,
+    records: LinkedRecords,
+  ): 'decided' | 'reading' | 'refused' {
+    const references = linkedReadsIn([value]);
+    if (references.length === 0) return 'decided';
     const shows = this.shows();
-    for (const reference of linkedReadsIn([rule])) {
+    let reading = false;
+    for (const reference of references) {
       const linked = shows?.get(ruleReadKey(reference));
-      if (linked === undefined) return false;
+      if (linked === undefined) {
+        reading = true;
+        continue;
+      }
       if (!usableShow(linked)) {
         this.tell(
           `a rule reading ${reference.show} of the record ${reference.field} names does not pass: none of the types it links to, ${reference.types.join(', ')}, has it, it is a reference, or their schemas could not be read`,
         );
-        return false;
+        return 'refused';
       }
       const id = document.properties[reference.field];
-      if (isDocumentId(id) && !records.has(id)) return false;
+      if (isDocumentId(id) && !records.has(id)) reading = true;
     }
-    return true;
+    return reading ? 'reading' : 'decided';
   }
 
   /** What a computation reads of the record: its values, their display, its rules and today. */
@@ -1174,6 +1196,19 @@ export class RecordPageComponent {
         context,
       );
       return [this.withExtras({ place: field.place, key: field.xpath, label, value })];
+    }
+    // A computation whose `core.choose` reads a linked record waits for it, as a banner does, so
+    // that it never shows the other value for a moment; one that can never read it is left out.
+    const linked = this.linkedState(field.computed, document, this.records());
+    if (linked === 'reading')
+      return [
+        { place: field.place, key: field.id, label, value: { kind: 'records', records: [] } },
+      ];
+    if (linked === 'refused') {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: its rule reads a linked record's property none of its types has`,
+      );
+      return [];
     }
     const result = compute(field.computed, this.computationContext(layout, document, context));
     if (!result.ok) {

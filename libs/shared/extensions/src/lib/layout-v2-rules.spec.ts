@@ -193,6 +193,21 @@ describe("a linked record's property (layout-v2.md, section 5)", () => {
     expect(evaluate('app.rules.datePassed', elsewhere, openedOn)).toBe(false);
   });
 
+  it("reads no value for one that names a show but is not all three, never the open record's own", () => {
+    for (const malformed of [
+      { field: 'deal:title', show: 'title:status' },
+      { field: 'deal:title', types: ['Title'], show: 5 },
+      { field: 'deal:title', types: ['Title'], show: { field: 'title:status' } },
+      { types: ['Title'], show: 'title:status' },
+    ]) {
+      // The open record's deal:title holds the title's id: a fallback to it would compare that.
+      expect(evaluate('app.rules.fieldIn', deal(TITLE), malformed, TITLE)).toBe(false);
+      expect(evaluate('app.rules.fieldIn', deal(TITLE), malformed, 'Awaiting lien release')).toBe(
+        false,
+      );
+    }
+  });
+
   it('still reads a plain property as before', () => {
     expect(evaluate('app.rules.fieldIn', deal(TITLE), { field: 'title:status' }, 'Issued')).toBe(
       true,

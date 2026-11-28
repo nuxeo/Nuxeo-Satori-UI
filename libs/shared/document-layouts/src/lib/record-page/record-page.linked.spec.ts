@@ -472,6 +472,48 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
       expect(banners(root)).toEqual(['lien', 'overdue']);
     });
 
+    it("waits with a computation's core.choose over it, as a banner does, then shows its value", async () => {
+      const answer = new Subject<ReadonlyMap<string, LinkedRecord> | null>();
+      linkedRecords = vi.fn(() => answer);
+      const page = {
+        version: 2,
+        cards: [
+          {
+            id: 'deal',
+            fields: [
+              'vdeal:number',
+              {
+                id: 'lien',
+                label: 'Lien',
+                computed: {
+                  type: 'core.choose',
+                  parameters: [awaitingLien, 'Waiting for its release', 'Released'],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const root = await render(deal({ 'vdeal:title': TITLE }), page);
+      // Never the other value for a moment: nothing while the title is read.
+      expect(valueOf(root, 'lien')).toBe('');
+      answer.next(
+        new Map([
+          [
+            TITLE,
+            {
+              title: TITLES[TITLE].title,
+              url: `/doc/${TITLE}`,
+              properties: TITLES[TITLE].properties,
+            },
+          ],
+        ]),
+      );
+      answer.complete();
+      await settle();
+      expect(valueOf(root, 'lien')).toBe('Waiting for its release');
+    });
+
     it('passes no rule, and says why, over a property none of its types has', async () => {
       const page = {
         version: 2,
