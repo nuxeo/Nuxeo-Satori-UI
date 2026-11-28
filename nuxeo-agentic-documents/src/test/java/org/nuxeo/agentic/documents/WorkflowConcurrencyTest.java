@@ -234,6 +234,79 @@ public class WorkflowConcurrencyTest {
     }
 
     /**
+     * One write in a cycle at a time, held open on purpose: two comments at once wrote the cycle's
+     * own rows at once, as the comment manager saves the cycle with each comment's text, and the
+     * database could deadlock them at commit, where the client got a failed commit, not a
+     * conflict. So a second comment waits for the first's transaction to end, and is written then;
+     * told to wait for nothing, it is refused, 409, "try again", with nothing written.
+     */
+    @Test
+    public void aSecondCommentWaitsForTheFirstToEndAndIsRefusedOnlyAsAConflict() throws Exception {
+        String revision = Library.inTransactionAs(repository, ALICE,
+                s -> Library.first(s, DRAWINGS, DRAWING, "one-at-a-time", "DWG").getId());
+        String cycle = Library.inTransactionAs(repository, ALICE,
+                s -> Library.openCycle(s, "one-at-a-time", revision, List.of(BOB)).getId());
+        TransactionHelper.commitOrRollbackTransaction();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The first comment's transaction, written and held open.
+            CountDownLatch written = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            Future<String> first = pool.submit(() -> TransactionHelper.runInTransaction(() -> {
+                try {
+                    return Comments.write(Library.as(repository, BOB), cycle, "First").getId();
+                } finally {
+                    written.countDown();
+                    await(release);
+                }
+            }));
+            assertTrue(written.await(1, TimeUnit.MINUTES));
+            // The second waits for it, and is not refused.
+            Future<String> second = pool.submit(() -> TransactionHelper.runInTransaction(
+                    () -> Comments.write(Library.as(repository, BOB), cycle, "Second").getId()));
+            Thread.sleep(500);
+            assertFalse("the second comment waits while the first's transaction is open", second.isDone());
+            release.countDown();
+            assertTrue(first.get(1, TimeUnit.MINUTES) != null);
+            assertTrue(second.get(1, TimeUnit.MINUTES) != null);
+            assertEquals(2L, (long) TransactionHelper.runInTransaction(() -> CoreInstance.doPrivileged(repository,
+                    (CoreSession s) -> (long) s.query("SELECT * FROM Document WHERE ecm:mixinType = 'ReviewComment' "
+                            + "AND rvwc:cycle = '" + cycle + "'").size())));
+
+            // Told to wait for nothing, the second is refused as a conflict while the first holds it.
+            org.nuxeo.runtime.api.Framework.getProperties()
+                                          .setProperty(ControlledDocumentComponent.CYCLE_WAIT_PROPERTY, "0");
+            try {
+                CountDownLatch held = new CountDownLatch(1);
+                CountDownLatch done = new CountDownLatch(1);
+                Future<String> holder = pool.submit(() -> TransactionHelper.runInTransaction(() -> {
+                    try {
+                        return Comments.write(Library.as(repository, BOB), cycle, "Third").getId();
+                    } finally {
+                        held.countDown();
+                        await(done);
+                    }
+                }));
+                assertTrue(held.await(1, TimeUnit.MINUTES));
+                Future<NuxeoException> refused = pool.submit(() -> Library.refusedAs(repository, BOB,
+                        s -> Comments.write(s, cycle, "Fourth")));
+                NuxeoException conflict = refused.get(1, TimeUnit.MINUTES);
+                assertEquals(409, conflict.getStatusCode());
+                assertTrue(conflict.getMessage(), conflict.getMessage().contains("try again"));
+                done.countDown();
+                assertTrue(holder.get(1, TimeUnit.MINUTES) != null);
+            } finally {
+                org.nuxeo.runtime.api.Framework.getProperties().remove(ControlledDocumentComponent.CYCLE_WAIT_PROPERTY);
+            }
+            assertEquals(3L, (long) TransactionHelper.runInTransaction(() -> CoreInstance.doPrivileged(repository,
+                    (CoreSession s) -> (long) s.query("SELECT * FROM Document WHERE ecm:mixinType = 'ReviewComment' "
+                            + "AND rvwc:cycle = '" + cycle + "'").size())));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
      * The fence, held open on purpose: while a comment's transaction is in it, the close is refused;
      * while a close's transaction holds it, the comment is; and once either ends, the other goes
      * through. Each held transaction waits on a latch, on a thread of its own.
