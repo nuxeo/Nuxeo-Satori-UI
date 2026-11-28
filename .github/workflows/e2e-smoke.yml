@@ -13,8 +13,9 @@ name: E2E smoke
 # **Without the secrets,** as for a fork's pull request or Dependabot's, which GitHub gives none of
 # them, `smoke` is skipped and `not-run` says so in a notice and the run's summary. Skipped is the
 # neutral result Actions has: the check shows grey, never a green tick for tests that did not run,
-# and an external contribution is not failed for a secret it cannot have. On this repository's own
-# branches the secrets are required, and their absence fails the job.
+# and an external contribution is not failed for a secret it cannot have. So Dependabot's pull
+# requests are not smoke-tested until someone pushes to their branch, which runs it as them. On this
+# repository's own branches the secrets are required, and their absence fails the job.
 #
 # **What makes it a required check** is a branch protection rule or a ruleset on the target
 # branches naming `E2E smoke (chromium)`: an administrator's setting, not this file's
@@ -23,7 +24,14 @@ name: E2E smoke
 # the branch to this repository.
 #
 # **No write permission and no `pull_request_target`.** The pull request's code runs in `smoke`, so
-# it gets `contents: read` and `packages: read`, and the checkout keeps no token in .git/config.
+# it gets `contents: read` alone, and the checkout keeps no token in .git/config.
+#
+# **No Playwright trace.** A trace holds the browser context's options, `httpCredentials` and so
+# NUXEO_PASS among them, in plain text, and the value of every field a test fills, as measured with
+# Playwright 1.63.0; and a public repository's artifacts can be downloaded by anyone signed in. So
+# the suite runs with `--trace off`, and the uploaded results are the report, screenshots and
+# videos, in which a password field shows only its dots.
+#
 # Controlled by scripts/beta-harness/e2e-smoke.selftest.mjs, with the shapes above: a change to this
 # file that drops one of them is refused there.
 
@@ -39,7 +47,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   not-run:
@@ -54,12 +61,15 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
+          # A repository's full name is letters, digits, `.`, `-` and `_`: nothing a workflow command reads.
           if [ "$ACTOR" = 'dependabot[bot]' ]; then
             why="it is Dependabot's, and GitHub gives Dependabot's runs only Dependabot's secrets"
+            how="push a commit to its branch, which runs them as you"
           else
             why="it comes from $HEAD_REPO, a fork, and GitHub gives a fork's pull request no secret"
+            how="push the branch to $GITHUB_REPOSITORY and open the pull request from there"
           fi
-          message="The end-to-end smoke flows did not run on this pull request: $why. It is not a pass. To run them, push the branch to $GITHUB_REPOSITORY and open the pull request from there."
+          message="The end-to-end smoke flows did not run on this pull request: $why. It is not a pass. To run them, $how."
           echo "::notice title=E2E smoke not run::$message"
           echo "**E2E smoke not run.** $message" >> "$GITHUB_STEP_SUMMARY"
 
@@ -67,12 +77,13 @@ jobs:
     name: E2E smoke (chromium)
     if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     # One smoke run at a time against the hosted Nuxeo, across every pull request, so two never
     # write over each other. GitHub keeps one run waiting per group: a third pull request's run
     # cancels the waiting one, which then shows as cancelled, never as passed, until re-run. The
-    # nightly runs in groups of its own at 03:00 UTC; the run prefix below keeps a smoke run's
-    # documents apart from them too.
+    # nightly runs in groups of its own at 03:00 UTC, as do the branches it dispatches, and a smoke
+    # run may overlap them: accepted, since the run prefix below keeps their documents apart, though
+    # the server's load and the test account are shared.
     concurrency:
       group: e2e-hosted-nuxeo-smoke
       cancel-in-progress: false
@@ -133,16 +144,19 @@ jobs:
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
         run: npx tsx scripts/beta-harness/e2e-preflight.mjs
 
+      # Its own deadline, inside the job's, so a hung run leaves the sweep time to run.
       - name: Run the smoke flows
+        timeout-minutes: 15
         env:
           CI: 'true'
           NUXEO_USER: ${{ secrets.NUXEO_USER }}
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
-        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=chromium --grep @smoke
+        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=chromium --grep @smoke --trace off
 
-      # Playwright's exit 0 says nothing selected failed, not that anything was selected or ran.
+      # Playwright's exit 0 says nothing selected failed, not that what was selected ran: a test
+      # that skips itself exits 0. --min is the subset's size; dropping a tag needs an edit here.
       - name: Hold the report to the smoke subset, every test passed
-        run: node scripts/beta-harness/e2e-smoke-verdict.mjs dist/e2e/results.json --project chromium
+        run: node scripts/beta-harness/e2e-smoke-verdict.mjs dist/e2e/results.json --project chromium --min 16
 
       # Whatever happened above, cancellation included, once the app was served.
       - name: Trash what the run left
@@ -152,7 +166,7 @@ jobs:
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
         run: npx tsx scripts/beta-harness/e2e-sweep.mjs
 
-      # Traces, screenshots and video are retained on failure only (playwright.config.ts).
+      # Screenshots and video on failure only (playwright.config.ts); no trace, as the header says.
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4

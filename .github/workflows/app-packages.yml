@@ -22,11 +22,11 @@ name: App definition packages
 #   GitHub's, or from a workflow business-apps/trusted-signers.json does not name, such as a fork's,
 #   nothing is signed, and the run says so in a warning and its summary. Once signed, the signature
 #   is verified as every later reader verifies it, and kept beside the zip in its own artifact.
-# - `publish`, only when `sign` signed, and only once a person has approved it: the job names the
-#   GitHub environment `marketplace-preprod`, so GitHub holds it until a reviewer that environment
-#   requires approves, and its first step, scripts/app-package-approval.mjs, refuses to go on
-#   unless the environment does require one, prevents self-review and lets no administrator
-#   bypass it. An environment nobody has set up holds nothing, which is why the step exists. Then
+# - `publish`, only when `sign` signed, and only once another person has approved it: the job
+#   names the GitHub environment `marketplace-preprod`, so GitHub holds it until a reviewer that
+#   environment requires approves, and its first step, scripts/app-package-approval.mjs, refuses to
+#   go on unless GitHub's record of this run shows an approval by a person who did not start it. An
+#   environment nobody has set up, an administrator's bypass and a self-review leave none. Then
 #   the signature verified again, against the trusted signers and the tag's package and version,
 #   then Nuxeo Marketplace preprod, the way build-marketplace.yml publishes the platform's own
 #   package. Nothing publishes on a merge, because a build nobody asked for does not belong in the
@@ -363,11 +363,10 @@ jobs:
         with:
           node-version: '24'
 
-      # The environment holds a job only when it requires a reviewer. GitHub creates one this job
-      # names with no rule at all, and until an administrator sets it, the job would have run at
-      # once. So this reads, from GitHub's public API with no token, how the environment is set,
-      # and refuses unless a person had to approve, someone other than whoever pushed the tag.
-      - name: Check a person had to approve this publish
+      # The environment holds a job only while it requires a reviewer, and lets an administrator,
+      # or a self-review, through. So this reads GitHub's record of this run, from its public API
+      # with no token, and refuses unless a person other than whoever started it approved it.
+      - name: Check another person approved this run
         run: node scripts/app-package-approval.mjs --environment marketplace-preprod
 
       - uses: actions/download-artifact@v4

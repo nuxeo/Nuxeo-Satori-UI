@@ -3,14 +3,17 @@
  * The pull request smoke run's verdict, read from Playwright's own report, after Playwright has
  * already exited 0 (`.github/workflows/e2e-smoke.yml`).
  *
- * Playwright's exit code says that nothing selected failed. It does not say that anything was
- * selected, or that what was selected ran: a `--grep` that matches nothing, a smoke test that
- * skips itself on an instance without the data it needs, or a run of the wrong project all exit 0
- * with nothing proved. A required check that can be green in those ways is a check that can pass
- * without having run. So the report is held to five things, each a refusal:
+ * Playwright's exit code says that nothing selected failed. It does not say that what was selected
+ * ran: a smoke test that skips itself, on an instance without the data it needs, exits 0 with
+ * nothing proved (measured with 1.63.0). Playwright 1.63.0 does exit 1 when a `--grep` matches
+ * nothing or a `--project` names none, but only until a `--pass-with-no-tests` or a config change
+ * says otherwise, and the verdict does not lean on that. A required check that can be green in any
+ * of those ways is a check that can pass without having run. So the report is held to six things,
+ * each a refusal:
  *
  * - it exists and is Playwright's JSON report;
- * - it holds at least one test;
+ * - it holds at least `--min` tests, the size of the subset when the workflow was last written, so
+ *   tags dropped from tests, or lost in a refactor, shrink the run only by an edit to the workflow;
  * - every test in it carries the `@smoke` tag, so the selection was the subset and not the suite;
  * - every test ran on the one project the run asked for;
  * - every test passed: `expected` with an expected status of `passed`, or `flaky`, passed on a
@@ -20,7 +23,7 @@
  * that misfired would exit 0 having judged nothing, and the job passes on that exit code. Its
  * controls run it as the workflow does (`e2e-smoke.selftest.mjs`).
  *
- * Usage: node scripts/beta-harness/e2e-smoke-verdict.mjs <results.json> --project <name>
+ * Usage: node scripts/beta-harness/e2e-smoke-verdict.mjs <results.json> --project <name> --min <n>
  * Exit: 0 every test passed; 1 refused, with each reason; 2 the command was wrong.
  */
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -62,7 +65,7 @@ function testsOf(report) {
  * @param {{ project: string }} options
  * @returns {{ problems: string[], tests: ReturnType<typeof testsOf> }}
  */
-function smokeVerdict(report, { project }) {
+function smokeVerdict(report, { project, min }) {
   const problems = [];
   if (!report || typeof report !== 'object' || !Array.isArray(report.suites))
     return {
@@ -70,6 +73,10 @@ function smokeVerdict(report, { project }) {
       tests: [],
     };
   const tests = testsOf(report);
+  if (tests.length > 0 && tests.length < min)
+    problems.push(
+      `the report holds ${tests.length} test(s), fewer than the ${min} of the smoke subset: was a SMOKE tag dropped?`,
+    );
   if (tests.length === 0)
     problems.push(
       'the report holds no test, so nothing was smoke-tested: did --grep match nothing?',
@@ -113,10 +120,19 @@ function summaryOf({ problems, tests }) {
 }
 
 function main(argv) {
-  const [file, flag, project, ...rest] = argv;
-  if (!file || flag !== '--project' || !project || rest.length) {
+  const [file, projectFlag, project, minFlag, minText, ...rest] = argv;
+  const min = Number(minText);
+  if (
+    !file ||
+    projectFlag !== '--project' ||
+    !project ||
+    minFlag !== '--min' ||
+    !Number.isInteger(min) ||
+    min < 1 ||
+    rest.length
+  ) {
     console.error(
-      'usage: node scripts/beta-harness/e2e-smoke-verdict.mjs <results.json> --project <name>',
+      'usage: node scripts/beta-harness/e2e-smoke-verdict.mjs <results.json> --project <name> --min <n>',
     );
     return 2;
   }
@@ -129,7 +145,7 @@ function main(argv) {
     );
     return 1;
   }
-  const verdict = smokeVerdict(report, { project });
+  const verdict = smokeVerdict(report, { project, min });
   const summary = summaryOf(verdict);
   process.stdout.write(summary);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);

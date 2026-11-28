@@ -180,9 +180,11 @@ arguments.
   document, open a collection, and list tasks and administration;
   [`smoke.ts`](../../apps/nuxeo-ui-e2e/src/smoke.ts) says which and why. One run at a time, each
   run's documents named for it and trashed at the end. A pull request without the secrets, a fork's
-  or Dependabot's, is skipped with a notice, never passed. The nightly still runs the whole suite on
-  Chromium and WebKit, and now on the staging branches too. **Not yet required:** a check is
-  required when a branch protection rule or a ruleset on the target branch names it, an
+  or Dependabot's, is skipped with a notice, and shows as skipped, never as passed; but a required
+  check that is skipped is satisfied, so a Dependabot update is not smoke-tested unless someone
+  pushes to its branch. The nightly still runs the whole suite on Chromium and WebKit, and once this
+  reaches `main`, whose copy the schedule runs, on the staging branches too. **Not yet required:**
+  a check is required when a branch protection rule or a ruleset on the target branch names it, an
   administrator's setting that no file in this repository makes, and none names it yet. Until one
   does, a red smoke run is seen on the pull request but does not stop its merge.
 - A CODEOWNERS file naming the owners of `nuxeo-agentic-core` and of each new library.
@@ -324,11 +326,11 @@ faxes wait for capture, in phase 7.
   not move as far as the changes need is refused, and each build writes what changed. Signatures
   are built, keyless, and verified before a publish (section 9.1). Promotion after a person
   approves is built for preprod (section 9.2): the publish waits in the GitHub environment
-  `marketplace-preprod` for one of its reviewers, and refuses to publish unless that environment
-  requires one, prevents self-review and lets no administrator bypass it. Its reviewers, its tag
-  rule and the ruleset for `app-package/*` tags are an administrator's to set, and none is set yet,
-  so until they are, nothing publishes. Promotion to production is still a proposal there, and no
-  tag has been pushed, so none of it has run on a real package.
+  `marketplace-preprod` for one of its reviewers, and refuses to publish unless GitHub's record of
+  the run shows an approval by a person who did not start it. The environment and a tag ruleset were
+  set by an administrator on 28 November 2026; 9.2 says what is still to change in them, and that
+  the Marketplace credentials themselves are not behind the approval. Promotion to production is
+  still a proposal there, and no tag has been pushed, so none of it has run on a real package.
 
 **Demo:**
 

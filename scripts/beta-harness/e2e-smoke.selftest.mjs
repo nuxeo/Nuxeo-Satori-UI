@@ -10,8 +10,9 @@
  *   written; and `uniqueTitle` puts it first.
  * - **The verdict** (`e2e-smoke-verdict.mjs`), run as the workflow runs it, on reports written here:
  *   a report of passed smoke tests passes, a flaky one passes and is named; refused are a report
- *   with no test, one that is not a report, one that is not JSON, a test not tagged `@smoke`, one
- *   on another project, a skipped one, a failed one, and a command without `--project`.
+ *   with no test, or fewer than `--min`, one that is not a report, one that is not JSON, a test not
+ *   tagged `@smoke`, one on another project, a skipped one, a failed one, and a command without
+ *   `--project` or a `--min` of at least 1.
  * - **The sweep** (`e2e-sweep.mjs`), run as the workflow runs it, against a stand-in Nuxeo on a
  *   local port: it asks for exactly the prefix's live documents, trashes each and nothing else, and
  *   says so; with nothing left it says that. Refused: a trash the server refuses, exit 1, naming the
@@ -20,9 +21,10 @@
  * - **The workflow's text:** the triggers, `pull_request` into the three branch families and never
  *   `pull_request_target`; read-only permissions; `smoke` running exactly when `not-run` does not,
  *   on this repository's own non-Dependabot pull requests; one shared concurrency group that never
- *   cancels a run in progress; the run prefix; the subset selected by tag on Chromium, then held to
- *   the verdict; the sweep on every outcome; no `continue-on-error`; and no token left in
- *   `.git/config`. Each, broken in a copy of the text, is refused. And the nightly dispatches its
+ *   cancels a run in progress; the run prefix; the subset selected by tag on Chromium, with no
+ *   trace, under a deadline of its own, then held to the verdict with the subset's size; the sweep on
+ *   every outcome; no `continue-on-error`; no token left in `.git/config`; and the job's name, which
+ *   is what a ruleset requires. Each, broken in a copy of the text, is refused. And the nightly dispatches its
  *   staging branches as well as its integration branches.
  *
  * Node 24 alone, no install and no network: the stand-in listens on 127.0.0.1 for the run only.
@@ -166,7 +168,7 @@ const report = (tests) => ({
   stats: {},
 });
 
-function verdict(content, args = ['--project', 'chromium']) {
+function verdict(content, args = ['--project', 'chromium', '--min', '1']) {
   const file = join(scratch, `results-${negative + positive}.json`);
   writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content));
   const run = spawnSync(process.execPath, [VERDICT, file, ...args], {
@@ -208,8 +210,25 @@ function theVerdict() {
     const result = verdict(content);
     check(`refused: ${label}`, result.status === 1 && reason.test(result.out), result.out);
   }
-  const usage = verdict(report([aTest()]), []);
-  check('refused: the verdict without --project, as a usage error', usage.status === 2, usage.out);
+  const short = verdict(report([aTest(), aTest({ title: 'offers navigation' })]), [
+    '--project',
+    'chromium',
+    '--min',
+    '3',
+  ]);
+  check(
+    'refused: fewer tests than the subset holds, as when a SMOKE tag is dropped',
+    short.status === 1 && /fewer than the 3 of the smoke subset/.test(short.out),
+    short.out,
+  );
+  for (const [label, args] of [
+    ['without --project', ['--min', '1']],
+    ['without --min', ['--project', 'chromium']],
+    ['with a --min of 0', ['--project', 'chromium', '--min', '0']],
+  ]) {
+    const usage = verdict(report([aTest()]), args);
+    check(`refused: the verdict ${label}, as a usage error`, usage.status === 2, usage.out);
+  }
 }
 
 // ── The sweep ───────────────────────────────────────────────────────────────────────────────────
@@ -408,8 +427,8 @@ function workflowProblems(text) {
     problems.push('it does not run on pull requests into main, integration/** and staging/**');
   if (/^ {2}(push|workflow_run|schedule|workflow_dispatch):/m.test(top))
     problems.push('it has a trigger other than pull_request');
-  if (!/^permissions:\n {2}contents: read\n {2}packages: read$/m.test(top))
-    problems.push("the workflow's permissions are not contents: read and packages: read");
+  if (!/^permissions:\n {2}contents: read$/m.test(top) || /^ {2}packages:/m.test(top))
+    problems.push("the workflow's permissions are not contents: read alone");
   if (/:\s*write\b|write-all/.test(code)) problems.push('something is given a write permission');
   if (/continue-on-error/.test(code)) problems.push('a step or job may fail and still pass');
   const smoke = jobs.get('smoke');
@@ -425,6 +444,8 @@ function workflowProblems(text) {
   if (!notRun.some((line) => /::notice title=E2E smoke not run::/.test(line)))
     problems.push('not-run does not say that the smoke run did not run');
   if (notRun.some((line) => /secrets\./.test(line))) problems.push('not-run reads a secret');
+  if (!smoke.includes('    name: E2E smoke (chromium)'))
+    problems.push('smoke is not named E2E smoke (chromium), the check a ruleset would require');
   const smokeText = smoke.join('\n');
   if (
     !/\n {4}concurrency:\n {6}group: e2e-hosted-nuxeo-smoke\n {6}cancel-in-progress: false(\n|$)/.test(
@@ -455,14 +476,20 @@ function workflowProblems(text) {
     if (/ --pass-with-no-tests| --grep-invert| \|\| true/.test(suiteStep))
       problems.push('the suite may pass with nothing run');
     if (/\n {8}if:/.test(suiteStep)) problems.push('the suite step is conditional');
+    if (!/ --trace off(\s|$)/.test(suiteStep))
+      problems.push('the suite may write a trace, which holds NUXEO_PASS, into a public artifact');
+    if (!/\n {8}timeout-minutes: \d+(\n|$)/.test(suiteStep))
+      problems.push('the suite has no deadline of its own, so a hang can starve the sweep');
   }
   const verdictAt = steps.findIndex((step) =>
-    /node scripts\/beta-harness\/e2e-smoke-verdict\.mjs dist\/e2e\/results\.json --project chromium(\n|$)/.test(
+    /node scripts\/beta-harness\/e2e-smoke-verdict\.mjs dist\/e2e\/results\.json --project chromium --min (1[6-9]|[2-9]\d)(\n|$)/.test(
       step,
     ),
   );
   if (verdictAt < 0 || verdictAt < suite)
-    problems.push('the report is not held to the verdict after the suite');
+    problems.push(
+      'the report is not held to the verdict, with the subset of 16 or more, after the suite',
+    );
   else if (/\n {8}if:/.test(steps[verdictAt])) problems.push('the verdict step is conditional');
   const sweep = steps.find((step) => /e2e-sweep\.mjs/.test(step)) ?? '';
   if (!/\n {8}if: always\(\)/.test(sweep))
@@ -488,8 +515,43 @@ function theWorkflow() {
     ['no staging branches', (t) => t.replace(", 'staging/**']", ']'), /staging\/\*\*/],
     [
       'a write permission',
-      (t) => t.replace('  packages: read\n', '  packages: read\n  pull-requests: write\n'),
+      (t) =>
+        t.replace(
+          'permissions:\n  contents: read\n',
+          'permissions:\n  contents: read\n  pull-requests: write\n',
+        ),
       /write permission/,
+    ],
+    [
+      'packages: read again',
+      (t) =>
+        t.replace(
+          'permissions:\n  contents: read\n',
+          'permissions:\n  contents: read\n  packages: read\n',
+        ),
+      /not contents: read alone/,
+    ],
+    ['a trace', (t) => t.replace(' --trace off', ''), /may write a trace/],
+    [
+      'a trace kept on failure',
+      (t) => t.replace(' --trace off', ' --trace retain-on-failure'),
+      /may write a trace/,
+    ],
+    [
+      'no deadline of its own',
+      (t) => t.replace(/(- name: Run the smoke flows\n) {8}timeout-minutes: \d+\n/, '$1'),
+      /no deadline of its own/,
+    ],
+    [
+      'a smaller subset',
+      (t) => t.replace('--project chromium --min 16', '--project chromium --min 1'),
+      /subset of 16 or more/,
+    ],
+    ['the verdict without --min', (t) => t.replace(' --min 16', ''), /subset of 16 or more/],
+    [
+      'a renamed check',
+      (t) => t.replace('    name: E2E smoke (chromium)', '    name: E2E smoke'),
+      /not named E2E smoke \(chromium\)/,
     ],
     [
       'smoke skipped for its own pull requests too',
@@ -540,7 +602,7 @@ function theWorkflow() {
       'no verdict',
       (t) =>
         t.replace(
-          'node scripts/beta-harness/e2e-smoke-verdict.mjs dist/e2e/results.json --project chromium',
+          'node scripts/beta-harness/e2e-smoke-verdict.mjs dist/e2e/results.json --project chromium --min 16',
           'echo verdict',
         ),
       /not held to the verdict/,
@@ -582,6 +644,18 @@ function theWorkflow() {
   const nightly = readFileSync(NIGHTLY, 'utf8');
   const dispatches = (t) =>
     /matching-refs\/heads\/integration\//.test(t) && /matching-refs\/heads\/staging\//.test(t);
+  const nightlyTraced = (t) =>
+    /npx playwright test [^\n]*--project=\$\{\{ matrix\.project \}\} --trace off\n/.test(t);
+  check(
+    'e2e-nightly.yml writes no trace into its public artifacts',
+    nightlyTraced(nightly),
+    '',
+    false,
+  );
+  check(
+    'refused: e2e-nightly.yml with traces',
+    !nightlyTraced(nightly.replace(' --trace off', '')),
+  );
   check(
     'e2e-nightly.yml dispatches its integration and staging branches',
     dispatches(nightly),

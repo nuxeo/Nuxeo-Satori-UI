@@ -35,10 +35,11 @@
  *   one or reads the Marketplace credentials, and checks a person had to approve before anything
  *   else. Each of those, broken in a copy of the workflow's text, is refused.
  * - **The approval gate** (`app-package-approval.mjs`), run as the workflow runs it with a stand-in
- *   for GitHub's answer: an environment with a team of reviewers, self-review prevented and no
- *   bypass passes. Refused are no environment, another one, one with no reviewer (as GitHub creates
- *   it), an empty list of reviewers, self-review allowed, an administrator bypass, an answer that
- *   says nothing of the bypass, and an answer that is not JSON.
+ *   for GitHub's review history of the run: an approval for `marketplace-preprod` by a person who
+ *   did not start the run passes, alone or among others. Refused are no approval, as an environment
+ *   with no reviewer or an administrator's bypass leaves; an approval for another environment; a
+ *   rejection; an approval by whoever pushed the tag, or re-ran the run; one by a bot, or by someone
+ *   of no known kind; an answer that is not a list, or not JSON; and no run to ask about.
  *
  * Node, git and `unzip`, as the pipeline needs, and no install: it runs in app-packages.yml's check
  * job, which has no node_modules. POSIX only, for the stand-in gh.
@@ -1287,7 +1288,7 @@ function theWorkflow() {
       'no approval check',
       (t) =>
         t.replace(
-          /\n {6}- name: Check a person had to approve this publish\n {8}run: [^\n]*\n/,
+          /\n {6}- name: Check another person approved this run\n {8}run: [^\n]*\n/,
           '\n',
         ),
       /does not check that a person had to approve/,
@@ -1295,18 +1296,15 @@ function theWorkflow() {
     [
       'the approval checked against a stand-in',
       (t) =>
-        t.replace(
-          `run: ${APPROVAL_STEP}`,
-          `run: ${APPROVAL_STEP} --environment-json approved.json`,
-        ),
+        t.replace(`run: ${APPROVAL_STEP}`, `run: ${APPROVAL_STEP} --approvals-json approved.json`),
       /something other than GitHub/,
     ],
     [
       'the approval check skippable',
       (t) =>
         t.replace(
-          '      - name: Check a person had to approve this publish\n',
-          "      - name: Check a person had to approve this publish\n        if: github.run_attempt == '1'\n",
+          '      - name: Check another person approved this run\n',
+          "      - name: Check another person approved this run\n        if: github.run_attempt == '1'\n",
         ),
       /approval check may be skipped/,
     ],
@@ -1342,82 +1340,102 @@ function theWorkflow() {
 }
 
 // ── The approval gate ──────────────────────────────────────────────────────────────────────────
-/** GitHub's answer for an environment, as `GET /repos/{repo}/environments/{name}` gives it. */
-function anEnvironment(overrides = {}) {
+/**
+ * One review of a run, as `GET /repos/{repo}/actions/runs/{run}/approvals` lists it: its state,
+ * the environments it was for, and who gave it. The shape was read from a public run on 28 November
+ * 2026.
+ */
+function aReview(overrides = {}) {
   return {
-    name: 'marketplace-preprod',
-    can_admins_bypass: false,
-    protection_rules: [
-      { type: 'branch_policy' },
-      {
-        type: 'required_reviewers',
-        prevent_self_review: true,
-        reviewers: [{ type: 'Team', reviewer: { slug: 'app-package-approvers' } }],
-      },
-    ],
-    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+    state: 'approved',
+    comment: '',
+    environments: [{ id: 1, name: 'marketplace-preprod' }],
+    user: { login: 'a-reviewer', type: 'User' },
     ...overrides,
   };
 }
 
-function approval(answer) {
-  const file = join(scratch, `environment-${negative + positive}.json`);
+/** The gate, as the workflow runs it, with GitHub's answer stood in for and the run's own names. */
+function approval(answer, env = {}) {
+  const file = join(scratch, `approvals-${negative + positive}.json`);
   writeFileSync(file, typeof answer === 'string' ? answer : JSON.stringify(answer));
   const run = spawnSync(
     process.execPath,
-    [APPROVAL, '--environment', 'marketplace-preprod', '--environment-json', file],
-    { cwd: REPO, encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } },
+    [APPROVAL, '--environment', 'marketplace-preprod', '--approvals-json', file],
+    {
+      cwd: REPO,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_STEP_SUMMARY: '',
+        GITHUB_REPOSITORY: TRUSTED_REPOSITORY,
+        GITHUB_RUN_ID: '1234567890',
+        GITHUB_ACTOR: 'the-tag-pusher',
+        GITHUB_TRIGGERING_ACTOR: 'the-tag-pusher',
+        ...env,
+      },
+    },
   );
   return { status: run.status, out: `${run.stdout}${run.stderr}` };
 }
 
 function theApprovalGate() {
-  const sound = approval(anEnvironment());
+  const sound = approval([aReview()]);
   check(
-    'approval: a team of reviewers, self-review prevented, no bypass, so a person had to approve',
-    sound.status === 0 && /team app-package-approvers/.test(sound.out),
+    'approval: this run approved for marketplace-preprod by a person who did not start it',
+    sound.status === 0 && /approved for marketplace-preprod by a-reviewer/.test(sound.out),
     sound.out,
     false,
   );
-  const open = approval(anEnvironment({ deployment_branch_policy: null }));
+  const amongOthers = approval([
+    aReview({ user: { login: 'release-gate[bot]', type: 'Bot' } }),
+    aReview({ environments: [{ name: 'github-pages' }], user: { login: 'b', type: 'User' } }),
+    aReview({ user: { login: 'the-tag-pusher', type: 'User' } }),
+    aReview(),
+  ]);
   check(
-    'approval: any branch may deploy, which is said and not refused, the workflow holding it to tags',
-    open.status === 0 && /::notice title=Approval gate::/.test(open.out),
-    open.out,
+    "approval: a person's approval among a bot's, another environment's and the pusher's own",
+    amongOthers.status === 0 && /by a-reviewer,/.test(amongOthers.out),
+    amongOthers.out,
     false,
   );
-  const onlyBranches = anEnvironment().protection_rules.filter(
-    (rule) => rule.type !== 'required_reviewers',
-  );
-  for (const [label, answer, reason] of [
-    ['no environment', { message: 'Not Found' }, /does not exist/],
-    ['another environment', anEnvironment({ name: 'github-pages' }), /does not exist/],
+  for (const [label, answer, reason, env] of [
     [
-      'an environment with no reviewer, as GitHub creates one and as it stood on 28 November 2026',
-      anEnvironment({ protection_rules: onlyBranches, can_admins_bypass: true }),
-      /requires no reviewer/,
+      'no approval, as an environment with no reviewer or an administrator bypass leaves',
+      [],
+      /nobody approved this run/,
     ],
     [
-      'an empty list of reviewers',
-      anEnvironment({
-        protection_rules: [
-          { type: 'required_reviewers', prevent_self_review: true, reviewers: [] },
-        ],
-      }),
-      /requires no reviewer/,
+      'an approval for another environment only',
+      [aReview({ environments: [{ name: 'github-pages' }] })],
+      /nobody approved this run/,
+    ],
+    ['a rejection only', [aReview({ state: 'rejected' })], /nobody approved this run/],
+    [
+      'an approval by whoever pushed the tag, as an environment that allows self-review lets them',
+      [aReview({ user: { login: 'The-Tag-Pusher', type: 'User' } })],
+      /only by The-Tag-Pusher \(User\)/,
     ],
     [
-      'self-review allowed',
-      anEnvironment({
-        protection_rules: [{ ...anEnvironment().protection_rules[1], prevent_self_review: false }],
-      }),
-      /does not prevent self-review/,
+      'an approval by whoever re-ran the run',
+      [aReview({ user: { login: 'a-reviewer', type: 'User' } })],
+      /only by a-reviewer/,
+      { GITHUB_TRIGGERING_ACTOR: 'a-reviewer' },
     ],
-    ['an administrator bypass', anEnvironment({ can_admins_bypass: true }), /bypass its rules/],
     [
-      'an answer silent on the bypass',
-      anEnvironment({ can_admins_bypass: undefined }),
-      /bypass its rules/,
+      'an approval by a bot',
+      [aReview({ user: { login: 'release-gate[bot]', type: 'Bot' } })],
+      /only by release-gate\[bot\] \(Bot\)/,
+    ],
+    [
+      'an approval by someone of no known kind',
+      [aReview({ user: { login: 'a-reviewer' } })],
+      /only by a-reviewer \(of no known kind\)/,
+    ],
+    [
+      'an answer that is not a list',
+      { message: 'Not Found' },
+      /is not a list \(GitHub: Not Found\)/,
     ],
     [
       'an answer that is not JSON',
@@ -1425,7 +1443,7 @@ function theApprovalGate() {
       /could not be read, so nothing is published/,
     ],
   ]) {
-    const result = approval(answer);
+    const result = approval(answer, env);
     check(
       `refused, not published: ${label}`,
       result.status === 1 &&
@@ -1434,6 +1452,8 @@ function theApprovalGate() {
       result.out,
     );
   }
+  const usage = approval([aReview()], { GITHUB_RUN_ID: '' });
+  check('refused, exit 2: no run to ask about', usage.status === 2, usage.out);
 }
 
 try {

@@ -1,48 +1,51 @@
 #!/usr/bin/env node
 /**
- * Refuse to publish an app definition package unless a person had to approve it: the check that
- * `app-packages.yml`'s `publish` job runs before anything else (docs/business-apps/package-pipeline.md,
- * section 9.2).
+ * Refuse to publish an app definition package unless a person approved this run: the check that
+ * `app-packages.yml`'s `publish` job runs first (docs/business-apps/package-pipeline.md, 9.2).
  *
  * `publish` names the GitHub environment `marketplace-preprod`, so GitHub holds the job until a
- * reviewer that environment requires approves it. That holds only once an administrator has given
- * the environment its reviewers. Until then GitHub creates the environment the first time a job
- * names it, with no protection rule at all, and the job runs at once: the `environment:` line would
- * read as an approval that never happened. So the job asks GitHub how the environment it waited on
- * is set, and refuses unless:
+ * reviewer that environment requires approves it. That holds only while the environment is set so.
+ * GitHub creates an environment a job names, if it has none of that name, with no protection rule,
+ * and then runs the job at once. An administrator may bypass the rules, and an environment that does
+ * not prevent self-review lets whoever pushed the tag approve it. In each case the `environment:`
+ * line reads as an approval that no one else gave.
  *
- * - it exists, under the name the job names;
- * - it requires reviewers, at least one;
- * - "Prevent self-review" is on, so whoever pushed the tag cannot approve their own publish;
- * - administrators cannot bypass it, so no approval is skipped.
+ * So this asks GitHub not how the environment is set but what happened to this run: the run's review
+ * history, `GET /repos/{repository}/actions/runs/{run}/approvals`. It refuses unless:
  *
- * A deployment policy that lets any branch or tag deploy to it is reported, not refused: the
- * workflow's own condition already lets only an `app-package/*` tag reach `publish`.
+ * - an approval of this run names the environment;
+ * - it was given by a person, not a bot;
+ * - and that person is neither who started the run (`GITHUB_ACTOR`, who pushed the tag) nor who
+ *   started this attempt (`GITHUB_TRIGGERING_ACTOR`, who re-ran it).
  *
- * It reads the public REST API without a token, `GET /repos/{repository}/environments/{name}`,
- * which answers for a public repository, so the job's permissions stay `contents: read`. If GitHub
- * cannot be read, or the repository is private, the answer is a refusal: nothing is published on a
- * gate nobody could see. Unauthenticated reads are limited to 60 an hour per address.
+ * An environment with no reviewer leaves no approval, and neither does an administrator's bypass,
+ * so both are refused whatever the environment's settings say.
+ *
+ * The review history is read from the public REST API without a token, so the job's permissions
+ * stay `contents: read`. It answers for a public repository, 60 times an hour per address. If it
+ * cannot be read, or the repository is private, the answer is a refusal: nothing is published on an
+ * approval nobody could see.
  *
  * It runs unconditionally, with no "was I started directly?" guard: one that misfired would exit 0
  * having checked nothing, and the job publishes on that exit code. Its controls run it as the
- * workflow does, with `--environment-json` in place of GitHub (app-package-signature.selftest.mjs).
+ * workflow does, with `--approvals-json` in place of GitHub (app-package-signature.selftest.mjs).
  *
- * Usage: node scripts/app-package-approval.mjs --environment <name>
- *          [--repository <owner/name>] [--environment-json <file>]
- * Exit: 0 a person had to approve; 1 refused, with each reason; 2 the command was wrong.
+ * Usage: node scripts/app-package-approval.mjs --environment <name> [--approvals-json <file>]
+ *   with GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_ACTOR and GITHUB_TRIGGERING_ACTOR as a run sets them
+ * Exit: 0 a person other than the run's own approved it; 1 refused, with each reason; 2 the command
+ *   or the run's environment was wrong.
  */
 import { appendFileSync, readFileSync } from 'node:fs';
 
 const USAGE =
-  'usage: node scripts/app-package-approval.mjs --environment <name> [--repository <owner/name>] [--environment-json <file>]';
+  'usage: node scripts/app-package-approval.mjs --environment <name> [--approvals-json <file>]';
 
-function parse(argv) {
+function parse(argv, env) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
     const value = argv[index + 1];
-    if (!['--environment', '--repository', '--environment-json'].includes(flag))
+    if (!['--environment', '--approvals-json'].includes(flag))
       return { error: `${flag} is not an option.` };
     if (value === undefined || value === '' || value.startsWith('--'))
       return { error: `${flag} has no value.` };
@@ -50,68 +53,60 @@ function parse(argv) {
     options[flag.slice(2)] = value;
   }
   if (!options.environment) return { error: '--environment is required.' };
-  options.repository ??= process.env.GITHUB_REPOSITORY;
-  if (
-    !options['environment-json'] &&
-    !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(options.repository ?? '')
-  )
-    return { error: '--repository, or GITHUB_REPOSITORY, must name owner/name.' };
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(env.GITHUB_REPOSITORY ?? ''))
+    return { error: 'GITHUB_REPOSITORY must name owner/name.' };
+  if (!/^\d+$/.test(env.GITHUB_RUN_ID ?? '')) return { error: 'GITHUB_RUN_ID must be a run id.' };
+  if (!env.GITHUB_ACTOR) return { error: 'GITHUB_ACTOR must name who started the run.' };
   return { options };
 }
 
-/** Who a required-reviewers rule names, for the log. */
-function reviewersOf(rule) {
-  return (rule.reviewers ?? []).map((entry) =>
-    entry.type === 'Team'
-      ? `team ${entry.reviewer?.slug ?? entry.reviewer?.name ?? '?'}`
-      : `user ${entry.reviewer?.login ?? '?'}`,
+/** Why this run's reviews do not show that a person other than its own approved it. */
+function judge(reviews, { environment, actors }) {
+  if (!Array.isArray(reviews))
+    return {
+      problems: [
+        `GitHub's review history of this run is not a list${reviews?.message ? ` (GitHub: ${reviews.message})` : ''}`,
+      ],
+      approvers: [],
+    };
+  const forHere = reviews.filter(
+    (review) =>
+      Array.isArray(review?.environments) &&
+      review.environments.some((each) => each?.name === environment),
   );
-}
-
-/** What is wrong with the environment as GitHub described it, and what is only worth saying. */
-function judge(environment, name) {
   const problems = [];
-  const notes = [];
-  if (!environment || typeof environment !== 'object' || environment.name !== name) {
+  const approvals = forHere.filter((review) => review.state === 'approved');
+  const approvers = approvals
+    .filter((review) => review.user?.type === 'User' && typeof review.user?.login === 'string')
+    .map((review) => review.user.login)
+    .filter((login) => !actors.some((actor) => actor.toLowerCase() === login.toLowerCase()));
+  if (approvals.length === 0)
     problems.push(
-      `the environment ${name} does not exist${environment?.message ? ` (GitHub: ${environment.message})` : ''}, ` +
-        'so GitHub would create it for this job with no protection rule',
+      `nobody approved this run for ${environment}: the environment requires no reviewer, or an administrator bypassed it`,
     );
-    return { problems, notes, reviewers: [] };
-  }
-  const rules = Array.isArray(environment.protection_rules) ? environment.protection_rules : [];
-  const review = rules.find((rule) => rule?.type === 'required_reviewers');
-  const reviewers = review ? reviewersOf(review) : [];
-  if (!review || reviewers.length === 0)
-    problems.push(`${name} requires no reviewer, so nobody approved this publish`);
-  else if (review.prevent_self_review !== true)
+  else if (approvers.length === 0)
     problems.push(
-      `${name} does not prevent self-review, so whoever pushed the tag could approve their own publish`,
+      `this run was approved for ${environment} only by ${approvals
+        .map(
+          (review) =>
+            `${review.user?.login ?? 'someone unnamed'} (${review.user?.type ?? 'of no known kind'})`,
+        )
+        .join(', ')}: a bot, or whoever started the run, and not another person`,
     );
-  if (environment.can_admins_bypass !== false)
-    problems.push(
-      `${name} lets administrators bypass its rules, so a publish could skip the approval`,
-    );
-  if (!environment.deployment_branch_policy)
-    notes.push(
-      `${name} lets any branch or tag deploy to it; this workflow's own condition lets only an app-package tag reach publish`,
-    );
-  return { problems, notes, reviewers };
+  return { problems, approvers };
 }
 
-async function environmentOf(options) {
-  if (options['environment-json'])
-    return JSON.parse(readFileSync(options['environment-json'], 'utf8'));
-  const url = `https://api.github.com/repos/${options.repository}/environments/${encodeURIComponent(options.environment)}`;
+async function reviewsOf(options, env) {
+  if (options['approvals-json']) return JSON.parse(readFileSync(options['approvals-json'], 'utf8'));
+  const url = `https://api.github.com/repos/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}/approvals`;
   const response = await fetch(url, {
     headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     signal: AbortSignal.timeout(30_000),
   });
-  const body = await response.json().catch(() => ({}));
-  if (response.status === 404) return { message: body.message ?? 'Not Found' };
+  const body = await response.json().catch(() => null);
   if (!response.ok)
     throw new Error(
-      `GitHub answered ${response.status} for ${url}: ${body.message ?? 'no message'}`,
+      `GitHub answered ${response.status} for ${url}: ${body?.message ?? 'no message'}`,
     );
   return body;
 }
@@ -121,34 +116,34 @@ function refuse(lines) {
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
-      `**Not published.** ${lines.join('; ')}. An administrator sets the environment as ` +
-        'docs/business-apps/package-pipeline.md, section 9.2, says.\n',
+      `**Not published.** ${lines.join('; ')}. What an administrator sets is in ` +
+        'docs/business-apps/package-pipeline.md, section 9.2.\n',
     );
   return 1;
 }
 
-async function main(argv) {
-  const { options, error } = parse(argv);
+async function main(argv, env) {
+  const { options, error } = parse(argv, env);
   if (error) {
     console.error(`${error}\n${USAGE}`);
     return 2;
   }
-  let environment;
+  let reviews;
   try {
-    environment = await environmentOf(options);
+    reviews = await reviewsOf(options, env);
   } catch (failure) {
     return refuse([
-      `how ${options.environment} is set could not be read, so nothing is published: ${failure instanceof Error ? failure.message : String(failure)}`,
+      `this run's approvals could not be read, so nothing is published: ${failure instanceof Error ? failure.message : String(failure)}`,
     ]);
   }
-  const { problems, notes, reviewers } = judge(environment, options.environment);
-  for (const note of notes) console.log(`::notice title=Approval gate::${note}`);
+  const actors = [...new Set([env.GITHUB_ACTOR, env.GITHUB_TRIGGERING_ACTOR].filter(Boolean))];
+  const { problems, approvers } = judge(reviews, { environment: options.environment, actors });
   if (problems.length) return refuse(problems);
   console.log(
-    `${options.environment} held this job for an approval: reviewers ${reviewers.join(', ')}, ` +
-      'self-review prevented, no administrator bypass.',
+    `Run ${env.GITHUB_RUN_ID} was approved for ${options.environment} by ${approvers.join(', ')}, ` +
+      `not by ${actors.join(' or ')}, who started it.`,
   );
   return 0;
 }
 
-process.exit(await main(process.argv.slice(2)));
+process.exit(await main(process.argv.slice(2), process.env));

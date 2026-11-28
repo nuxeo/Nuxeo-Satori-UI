@@ -20,7 +20,9 @@ on:
 # One run at a time. Each integration and staging branch queues in a group of its own instead: the
 # scheduled run dispatches all of them at the same moment (job `integration-branches`), and a group
 # keeps only one pending run, so a shared group would cancel all but the last. They are dispatched
-# after `main`'s suite has finished, so they do not overlap it.
+# after `main`'s suite has finished, so they do not overlap it, though they run at the same time as
+# each other, and as any pull request's smoke run (e2e-smoke.yml). Each spec titles what it makes
+# with a random suffix, which keeps their documents apart; the server and the account are shared.
 concurrency:
   group: ${{ (startsWith(github.ref, 'refs/heads/integration/') || startsWith(github.ref, 'refs/heads/staging/')) && format('e2e-nightly-{0}', github.ref) || 'e2e-nightly' }}
   cancel-in-progress: false
@@ -88,14 +90,18 @@ jobs:
           E2E_ALLOWED_HOSTS: localhost:4200
         run: npx tsx scripts/beta-harness/e2e-preflight.mjs
 
+      # `--trace off`: a trace holds the browser context's options, `httpCredentials` and so
+      # NUXEO_PASS among them, in plain text (measured with Playwright 1.63.0 on 28 November 2026),
+      # and this public repository's artifacts can be downloaded by anyone signed in. The suite and
+      # its projects are unchanged; only the artifact a failure leaves is.
       - name: Run the suite (${{ matrix.project }})
         env:
           CI: 'true'
           NUXEO_USER: ${{ secrets.NUXEO_USER }}
           NUXEO_PASS: ${{ secrets.NUXEO_PASS }}
-        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }}
+        run: npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts --project=${{ matrix.project }} --trace off
 
-      # Traces, screenshots and video are retained on failure only (playwright.config.ts).
+      # Screenshots and video are retained on failure only (playwright.config.ts); no trace, above.
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
