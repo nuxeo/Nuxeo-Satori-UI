@@ -78,7 +78,10 @@ const me: RecordedRequest = {
   answeredAs: 'alice',
 };
 
-/** Web UI showing dc:description, and the new app on its document page or on Browse. */
+/**
+ * Web UI showing dc:contributors, and the new app on its document page, whose Properties panel
+ * shows it, or on Browse, whose info panel does not: it shows the last contributor alone.
+ */
 function recorder(
   pages: Readonly<Record<string, 'document' | 'browse'>>,
   identity: readonly string[] = [],
@@ -95,12 +98,12 @@ function recorder(
         app === 'new-app' && options.control?.kind === 'withhold-property'
           ? read(
               document,
-              ['dc:title', 'dc:description'].filter(
+              ['dc:title', 'dc:contributors'].filter(
                 (name) => name !== (options.control as { xpath: string }).xpath,
               ),
             )
           : {
-              ...read(document, ['dc:title', 'dc:description']),
+              ...read(document, ['dc:title', 'dc:contributors']),
               ...(app === 'new-app' && options.control?.kind === 'narrow-schemas'
                 ? { asks: { properties: options.control.schemas } }
                 : {}),
@@ -113,7 +116,7 @@ function recorder(
                 path: '/nuxeo/ui/document/x/nuxeo-x-metadata-layout.html',
                 status: 200,
                 mode: 'metadata',
-                fields: [{ xpath: 'dc:description', conditional: false }],
+                fields: [{ xpath: 'dc:contributors', conditional: false }],
               },
             ]
           : [],
@@ -223,7 +226,7 @@ describe('lab: the command', () => {
     expect(text).toContain(`Document 1 of 2: Note "A note", /ws/note (${NOTE.uid})`);
     expect(text).toContain(' 7  What the server is asked   partial:');
     expect(text).toContain(
-      ' 7  What the server is asked   FAIL\n      - Web UI shows dc:description',
+      ' 7  What the server is asked   FAIL\n      - Web UI shows dc:contributors',
     );
     expect(text).toContain(
       'Lab verdict: 1 of 2 documents with a difference under the request-log rule',
@@ -275,7 +278,7 @@ describe('lab: the command', () => {
   });
 
   it("says, with a control, whether the rule reported the control's own finding, and exits by it", async () => {
-    for (const control of ['withhold-property=dc:description', 'narrow-schemas=dublincore']) {
+    for (const control of ['withhold-property=dc:contributors', 'narrow-schemas=dublincore']) {
       const caught = io();
       expect(await lab([NOTE.uid, '--out', fresh(), '--control', control], caught, deps())).toBe(0);
       expect(caught.printed[0]).toContain(`Control: ${control}`);
@@ -389,7 +392,7 @@ describe('lab: the command', () => {
         deps({ record: notFetching }),
       ),
     ).toBe(1);
-    expect(another.printed[0]).toContain('Web UI shows dc:description');
+    expect(another.printed[0]).toContain('Web UI shows dc:contributors');
     expect(another.printed[0]).toContain('The control was reported on none');
   });
 
@@ -485,7 +488,7 @@ describe('lab: the command', () => {
       ' 6  What people see            partial: On the document given: the values are not compared yet',
     );
     expect(both.printed[0]).toContain(
-      ' 7  What the server is asked   FAIL\n      - document 1: Web UI shows dc:description',
+      ' 7  What the server is asked   FAIL\n      - document 1: Web UI shows dc:contributors',
     );
   });
 });

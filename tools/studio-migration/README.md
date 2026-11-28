@@ -1312,7 +1312,10 @@ the administrator, on a File, a Folder, a Note and a Payers Member:
 
 - **The Folder differs, five times.** Web UI's folder metadata layout, under its Details, shows
   the description, nature, subjects, coverage and expiry date. The new app opens a folder in
-  Browse, whose info panel shows none of them. The other three documents do not differ.
+  Browse, whose info panel showed none of them. The other three documents do not differ.
+  **Fixed** in #804: the info panel shows each of the five for a folderish document when it has a
+  value, nature, subjects and coverage by their vocabulary labels, and `DRAWN_BY_THE_PAGE` lists
+  them. Lab mode has not been run on the server since.
 - **The Member:** Web UI has no layout for Member, as nothing installed gives it one (both answered
   404), so the rule holds none of its properties. Web UI's page still shows its own info rows, of
   state, dates and people, which the rule does not hold yet.
