@@ -546,8 +546,8 @@ reaches only when the integration branch does, and a tag names exactly what is p
   environment first. Not checked.
 - **Who may publish:** whoever may push an `app-package/*` tag starts a run, and a reviewer of
   the `marketplace-preprod` environment, someone else, must approve it before it publishes (section
-  9.2). A ruleset restricts those tags since 28 November 2026, though its pattern may not reach a
-  package's tag (9.2). A signature names the tag's run, not who pushed the tag.
+  9.2). A ruleset for those tags exists since 28 November 2026, but its pattern,
+  `refs/tags/app-package/*`, reaches no package's tag; `refs/tags/app-package/**` would (9.2). A signature names the tag's run, not who pushed the tag.
 - **Promotion to production after a person approves:** proposed in section 9.2; not built. The
   publish to preprod waits for an approval since 28 November 2026. Versions are section 8's.
 - **The allow-list** is the deployment's (decision 3), never in a package's bundle. The workflow
@@ -874,9 +874,9 @@ any approver, a bot or whoever started the run included, 5. The release candidat
 **Not built, and still proposals:**
 
 - any publish to production, and its promotion after a person approves (9.2);
-- a ruleset that certainly reaches a package's tag, `app-package/<name>/<version>`, for who may
-  create one, and that none may be moved or deleted (section 7, and 9.2 for the one set on 28
-  November 2026). Until there is one, whoever can push a tag starts a run the trusted signers accept,
+- a ruleset that reaches a package's tag, `app-package/<name>/<version>`, for who may create one,
+  and that none may be moved or deleted: `refs/tags/app-package/**`, where the one set on 28 November
+  2026 targets `refs/tags/app-package/*` (section 7, and 9.2). Until there is one, whoever can push a tag starts a run the trusted signers accept,
   though it publishes only once another person approves,
   and a signature says that this workflow ran for this tag on this commit, not that the commit was
   reviewed. The certificate names the tag, not its commit: a tag deleted and pushed again on
@@ -931,23 +931,23 @@ by this change:
 - a tag ruleset, "App Packages", active, targets `refs/tags/app-package/*`, restricts creating,
   moving and deleting those tags, and lets the repository's administrators bypass it.
 
-So a run today, if the tag rule lets it reach `publish` at all (below, it likely does not), waits
-for one of the two, and the gate refuses an approval by whichever of them pushed the tag, or an
-administrator's bypass. Not tried: no tag has been pushed.
+So a run today, if the tag rule let it reach `publish` at all (below, it does not), would wait
+for one of the two, and the gate would refuse an approval by whichever of them pushed the tag.
+Not tried: no tag has been pushed.
 
 **What an administrator still sets.** None of it is in a file, and this change set none of it:
 
 1. **The environment,** Settings, Environments, `marketplace-preprod`:
    - **Prevent self-review:** on, so GitHub itself stops a pusher approving, before the gate does.
    - **Allow administrators to bypass configured protection rules:** off, for the same reason.
-   - **Deployment branches and tags:** one tag rule, `app-package/*/*`. GitHub documents that a
-     wildcard in these rules does not match `/`, so the rule there today, `app-package/*`, would
-     match no package's tag, `app-package/<name>/<version>`, and GitHub would refuse the job before
-     it starts. Not tried, since no tag has been pushed.
+   - **Deployment branches and tags:** one tag rule, `app-package/**`. In GitHub's patterns `*`
+     does not match `/`, so the rule there today, `app-package/*`, matches no package's tag,
+     `app-package/<name>/<version>`, and GitHub would refuse the job before it starts; `**` matches
+     across the `/`.
    - **Required reviewers:** a team rather than two people would let an absence not stop a release.
-2. **The tag ruleset,** "App Packages": its target `refs/tags/app-package/**/*`. If `*` there does not
-   match `/` either, which is likely and not tried, `refs/tags/app-package/*` protects no package's
-   tag, and anyone who can push can still create, move or delete one.
+2. **The tag ruleset,** "App Packages": its target `refs/tags/app-package/**`. For the same reason,
+   its target today, `refs/tags/app-package/*`, protects no package's tag, and anyone who can push
+   can still create, move or delete one.
 3. **The Marketplace credentials,** for the approval to guard them too: environment secrets of
    `marketplace-preprod`, by names of their own, which only an approved job there can read, with
    `publish` changed to those names; and `build-marketplace.yml`'s preprod push behind the same
@@ -994,8 +994,8 @@ tag app-package/<name>/<version>
    approved the run (9.2). Who the reviewers are is theirs, with an administrator.
 4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
    preprod's (the name of its production environment is not checked here).
-5. The ruleset for `app-package/*` tags: one exists since 28 November 2026, and 9.2 says why its
-   pattern may protect no package's tag.
+5. The ruleset for `app-package/*` tags: one exists since 28 November 2026, and its target should
+   be `refs/tags/app-package/**`, since `*` does not match `/` (9.2).
 
 ## 10. The upgrade check
 
