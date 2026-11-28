@@ -6,13 +6,12 @@ section 5). A customer keeps all of their configuration in one repository of the
 builds and signs it with this tool, and builds it with an agent through its MCP server, outside this
 repository, with Node alone.
 
-**Published, with the `alpha` tag.** 0.3.0 has been on Nuxeo's npm registry,
-`https://packages.nuxeo.com/repository/npm-public/`, since 28 November 2026, and anyone can read it
-with no token. [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes
+**Published, with the `alpha` tag.** 0.4.0 has been on Nuxeo's npm registry,
+`https://packages.nuxeo.com/repository/npm-public/`, since 28 November 2026, after 0.3.0 the same
+morning, and anyone can read it with no token. [`publish-satori-cli.yml`](../../.github/workflows/publish-satori-cli.yml) publishes
 each version when a person dispatches it ([Publishing it](#publishing-it)). The tool has the `alpha`
 tag and no `latest`, so a command names `@alpha` or an exact version: `npm view @nuxeo/satori-cli`
-without either prints nothing. This folder is 0.4.0, published when a person next dispatches the
-workflow. A version not published yet is built from this repository and run from the folder it is
+without either prints nothing. A version not published yet is built from this repository and run from the folder it is
 built into, or from a tarball `npm pack` makes of that folder. A customer's
 guide, from nothing to a signed release with the published tool, is
 [customer-config-repository.md](../../docs/business-apps/customer-config-repository.md).
@@ -384,6 +383,8 @@ file; its `publish` job, which checks nothing out, publishes that same file alon
 the tool's tarball's and it is in the artifact, with `NPM_PACKAGES_TOKEN`, `--tag alpha`,
 `--ignore-scripts` and Nuxeo's registry, and never `latest`. A workflow can be dispatched only once
 it is on the repository's default branch, `main`.
+
+**0.4.0 was published the same day,** at 10:09 UTC, from the merge of #805, `a2eeada85`. It has 197 files, with the shasum `e3867c1206bc49e40dce4954ede1ee3a3aca9800`, which the registry serves. From the registry, with no token, these then ran: `create`, `npm install`, `agents sync --check`, `validate` and `satori tool --list`.
 
 The first publish, 0.3.0, ran on 28 November 2026, from `staging/enterprise-grade-app`, after a dry
 run of the same commit. Both packed the same tarball, 65 files with the shasum

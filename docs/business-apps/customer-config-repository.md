@@ -5,15 +5,8 @@ configuration, branding, the menu, and the app definitions your users work in, c
 signed with `@nuxeo/satori-cli`, the tool Nuxeo publishes for it. You need nothing of this
 repository: not a clone, not its build, and no token.
 
-This guide is for version 0.4.0. Versions are published with the `alpha` tag: 0.3.0 has been since
-28 November 2026, and 0.4.0 follows when Nuxeo next runs its publish. Until then, `@alpha` installs
-0.3.0, which has none of these:
-
-- `connect`, `tool` and `version`;
-- the Claude app's files, `CLAUDE.md` and `.claude/settings.json`;
-- the reference.
-
-What the tool checks and the files it writes can still change between versions, and each change is
+The tool is version 0.4.0, published with the `alpha` tag on 28 November 2026, after 0.3.0 the
+same morning. `@alpha` installs it. What the tool checks and the files it writes can still change between versions, and each change is
 in its release notes. It has no `latest` tag
 yet, so name `@alpha` or an exact version: `npm view @nuxeo/satori-cli` without either prints
 nothing.

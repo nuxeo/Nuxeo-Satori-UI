@@ -270,7 +270,7 @@ Renovate or Dependabot opens a pull request in the customer's repository, and th
 ### Where the tools stand
 
 `@nuxeo/satori-cli`, [`tools/satori-cli`](../../tools/satori-cli/README.md), is built from this
-repository, and 0.3.0 has been published since 28 November 2026, to
+repository, and 0.4.0 has been published since 28 November 2026, to
 `packages.nuxeo.com/repository/npm-public/` with the `alpha` tag: `publish-satori-cli.yml`
 publishes each version when a person dispatches it. It needs no token to install: it has no
 dependency, and nothing of Hyland's private packages is in it. It runs outside this repository with
@@ -394,7 +394,7 @@ What a customer needs:
    command-line tool that runs outside this repository, so that one config repository holds all
    of a customer's configuration.
 2. **Decide K,** then publish `@nuxeo/satori-cli`, `@nuxeo/satori-mcp` and the reusable workflows
-   (`@nuxeo/satori-cli` 0.3.0, with the MCP server in it, has had the `alpha` tag since
+   (`@nuxeo/satori-cli` 0.4.0, with the MCP server in it, has had the `alpha` tag since
    28 November 2026),
    with `satori create` and the documentation for a customer's own repository. This is what lets a
    customer's AI IDE build their configuration at all.
