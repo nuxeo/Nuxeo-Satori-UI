@@ -391,6 +391,20 @@ console.log('Refused, and not answered');
   );
 }
 {
+  // An operation run on a batch names its record in its body, and is read as any write's.
+  const { result, requests } = await upstreamSaw(() =>
+    call(vehiclePort, 'POST', '/nuxeo/api/v1/upload/batch-1/0/execute/Blob.AttachOnDocument', {
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ params: { document: deal.id, xpath: 'files:files' } }),
+    }),
+  );
+  check(
+    '(negative) an operation run on a batch, naming a stand-in record, is refused, 403, and not sent',
+    result.status === 403 && requests.length === 0,
+    `${result.status} ${requests.length}`,
+  );
+}
+{
   const { result, requests } = await upstreamSaw(() =>
     call(vehiclePort, 'PUT', `/nuxeo/api/v1/id/${deal.id}`, {
       headers: { 'content-type': 'application/json' },

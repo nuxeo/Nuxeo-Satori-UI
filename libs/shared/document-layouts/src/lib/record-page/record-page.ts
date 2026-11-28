@@ -584,8 +584,11 @@ export class RecordPageComponent {
       // An id it gives a `user`, `group`, `vocabulary` or `document-link` widget is a stored value
       // or a literal it chose, which no label changes. A template's text can change with its
       // placeholders' labels; it is a name already, not an id, and only its unlabelled text is
-      // asked for, to no effect.
-      const unlabelled = this.valueContext(document, NO_LABELS, NO_RECORDS);
+      // asked for, to no effect. It is worked out with the linked records read so far, so that a
+      // `core.choose` over a rule that reads one names the value it chooses once that record is
+      // read: until then it chooses neither, as the field shows neither. The records it chooses by
+      // are named by the rule itself, below, so a new read only adds the chosen value's own.
+      const unlabelled = this.valueContext(document, NO_LABELS, this.records());
       const read = new Set<string>();
       for (const field of fieldsOf(layout)) {
         if (field.kind === 'computed') {

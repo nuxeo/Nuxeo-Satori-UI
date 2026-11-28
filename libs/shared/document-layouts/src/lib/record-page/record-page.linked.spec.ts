@@ -143,6 +143,8 @@ const deal = (properties: Record<string, unknown>): NuxeoDocument =>
 describe('RecordPageComponent: a linked record read for a show and a rule', () => {
   let fixture: ComponentFixture<RecordPageComponent>;
   let warnings: string[];
+  /** A user's or group's display name, as the layout service reads one. */
+  let principal: (kind: 'user' | 'group', id: string) => Observable<string | null>;
   /** The linked records' search: each call is one request, with the ids and the schemas asked. */
   let linkedRecords: ReturnType<
     typeof vi.fn<
@@ -180,6 +182,7 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
 
   beforeEach(() => {
     warnings = [];
+    principal = () => of(null);
     linkedRecords = vi.fn(search);
     linkedProperty = vi.fn((_types: readonly string[], show: string) =>
       of(TITLE_PROPERTIES[show] ?? null),
@@ -201,7 +204,7 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
           provide: DocumentLayoutService,
           useValue: {
             vocabularyLabel: () => of(null),
-            principalLabel: () => of(null),
+            principalLabel: (kind: 'user' | 'group', id: string) => principal(kind, id),
             rowPropertiesOf: () => of(new Map()),
             linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
               schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
@@ -512,6 +515,74 @@ describe('RecordPageComponent: a linked record read for a show and a rule', () =
       answer.complete();
       await settle();
       expect(valueOf(root, 'lien')).toBe('Waiting for its release');
+    });
+
+    it('names the person a core.choose over it chooses, once the record is read, and shows them by name', async () => {
+      principal = (kind, id) =>
+        of(kind === 'user' && id === 'bram.vasquez' ? 'Bram Vasquez' : null);
+      const page = {
+        version: 2,
+        cards: [
+          {
+            id: 'deal',
+            fields: [
+              {
+                id: 'clerk',
+                label: 'Clerk',
+                widget: 'user',
+                computed: {
+                  type: 'core.choose',
+                  parameters: [awaitingLien, 'bram.vasquez', 'ines.calloway'],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const root = await render(deal({ 'vdeal:title': TITLE }), page);
+      // The one it chose, by name: never the stored id because the other was looked up instead.
+      expect(valueOf(root, 'clerk')).toBe('Bram Vasquez');
+    });
+
+    it('leaves out a computation, and says why, whose rule reads a property none of its types has', async () => {
+      const page = {
+        version: 2,
+        cards: [
+          {
+            id: 'deal',
+            fields: [
+              'vdeal:number',
+              {
+                id: 'lender',
+                label: 'Lender',
+                computed: {
+                  type: 'core.choose',
+                  parameters: [
+                    {
+                      type: 'app.rules.fieldIn',
+                      parameters: [
+                        { field: 'vdeal:title', types: ['VehicleTitle'], show: 'vtitle:lender' },
+                        'none',
+                      ],
+                    },
+                    'No lender',
+                    'A lender',
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const root = await render(deal({ 'vdeal:title': TITLE }), page);
+      expect(root.querySelector('[data-field="lender"]')).toBeNull();
+      expect(
+        warnings.some((warning) =>
+          warning.includes(
+            "cards[0].fields[1] left out: its rule reads a linked record's property",
+          ),
+        ),
+      ).toBe(true);
     });
 
     it('passes no rule, and says why, over a property none of its types has', async () => {

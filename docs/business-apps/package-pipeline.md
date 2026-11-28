@@ -464,7 +464,9 @@ in with your own account, on the Nuxeo behind the stand-in. `--port` moves the s
     asked, and counts the facets each terms aggregate defines.
 - **Read-only.** Each record's permissions are Read's, so no Edit, tick or capture is offered. A
   write naming a stand-in record, in its address or its body, is refused with HTTP 403, and nothing
-  is sent on. An operation that reads one, such as `Connector.Read`, is not run: HTTP 501. A
+  is sent on. A file sent to the batch upload, `/api/v1/upload/<batch>`, is passed on unread, as a
+  file's bytes name no record; an operation run on a batch, `.../execute/<operation>`, is read as
+  any write is. An operation that reads one, such as `Connector.Read`, is not run: HTTP 501. A
   record's history, comments, tasks and workflows are empty lists, and it has no file.
 - **What it forwards:** everything else, to the Nuxeo behind it: sign-in, `/me`, and the platform's
   own documents, searches and configuration. It changes what the dev server's own proxy changes,
