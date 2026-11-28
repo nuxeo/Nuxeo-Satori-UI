@@ -441,11 +441,14 @@ describe.skipIf(process.platform === 'win32')(
         columns: 'acon:number,dc:title,acon:end',
         sort: 'acon:end',
       });
+      // Its facets, one by the property its aggregate groups by and one by the aggregate's id,
+      // each with its name in labels/en.json: the pipeline holds them to the page provider.
       await appQueueGenerator(tree, {
         package: KIT,
         id: 'open',
         pageProvider: 'acme_open_contracts',
         columns: 'acon:number,dc:title,acon:status',
+        facets: 'acon:status,acon_currency_agg',
       });
       // By hand, one at each place of the registry's that no generator writes, so that the
       // generators' copy of the pipeline's REGISTRY_FILES is held to it at every place.
@@ -454,19 +457,6 @@ describe.skipIf(process.platform === 'win32')(
           `${KIT}/bundle/agentic-ui-config/${file}`,
           `${JSON.stringify(content, null, 2)}\n`,
         );
-      // The facets, by hand, by the aggregates' ids app-model printed, and their labels.
-      const queueFile = `${KIT}/bundle/agentic-ui-config/queues/open.json`;
-      const queue = JSON.parse(tree.read(queueFile, 'utf-8') ?? '{}');
-      queue.facets = [
-        { aggregate: 'acon_status_agg', labelKey: 'acme-desk.facet.status' },
-        { aggregate: 'acon_currency_agg', labelKey: 'acme-desk.facet.currency' },
-      ];
-      tree.write(queueFile, `${JSON.stringify(queue, null, 2)}\n`);
-      const labelsFile = `${KIT}/bundle/agentic-ui-config/labels/en.json`;
-      const english = JSON.parse(tree.read(labelsFile, 'utf-8') ?? '{}');
-      english.labels['acme-desk.facet.status'] = 'Status';
-      english.labels['acme-desk.facet.currency'] = 'Currency';
-      tree.write(labelsFile, `${JSON.stringify(english, null, 2)}\n`);
       byHand('navigation.json', {
         version: 2,
         entries: [{ id: 'active', icon: 'inbox', queue: 'active' }],
@@ -532,6 +522,21 @@ describe.skipIf(process.platform === 'win32')(
         expect(component).toContain(`<file path="${file}" />`);
       expect(run.output).not.toContain('no component contributes the app');
       expect(run.status).toBe(0);
+      // What passed holds the facets app-queue wrote, and their names.
+      const queue = JSON.parse(
+        readFileSync(join(directory, 'bundle/agentic-ui-config/queues/open.json'), 'utf8'),
+      );
+      expect(queue.facets).toEqual([
+        { aggregate: 'acon_status_agg', labelKey: 'acme-desk.facet.acon_status_agg' },
+        { aggregate: 'acon_currency_agg', labelKey: 'acme-desk.facet.acon_currency_agg' },
+      ]);
+      const english = JSON.parse(
+        readFileSync(join(directory, 'bundle/agentic-ui-config/labels/en.json'), 'utf8'),
+      );
+      expect(english.labels).toMatchObject({
+        'acme-desk.facet.acon_status_agg': 'Status',
+        'acme-desk.facet.acon_currency_agg': 'Currency',
+      });
       // The model component is the bundle's, and loaded first.
       expect(readFileSync(join(directory, 'bundle', 'META-INF', 'MANIFEST.MF'), 'utf8')).toContain(
         'Nuxeo-Component: OSGI-INF/acme-demo-model.xml,OSGI-INF/acme-demo-config.xml',

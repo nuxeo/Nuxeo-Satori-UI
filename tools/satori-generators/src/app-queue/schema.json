@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/schema",
   "$id": "SatoriAppQueue",
   "title": "Satori business app queue",
-  "description": "Writes a queue, queues/<id>.json: a page provider's records, with columns, a sort and a page size, and its name in labels/en.json.",
+  "description": "Writes a queue, queues/<id>.json: a page provider's records, with columns, a sort, a page size and facets, and its name and its facets' names in labels/en.json.",
   "type": "object",
   "properties": {
     "package": {
@@ -37,9 +37,13 @@
       "type": "number",
       "description": "Records per page, 1 to 100."
     },
+    "facets": {
+      "type": "string",
+      "description": "The facets that filter the list, separated by commas: each an aggregate the page provider defines, by its id, or by the property it groups by, <prefix>:<name>, such as claim:status for claim_status_agg, as app-model's aggregates are named. A page provider of the package's own is read, and an aggregate it does not define is refused, naming those it does. On the server's page provider an id is written unchecked, and a property is refused: give the id describe_page_provider lists. Each facet's name is a label key, <app>.facet.<aggregate>, with its English text in labels/en.json."
+    },
     "force": {
       "type": "boolean",
-      "description": "Write the queue again if it exists, replacing its page provider and columns, and its sort and page size when given. What else it has is kept: parameters, facets, row and bulk actions, visibleWhen. Its label keeps the text labels/en.json has.",
+      "description": "Write the queue again if it exists, replacing its page provider and columns, and its sort, page size and facets when given. What else it has is kept: parameters, facets when not given, row and bulk actions, visibleWhen, and the widget of a facet on an aggregate given again. Its labels keep the texts labels/en.json has.",
       "default": false
     }
   },

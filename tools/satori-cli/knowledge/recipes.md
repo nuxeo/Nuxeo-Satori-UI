@@ -55,15 +55,24 @@ fields a person must fill.
 
 ## A queue
 
-`apply_generator` `app-queue` with `id`, `pageProvider`, `columns`, `label`, `sort` and `pageSize`.
-It writes no facets.
+`apply_generator` `app-queue` with `id`, `pageProvider`, `columns`, `label`, `sort`, `pageSize`
+and, for a list a person filters, `facets`.
 
-**Facets are a second step.** Read the queue file, then write it whole with `write_package_file`,
-adding `"facets": [{ "aggregate": "<id>", "labelKey": "<key>" }]`, with each text in
-`labels/en.json` in the same `apply_package_changes` call. Each aggregate is one the page
-provider defines: `describe_page_provider` lists them. A stand-in model's are
-`<prefix>_<name>_agg`, such as `claim_status_agg`. Never say a queue has facets until its file
-has them.
+**Facets are the option `facets`:** one string, the aggregates separated by commas, each by its
+id or by the property it groups by. `"facets": "claim:status,claim:priority"` names
+`claim_status_agg` and `claim_priority_agg`, as `app-model` names a stand-in model's,
+`<prefix>_<name>_agg`. It writes each facet, `{ "aggregate": "<id>", "labelKey": "<key>" }`, and
+its text in `labels/en.json`, the property's name made readable; change the text there.
+
+- **A stand-in model's page provider,** the package's own, is read: an aggregate it does not
+  define is refused, and the refusal names those it does.
+- **On the server's page provider,** give the ids `describe_page_provider` lists. Nothing checks
+  them before the queue is drawn, and a property is refused.
+- **On a queue that exists,** `force` with `facets` replaces its facets; `force` without `facets`
+  keeps them.
+
+Never say a queue has facets until its file has them: after the write, read the queue file and
+find its `"facets"`.
 
 ## A home and a menu
 

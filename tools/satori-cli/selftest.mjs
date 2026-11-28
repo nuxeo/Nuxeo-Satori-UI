@@ -2054,6 +2054,63 @@ async function connectAndVersion(satori) {
       goodTheme.output,
     );
   else held++;
+  // satori tool apply_generator, app-queue with facets, on a copy of the facilities kit, whose
+  // stand-in model's page provider defines two aggregates: one it does not define is refused,
+  // naming those it does, with nothing written; the two, by a property and by an id, are written.
+  const facilities = join(repository, 'config-packages', 'facilities-demo');
+  cpSync(join(KITS, 'facilities-demo'), facilities, {
+    recursive: true,
+    filter: (source) => relative(join(KITS, 'facilities-demo'), source) !== 'dist',
+  });
+  const facetedQueue = join(
+    facilities,
+    'bundle',
+    'agentic-ui-config',
+    'queues',
+    'by-priority.json',
+  );
+  const queueWith = (facets) =>
+    tool(
+      'apply_generator',
+      JSON.stringify({
+        package: 'config-packages/facilities-demo',
+        generator: 'app-queue',
+        options: { id: 'by-priority', pageProvider: 'facilities_open_work_orders', facets },
+      }),
+    );
+  const unknownFacet = queueWith('wo:priority,wo_building_agg');
+  if (
+    unknownFacet.status !== 1 ||
+    !unknownFacet.output.includes(
+      'has no aggregate "wo_building_agg": it defines wo_priority_agg (wo:priority), wo_category_agg (wo:category)',
+    ) ||
+    existsSync(facetedQueue)
+  )
+    fail(
+      'satori tool apply_generator app-queue, a facet its page provider does not define',
+      `exit ${unknownFacet.status}, not 1 naming the aggregates it defines, or the queue was written`,
+      unknownFacet.output,
+    );
+  else held++;
+  const faceted = queueWith('wo:priority,wo_category_agg');
+  const facetsWritten = existsSync(facetedQueue)
+    ? JSON.parse(readFileSync(facetedQueue, 'utf8')).facets
+    : undefined;
+  if (
+    faceted.status !== 0 ||
+    JSON.stringify(facetsWritten) !==
+      JSON.stringify([
+        { aggregate: 'wo_priority_agg', labelKey: 'facilities.facet.wo_priority_agg' },
+        { aggregate: 'wo_category_agg', labelKey: 'facilities.facet.wo_category_agg' },
+      ])
+  )
+    fail(
+      'satori tool apply_generator app-queue with facets',
+      `exit ${faceted.status}, facets ${JSON.stringify(facetsWritten)}`,
+      faceted.output,
+    );
+  else held++;
+  rmSync(facilities, { recursive: true, force: true });
 
   // satori version: the three places together, never lower, never from places that disagree.
   const pkg = join(repository, 'config-packages', 'acme-config');
@@ -2539,6 +2596,7 @@ function oneGenerator(tool) {
         pageProvider: 'acme_open_cases',
         columns: 'acmecase:number,dc:title,acmecase:status',
         sort: 'acmecase:opened',
+        facets: 'acmecase:status',
       },
     ],
     [

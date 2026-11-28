@@ -16,6 +16,16 @@ built into, or from a tarball `npm pack` makes of that folder. A customer's
 guide, from nothing to a signed release with the published tool, is
 [customer-config-repository.md](../../docs/business-apps/customer-config-repository.md).
 
+**0.4.1, in this repository and not published yet: a queue's facets.** The generator `app-queue`
+takes `facets`, through `apply_generator` and `satori tool` too: the aggregates the queue filters
+by, separated by commas, each by its id or by the property it groups by, `claim:status` for
+`claim_status_agg`. It writes each facet with its name in `labels/en.json`. On a page provider of
+the package's own, as a stand-in model's is, it refuses an aggregate the page provider does not
+define and names those it does; with `force` it replaces the queue's facets. Until then an agent
+wrote a queue's facets by hand, and in the trial of 28 November 2026 it said a queue had facets
+that its file did not have. The knowledge pack's recipe and worked example, and the app builder
+skill, now give the option. 0.4.0 is still the registry's.
+
 ## The commands
 
 ```bash
@@ -453,9 +463,14 @@ limited to `main` with required reviewers, is the repository's settings to make.
   the server's `release_check`: ready, with the tag and push, held to its own zip as `--previous`,
   and with no tag made; then not ready once that version is tagged, and for a package that does not
   build; and refuses `--out`, no package, and a `--model` that names no file;
-- runs every app generator, in the order a kit is made, through the repository's runner, with Nx's
-  tree and Prettier, and through the bundled one, on the same package, and requires the same bytes;
-  the bundled one given another print width must answer otherwise;
+- runs every app generator, in the order a kit is made, `app-queue` with `facets` among them,
+  through the repository's runner, with Nx's tree and Prettier, and through the bundled one, on the
+  same package, and requires the same bytes; the bundled one given another print width must answer
+  otherwise;
+- through `satori tool`, runs `apply_generator` `app-queue` with `facets` on a copy of the
+  facilities kit: a facet on an aggregate its page provider does not define must be refused,
+  naming the two it does, with nothing written, and those two, given by a property and by an id,
+  written;
 - runs `agents sync` with credentials and an address in the environment, none of which may be in a
   file it writes; again, which must touch no file; with a customer's text around the section, which
   must be kept to the byte, and the entry alone edited, both of which `--check` must see and the
