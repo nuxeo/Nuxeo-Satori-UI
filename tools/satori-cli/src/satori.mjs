@@ -68,6 +68,7 @@ import { unpack } from '../../../scripts/release-candidate-set.mjs';
 import { agentsCommand } from './agents.mjs';
 import { connectCommand } from './connect.mjs';
 import { createCommand } from './create.mjs';
+import { toolCommand } from './tool.mjs';
 import { versionCommand } from './version.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
@@ -106,8 +107,9 @@ const USAGE = `usage: satori <command> [arguments]
   satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json]
       [--tmp <directory>]
       Hold it to the package it was: what a customer may override or name stays.
-  satori model pull --server <address> --out <file>
-      Write a server's content model to a file, reading only, as NUXEO_USER with NUXEO_PASS.
+  satori model pull [--server <address>] --out <file>
+      Write a server's content model to a file, reading only, as NUXEO_USER with NUXEO_PASS;
+      the server is NUXEO_URL's when --server is not given.
   satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
       Scaffold a configuration repository, with a first package that builds, its agent files
       and a workflow that validates, builds and, once trusted-signers.json says who, signs.
@@ -124,6 +126,10 @@ const USAGE = `usage: satori <command> [arguments]
       so that a change installs over the one before it.
   satori mcp [--root <directory>] [--tmp <directory>]
       The Builder MCP server, over stdio, for an AI IDE, in a configuration repository.
+  satori tool --list | satori tool <name> ['<arguments as JSON>']
+      Call one of the MCP server's tools from the command line, the same reads and the same
+      validated writes, where an IDE cannot run the server: such as under a policy that allows
+      only the MCP servers an organisation lists.
   satori sign <zip> --key <file> | --ephemeral-key --signers-out <file> [--commit <sha>] [--out <file>]
   satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>
       Sign a zip with a key you hold, outside the repository; or, in CI, decide whether the run
@@ -150,7 +156,8 @@ const BUILD_USAGE = `usage: satori build <package> [--out <directory>] [options]
 ${BUILD_OPTIONS}`;
 const UPGRADE_USAGE =
   'usage: satori upgrade-check <package> --previous <directory or zip> [--deployment <file>] [--json] [--tmp <directory>]';
-const MODEL_USAGE = 'usage: satori model pull --server <address> --out <file>';
+const MODEL_USAGE =
+  'usage: satori model pull [--server <address>] --out <file>   (--server defaults to $NUXEO_URL/nuxeo)';
 const SIGN_USAGE = [
   'usage: satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]',
   '       satori sign <zip> --keyless --trusted-signers <file> --predicate-out <file>',
@@ -229,6 +236,8 @@ async function dispatch(name, args) {
       return agentsCommand(args, { here: HERE, version: VERSION });
     case 'connect':
       return connectCommand(args);
+    case 'tool':
+      return toolCommand(args, { here: HERE });
     case 'version':
       return versionCommand(args);
     case 'mcp':

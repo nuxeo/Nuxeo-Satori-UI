@@ -31,14 +31,15 @@ When the person asks for records of a type the server does not have (`describe_d
 refuses), say so, and ask whether this is a demo or a prototype on a development server. Only on
 their yes:
 
-1. `./node_modules/.bin/satori model pull --server "$NUXEO_URL/nuxeo" --out config-packages/<name>/content-model.json`,
-   which they approve when Claude asks: the package then holds the server's model and its own;
+1. `./node_modules/.bin/satori model pull --out config-packages/<name>/content-model.json`, the
+   server `NUXEO_URL`'s, which they approve when Claude asks: the package then holds the server's
+   model and its own. If it is refused, stop and ask: never write `content-model.json` yourself;
 2. `apply_generator` `app-model` once per type: `type`, `properties` (each `name`, `name:type` or
    `name=Value|Value`; types are string, long, double, boolean, date, document, checklist and
    complex), `pageProvider` with `where`, `sort` and `aggregates` for the queues and the home.
 
 Never write a type the server already has, and say that a real model comes from Nuxeo Studio and
-replaces the stand-in whole.
+replaces the stand-in whole. `properties` is one string, comma-separated, not a list.
 
 ## A record page
 
@@ -55,7 +56,14 @@ fields a person must fill.
 ## A queue
 
 `apply_generator` `app-queue` with `id`, `pageProvider`, `columns`, `label`, `sort` and `pageSize`.
-Facets need a page provider with aggregates (a stand-in model's `aggregates`, or the server's).
+It writes no facets.
+
+**Facets are a second step.** Read the queue file, then write it whole with `write_package_file`,
+adding `"facets": [{ "aggregate": "<id>", "labelKey": "<key>" }]`, with each text in
+`labels/en.json` in the same `apply_package_changes` call. Each aggregate is one the page
+provider defines: `describe_page_provider` lists them. A stand-in model's are
+`<prefix>_<name>_agg`, such as `claim_status_agg`. Never say a queue has facets until its file
+has them.
 
 ## A home and a menu
 

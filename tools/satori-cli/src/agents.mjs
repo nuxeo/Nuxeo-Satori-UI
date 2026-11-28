@@ -86,10 +86,17 @@ const CLAUDE_SETTINGS = {
     'Bash(./node_modules/.bin/satori upgrade-check *)',
     'Bash(./node_modules/.bin/satori release-check *)',
     'Bash(./node_modules/.bin/satori version *)',
+    // The same tools from the command line, where an organisation's policy blocks the server.
+    'Bash(./node_modules/.bin/satori tool *)',
     'Bash(./node_modules/.bin/satori agents sync *)',
     'Bash(./node_modules/.bin/satori connect --check)',
   ],
-  deny: [`Read(./${LOCAL_SETTINGS})`, `Edit(./${LOCAL_SETTINGS})`],
+  deny: [
+    `Read(./${LOCAL_SETTINGS})`,
+    `Edit(./${LOCAL_SETTINGS})`,
+    // A package's files are written by the validated tools only, never by Claude's own file tools.
+    'Edit(./config-packages/**)',
+  ],
 };
 /** What the server reads, each given to it as a reference to the environment, never a value. */
 export const SERVER_VARIABLES = ['NUXEO_URL', 'NUXEO_USER', 'NUXEO_PASS'];

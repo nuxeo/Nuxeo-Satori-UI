@@ -21,6 +21,21 @@ tool writes it, a recipe for each kind of request, a worked example of a claims 
 the colour tokens, every id the platform registers, and read-only example apps. It is this
 version's, as the checks are.
 
+**When the `nuxeo-satori` tools are not there,** because an organisation's policy allows only the
+MCP servers it lists, or the IDE runs none, call the same tools from the command line. It is the
+same server, with the same reads and the same validated writes:
+
+```bash
+./node_modules/.bin/satori tool --list
+./node_modules/.bin/satori tool describe_document_type '{ "type": "File" }'
+./node_modules/.bin/satori tool write_package_file '{ "package": "config-packages/acme-config", "path": "bundle/agentic-ui-config/bootstrap.json", "content": "..." }'
+```
+
+Each prints the tool's JSON answer. It exits 1 when the tool refused, or the pipeline refused the
+write, and the package is then as it was. Everything below that names a tool means it either way.
+Say to the person, once, that the server is not available to the IDE, and that an administrator
+can allow `nuxeo-satori` for it.
+
 **The customer's configuration is one package,** the one `satori create` wrote in
 `config-packages/`: their branding, what the app shows, and their app definition, together. Add
 to it; do not make another package unless the person asks for one.
@@ -198,8 +213,11 @@ What each writes, and what it leaves to you:
 - **`app-model`** writes a stand-in type, its schema and page providers, for a demo or a
   prototype only. It is refused on a package with no `content-model.json`: the types of a
   customer's server are Studio's. On the person's yes, for a development server, make the package a
-  stand-in model's with `./node_modules/.bin/satori model pull --server "$NUXEO_URL/nuxeo" --out config-packages/<package>/content-model.json`,
-  which they approve when asked, then call `app-model` once a type. Never write a type the server
+  stand-in model's with `./node_modules/.bin/satori model pull --out config-packages/<package>/content-model.json`
+  (the server is `NUXEO_URL`'s), which they approve when asked, then call `app-model` once a type.
+  **If that command is refused, stop and ask the person:** never write `content-model.json`, or any
+  file of a package, yourself, with a file tool, a redirect or `echo`. The settings deny your file
+  tools there, and a model you wrote would hold the package to nothing. Never write a type the server
   has. `knowledge/recipes.md`, "A stand-in model", and `knowledge/payers.md` show it.
 
 Then edit what the generators wrote, with `write_package_file`, as the person asks. Write the whole

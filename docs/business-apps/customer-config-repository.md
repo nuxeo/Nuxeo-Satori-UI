@@ -133,6 +133,16 @@ app's terminal pane will do), in the repository:
 Then reconnect the server in Claude with `/mcp`. `satori connect --check` says whether it still
 answers. Use a development server, never production: what the tools read goes to the agent.
 
+Two things the Claude app needs from you once:
+
+- **Trust the folder** when Claude asks, on first opening it. Until a folder is trusted, Claude
+  ignores its `.claude/settings.json`: the server is not approved, the checks are not allowed, and
+  the skill is not loaded.
+- **If your organisation manages Claude,** its policy may allow only the MCP servers it lists. Claude
+  then says the server `nuxeo-satori` is "blocked by enterprise policy". The agent goes on through
+  the same tools from the command line, `./node_modules/.bin/satori tool`, which the settings allow.
+  An administrator can allow `nuxeo-satori` instead.
+
 ### In a terminal IDE
 
 The MCP entries name `NUXEO_URL`, `NUXEO_USER` and `NUXEO_PASS` as references, which the IDE fills

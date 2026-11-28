@@ -33,7 +33,9 @@ import {
 import { readServerModel, serverBase, withoutCredentials } from '../nuxeo-content-model.mjs';
 
 /**
- * The export, as a command: `argv` is `--server <address> --out <file>`, in either order. `host`
+ * The export, as a command: `argv` is `--server <address> --out <file>`, in either order, or
+ * `--out <file>` alone with `NUXEO_URL` set, its `/nuxeo`, so that the command an agent runs
+ * names no variable, which Claude Code cannot check before it runs. `host`
  * gives `usage`, said with every command-line error, and `validator`, the command that runs the
  * app definition's validator, given `model <file>`.
  */
@@ -47,6 +49,8 @@ export async function modelExportCommand(argv, host) {
     }
     options[key.slice(2)] = value;
   }
+  if (!options.server && process.env.NUXEO_URL)
+    options.server = `${process.env.NUXEO_URL.replace(/\/+$/, '').replace(/\/nuxeo$/, '')}/nuxeo`;
   if (!options.server || !options.out) {
     console.error(host.usage);
     return 2;

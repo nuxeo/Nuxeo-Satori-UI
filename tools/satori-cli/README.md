@@ -25,6 +25,7 @@ satori model pull --server <address> --out <file>
 satori create <directory> --name <name> --owner <prefix> [--title <text>] [--vendor <text>]
 satori agents sync [<directory>] [--check]
 satori connect [<directory>] [--server <origin>] [--user <name>] [--password-stdin] [--check]
+satori tool --list | satori tool <name> ['<arguments as JSON>']
 satori version <package> <x.y.z | patch | minor | major>
 satori mcp [--root <directory>] [--tmp <directory>]
 satori sign <zip> (--key <file> | --ephemeral-key --signers-out <file>) [--commit <sha>] [--out <file>]
@@ -44,6 +45,12 @@ satori release-check <package> [--previous <directory or zip>] [--json] [options
   - It writes them into `.claude/settings.local.json`'s `env` at mode 0600. It refuses unless the
     folder is a git repository that ignores the file and does not track it.
   - It never prints the password. `--check` writes nothing and says whether the server answers.
+- **`tool`** calls one of the MCP server's tools from the command line. It starts `satori mcp`,
+  asks it once over stdio, and prints the answer, so a read is the server's and a write is its
+  validated write. It exits 1 when the tool or the pipeline refused. This is for an IDE that cannot
+  run the server, such as under an organisation's policy that allows only the MCP servers it
+  lists: the Claude Code trial on 28 November 2026 ran under such a policy, and built a whole app
+  through it.
 - **`version`** raises a package's version in `package/package.xml`, the bundle's
   `Bundle-Version` and `app.json`'s `packageVersion` together. It refuses a version that is not
   higher, and a package whose three disagree.

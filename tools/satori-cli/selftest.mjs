@@ -1284,6 +1284,23 @@ async function modelPull(satori, confined) {
   await new Promise((listening) => server.listen(0, '127.0.0.1', listening));
   try {
     const { port } = server.address();
+    // With no --server, the server is NUXEO_URL's: a command an agent runs then holds no variable.
+    const byEnvironment = join(scratch, 'pulled-model-by-environment.json');
+    const pulledByEnvironment = await nodeAsync([satori, 'model', 'pull', '--out', byEnvironment], {
+      env: {
+        ...process.env,
+        NUXEO_USER: user,
+        NUXEO_PASS: secret,
+        NUXEO_URL: `http://127.0.0.1:${server.address().port}`,
+      },
+    });
+    if (pulledByEnvironment.status !== 0 || !existsSync(byEnvironment))
+      fail(
+        'satori model pull, its server from NUXEO_URL',
+        `exit ${pulledByEnvironment.status}`,
+        pulledByEnvironment.output,
+      );
+    else held++;
     const out = join(scratch, 'pulled-model.json');
     const env = { ...process.env, NUXEO_USER: user, NUXEO_PASS: secret };
     const pulled = await nodeAsync(
@@ -1966,6 +1983,77 @@ async function connectAndVersion(satori) {
   } finally {
     server.close();
   }
+
+  // satori tool: the MCP server's tools from the command line, the same reads and validated writes.
+  const tool = (...args) => node([satori, 'tool', ...args], { cwd: repository });
+  const listedTools = tool('--list');
+  let names = [];
+  try {
+    names = JSON.parse(listedTools.output).map(({ name }) => name);
+  } catch {
+    names = [];
+  }
+  if (
+    listedTools.status !== 0 ||
+    !names.includes('read_reference') ||
+    !names.includes('write_package_file')
+  )
+    fail(
+      'satori tool --list',
+      `exit ${listedTools.status}, tools ${names.join(', ') || 'none'}`,
+      listedTools.output,
+    );
+  else held++;
+  const readme = tool('read_reference', '{ "path": "knowledge/README.md" }');
+  if (readme.status !== 0 || !readme.output.includes('Nuxeo Satori, for the agent'))
+    fail('satori tool read_reference', `exit ${readme.status}`, readme.output);
+  else held++;
+  const bootstrapFile = join(
+    repository,
+    'config-packages',
+    'acme-config',
+    'bundle',
+    'agentic-ui-config',
+    'bootstrap.json',
+  );
+  const bootstrapBefore = readFileSync(bootstrapFile, 'utf8');
+  const badTheme = tool(
+    'write_package_file',
+    JSON.stringify({
+      package: 'config-packages/acme-config',
+      path: 'bundle/agentic-ui-config/bootstrap.json',
+      content: JSON.stringify({ themes: [{ id: 'acme', base: 'midnight' }] }),
+    }),
+  );
+  if (
+    badTheme.status !== 1 ||
+    !badTheme.output.includes('is not a theme the application has') ||
+    readFileSync(bootstrapFile, 'utf8') !== bootstrapBefore
+  )
+    fail(
+      'satori tool write_package_file, a theme the pipeline refuses',
+      `exit ${badTheme.status}, or the file changed`,
+      badTheme.output,
+    );
+  else held++;
+  const goodTheme = tool(
+    'write_package_file',
+    JSON.stringify({
+      package: 'config-packages/acme-config',
+      path: 'bundle/agentic-ui-config/bootstrap.json',
+      content: `${JSON.stringify({ branding: { applicationTitle: 'Acme' }, themes: [{ id: 'acme', base: 'nuxeo', tokens: { '--mat-sys-primary': '#0b5fff' } }], defaultThemeId: 'acme' }, null, 2)}\n`,
+    }),
+  );
+  if (
+    goodTheme.status !== 0 ||
+    !readFileSync(bootstrapFile, 'utf8').includes('"defaultThemeId": "acme"')
+  )
+    fail(
+      'satori tool write_package_file, a theme that passes',
+      `exit ${goodTheme.status}`,
+      goodTheme.output,
+    );
+  else held++;
 
   // satori version: the three places together, never lower, never from places that disagree.
   const pkg = join(repository, 'config-packages', 'acme-config');

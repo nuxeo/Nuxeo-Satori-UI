@@ -35,6 +35,9 @@ the file, the place and the reason. A change is done when `validate` passes.
   `satori mcp`. It reads the development server's content model, page providers, workflows,
   vocabularies and operations, and writes a package's file only when the package then passes
   `satori validate`'s steps. Write every package file through it, never with your own file tools.
+  Where the IDE cannot run it, as under a policy that allows only the MCP servers an organisation
+  lists, `./node_modules/.bin/satori tool <name> '<json>'` calls the same tools from the command
+  line, and `satori tool --list` lists them.
 - **Its server and account come from its environment:** `NUXEO_URL`, `NUXEO_USER` and
   `NUXEO_PASS`, exported in the shell a terminal IDE starts from; or, for the Claude app, written by
   a person with `satori connect` into `.claude/settings.local.json`, which git ignores and the
