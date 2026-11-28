@@ -5,13 +5,11 @@ configuration, branding, the menu, and the app definitions your users work in, c
 signed with `@nuxeo/satori-cli`, the tool Nuxeo publishes for it. You need nothing of this
 repository: not a clone, not its build, and no token.
 
-> **Not published yet.** `@nuxeo/satori-cli` reaches the registry the first time Nuxeo runs its
-> publish workflow, `Publish Satori CLI`, by hand, after the pull request that made it publishable
-> is merged. Until then the `npx` command in section 2 answers `404 Not Found`, and the rest of this
-> guide can be followed only from a tarball someone at Nuxeo builds for you (section 9).
-
-The tool is version 0.3.0, published with the `alpha` tag: what it checks and the files it writes
-can still change between versions, and each change is in its release notes.
+The tool is version 0.4.0, published with the `alpha` tag on 28 November 2026, after 0.3.0 the
+same morning. `@alpha` installs it. What the tool checks and the files it writes can still change between versions, and each change is
+in its release notes. It has no `latest` tag
+yet, so name `@alpha` or an exact version: `npm view @nuxeo/satori-cli` without either prints
+nothing.
 
 ## 1. What you need
 
@@ -321,21 +319,22 @@ Renovate or Dependabot can open that pull request for you: `.npmrc` tells them w
 The workflow then holds every package to the new version's checks, and `agents sync --check` fails
 until the agent files are this version's.
 
-## 9. Before the first publish: from a tarball
+## 9. A version not published yet: from a tarball
 
-Until the tool is on the registry, someone at Nuxeo builds its tarball from Nuxeo Satori UI's
-repository, `node tools/satori-cli/build.mjs`, then `npm pack dist/tools/satori-cli`, and gives you
-`nuxeo-satori-cli-0.3.1.tgz`. The same commands then work with the tarball in place of the registry:
+To try a version before it is on the registry, someone at Nuxeo builds its tarball from Nuxeo
+Satori UI's repository, `node tools/satori-cli/build.mjs`, then `npm pack dist/tools/satori-cli`,
+and gives you `nuxeo-satori-cli-<version>.tgz`. The same commands then work with the tarball in
+place of the registry, with `<version>` the tarball's:
 
 ```bash
-npx --package ./nuxeo-satori-cli-0.3.1.tgz satori create acme-satori --name acme-config --owner acme
+npx --package ./nuxeo-satori-cli-<version>.tgz satori create acme-satori --name acme-config --owner acme
 cd acme-satori
-npm install --no-save ../nuxeo-satori-cli-0.3.1.tgz
+npm install --no-save ../nuxeo-satori-cli-<version>.tgz
 ```
 
 `--no-save` keeps the registry's version in `package.json`, so the repository is the one the
-published tool writes, and writes no `package-lock.json`. Until there is one, the workflow's
-`npm ci` refuses to run: run `npm install` once the tool is published, and commit the
+published tool writes, and writes no `package-lock.json`. Until that version is on the registry,
+the workflow's `npm ci` refuses to run: run `npm install` once it is, and commit the
 `package-lock.json` it writes.
 
 ## 10. Not there yet
