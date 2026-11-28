@@ -414,6 +414,43 @@ describe('writePackage, refusing before anything runs', () => {
     ).toContain('is named by no component of the package as its bootstrap fragment');
   });
 
+  it('does not count a fragment inside a comment, however its halves are written', async () => {
+    const COMPONENT = 'bundle/OSGI-INF/contracts-demo-config.xml';
+    const fragment =
+      '<fragment name="contracts-demo" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />';
+    for (const commented of [
+      `<!-- ${fragment} -->`,
+      // Two comments back to back, the fragment in the second.
+      `<!-- first --><!-- ${fragment} -->`,
+      `<!-- unclosed ${fragment}`,
+    ]) {
+      const root = kit('contracts-demo', `commented-${commented.length}`, (at) =>
+        writeFileSync(
+          join(at, ...COMPONENT.split('/')),
+          edited(
+            at,
+            COMPONENT,
+            '<extension target="org.nuxeo.agentic.ui.config" point="configuration">',
+            `<extension target="org.nuxeo.agentic.ui.config" point="configuration">\n    ${commented}`,
+          ),
+        ),
+      );
+      let message = '';
+      try {
+        await writePackage(
+          {
+            package: root,
+            changes: [{ kind: 'write', path: `${CONFIG}/bootstrap.json`, content: '{}' }],
+          },
+          NEVER,
+        );
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message, commented).toContain('is named by no component of the package');
+    }
+  });
+
   it('refuses to remove a file the package does not hold, before the pipeline runs', async () => {
     const root = kit('contracts-demo', 'remove-missing');
     const before = fingerprint(root);

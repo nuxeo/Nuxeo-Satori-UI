@@ -995,7 +995,7 @@ function differences(before: Files, after: Files): FileChange[] {
 function namesFragment(files: Files, src: string, layer: string): boolean {
   for (const [path, data] of files) {
     if (!/^bundle\/OSGI-INF\/[^/]+\.xml$/.test(path)) continue;
-    const xml = data.toString('utf8').replace(/<!--[\s\S]*?-->/g, '');
+    const xml = withoutComments(data.toString('utf8'));
     for (const match of xml.matchAll(/<fragment\b([^>]*)>/g)) {
       const attributes = new Map(
         [...match[1].matchAll(/([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*("([^"]*)"|'([^']*)')/g)].map(
@@ -1012,6 +1012,24 @@ function namesFragment(files: Files, src: string, layer: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * `xml` without its comments, each skipped whole from its `<!--` to the first `-->` after it, and an
+ * unclosed one to the end: a scan rather than a replace, which could leave a `<!--` that two
+ * comments' halves make.
+ */
+function withoutComments(xml: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = xml.indexOf('<!--', at);
+    if (open < 0) return out + xml.slice(at);
+    out += xml.slice(at, open);
+    const close = xml.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    at = close + 3;
+  }
 }
 
 /** A file of the app definition is a JSON object of version 2; any other file is not held to it. */
