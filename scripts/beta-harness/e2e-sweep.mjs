@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Trash what one CI run of the e2e suite left on the shared Nuxeo: every live document whose title
- * starts with the run's prefix (`E2E_RUN_PREFIX`, `e2e-run-prefix.mjs`).
+ * starts with the run's prefix (`E2E_RUN_PREFIX`, `apps/nuxeo-ui-e2e/src/run-prefix.mjs`).
  *
  * The smoke specs delete their own documents in `afterEach`. This runs after them, `if: always()`,
  * for what they could not: a run cancelled half way, a spec that died between creating a document
@@ -19,7 +19,11 @@
  * Usage: E2E_RUN_PREFIX=e2e-pr1-2-1- npx tsx scripts/beta-harness/e2e-sweep.mjs
  * Exit: 0 nothing left; 1 a document could not be trashed, or some remain; 2 a precondition.
  */
-import { leftoverQuery, runPrefix, RUN_PREFIX_ENV } from './e2e-run-prefix.mjs';
+import {
+  leftoverQuery,
+  runPrefix,
+  RUN_PREFIX_ENV,
+} from '../../apps/nuxeo-ui-e2e/src/run-prefix.mjs';
 
 const BASE = process.env['E2E_BASE_URL'] ?? 'http://localhost:4200';
 const PAGE_SIZE = 100;

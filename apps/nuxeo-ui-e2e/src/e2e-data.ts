@@ -1,8 +1,8 @@
 import { type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
-import { runPrefix } from '../../../scripts/beta-harness/e2e-run-prefix.mjs';
 import { expect } from './fixtures';
+import { runPrefix } from './run-prefix.mjs';
 
 /**
  * Documents the write-path specs create for themselves, so they never depend on one instance's
@@ -64,7 +64,7 @@ export async function removeDoc(api: APIRequestContext, uid: string): Promise<vo
 
 /**
  * A title no other run uses: the run's prefix when CI gives one (`E2E_RUN_PREFIX`, read by
- * `scripts/beta-harness/e2e-run-prefix.mjs`), then `prefix`, then a random suffix. The pull request
+ * `run-prefix.mjs`), then `prefix`, then a random suffix. The pull request
  * smoke run sets the run prefix, so everything it made can be found and trashed at the end
  * (`scripts/beta-harness/e2e-sweep.mjs`) even when a spec never reached its own cleanup. A
  * malformed run prefix throws here, before anything is written.

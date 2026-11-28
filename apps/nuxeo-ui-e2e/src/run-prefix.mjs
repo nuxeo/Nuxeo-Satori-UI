@@ -6,7 +6,11 @@
  * (`uniqueTitle` in `apps/nuxeo-ui-e2e/src/e2e-data.ts`) and delete it in their own `afterEach`. The
  * prefix adds two things: a document is named for the run that made it, so a leftover can be traced
  * to its run, and the run can find everything it made, whatever happened to its specs, and trash it
- * at the end (`e2e-sweep.mjs`).
+ * at the end (`scripts/beta-harness/e2e-sweep.mjs`).
+ *
+ * Here, in the suite, rather than beside the sweep in `scripts/`: the specs import it, and a spec may
+ * import only its own project's files, while a script may import anything. One module, so the
+ * titles and the sweep cannot disagree on its shape.
  *
  * The sweep queries `dc:title LIKE '<prefix>%'`, so the prefix is what stands between it and every
  * document on the server. Hence the shape is strict rather than merely non-empty: lower-case letters,

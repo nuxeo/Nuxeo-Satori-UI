@@ -3,7 +3,7 @@
  * Controls for the pull request smoke run (`.github/workflows/e2e-smoke.yml`): the parts of it that
  * decide whether a green check means the flows ran, each seen refusing what it must refuse.
  *
- * - **The run prefix** (`e2e-run-prefix.mjs`), which is all that stands between the sweep's
+ * - **The run prefix** (`apps/nuxeo-ui-e2e/src/run-prefix.mjs`), which is all that stands between the sweep's
  *   `LIKE '<prefix>%'` and every document on the shared server: a sound one is taken; an empty one,
  *   a bare `e2e-`, a short one, one with a quote, `%`, `_`, a capital or no trailing hyphen is
  *   refused; with none set the suite runs as before; a malformed one throws before anything is
@@ -37,7 +37,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { leftoverQuery, runPrefix, runPrefixProblem } from './e2e-run-prefix.mjs';
+import {
+  leftoverQuery,
+  runPrefix,
+  runPrefixProblem,
+} from '../../apps/nuxeo-ui-e2e/src/run-prefix.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VERDICT = join(REPO, 'scripts', 'beta-harness', 'e2e-smoke-verdict.mjs');
