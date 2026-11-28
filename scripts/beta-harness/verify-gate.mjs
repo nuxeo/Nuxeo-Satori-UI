@@ -426,6 +426,43 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/spec-typecheck.mjs'],
   },
+  // The same hole as `spec-types`, one tsconfig over. `tsconfig.lib.json` excludes
+  // `**/*.stories.ts` as explicitly as it excludes `*.spec.ts`, and `tsconfig.spec.json` includes
+  // only specs, so between them `typecheck` and `spec-types` read no stories file; `lint` catches
+  // no type error and Vitest never loads one. The only tsconfig that includes them is
+  // `.storybook/tsconfig.json`, and until this gate nothing ran `tsc` against it — 65 stories
+  // files checked by nothing. They are not decoration: their `play` functions carry the
+  // assertions `scripts/storybook-interactions.mjs` runs as a gate, so a type error there is an
+  // assertion that may never have asserted.
+  //
+  // Landed green, unlike `spec-types`: both configs were already clean, so this is prevention
+  // rather than a backlog. Demonstrated on a one-character change to a story arg — `lint`,
+  // `test`, `typecheck` and `spec-types` all exited 0 and this gate named the file and line.
+  {
+    id: 'stories-types',
+    platformSensitive: true,
+    label: 'Storybook stories typecheck',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/stories-typecheck.mjs'],
+    // It reports how many stories files it covered and that none were left uncovered; a count
+    // that silently drops to zero is the way this gate would stop meaning anything.
+    echoOnPass: true,
+  },
+  // Its negative controls. Registered beside it because the gate is green against this repository
+  // and always was — it closed no backlog, so a real run cannot distinguish it from a check that
+  // returns pass unconditionally. Each control builds a miniature repository under `os.tmpdir()`,
+  // so nothing tracked is touched. Four are negative, including the two that pin safety properties
+  // a passing run can never exercise here: no config found at all must fail, and a stories file
+  // that no discovered config covers must fail rather than be quietly skipped.
+  {
+    id: 'stories-types-selftest',
+    platformSensitive: true,
+    label: 'Storybook stories typecheck controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/stories-typecheck.selftest.mjs'],
+    // Which controls are negative is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // Last, because it reads the artifact `build` produces. It asks the only question
   // the other gates cannot: what does a customer actually receive? Phase 3's spike
   // found adf-hx importing a test library from its shipped runtime bundle, which put
