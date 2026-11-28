@@ -200,7 +200,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-209 exported symbol(s).
+214 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -751,6 +751,10 @@ class NxsButtonComponent {
     readonly label: InputSignal<string>;
     readonly type: InputSignal<NxsButtonType>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabledInteractive: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly ariaPressed: InputSignal<boolean | null>;
+    readonly describedBy: InputSignal<string | null>;
+    readonly controlId: InputSignal<string>;
     readonly press: import("@angular/core").OutputEmitterRef<void>;
     protected readonly name: import("@angular/core").Signal<string>;
     protected pressed(): void;
@@ -778,6 +782,26 @@ class NxsButtonComponent {
     };
     "disabled": {
     "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabledInteractive": {
+    "alias": "disabledInteractive";
+    "required": false;
+    "isSignal": true;
+    };
+    "ariaPressed": {
+    "alias": "ariaPressed";
+    "required": false;
+    "isSignal": true;
+    };
+    "describedBy": {
+    "alias": "describedBy";
+    "required": false;
+    "isSignal": true;
+    };
+    "controlId": {
+    "alias": "controlId";
     "required": false;
     "isSignal": true;
     };
@@ -1262,6 +1286,18 @@ class NxsDetailsPanelComponent {
 interface NxsDetailsPanelTab {
     readonly id: string;
     readonly label: string;
+    }
+}
+class NxsDialogComponent {
+    readonly heading: import("@angular/core").InputSignal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDialogComponent, "nxs-dialog", never, {
+    "heading": {
+    "alias": "heading";
+    "required": true;
+    "isSignal": true;
+    };
+    }, {}, never, ["*", "[nxsDialogActions]"], true, never>;
     }
 }
 class NxsDocTypeIconComponent {
@@ -3012,12 +3048,57 @@ class NxsTabBodyDirective {
     static ɵdir: i0.ɵɵDirectiveDeclaration<NxsTabBodyDirective, "ng-template[nxsTabBody]", never, {}, {}, never, never, true, never>;
     }
 }
+class NxsTableComponent {
+    readonly caption: import("@angular/core").InputSignal<string>;
+    readonly hideCaption: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly columns: import("@angular/core").InputSignal<readonly string[]>;
+    readonly rows: import("@angular/core").InputSignal<readonly NxsTableRow[]>;
+    readonly emptyText: import("@angular/core").InputSignal<string>;
+    readonly dense: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    protected readonly columnIds: import("@angular/core").Signal<string[]>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTableComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTableComponent, "nxs-table", never, {
+    "caption": {
+    "alias": "caption";
+    "required": true;
+    "isSignal": true;
+    };
+    "hideCaption": {
+    "alias": "hideCaption";
+    "required": false;
+    "isSignal": true;
+    };
+    "columns": {
+    "alias": "columns";
+    "required": true;
+    "isSignal": true;
+    };
+    "rows": {
+    "alias": "rows";
+    "required": false;
+    "isSignal": true;
+    };
+    "emptyText": {
+    "alias": "emptyText";
+    "required": false;
+    "isSignal": true;
+    };
+    "dense": {
+    "alias": "dense";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+type NxsTableRow = readonly string[];
 class NxsTabsComponent implements NxsTabsInputs {
     readonly tabs: import("@angular/core").InputSignal<readonly NxsTab[]>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly selectedIndex: import("@angular/core").ModelSignal<number>;
     readonly body: import("@angular/core").InputSignal<TemplateRef<NxsTabBodyContext> | null>;
     readonly selectHandler: import("@angular/core").InputSignal<((tab: NxsTab, index: number) => void) | null>;
+    readonly lazy: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly selectedTabChange: import("@angular/core").OutputEmitterRef<NxsTab>;
     protected readonly bodyTemplate: import("@angular/core").Signal<TemplateRef<NxsTabBodyContext> | null>;
     protected readonly ownLabel: import("@angular/core").Signal<string>;
@@ -3047,6 +3128,11 @@ class NxsTabsComponent implements NxsTabsInputs {
     };
     "selectHandler": {
     "alias": "selectHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "lazy": {
+    "alias": "lazy";
     "required": false;
     "isSignal": true;
     };
@@ -3281,8 +3367,18 @@ class NxsTextFieldComponent {
     readonly autocomplete: InputSignal<string>;
     readonly appearance: InputSignal<NxsFieldAppearance>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly type: InputSignal<NxsTextFieldType>;
+    readonly min: InputSignal<number | null>;
+    readonly max: InputSignal<number | null>;
+    readonly step: InputSignal<number | null>;
+    readonly maxLength: InputSignal<number | null>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly hint: InputSignal<string>;
+    readonly hintAlign: InputSignal<NxsTextFieldHintAlign>;
+    readonly controlId: InputSignal<string>;
     readonly valueCommit: import("@angular/core").OutputEmitterRef<string>;
     protected readonly listId: string;
+    constructor();
     protected typed(event: Event): void;
     protected committed(event: Event): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsTextFieldComponent, never>;
@@ -3332,12 +3428,59 @@ class NxsTextFieldComponent {
     "required": false;
     "isSignal": true;
     };
+    "type": {
+    "alias": "type";
+    "required": false;
+    "isSignal": true;
+    };
+    "min": {
+    "alias": "min";
+    "required": false;
+    "isSignal": true;
+    };
+    "max": {
+    "alias": "max";
+    "required": false;
+    "isSignal": true;
+    };
+    "step": {
+    "alias": "step";
+    "required": false;
+    "isSignal": true;
+    };
+    "maxLength": {
+    "alias": "maxLength";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "hintAlign": {
+    "alias": "hintAlign";
+    "required": false;
+    "isSignal": true;
+    };
+    "controlId": {
+    "alias": "controlId";
+    "required": false;
+    "isSignal": true;
+    };
     }, {
     "value": "valueChange";
     "valueCommit": "valueCommit";
     }, never, never, true, never>;
     }
 }
+type NxsTextFieldHintAlign = 'end' | 'start';
+type NxsTextFieldType = 'number' | 'text';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;

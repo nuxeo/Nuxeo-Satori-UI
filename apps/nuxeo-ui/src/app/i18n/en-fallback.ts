@@ -285,8 +285,12 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.picture.label': 'Picture',
   'document-layouts.picture.loading': 'Loading the picture',
   'document-layouts.picture.views': 'Views of the picture',
+  // The new pin's two places and its note: nxs-text-field labels, each its field's whole name.
+  'document-layouts.review.across': 'Across (%)',
+  'document-layouts.review.down': 'Down (%)',
   'document-layouts.review.keys': 'Use the arrow keys to move between the pins.',
   'document-layouts.review.loading': 'Loading the review',
+  'document-layouts.review.note': 'Note',
   'document-layouts.review.on-picture': 'Pins on the picture',
   // A pin's name on the picture, given through `instant()` rather than the pipe, so the rule above
   // does not find it in a template; it is a control's whole name all the same.
@@ -303,6 +307,9 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.share-links.loading': 'Loading the share links',
   'document-layouts.share-links.original': 'Original file',
   'document-layouts.share-links.revoke.label': 'Revoke link {{label}}',
+  // The timeline's filter, an nxs-select: its name, and its first choice.
+  'document-layouts.timeline.all': 'All events',
+  'document-layouts.timeline.filter': 'Show',
   'document-layouts.timeline.loading': 'Loading the history',
   // The still-preparing banner's one button: its text is its name.
   'document-layouts.video.check-again': 'Check again',

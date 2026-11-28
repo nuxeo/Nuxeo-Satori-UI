@@ -23,6 +23,7 @@ belongs to this ticket.
 | Banner                         | `TrashedDocument`                                                         | Enter/Space invoke the corresponding action; Tab reaches the next action                                                               |
 | Breadcrumbs                    | `FollowingALink`                                                          | Enter follows the router link and produces the expected URL                                                                            |
 | Button                         | `KeyboardContract`                                                        | Enter and Space each emit `press` once and keep the focus; Tab skips a disabled button, which does not press                           |
+| Button, disabled but reachable | `DisabledInteractive`                                                     | Tab still reaches it, it says `aria-disabled="true"`, and Enter does not press                                                         |
 | Card                           | `KeyboardContract`                                                        | Space selects without opening; Enter/Space on the title open the card                                                                  |
 | Checkbox                       | `KeyboardContract`                                                        | Space asks for the other state and emits it; with no owner setting it, the box stays as it was and keeps the focus                     |
 | Chip set                       | `KeyboardContract`                                                        | Enter/Space emit the chip whose remove button was focused; Tab reaches the next button                                                 |
@@ -51,7 +52,9 @@ belongs to this ticket.
 | Tag editor                     | `Editable`                                                                | ArrowDown changes the active option; Enter saves the selected suggestion instead of the prefix; new tags remain normalized             |
 | Tag input                      | `KeyboardContract`                                                        | ArrowDown activates distinct options; Enter adds the selected suggestion instead of the prefix and returns to an empty focused input   |
 | Text field                     | `KeyboardContract`                                                        | Typing changes `value`; leaving the field with Tab emits `valueCommit` once, with the text                                             |
+| Text field, number             | `NumberField`                                                             | It is a `spinbutton` held by `min` and `max`; ArrowUp steps its value by `step`                                                        |
 | Tabs                           | `SelectedFromTheKeyboard`                                                 | Arrows move focus, Enter activates and emits the exact tab, Home/End jump, and `aria-controls` identifies its panel                    |
+| Tabs, lazy                     | `Lazy`                                                                    | Only the selected tab's body is drawn; choosing another draws its body and drops the one left                                          |
 | Toast                          | `WithAnAction`                                                            | Keyboard activation invokes Undo and dismisses the toast                                                                               |
 | Upload queue                   | `Refused`                                                                 | Enter requests retry for a failed upload                                                                                               |
 | User/group picker              | `MultipleFromTheKeyboard`                                                 | Keyboard choice, chip navigation/removal, focus recovery and required validation                                                       |
@@ -66,7 +69,10 @@ asserts what choosing does — the value it emits — and the layout designer's 
 (`libs/features/layout-designer/src/lib/control-contract.testing.ts`) asserts that each of its
 pickers is that native element, named and in order.
 
-The confirm dialog's `Asking` story asserts that keyboard confirmation closes with `true`.
+The confirm dialog's `Asking` story asserts that keyboard confirmation closes with `true`. The
+dialog frame's (`nxs-dialog`) `Asking` story asserts that Tab goes from Cancel to the action and
+that Enter presses it once; the frame draws Material's title, content and actions and takes no
+focus of its own.
 `KeyboardCancellation` in change-password, create-version, delete-permission, drive,
 folder-picker, group-form, rename, share-external, update-permission and user-form asserts the
 close request made by the Cancel/Close button. These previews deliberately stay mounted:
@@ -76,8 +82,9 @@ handling by `MatDialog`, or restoration after destruction.
 
 ## 2. Components without their own keyboard action
 
-Avatar, document-type icon, domain hint, icon, spinner, status tag, tag and thumbnail are
-presentation components. Empty state and folder header project actions supplied by the host;
+Avatar, document-type icon, domain hint, icon, spinner, status tag, table, tag and thumbnail are
+presentation components. The table's `Default` and `Empty` stories assert its caption, its column
+headers and its empty row; it takes no focus, so it has no keyboard action of its own. Empty state and folder header project actions supplied by the host;
 their own API has no keyboard action. The registered-primitives story is a composition of
 the same components, not another implementation. Do not invent key handlers or focus stops
 for these components to satisfy a coverage count. Their rendered semantics remain observable
