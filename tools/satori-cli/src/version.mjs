@@ -73,7 +73,7 @@ export function versionCommand(args) {
   if (app !== null) {
     let value;
     try {
-      value = JSON.parse(app.replace(/^﻿/, ''));
+      value = JSON.parse(app.replace(/^\uFEFF/, ''));
     } catch (error) {
       return refuse(`${APP} is not JSON (${error.message}).`);
     }

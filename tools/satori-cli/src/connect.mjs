@@ -162,7 +162,7 @@ function readSettings(file) {
   if (entry === undefined) return { value: {} };
   if (!entry.isFile()) return { problem: `${LOCAL_SETTINGS} is not a file.` };
   try {
-    const value = JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, ''));
+    const value = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
     if (value === null || typeof value !== 'object' || Array.isArray(value))
       return { problem: `${LOCAL_SETTINGS} is not a JSON object.` };
     if (
