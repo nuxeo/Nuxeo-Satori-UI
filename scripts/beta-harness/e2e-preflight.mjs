@@ -122,9 +122,25 @@ try {
  * leaves the path in place and fails at launch, and "the folder exists" is not the claim. A
  * missing engine otherwise surfaces as every WebKit spec failing, which reads as seventeen
  * product defects rather than one absent browser.
+ *
+ * `E2E_BROWSERS` narrows the engines to those a run uses, for the pull request smoke run, which is
+ * Chromium alone (`.github/workflows/e2e-smoke.yml`). Unset, it is both, as before. A name that is
+ * not one of the suite's engines is a problem, not ignored: a typo must not launch nothing and pass.
  */
+const ENGINES = ['chromium', 'webkit'];
+const requestedEngines = (process.env['E2E_BROWSERS'] ?? ENGINES.join(','))
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+const unknownEngines = requestedEngines.filter((name) => !ENGINES.includes(name));
+if (requestedEngines.length === 0 || unknownEngines.length > 0) {
+  problems.push(
+    `E2E_BROWSERS names ${unknownEngines.length ? unknownEngines.map((n) => `"${n}"`).join(', ') : 'no engine'}; ` +
+      `the suite's engines are ${ENGINES.join(' and ')}.`,
+  );
+}
 if (playwright) {
-  for (const name of ['chromium', 'webkit']) {
+  for (const name of requestedEngines.filter((each) => ENGINES.includes(each))) {
     try {
       const browser = await playwright[name].launch();
       const v = browser.version();

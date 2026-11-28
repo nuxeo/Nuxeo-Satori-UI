@@ -3,6 +3,7 @@ import { type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
 import { removeDoc, uniqueTitle } from './e2e-data';
+import { SMOKE } from './smoke';
 
 /**
  * Collections — the detail page reads a real collection. The collection is created by the spec
@@ -25,7 +26,7 @@ test.afterAll(async () => {
 });
 
 test.describe('collections', () => {
-  test('shows the collection it was opened for', async ({ signedIn: page }) => {
+  test('shows the collection it was opened for', SMOKE, async ({ signedIn: page }) => {
     const name = uniqueTitle('e2e-collection');
     const created = await api.post('/nuxeo/api/v1/automation/Collection.Create', {
       data: { params: { name, description: 'created by the E2E suite' }, context: {} },

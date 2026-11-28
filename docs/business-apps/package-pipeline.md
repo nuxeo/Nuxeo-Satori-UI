@@ -8,7 +8,10 @@ Status: built on 22 November 2026, and not yet run in full. The checks run on ev
 signing and publishing run only for a tag, and no tag has been pushed yet. Versions were added on
 23 November 2026 (section 8). Signatures were built on 26 November 2026, with their verification
 before a publish, in the release candidate and at install (section 9); the workflow has signed no
-package yet, and promotion after a person approves is still a proposal.
+package yet. Since 28 November 2026 a publish to preprod waits for a person to approve it, in the
+GitHub environment `marketplace-preprod`, and refuses unless that environment requires one (section
+9.2). Its reviewers and the tag ruleset are an administrator's to set, and none is set yet, so today
+nothing would publish. Promotion to production is still a proposal.
 The upgrade check, phase 10's offline half of "an upgrade that keeps every configuration", was
 added on 25 November 2026 (section 10); its server-side half is not built.
 
@@ -22,6 +25,10 @@ added on 25 November 2026 (section 10); its server-side half is not built.
   keyless, through Sigstore with the run's GitHub identity, and published only once its signature
   verifies against the trusted signers, as the release candidate and an administrator verify it
   (section 9).
+- **Published only once a person approves.** The job that publishes waits in the GitHub
+  environment `marketplace-preprod` for one of its reviewers, and refuses to publish when the
+  environment does not require one, lets the tag's pusher approve, or lets an administrator skip
+  the approval (section 9.2).
 - **A package's own code never runs where the secrets are.** The jobs that sign and publish only
   check, sign, verify and publish the zip the first job built; only the one that signs has an
   identity, and only the one that publishes a secret.
@@ -439,9 +446,10 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
    request's check refuses less.
 2. Tag the merged commit `app-package/<name>/<version>`, and push the tag.
 3. The workflow checks and builds the package again at that commit, held to its last release,
-   signs the zip, verifies the signature and publishes it, with what changed since in the run's
-   summary.
-4. Anyone can check the signature before installing it, with the GitHub CLI signed in, which reads
+   signs the zip and verifies the signature, with what changed since in the run's summary.
+4. A reviewer of the `marketplace-preprod` environment, someone other than whoever pushed the tag,
+   approves the run's `Publish to preprod` job, and it publishes (section 9.2).
+5. Anyone can check the signature before installing it, with the GitHub CLI signed in, which reads
    the repository's attestations (section 9.1):
 
    ```bash
@@ -468,10 +476,12 @@ reaches only when the integration branch does, and a tag names exactly what is p
   tag has been pushed (section 9).
 - **The first publish of a new package name** may need it registered on Nuxeo Connect's staging
   environment first. Not checked.
-- **Who may publish:** anyone who can push a tag. A ruleset can restrict `app-package/*` tags, and
-  none does yet. A signature names the tag's run, not who pushed the tag.
-- **Promotion to production after a person approves:** proposed in section 9, a GitHub
-  environment with required reviewers; not built. Versions are section 8's.
+- **Who may publish:** anyone who can push a tag starts a run, and a reviewer of the
+  `marketplace-preprod` environment must approve it before it publishes (section 9.2). A ruleset
+  can restrict `app-package/*` tags, and none does yet; what it would set is in 9.2. A signature
+  names the tag's run, not who pushed the tag.
+- **Promotion to production after a person approves:** proposed in section 9.2; not built. The
+  publish to preprod waits for an approval since 28 November 2026. Versions are section 8's.
 - **The allow-list** is the deployment's (decision 3), never in a package's bundle. The workflow
   passes a kit's `deployment/build-allow-list.json` with `--allow-list` when the kit has one,
   which today only the Payers kit does; a kit without one is built with none, and every operation
@@ -612,11 +622,13 @@ learns that a version must move only from the pipeline.
 
 ## 9. Signatures and promotion after approval
 
-Status: signing and its verification built on 26 November 2026; promotion after a person approves
-(9.2) is still a proposal. **Not yet run on a tag:** no `app-package/*` tag has been pushed, so the
-workflow has signed no package, and the verification of a keyless signature has run only against a
-stand-in for `gh` in the controls, never on a bundle Sigstore issued. The first tag is its first
-real run. No key, tag, secret, environment or ruleset was created, and nothing was published.
+Status: signing and its verification built on 26 November 2026; a publish to preprod waits for a
+person's approval since 28 November 2026 (9.2), and promotion to production is still a proposal.
+**Not yet run on a tag:** no `app-package/*` tag has been pushed, so the workflow has signed and
+published no package, the verification of a keyless signature has run only against a stand-in for
+`gh` in the controls, never on a bundle Sigstore issued, and no job has waited in the environment.
+The first tag is its first real run. This repository's changes created no key, tag, secret,
+environment or ruleset, and published nothing.
 
 ### 9.1 Signing
 
@@ -703,8 +715,9 @@ check    builds and verifies the zip, its checksum and its changelog, and upload
 sign     contents: read, id-token: write, attestations: write, and no secret: checks the
          checksum; ci-plan decides; actions/attest signs the statement, and
          attest-build-provenance attests the build as before; verifies the signature; uploads it
-publish  contents: read, and the Marketplace credentials; only when sign signed: checks the
-         checksum, verifies the signature, publishes to preprod
+publish  environment marketplace-preprod, contents: read, and the Marketplace credentials; only
+         when sign signed, and once a reviewer approves: checks that a person had to approve,
+         checks the checksum, verifies the signature, publishes to preprod
 ```
 
 - **The skip logic, `ci-plan`.** It signs only a tag build of the package the tag names, on
@@ -753,7 +766,18 @@ its own reason, and the sound package passes:
   a tag of another version.
 - **The workflow:** only `sign` has an identity, its signing steps run only when `ci-plan` said so,
   `publish` runs only when `sign` signed, verifying before it publishes, and each verification pins
-  the tag's name and version. Each, broken in a copy of the workflow's text, is refused.
+  the tag's name and version. `publish` waits in `marketplace-preprod`, by that fixed name, and is
+  the only job that names an environment or reads the Marketplace credentials; its first step after
+  the checkout checks that a person had to approve, unconditionally, against GitHub and not a
+  stand-in. Each, broken in a copy of the workflow's text, is refused: publish in no environment, in
+  another, or in one an input names; the environment on `sign`; the credentials read by `check`; and
+  the approval check removed, given a stand-in, made skippable, or moved after the publish.
+- **The approval gate,** `app-package-approval.mjs`, with GitHub's answer stood in for by a file: an
+  environment with a team of reviewers, self-review prevented and no administrator bypass passes,
+  and one that lets any branch deploy passes with a notice. Refused, with nothing published: no
+  environment, another environment, one with no reviewer, as GitHub creates one and as
+  `marketplace-preprod` stood on 28 November 2026, an empty list of reviewers, self-review allowed,
+  an administrator bypass, an answer silent on the bypass, and an answer that is not JSON.
 
 Each check was also seen failing from the other side, on 26 November 2026: the verifier broken in
 place one way at a time, the controls run, and the verifier put back. Not comparing the digest
@@ -762,7 +786,10 @@ signature's bytes, 2; not holding the file name, 1, or the version expected, 1; 
 certificate's identity, 5, or the source commit, 4; not holding the predicate's tag, 1; taking
 gh's refusal as a pass, 6; not refusing a missing signature, 1; not reading `package.xml`, 1;
 taking any PEM for a public key, 1; passing JSON lines on any line, 2; and in `ci-plan`, not
-checking the identity, the runner or the signer, 1 each. The release candidate's, in section 11.
+checking the identity, the runner or the signer, 1 each. On 28 November 2026 the same for the
+approval: the workflow's check not requiring the environment failed 3 controls; the gate taking
+self-review and an administrator bypass, 3; and taking an empty list of reviewers, 1. The release
+candidate's, in section 11.
 
 **Departures from the proposal:**
 
@@ -778,9 +805,10 @@ checking the identity, the runner or the signer, 1 each. The release candidate's
 
 **Not built, and still proposals:**
 
-- promotion after a person approves, and any publish to production (9.2);
+- any publish to production, and its promotion after a person approves (9.2);
 - a ruleset for who may create `app-package/*` tags, and that none may be moved or deleted
-  (section 7). Until there is one, whoever can push a tag starts a run the trusted signers accept,
+  (section 7), which 9.2 says how to set. Until there is one, whoever can push a tag starts a run
+  the trusted signers accept, though it publishes only once a reviewer approves,
   and a signature says that this workflow ran for this tag on this commit, not that the commit was
   reviewed. The certificate names the tag, not its commit: a tag deleted and pushed again on
   another commit signs a second zip of the same version, which a publish and an administrator's
@@ -794,27 +822,73 @@ checking the identity, the runner or the signer, 1 each. The release candidate's
 - Nuxeo's package manager, or the app registry, checking a signature on the server;
 - a verification offline with `--trusted-root`, which has not been tried.
 
-### 9.2 Promotion after a person approves: a proposal
+### 9.2 Promotion after a person approves
 
-Proposed: **build once, publish to preprod on the tag, and promote the same bytes to production
-once a named person approves, in a GitHub environment.** Not built.
+**Built for preprod on 28 November 2026: a publish waits for a person.**
+[`app-packages.yml`](../../.github/workflows/app-packages.yml)'s `publish` job names the GitHub
+environment `marketplace-preprod`, by a fixed name and never an expression, so GitHub holds the job,
+before its first step and before it can read a secret, until a reviewer the environment requires
+approves the run. Then its first step after the checkout,
+[`app-package-approval.mjs`](../../scripts/app-package-approval.mjs), reads from GitHub's public API,
+without a token, how the environment it waited in is set, and refuses, publishing nothing, unless the
+environment:
+
+- requires reviewers, at least one;
+- prevents self-review, so whoever pushed the tag cannot approve their own publish;
+- lets no administrator bypass it, so no approval is skipped.
+
+A deployment rule that lets any branch or tag deploy is reported, not refused, since the workflow's
+own condition lets only an `app-package/*` tag reach `publish`. The permissions did not move: `sign`
+keeps `contents: read`, `id-token: write` and `attestations: write` and names no environment, and
+`publish` keeps `contents: read`. The API is read without a token so that it stays so: it answers for
+a public repository, 60 times an hour per address, and an answer that cannot be read, or a
+repository made private, is a refusal.
+
+**What the workflow does until an administrator sets the environment.** A job that names an
+environment GitHub does not have creates it, with no protection rule, and runs at once. Without its
+first step, the first tag would publish straight away, with an `environment:` line reading as an
+approval nobody gave. With it, `publish` refuses, with "Not published" and the reasons in the run's
+annotations and summary, and nothing reaches preprod. As read from the API on 28 November 2026,
+`marketplace-preprod` exists, created that day and not by this change, with one deployment rule, the
+tag pattern `app-package/*`, no required reviewer, and administrators allowed to bypass it. So a tag
+pushed today would be signed, and `publish` would refuse for two reasons.
+
+**What an administrator sets.** None of it is in a file, and this change set none of it:
+
+1. **The environment,** Settings, Environments, `marketplace-preprod`:
+   - **Required reviewers:** the people or a team who may release a package, a team rather than one
+     person, so an absence does not stop every release.
+   - **Prevent self-review:** on.
+   - **Allow administrators to bypass configured protection rules:** off.
+   - **Deployment branches and tags:** selected branches and tags, with one tag rule,
+     `app-package/*/*`. GitHub documents that a wildcard in these rules does not match `/`, so the
+     rule there today, `app-package/*`, would match no package's tag, `app-package/<name>/<version>`,
+     and GitHub would refuse the job before it starts. Not tried, since no tag has been pushed.
+   - **Environment secrets:** `CONNECT_PREPROD_USERNAME` and `CONNECT_PREPROD_PASSWORD`, moved here
+     from the repository's secrets, which are then deleted, so that only an approved job in this
+     environment can read them. The workflow reads them the same way either way.
+2. **The tag ruleset,** Settings, Rules, Rulesets, a new tag ruleset, active, targeting
+   `refs/tags/app-package/**/*`: restrict creations, with the people or team who may start a release
+   allowed to bypass, restrict updates, and restrict deletions. So nobody else starts the chain, and a
+   tag is never moved to another commit, or deleted and pushed again on one.
+
+**Production: still a proposal, not built.** Build once, publish to preprod on the tag, and promote
+the same bytes to production once a named person approves, in an environment of its own.
 
 ```text
 tag app-package/<name>/<version>
   check    builds and verifies the zip, its checksum and its changelog, and uploads them
   sign     signs the zip, and verifies the signature (9.1)
-  publish  verifies the signature, publishes to preprod (9.1)
+  publish  environment marketplace-preprod: waits for an approval, verifies the signature,
+           publishes to preprod (built)
   promote  environment app-packages-production: waits for an approval, then takes the
            same artifact, checks the checksum and verifies the signature, publishes to production
 ```
 
-- **The approval is a GitHub environment,** say `app-packages-production`, with required
-  reviewers, a team rather than one person, and "Prevent self-review" on, so whoever pushed the
-  tag cannot approve it; and with its deployments limited to `app-package/*` tags, so no branch can
-  reach it.
+- **The approval is a GitHub environment,** say `app-packages-production`, set as
+  `marketplace-preprod` is above, with the same check as its first step.
 - **Its secrets are its own.** The production Marketplace credentials would be environment
-  secrets of `app-packages-production`, which a job reads only once approved. Today's
-  `CONNECT_PREPROD_*` would move to an `app-packages-preprod` environment the same way.
+  secrets of `app-packages-production`, which a job reads only once approved.
 - **What the approver sees,** in the run's summary: the changelog since the last release (section
   8), the part the version needed and the part it raised, the zip's digest, its signature, and
   the preprod install to try. Approving says that these bytes, tried in preprod, go to production.
@@ -823,9 +897,6 @@ tag app-package/<name>/<version>
   artifact is kept 30 days (`retention-days`), so the two must stay aligned.
 - **The record:** GitHub keeps each deployment, who approved it and when; the tag names the
   commit, and the signature the package, its version, its digest, the commit and the run.
-- **Who may start it:** a ruleset restricting who may create `app-package/*` tags (section 7
-  notes that none does). Without one, anyone who can push starts the chain, and the approval still
-  stops it short of production.
 - **Rolling back** is publishing a higher version with the earlier content: a version is never
   published twice. Removing what a version added is a breaking change, and section 8 asks for its
   raise.
@@ -838,9 +909,11 @@ tag app-package/<name>/<version>
 2. Whether installs check the signature, and where. The administrator's guide says how, before
    `mp-install`, and the release candidate does given `--signatures`; nothing on a server enforces it.
 3. The environments' names, their reviewers, and whether preprod also waits for an approval.
+   Acted on: preprod waits, in `marketplace-preprod`, and refuses to publish until that environment
+   requires a reviewer (9.2). Who the reviewers are is still theirs, with an administrator.
 4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
    preprod's (the name of its production environment is not checked here).
-5. The ruleset for `app-package/*` tags.
+5. The ruleset for `app-package/*` tags, which 9.2 says how to set. Not created.
 
 ## 10. The upgrade check
 

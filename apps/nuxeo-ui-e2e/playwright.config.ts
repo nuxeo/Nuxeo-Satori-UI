@@ -24,8 +24,9 @@ import { nuxeoCredentials } from './src/nuxeo-credentials';
  *
  * It is a **phase gate** instead, run against the local stack via `npm run beta:e2e`, and
  * `scripts/beta-harness/e2e-preflight.mjs` refuses to report a pass when the stack is
- * absent rather than passing vacuously. That this does not run on every PR is a real
- * limitation, recorded in `.ai/state/phases.json` rather than glossed.
+ * absent rather than passing vacuously. In CI it runs against a hosted Nuxeo instead: the
+ * `@smoke` subset on every pull request (`.github/workflows/e2e-smoke.yml`, `src/smoke.ts`), and
+ * the whole suite nightly (`e2e-nightly.yml`).
  *
  * ## Authentication
  *

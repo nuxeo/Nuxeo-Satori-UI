@@ -173,7 +173,18 @@ arguments.
 - An agreement with the Beta team on the Beta phases still in progress, configuration and the
   registry, which the engines grow from.
 - The current app's end-to-end flows as a required check on every pull request, so business apps
-  work cannot change the current app unnoticed.
+  work cannot change the current app unnoticed. The check is built,
+  [`e2e-smoke.yml`](../../.github/workflows/e2e-smoke.yml): on every pull request into `main`,
+  `integration/**` and `staging/**`, the suite's `@smoke` tests run on Chromium against the hosted
+  Nuxeo the nightly run uses. They sign in, browse, open a document, search, trash and restore a
+  document, open a collection, and list tasks and administration;
+  [`smoke.ts`](../../apps/nuxeo-ui-e2e/src/smoke.ts) says which and why. One run at a time, each
+  run's documents named for it and trashed at the end. A pull request without the secrets, a fork's
+  or Dependabot's, is skipped with a notice, never passed. The nightly still runs the whole suite on
+  Chromium and WebKit, and now on the staging branches too. **Not yet required:** a check is
+  required when a branch protection rule or a ruleset on the target branch names it, an
+  administrator's setting that no file in this repository makes, and none names it yet. Until one
+  does, a red smoke run is seen on the pull request but does not stop its merge.
 - A CODEOWNERS file naming the owners of `nuxeo-agentic-core` and of each new library.
 - The new library boundaries (`scope:engine`, `scope:module`, `scope:experience`) in
   `eslint.config.mjs`, with a test that a forbidden import fails.
@@ -311,7 +322,13 @@ faxes wait for capture, in phase 7.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.
   Versions are built ([package-pipeline.md](package-pipeline.md), section 8): a version that did
   not move as far as the changes need is refused, and each build writes what changed. Signatures
-  and promotion are a proposal there, section 9, for the user to decide.
+  are built, keyless, and verified before a publish (section 9.1). Promotion after a person
+  approves is built for preprod (section 9.2): the publish waits in the GitHub environment
+  `marketplace-preprod` for one of its reviewers, and refuses to publish unless that environment
+  requires one, prevents self-review and lets no administrator bypass it. Its reviewers, its tag
+  rule and the ruleset for `app-package/*` tags are an administrator's to set, and none is set yet,
+  so until they are, nothing publishes. Promotion to production is still a proposal there, and no
+  tag has been pushed, so none of it has run on a real package.
 
 **Demo:**
 

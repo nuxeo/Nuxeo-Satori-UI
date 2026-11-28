@@ -31,7 +31,14 @@
  *   on a tag naming another package, it refuses.
  * - **The workflow:** only the `sign` job holds an OIDC identity, its signing steps run only when
  *   `ci-plan` said so, and `publish` runs only when the zip was signed, with the verification before
- *   the publish. Each of those, broken in a copy of the workflow's text, is refused.
+ *   the publish. `publish` waits in the `marketplace-preprod` environment, the only job that names
+ *   one or reads the Marketplace credentials, and checks a person had to approve before anything
+ *   else. Each of those, broken in a copy of the workflow's text, is refused.
+ * - **The approval gate** (`app-package-approval.mjs`), run as the workflow runs it with a stand-in
+ *   for GitHub's answer: an environment with a team of reviewers, self-review prevented and no
+ *   bypass passes. Refused are no environment, another one, one with no reviewer (as GitHub creates
+ *   it), an empty list of reviewers, self-review allowed, an administrator bypass, an answer that
+ *   says nothing of the bypass, and an answer that is not JSON.
  *
  * Node, git and `unzip`, as the pipeline needs, and no install: it runs in app-packages.yml's check
  * job, which has no node_modules. POSIX only, for the stand-in gh.
@@ -74,6 +81,8 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(REPO, 'scripts', 'app-package-signature.mjs');
 const KIT = join(REPO, 'business-apps', 'packages', 'contracts-demo');
 const WORKFLOW = join(REPO, '.github', 'workflows', 'app-packages.yml');
+const APPROVAL = join(REPO, 'scripts', 'app-package-approval.mjs');
+const APPROVAL_STEP = 'node scripts/app-package-approval.mjs --environment marketplace-preprod';
 const TRUSTED_REPOSITORY = 'nuxeo/Nuxeo-Satori-UI';
 const TRUSTED_WORKFLOW = '.github/workflows/app-packages.yml';
 const COMMIT = 'c0ffee0000000000000000000000000000c0ffee';
@@ -1141,6 +1150,32 @@ function workflowProblems(text) {
   if (nos < 0) problems.push('publish does not publish');
   if (verify < 0 || verify > nos)
     problems.push('publish does not verify the signature before it publishes');
+  // The approval: publish waits in the one environment, by a name no input can change, and its
+  // first act is to check that waiting meant a person had to approve.
+  if (!publish.some((line) => line === '    environment: marketplace-preprod'))
+    problems.push('publish does not wait in the marketplace-preprod environment for an approval');
+  for (const [name, lines] of jobs)
+    if (name !== 'publish' && lines.some((line) => /^ {4}environment:/.test(line)))
+      problems.push(`the job ${name} names an environment, which only publish does`);
+  for (const [name, lines] of jobs)
+    if (name !== 'publish' && lines.some((line) => /secrets\.CONNECT_/.test(line)))
+      problems.push(`the job ${name} reads the Marketplace credentials, which only publish does`);
+  const approval = publishSteps.findIndex((step) => step.includes(APPROVAL_STEP));
+  const firstSecret = publishSteps.findIndex((step) => /secrets\./.test(step));
+  if (approval < 0) problems.push('publish does not check that a person had to approve');
+  else {
+    const step = publishSteps[approval];
+    if (!new RegExp(`\\n {8}run: ${APPROVAL_STEP}$`).test(step))
+      problems.push('publish checks the approval against something other than GitHub');
+    if (/\n {8}if:|continue-on-error/.test(step))
+      problems.push('the approval check may be skipped');
+    if (
+      approval > publishSteps.findIndex((each) => /uses: actions\/download-artifact@/.test(each)) ||
+      (firstSecret >= 0 && approval > firstSecret) ||
+      approval > nos
+    )
+      problems.push('publish checks the approval after it has begun');
+  }
   for (const [job, steps] of [
     ['sign', signSteps],
     ['publish', publishSteps],
@@ -1208,6 +1243,84 @@ function theWorkflow() {
       /publish verifies without pinning the tag's name and version/,
     ],
     [
+      'publish not waiting in an environment',
+      (t) => t.replace(/\n {4}environment: marketplace-preprod\n/, '\n'),
+      /does not wait in the marketplace-preprod environment/,
+    ],
+    [
+      'publish waiting in another environment',
+      (t) =>
+        t.replace(
+          '    environment: marketplace-preprod',
+          '    environment: marketplace-preprod-open',
+        ),
+      /does not wait in the marketplace-preprod environment/,
+    ],
+    [
+      'an environment an input names',
+      (t) =>
+        t.replace(
+          '    environment: marketplace-preprod',
+          '    environment: ${{ github.event.inputs.environment }}',
+        ),
+      /does not wait in the marketplace-preprod environment/,
+    ],
+    [
+      'the environment on sign',
+      (t) =>
+        t.replace(
+          /(\n {2}sign:\n(?: {4}[^\n]*\n)*? {4}runs-on: ubuntu-latest\n)/,
+          '$1    environment: marketplace-preprod\n',
+        ),
+      /the job sign names an environment/,
+    ],
+    [
+      'the credentials read by the check job',
+      (t) =>
+        t.replace(
+          /(\n {2}check:\n(?: {4}[^\n]*\n)*? {4}runs-on: ubuntu-latest\n)/,
+          '$1    env:\n      LEAK: ${{ secrets.CONNECT_PREPROD_PASSWORD }}\n',
+        ),
+      /the job check reads the Marketplace credentials/,
+    ],
+    [
+      'no approval check',
+      (t) =>
+        t.replace(
+          /\n {6}- name: Check a person had to approve this publish\n {8}run: [^\n]*\n/,
+          '\n',
+        ),
+      /does not check that a person had to approve/,
+    ],
+    [
+      'the approval checked against a stand-in',
+      (t) =>
+        t.replace(
+          `run: ${APPROVAL_STEP}`,
+          `run: ${APPROVAL_STEP} --environment-json approved.json`,
+        ),
+      /something other than GitHub/,
+    ],
+    [
+      'the approval check skippable',
+      (t) =>
+        t.replace(
+          '      - name: Check a person had to approve this publish\n',
+          "      - name: Check a person had to approve this publish\n        if: github.run_attempt == '1'\n",
+        ),
+      /approval check may be skipped/,
+    ],
+    [
+      'the approval checked after the publish',
+      (t) => {
+        const { jobs } = jobsOf(t);
+        const steps = stepsOf(jobs.get('publish'));
+        const gate = steps.find((step) => step.includes(APPROVAL_STEP));
+        return `${t.replace(`${gate}\n`, '').replace(/\n$/, '')}\n\n${gate}\n`;
+      },
+      /checks the approval after it has begun/,
+    ],
+    [
       'every job given an identity',
       (t) =>
         t.replace(
@@ -1228,6 +1341,101 @@ function theWorkflow() {
   }
 }
 
+// ── The approval gate ──────────────────────────────────────────────────────────────────────────
+/** GitHub's answer for an environment, as `GET /repos/{repo}/environments/{name}` gives it. */
+function anEnvironment(overrides = {}) {
+  return {
+    name: 'marketplace-preprod',
+    can_admins_bypass: false,
+    protection_rules: [
+      { type: 'branch_policy' },
+      {
+        type: 'required_reviewers',
+        prevent_self_review: true,
+        reviewers: [{ type: 'Team', reviewer: { slug: 'app-package-approvers' } }],
+      },
+    ],
+    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+    ...overrides,
+  };
+}
+
+function approval(answer) {
+  const file = join(scratch, `environment-${negative + positive}.json`);
+  writeFileSync(file, typeof answer === 'string' ? answer : JSON.stringify(answer));
+  const run = spawnSync(
+    process.execPath,
+    [APPROVAL, '--environment', 'marketplace-preprod', '--environment-json', file],
+    { cwd: REPO, encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } },
+  );
+  return { status: run.status, out: `${run.stdout}${run.stderr}` };
+}
+
+function theApprovalGate() {
+  const sound = approval(anEnvironment());
+  check(
+    'approval: a team of reviewers, self-review prevented, no bypass, so a person had to approve',
+    sound.status === 0 && /team app-package-approvers/.test(sound.out),
+    sound.out,
+    false,
+  );
+  const open = approval(anEnvironment({ deployment_branch_policy: null }));
+  check(
+    'approval: any branch may deploy, which is said and not refused, the workflow holding it to tags',
+    open.status === 0 && /::notice title=Approval gate::/.test(open.out),
+    open.out,
+    false,
+  );
+  const onlyBranches = anEnvironment().protection_rules.filter(
+    (rule) => rule.type !== 'required_reviewers',
+  );
+  for (const [label, answer, reason] of [
+    ['no environment', { message: 'Not Found' }, /does not exist/],
+    ['another environment', anEnvironment({ name: 'github-pages' }), /does not exist/],
+    [
+      'an environment with no reviewer, as GitHub creates one and as it stood on 28 November 2026',
+      anEnvironment({ protection_rules: onlyBranches, can_admins_bypass: true }),
+      /requires no reviewer/,
+    ],
+    [
+      'an empty list of reviewers',
+      anEnvironment({
+        protection_rules: [
+          { type: 'required_reviewers', prevent_self_review: true, reviewers: [] },
+        ],
+      }),
+      /requires no reviewer/,
+    ],
+    [
+      'self-review allowed',
+      anEnvironment({
+        protection_rules: [{ ...anEnvironment().protection_rules[1], prevent_self_review: false }],
+      }),
+      /does not prevent self-review/,
+    ],
+    ['an administrator bypass', anEnvironment({ can_admins_bypass: true }), /bypass its rules/],
+    [
+      'an answer silent on the bypass',
+      anEnvironment({ can_admins_bypass: undefined }),
+      /bypass its rules/,
+    ],
+    [
+      'an answer that is not JSON',
+      '<html>rate limited</html>',
+      /could not be read, so nothing is published/,
+    ],
+  ]) {
+    const result = approval(answer);
+    check(
+      `refused, not published: ${label}`,
+      result.status === 1 &&
+        reason.test(result.out) &&
+        /::error title=Not published::/.test(result.out),
+      result.out,
+    );
+  }
+}
+
 try {
   const current = built('current');
   const next = built('next', nextVersion(current.version));
@@ -1236,6 +1444,7 @@ try {
   keylessSignatures(current, next);
   theCiPlan(current);
   theWorkflow();
+  theApprovalGate();
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

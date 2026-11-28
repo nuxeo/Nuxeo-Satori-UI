@@ -1,5 +1,6 @@
 import { expect, newNuxeoApiContext, nuxeoCredentials, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
+import { SMOKE } from './smoke';
 
 /**
  * Tasks — the list agrees with the repository about how many tasks the user has. Both branches
@@ -17,7 +18,7 @@ test.afterAll(async () => {
 });
 
 test.describe('tasks', () => {
-  test('lists the pending tasks the repository reports', async ({ signedIn: page }) => {
+  test('lists the pending tasks the repository reports', SMOKE, async ({ signedIn: page }) => {
     // The same query the app makes (`TaskService.getUserTasks`): scoped to the user, page of 50.
     // The unscoped `/task` returns tasks the drawer deliberately does not list.
     const response = await api.get('/nuxeo/api/v1/task', {

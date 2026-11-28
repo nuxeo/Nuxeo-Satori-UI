@@ -1,6 +1,7 @@
 import { expect, expectSurfaceWithData, test } from './fixtures';
 import { type Page, type Request } from '@playwright/test';
 import { nuxeoCredentials } from './nuxeo-credentials';
+import { SMOKE } from './smoke';
 
 /**
  * Search — and the guard for the injection defect once found in the retired POC's search.
@@ -115,7 +116,7 @@ async function describeSearch(request: Request): Promise<Omit<SentSearch, 'label
 }
 
 test.describe('search', () => {
-  test('one Enter sends one search', async ({ signedIn: page }) => {
+  test('one Enter sends one search', SMOKE, async ({ signedIn: page }) => {
     const sent = await searchesSentFor(page, 'contract');
     expect(
       sent.map((s) => s.label),
@@ -124,7 +125,7 @@ test.describe('search', () => {
     expect(sent[0].params.get('ecm_fulltext')).toBe('contract');
   });
 
-  test('returns results from the index', async ({ signedIn: page }) => {
+  test('returns results from the index', SMOKE, async ({ signedIn: page }) => {
     await page.goto('/#/search', { waitUntil: 'networkidle' });
 
     await expectSurfaceWithData(page, 'lib-search', /\d+\s+results?\b/);
@@ -300,30 +301,34 @@ function expectWholeTermInALiteral(sent: SentSearch, term: string) {
 }
 
 test.describe('NXQL injection guard', () => {
-  test('an apostrophe travels as data and Nuxeo accepts the query', async ({ signedIn: page }) => {
-    for (const sent of await searchesSentFor(page, "O'Brien")) {
-      if (sent.endpoint === 'page-provider') {
-        expectBoundVerbatim(sent, "O'Brien");
-      } else {
-        // Unescaped this reads `'O'Brien*'`, which closes the literal after `O` and leaves `Brien`
-        // as a bare token.
+  test(
+    'an apostrophe travels as data and Nuxeo accepts the query',
+    SMOKE,
+    async ({ signedIn: page }) => {
+      for (const sent of await searchesSentFor(page, "O'Brien")) {
+        if (sent.endpoint === 'page-provider') {
+          expectBoundVerbatim(sent, "O'Brien");
+        } else {
+          // Unescaped this reads `'O'Brien*'`, which closes the literal after `O` and leaves `Brien`
+          // as a bare token.
+          expect(
+            sent.params.get('query'),
+            `${sent.label}: the apostrophe was not escaped on its way into the literal`,
+          ).toContain("'O\\'Brien");
+          expectWholeTermInALiteral(sent, "O'Brien");
+        }
         expect(
-          sent.params.get('query'),
-          `${sent.label}: the apostrophe was not escaped on its way into the literal`,
-        ).toContain("'O\\'Brien");
-        expectWholeTermInALiteral(sent, "O'Brien");
+          structureOf(sent),
+          `${sent.label}: part of the term is outside its literal`,
+        ).not.toContain('Brien');
+        // And Nuxeo agrees it is well-formed. Unescaped in NXQL it answers 400.
+        expect(
+          sent.status,
+          `${sent.label}: Nuxeo rejected the query, so the literal was not closed correctly`,
+        ).toBe(200);
       }
-      expect(
-        structureOf(sent),
-        `${sent.label}: part of the term is outside its literal`,
-      ).not.toContain('Brien');
-      // And Nuxeo agrees it is well-formed. Unescaped in NXQL it answers 400.
-      expect(
-        sent.status,
-        `${sent.label}: Nuxeo rejected the query, so the literal was not closed correctly`,
-      ).toBe(200);
-    }
-  });
+    },
+  );
 
   test('a term shaped like a query cannot become query structure', async ({ signedIn: page }) => {
     // The payload from the original adversarial review, recorded in `hxql-literal.ts`: it

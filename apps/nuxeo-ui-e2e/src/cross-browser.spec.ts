@@ -1,5 +1,6 @@
 import { aRootChild, expect, expectRowWithData, newNuxeoApiContext, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
+import { SMOKE } from './smoke';
 
 /**
  * Cross-engine behaviour — Phase 6 step 5, "Chrome and Safari verified".
@@ -142,23 +143,25 @@ test.describe('cross-engine behaviour', () => {
    * That distinction is recorded in CLAUDE.md for the evidence harness, where `withHashLocation()`
    * made `goto('/#/x')` same-document and an initializer assertion never re-ran.
    */
-  test('the session survives a real reload, not just a hash navigation', async ({
-    signedIn: page,
-  }) => {
-    await page.goto('/#/browse', { waitUntil: 'networkidle' });
+  test(
+    'the session survives a real reload, not just a hash navigation',
+    SMOKE,
+    async ({ signedIn: page }) => {
+      await page.goto('/#/browse', { waitUntil: 'networkidle' });
 
-    const rootChild = await aRootChild(api);
-    await expectRowWithData(page, 'lib-browse', rootChild.title);
+      const rootChild = await aRootChild(api);
+      await expectRowWithData(page, 'lib-browse', rootChild.title);
 
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForTimeout(1500);
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
 
-    // Still authenticated: the guard did not bounce us, and a repository row arrived again.
-    // Asserted as a row rather than as surface text, or an empty listing whose copy happens
-    // to name the expected title would satisfy it (NXSAT-708).
-    expect(page.url(), 'a reload should not redirect to sign-in').not.toMatch(/sign-?in|login/i);
-    await expectRowWithData(page, 'lib-browse', rootChild.title);
-  });
+      // Still authenticated: the guard did not bounce us, and a repository row arrived again.
+      // Asserted as a row rather than as surface text, or an empty listing whose copy happens
+      // to name the expected title would satisfy it (NXSAT-708).
+      expect(page.url(), 'a reload should not redirect to sign-in').not.toMatch(/sign-?in|login/i);
+      await expectRowWithData(page, 'lib-browse', rootChild.title);
+    },
+  );
 
   /**
    * Phase 6 step 3 gave the dashboard's scrollable `.widget-body` `tabindex="0"`, because
