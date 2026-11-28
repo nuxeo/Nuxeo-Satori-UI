@@ -40,8 +40,13 @@ Every name in it is fictional. The log of each step, its result and each departu
   when a real one comes.
 - **A seed script,** with its controls, writing eight fictional moves, eighteen inventory items and
   five claims. It creates no user and no group.
-- **Not installed anywhere.** The package passes the pipeline; installing it and seeding it are
-  the orchestrator's ([below](#installing-it-on-a-local-nuxeo)).
+- **Recorded on one server, at 0.1.0.** When the kit was built, on the morning of 26 November
+  2026, no server had it. By the time 0.2.0 was written, later that day, the local Docker Nuxeo the
+  kit was built against had 0.1.0's model installed ([below](#version-020)), and the
+  [administrator's guide](../../../docs/business-apps/administrator-guide.md), section 9, records
+  the seed run there the same day. No install of 0.2.0 or 0.3.0 is recorded. The package passes the
+  pipeline; installing it and seeding it are the orchestrator's
+  ([below](#installing-it-on-a-local-nuxeo)).
 
 ## What is in it
 
@@ -80,8 +85,8 @@ Every name in it is fictional. The log of each step, its result and each departu
 
 ## The stand-in model
 
-The local Nuxeo has no moves model, and none was given, so the package carries a fictional one in
-a component of its own, `moves-demo-model.xml`, as the Payers kit does.
+The local Nuxeo had no moves model when the kit was built, and none was given, so the package
+carries a fictional one in a component of its own, `moves-demo-model.xml`, as the Payers kit does.
 
 | Type          | Schema (prefix)         | What it holds                                                                                                                                                                                                      |
 | ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -149,15 +154,16 @@ the claim of the move. **Since 0.3.0 the claim's layout turns the phone capture 
 - **Where each photo was taken is taken out** before it is sent: the capture keeps no location,
   since `keepLocation` is not set. A move's addresses are on the move already.
 - **The seed never writes `files:files`,** so a photo filed on a claim stays through a second run.
-- **Not seen on a server:** the kit is not installed anywhere. The page was run against a stand-in
-  of the server with this kit's layout and model, at a phone's 320 pixels
+- **Not seen on a server:** no install of 0.3.0 is recorded, and the one server recorded with the
+  kit, the local Docker Nuxeo, had 0.1.0's model on 26 November 2026. The page was run against a
+  stand-in of the server with this kit's layout and model, at a phone's 320 pixels
   (`scripts/beta-harness/steps/capture-phone.mjs`).
 
 ## How it was built: the log
 
 Run on 26 November 2026, from 05:25 to 08:15 IST, in a worktree of
 `staging/enterprise-grade-app` at `749cbd660`, on Node 24.22.1, against the local Docker Nuxeo
-(container `nuxeo`, port 8080, which has the Satori package and the Payers and contracts kits
+(container `nuxeo`, port 8080, which had the Satori package and the Payers and contracts kits
 installed), signed in with its default administrator account from the environment. **Nothing was
 written to that server:** every request was a `GET`. The agent spoke to the Builder MCP server
 over stdio, as Claude Code does once the server is registered, through a small client of its own
@@ -171,7 +177,7 @@ times are the agent's, from the timestamps of its commands.
 | ---------------------------------- | ------------------------------------------------------------------------------ |
 | `npm ci`, Node 24.22.1             | Passed in 76 seconds. `package-lock.json`'s SHA-256 the same before and after  |
 | `NUXEO_USER`, `NUXEO_PASS`         | Exported in each shell only; never written to a file, a commit, a URL or a log |
-| A server whose model may be shared | The local Docker Nuxeo, which holds fictional records only                     |
+| A server whose model may be shared | The local Docker Nuxeo, which held fictional records only                      |
 | The platform version               | `0.2.0`, from `libs/platform/package.json`                                     |
 
 Reading the plan, the skill, the contracts kit's README and the three documents took about 17
@@ -263,7 +269,7 @@ The edits, written with `write_package_file` from layout-v2.md and app-definitio
 | `npx nx serve nuxeo-ui --port 4299`, after the folder existed            | Up in about three minutes                                                                                                                                      |
 | `preview_package` again                                                  | `served: true`; `devServer`: "answers every file as the dev folder holds it"                                                                                   |
 | The pages in a browser                                                   | **Not seen.** The browser tool of this run needs a launch configuration under `.claude/`, which it was refused permission to write; nothing worked around that |
-| The record pages                                                         | **Not seen, and could not be:** no server holds a `Move`, a `MoveItem` or a `DamageClaim`                                                                      |
+| The record pages                                                         | **Not seen, and could not be:** no server held a `Move`, a `MoveItem` or a `DamageClaim`                                                                       |
 
 What a browser would have shown is what the contracts and facilities kits' runs saw for a kit no
 server has installed: the home's figures "Unavailable" and each queue's "Something went wrong",
@@ -273,8 +279,8 @@ four layouts as "Open a ... record, from a queue, a search or `#/doc/<its id>`".
 
 ### Step 5. Publish to pre-production
 
-**Not done, and not built in the MCP server.** No `app-package/*` tag was pushed. The kit is not
-installed anywhere: the orchestrator installs it.
+**Not done, and not built in the MCP server.** No `app-package/*` tag was pushed. When the run
+ended the kit was installed nowhere: the orchestrator installs it.
 
 ### The seed (06:07, 7 minutes)
 
@@ -337,9 +343,11 @@ for 0.2.0).
 
 ## Installing it on a local Nuxeo
 
-**Not run.** Installing is the orchestrator's. Written from the contracts kit's install, which
-follows the Payers kit's, the one that ran on the same container: the local Nuxeo is the Docker
-container `nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed.
+**Not run when it was written,** on 26 November 2026, with 0.1.0. Installing is the orchestrator's.
+0.1.0's model was on the local Docker Nuxeo later that day ([Version 0.2.0](#version-020)); how it
+was installed, and the checks of step 3 below, are not recorded here. Written from the contracts
+kit's install, which follows the Payers kit's, the one that ran on the same container: the local
+Nuxeo is the Docker container `nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed.
 
 **1. Build it,** as above. **2. Copy it into the container,** then a one-off script that installs
 it when the container next starts, and removes itself: `nuxeoctl mp-install` refuses while the
@@ -495,8 +503,9 @@ need a patch; 0.2.0 raises the minor, for three new features.
   claims are filed, as before. The days to filing still say what the banner reads.
 - **`dmg:moveNumber` stays too,** though nothing but the Edit form shows it now: dropping a property
   is a change to the model, which the kit's stand-in leaves for a real one.
-- **Not seen in a browser or on a server:** the local Nuxeo has 0.1.0's model installed, and
-  installing is the orchestrator's. The pages are held by the engine's specs, the pipeline and the
+- **Not seen in a browser or on a server:** when 0.2.0 was written, on 26 November 2026, the local
+  Nuxeo had 0.1.0's model installed, and no install of 0.2.0 is recorded; installing is the
+  orchestrator's. The pages are held by the engine's specs, the pipeline and the
   seed's controls, 32 of 32, its open-claims check now finding each move's bucket by the move's id.
 
 ## Phase 8 feedback: where the tools fell short
@@ -553,8 +562,8 @@ the kit, because it blocked it; items 2 to 4 were built in a later one, and the 
    `describe_page_provider`, which answers that the server has none.
 10. **`preview_package` still calls the Edit form "the DamageClaim record page (edit)"** (the
     contracts kit's item 7, the tutorial's item 10).
-11. **Dev mode shows a demo kit's shell, not its pages** (the tutorial's item 8): no server has
-    the types.
+11. **Dev mode shows a demo kit's shell, not its pages** (the tutorial's item 8): no server had
+    the types when the kit was built.
 12. **Nothing checks a page provider's NXQL before a server loads it.** `BETWEEN NOW(...)` would
     have passed `app-model` and the pipeline and failed on install; it was found only by a
     read-only query.
@@ -578,7 +587,9 @@ the kit, because it blocked it; items 2 to 4 were built in a later one, and the 
 
 ## Not done yet
 
-- **Installing, seeding, and the live pages:** the orchestrator's.
+- **Installing, seeding, and the live pages:** the orchestrator's. What is recorded of them: 0.1.0's
+  model on the local Docker Nuxeo on 26 November 2026, and its seed run there the same day, in the
+  administrator's guide; no install of 0.2.0 or 0.3.0, and no page seen on a server.
 - **The delivery day read from the move** for the banner and the days to filing: a rule reads the
   open record only ([above](#version-020)).
 - **The photo from a phone on a server:** the capture page files it, since 0.3.0, and has been run

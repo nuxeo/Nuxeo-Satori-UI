@@ -652,18 +652,22 @@ so in the console and runs in English (`resolveStringLanguage` in
 [`provide-app-config.ts`](../../apps/nuxeo-ui/src/app/config/provide-app-config.ts)). Dates,
 numbers and amounts follow the same language, once it is offered.
 
-| Languages                                                               | State                                                                                                                             |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,355 keys                                                                    |
-| Spanish (`es`)                                                          | Requested from Crowdin. Its dates, numbers and amounts are ready; its catalogue is not on this branch, so it cannot be chosen yet |
-| Swedish, Arabic, Hebrew, Italian (`sv`, `ar`, `he`, `it`)               | Crowdin targets, not requested on this branch; dates, numbers and amounts ready; no catalogue here                                |
-| Danish, Finnish, Norwegian Bokmål (`da`, `fi`, `nb`)                    | Registered: dates, numbers and amounts ready. Not yet Crowdin targets, so not requested                                           |
+| Languages                                                               | State                                                                                                                           |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| English, French, German, Japanese, Dutch (`en`, `fr`, `de`, `ja`, `nl`) | Ship. The four translations hold 2,013 of English's 3,355 keys                                                                  |
+| Spanish (`es`)                                                          | Requested from Crowdin; ships on `main` (#697). Dates, numbers and amounts ready; no catalogue here, so it cannot be chosen yet |
+| Swedish, Arabic, Hebrew, Italian (`sv`, `ar`, `he`, `it`)               | Crowdin targets, not requested on this branch; dates, numbers and amounts ready; no catalogue here                              |
+| Danish, Finnish, Norwegian Bokmål (`da`, `fi`, `nb`)                    | Registered: dates, numbers and amounts ready. Not yet Crowdin targets, so not requested                                         |
 
 `main` is further along than this branch. Swedish, Italian, Arabic and Hebrew ship there already
-(NXSAT-754, #656 and #696), and Spanish, 99 % approved on Crowdin on 30 October
-([i18n-status.md](../i18n-status.md)), waits in Crowdin's pull request into `main`, #401, with
-2,774 keys. Each reaches this branch when `main` is merged into it. Danish, Finnish and Norwegian
-Bokmål are new: none was among the project's targets on 30 October, the last time they were read.
+(NXSAT-754, #656 and #696), and Spanish since 27 November 2026 (#697): its catalogue is the
+approved-only export from Crowdin's pull request into `main`, #401, taken unchanged, 2,771 keys;
+#401 itself was still open on 28 November 2026. Spanish was 99 % approved on Crowdin on 30 October
+([i18n-status.md](../i18n-status.md)); the wording corrections #697's review found, Spanish's
+permission labels among them, were left to Crowdin (NXSAT-861). Each language reaches this branch
+when `main` is merged into it, which had not happened for any of the five on 28 November 2026.
+Danish, Finnish and Norwegian Bokmål are new: none was among the project's targets on 30 October,
+the last time they were read.
 
 **Every language falls back to English, key by key.** A key a catalogue does not give shows in
 English, never as the key, so a language at 60 % shows the other 40 % in English.
@@ -682,8 +686,9 @@ request that would hold every app catalogue red with it.
 **The demos need approved translations first.** Phase 7's "the app in Spanish" and phase 8's "the
 app in French" each show the app only as far as Crowdin has approved it and the steps below have
 brought it here. French ships today at 60 %, and every kit label in French is English until its
-translations are approved and pulled. Spanish needs #401 merged, with step 3 below, and its kit
-labels the same as French. Translations are never written in this repository.
+translations are approved and pulled. Spanish needs `main` merged into this branch, which brings
+#697's catalogue, and its kit labels the same as French. Translations are never written in this
+repository.
 
 **On Crowdin's side,** a Crowdin manager on project 160 of the Hyland tenant, with the Translation
 Team, does each of these:

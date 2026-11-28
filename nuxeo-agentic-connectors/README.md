@@ -871,4 +871,10 @@ for it, not its findings.
   than bringing the earlier one back, and an `enabled="false"` removal is not undone. Only a
   development server's hot reload unregisters.
 - **The rest of the plan's connectors add-on:** fields synced in, a real connector chosen with
-  presales, a query parameter for the key, embedded panels (decision F).
+  presales, a query parameter for the key. Embedded panels, which this list named with decision F,
+  were built on 26 November 2026 in an add-on of their own,
+  [`nuxeo-agentic-embedded`](../nuxeo-agentic-embedded/README.md) (#766), installed on no server
+  when it merged. What they leave to this add-on is unchanged: a panel's card from another system
+  still reads through `Connector.Read` with the service credential, and passing the reader's own
+  identity on to that system is not built ([decision log](../docs/business-apps/decisions.md), F's
+  note).
